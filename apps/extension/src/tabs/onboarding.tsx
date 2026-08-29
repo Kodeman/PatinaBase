@@ -144,10 +144,10 @@ function Onboarding() {
       <Shell step={2} eyebrow="Why page access" title="Reading the page" primary="Makes sense" onPrimary={next} onBack={back}>
         To read a product's name, price, and images, Patina reads the page you're
         on when you capture — only then, only that tab. What it reads goes to
-        your Patina workspace. We keep light usage stats — which screens, how
-        long — never the page. Chrome words this permission broadly ('read and
-        change all your data on all websites'); we use it only at the moment
-        you capture.
+        your Patina workspace. We keep light usage stats — what you do in the
+        extension, never the page. Chrome words this permission broadly ('Read
+        and change all your data on all websites'); we use it only at the
+        moment you capture.
       </Shell>
     );
   }

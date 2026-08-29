@@ -118,35 +118,40 @@ export function AuthScreen() {
         <p className="text-sm text-ink">Sign in to capture products</p>
       </header>
 
-      {/* Primary path — public installer, no account assumed yet */}
-      <div className="flex flex-col gap-2">
-        <button
-          onClick={handleOpenPortalSignin}
-          data-testid="auth.openPortalSignin"
-          className="w-full py-2.5 px-4 bg-verdigris text-paper text-sm font-medium rounded-[3px]
-                   hover:bg-verdigris-ink transition-all shadow-md hover:shadow-lg"
-        >
-          Sign in on patina.cloud
-        </button>
-        <button
-          onClick={handleOpenPortalSignup}
-          data-testid="auth.openPortalSignup"
-          className="w-full py-2 px-4 text-sm font-medium text-ink border border-line rounded-[3px]
-                   hover:bg-[var(--bg-hover)] transition-all"
-        >
-          Create an account
-        </button>
-        <p className="mt-1 text-[0.65rem] text-ink-soft/70 text-center">
-          After you sign in, this extension will pick up your session automatically.
-        </p>
-      </div>
+      {/* Primary path — public installer, no account assumed yet. Hidden once
+          pairing has resolved (approved) or is still resolving (loading). */}
+      {(qr.state === 'pending' || qr.state === 'expired' || qr.state === 'error') && (
+        <>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleOpenPortalSignin}
+              data-testid="auth.openPortalSignin"
+              className="w-full py-2.5 px-4 bg-verdigris text-paper text-sm font-medium rounded-[3px]
+                       hover:bg-verdigris-ink transition-all shadow-md hover:shadow-lg"
+            >
+              Sign in on patina.cloud
+            </button>
+            <button
+              onClick={handleOpenPortalSignup}
+              data-testid="auth.openPortalSignup"
+              className="w-full py-2 px-4 text-sm font-medium text-ink border border-line rounded-[3px]
+                       hover:bg-[var(--bg-hover)] transition-all"
+            >
+              Create an account
+            </button>
+            <p className="mt-1 text-[0.65rem] text-ink-soft/70 text-center">
+              After you sign in, this extension will pick up your session automatically.
+            </p>
+          </div>
 
-      {/* Divider */}
-      <div className="flex items-center gap-3 w-full mt-6 mb-4">
-        <div className="flex-1 h-px bg-line" />
-        <StrataMark variant="micro" />
-        <div className="flex-1 h-px bg-line" />
-      </div>
+          {/* Divider */}
+          <div className="flex items-center gap-3 w-full mt-6 mb-4">
+            <div className="flex-1 h-px bg-line" />
+            <StrataMark variant="micro" />
+            <div className="flex-1 h-px bg-line" />
+          </div>
+        </>
+      )}
 
       <div className="flex flex-col items-center">
         {/* Loading */}
