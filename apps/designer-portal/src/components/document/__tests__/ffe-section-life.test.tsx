@@ -224,13 +224,42 @@ describe('FF&E region rule', () => {
 });
 
 describe('FF&E stamp — filled variant + tone', () => {
-  it('maps ordered/in-production/received/delivered lines to tone="ordered"', () => {
-    mockItems = [{ ...baseFurnishing, status: 'ordered' }];
+  it.each(['ordered', 'production', 'shipped'])(
+    'maps a %s line to tone="ordered" — money committed, goods still coming',
+    (status) => {
+      mockItems = [{ ...baseFurnishing, status }];
+      renderSection();
+      expect(stampCalls).toHaveLength(1);
+      expect(stampCalls[0].variant).toBe('filled');
+      expect(stampCalls[0].tone).toBe('ordered');
+    },
+  );
+
+  it.each([
+    ['delivered', { status: 'delivered' }],
+    ['installed', { status: 'installed' }],
+    ['received', { status: 'delivered', quantity: 1, received_quantity: 1 }],
+  ])('maps a %s line to tone="delivered" — arrived, not on order', (_name, patch) => {
+    // S5: these three used to wear ORDERED's clay plate, so a designer
+    // scanning Pieces for what was still on order read arrived goods as
+    // outstanding. Sage is their own pigment now.
+    mockItems = [{ ...baseFurnishing, ...(patch as Record<string, unknown>) }];
     renderSection();
     expect(stampCalls).toHaveLength(1);
     expect(stampCalls[0].variant).toBe('filled');
-    expect(stampCalls[0].tone).toBe('ordered');
+    expect(stampCalls[0].tone).toBe('delivered');
   });
+
+  it.each(['specified', 'quoted', 'approved'])(
+    'leaves a %s line on the OUTLINE — a fill it has no ruled recipe for is not invented',
+    (status) => {
+      mockItems = [{ ...baseFurnishing, status }];
+      renderSection();
+      expect(stampCalls).toHaveLength(1);
+      expect(stampCalls[0].variant).toBeUndefined();
+      expect(stampCalls[0].tone).toBeUndefined();
+    },
+  );
 
   it('maps a decision-due line to tone="decision"', () => {
     mockItems = [

@@ -72,7 +72,7 @@ import {
   type TradeLineHold,
 } from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
-import { Stamp } from './stamp';
+import { Stamp, type StampTone } from './stamp';
 import { RowWash, useRowWash, type RowWashTone } from './row-wash';
 import { LineUnfold } from './line-unfold';
 import { StrataMark } from './strata-mark';
@@ -190,15 +190,33 @@ function stampProps(stamp: LineStamp): {
   }
 }
 
-/** The Life Review's stamp contract (Lane 1, `stamp.tsx` on
- *  `document-life/stamp`): every filled stamp collapses onto one of three
- *  tones. decision_due and damaged/claim are each their own tone; every
- *  other kind an FF&E line can wear — ordered, in production, shipped,
- *  received, delivered, installed, any trade-* progress — reads "ordered". */
-function ffeStampTone(kind: LineStamp['kind']): 'ordered' | 'decision' | 'damaged' {
-  if (kind === 'decision_due') return 'decision';
-  if (kind === 'damaged') return 'damaged';
-  return 'ordered';
+/** The Life Review's stamp contract (Lane 1, `stamp.tsx`), as amended by S5.
+ *  A fill is a RULED recipe, not a default: four states carry one, and a kind
+ *  with no ruled fill keeps the outline rather than borrowing another state's
+ *  pigment. Money committed and goods arrived are two different answers to
+ *  "where is this piece", so they do not share a plate — the earlier collapse
+ *  showed delivered and installed lines wearing ORDERED's clay.
+ *
+ *  `null` means outline: specified, quoted, approved, partial (delivered but
+ *  inspected short — an open question, not an arrival) and every trade-* kind,
+ *  whose journey is judged work rather than logistics. */
+function ffeStampTone(kind: LineStamp['kind']): StampTone | null {
+  switch (kind) {
+    case 'ordered':
+    case 'production':
+    case 'shipped':
+      return 'ordered';
+    case 'received':
+    case 'delivered':
+    case 'installed':
+      return 'delivered';
+    case 'decision_due':
+      return 'decision';
+    case 'damaged':
+      return 'damaged';
+    default:
+      return null;
+  }
 }
 
 /** The hover wash takes the same three-way split, in the wash's own
@@ -372,6 +390,7 @@ function FFELine({
     item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—';
   const thumbSrc = ffeThumbSrc(item);
   const washTone = ffeWashTone(stamp.kind);
+  const tone = ffeStampTone(stamp.kind);
   const rowWash = useRowWash();
 
   const body = (
@@ -400,12 +419,12 @@ function FFELine({
             {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
           </p>
           {line && (
-            <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>
+            <p className="mt-px text-[11px] text-[var(--text-muted)]">{line}</p>
           )}
           {/* R76: the coverage stamp — the 00187 bridge's per-line truth. */}
           {billing && (
             <p
-              className="mt-px font-mono text-[8px] uppercase tracking-[0.08em]"
+              className="mt-px font-mono text-[11px] uppercase tracking-[0.08em]"
               style={{ color: billing.color }}
             >
               {billing.text}
@@ -413,7 +432,7 @@ function FFELine({
           )}
           {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
           {item.added_via === 'engine' && (
-            <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] opacity-70">
+            <p className="mt-px font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] opacity-70">
               via the Engine
             </p>
           )}
@@ -422,7 +441,7 @@ function FFELine({
       {/* Ineligibility is a reason, not a refusal — lowercase mono, exactly
           where the logistics stamp sits. */}
       {selecting && !eligible.eligible ? (
-        <span className="whitespace-nowrap font-mono text-[9px] lowercase tracking-[0.04em] text-[var(--text-muted)]">
+        <span className="whitespace-nowrap font-mono text-[11px] lowercase tracking-[0.04em] text-[var(--text-muted)]">
           {eligible.reason}
         </span>
       ) : stamp.kind === 'trade_pending' ? null : (
@@ -430,8 +449,7 @@ function FFELine({
           label={sp.label}
           color={sp.color}
           ink={sp.ink}
-          variant="filled"
-          tone={ffeStampTone(stamp.kind)}
+          {...(tone ? ({ variant: 'filled', tone } as const) : {})}
         />
       )}
       {showAuthorization &&
@@ -614,7 +632,7 @@ function RoomHeading({
         <h3 className="font-heading text-[13.5px] font-medium italic text-[var(--color-charcoal)]">
           {name}
         </h3>
-        <span className="ml-auto font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           {meta}
         </span>
       </div>
@@ -697,7 +715,7 @@ function AddRoomInline({ projectId }: { projectId: string }) {
         onChange={(e) => setBudget(e.target.value)}
         placeholder="allocation $"
         aria-label="Budget allocation (dollars)"
-        className="w-24 bg-transparent text-right font-mono text-[9.5px] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]"
+        className="w-24 bg-transparent text-right font-mono text-[11px] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]"
       />
       <DocumentAction
         actionKey="add-project-room"
@@ -1210,7 +1228,7 @@ function FFESectionBody({
           </h2>
           <span className="flex items-baseline gap-3">
             {!selecting && meta && (
-              <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                 {meta}
               </span>
             )}
@@ -1228,7 +1246,7 @@ function FFESectionBody({
               <>
                 <Link
                   href={`/doc/${projectId}/spec-book`}
-                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:text-[var(--color-charcoal)]"
+                  className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:text-[var(--color-charcoal)]"
                 >
                   Spec book →
                 </Link>

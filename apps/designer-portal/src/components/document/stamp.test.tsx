@@ -16,6 +16,10 @@ const SOURCE = readFileSync(join(__dirname, 'stamp.tsx'), 'utf8');
 
 const CANON: Record<StampTone, { fill: string; border: string }> = {
   ordered: { fill: 'var(--fill-ordered-tint)', border: 'var(--color-clay-ink)' },
+  delivered: {
+    fill: 'var(--fill-delivered-tint)',
+    border: 'var(--color-sage-ink)',
+  },
   decision: {
     fill: 'var(--fill-decision-tint)',
     border: 'var(--color-golden-hour-ink)',
@@ -34,7 +38,7 @@ describe('Stamp', () => {
     );
     const stamp = container.firstElementChild as HTMLElement;
     expect(stamp).not.toHaveAttribute('data-stamp-variant');
-    expect(stamp).toHaveClass('bg-transparent', '-rotate-[1.5deg]', 'text-[10px]');
+    expect(stamp).toHaveClass('bg-transparent', '-rotate-[1.5deg]', 'text-[11px]');
     expect(SOURCE).toContain('style={{ borderColor: color, color: ink ?? color }}');
   });
 
@@ -99,6 +103,22 @@ describe('Stamp', () => {
     const stamp = container.firstElementChild as HTMLElement;
     expect(stamp).not.toHaveAttribute('data-stamp-variant');
     expect(stamp).toHaveClass('bg-transparent');
+  });
+
+  it('gives DELIVERED its own sage plate, not ORDERED’s clay one', () => {
+    // S5: eight states used to collapse onto the ordered fill, so a designer
+    // scanning Pieces for what was still on order saw delivered and installed
+    // lines wearing the ordered-money plate. Two answers, two pigments.
+    const ordered = render(
+      <Stamp label="Ordered" color="var(--color-clay)" variant="filled" tone="ordered" />,
+    ).container.firstElementChild as HTMLElement;
+    const delivered = render(
+      <Stamp label="Delivered" color="var(--color-sage)" variant="filled" tone="delivered" />,
+    ).container.firstElementChild as HTMLElement;
+    expect(ordered.getAttribute('data-stamp-tone')).toBe('ordered');
+    expect(delivered.getAttribute('data-stamp-tone')).toBe('delivered');
+    expect(CANON.delivered.fill).not.toBe(CANON.ordered.fill);
+    expect(CANON.delivered.border).not.toBe(CANON.ordered.border);
   });
 
   it('carries no shadow (D4)', () => {

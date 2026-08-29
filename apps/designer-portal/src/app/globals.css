@@ -135,10 +135,11 @@
      One recipe: the state's own canon pigment composited over --doc-paper to a
      common ~1.18:1, a 1.5px pigment border (the state's own -ink), and a
      CHARCOAL word at 11.7:1. State is hue; legibility is charcoal. Light
-     enough that every canon ink clears 4.5:1 on all four (floor 4.56). */
+     enough that every canon ink clears 4.5:1 on all five (floor 4.56). */
   --fill-ordered-tint: #EFE6DA;   /* clay @23% — paper 1.185, charcoal 11.71 */
   --fill-decision-tint: #F5E7B9;  /* golden hour @35% — paper 1.184, charcoal 11.72 */
   --fill-damaged-tint: #F3E5DF;   /* terracotta @23% — paper 1.179, charcoal 11.76 */
+  --fill-delivered-tint: #E6E8E0; /* sage @26% — paper 1.186, charcoal 11.69 */
   --fill-anchor-tint: #E7E8E8;    /* dusty-blue @19% — paper 1.178, charcoal 11.78 */
 
   /* — The Life Review (R126): the six saturated stage tabs —
@@ -393,6 +394,46 @@
 .desk-settle {
   animation: desk-settle 320ms var(--ease-editorial) both;
   animation-delay: calc(min(var(--i, 0), 6) * 60ms);
+}
+
+/* R126 — the fold seam settles in on MOUNT. A keyframe rather than a JS-gated
+   transition so the server-rendered seam paints VISIBLE on the first frame and
+   animates from there; a folded region's only control must never depend on
+   hydration to be seen. `both` holds the from-state before the first frame the
+   same way .desk-settle does. */
+@keyframes fold-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The arrow the head was wearing a frame ago flips over as the seam lands. Two
+   keyframes rather than one so the arrow can turn on its own axis while the
+   seam drops. */
+@keyframes fold-arrow-flip {
+  from {
+    transform: rotate(180deg);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fold-settle {
+    animation: fold-in 300ms var(--ease-editorial) both;
+  }
+
+  .fold-arrow-settle {
+    animation: fold-arrow-flip 300ms var(--ease-editorial) both;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

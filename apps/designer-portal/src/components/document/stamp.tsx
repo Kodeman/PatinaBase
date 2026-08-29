@@ -11,12 +11,25 @@
  * The filled stamp keeps the −1.5° tilt the mockup draws on every stamp.
  */
 
-/** The four states that carry a fill (FINAL §2). One pigment per state, spent
- *  on BOTH the tint and the border, so no two filled stamps share an edge. */
-export type StampTone = 'ordered' | 'decision' | 'damaged' | 'anchor';
+/** The states that carry a fill (FINAL §2, plus DELIVERED). One pigment per
+ *  state, spent on BOTH the tint and the border, so no two filled stamps share
+ *  an edge.
+ *
+ *  S5 — `delivered` is the fifth, in sage, because collapsing arrived goods
+ *  onto ORDERED's clay plate told a designer scanning for what is still on
+ *  order that delivered and installed lines were still coming. Sage is canon's
+ *  settled pigment and the fill is cut to the same ~1.18:1 as the other four,
+ *  so it joins their plane rather than outranking them. */
+export type StampTone =
+  | 'ordered'
+  | 'delivered'
+  | 'decision'
+  | 'damaged'
+  | 'anchor';
 
 const TONE_FILL: Record<StampTone, string> = {
   ordered: 'var(--fill-ordered-tint)',
+  delivered: 'var(--fill-delivered-tint)',
   decision: 'var(--fill-decision-tint)',
   damaged: 'var(--fill-damaged-tint)',
   anchor: 'var(--fill-anchor-tint)',
@@ -28,14 +41,16 @@ const TONE_FILL: Record<StampTone, string> = {
  *  pigment. */
 const TONE_BORDER: Record<StampTone, string> = {
   ordered: 'var(--color-clay-ink)',
+  delivered: 'var(--color-sage-ink)',
   decision: 'var(--color-golden-hour-ink)',
   damaged: 'var(--color-terracotta-ink)',
   anchor: 'var(--color-dusty-blue)',
 };
 
 /**
- * `size` — 'xs' is the historical 10px mark, kept as the default so no existing
- * surface shifts. 'sm' is the 12px metadata floor the Document's newer surfaces
+ * `size` — 'xs' is the historical small mark, kept as the default so no
+ * existing surface shifts. Its literal is the 11px mono floor (S2), raised
+ * from 10px with the rest of the direction's own surfaces. 'sm' is the 12px metadata floor the Document's newer surfaces
  * hold to (R7's lifecycle stamp, I114–I120); the grammar is identical at both.
  */
 export function Stamp({
@@ -77,7 +92,7 @@ export function Stamp({
       className={`inline-block -rotate-[1.5deg] whitespace-nowrap rounded-[3px] border-[1.5px] bg-transparent px-[9px] py-[3px] font-mono font-semibold uppercase ${
         size === 'sm'
           ? 'text-[12px] tracking-[0.08em]'
-          : 'text-[10px] tracking-[0.1em]'
+          : 'text-[11px] tracking-[0.1em]'
       }`}
       style={{ borderColor: color, color: ink ?? color }}
     >
