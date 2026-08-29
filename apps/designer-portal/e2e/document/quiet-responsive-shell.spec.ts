@@ -325,18 +325,25 @@ test.describe('Quiet Work responsive document shell', () => {
         ),
     ).toBe('');
 
-    // 56 + 1rem. The design declares 72; this portal's root is 18px rather
-    // than 16 (W1's measurement note), so the computed constant is 74 — inside
-    // the 4px the landing contract allows, and named here rather than rounded
-    // away.
+    // 56 + 16. The token is a `calc()`, and `getPropertyValue` on an
+    // unregistered custom property hands back the UNRESOLVED string
+    // ("calc(56px + 16px)"), which `parseFloat` reads as NaN — so the length
+    // is measured through a probe that actually lays the token out. (W3-L5
+    // wrote the `parseFloat` form against a band that did not exist yet in its
+    // lane, so this assertion had never run until integration.) The gap arm is
+    // an absolute 16px rather than `1rem` because this route's root is 18px
+    // (W1's measurement note): `1rem` computed to 74.
     const landingClear = await page
       .locator('[data-document-shell]')
-      .evaluate(
-        (el) =>
-          parseFloat(
-            getComputedStyle(el).getPropertyValue('--doc-landing-clear'),
-          ) || 0,
-      );
+      .evaluate((el) => {
+        const probe = document.createElement('div');
+        probe.style.cssText =
+          'position:absolute;visibility:hidden;pointer-events:none;height:var(--doc-landing-clear)';
+        el.appendChild(probe);
+        const height = probe.getBoundingClientRect().height;
+        probe.remove();
+        return height;
+      });
     expect(Math.abs(landingClear - 72)).toBeLessThanOrEqual(4);
 
     // Scroll the letterhead and the band's sentinel out of view, so the band
