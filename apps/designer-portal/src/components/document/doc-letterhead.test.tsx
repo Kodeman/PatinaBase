@@ -3,6 +3,9 @@
  * which prints `IN HAND · <ROOM>` and carries `Put down` (C-1). The letterhead
  * still ACCEPTS the two props — page.tsx passes them until W1-L4 rewires it —
  * but prints nothing from them, so the room is named once, on the rail.
+ *
+ * Wave 3 (R127): it sheds 4.5px of foot (`pb-5` → `pb-4`) and takes the
+ * instruments' ledger into its own column at ≥1180.
  */
 
 import { render, screen } from '@testing-library/react';
@@ -39,6 +42,43 @@ describe('the letterhead', () => {
     const header = container.querySelector('header')!;
     expect(header).toHaveClass('doc-rule-mid');
     expect(header.className).not.toMatch(/border-b\b/);
+    // W3 — the foot the header sheds so the first head comes up the paper.
+    expect(header).toHaveClass('pb-4');
+    expect(header.className).not.toMatch(/\bpb-5\b/);
+  });
+
+  it('takes the instruments ledger into its own column at ≥1180 (W3)', () => {
+    const { container } = render(
+      <DocLetterhead
+        title="Vandersteen residence"
+        vitals="Procurement"
+        instruments={<span data-testid="ledger">Message the Vandersteens</span>}
+      />,
+    );
+
+    const ledger = screen.getByTestId('ledger');
+    expect(ledger).toBeVisible();
+    // Inside the letterhead itself — not a row below it.
+    expect(container.querySelector('header')!.contains(ledger)).toBe(true);
+    // One grid, one column below 1180 (the ledger falls under the vitals,
+    // where the instruments row mounted before) and two columns above it.
+    const grid = ledger.closest('.grid')!;
+    expect(grid).toHaveClass(
+      'grid-cols-1',
+      'min-[1180px]:grid-cols-[1fr_auto]',
+    );
+    // The title block and the ledger are the grid's two children, in that
+    // order, so the ledger is the right-hand column at ≥1180.
+    expect(Array.from(grid.children).indexOf(ledger.parentElement!)).toBe(1);
+  });
+
+  it('prints nothing for the ledger column when there are no instruments', () => {
+    const { container } = render(
+      <DocLetterhead title="Vandersteen residence" vitals="Procurement" />,
+    );
+
+    const grid = container.querySelector('header > .grid')!;
+    expect(grid.children).toHaveLength(1);
   });
 
   it('keeps the lg mark, the household slot and the vitals it is given', () => {

@@ -62,13 +62,9 @@ import {
 import { type DocumentStateRow, type SectionKey } from '@/lib/document/desk-derivation';
 import {
   paperRegionsForSection,
-  requestRegionUnfold,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
-import {
-  scrollToRegion,
-  useDocumentRunningIndex,
-} from '@/hooks/use-document-running-index';
+import { useDocumentRunningIndex } from '@/hooks/use-document-running-index';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
 import {
   deriveProposalWatch,
@@ -81,7 +77,7 @@ import { DocSpine } from '@/components/document/doc-spine';
 import { DocLetterhead } from '@/components/document/doc-letterhead';
 import { SettledBar } from '@/components/document/settled-bar';
 import { PreviousWork } from '@/components/document/previous-work';
-import { DocumentGuide } from '@/components/document/document-guide';
+import { deriveGuideModel } from '@/components/document/document-guide';
 import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-readonly';
 import { FFESection } from '@/components/document/ffe-section';
 import { ScheduleSpine } from '@/components/document/schedule/schedule-spine';
@@ -149,17 +145,19 @@ import {
   useDeskEngagements,
 } from '@/hooks/use-desk-engagements';
 import { callSheetPending, openLedger } from '@/components/document/command-bar';
-import { RedLetterZone, type RedLetterRow } from '@/components/document/red-letter-zone';
+import { type RedLetterRow } from '@/components/document/red-letter-zone';
 import {
   RoomLensProvider,
   useRoomLens,
 } from '@/components/document/room-lens-context';
-import { JobTicket } from '@/components/document/job-ticket';
+import { LensBand } from '@/components/document/lens-band';
+import {
+  deriveLensBand,
+  type LensReadingStop,
+} from '@/lib/document/lens-band-derivation';
+import { useLensFrame } from '@/hooks/use-lens-frame';
 import {
   deriveTicket,
-  deriveTicketHead,
-  deriveTicketIdentity,
-  deriveTicketSeam,
   type TicketClientCopy,
   type TicketInput,
   type TicketLine,
@@ -173,7 +171,6 @@ import {
   deriveLadderDoors,
   deriveLadderSegments,
 } from '@/lib/document/lens-ladder-derivation';
-import { boardsRoutePath } from '@/lib/document/registry';
 import { deriveMoneyLadder, type MoneyLadder } from '@/lib/document/money-ladder';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
@@ -402,9 +399,8 @@ function noProjectLadder(): MoneyLadder {
  * the shelf leaves, the money region and the FF&E section make the same
  * calls — so the ticket costs cache hits, not round trips.
  */
-function JobTicketMount({
+function ProjectTicketFacts({
   projectId,
-  routeId,
   section,
   regionSection,
   project,
@@ -418,17 +414,12 @@ function JobTicketMount({
   callSheetEnabled,
   rosterCount,
   rosterSettled,
-  onOpenLeaf,
-  onUnfoldRegion,
   onRows,
   onInput,
   onDamagedOn,
   clientCopy,
 }: {
   projectId: string;
-  /** The `[id]` this document is mounted at — the address every leaf page and
-   *  the boards route resolve, project id or engagement id alike. */
-  routeId: string;
   section: SectionKey;
   /** Which spread's regions are actually on the paper. Off the `worktable`
    *  flag this IS `section`; with a table pinned the two differ, and a row
@@ -449,12 +440,10 @@ function JobTicketMount({
   callSheetEnabled: boolean;
   rosterCount: number;
   rosterSettled: boolean;
-  onOpenLeaf: (key: ShelfKey) => void;
-  onUnfoldRegion: (region: DocumentIndexKey) => void;
-  /** The eight rows, reported up for the guide's leader (B2-L3). The rows are
-   *  derived here because the reads are here; the guide is derived above this
-   *  mount, so the leader can only speak from what the ticket prints if the
-   *  rows travel back up. */
+  /** The eight rows, reported up for the guide's leader (B2-L3) and for the
+   *  band's standing set (OD-8). The rows are derived here because the reads
+   *  are here; both consumers stand above this mount, so the rows travel back
+   *  up. */
   onRows: (rows: readonly TicketRow[]) => void;
   onInput: (input: TicketInput) => void;
   /** W2 design review, item 11 — the carrier window on the damaged line. The
@@ -522,7 +511,7 @@ function JobTicketMount({
     [regionSection],
   );
 
-  // See `ProjectlessTicketMount` — the facts, not the object identity. Both
+  // See `ProjectlessTicketFacts` — the facts, not the object identity. Both
   // props are rebuilt on every render of the page, which sits above an early
   // return no memo of theirs could be hoisted over.
   const copySettled = clientCopy?.settled ?? null;
@@ -606,20 +595,11 @@ function JobTicketMount({
     ],
   );
 
-  return (
-    <TicketFace
-      input={ticketInput}
-      routeId={routeId}
-      onOpenLeaf={onOpenLeaf}
-      onUnfoldRegion={onUnfoldRegion}
-      onRows={onRows}
-      onInput={onInput}
-    />
-  );
+  return <TicketFacts input={ticketInput} onRows={onRows} onInput={onInput} />;
 }
 
 /**
- * The ticket on a document that has no project yet — the four stages before
+ * The facts on a document that has no project yet — the four stages before
  * the work starts (brief · discovery · direction · proposal).
  *
  * It reads the PROPOSAL's three populations, never the project's. A direction
@@ -630,32 +610,26 @@ function JobTicketMount({
  * room, the money ladder, the schedule, the roster) stays settled and empty:
  * an honest empty for a paper that genuinely has none.
  *
- * `JobTicketMount`'s own reads still may not run here. Its `enabled`-gated
+ * `ProjectTicketFacts`'s own reads still may not run here. Its `enabled`-gated
  * queries would never answer with no project id, pinning rows at `Reading…`
  * for the life of the document, and its two un-`enabled` ones would fetch the
  * studio's whole ledger.
  */
-function ProjectlessTicketMount({
-  routeId,
+function ProjectlessTicketFacts({
   proposalId,
   section,
   regionSection,
   tableSlots,
   clientCopy,
-  onOpenLeaf,
-  onUnfoldRegion,
   onRows,
   onInput,
 }: {
-  routeId: string;
   /** The proposal this paper is composed from, where it has one. */
   proposalId: string | null;
   section: SectionKey;
   regionSection: SectionKey;
   tableSlots: readonly TicketSlotKey[] | undefined;
   clientCopy: TicketClientCopy | null;
-  onOpenLeaf: (key: ShelfKey) => void;
-  onUnfoldRegion: (region: DocumentIndexKey) => void;
   onRows: (rows: readonly TicketRow[]) => void;
   onInput: (input: TicketInput) => void;
 }) {
@@ -751,82 +725,45 @@ function ProjectlessTicketMount({
       proposalBoardsQuery.isLoading,
     ],
   );
-  return (
-    <TicketFace
-      input={ticketInput}
-      routeId={routeId}
-      onOpenLeaf={onOpenLeaf}
-      onUnfoldRegion={onUnfoldRegion}
-      onRows={onRows}
-      onInput={onInput}
-    />
-  );
+  return <TicketFacts input={ticketInput} onRows={onRows} onInput={onInput} />;
 }
 
 /**
- * The ticket itself, once its facts are settled — one derivation and one
- * render, whether the facts came from a project's seven reads or from a paper
- * that has no project to read.
+ * The document's facts, once its reads are settled — one derivation, reported
+ * up, whether the facts came from a project's seven reads or from a paper that
+ * has no project to read.
+ *
+ * W3 · it renders nothing. The eight rows used to be printed by `JobTicket`
+ * between the letterhead and the guide; the lens band prints the worst of them
+ * on line 2 and the ladder prints the rest as the rail's own register, so this
+ * component is now only the place the reads are cheap.
  */
-function TicketFace({
+function TicketFacts({
   input,
-  routeId,
-  onOpenLeaf,
-  onUnfoldRegion,
   onRows,
   onInput,
 }: {
   input: TicketInput;
-  routeId: string;
-  onOpenLeaf: (key: ShelfKey) => void;
-  onUnfoldRegion: (region: DocumentIndexKey) => void;
   onRows: (rows: readonly TicketRow[]) => void;
-  /** W2 · the ladder reads the SAME input the ticket does (OD-8): one source,
+  /** W2 · the ladder reads the SAME input the band does (OD-8): one source,
    *  two registers, and no second query. The reads that compose it are here
    *  because this is where they are cheap, so the input travels back up the
    *  way the rows already do. */
   onInput: (input: TicketInput) => void;
 }) {
-  // The top of the paper on every document: the derivation runs when a fact
-  // changes, not on every render one of the reads beneath it causes.
-  const ticket = useMemo(() => {
-    const rows = deriveTicket(input);
-    return {
-      rows,
-      seam: deriveTicketSeam(rows, deriveTicketIdentity(input)),
-      head: deriveTicketHead(input),
-    };
-  }, [input]);
+  // The derivation runs when a fact changes, not on every render one of the
+  // reads beneath it causes.
+  const rows = useMemo(() => deriveTicket(input), [input]);
 
   useEffect(() => {
-    onRows(ticket.rows);
-  }, [ticket.rows, onRows]);
+    onRows(rows);
+  }, [rows, onRows]);
 
   useEffect(() => {
     onInput(input);
   }, [input, onInput]);
 
-  return (
-    <JobTicket
-      rows={ticket.rows}
-      seam={ticket.seam}
-      head={ticket.head}
-      onOpenLeaf={onOpenLeaf}
-      routes={{
-        planroom: shelfRouteFor('planroom', routeId) ?? undefined,
-        specbook: shelfRouteFor('specbook', routeId) ?? undefined,
-        moodboards: boardsRoutePath(routeId),
-      }}
-      onUnfoldRegion={onUnfoldRegion}
-      onOpenCallSheet={() =>
-        window.dispatchEvent(
-          new CustomEvent('document:open-call-sheet', {
-            detail: { mode: 'sheet' },
-          }),
-        )
-      }
-    />
-  );
+  return null;
 }
 
 /** The subset of the ticket's input the ladder's registers are read from
@@ -1221,16 +1158,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // routes it to the shelf's own page instead, so the reader arrives at what
   // they opened rather than at nothing.
 
-  // The region a ticket row unfolds — the same request and the same landing the
-  // running index's own rows make, so a jump from the ticket and a jump from
-  // the index take the reading line to the same place by the same act.
-  const unfoldRegion = useCallback(
-    (key: DocumentIndexKey) => {
-      requestRegionUnfold(key);
-      scrollToRegion(key, row?.project_id ?? '');
-    },
-    [row?.project_id],
-  );
+  // H4 — the band's one reversing act: pressing the household on line 1 puts
+  // the reader back at the top of the paper, focus on the letterhead itself.
+  const toTop = useCallback(() => {
+    const head = document.getElementById('document-project-status');
+    if (!head) return;
+    const reduceMotion = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    head.scrollIntoView({
+      block: 'start',
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    });
+    head.focus({ preventScroll: true });
+  }, []);
 
   // "Start a board" from the Add-to-project sheet reaches a room that now lives
   // on a shelf. Catch the intent, open the shelf, and re-fire once the room is
@@ -1519,8 +1460,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         jumpToSection(destination.section, destination.focusId, destination.activate);
       }
       if (destination.kind === 'ledger') openLedger(destination.name, destination.context);
+      // W3 — the guide's deep links used to be an `<a href>` the zone rendered
+      // itself. The band prints one act, as a press, so the switch has to carry
+      // the fourth destination or a deep-linked guide act would open nothing.
+      if (destination.kind === 'href') router.push(destination.href);
     },
-    [enrichedOperationalQuery, jumpToSection],
+    [enrichedOperationalQuery, jumpToSection, router],
   );
   const activateGuide = useCallback(() => {
     const destination = guideModel?.action?.destination;
@@ -1564,6 +1509,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     runningIndexRegions.map((region) => region.key),
     row?.project_id ?? '',
   );
+
+  // W3 · the two yields the lens line needs: whether the letterhead is still in
+  // frame (the band's s0 form, and L-6 on the rail head) and which stop's own
+  // head is crossing the frame's top band (L-3 on the ladder). Called above
+  // every early return, like the running index it stands beside.
+  const { letterheadInFrame, headInFrame } = useLensFrame();
 
   // Call Sheet (Wave 3) — rules of hooks: called unconditionally above the
   // early returns below, alongside the page's other hooks. The roster fetch is
@@ -1821,6 +1772,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
   const settled = sections.filter((s) => s.state === 'settled');
   settledCountRef.current = settled.length;
+  // The band's stage word where no phase is placed — the same fallback the
+  // rail head takes (`doc-spine.tsx`).
+  const activeSectionLabel =
+    sections.find((s) => s.state === 'active')?.label ?? '';
   const heldRoomName =
     (docRooms ?? []).find((r) => r.id === heldRoomId)?.name ?? null;
   // W1 — the letterhead's setup chip. deriveNeed returns at most one need per
@@ -1913,33 +1868,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         'reach-in': <LibraryReachIn proposalId={row.proposal_id} />,
       }
     : {};
-  // THE TICKET — the document's map, composed ONCE here and printed in exactly
-  // one of two positions (B2-L4, direction-b §9). With no table it stands
-  // between the letterhead and the guide, which is where B1 mounted it and
-  // where it stays on today's paper. With a table it stands above the table:
-  // the job's header over the job's middle (I138), the same rows, values,
-  // doors and seam either way — what differs is only what sits beneath it.
-  // `TableFrame` prints nothing when it has no composition, so handing the
-  // node to both positions cannot print two.
+  // THE FACTS — the document's own reads, mounted ONCE here and printing
+  // nothing (W3). Exactly one of the two stands on any document: a document
+  // that carries a project reads its seven facts; the four stages before the
+  // work starts have no project to read and take the honest empties
+  // `deriveTicket` holds for them. The rows and the input they report up are
+  // what the band's line 2 and the rail's ladder are BOTH derived from (OD-8),
+  // so the two registers can never state different numbers.
   //
-  // THE ORDER, RULED. direction-b §2.2 draws LETTERHEAD → TICKET → GUIDE on the
-  // paper with no table, and §9 asks for the ticket immediately above
-  // `TableFrame` where one stands — which puts the guide above the ticket on
-  // the four compositions. §9 wins, and deliberately: the guide's sentence is a
-  // quotation of a ticket row, and the reader who wants the whole map is one
-  // scroll from it either way, while a ticket divorced from the table it heads
-  // stops being the job's header over the job's middle (I138). Nothing about
-  // the guide's own position changes with the flag off.
-  //
-  // All seven spreads print it. A document that carries a project reads its
-  // seven facts; the four stages before the work starts have no project to
-  // read and print the honest empties `deriveTicket` holds for them. Exactly
-  // one of the two mounts stands on any document, so the rows the guide's
-  // leader is elected from are always the rows on this paper.
   // The three shelf leaves and the call sheet are project-keyed and mounted
   // only on a project document (see `DocumentShelves` / `CallSheetMount`
-  // below). The ticket reads the SAME predicate, so a row never prints a `→`
-  // for a leaf this document has not mounted.
+  // below). The derivation reads the SAME predicate, so a row never claims a
+  // door this document has not mounted.
   const ticketLeaves =
     row.engagement_kind === 'project' && Boolean(row.project_id);
   // The Speccing table already stands I139's rooms rail and Q1/C9's on-paper
@@ -1958,45 +1898,113 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           sentAt: row.oldest_unacked_sent_at,
         }
       : null;
-  const jobTicket =
-    row.project_id ? (
-      <JobTicketMount
+  const ticketFacts = row.project_id ? (
+    <ProjectTicketFacts
+      projectId={row.project_id}
+      section={row.active_section}
+      regionSection={spreadSection}
+      project={ticketLeaves}
+      tableSlots={ticketSlots}
+      unansweredPo={unansweredPo}
+      phase={ticketPhase}
+      rooms={docRooms ?? []}
+      roomsSettled={docRoomsSettled}
+      schedule={scheduleFacts}
+      scheduleSettled={!scheduleQuery.isLoading}
+      callSheetEnabled={callSheetGate.value}
+      rosterCount={(rosterRows ?? []).length}
+      rosterSettled={rosterSettled}
+      onRows={acceptTicketRows}
+      onInput={acceptTicketInput}
+      onDamagedOn={acceptDamagedOn}
+      clientCopy={clientCopy}
+    />
+  ) : (
+    <ProjectlessTicketFacts
+      proposalId={row.proposal_id}
+      section={row.active_section}
+      regionSection={spreadSection}
+      tableSlots={ticketSlots}
+      clientCopy={clientCopy}
+      onRows={acceptTicketRows}
+      onInput={acceptTicketInput}
+    />
+  );
+
+  // THE BAND — the one line the paper keeps (C-5, OD-1). It stands where the
+  // ticket stood and it is the document's, not the spread's: sticky under the
+  // letterhead on all seven spreads, including the four the worktable
+  // composes, so `TableFrame` no longer re-mounts anything at the table's head.
+  //
+  // The standing set is the red letter's own rows under the same gate the
+  // guide-or-zone ternary used to apply: a composed Desk answer for THIS
+  // engagement, and not a failed read (whose retry rides the guide's act).
+  // With nothing standing, line 2 prints the guide's sentence instead (C-6).
+  const bandNeeds =
+    row.engagement_kind === 'project' &&
+    enrichedOperationalNeeds &&
+    !deskGuidanceFailed
+      ? redLetterRows
+      : [];
+  const bandSegment = activeKey
+    ? (ladderSegments.find((segment) => segment.key === activeKey) ?? null)
+    : null;
+  const bandStop: LensReadingStop | null = bandSegment
+    ? {
+        key: bandSegment.key,
+        label: bandSegment.name,
+        countLine: bandSegment.countLine,
+      }
+    : null;
+  // R107/R108 — only the committed and record registers carry a day the band
+  // may state, the same test `scheduleRegister` applies on the rail.
+  const bandInstall =
+    scheduleFacts?.install?.date &&
+    (scheduleFacts.install.fidelity === 'committed' ||
+      scheduleFacts.install.fidelity === 'record')
+      ? fmtDay(scheduleFacts.install.date).toUpperCase()
+      : null;
+  const bandModel = deriveLensBand({
+    spreadKind: spreadSection,
+    ticket: ticketRows ?? [],
+    needs: bandNeeds,
+    guide: guideModel ? deriveGuideModel(guideModel, activateGuide) : null,
+    household: row.client_name,
+    stageWord: ticketPhase?.name ?? activeSectionLabel,
+    stageIndex: ticketPhase
+      ? { position: ticketPhase.position, of: ticketPhase.of }
+      : null,
+    installDate: bandInstall,
+    moneyFigure: ticketRows?.find((r) => r.key === 'money')?.emphasis ?? null,
+    // The proposal's own investment total is the Wave-5 `investment` stop; no
+    // read on this page states it today, so the proposal spread's right slot
+    // prints its sent date alone rather than an FF&E budget wearing its name.
+    proposalInvestment: null,
+    sentDate: liveProposal?.sent_at
+      ? fmtDay(liveProposal.sent_at).toUpperCase()
+      : null,
+    readingStop: bandStop,
+  });
+
+  // The letterhead instruments, mounted ONCE and handed to the letterhead's
+  // ledger column: at ≥1180 they print beside the title block, below it they
+  // fall under the vitals (the same `grid-cols-1` collapse `region-head.tsx`
+  // uses). Two mounts would register `useMobilePrimaryAction` twice.
+  const letterheadInstruments =
+    row.engagement_kind === 'project' && row.project_id ? (
+      <LetterheadInstruments
         projectId={row.project_id}
-        routeId={id}
-        section={row.active_section}
-        regionSection={spreadSection}
-        project={ticketLeaves}
-        tableSlots={ticketSlots}
-        unansweredPo={unansweredPo}
-        phase={ticketPhase}
-        rooms={docRooms ?? []}
-        roomsSettled={docRoomsSettled}
-        schedule={scheduleFacts}
-        scheduleSettled={!scheduleQuery.isLoading}
-        callSheetEnabled={callSheetGate.value}
-        rosterCount={(rosterRows ?? []).length}
-        rosterSettled={rosterSettled}
-        onOpenLeaf={toggleShelf}
-        onUnfoldRegion={unfoldRegion}
-        onRows={acceptTicketRows}
-        onInput={acceptTicketInput}
-        onDamagedOn={acceptDamagedOn}
-        clientCopy={clientCopy}
+        clientProfileId={row.client_profile_id}
+        clientName={row.client_name}
+        engagementId={row.engagement_id}
       />
-    ) : (
-      <ProjectlessTicketMount
-        routeId={id}
-        proposalId={row.proposal_id}
-        section={row.active_section}
-        regionSection={spreadSection}
-        tableSlots={ticketSlots}
-        clientCopy={clientCopy}
-        onOpenLeaf={toggleShelf}
-        onUnfoldRegion={unfoldRegion}
-        onRows={acceptTicketRows}
-        onInput={acceptTicketInput}
+    ) : row.engagement_kind !== 'project' && row.client_profile_id ? (
+      <LetterheadInstruments
+        clientProfileId={row.client_profile_id}
+        clientName={row.client_name}
+        engagementId={row.engagement_id}
       />
-    );
+    ) : null;
   const seal = lineage?.signedAt
     ? {
         date: fmtDay(lineage.signedAt),
@@ -2032,8 +2040,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         activeKey={activeKey}
         onJumpRegion={jumpToRegion}
         onToggleRoom={toggleRoom}
-        // W3 wires the head-in-frame observer; until then nothing yields.
-        headInFrame={null}
+        headInFrame={headInFrame}
+        // L-6 — at s0 the head yields the stage phrase only; the household and
+        // the count stay printed and turn `--text-muted` (RF-02).
+        letterheadInFrame={letterheadInFrame}
         // The head names the PHASE and where it stands — `PROCUREMENT &
         // ORDERS` over `4 OF 6` (reconciliation §7 / W1 walk differs #1) —
         // from the same derivation the letterhead's vitals and the ticket's
@@ -2088,64 +2098,43 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             ) : undefined
           }
           needsSetup={needsSetup}
+          /* R27 / R63: the letterhead instruments — one quiet DM-mono row,
+             STAGE-CONSISTENT. Send-a-note (and, where there's something to
+             mirror, View-as) ride the letterhead across stages, not
+             project-only:
+               · project      — full client mirror + project group thread + folio
+               · proposal      — direct-thread follow-up at the letterhead; the
+                                 proposal-grain mirror stays in the Proposal
+                                 section's ProposalInstruments (no duplicate
+                                 "view as them" under one letterhead)
+               · relationship  — direct-thread follow-up (no artifact to mirror)
+               · brief (lead)  — only when the captured lead has an in-app profile
+             A profile-less captured lead has no counterpart, so the component
+             hides both affordances itself (no empty row). The folio unfold is a
+             project artifact and stays project-only, below. */
+          instruments={letterheadInstruments}
         />
 
-        {/* THE TICKET — the document's map, mounted by the DOCUMENT rather
-            than the section, so all seven spreads read identically (B1, B2).
-            Between the letterhead and the guide/red-letter zone on the paper
-            that has no table; above the table where one stands, which is the
-            position `TableFrame` prints it in below. */}
-        {!table && jobTicket}
+        {/* The document's own reads — mounted by the DOCUMENT rather than the
+            section, so all seven spreads read identically (B1, B2). Prints
+            nothing; it reports the rows and the input the band and the ladder
+            are derived from. */}
+        {ticketFacts}
 
-        {/* The red letter replaces the guide only where it can actually speak
-            for the document: a composed Desk answer for THIS engagement that
-            carries at least one row. With no composition, a failed Desk read
-            (whose retry lives on the guide), or a composition that answered
-            "nothing", the project document keeps the same guide every other
-            kind gets — the zone renders null on an empty list, so without the
-            row count this branch printed nothing at all, and silence is not a
-            state this page is allowed to render. */}
-        {guideModel &&
-          (row.engagement_kind === 'project' &&
-          enrichedOperationalNeeds &&
-          redLetterRows.length > 0 &&
-          !deskGuidanceFailed ? (
-            <RedLetterZone rows={redLetterRows} />
-          ) : (
-            <DocumentGuide model={guideModel} onActivate={activateGuide} />
-          ))}
+        {/* THE BAND — where the ticket stood, and the one printing of the
+            worst standing exception (or the stage's guide sentence) at every
+            width. It carries `#doc-ticket-sentinel` as its own immediate
+            previous sibling. */}
+        <LensBand
+          model={bandModel}
+          open={letterheadInFrame}
+          readingStop={bandStop}
+          docId={id}
+          onToTop={toTop}
+        />
 
-        {/* R27 / R63: the letterhead instruments — one quiet DM-mono row under
-            the subtitle, now STAGE-CONSISTENT. Send-a-note (and, where there's
-            something to mirror, View-as) ride the letterhead across stages,
-            not project-only:
-              · project      — full client mirror + project group thread + folio
-              · proposal      — direct-thread follow-up at the letterhead; the
-                                proposal-grain mirror stays in the Proposal
-                                section's ProposalInstruments (no duplicate
-                                "view as them" under one letterhead)
-              · relationship  — direct-thread follow-up (no artifact to mirror)
-              · brief (lead)  — only when the captured lead has an in-app profile
-            A profile-less captured lead has no counterpart, so the component
-            hides both affordances itself (no empty row). The folio unfold is a
-            project artifact and stays project-only. */}
         {row.engagement_kind === 'project' && row.project_id && (
-          <>
-            <LetterheadInstruments
-              projectId={row.project_id}
-              clientProfileId={row.client_profile_id}
-              clientName={row.client_name}
-              engagementId={row.engagement_id}
-            />
-            <FolioLetterhead projectId={row.project_id} />
-          </>
-        )}
-        {row.engagement_kind !== 'project' && row.client_profile_id && (
-          <LetterheadInstruments
-            clientProfileId={row.client_profile_id}
-            clientName={row.client_name}
-            engagementId={row.engagement_id}
-          />
+          <FolioLetterhead projectId={row.project_id} />
         )}
 
         {/* D13: letterhead-anchored margin items (Pulse, section items) as
@@ -2242,7 +2231,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               onTurn={tablePin.turn}
               sealTurn={sealTurnNoted ? { signedDate: seal?.date ?? null } : null}
               slots={speccingSlots}
-              ticket={jobTicket}
             >
             {/* W4c — Table I's spread header: the household chip promoted into
                 the spread. Printed identity only (Q6). Mounted only on the
