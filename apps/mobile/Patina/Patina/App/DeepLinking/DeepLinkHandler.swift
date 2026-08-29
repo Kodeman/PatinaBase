@@ -98,6 +98,12 @@ public final class DeepLinkHandler {
         case "piece":
             return handlePieceURL(url)
 
+        // W6: the widget's two doors. They sit here, on the right side of the
+        // scheme guard, because `handle` checks universal links BEFORE that
+        // guard and drops every other scheme after it.
+        case Self.widgetTodayHost, Self.widgetRecordHost:
+            return handleWidgetURL(url)
+
         default:
             // Try path-based routing for universal links
             return handlePathBasedURL(url)
@@ -232,6 +238,57 @@ public final class DeepLinkHandler {
         default:
             return nil
         }
+    }
+
+    // MARK: - Widget URLs (W6)
+
+    /// `patina://today` — the plain open.
+    static let widgetTodayHost = "today"
+    /// `patina://record/<rowId>` — the row's own door.
+    static let widgetRecordHost = "record"
+
+    /// Map a widget URL to its route against the record the app itself wrote.
+    ///
+    /// Pure — no coordinator, no side effects — so the table is unit-testable,
+    /// exactly like `route(forUniversalLink:)`.
+    ///
+    /// The widget carries a row **id**, not a route: it has no access to
+    /// `AppRoute`, and duplicating `HouseRecord`'s route vocabulary in the
+    /// extension would give it a second place to drift. So the id is resolved
+    /// here, against the snapshot on disk.
+    ///
+    /// An unknown id, a row with no destination, or no snapshot at all resolves
+    /// to `.heroFrame` — Today, plain. A widget tap must never dead-end, and it
+    /// must never land somewhere the widget did not name.
+    static func route(forWidgetLink url: URL, in record: HouseRecord?) -> AppRoute? {
+        guard url.scheme == APIConfiguration.appURLScheme else { return nil }
+        switch url.host {
+        case widgetTodayHost:
+            return .heroFrame
+        case widgetRecordHost:
+            let rowId = url.pathComponents.dropFirst().joined(separator: "/")
+            guard !rowId.isEmpty, let record else { return .heroFrame }
+            let row = (record.moved + record.needsYou).first { $0.id == rowId }
+            return row?.route ?? .heroFrame
+        default:
+            return nil
+        }
+    }
+
+    private func handleWidgetURL(_ url: URL) -> Bool {
+        guard let route = Self.route(forWidgetLink: url, in: RecordSnapshotStore.shared.load()) else {
+            return false
+        }
+        // Stash-or-open, the same pair `navigate(to:)` does: a tap that arrives
+        // before SwiftUI has stood the coordinator up is held in `pendingRoute`
+        // and replayed by `configure(coordinator:)` — the coldest of the four
+        // doors, and the easiest to drop on the floor.
+        if let coordinator {
+            coordinator.openExternal(route)
+        } else {
+            pendingRoute = route
+        }
+        return true
     }
 
     // MARK: - Path-Based URLs
