@@ -75,7 +75,7 @@ export function KickoffBand({
   return (
     <div
       data-kickoff-band
-      className="mt-4 flex flex-wrap items-baseline justify-between gap-x-5 gap-y-2 border-l-2 border-[var(--color-clay)] bg-white/40 px-3 py-2.5"
+      className="mt-[var(--doc-region-gap)] flex flex-wrap items-baseline justify-between gap-x-5 gap-y-2 border-l-2 border-[var(--color-clay)] bg-white/40 px-3 py-2.5"
     >
       <div className="min-w-0">
         <p className="text-[0.8rem] text-[var(--color-charcoal)]">

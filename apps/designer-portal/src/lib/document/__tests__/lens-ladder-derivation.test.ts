@@ -326,6 +326,18 @@ describe('deriveLadderDoors', () => {
     expect(doors.map((door) => door.key)).toEqual(['clientcopy']);
   });
 
+  // The seed's pre-work paper (`…d6`, project_id NULL) as it actually stands:
+  // no project behind it, and its ninth row only appears on the Finalize
+  // table. OD-8 gives it no door at all — which is why the ladder prints no
+  // `FILED WITH THIS JOB` over it.
+  it('files nothing under a pre-work proposal with no project and no ninth row', () => {
+    const doors = deriveLadderDoors({
+      ticket: ticket({ section: 'proposal', project: false }),
+      held: false,
+    });
+    expect(doors).toEqual([]);
+  });
+
   it('gives the release a second home while a room is in hand', () => {
     const doors = deriveLadderDoors({ ticket: ticket(), held: true });
     expect(doors.map((door) => door.key)).toContain('release-room');

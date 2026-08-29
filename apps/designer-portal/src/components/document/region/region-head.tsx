@@ -129,7 +129,15 @@ export function RegionHead({
   return (
     <div
       data-region-head={regionKey}
-      className="grid grid-cols-1 items-start gap-x-4 gap-y-2 min-[1180px]:grid-cols-[1fr_auto]"
+      // B4/B5 — the left track carries a FLOOR, not a bare `1fr`. `auto` sizes
+      // the ledger column to its max-content (the acts are `whitespace-nowrap`
+      // and `shrink-0`, so that is the whole ledger on one line) and `1fr`
+      // takes only what is left: under the four-act Pieces ledger at 1440 that
+      // left ~60px and the status broke one word per line. A `minmax(0,1fr)`
+      // would change nothing — the left column already carries `min-w-0`, so
+      // its automatic minimum is 0 either way. The floor is what caps the
+      // ledger column, and the ledger's own `flex-wrap` does the rest.
+      className="grid grid-cols-1 items-start gap-x-4 gap-y-2 min-[1180px]:grid-cols-[minmax(20rem,1fr)_auto]"
     >
       <div className="min-w-0">
         {eyebrow && (
