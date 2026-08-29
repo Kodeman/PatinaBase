@@ -164,10 +164,17 @@ export function MarginNote({
     documentEvents.wayfinding.marginNote({ key: noteKey, action: 'dismissed' });
   };
 
+  // RF-03: the note is capped at two lines. A string body keeps its full text
+  // in `title` so nothing the clamp cuts is lost.
+  const fullText = typeof children === 'string' ? children : undefined;
+
   return (
     <aside role="note" className={`flex max-w-[34ch] items-start gap-2 ${className ?? ''}`}>
       <p className="min-w-0 flex-1">
-        <span className="font-heading text-[15px] italic leading-[1.55] text-[var(--text-body)]">
+        <span
+          title={fullText}
+          className="line-clamp-2 font-heading text-[15px] italic leading-[1.55] text-[var(--text-body)]"
+        >
           <span aria-hidden className="mr-1 not-italic text-[var(--text-muted)]">
             –
           </span>

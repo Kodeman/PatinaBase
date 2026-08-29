@@ -55,6 +55,41 @@ describe('MarginItem', () => {
     expect(chip.className.replace('doc-elevated', '')).not.toMatch(/shadow/);
   });
 
+  it('prints where it is anchored — beside a region, or about the whole job', () => {
+    // RF-03: `margin_items` only ever resolves a `line` anchor to an FF&E line
+    // (00197), so a line anchor prints the Pieces region by name; a section or
+    // letterhead anchor is about the document itself.
+    const { rerender } = render(<MarginItem row={row()} open={false} />);
+    expect(
+      document.querySelector('[data-margin-anchor-line]'),
+    ).toHaveTextContent('ABOUT THE WHOLE JOB');
+
+    rerender(
+      <MarginItem
+        row={row({ anchor_kind: 'section', anchor_id: null })}
+        open={false}
+      />,
+    );
+    expect(
+      document.querySelector('[data-margin-anchor-line]'),
+    ).toHaveTextContent('ABOUT THE WHOLE JOB');
+
+    rerender(
+      <MarginItem
+        row={row({ anchor_kind: 'line', anchor_id: 'ffe-1' })}
+        open={false}
+      />,
+    );
+    const anchor = document.querySelector('[data-margin-anchor-line]')!;
+    expect(anchor).toHaveTextContent('BESIDE PIECES');
+    // The rail's register: muted mono, never a pigment that fails on stock.
+    expect(anchor).toHaveClass(
+      'font-mono',
+      'text-[11px]',
+      'text-[var(--text-muted)]',
+    );
+  });
+
   it('claims no unfold state when no onToggle makes it expandable', () => {
     // Expandability is decided by the presence of onToggle, not by the row's
     // kind — MarginRail withholds it (only) for `time` rows, but the component
