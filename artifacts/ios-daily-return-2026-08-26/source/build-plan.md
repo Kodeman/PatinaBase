@@ -298,6 +298,23 @@ seed fix (`studio_id_not_designer_studio`) — pre-existing.
 moved, never what is owed), foreground refresh; opt-in due-date local reminder on the invoice.
 ASC bundle id + App Group provisioning on device = Kody.
 
+### W6 — DONE 2026-08-28 (merged; `waves/w6/`; 1523 tests; no migration)
+The PatinaWidget target (small Home widget + Lock Screen accessory) draws the Record's MOVED rows
+and the house line from `widget-snapshot.json` in the App Group, behind `house-widget`; widget and
+notification deep links land on the right tab on both roots; the opt-in invoice due-date reminder;
+one SessionScope reset on the auth seam (72 `static let shared` holders enumerated and pinned);
+the Ask-designer thread and the seat pick the project the house is waiting on; the record's
+foreground rebuild fires from the app root. **Not verified on glass:** a widget actually rendered
+on a Home/Lock Screen (simulator long-presses die before the gallery opens) — a device claim, with
+the App Group, ASC registration of `cloud.patina.app.widget`, and the associated-domains capability.
+
+## Program status — 2026-08-28
+All scripted waves are on `main`. What remains is Kody's: the OWED list in `RESUME.md` (Sanity
+tour bodies before `house-first`; PostHog flags; a real `sk_test` locally and the Stripe Tax /
+shipping ruling before Path A opens; the client-portal deploy for the AASA + `/piece/<id>` page;
+App ID capabilities + the widget bundle id; a TestFlight archive and a device pass), plus the
+backlog rows recorded per wave above.
+
 ### Later (not this program)
 Household second seat (Q9); maker pages; Live Activity on delivery; designer-portal FF&E join (B
 W7); client-portal deploy for AASA + piece route (Kody's "ship"); TestFlight archive + device pass

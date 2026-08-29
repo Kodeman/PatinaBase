@@ -1,4 +1,4 @@
-# RESUME — The Daily Return (Patina iOS client app), review DONE · build program IN PROGRESS
+# RESUME — The Daily Return (Patina iOS client app), review DONE · build program DONE (2026-08-28)
 
 ## The ask (Kody, verbatim)
 "Assemble a team of interior designers, home owners and UX UI designers. Review the Patina iOS
@@ -24,7 +24,7 @@ see `source/` and `research/` (index in the previous RESUME text, preserved in g
 | W3 tab bar behind `house-first` (B-1/B-2/B-7/B-8; `AppRoute.studio`; tour on the bar) | DONE | `1cb71c346` | `waves/w3/` (re-walk PASS; Sanity tour copy OWED to Kody before the flag flips) |
 | W4 house on Today (rooms + budgets, saved date/room/note, decays removed, timeline, seat project rule, guest-session durability, 00539) | DONE (four fix rounds; rulings in `waves/w4/rulings-fable.md`) | `2fffd48b3` | `waves/w4/` (walk 4 PASS on the wave's items; two Companion-at-AX-size defects → W5 A11Y lane) |
 | W5 purchase (`direct-orders`; R3 pre-emption; 00540 attribution + fulfillment intake; A11Y carry-overs) | DONE (walk PASS; Checkout hand-off BLOCKED by the local placeholder Stripe key) | see git log `chore(daily-return): integrate W5` | `waves/w5/` |
-| W6 widget + deep links (`house-widget`) | script ready `source/workflows/w6-widget.js` | — | — |
+| W6 widget + deep links + due reminder + session isolation (`house-widget`) | DONE (1523 tests; widget-on-Home-Screen pixel proof is a device claim) | see git log `chore(daily-return): integrate W6` | `waves/w6/` |
 
 ## How a wave runs (the pattern that works)
 Each wave = one Workflow script in `source/workflows/`: steward (worktrees `.codex/worktrees/agent-dr-<wave>-<lane>`,
@@ -60,6 +60,7 @@ the shared DerivedData (transient failures = contention).
 - Device pass + TestFlight archive (Apple Pay in Checkout, push round trip, universal links, App Group).
 
 ## Resume prompt
-"Read `artifacts/ios-daily-return-2026-08-26/RESUME.md` and the memory file. Check `/workflows`
-for the running wave; if it completed, review its integration.md + walk.md, merge per the pattern
-above, then launch the next wave's script from `source/workflows/`."
+"Read `artifacts/ios-daily-return-2026-08-26/RESUME.md` and the memory file. Every scripted wave is
+on main. Work through the OWED list with Kody (flags, Sanity copy, Stripe key + tax ruling,
+client-portal deploy, App ID capabilities, TestFlight + device pass), then the per-wave backlog rows
+in `source/build-plan.md`."
