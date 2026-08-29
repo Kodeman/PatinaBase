@@ -1,6 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: "Privacy Policy — Patina" };
+export const metadata: Metadata = { title: 'Privacy Policy — Patina' };
 
 export default function PrivacyPage() {
   return (
@@ -17,11 +17,11 @@ export default function PrivacyPage() {
       <Section heading="Who we are">
         <p>
           Patina connects interior designers with the manufacturers who build
-          their furniture. This policy covers the Patina Designer Portal at{" "}
+          their furniture. This policy covers the Patina Designer Portal at{' '}
           <span className="font-medium text-[var(--color-charcoal)]">
             app.patina.cloud
-          </span>{" "}
-          and the Patina Chrome extension. If you have questions, write to{" "}
+          </span>{' '}
+          and the Patina Chrome extension. If you have questions, write to{' '}
           <a
             href="mailto:hello@patina.cloud"
             className="underline decoration-[var(--border-default)] hover:text-[var(--color-charcoal)]"
@@ -38,20 +38,20 @@ export default function PrivacyPage() {
           <li>
             <span className="font-medium text-[var(--color-charcoal)]">
               Account information
-            </span>{" "}
+            </span>{' '}
             — your email, name, and studio, when you create a Patina account.
           </li>
           <li>
             <span className="font-medium text-[var(--color-charcoal)]">
               Content you add
-            </span>{" "}
+            </span>{' '}
             — projects, the products you capture, images, notes, and client
             details you put into your workspace.
           </li>
           <li>
             <span className="font-medium text-[var(--color-charcoal)]">
               Usage information
-            </span>{" "}
+            </span>{' '}
             — product analytics through PostHog, hosted in the US. The Chrome
             extension does not do session recording.
           </li>
@@ -116,7 +116,7 @@ export default function PrivacyPage() {
 
       <Section heading="Retention and deletion">
         <p>
-          To delete your account, email{" "}
+          To delete your account, email{' '}
           <a
             href="mailto:hello@patina.cloud"
             className="underline decoration-[var(--border-default)] hover:text-[var(--color-charcoal)]"
@@ -139,7 +139,7 @@ export default function PrivacyPage() {
 
       <Section heading="Contact">
         <p>
-          Questions about this policy or your data go to{" "}
+          Questions about this policy or your data go to{' '}
           <a
             href="mailto:hello@patina.cloud"
             className="underline decoration-[var(--border-default)] hover:text-[var(--color-charcoal)]"

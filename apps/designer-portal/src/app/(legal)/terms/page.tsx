@@ -1,6 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: "Terms of Service — Patina" };
+export const metadata: Metadata = { title: 'Terms of Service — Patina' };
 
 export default function TermsPage() {
   return (
@@ -17,7 +17,7 @@ export default function TermsPage() {
       <Section heading="The service">
         <p>
           Patina connects interior designers with the manufacturers who build
-          their furniture. The Designer Portal at{" "}
+          their furniture. The Designer Portal at{' '}
           <span className="font-medium text-[var(--color-charcoal)]">
             app.patina.cloud
           </span>
@@ -83,7 +83,7 @@ export default function TermsPage() {
 
       <Section heading="Contact">
         <p>
-          Questions about these terms go to{" "}
+          Questions about these terms go to{' '}
           <a
             href="mailto:hello@patina.cloud"
             className="underline decoration-[var(--border-default)] hover:text-[var(--color-charcoal)]"

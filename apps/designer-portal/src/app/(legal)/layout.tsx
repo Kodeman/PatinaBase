@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from 'next/link';
 
 /**
  * The (legal) route group: static, public-not-landing pages (/privacy,
