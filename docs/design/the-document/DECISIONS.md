@@ -10044,6 +10044,34 @@ value so they separate by hue and not by depth; each `--tab-*` is gated as a dar
 label and the six are held to a descending value ladder, so the naming survives a colourblind read and a
 greyscale print.
 
+**Implementation note (added after the adversarial review, 2026-08-28).** Three things landed on the
+branch that this entry did not rule, and one review finding is accepted with a note. **The mono floor:**
+a 236-file sweep raised 911 sub-11px font-size literals to `11px` across the whole Document surface, not
+only the surfaces the mockup draws — it is recorded here because it is the largest change on the branch
+and it goes further than "typography goes no further than the mockup". The floor now also covers the four
+files this direction itself restyled (`ffe-section.tsx`, `doc-letterhead.tsx`, `region/fold-seam.tsx`,
+`stamp.tsx`, whose `xs` mark went 10px → 11px), which the sweep had skipped; deliberate micro-marks
+(Strata mark bars, dots) are exempt, and the five `✓` glyphs the sweep raised inside fixed `h-[13px]`
+tick boxes are reverted to 8px, because an 11px bold glyph does not fit a 10px content box. **The
+RegionRule default stays `strong`** — the mockup draws exactly one strong rule, on the Pieces head, but
+it draws *none* of the eleven other call sites (mood boards, care, schedule, money, the approval
+document), so a `mid` default would have demoted all eleven from a 6px double rule to a 1.5px single line
+by omission rather than by ruling; `mid` is opt-in. **The FF&E decision-due resting tint**
+(`rgba(232,197,71,0.05)`) is retired: the golden **filled stamp** is the at-a-glance signal now, and a
+resting 5% wash under a row that also has a hover wash reads as two answers to one question. **Filled
+stamps take a fifth tone, `delivered`** (sage `#A8B5A0` at 26% over `#FCFAF6` = `--fill-delivered-tint
+#E6E8E0`, 1.186:1 off the paper, charcoal at 11.69:1, border `--color-sage-ink`), because eight FF&E
+states had collapsed onto ORDERED's clay plate — money committed and goods arrived are two different
+answers to "where is this piece". Any state with no ruled fill keeps the **outline**; a fill is a recipe,
+not a default. **`DocSheet` carries the elevation** and every Document overlay built on it inherits it:
+that is accepted, not a leak — `DocSheet` *is* the ledger-sheet primitive, so "the open ledger sheet" and
+"every DocSheet" name the same object; the budget stays three code sites. The **fold seam** settles on a
+CSS keyframe rather than a hydration-gated opacity, so a folded region's only control is never invisible
+while it waits for JS. The **spine's rail labels** (`On this paper` and the running index's inactive
+values) moved off `--color-aged-oak` (3.51:1 on `#E8E3DB`) to `--text-muted` (7.52:1), and
+`contrast.test.ts` now gates the rail's off-register pigments at the source as well as the eighteen
+`--wash-*` tokens, composited over the ground each actually paints on.
+
 Deck: https://claude.ai/code/artifact/f333f3f1-c2d5-4d79-8480-7e22f7330500 · clickable mockup:
 https://claude.ai/code/artifact/bf781dba-3938-464d-849d-5787bbd79cd7. Implementation branches:
 `document-life/foundation` (tokens, the wash mechanic and component, the two gates, this entry) → the
