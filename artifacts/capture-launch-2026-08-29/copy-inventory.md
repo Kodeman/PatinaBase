@@ -25,7 +25,7 @@ button copy.
 | 105 | "Get started" | primary button, step 0 | — |
 | 106–107 | "Pull any furniture page into your Patina library — verified, priced, and routed to the right project. Let's set it up; it takes a minute." | body, step 0 | **"verified"** is a puffery risk: nothing in the pipeline actually verifies a captured field against a source of truth — extraction is best-effort DOM scraping (this audit's own extraction-report.json shows wrong currencies, missed dimensions, a crash). Reads as an overclaim on day one. Plain-spoken otherwise. |
 | 113–119 | "Connect workspace" / "Sign in to Patina" / "Open Patina to sign in" | eyebrow/title/button, step 1 | — |
-| 121–122 | "Capture saves straight into your workspace. Sign in to the Patina portal and the extension adopts your session automatically — then come back here." | body, step 1 | "adopts your session automatically" is dev-flavored ("session" as an auth-token concept) for a first-run explainer; a plainer "you'll be signed in here too" would match the plain-spoken register better. Low severity. |
+| 121–122 | "Capture saves straight into your workspace. Sign in to the Patina portal and the extension picks up your sign-in on its own — then come back here." | body, step 1 | Already softened from the original "adopts your session automatically" (dev-flavored "session"-as-auth-token framing) to this plainer phrasing — no longer a flag as of this reading. |
 | 129 | "I'm signed in →" | button, step 1 | — |
 | 137 | "Why page access" / "Reading the page" / "Makes sense" | eyebrow/title/button, step 2 | "Makes sense" as a primary CTA is casual to the point of vague, but this is a low-stakes permissions screen — fine. |
 | 138–140 | "To pull a product's name, price, and images, Patina reads the page you're on when you capture — only then, only that tab. Nothing is read in the background, and nothing leaves your workspace." | body, step 2 (page-access primer) | **False claim, high severity.** "Nothing leaves your workspace" is not true: PostHog analytics and Supabase both receive data from the extension (`src/lib/analytics.ts`, `src/lib/supabase.ts`, every save/search RPC). This is the exact install-time trust claim a privacy-conscious installer will hold Patina to later. Needs a rewrite or removal — not a wording nit. |
@@ -178,7 +178,7 @@ button copy.
 
 | Line | String | Surface | Voice note |
 |---|---|---|---|
-| 41–42 | "Sent for approval" / "The client has been notified." | success state | Plain, clear. |
+| 39/42 | "Sent for approval" / "The client has been notified." | success state | Plain, clear. |
 | 51 | "Capture another" | button | — |
 | 60–61 | "Send for approval" / "Create a client decision" | overlay title/subtitle | **"a client decision" is unexplained internal product terminology, medium severity.** Nothing on this screen or the ones before it ever tells the installer what a "decision" is as a distinct object from an "approval" or a "proposal" — the subtitle assumes the reader already knows Patina's spec-book decision model. Ties back to the same bare "Decision" label in RecentCapturesSheet. |
 | 69 | "Sending…" / "Choose a client" / "Send to client" | submit button states | — |
@@ -205,7 +205,7 @@ button copy.
 All five Top-5 findings above have shipped. Exact current strings, read from
 source on this date (worktree `capture-launch/w3-e11` @ `80cdbf3eb`):
 
-1. **False privacy claim — RESOLVED.** `onboarding.tsx:148-150` (step 2) now
+1. **False privacy claim — RESOLVED.** `onboarding.tsx:144-150` (step 2) now
    reads: *"To read a product's name, price, and images, Patina reads the
    page you're on when you capture — only then, only that tab. What it reads
    goes to your Patina workspace. We keep light usage stats — what you do in
@@ -225,7 +225,7 @@ source on this date (worktree `capture-launch/w3-e11` @ `80cdbf3eb`):
 3. **Raw `{confidence} confidence` badge — RESOLVED.** `InsightRegion.tsx`
    no longer renders a confidence string at all — its body copy is now
    *"Read {n} of {m} fields from {host}."* with a flagged-fields callout
-   (lines 44-49), no raw score. `InsightSheet.tsx` similarly dropped the
+   (lines 42-47), no raw score. `InsightSheet.tsx` similarly dropped the
    score line; its body copy is *"Pulled from {host}. Verdigris means we're
    confident; rust means it needs your eye."* (lines 30-33). `FieldBadge.tsx`
    shows only `verified`/`read`/`edited`/`needs check` — never a numeric or
@@ -249,7 +249,12 @@ Lower-severity notes from the original audit that no in-flight lane has
 addressed, carried forward for a future copy pass:
 
 - `AuthScreen.tsx:104` — "Signing in..." uses a three-dot ellipsis, inconsistent with the single-glyph "…" used elsewhere in the panel (e.g. `CommitBar.tsx`).
-- `TradeRegion.tsx:28-30` — "resolves against {vendor}" / "surface trade pricing" are dev-register verbs; a plainer designer-facing phrasing was suggested but not applied.
 - `TerminalScreens.tsx:91` — the error screen's fallback string still says "extraction" ("The page blocked extraction or timed out").
-- `SettingsSheet.tsx` — "Trade layer" / "region" (line 7's hint) and "vendor mode" (line 11's hint) are still internal-architecture nouns in toggle copy.
+- `SettingsSheet.tsx:9` — "vendor mode" ("Switch to vendor mode on brand pages") is still an internal page-mode enum surfacing directly in toggle copy.
 - `TerminalScreens.tsx:47-49` (S4 save-outcome subline) — "held for review" still names an internal moderation state without saying who reviews or why.
+
+Dropped from this list (W1 removed the surfaces they described): the
+`TradeRegion.tsx:28-30` "resolves against {vendor}" / "surface trade
+pricing" item — `TradeRegion.tsx` no longer exists — and the
+`SettingsSheet.tsx` "Trade layer" / "region" (formerly line 7's hint) item —
+the Trade layer toggle was cut along with the trade-pricing region.

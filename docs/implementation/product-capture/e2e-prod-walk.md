@@ -1,5 +1,7 @@
 # Chrome Extension — Prod E2E Walk (v0.3.0)
 
+Targets the 0.3.0 release; commands derive the version from package.json.
+
 **Purpose:** one pass of all **five** write paths (library, project room, inbox,
 client decision, update-existing) against **live Strata prod**, followed by
 read-only verification per `patina-prod-ops`. Distinct from
@@ -35,14 +37,13 @@ gh workflow run extension-cws.yml -f dry_run=true
 # wait ~2–3 min for the run to finish, then:
 RUN_ID="$(gh run list --workflow=extension-cws.yml --limit 1 --json databaseId -q '.[0].databaseId')"
 gh run watch "$RUN_ID"
-gh run download "$RUN_ID" -n patina-capture-0.3.0 -D "$TMPDIR/patina-capture-e2e"
+gh run download "$RUN_ID" -n "patina-capture-$(node -p "require('./apps/extension/package.json').version")" -D "$TMPDIR/patina-capture-e2e"
 unzip -o "$TMPDIR"/patina-capture-e2e/*.zip -d "$TMPDIR/patina-capture-e2e/unpacked"
 ```
 
-(If `patina-capture-0.3.0` doesn't match the artifact name, the workflow
-names it `patina-capture-<package.json version>` — check
-`apps/extension/package.json`'s `version` field first; it's `0.3.0` as of
-this write-up.)
+Run this from the repo root — the artifact name is derived from
+`apps/extension/package.json`'s `version` field, not hardcoded, so it stays
+correct once the 0.3.0 bump lands in W4 (these docs merge before that).
 
 ### 3. Load unpacked
 
@@ -107,13 +108,37 @@ existing row via exact-URL dedup):
 4. **Send as client decision** — capture the URL a fourth time, click **Send
    for client approval →**, choose the throwaway client from setup, click
    **Send to client**, confirm "Sent for approval" / "The client has been
-   notified." (`DecisionSheet.tsx:41-42`).
+   notified." (`DecisionSheet.tsx:39/42`).
 5. **Update existing** — reopen the panel on the same URL once more. The
    dedup banner now names step 1's product (the first-created row — dedup
    matches on exact URL, and multiple products share this URL after steps
    1–4, so confirm the name shown is the one you expect). Click
    `Update "{name}"`. Confirm S4 again, with **no new product row created**
    (verify in the next section).
+
+## The R5 save-error UX (offline / expired session)
+
+CL W3-E10's final pass adds a live-retry error path to R5 — worth one real
+pass against prod, not just the matrix's isolated edge-case rows, since this
+is the failure mode a designer actually hits on a bad connection.
+
+6. **Trigger a save error** — reopen the panel on the same Stevens Sofa URL,
+   let the draft populate, then DevTools → Network → Offline, and click
+   **Save to library**. Confirm the panel lands on R5 with title **"Couldn't
+   save"** and body text exactly `"You're offline — your draft is kept.
+   Retry when you're back."`, with two buttons: **Retry** and **"Edit the
+   record"** (`TerminalScreens.tsx`, CL W3-E10).
+7. **Confirm "Edit the record"** — click it. Confirm you land back on C2
+   (the record screen) with every field from the draft still populated —
+   nothing was discarded (`dispatch({ type: 'NAV', screen: 'C2' })`).
+8. **Confirm retry-in-flight copy, then complete the save** — go back to R5
+   (re-trigger the same offline save if needed), go back online, click
+   **Retry**, and confirm the body text swaps to exactly `"Retrying your
+   save…"` while in flight (not just the button, which separately reads
+   "Retrying…"), then lands on S4 "Saved to your library" once the retry
+   succeeds — the same commit target (library) it started as, with no
+   re-typing. This produces a 6th `products` row captured_by your `<uid>`;
+   the verification query below still applies to it.
 
 ## Verification (READ-ONLY — per `patina-prod-ops`)
 
@@ -122,7 +147,8 @@ Strata's SQL editor, as `service_role`/`postgres`. Replace only `<uid>` —
 every value below is real Room & Board data.
 
 **Products** (steps 1, 2, 3, 4 each insert one row; step 5 updates step 1's
-row in place — expect exactly 4 rows, not 5):
+row in place, no new row; step 8's completed retry inserts a 6th — expect
+exactly 5 rows):
 
 ```sql
 select id, name, status, layer, captured_by, captured_at, updated_at, source_url
@@ -178,9 +204,9 @@ order by cd.sent_at desc;
 ```
 
 **Cross-check step 5 (update) didn't create a new row**: the products query
-above should show exactly 4 distinct `id`s across all five steps — if it
-shows 5, step 5's dedup match failed silently and a duplicate was created
-instead of an update.
+above should show exactly 5 distinct `id`s across all six write steps
+(1–5 plus step 8's completed retry) — if it shows 6, step 5's dedup match
+failed silently and a duplicate was created instead of an update.
 
 ## Analytics check (PostHog)
 
@@ -214,12 +240,14 @@ order by timestamp desc
 limit 10
 ```
 
-Run in PostHog's SQL/HogQL insight editor. Expect **5 rows**, one per
-write-path step above, each with `properties.domain = 'roomandboard.com'`
-(no `www.`) and `properties.captureTimeMs` a positive number in the
-low-thousands (ms). `properties.destination` must match the step that
-produced it — this is the check that actually proves each of the five write
-paths landed where it was supposed to, not just that *a* product row
+Run in PostHog's SQL/HogQL insight editor. Expect **6 rows**: one per
+write-path step above, plus step 8's completed retry — each with
+`properties.domain = 'roomandboard.com'` (no `www.`) and
+`properties.captureTimeMs` a positive number (step 8's will run higher than
+the others since its clock includes the failed offline attempt's dwell
+time before the retry succeeded). `properties.destination` must match the
+step that produced it — this is the check that actually proves each write
+path landed where it was supposed to, not just that *a* product row
 appeared:
 
 | Step | Write path | Expected `destination` |
@@ -229,13 +257,16 @@ appeared:
 | 3 | Send to inbox | `inbox` |
 | 4 | Send as client decision | `decision` |
 | 5 | Update existing | `update` |
+| 8 | Retry (completed offline save) | `library` — `deriveRetryKind` returns the original `lastCommitKind` ('library', from step 6's initial attempt), so the retried save reports the same destination it started as |
 
 ### Extraction telemetry
 
-Each of the five panel opens on the Stevens Sofa page should also emit a
-matched `extraction_started` → `extraction_completed` pair (`mode: 'product'`
-— `use-capture-controller.ts` calls `extensionEvents.extractionStart('product')`
-/ `extractionComplete('product', fieldCount, confidence)` around the
+Each of the six panel opens on the Stevens Sofa page (steps 1–6 — step 8
+reuses step 6's draft via Retry rather than re-extracting, so it does not
+add a seventh pair) should also emit a matched `extraction_started` →
+`extraction_completed` pair (`mode: 'product'` — `use-capture-controller.ts`
+calls `extensionEvents.extractionStart('product')` /
+`extractionComplete('product', fieldCount, confidence)` around the
 extraction call; `extractionError('product', ...)` fires instead only if the
 page fails to extract, which a clean SSR page like Room & Board shouldn't):
 
@@ -248,18 +279,20 @@ order by timestamp desc
 limit 20
 ```
 
-Expect **5 `extraction_started` rows** (`mode = 'product'`) each paired with
+Expect **6 `extraction_started` rows** (`mode = 'product'`) each paired with
 an adjacent-in-time **`extraction_completed`** row (`mode = 'product'`,
 `field_count` populated, `confidence` one of `high`/`medium`/`low`) — no
-`extraction_failed` rows for this walk. If any pair is missing its
+`extraction_failed` rows for this walk (going offline breaks the *save*, not
+the extraction that already happened before it). If any pair is missing its
 `extraction_completed` half, that panel open never actually extracted a
-draft and one of the five write-path steps above didn't run against real
-extracted data.
+draft and the write-path step it fed didn't run against real extracted
+data.
 
 ## After the walk
 
-This leaves real data on prod under your own account: 4 `products` rows, 1
-`proposal_captures` row, 1 `project_ffe_items` placement, 1 `client_decisions`
+This leaves real data on prod under your own account: 5 `products` rows
+(steps 1–4 plus step 8's completed retry), 1 `proposal_captures` row, 1
+`project_ffe_items` placement, 1 `client_decisions`
 row (which notifies and emails the throwaway client via
 `notification-digest-daily`, 15:00 UTC — expect that email). None of it is
 `PROBE-`-prefixed since this is a real designer-account walk, not the

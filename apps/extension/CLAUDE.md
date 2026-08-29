@@ -1,6 +1,6 @@
 # Chrome Extension
 
-Plasmo-based extension for product capture from e-commerce sites. v0.3.0.
+Plasmo-based extension for product capture from e-commerce sites. 0.3.0 (target).
 
 ## Commands
 
