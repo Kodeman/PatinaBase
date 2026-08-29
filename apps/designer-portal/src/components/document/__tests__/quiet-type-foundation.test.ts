@@ -39,9 +39,10 @@ describe('Quiet Work type foundation', () => {
     expect(quietInk).toBeDefined();
     expect(contrastRatio(quietInk!, '#FAF7F2')).toBeGreaterThanOrEqual(6.3);
     // R126 split the ramp: muted, subtle and faint were three names on this one
-    // ink and are now three real steps. The guarantee is unchanged and now
-    // covers all three — small copy is a quiet ink, never a material pigment —
-    // so it is asserted on the values rather than on the alias form.
+    // ink and are now three real steps. T4 — this is a KIND change, not a
+    // widening: the old assertion pinned the alias form and so guaranteed the
+    // pigment; this one covers all three steps but guarantees only the ratio,
+    // which a warm clay-ish pigment could also satisfy.
     for (const step of ['--text-muted', '--text-subtle', '--text-faint']) {
       const hex = globals.match(
         new RegExp(`${step}:\\s*(#[\\dA-F]{6})`, 'i'),

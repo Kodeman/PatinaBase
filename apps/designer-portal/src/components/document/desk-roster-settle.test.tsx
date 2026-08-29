@@ -2,6 +2,10 @@
  * R126 — the one orchestrated moment. Its own file because the guard is a
  * module-level flag: a suite that rendered the roster earlier would have
  * spent it, and this is exactly the behaviour under test.
+ *
+ * T5 — the two `it`s below are ORDERED, deliberately: the second asserts what
+ * the first consumed. `jest -t 'never settles again'` in isolation fails, and
+ * should — the flag is the subject, not a fixture.
  */
 
 import { render } from '@testing-library/react';
