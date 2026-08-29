@@ -7,10 +7,11 @@
 //  what these pin is that both go through ONE entry point, and that two asks
 //  for the same foreground rebuild the record once.
 //
-//  Once is the safety property, not an optimisation: `RecordRefresh` stamps the
-//  visit at the end of a rebuild, so a second rebuild for the same open would
-//  build against that stamp and take every row's `isNew` tick off on the open
-//  that should have shown them.
+//  Once is a cost property, not a safety one: a second rebuild seconds later
+//  would still compute its six-hour suppression from the snapshot's
+//  `window.end` and reuse the OLD anchor, so the `isNew` ticks survive either
+//  way. What the root really put at risk is the visit stamp — a foreground that
+//  never reaches Today claiming the record was seen — which is `stampVisit`.
 //
 
 import Testing
@@ -102,5 +103,70 @@ struct RecordForegroundTests {
         let run = try #require(body.range(of: "await run("))
         #expect(badges.upperBound < run.lowerBound)
         #expect(requests.upperBound < run.lowerBound)
+    }
+
+    // MARK: - The root's pass does not claim a visit
+
+    /// A foreground onto Studio or Spaces rebuilds the record and never shows
+    /// it. `stampVisit: false` is what keeps "when you last saw the Record"
+    /// honest about that; the joiner's stamp in `run` is what keeps a
+    /// foreground ONTO Today from losing the visit altogether.
+    @Test("the root's foreground pass does not stamp the visit")
+    func theRootDoesNotClaimAVisit() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Home/ViewModels/RecordForeground.swift"
+        )
+        let start = try #require(source.range(of: "static func onForeground("))
+        let end = try #require(source[start.upperBound...].range(of: "\n    }"))
+        let body = String(source[start.upperBound..<end.lowerBound])
+        #expect(body.contains("stampVisit: false"))
+
+        // Today's own ask keeps the default, and picks the stamp up when it
+        // joined a pass that did not take it.
+        let run = try #require(source.range(of: "if stampVisit, let outcome, !outcome.stampedVisit"))
+        let markSeen = try #require(source[run.upperBound...].range(of: "markSeen(now:"))
+        #expect(run.upperBound < markSeen.lowerBound)
+    }
+
+    // MARK: - One fetch per foreground, not two
+
+    /// Foregrounding onto Today asks both services twice — once from the root's
+    /// pass and once from `DailyRoomView`'s own `scenePhase` hook — and each
+    /// `BadgeCountService.refresh()` fans out six PostgREST reads. Joining the
+    /// ask already in flight is what keeps that at six rather than twelve on
+    /// the app's hottest path.
+    @Test(
+        "a second ask joins the refresh already in flight",
+        arguments: [
+            "Patina/Services/Badges/BadgeCountService.swift",
+            "Patina/Services/DesignServices/DesignRequestStatusService.swift"
+        ]
+    )
+    func theSecondAskJoinsTheFirst(path: String) throws {
+        let source = try SourcePin.read(path)
+        let start = try #require(source.range(of: "func refresh() async {"))
+        let end = try #require(source[start.upperBound...].range(of: "\n    }"))
+        let body = String(source[start.upperBound..<end.lowerBound])
+        #expect(body.contains("if let existing = inFlightRefresh"))
+        #expect(body.contains("await existing.value"))
+
+        // And the token is what stops the joined fetch writing the previous
+        // account's rows back over a service the seam has just cleared.
+        let performStart = try #require(source.range(of: "func performRefresh(token: Int) async {"))
+        let perform = source[performStart.upperBound...]
+        #expect(perform.contains("token == refreshToken"))
+    }
+
+    /// SP-18's pick is deterministic over the candidates, so the two asks a
+    /// foreground onto Today makes are the same answer read twice.
+    @Test("the story is fetched once per foreground")
+    func theStoryReadIsShared() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Home/ViewModels/RecordForeground.swift"
+        )
+        let start = try #require(source.range(of: "static func todaysStoryRow() async throws"))
+        let end = try #require(source[start.upperBound...].range(of: "\n    }"))
+        let body = String(source[start.upperBound..<end.lowerBound])
+        #expect(body.contains("if let existing = inFlightStory"))
     }
 }

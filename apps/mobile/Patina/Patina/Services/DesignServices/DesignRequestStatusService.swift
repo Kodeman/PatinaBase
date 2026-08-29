@@ -395,6 +395,18 @@ public final class DesignRequestStatusService {
 
     @ObservationIgnored private var pendingRefresh: Task<Void, Never>?
 
+    /// The refresh currently running. A foreground asks this service twice in
+    /// the same tick — the app root's pass (`RecordForeground.onForeground`)
+    /// and Today's own `scenePhase` hook — and `liveLead` is what R3's
+    /// pre-emption and the thread opener read off it. The second ask joins the
+    /// first rather than fetching the same leads again.
+    @ObservationIgnored private var inFlightRefresh: Task<Void, Never>?
+
+    /// Stamped on the refresh in flight, and bumped by every session change, so
+    /// rows fetched for the PREVIOUS account cannot land after the reset that
+    /// cleared them.
+    @ObservationIgnored private var refreshToken = 0
+
     /// Matched requests the reader dismissed **in this session**. W4: a match
     /// is a fact about the house, so nothing writes it to the receipt — the
     /// card folds away now and the relationship is back on the next launch.
@@ -452,6 +464,22 @@ public final class DesignRequestStatusService {
     /// on a cold, never-loaded launch it falls back to the local receipts so
     /// the card can paint offline.
     public func refresh() async {
+        if let existing = inFlightRefresh {
+            await existing.value
+            return
+        }
+        refreshToken += 1
+        let token = refreshToken
+        let task = Task { @MainActor [weak self] in
+            await self?.performRefresh(token: token)
+            guard let self, self.refreshToken == token else { return }
+            self.inFlightRefresh = nil
+        }
+        inFlightRefresh = task
+        await task.value
+    }
+
+    private func performRefresh(token: Int) async {
         guard AuthService.shared.isAuthenticated else {
             requests = []
             hasLoaded = false
@@ -470,9 +498,14 @@ public final class DesignRequestStatusService {
 
         do {
             let rows = try await fetchLeadRows()
-            requests = await reconcile(rows)
+            let reconciled = await reconcile(rows)
+            // The account changed while the read was in the air — these leads
+            // are the previous account's.
+            guard token == refreshToken else { return }
+            requests = reconciled
             hasLoaded = true
         } catch {
+            guard token == refreshToken else { return }
             if !hasLoaded { hydrateFromLocal() }
         }
     }
@@ -486,8 +519,13 @@ public final class DesignRequestStatusService {
     /// `SubmittedDesignRequest` on the same boundary, and this reset is called
     /// beside it.
     public func resetForSessionChange() {
+        refreshToken += 1
         pendingRefresh?.cancel()
         pendingRefresh = nil
+        // Dropped rather than awaited: the next ask must fetch for the NEW
+        // account, not join the read already in the air for the old one.
+        inFlightRefresh?.cancel()
+        inFlightRefresh = nil
         requests = []
         hasLoaded = false
         sessionDismissedLeadIds = []

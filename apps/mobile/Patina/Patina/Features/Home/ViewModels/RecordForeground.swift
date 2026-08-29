@@ -15,9 +15,16 @@
 //
 //  Both callers come through `run`, so there is one spelling of what a rebuild
 //  is. Asks that overlap — the root's and Today's, when the person foregrounds
-//  ONTO Today — coalesce onto the first: a second rebuild would build against
-//  the visit stamp the first one had just written, and take every row's `isNew`
-//  tick off on the very open that should have shown them.
+//  ONTO Today — coalesce onto the first, so one foreground costs one rebuild
+//  rather than two. It is a cost fix, not a safety property: a second rebuild
+//  seconds later would compute its six-hour suppression from the snapshot's
+//  `window.end` and reuse the OLD anchor, so the `isNew` ticks survive either
+//  way (`HouseRecord.build`). The tick hazard the root really introduced is the
+//  visit stamp, and `stampVisit` is what answers it.
+//
+//  The root's pass paints nothing, so it does not stamp the visit. Whoever puts
+//  the record on screen does — including a joiner that took a record built by a
+//  pass which did not.
 //
 
 import Foundation
@@ -31,6 +38,10 @@ enum RecordForeground {
     struct Outcome {
         let record: HouseRecord
         let saved: [TableItemModel]
+        /// Whether the pass that built this record also moved the visit stamp.
+        /// A joiner that paints a record built by a pass which did not is the
+        /// one that owes the stamp.
+        let stampedVisit: Bool
     }
 
     /// The rebuild currently running, and its result. Both are cleared by the
@@ -50,11 +61,15 @@ enum RecordForeground {
         let context = PersistenceController.shared.container.mainContext
         // The builder is pure and reads whatever these two are holding, so the
         // order is the same one `DailyRoomView` runs (`DailyRoomViewModel
-        // .refreshRecord`'s doc comment).
+        // .refreshRecord`'s doc comment). Foregrounding ONTO Today asks both
+        // services twice — from here and from Today's own `scenePhase` hook —
+        // so each of them joins the ask already in flight instead of doubling
+        // six PostgREST reads on the app's hottest path.
         await BadgeCountService.shared.refresh()
         await DesignRequestStatusService.shared.refresh()
         let story = try? await todaysStoryRow()
-        await run(context: context, story: story)
+        // `stampVisit: false`: nothing was shown here.
+        await run(context: context, story: story, stampVisit: false)
     }
 
     /// One rebuild for this foreground, whoever asked first.
@@ -67,14 +82,20 @@ enum RecordForeground {
     static func run(
         context: ModelContext?,
         story: RemoteEditorialStory?,
+        stampVisit: Bool = true,
         paint: @escaping @MainActor (HouseRecord) -> Void = { _ in }
     ) async -> Outcome? {
         let (outcome, ranTheRebuild) = await coalesce {
-            await rebuild(context: context, story: story, paint: paint)
+            await rebuild(context: context, story: story, stampVisit: stampVisit, paint: paint)
         }
         // A caller that joined a rebuild already in flight missed its paints,
         // so it takes the built record here.
         if let outcome, !ranTheRebuild { paint(outcome.record) }
+        // Today joining the root's pass is the case this covers: the record
+        // reached the screen, but the pass that built it did not claim a visit.
+        if stampVisit, let outcome, !outcome.stampedVisit {
+            LastSeenStore.shared.markSeen(now: Date())
+        }
         return outcome
     }
 
@@ -103,6 +124,7 @@ enum RecordForeground {
     private static func rebuild(
         context: ModelContext?,
         story: RemoteEditorialStory?,
+        stampVisit: Bool,
         paint: @escaping @MainActor (HouseRecord) -> Void
     ) async -> Outcome? {
         guard AuthService.shared.isAuthenticated else { return nil }
@@ -116,6 +138,7 @@ enum RecordForeground {
 
         let outcome = RecordRefresh.run(
             sessionUserId: AuthService.shared.currentUserId,
+            stampVisit: stampVisit,
             build: { previous, lastSeenAt in
                 HouseRecordBuilder.build(
                     from: BadgeCountService.shared,
@@ -131,18 +154,38 @@ enum RecordForeground {
             },
             paint: paint
         )
-        return Outcome(record: outcome.record, saved: saved)
+        return Outcome(
+            record: outcome.record,
+            saved: saved,
+            stampedVisit: outcome.steps.contains(.stamped)
+        )
     }
 
     // MARK: - The inputs
 
     /// Today's story row — SP-18's pick, in one place, so the card and the
     /// record's MOVED row can never name two different stories.
+    ///
+    /// A foreground onto Today asks twice — this pass, and the card's own
+    /// `refreshTodaysStory()` — so a concurrent ask joins the fetch in flight
+    /// rather than making the same read again. The pick is deterministic over
+    /// the candidates, so the joiner's answer is the same answer.
     static func todaysStoryRow() async throws -> RemoteEditorialStory? {
-        let candidates = try await EditorialStoriesAPIClient.shared.fetchCandidates()
-        let pickedId = StoryReadStore().nextStoryId(from: candidates.map(\.id))
-        return candidates.first { $0.id == pickedId }
+        if let existing = inFlightStory {
+            return try await existing.value
+        }
+        let task = Task { () throws -> RemoteEditorialStory? in
+            let candidates = try await EditorialStoriesAPIClient.shared.fetchCandidates()
+            let pickedId = StoryReadStore().nextStoryId(from: candidates.map(\.id))
+            return candidates.first { $0.id == pickedId }
+        }
+        inFlightStory = task
+        defer { inFlightStory = nil }
+        return try await task.value
     }
+
+    /// The story read currently in flight, if any.
+    private static var inFlightStory: Task<RemoteEditorialStory?, Error>?
 
     static func savedItems(in context: ModelContext?) -> [TableItemModel] {
         guard let context else { return [] }
