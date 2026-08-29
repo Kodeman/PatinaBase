@@ -1,12 +1,22 @@
 /**
  * R126 — fold motion. The seam still hard-swaps with the region body (fold
  * STATE is untouched); what is new is that the seam settles in on mount and
- * its arrow flips over, and that every one of those classes is motion-safe
- * gated so reduced motion gets a still seam.
+ * its arrow flips over.
+ *
+ * C1 — the settle is a CSS keyframe, so the assertions here are about what the
+ * FIRST paint carries: a seam that is visible immediately, with no JS-gated
+ * opacity and no hydration-window blank band. The reduced-motion gating moved
+ * with it, from `motion-safe:` class prefixes to a no-preference media block in
+ * globals.css, so that is asserted on the stylesheet.
  */
 
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { render, screen } from '@testing-library/react';
 import { FoldSeam } from '../fold-seam';
+
+const GLOBALS_CSS = join(__dirname, '../../../../app/globals.css');
 
 function renderSeam() {
   return render(
@@ -23,48 +33,46 @@ function renderSeam() {
 }
 
 describe('FoldSeam', () => {
-  it('carries the FROM state on its first paint, then settles', async () => {
+  it('paints VISIBLE on its first render, and animates from a keyframe', () => {
+    // The defect this pins: `opacity-0` until a post-hydration rAF flipped a
+    // state flag meant a folded region's only control was a blank 44px band for
+    // the whole hydration window — and for good on a hydration error.
     renderSeam();
     const seam = screen.getByRole('button');
-    expect(seam).toHaveAttribute('data-fold-settled', 'false');
-    expect(seam).toHaveClass(
-      'motion-safe:-translate-y-[4px]',
-      'motion-safe:opacity-0',
-      'motion-safe:transition-[opacity,transform]',
-      'motion-safe:duration-300',
-      'motion-safe:ease-[var(--ease-editorial)]',
-    );
-
-    await waitFor(() =>
-      expect(seam).toHaveAttribute('data-fold-settled', 'true'),
-    );
-    expect(seam).not.toHaveClass('motion-safe:opacity-0');
-    expect(seam).not.toHaveClass('motion-safe:-translate-y-[4px]');
-    // The transition itself stays on: the seam is animating, not jumping.
-    expect(seam).toHaveClass('motion-safe:transition-[opacity,transform]');
+    expect(seam).toHaveClass('fold-settle');
+    expect(seam.className).not.toMatch(/opacity-0|translate-y/);
+    expect(seam).not.toHaveAttribute('data-fold-settled');
   });
 
-  it('flips the toggle arrow over as it settles', async () => {
+  it('flips the toggle arrow over on its own keyframe', () => {
     const { container } = renderSeam();
     const arrow = container.querySelector('[data-fold-arrow]')!;
-    expect(arrow).toHaveClass(
-      'motion-safe:rotate-180',
-      'motion-safe:transition-transform',
-      'motion-safe:duration-300',
-    );
-    await waitFor(() => expect(arrow).not.toHaveClass('motion-safe:rotate-180'));
+    expect(arrow).toHaveClass('fold-arrow-settle');
+    expect(arrow.className.toString()).not.toMatch(/rotate-180/);
   });
 
-  it('gates every motion class behind motion-safe', async () => {
-    const { container } = renderSeam();
-    await act(async () => {});
-    container.querySelectorAll('*').forEach((el) => {
-      el.className
-        .toString()
-        .split(' ')
-        .filter((c) => /transition|duration|ease-\[|translate-y|rotate|opacity-0/.test(c))
-        .forEach((c) => expect(c.startsWith('motion-safe:')).toBe(true));
-    });
+  it('declares both keyframes behind prefers-reduced-motion: no-preference', () => {
+    const css = readFileSync(GLOBALS_CSS, 'utf8');
+    const block = /@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?)\n\}/.exec(
+      css,
+    );
+    expect(block).not.toBeNull();
+    expect(block![1]).toContain('.fold-settle');
+    expect(block![1]).toContain(
+      'animation: fold-in 300ms var(--ease-editorial) both',
+    );
+    expect(block![1]).toContain('.fold-arrow-settle');
+    expect(block![1]).toContain(
+      'animation: fold-arrow-flip 300ms var(--ease-editorial) both',
+    );
+    // `both` is what lets the from-state exist for exactly one frame without
+    // ever being the server-rendered state.
+    expect(css).toMatch(/@keyframes fold-in \{[\s\S]*?opacity: 0;[\s\S]*?\}/);
+  });
+
+  it('is a pure render — no state, so nothing to hydrate and nothing to mismatch', () => {
+    const source = readFileSync(join(__dirname, '../fold-seam.tsx'), 'utf8');
+    expect(source).not.toMatch(/useState|useEffect|requestAnimationFrame/);
   });
 
   it('still says the word, and still unmounts rather than collapsing', () => {
