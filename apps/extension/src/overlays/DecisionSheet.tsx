@@ -58,7 +58,7 @@ export function DecisionSheet() {
   return (
     <OverlaySheet
       title="Send for approval"
-      subtitle="Create a client decision"
+      subtitle="Ask the client to choose"
       footer={
         <button
           type="button"
@@ -77,7 +77,7 @@ export function DecisionSheet() {
       )}
       <div className="mb-3 space-y-1">
         <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-soft">
-          Decision title
+          What the client is choosing
         </span>
         <input
           value={dec.title}

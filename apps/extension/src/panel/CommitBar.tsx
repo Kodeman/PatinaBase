@@ -99,8 +99,8 @@ export function CommitBar() {
             {busy === 'reuse'
               ? 'Placing…'
               : io.pendingPlacementProductId
-                ? 'Retry project placement'
-                : `Place existing “${dedup.match.name}”`}
+                ? 'Retry saving to project'
+                : `Use “${dedup.match.name}” here`}
           </button>
           <button
             type="button"
@@ -108,7 +108,7 @@ export function CommitBar() {
             onClick={() => run('library')}
             className="w-full rounded-md border border-line py-2.5 text-[0.82rem] font-medium text-ink-soft transition-colors hover:border-ink-soft hover:text-ink disabled:opacity-50"
           >
-            {busy === 'library' ? 'Saving & placing…' : 'Save as new selection'}
+            {busy === 'library' ? 'Saving & placing…' : 'Save as new'}
           </button>
         </div>
       );
@@ -129,7 +129,7 @@ export function CommitBar() {
           onClick={() => run('library')}
           className="w-full rounded-md border border-line py-2.5 text-[0.82rem] font-medium text-ink-soft transition-colors hover:border-ink-soft hover:text-ink disabled:opacity-50"
         >
-          {busy === 'library' ? 'Saving…' : 'Save as new instead'}
+          {busy === 'library' ? 'Saving…' : 'Save as new'}
         </button>
       </div>
     );
@@ -148,12 +148,12 @@ export function CommitBar() {
             ? 'Saving & placing…'
             : 'Saving…'
           : io.pendingPlacementProductId
-            ? 'Retry project placement'
+            ? 'Retry saving to project'
             : hasProjectPlacement
               ? placementRoute.kind === 'fill_slot'
-                ? 'Save & fill slot'
+                ? 'Save into this room'
                 : placementRoute.kind === 'create_line'
-                  ? 'Save & create line'
+                  ? 'Add to this room'
                   : 'Save to project inbox'
               : 'Save to library'}
       </button>

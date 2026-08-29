@@ -14,14 +14,16 @@ export function AuthScreen() {
 
   const qr = useQRAuth();
 
-  const handleOpenPortalSignin = () => {
-    const url = `${PORTAL_URL}/auth/signin?source=ext`;
+  const openPortalTab = (url: string) => {
     if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
       chrome.tabs.create({ url });
     } else {
       window.open(url, '_blank');
     }
   };
+
+  const handleOpenPortalSignin = () => openPortalTab(`${PORTAL_URL}/auth/signin?source=ext`);
+  const handleOpenPortalSignup = () => openPortalTab(`${PORTAL_URL}/auth/signup?source=ext`);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,15 +49,15 @@ export function AuthScreen() {
   // Email/password form (fallback)
   if (showEmailForm) {
     return (
-      <div className="w-full min-w-[320px] max-w-[600px] h-screen p-4 bg-off-white font-body">
+      <div className="w-full min-w-[320px] max-w-[600px] h-screen p-4 bg-paper font-body">
         <header className="mb-4">
-          <h1 className="font-display font-normal text-[1.8rem] text-mocha">Patina</h1>
-          <p className="text-sm text-mocha">Sign in to capture products</p>
+          <h1 className="font-display font-normal text-[1.8rem] text-ink">Patina</h1>
+          <p className="text-sm text-ink">Sign in to capture products</p>
         </header>
 
         <button
           onClick={() => setShowEmailForm(false)}
-          className="mb-4 flex items-center gap-1 text-sm text-aged-oak hover:text-charcoal transition-colors"
+          className="mb-4 flex items-center gap-1 text-sm text-ink-soft hover:text-ink transition-colors"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5" />
@@ -65,41 +67,41 @@ export function AuthScreen() {
         </button>
 
         {authError && (
-          <div className="mb-3 p-2 bg-terracotta/15 border border-terracotta/30 rounded-md">
-            <p className="text-xs text-terracotta">{authError}</p>
+          <div className="mb-3 p-2 bg-rust/15 border border-rust/30 rounded-md">
+            <p className="text-xs text-rust">{authError}</p>
           </div>
         )}
 
         <form onSubmit={handleSignIn} className="space-y-3">
           <div>
-            <label className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak">Email</label>
+            <label className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
               required
-              className="w-full px-3 py-2 text-sm rounded-md border border-pearl
-                       focus:border-mocha focus:ring-1 focus:ring-mocha outline-none"
+              className="w-full px-3 py-2 text-sm rounded-md border border-line
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
           </div>
           <div>
-            <label className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak">Password</label>
+            <label className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               required
-              className="w-full px-3 py-2 text-sm rounded-md border border-pearl
-                       focus:border-mocha focus:ring-1 focus:ring-mocha outline-none"
+              className="w-full px-3 py-2 text-sm rounded-md border border-line
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
           </div>
           <button
             type="submit"
             disabled={isSigningIn}
-            className="w-full py-2 px-4 bg-charcoal text-off-white text-sm font-medium rounded-[3px]
-                     hover:bg-mocha transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:shadow-none"
+            className="w-full py-2 px-4 bg-ink text-paper text-sm font-medium rounded-[3px]
+                     hover:bg-ink-2 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:shadow-none"
           >
             {isSigningIn ? 'Signing in...' : 'Sign in'}
           </button>
@@ -110,11 +112,46 @@ export function AuthScreen() {
 
   // QR code screen (primary)
   return (
-    <div className="w-full min-w-[320px] max-w-[600px] h-screen p-4 bg-off-white font-body">
+    <div className="w-full min-w-[320px] max-w-[600px] h-screen p-4 bg-paper font-body">
       <header className="mb-6">
-        <h1 className="font-display font-normal text-[1.8rem] text-mocha">Patina</h1>
-        <p className="text-sm text-mocha">Sign in to capture products</p>
+        <h1 className="font-display font-normal text-[1.8rem] text-ink">Patina</h1>
+        <p className="text-sm text-ink">Sign in to capture products</p>
       </header>
+
+      {/* Primary path — public installer, no account assumed yet. Hidden once
+          pairing has resolved (approved) or is still resolving (loading). */}
+      {(qr.state === 'pending' || qr.state === 'expired' || qr.state === 'error') && (
+        <>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleOpenPortalSignin}
+              data-testid="auth.openPortalSignin"
+              className="w-full py-2.5 px-4 bg-verdigris text-paper text-sm font-medium rounded-[3px]
+                       hover:bg-verdigris-ink transition-all shadow-md hover:shadow-lg"
+            >
+              Sign in on patina.cloud
+            </button>
+            <button
+              onClick={handleOpenPortalSignup}
+              data-testid="auth.openPortalSignup"
+              className="w-full py-2 px-4 text-sm font-medium text-ink border border-line rounded-[3px]
+                       hover:bg-[var(--bg-hover)] transition-all"
+            >
+              Create an account
+            </button>
+            <p className="mt-1 text-[0.65rem] text-ink-soft/70 text-center">
+              After you sign in, this extension will pick up your session automatically.
+            </p>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 w-full mt-6 mb-4">
+            <div className="flex-1 h-px bg-line" />
+            <StrataMark variant="micro" />
+            <div className="flex-1 h-px bg-line" />
+          </div>
+        </>
+      )}
 
       <div className="flex flex-col items-center">
         {/* Loading */}
@@ -126,21 +163,21 @@ export function AuthScreen() {
 
         {/* QR code */}
         {qr.state === 'pending' && qr.qrUrl && (
-          <div className="p-3 bg-surface rounded-md shadow-md">
+          <div className="p-3 bg-paper-3 rounded-md shadow-md">
             <QRCodeSVG
               value={qr.qrUrl}
               size={172}
               level="M"
-              bgColor="#FFFFFF"
-              fgColor="#2C2926"
+              bgColor="#F1EFE7"
+              fgColor="#211E18"
             />
           </div>
         )}
 
         {/* Approved checkmark */}
         {qr.state === 'approved' && (
-          <div className="w-[172px] h-[172px] rounded-md bg-sage/15 border border-sage/30 flex items-center justify-center">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sage">
+          <div className="w-[172px] h-[172px] rounded-md bg-verdigris/15 border border-verdigris/30 flex items-center justify-center">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-verdigris">
               <path d="M20 6 9 17l-5-5" />
             </svg>
           </div>
@@ -148,15 +185,15 @@ export function AuthScreen() {
 
         {/* Expired */}
         {qr.state === 'expired' && (
-          <div className="w-[172px] h-[172px] rounded-md bg-clay/10 flex flex-col items-center justify-center gap-3">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-aged-oak">
+          <div className="w-[172px] h-[172px] rounded-md bg-paper-2 flex flex-col items-center justify-center gap-3">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-ink-soft">
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            <p className="text-sm text-aged-oak">Code expired</p>
+            <p className="text-sm text-ink-soft">Code expired</p>
             <button
               onClick={qr.regenerate}
-              className="text-sm font-medium text-mocha hover:text-charcoal transition-colors"
+              className="text-sm font-medium text-ink hover:text-ink-2 transition-colors"
             >
               Generate new code
             </button>
@@ -165,16 +202,16 @@ export function AuthScreen() {
 
         {/* Error */}
         {qr.state === 'error' && (
-          <div className="w-[172px] h-[172px] rounded-md bg-terracotta/15 border border-terracotta/30 flex flex-col items-center justify-center gap-3 p-4">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-terracotta">
+          <div className="w-[172px] h-[172px] rounded-md bg-rust/15 border border-rust/30 flex flex-col items-center justify-center gap-3 p-4">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-rust">
               <circle cx="12" cy="12" r="10" />
               <line x1="15" y1="9" x2="9" y2="15" />
               <line x1="9" y1="9" x2="15" y2="15" />
             </svg>
-            <p className="text-xs text-terracotta text-center">{qr.error}</p>
+            <p className="text-xs text-rust text-center">{qr.error}</p>
             <button
               onClick={qr.regenerate}
-              className="text-sm font-medium text-mocha hover:text-charcoal transition-colors"
+              className="text-sm font-medium text-ink hover:text-ink-2 transition-colors"
             >
               Try again
             </button>
@@ -184,46 +221,26 @@ export function AuthScreen() {
         {/* Status text */}
         {qr.state === 'pending' && (
           <div className="mt-4 text-center">
-            <p className="text-sm text-aged-oak">Scan with the Patina iOS app</p>
-            <p className="font-mono text-[0.62rem] uppercase tracking-[0.06em] text-aged-oak mt-1">
+            <p className="text-sm text-ink-soft">Scan with the Patina iOS app</p>
+            <p className="font-mono text-[0.62rem] uppercase tracking-[0.06em] text-ink-soft mt-1">
               Expires in {formatTime(qr.secondsRemaining)}
             </p>
           </div>
         )}
 
         {qr.state === 'approved' && (
-          <p className="mt-4 text-sm font-medium text-sage">Signed in!</p>
+          <p className="mt-4 text-sm font-medium text-verdigris">Signed in!</p>
         )}
 
-        {/* Divider + email fallback */}
+        {/* Email/password fallback */}
         {(qr.state === 'pending' || qr.state === 'expired' || qr.state === 'error') && (
-          <>
-            <div className="flex items-center gap-3 w-full mt-6 mb-4">
-              <div className="flex-1 h-px bg-pearl" />
-              <StrataMark variant="micro" />
-              <div className="flex-1 h-px bg-pearl" />
-            </div>
-
-            <button
-              onClick={() => setShowEmailForm(true)}
-              className="w-full py-2 px-4 text-sm font-medium text-charcoal border border-pearl rounded-[3px]
-                       hover:bg-[var(--bg-hover)] transition-all"
-            >
-              Sign in with email
-            </button>
-
-            <button
-              onClick={handleOpenPortalSignin}
-              data-testid="auth.openPortalSignin"
-              className="mt-2 w-full py-2 px-4 text-sm text-aged-oak border border-pearl/60 rounded-[3px]
-                       hover:text-charcoal hover:border-pearl transition-all"
-            >
-              Use email code on patina.cloud
-            </button>
-            <p className="mt-1 text-[0.65rem] text-aged-oak/70 text-center">
-              After you sign in, this extension will pick up your session automatically.
-            </p>
-          </>
+          <button
+            onClick={() => setShowEmailForm(true)}
+            className="mt-4 w-full py-2 px-4 text-sm font-medium text-ink border border-line rounded-[3px]
+                     hover:bg-[var(--bg-hover)] transition-all"
+          >
+            Sign in with email
+          </button>
         )}
       </div>
     </div>
