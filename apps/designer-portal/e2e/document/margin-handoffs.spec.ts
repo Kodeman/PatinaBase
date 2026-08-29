@@ -143,44 +143,52 @@ test('an overdue gate wears the stamp, and only an overdue gate does', async ({
   expect(box!.width).toBeGreaterThanOrEqual(90);
 });
 
-// QUARANTINED 2026-08-29, Smart Lens W0. Reason: this was the last assertion
-// of "an overdue gate wears the stamp, and only an overdue gate does" — split
-// out so the stamp/need-line coverage above it keeps running. `#document-next-up`
-// only exists inside `DocumentGuide` (src/components/document/document-guide.tsx),
-// but WORKFLOW_GATE_PROJECT_ID's page (b0000000-0000-0000-0000-0000000000d1,
-// "Aspen Loft Refresh") renders `RedLetterZone` instead: page.tsx's mount
-// condition (`row.engagement_kind === 'project' && redLetterRows.length > 0`)
-// is true for this fixture (it has 3 overdue decisions), and confirmed by the
-// captured page snapshot showing a "Needs attention" region with "3 decisions
-// overdue — oldest due Aug 24" in place of any "document-next-up" section.
-// RedLetterZone carries no "has waited N days" sentence anywhere in its
-// markup (grepped red-letter-zone.tsx). Not a lens regression — failing the
-// same way on main@dab057537. Un-fixme when: RedLetterZone's overdue
-// rendering carries this derivation's sentence (Ruling IV's "second
-// rendering"), or the fixture project is changed to a row shape that still
-// takes the DocumentGuide branch. Owner: e2e triage.
-test.fixme(
-  "an overdue gate's elapsed-time derivation prints as a guide sentence",
-  async ({ authenticatedPage: page }) => {
-    await openDocument(page, FULL_RAIL);
-    // Ruling IV, second rendering: the same derivation, read as a sentence.
-    await expect(page.locator('#document-next-up')).toContainText(
-      /has waited \d+ days?\./,
-    );
-  },
-);
+// RE-POINTED 2026-08-29, W0-fix (was QUARANTINED, Smart Lens W0). Ruling IV's
+// SECOND rendering still prints — just not from `DocumentGuide`. This fixture
+// project (b0000000-…-d1, 3 overdue decisions) satisfies page.tsx's guide-or-
+// zone ternary (`engagement_kind === 'project' && redLetterRows.length > 0`),
+// so `RedLetterZone` stands in the guide's place at the guide's rank and
+// `#document-next-up` never mounts. The sentence it prints is the aggregate
+// form of the same overdue derivation — a count and the oldest due date —
+// rather than the guide's per-gate "has waited N days". Product drift, not
+// environment. The assertion is re-pointed at the sentence that prints, and
+// pins the supersession itself so a silent flip back to the guide fails here.
+test("an overdue gate's elapsed-time derivation prints once more above the paper", async ({
+  authenticatedPage: page,
+}) => {
+  await openDocument(page, FULL_RAIL);
 
-// QUARANTINED 2026-08-29, Smart Lens W0. Reason: same root cause as the
-// sibling fixme above — this whole test's target,
-// `section[aria-labelledby="document-next-up"]`, is inside `DocumentGuide`,
-// but WORKFLOW_GATE_PROJECT_ID's page renders `RedLetterZone` instead (page.tsx's
-// `row.engagement_kind === 'project' && redLetterRows.length > 0` mount
-// condition — true for this fixture's 3 overdue decisions; confirmed via the
-// captured "Needs attention" region in place of any "document-next-up"
-// section). Not a lens regression — failing the same way on main@dab057537.
-// Un-fixme when: the guide's gate act is reachable from RedLetterZone's
-// rendering for a project row, or the fixture project takes the DocumentGuide
-// branch. Owner: e2e triage.
+  // The zone stands in the guide's place — the two can never both publish.
+  await expect(page.locator('#document-next-up')).toHaveCount(0);
+
+  const zone = page.locator('section[aria-label="Needs attention"]');
+  await expect(zone).toBeVisible();
+  await expect(zone).toContainText(
+    /\d+ decisions? overdue — oldest due [A-Z][a-z]{2} \d{1,2}/,
+  );
+  // Still one derivation: the row that prints the sentence is the same
+  // overdue-decision need the margin stamps.
+  await expect(zone.locator('[data-need-kind="overdue_decision"]')).toHaveCount(1);
+});
+
+// QUARANTINED 2026-08-29, Smart Lens W0; reason re-verified 2026-08-29,
+// W0-fix. Not re-pointed, because the behaviour asserted here exists nowhere
+// on this route: `section[aria-labelledby="document-next-up"]` lives inside
+// `DocumentGuide`, which `RedLetterZone` supersedes for this fixture (see the
+// sibling test above), and the zone's overdue act is NOT the guide's act
+// wearing different clothes. Measured on the live page: the zone publishes a
+// single act `red-letter-overdue_decision-0` labelled "Chase the approval";
+// pressing it neither raises the folded margin (`data-margin-trigger`
+// aria-expanded stays "false") nor lands on the gate's control — it routes to
+// needGuideAction's overdue_decision anchor (document-guide.ts:504-506,
+// focusId `document-decision-controls`), a node that does not exist on this
+// page at all (count 0), so focus settles on `doc-section-install`. Re-pointing
+// would mean asserting a weaker contract than Ruling V's, so the test stays
+// quarantined and the gap stays visible. Not a lens regression — failing the
+// same way on main@dab057537. Un-fixme when: an overdue need's act raises the
+// margin and focuses the gate's own control (from the zone or from a restored
+// guide), or the fixture project takes the DocumentGuide branch.
+// Owner: e2e triage.
 test.fixme("the guide's gate act focuses the gate's own control in the margin", async ({
   authenticatedPage: page,
 }) => {

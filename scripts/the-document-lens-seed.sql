@@ -1,4 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
+-- LOCAL DEV ONLY — never run against Strata (or any other hosted database).
+--
 -- SEED: The Document Lens — "the long paper" (Smart Lens build, W0-L2)
 --
 -- A NEW project (id b0000000-0000-0000-0000-0000000000d5, "Aspen Loft — the
@@ -21,13 +23,41 @@
 -- (project + the two proposal-shape docs use the pre-assigned …d5 / …d6).
 -- Idempotent: every row carries a fixed id; each section deletes its own ids
 -- before inserting (mirrors supabase/seed/decisions.sql + schedule.sql).
--- Safe on a fresh `supabase db reset` and safe to re-run against a live DB.
+-- Safe on a fresh `supabase db reset` and safe to re-run against the LOCAL
+-- stack. It is not safe against, and refuses to run on, anything else — the
+-- guard below is the enforcement; the header is only the warning.
 --
--- Run:
+-- Run (local only):
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres < scripts/the-document-lens-seed.sql
 -- Verify:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres < artifacts/document-lens-build-2026-08-29/build/seed/seed-verify.sql
 -- ═══════════════════════════════════════════════════════════════════════════
+
+-- ── Local-dev guard ────────────────────────────────────────────────────────
+-- Two independent refusals, either of which stops the file before it writes a
+-- row: the local `designer@patina.dev` fixture must exist (it does not on any
+-- hosted project), and the server must not answer on a routable address.
+-- inet_server_addr() is NULL over the unix socket `docker exec … psql` uses.
+DO $$
+DECLARE
+  v_addr inet := inet_server_addr();
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'designer@patina.dev') THEN
+    RAISE EXCEPTION 'the-document-lens-seed: local dev only (designer@patina.dev fixture not found)';
+  END IF;
+
+  IF v_addr IS NOT NULL
+     AND NOT (
+       v_addr <<= inet '127.0.0.0/8'
+       OR v_addr = inet '::1'
+       OR v_addr <<= inet '10.0.0.0/8'
+       OR v_addr <<= inet '172.16.0.0/12'
+       OR v_addr <<= inet '192.168.0.0/16'
+     )
+  THEN
+    RAISE EXCEPTION 'the-document-lens-seed: local dev only (server address % is neither loopback nor a private docker network)', v_addr;
+  END IF;
+END $$;
 
 DO $$
 DECLARE
@@ -61,15 +91,20 @@ DECLARE
   v_po_coastal  UUID := 'b0000000-0000-0000-0005-000000000503'; -- shipped -> clean inspection -> delivered
   v_po_fdl      UUID := 'b0000000-0000-0000-0005-000000000504'; -- shipped -> damaged inspection (console)
 
-  -- ── Receiving inspections ────────────────────────────────────────────────
+  -- ── Receiving inspections + the claim the damaged stamp reads ────────────
   v_ri_coastal UUID := 'b0000000-0000-0000-0005-000000000701'; -- clean
   v_ri_fdl     UUID := 'b0000000-0000-0000-0005-000000000702'; -- damaged
+  v_claim_fdl  UUID := 'b0000000-0000-0000-0005-00000c1a0901'; -- the console's drafted damage_claims row
 
   -- ── Client decisions (approvals) ─────────────────────────────────────────
-  v_dec_overdue6 UUID := 'b0000000-0000-0000-0005-000000000801'; -- Primary bedroom rug + nightstands, overdue 6d
-  v_dec_com      UUID := 'b0000000-0000-0000-0005-000000000802'; -- Living room reading-chair fabric (COM), overdue 3d
-  v_dec_dining   UUID := 'b0000000-0000-0000-0005-000000000803'; -- approved: dining finish sample
-  v_dec_hardware UUID := 'b0000000-0000-0000-0005-000000000804'; -- approved: whole-house hardware
+  -- Sub-prefix `dec` (a valid hex triplet) keeps these off the FF&E band. FF&E
+  -- ids are minted as lpad(to_hex(2000 + n), 12, '0') = 0x7d1…0x80e, so the
+  -- decimal-looking …0801…0804 these once used WERE the ids of FF&E lines
+  -- n=49…52 — the same uuid meaning two different rows in two tables.
+  v_dec_overdue6 UUID := 'b0000000-0000-0000-0005-00000dec0801'; -- Primary bedroom rug + nightstands, overdue 6d
+  v_dec_com      UUID := 'b0000000-0000-0000-0005-00000dec0802'; -- Living room reading-chair fabric (COM), overdue 3d
+  v_dec_dining   UUID := 'b0000000-0000-0000-0005-00000dec0803'; -- approved: dining finish sample
+  v_dec_hardware UUID := 'b0000000-0000-0000-0005-00000dec0804'; -- approved: whole-house hardware
 
   -- ── Margin: comms threads (beside-Pieces items) ─────────────────────────
   v_thread_console UUID := 'b0000000-0000-0000-0005-000000001001'; -- photo/time on the damaged console
@@ -143,8 +178,10 @@ BEGIN
     v_product_count := 0;
   END IF;
 
-  v_install_date := (CURRENT_DATE + 21)
-    + ((2 - EXTRACT(DOW FROM CURRENT_DATE + 21)::int + 7) % 7); -- next Tuesday on/after +21d
+  -- Exactly +21d. The earlier "next Tuesday on/after +21d" search drifted the
+  -- install milestone 21–27d depending on the run day, which is the one
+  -- reconciliation figure the ladder rounds to weeks ("3 WEEKS").
+  v_install_date := CURRENT_DATE + 21;
 
   ------------------------------------------------------------------------
   -- 1. The lineage proposal — a long-settled, already-signed proposal that
@@ -290,33 +327,39 @@ BEGIN
   ------------------------------------------------------------------------
   -- Upsert, never delete-then-insert: receiving_inspections.purchase_order_id
   -- is ON DELETE RESTRICT, so a re-run's DELETE would fail once step 8 below
-  -- has logged an inspection against these ids. status is reset to its base
-  -- value on every run (deliberately) — the receiving_inspections re-insert
-  -- in step 8 re-cascades PO3 back to 'delivered' every time, so the final
-  -- state converges identically regardless of run count.
+  -- has logged an inspection against these ids. status AND delivered_date are
+  -- both reset to their base values on every run (deliberately) — the
+  -- receiving_inspections re-insert in step 8 re-cascades PO3 back to
+  -- 'delivered' every time, so the final state converges identically
+  -- regardless of run count. delivered_date must be reset with status:
+  -- trigger C only shifts a net-30 balance's due_date when delivered_date
+  -- transitions FROM NULL (00184's v_delivered_was_null branch), so leaving a
+  -- run-1 delivered_date in place made run 2 re-insert the payments with
+  -- due_date NULL and never re-derive it.
   INSERT INTO public.purchase_orders (
     id, designer_id, project_id, vendor_id, vendor_po_number,
     confirmed_eta, payment_pattern, total_cents, status,
-    acknowledged_at, created_at
+    acknowledged_at, created_at, delivered_date
   ) VALUES
     (v_po_sturdy, uid_designer, v_project_id, v_vendor_sturdy, 'PO-2026-0418',
      v_install_date - 10, 'fifty_fifty', 1488000, 'draft',
-     NULL, NOW() - INTERVAL '14 days'),
+     NULL, NOW() - INTERVAL '14 days', NULL),
     (v_po_heritage, uid_designer, v_project_id, v_vendor_heritage, 'HC-2244',
      v_install_date - 5, 'fifty_fifty', 960000, 'in_production',
-     NOW() - INTERVAL '9 days', NOW() - INTERVAL '11 days'),
+     NOW() - INTERVAL '9 days', NOW() - INTERVAL '11 days', NULL),
     (v_po_coastal, uid_designer, v_project_id, v_vendor_coastal, 'CM-1187',
      v_install_date - 12, 'net_30', 520000, 'shipped',
-     NOW() - INTERVAL '4 days', NOW() - INTERVAL '20 days'),
+     NOW() - INTERVAL '4 days', NOW() - INTERVAL '20 days', NULL),
     (v_po_fdl, uid_designer, v_project_id, v_vendor_fdl, 'FDL-0912',
      NULL, 'net_30', 320000, 'shipped',
-     NOW() - INTERVAL '19 days', NOW() - INTERVAL '20 days')
+     NOW() - INTERVAL '19 days', NOW() - INTERVAL '20 days', NULL)
   ON CONFLICT (id) DO UPDATE SET
     designer_id = EXCLUDED.designer_id, project_id = EXCLUDED.project_id,
     vendor_id = EXCLUDED.vendor_id, vendor_po_number = EXCLUDED.vendor_po_number,
     confirmed_eta = EXCLUDED.confirmed_eta, payment_pattern = EXCLUDED.payment_pattern,
     total_cents = EXCLUDED.total_cents, status = EXCLUDED.status,
-    acknowledged_at = EXCLUDED.acknowledged_at, created_at = EXCLUDED.created_at;
+    acknowledged_at = EXCLUDED.acknowledged_at, created_at = EXCLUDED.created_at,
+    delivered_date = EXCLUDED.delivered_date;
 
   DELETE FROM public.po_payments WHERE purchase_order_id IN
     (v_po_sturdy, v_po_heritage, v_po_coastal, v_po_fdl);
@@ -540,11 +583,20 @@ BEGIN
       v_id, v_project_id, v_room_id, 'room', v_product_id, v_name, v_status,
       v_qty, v_unit_cents, v_line_cents, v_vendor_name,
       v_po_id, v_po_number, v_eta,
-      (n = 1), -- only the console is blocked/damaged
-      CASE WHEN n = 1 THEN
-        'Top panel gouged in transit. Carrier claim window closes ' ||
-        to_char(CURRENT_DATE + INTERVAL '1 day', 'FMMonth FMDD') || '.'
-      ELSE NULL END,
+      -- n=1 is blocked by damage, n=2 by the pending COM decision.
+      -- deriveLineStamp's 'decision_due' branch (stamp-derivation.ts) needs
+      -- blocked = true AND a pending blocking_decision, so a line carrying
+      -- blocked_by_decision_id alone would print as an ordinary line and read
+      -- as orderable everywhere .blocked gates authorization.
+      (n IN (1, 2)),
+      CASE
+        WHEN n = 1 THEN
+          'Top panel gouged in transit. Carrier claim window closes ' ||
+          to_char(CURRENT_DATE + INTERVAL '1 day', 'FMMonth FMDD') || '.'
+        WHEN n = 2 THEN
+          'Customer''s own material — held for the client''s fabric decision.'
+        ELSE NULL
+      END,
       CASE WHEN n = 2 THEN v_dec_com ELSE NULL END,
       n
     )
@@ -566,6 +618,10 @@ BEGIN
   --    — the console line's explicit status='delivered' from step 7 stands
   --    because the ratchet trigger never moves a status DOWN).
   ------------------------------------------------------------------------
+  -- damage_claims.receiving_inspection_id is ON DELETE RESTRICT, so the claim
+  -- must go before the inspection it hangs from (00151 documents the same
+  -- ordering for the app's own delete path).
+  DELETE FROM public.damage_claims WHERE id = v_claim_fdl;
   DELETE FROM public.receiving_inspections WHERE id IN (v_ri_coastal, v_ri_fdl);
 
   INSERT INTO public.receiving_inspections (
@@ -575,6 +631,27 @@ BEGIN
      'Boot bench and cubby shelving received complete, no damage.'),
     (v_ri_fdl, v_po_fdl, NOW() - INTERVAL '6 days', uid_designer, 'damaged',
      'Top panel gouged on arrival — photos attached. Filing a carrier claim.');
+
+  -- The line's DAMAGED stamp is read from HERE, not from the inspection and
+  -- not from project_ffe_items.blocked: deriveLineStamp (stamp-derivation.ts)
+  -- returns 'damaged' only when the item's `item_claims` embed
+  -- (damage_claims!ffe_item_id, use-project-v2.ts) holds a row in
+  -- 'drafted'/'vendor_notified'. Nothing in the database auto-drafts it —
+  -- 00150's "auto-drafted" note describes useCreateReceivingInspection, an
+  -- application hook — so the seed writes it. 'drafted' with a NULL
+  -- vendor_notified_at is the claim written but not yet filed with the
+  -- carrier; the window closes tomorrow, the same date the line's
+  -- blocked_reason prints.
+  INSERT INTO public.damage_claims (
+    id, receiving_inspection_id, ffe_item_id, state, description, vendor_notified_at
+  ) VALUES (
+    v_claim_fdl, v_ri_fdl,
+    ('b0000000-0000-0000-0005-' || lpad(to_hex(2000 + 1), 12, '0'))::uuid,
+    'drafted',
+    'Brass-and-Oak Console: top panel gouged in transit. Photos filed. Carrier claim window closes ' ||
+      to_char(CURRENT_DATE + INTERVAL '1 day', 'FMMonth FMDD') || ' — drafted, not yet sent to Fond du Lac.',
+    NULL
+  );
 
   ------------------------------------------------------------------------
   -- 9. Margin — source rows only (margin_items is a VIEW, 00194/00282;

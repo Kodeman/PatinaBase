@@ -304,13 +304,23 @@ describe('R126 · the three muted steps are three, and all three are legible', (
 function resolveRailFiles(): string[] {
   const documentDir = join(SRC_ROOT, 'components/document');
   const topLevel = readdirSync(documentDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /spine.*\.tsx$/i.test(entry.name))
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        /spine.*\.tsx$/i.test(entry.name) &&
+        !/\.test\.tsx$/i.test(entry.name),
+    )
     .map((entry) => join(documentDir, entry.name));
 
   const spineSubdir = join(documentDir, 'spine');
   const nested = existsSync(spineSubdir)
     ? readdirSync(spineSubdir, { withFileTypes: true })
-        .filter((entry) => entry.isFile() && entry.name.endsWith('.tsx'))
+        .filter(
+          (entry) =>
+            entry.isFile() &&
+            entry.name.endsWith('.tsx') &&
+            !/\.test\.tsx$/i.test(entry.name),
+        )
         .map((entry) => join(spineSubdir, entry.name))
     : [];
 
@@ -357,11 +367,16 @@ describe('R126 · --doc-rail-stock holds the register it prints', () => {
     expect(failuresBelowAA(pairs)).toEqual([]);
   });
 
-  it('resolves the rail file glob to at least today\'s five files', () => {
+  it('resolves the rail file glob to at least the floor the ladder leaves standing', () => {
     // A glob that silently resolves to zero (or too few) files would make
     // every offender assertion below vacuously true — a renamed or moved
     // rail file must fail this loudly, not go quiet.
-    expect(resolveRailFiles().length).toBeGreaterThanOrEqual(5);
+    // The floor is 3, not today's 5, because OD-16 deletes spine-timer.tsx in
+    // W1 and spine-running-index.tsx + spine-shelved-blocks.tsx in W2. What
+    // survives those rulings is doc-spine.tsx, spine/lens-ladder.tsx and
+    // margin-rail.tsx — three files. A correct deletion must not turn this
+    // tripwire red.
+    expect(resolveRailFiles().length).toBeGreaterThanOrEqual(3);
   });
 
   it('prints no rail label in a pigment that fails on it', () => {

@@ -105,25 +105,26 @@ async function openPlanRoom(page: AuthenticatedPage): Promise<void> {
   });
 }
 
-// QUARANTINED 2026-08-29, Smart Lens W0. Reason: the light table's empty-state
-// copy and interaction changed — the app now renders "Choose a PDF set; the
-// light table splits it and proposes where each page belongs before anything
-// becomes current." with a "Choose a PDF" button (confirmed via captured page
-// snapshot), not this test's expected "Drop a PDF set — the table splits it"
-// drag-and-drop framing. A real product copy/UX change, not a fixture or
-// ordering issue — out of this wave's fix scope (assertion-text drift, not
-// pinned-id or fixture-ordering). Not a lens regression — failing the same
-// way on main@dab057537 (the beforeAll seed-project failure that used to mask
-// this, `studio_id_not_designer_studio`, is fixed above; this is the next,
-// independent failure once seeding succeeds). Un-fixme when: the assertions
-// are updated to the current light-table copy and interaction. Owner: e2e triage.
-test.fixme('files a dropped set, then shares a sheet with the client', async ({
+// RE-POINTED 2026-08-29, W0-fix (was QUARANTINED, Smart Lens W0). The empty
+// state's drag-and-drop framing ("Drop a PDF set — the table splits it") was
+// replaced by a chooser: plan-room-set.tsx:150-152 prints "Choose a PDF set;
+// the light table splits it…" beside a "Choose a PDF" button. Product drift,
+// not environment — the flow the rest of this test walks is unchanged, so the
+// assertion is re-pointed at the copy and the control that actually print
+// rather than dropped.
+test('files a dropped set, then shares a sheet with the client', async ({
   authenticatedPage: page,
 }) => {
   // ── The empty room invites a set ────────────────────────────────────────
   await openPlanRoom(page);
   await expect(
-    page.getByText(/Drop a PDF set — the table splits it/),
+    page.getByText(/Choose a PDF set; the light table splits it/),
+  ).toBeVisible();
+  // Scoped by action key: the intake strip carries a second "Choose a PDF"
+  // (`choose-plan-pdf`), and the empty state's own primary act is the one the
+  // invitation offers.
+  await expect(
+    page.locator('[data-action-key="choose-plan-pdf-empty"]'),
   ).toBeVisible();
 
   // ── Stage the fixture on the Light Table ────────────────────────────────
