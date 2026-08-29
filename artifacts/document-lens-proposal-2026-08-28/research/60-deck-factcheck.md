@@ -235,3 +235,5 @@ list exactly; the wave/seat census in the colophon (2/6/11/6/7/5/5/4/11/5/1, sum
 `source/plan.md`'s phase-map table's `Calls` column row for row; all 9 quoted "voice" attributions
 (04-found.html's P1/P3/E1 quotes, 13-roads.html's 7 judge/critique quotes) were traced to their
 named panel/critique/judge files and match character-for-character, including retained ellipses.
+
+Correction (close): 02-ask now quotes Kody's message verbatim (as written); the plan.md paraphrase check is superseded.

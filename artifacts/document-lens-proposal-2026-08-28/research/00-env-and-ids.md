@@ -254,3 +254,7 @@ Commands run unsandboxed (deck r4)
 ## Commands run unsandboxed (close)
 - `SMOKE=1 node mock/deck-parts/build.mjs` — exit 0 — shells out to `sips` (image processing), which writes a scratch file into the system temp directory; unreachable inside the sandbox.
 - `node mock/deck-parts/qa-run.cjs` — exit 0 — launches headless Chromium, which cannot claim its mach port inside the sandbox.
+
+## Commands run unsandboxed (ask fix)
+- `node mock/deck-parts/build.mjs` — exit 0 — shells out to `sips` (image processing), which writes a scratch file into the system temp directory; unreachable inside the sandbox.
+- `node mock/deck-parts/qa-run.cjs` — exit 0 — launches headless Chromium, which cannot claim its mach port inside the sandbox.
