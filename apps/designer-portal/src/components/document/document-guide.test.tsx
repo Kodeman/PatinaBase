@@ -1,9 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { DocumentGuide } from './document-guide';
+import { deriveGuideModel, DocumentGuide } from './document-guide';
 import type { DocumentGuideModel } from '@/lib/document/document-guide';
 import { documentEvents } from '@/lib/analytics/document-events';
 
+// OD-11 / DL-05 — the guide no longer registers the bar's primary act; the
+// band's line 2 is the one printing of it at every width. The spy survives as
+// the assertion that it stays that way.
 const mockUseMobilePrimaryAction = jest.fn();
 
 jest.mock('./mobile/mobile-shell', () => ({
@@ -30,15 +33,19 @@ const model = (headline: string): DocumentGuideModel => ({
 });
 
 describe('DocumentGuide', () => {
-  it('registers below lifecycle actions and announces only subsequent changes', async () => {
+  beforeEach(() => {
+    mockUseMobilePrimaryAction.mockClear();
+  });
+
+  // W3 rewrite of "registers below lifecycle actions and announces only
+  // subsequent changes": the registration half becomes the assertion that the
+  // guide registers NOTHING (OD-11); the announcement half is unchanged.
+  it('registers no primary act and announces only subsequent changes', async () => {
     const { rerender } = render(
       <StrictMode><DocumentGuide model={model('First task')} onActivate={jest.fn()} /></StrictMode>,
     );
 
-    expect(mockUseMobilePrimaryAction).toHaveBeenLastCalledWith(
-      expect.objectContaining({ actionKey: 'review-project-work' }),
-      { priority: 5 },
-    );
+    expect(mockUseMobilePrimaryAction).not.toHaveBeenCalled();
     const liveRegion = document.querySelector('[aria-live="polite"]');
     expect(liveRegion).toHaveTextContent('');
 
@@ -211,5 +218,20 @@ describe('DocumentGuide', () => {
       </StrictMode>,
     );
     await waitFor(() => expect(liveRegion).toHaveTextContent('Next up: Same task'));
+  });
+
+  it('hands the band its headline and its act (C-6)', () => {
+    const onActivate = jest.fn();
+    const line = deriveGuideModel(model('Name the phases for this project'), onActivate);
+    expect(line.text).toBe('Name the phases for this project');
+    expect(line.act?.label).toBe('Open the FF&E schedule');
+    line.act?.onAct();
+    expect(onActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the band no act when the guide has none', () => {
+    expect(
+      deriveGuideModel({ ...model('Nothing is waiting on you'), action: null }, jest.fn()).act,
+    ).toBeNull();
   });
 });
