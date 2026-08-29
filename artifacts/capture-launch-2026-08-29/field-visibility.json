@@ -1,0 +1,70 @@
+{
+  "generatedAt": "2026-08-29T13:20:52.996Z",
+  "lane": "capture-launch/w0-d1",
+  "notes": [
+    "RecordScreen (RecordRegion + TradeRegion + InsightRegion + RouteCommitRegion) mounted directly under <CaptureProvider initial={...}> in state C2 — the same seam src/__tests__/state/CaptureProvider.test.tsx and src/__tests__/spec-books/route-commit-ga.test.tsx use — rather than through PanelShell, which pulls in useCaptureController()/useSettingsSync() side effects not needed for this survey.",
+    "FFESlotPicker and useReferenceData were left real (not mocked away) so the route region select/input counts reflect actual render output; supabase is mocked via src/__tests__/mocks/supabase.ts so those queries resolve to empty projects/styles without a network call."
+  ],
+  "cases": [
+    {
+      "file": "dwr.com.eames-lounge-chair-and-ottoman.html",
+      "url": "https://www.dwr.com/living-lounge-chairs/eames-lounge-chair-and-ottoman/5667.html?lang=en_US",
+      "extracted": {
+        "name": true,
+        "price": true,
+        "description": true,
+        "manufacturer": "Design Within Reach",
+        "dimensionFieldCount": 3,
+        "materialsCount": 7,
+        "colorsCount": 0,
+        "finish": null,
+        "imagesCount": 1
+      },
+      "visibleInDom": {
+        "name": true,
+        "price": true,
+        "description": true,
+        "brand": false,
+        "dimensions": false,
+        "materials": false,
+        "colors": false,
+        "finish": false,
+        "images": true
+      },
+      "routeRegion": {
+        "selectCount": 1,
+        "inputCount": 0
+      }
+    },
+    {
+      "file": "1stdibs.com.rare-1964-eames-lounge-chair.html",
+      "url": "https://www.1stdibs.com/furniture/seating/lounge-chairs/rare-1964-rosewood-herman-miller-eames-lounge-chair-ottoman-w-original-receipt/id-f_48117292/",
+      "extracted": {
+        "name": true,
+        "price": true,
+        "description": true,
+        "manufacturer": "1stDibs",
+        "dimensionFieldCount": 0,
+        "materialsCount": 3,
+        "colorsCount": 0,
+        "finish": null,
+        "imagesCount": 0
+      },
+      "visibleInDom": {
+        "name": true,
+        "price": true,
+        "description": true,
+        "brand": false,
+        "dimensions": false,
+        "materials": false,
+        "colors": false,
+        "finish": false,
+        "images": false
+      },
+      "routeRegion": {
+        "selectCount": 1,
+        "inputCount": 0
+      }
+    }
+  ]
+}
