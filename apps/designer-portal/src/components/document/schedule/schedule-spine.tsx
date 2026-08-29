@@ -704,6 +704,8 @@ export function ScheduleSpine({
   // so it reads the fold through a ref kept current after every render.
   const scheduleFoldRef = useRef<RegionFold>({
     folded: false,
+    density: 'full',
+    cause: null,
     toggle: () => {},
     setFolded: () => {},
   });
