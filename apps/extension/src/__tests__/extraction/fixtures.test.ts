@@ -129,6 +129,45 @@ function skuLikeKeysInJsonLd(doc: Document): string[] {
   return [...found].sort();
 }
 
+/** Mirrors extraction/index.ts's own findSchemaTypes (used by
+ * detectPageModeSignals to decide hasProductSchema) so this audit's
+ * "product-typed" count reflects the same @type detection the extractor
+ * itself relies on, rather than inventing a separate definition. */
+function findSchemaTypes(data: unknown): string[] {
+  const types: string[] = [];
+  if (!data || typeof data !== 'object') return types;
+  const obj = data as Record<string, unknown>;
+  if (typeof obj['@type'] === 'string') {
+    types.push(obj['@type']);
+  } else if (Array.isArray(obj['@type'])) {
+    types.push(...(obj['@type'] as string[]));
+  }
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      types.push(...findSchemaTypes(item));
+    }
+  }
+  return types;
+}
+
+/** Count of <script type="application/ld+json"> blocks on the page, and how
+ * many of them declare (or contain) an @type of "Product". */
+function jsonLdCounts(doc: Document): { jsonLdBlocks: number; jsonLdProductTyped: number } {
+  const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+  let productTyped = 0;
+  for (const script of scripts) {
+    const text = script.textContent ?? '';
+    if (!text.trim()) continue;
+    try {
+      const types = findSchemaTypes(JSON.parse(text));
+      if (types.includes('Product')) productTyped += 1;
+    } catch {
+      // Invalid JSON in the block — not product-typed, don't count it.
+    }
+  }
+  return { jsonLdBlocks: scripts.length, jsonLdProductTyped: productTyped };
+}
+
 interface FixtureReportEntry {
   file: string;
   url: string;
@@ -145,7 +184,8 @@ interface FixtureReportEntry {
   manufacturer: string | null;
   retailer: string | null;
   confidence: 'high' | 'medium' | 'low' | null;
-  jsonLdProductBlocks: number;
+  jsonLdBlocks: number;
+  jsonLdProductTyped: number;
   skuLikeKeysInJsonLd: string[];
 }
 
@@ -180,9 +220,7 @@ describe('extraction fixtures (persona harvest)', () => {
       // lib's Window type, but this is the same object shape at runtime.
       globalThis.window = dom.window;
 
-      const jsonLdProductBlocks = dom.window.document.querySelectorAll(
-        'script[type="application/ld+json"]'
-      ).length;
+      const { jsonLdBlocks, jsonLdProductTyped } = jsonLdCounts(dom.window.document);
       const skuLike = skuLikeKeysInJsonLd(dom.window.document);
 
       let entry: FixtureReportEntry;
@@ -205,7 +243,8 @@ describe('extraction fixtures (persona harvest)', () => {
           manufacturer: data.manufacturer,
           retailer: retailer.name,
           confidence: data.confidence,
-          jsonLdProductBlocks,
+          jsonLdBlocks,
+          jsonLdProductTyped,
           skuLikeKeysInJsonLd: skuLike,
         };
       } catch (error) {
@@ -239,7 +278,8 @@ describe('extraction fixtures (persona harvest)', () => {
           manufacturer: null,
           retailer: extractRetailer(fixture.url).name,
           confidence: null,
-          jsonLdProductBlocks,
+          jsonLdBlocks,
+          jsonLdProductTyped,
           skuLikeKeysInJsonLd: skuLike,
         };
       } finally {
@@ -262,7 +302,10 @@ describe('extraction fixtures (persona harvest)', () => {
   }
 });
 
+// Gated: `pnpm test` must never dirty tracked files. Regenerate the report
+// with `CAPTURE_REPORT=1 pnpm --filter @patina/extension test -- fixtures`.
 afterAll(() => {
+  if (process.env.CAPTURE_REPORT !== '1') return;
   mkdirSync(REPORT_DIR, { recursive: true });
   const byFile = new Map(report.map((r) => [r.file, r]));
   const ordered = FIXTURES.map((f) => byFile.get(f.file)).filter((r): r is FixtureReportEntry => !!r);
@@ -281,8 +324,11 @@ afterAll(() => {
         'extraction can run without throwing. That polyfill is not layout-aware: hidden/off- ' +
         'screen price text a real browser would exclude from innerText can be picked up here.',
       'window.getComputedStyle() background-image lookups (images.ts) will not see rules from ' +
-        'external stylesheets, since fixture harvesting strips <link rel="stylesheet"> and ' +
-        'non-JSON-LD <script> tags (see fixtures/README.md methodology note).',
+        'external stylesheets on the 4 Chrome-rendered fixtures (rh, hermanmiller, westelm, cb2) ' +
+        '— harvesting those stripped <link rel="stylesheet"> and non-JSON-LD <script> tags before ' +
+        'saving. The other 11 fixtures were fetched with curl and retain their full <script> ' +
+        'content (including any inline/external stylesheet links) unmodified — see ' +
+        'fixtures/README.md methodology note.',
       'sku/mpn/productID presence is a raw JSON-LD text probe, independent of extraction — ' +
         'extractProductData does not read those keys yet; ExtractedProductData has no sku field.',
     ],

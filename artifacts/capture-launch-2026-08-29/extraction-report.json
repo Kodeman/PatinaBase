@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-08-29T13:08:14.102Z",
+  "generatedAt": "2026-08-29T13:20:55.896Z",
   "lane": "capture-launch/w0-d1",
   "notes": [
     "Ran extractProductData() against each fixture inside jsdom (new JSDOM(html, { url })). jsdom has no layout engine: getBoundingClientRect() always returns zeros, so the position-based component of image scoring (src/lib/extraction/images.ts) never contributes here the way it would in a real browser tab — image counts and JSON-LD- derived scores are representative, but the highest-scored image may differ from what the live extension would pick.",
     "jsdom does not implement innerText at all (price.ts uses document.body.innerText as a fallback price scan) — this suite polyfills it as an alias for textContent so extraction can run without throwing. That polyfill is not layout-aware: hidden/off- screen price text a real browser would exclude from innerText can be picked up here.",
-    "window.getComputedStyle() background-image lookups (images.ts) will not see rules from external stylesheets, since fixture harvesting strips <link rel=\"stylesheet\"> and non-JSON-LD <script> tags (see fixtures/README.md methodology note).",
+    "window.getComputedStyle() background-image lookups (images.ts) will not see rules from external stylesheets on the 4 Chrome-rendered fixtures (rh, hermanmiller, westelm, cb2) — harvesting those stripped <link rel=\"stylesheet\"> and non-JSON-LD <script> tags before saving. The other 11 fixtures were fetched with curl and retain their full <script> content (including any inline/external stylesheet links) unmodified — see fixtures/README.md methodology note.",
     "sku/mpn/productID presence is a raw JSON-LD text probe, independent of extraction — extractProductData does not read those keys yet; ExtractedProductData has no sku field."
   ],
   "fixtures": [
@@ -34,7 +34,8 @@
       "manufacturer": "Room & Board",
       "retailer": "Room & Board",
       "confidence": "high",
-      "jsonLdProductBlocks": 3,
+      "jsonLdBlocks": 3,
+      "jsonLdProductTyped": 1,
       "skuLikeKeysInJsonLd": [
         "mpn",
         "sku"
@@ -62,7 +63,8 @@
       "manufacturer": "Design Within Reach",
       "retailer": "Design Within Reach",
       "confidence": "high",
-      "jsonLdProductBlocks": 1,
+      "jsonLdBlocks": 1,
+      "jsonLdProductTyped": 0,
       "skuLikeKeysInJsonLd": []
     },
     {
@@ -83,7 +85,8 @@
       "manufacturer": "Restoration Hardware",
       "retailer": "Restoration Hardware",
       "confidence": "high",
-      "jsonLdProductBlocks": 1,
+      "jsonLdBlocks": 1,
+      "jsonLdProductTyped": 0,
       "skuLikeKeysInJsonLd": []
     },
     {
@@ -104,7 +107,8 @@
       "manufacturer": "Wayfair",
       "retailer": "Wayfair",
       "confidence": "high",
-      "jsonLdProductBlocks": 2,
+      "jsonLdBlocks": 2,
+      "jsonLdProductTyped": 0,
       "skuLikeKeysInJsonLd": []
     },
     {
@@ -122,7 +126,8 @@
       "manufacturer": "Herman Miller",
       "retailer": "Herman Miller",
       "confidence": "medium",
-      "jsonLdProductBlocks": 0,
+      "jsonLdBlocks": 0,
+      "jsonLdProductTyped": 0,
       "skuLikeKeysInJsonLd": []
     },
     {
@@ -140,7 +145,8 @@
       "manufacturer": "Steelcase",
       "retailer": "Steelcase",
       "confidence": "medium",
-      "jsonLdProductBlocks": 2,
+      "jsonLdBlocks": 2,
+      "jsonLdProductTyped": 0,
       "skuLikeKeysInJsonLd": []
     },
     {
@@ -161,7 +167,8 @@
       "manufacturer": "Visualcomfort",
       "retailer": "Visualcomfort",
       "confidence": "high",
-      "jsonLdProductBlocks": 1,
+      "jsonLdBlocks": 1,
+      "jsonLdProductTyped": 1,
       "skuLikeKeysInJsonLd": [
         "productID",
         "sku"
@@ -189,7 +196,8 @@
       "manufacturer": "Knoll",
       "retailer": "Knoll",
       "confidence": "high",
-      "jsonLdProductBlocks": 1,
+      "jsonLdBlocks": 1,
+      "jsonLdProductTyped": 0,
       "skuLikeKeysInJsonLd": []
     },
     {
@@ -210,7 +218,8 @@
       "manufacturer": "1stDibs",
       "retailer": "1stDibs",
       "confidence": "medium",
-      "jsonLdProductBlocks": 2,
+      "jsonLdBlocks": 2,
+      "jsonLdProductTyped": 2,
       "skuLikeKeysInJsonLd": []
     },
     {
@@ -235,7 +244,8 @@
       "manufacturer": "Chairish",
       "retailer": "Chairish",
       "confidence": "high",
-      "jsonLdProductBlocks": 2,
+      "jsonLdBlocks": 2,
+      "jsonLdProductTyped": 1,
       "skuLikeKeysInJsonLd": []
     },
     {
@@ -256,7 +266,8 @@
       "manufacturer": "West Elm",
       "retailer": "West Elm",
       "confidence": "high",
-      "jsonLdProductBlocks": 3,
+      "jsonLdBlocks": 3,
+      "jsonLdProductTyped": 0,
       "skuLikeKeysInJsonLd": [
         "productID",
         "sku"
@@ -284,7 +295,8 @@
       "manufacturer": "CB2",
       "retailer": "CB2",
       "confidence": "high",
-      "jsonLdProductBlocks": 6,
+      "jsonLdBlocks": 6,
+      "jsonLdProductTyped": 1,
       "skuLikeKeysInJsonLd": [
         "sku"
       ]
@@ -307,7 +319,8 @@
       "manufacturer": "Hedgehousefurniture",
       "retailer": "Hedgehousefurniture",
       "confidence": "high",
-      "jsonLdProductBlocks": 1,
+      "jsonLdBlocks": 1,
+      "jsonLdProductTyped": 1,
       "skuLikeKeysInJsonLd": []
     },
     {
@@ -326,7 +339,8 @@
       "manufacturer": null,
       "retailer": "Pinterest",
       "confidence": null,
-      "jsonLdProductBlocks": 0,
+      "jsonLdBlocks": 0,
+      "jsonLdProductTyped": 0,
       "skuLikeKeysInJsonLd": []
     },
     {
@@ -347,7 +361,8 @@
       "manufacturer": "Instagram",
       "retailer": "Instagram",
       "confidence": "medium",
-      "jsonLdProductBlocks": 0,
+      "jsonLdBlocks": 0,
+      "jsonLdProductTyped": 0,
       "skuLikeKeysInJsonLd": []
     }
   ]

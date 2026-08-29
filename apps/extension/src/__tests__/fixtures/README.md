@@ -24,7 +24,12 @@ fallback noted as "un-rendered fetch." In practice:
   did not reliably trigger the save; western elm and cb2 confirmed this).
   The file lands in `~/Downloads` and was moved into this directory. This
   bypasses the return-channel limit entirely since the content never has to
-  pass back through the tool's text channel.
+  pass back through the tool's text channel. **This stripping (`<link
+  rel="stylesheet">`, non-JSON-LD `<script>`, `<style>`, `<svg>`, `data:`
+  URIs) applies only to the 4 fixtures harvested this way** — `rh.com`,
+  `hermanmiller.com`, `westelm.com`, `cb2.com`. The other 11 fixtures were
+  fetched with plain `curl` and saved byte-for-byte as returned by the
+  server, with every `<script>`/`<style>`/stylesheet `<link>` intact.
 - **`curl -sL -A '<desktop Chrome UA>' -H 'Accept: ...' -H 'Accept-Language:
   ...' --compressed <url>`** worked for most sites (Room & Board, DWR, RH's
   Jennifer Sofa page, Wayfair, Steelcase, Visual Comfort, Knoll, 1stDibs,

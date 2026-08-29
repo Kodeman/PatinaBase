@@ -227,7 +227,10 @@ describe('field visibility on the C2 record screen', () => {
   }
 });
 
+// Gated: `pnpm test` must never dirty tracked files. Regenerate the report
+// with `CAPTURE_REPORT=1 pnpm --filter @patina/extension test -- field-visibility`.
 afterAll(() => {
+  if (process.env.CAPTURE_REPORT !== '1') return;
   mkdirSync(REPORT_DIR, { recursive: true });
   writeFileSync(
     REPORT_PATH,

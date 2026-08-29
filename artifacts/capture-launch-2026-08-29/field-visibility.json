@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-29T13:08:11.234Z",
+  "generatedAt": "2026-08-29T13:20:52.996Z",
   "lane": "capture-launch/w0-d1",
   "notes": [
     "RecordScreen (RecordRegion + TradeRegion + InsightRegion + RouteCommitRegion) mounted directly under <CaptureProvider initial={...}> in state C2 — the same seam src/__tests__/state/CaptureProvider.test.tsx and src/__tests__/spec-books/route-commit-ga.test.tsx use — rather than through PanelShell, which pulls in useCaptureController()/useSettingsSync() side effects not needed for this survey.",
