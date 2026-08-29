@@ -15,15 +15,12 @@ describe('designer Stage-2 cutover source contract', () => {
     expect(page).toMatch(
       /<MobileMarginChips[\s\S]*?<ProjectApprovalDocumentMount/,
     );
-    expect(page).toMatch(
-      /data-active-section[\s\S]{0,1500}?<SectionStageLineMount/,
-    );
     expect(page.indexOf('<SectionStageLineMount')).toBeGreaterThan(
       page.indexOf('<ProjectApprovalDocumentMount'),
     );
     expect(page).toContain('project?.client_id ?? null');
     expect(page).not.toMatch(
-      /<ProjectApprovalDocumentMount[\s\S]{0,300}clientProfileId=\{row\.client_profile_id/,
+      /<ProjectApprovalDocumentMount[\s\S]{0,1200}clientProfileId=\{row\.client_profile_id/,
     );
   });
 

@@ -1234,6 +1234,30 @@ describe('DocumentPage guide activation', () => {
     });
   });
 
+  // ── OD-9 / W0-L1 — the rendered replacement for the retired 1500-char
+  // regex in stage2-approval-cutover-contract.test.ts: the in-section stage
+  // line must actually land INSIDE <div data-active-section> (containment,
+  // not merely "somewhere after it in source text"), and after it in DOM
+  // order. jsdom has no :has(), so containment is proven by index comparison
+  // over a flattened element list rather than by selector. ──
+  describe('the stage line mount is contained by the active section (OD-9)', () => {
+    it('nests [data-section-stage-line] inside [data-active-section], after it in document order', () => {
+      asProjectDocument();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const activeSection = document.querySelector('[data-active-section]');
+      const stageLine = document.querySelector('[data-section-stage-line]');
+      expect(activeSection).not.toBeNull();
+      expect(stageLine).not.toBeNull();
+
+      expect(activeSection!.contains(stageLine!)).toBe(true);
+
+      const all = Array.from(document.querySelectorAll('*'));
+      expect(all.indexOf(stageLine!)).toBeGreaterThan(all.indexOf(activeSection!));
+    });
+  });
+
   // ── B1-L3/L5 — the job ticket is mounted by the DOCUMENT, not by the
   // section: every `engagement_kind === 'project'` spread prints the same
   // eight rows, and the three project-kind sections read identically. Its

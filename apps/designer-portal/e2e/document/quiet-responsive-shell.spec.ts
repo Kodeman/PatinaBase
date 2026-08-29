@@ -258,4 +258,69 @@ test.describe('Quiet Work responsive document shell', () => {
     await expect(margin).toHaveAttribute('aria-hidden', 'false');
     await expectNoHorizontalOverflow(page);
   });
+
+  // ── OD-4/OD-12 landing clearance — W0-L1 tripwire ──
+  // The ticket's PINNED seam publishes `--doc-seam-height`
+  // (job-ticket.tsx), and every `[data-index-region]` root reads it back as
+  // its own `scroll-margin-top` (globals.css), so a running-index jump lands
+  // clear of the pinned ticket rather than under it. This is TODAY's
+  // clearance. OD-12/the W3 ladder rewrite retargets this to a fixed
+  // `--doc-landing-clear` (72px) instead of the ticket's own measured
+  // height — when that lands, this assertion's right-hand side becomes the
+  // fixed token instead of the seam-height custom property.
+  test('at 1440, a running-index jump to Money lands clear of the pinned ticket seam', async ({
+    authenticatedPage: page,
+  }) => {
+    // PROJECT_ID (b0000000-…-d4, the seeded project-kind spread already used
+    // above by openProject/the ticket tests in this file) is what actually
+    // prints the Money region: b0000000-…-d1 was checked and mounts only
+    // Client approvals + Pieces, its active_section is not the project
+    // spread — jumping to "Money" would time out finding the button.
+    await openProject(page, 1440);
+
+    const ticket = page.locator('[data-job-ticket]');
+    await expect(ticket).toBeVisible();
+
+    // Scroll the letterhead and the ticket's own sentinel out of view so the
+    // ticket pins and folds, publishing --doc-seam-height.
+    await page.evaluate(() => window.scrollTo(0, 2000));
+    await expect(ticket).toHaveAttribute('data-pinned', 'true');
+    await expect
+      .poll(() =>
+        page
+          .locator('[data-document-shell]')
+          .evaluate(
+            (el) =>
+              parseFloat(getComputedStyle(el).getPropertyValue('--doc-seam-height')) || 0,
+          ),
+      )
+      .toBeGreaterThan(0);
+
+    const runningIndex = page.getByRole('group', { name: 'On this paper' });
+    await runningIndex.getByRole('button', { name: /^Money/i }).click();
+
+    // The Money region ROOT (`[data-index-region="money"]`) is what
+    // `globals.css`'s `scroll-margin-top: var(--doc-seam-height, 0px)`
+    // targets, and it lands within a sub-pixel of the seam height (verified
+    // against the live DOM). `RegionHead`'s own `regionKey` for Money is
+    // "money-head" (an inner element, past RegionRule's own ~6px) — the
+    // region root, not that inner head, is the paper's actual landing
+    // target and the one that carries this clearance contract.
+    await expect
+      .poll(
+        async () => {
+          const box = await page.locator('[data-index-region="money"]').boundingBox();
+          if (!box) return Number.POSITIVE_INFINITY;
+          const seamHeight = await page
+            .locator('[data-document-shell]')
+            .evaluate(
+              (el) =>
+                parseFloat(getComputedStyle(el).getPropertyValue('--doc-seam-height')) || 0,
+            );
+          return Math.abs(box.y - seamHeight);
+        },
+        { timeout: 15_000 },
+      )
+      .toBeLessThanOrEqual(4);
+  });
 });
