@@ -474,7 +474,11 @@ export function StudioDrawer() {
             className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
           >
             <Search className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} aria-hidden />
-            <span>Find anything</span>
+            {/* F03 — at 1280 the drawer's centre and right zones overprint.
+                The words go first: below 1440 the door is the glyph and the
+                chord, and the accessible name above still carries "Find
+                anything (⌘K)". */}
+            <span className="hidden min-[1440px]:inline">Find anything</span>
             <span className="rounded-[3px] border border-[var(--border-default)] px-1.5 py-px font-mono text-[12px] text-[var(--text-muted)]">
               ⌘K
             </span>
