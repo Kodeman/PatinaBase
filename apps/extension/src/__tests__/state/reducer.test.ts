@@ -204,12 +204,11 @@ describe('captureReducer — extraction lifecycle', () => {
     expect(s.draft?.images.all[0]?.url).toBe('https://cdn/i.jpg');
   });
 
-  it('EXTRACTION_UNKNOWN routes to R4, EXTRACTION_ERROR routes to R5', () => {
+  it('EXTRACTION_ERROR routes to R5', () => {
     const base = captureReducer(initialCaptureState(), {
       type: 'SESSION_RESOLVED',
       user: fakeUser,
     });
-    expect(captureReducer(base, { type: 'EXTRACTION_UNKNOWN' }).nav.screen).toBe('R4');
     const err = captureReducer(base, {
       type: 'EXTRACTION_ERROR',
       error: 'timeout',
@@ -280,24 +279,6 @@ describe('captureReducer — save + dedup', () => {
     expect(s.draft).toBeNull();
     expect(s.nav.screen).toBe('C1');
     expect(s.io.error).toBeNull();
-  });
-
-  it('DUPLICATE_FOUND stores the match and routes to D1', () => {
-    let s = captured();
-    s = captureReducer(s, {
-      type: 'DUPLICATE_FOUND',
-      match: {
-        id: 'p9',
-        name: 'Test Chair',
-        imageUrl: null,
-        priceRetail: 10000,
-        capturedAt: null,
-      },
-      confidence: 0.82,
-    });
-    expect(s.nav.screen).toBe('D1');
-    expect(s.dedup.match?.id).toBe('p9');
-    expect(s.dedup.confidence).toBeCloseTo(0.82);
   });
 
   it('preserves a Product id for placement-only retry without dropping routing', () => {

@@ -107,12 +107,20 @@ function scoreImage(img: HTMLImageElement, pageUrl: string): number {
   if (/product|furniture|chair|table|sofa|bed|desk|lamp/i.test(alt)) score += 15;
 
   // Parent container analysis
-  const parent = img.closest('[class*="product"], [class*="gallery"], [class*="image"], [data-product]');
-  if (parent) score += 20;
+  try {
+    const parent = img.closest('[class*="product"], [class*="gallery"], [class*="image"], [data-product]');
+    if (parent) score += 20;
+  } catch {
+    // Selector unsupported in this document — treat as no match
+  }
 
   // Image gallery indicators
-  if (img.closest('[class*="carousel"], [class*="slider"], [class*="swipe"]')) {
-    score += 15;
+  try {
+    if (img.closest('[class*="carousel"], [class*="slider"], [class*="swipe"]')) {
+      score += 15;
+    }
+  } catch {
+    // Selector unsupported in this document — treat as no match
   }
 
   // Data attributes

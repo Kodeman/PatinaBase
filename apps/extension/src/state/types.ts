@@ -148,26 +148,11 @@ export interface DedupSlice {
   mergePicks: Partial<Record<DraftFieldKey, 'existing' | 'new'>>;
 }
 
-export interface QueuedCaptureSummary {
-  id: string;
-  name: string;
-  attempts: number;
-  status: 'pending' | 'syncing' | 'failed';
-}
-
-export interface QueueSlice {
-  items: QueuedCaptureSummary[];
-  online: boolean;
-  lastSyncAt: string | null;
-}
-
 export interface Prefs {
   defaultDestination: Destination;
   autoDetect: boolean;
-  tradeLayer: boolean;
   dupeWarnings: boolean;
   captureConfirmation: boolean;
-  ocrEnabled: boolean;
   snapshotFallbackEnabled: boolean;
 }
 
@@ -187,7 +172,6 @@ export interface CaptureState {
   draft: DraftSlice | null;
   routing: RoutingSlice;
   dedup: DedupSlice;
-  queue: QueueSlice;
   prefs: Prefs;
   io: IoSlice;
 }
@@ -213,7 +197,6 @@ export type CaptureAction =
       missing: DraftFieldKey[];
     }
   | { type: 'EXTRACTION_BLOCKED'; snapshotUrl: string | null }
-  | { type: 'EXTRACTION_UNKNOWN' }
   | { type: 'EXTRACTION_ERROR'; error: string }
   | { type: 'MANUAL_START'; url: string }
   | { type: 'SNAPSHOT_CAPTURED'; sourceUrl: string; imageUrl: string }
@@ -238,12 +221,6 @@ export type CaptureAction =
   | { type: 'SHELF_SET'; shelf: string | null }
   | { type: 'COMMIT_TARGET_SET'; target: CommitTarget }
   | {
-      type: 'INBOX_TARGET_SET';
-      proposalId: UUID | null;
-      scopeRoomId: UUID | null;
-      ffeCategorySlug: string | null;
-    }
-  | {
       type: 'SPEC_BOOK_PLACEMENT_SET';
       route: SpecBookPlacementRoute | null;
       valid?: boolean;
@@ -255,7 +232,6 @@ export type CaptureAction =
       match: ExistingProductMatch;
       confidence: number;
     }
-  | { type: 'DUPLICATE_FOUND'; match: ExistingProductMatch; confidence: number }
   | { type: 'DUPLICATE_CLEARED' }
   | { type: 'MERGE_FIELD_PICK'; field: DraftFieldKey; pick: 'existing' | 'new' }
   // save lifecycle
@@ -263,13 +239,7 @@ export type CaptureAction =
   | { type: 'SAVE_SUCCESS'; productId: UUID; landed: 'library' | 'inbox'; placementOutcome?: PlacementOutcome | null }
   | { type: 'SAVE_ERROR'; error: string; preservedProductId?: UUID }
   | { type: 'CAPTURE_NEXT' }
-  // offline / prefs
-  | { type: 'CONNECTIVITY'; online: boolean }
-  | {
-      type: 'QUEUE_STATUS';
-      items: QueuedCaptureSummary[];
-      lastSyncAt: string | null;
-    }
+  // prefs
   | { type: 'PREFS_LOADED'; prefs: Prefs }
   | { type: 'PREF_SET'; key: keyof Prefs; value: Prefs[keyof Prefs] };
 

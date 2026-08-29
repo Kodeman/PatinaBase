@@ -3,44 +3,8 @@
  * verified/edited/missing badges, inline-editable. The hero image opens the C3
  * curation sheet; tapping a field marks it edited.
  */
-import { useState } from 'react';
-import { useCapture, useDraft, useCaptureDispatch } from '../../state/CaptureProvider';
+import { useDraft, useCaptureDispatch } from '../../state/CaptureProvider';
 import { FieldBadge } from '../FieldBadge';
-import { runOcr } from '../../lib/ocr';
-
-function OcrTrigger({ imageUrl }: { imageUrl: string }) {
-  const dispatch = useCaptureDispatch();
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
-
-  const read = async () => {
-    setBusy(true);
-    setDone(null);
-    const fields = await runOcr(imageUrl);
-    setBusy(false);
-    if (!fields) {
-      setDone('No text read');
-      return;
-    }
-    if (fields.name) dispatch({ type: 'FIELD_EDIT', field: 'name', value: fields.name });
-    if (fields.price)
-      dispatch({ type: 'FIELD_EDIT', field: 'price', value: (fields.price.value / 100).toFixed(2) });
-    if (fields.materials?.length)
-      dispatch({ type: 'FIELD_EDIT', field: 'materials', value: fields.materials });
-    setDone('Filled from image');
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={read}
-      disabled={busy}
-      className="w-full rounded-md border border-line py-1.5 font-mono text-[0.6rem] uppercase tracking-[0.08em] text-ink-soft transition-colors hover:border-verdigris hover:text-verdigris disabled:opacity-50"
-    >
-      {busy ? 'Reading image…' : (done ?? 'Read text from image')}
-    </button>
-  );
-}
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -52,16 +16,11 @@ function Label({ children }: { children: React.ReactNode }) {
 
 export function RecordRegion() {
   const draft = useDraft();
-  const { prefs } = useCapture();
   const dispatch = useCaptureDispatch();
   if (!draft) return null;
 
   const f = draft.fields;
   const hero = draft.images.selected.map((i) => draft.images.all[i])[0] ?? draft.images.all[0];
-  const ocrEligible =
-    prefs.ocrEnabled &&
-    !!hero &&
-    (draft.captureKind === 'snapshot' || draft.captureKind === 'image');
   const vendorName = draft.manufacturer.vendor?.name ?? draft.retailer.vendor?.name ?? null;
 
   return (
@@ -86,8 +45,6 @@ export function RecordRegion() {
           </span>
         )}
       </button>
-
-      {ocrEligible && hero && <OcrTrigger imageUrl={hero.url} />}
 
       {/* Name */}
       <div className="space-y-1">

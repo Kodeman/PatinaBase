@@ -14,8 +14,8 @@ export type EntryPoint =
   | 'toolbar' // E1 — toolbar icon
   | 'shortcut' // keyboard command
   | 'ctx-page' // E3 — right-click page
-  | 'ctx-image' // X1 — right-click image
-  | 'ctx-selection' // X2 — right-click selection
+  | 'ctx-image' // right-click image
+  | 'ctx-selection' // right-click selection
   | 'onboarding'; // arrived from the onboarding tab
 
 /** Full-screen states the panel can rest in. */
@@ -25,15 +25,9 @@ export type BaseScreen =
   | 'C1' // extracting
   | 'C2' // captured & enriched (also renders R1 when fields are flagged)
   | 'R2' // snapshot fallback
-  | 'R3' // add fields manually
-  | 'R4' // not a product page
   | 'R5' // extraction error
-  | 'D1' // duplicate detected
   | 'S4' // saved to library (terminal)
   | 'S5' // sent to inbox (terminal)
-  | 'X1' // capture image only
-  | 'X2' // capture selection
-  | 'U2' // offline queue takeover
   | 'vendor'; // vendor capture base
 
 /** Sheets that sit ON TOP of a base screen and pop back to it. */

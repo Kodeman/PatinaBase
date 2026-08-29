@@ -4,7 +4,7 @@
  * For the DWR and 1stDibs fixtures, runs the real extractor, builds a draft
  * with draftFromExtraction (the same adapter the live panel uses), and mounts
  * RecordScreen — the C2 "captured & enriched" screen (RecordRegion +
- * TradeRegion + InsightRegion + RouteCommitRegion) — under CaptureProvider
+ * InsightRegion + RouteCommitRegion) — under CaptureProvider
  * with that draft, exactly as the panel would after a real extraction. Counts
  * which extracted fields actually surface as a visible input/value in the
  * rendered DOM, and how many <select>/<input> elements the route region
@@ -194,9 +194,9 @@ describe('field visibility on the C2 record screen', () => {
           brand: brandVisible,
           // Dimensions, materials, colors, and finish have no rendered value
           // anywhere on C2: RecordRegion renders inputs only for
-          // name/price/description plus a plain-text Brand row; TradeRegion
-          // only echoes price; InsightRegion and RouteCommitRegion don't
-          // touch these fields at all. The only DOM trace of them is
+          // name/price/description plus a plain-text Brand row; InsightRegion
+          // and RouteCommitRegion don't touch these fields at all. The only
+          // DOM trace of them is
           // InsightRegion's flagged-field-key summary line ("materials,
           // colors, finish, dimensions need a look") when the field is
           // missing — that's the field's *key name* appearing as a flag
@@ -239,7 +239,7 @@ afterAll(() => {
         generatedAt: new Date().toISOString(),
         lane: 'capture-launch/w0-d1',
         notes: [
-          'RecordScreen (RecordRegion + TradeRegion + InsightRegion + RouteCommitRegion) mounted ' +
+          'RecordScreen (RecordRegion + InsightRegion + RouteCommitRegion) mounted ' +
             'directly under <CaptureProvider initial={...}> in state C2 — the same seam ' +
             'src/__tests__/state/CaptureProvider.test.tsx and ' +
             'src/__tests__/spec-books/route-commit-ga.test.tsx use — rather than through ' +
