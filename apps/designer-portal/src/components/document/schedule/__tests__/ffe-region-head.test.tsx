@@ -94,6 +94,7 @@ jest.mock('../../strata-mini-rule', () => ({ StrataMiniRule: () => null }));
 jest.mock('../../line-unfold', () => ({ LineUnfold: () => null }));
 
 import { FFESection } from '../../ffe-section';
+import { RoomLensProvider } from '../../room-lens-context';
 
 /** A furnishing the studio still has to release. */
 const line = (over: Record<string, unknown> = {}) => ({
@@ -255,5 +256,61 @@ describe('FF&E project-mode region head', () => {
       screen.queryByRole('button', { name: 'Fold ↑' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/unfold/i)).not.toBeInTheDocument();
+  });
+});
+
+// W2 — the room heading itself is the room lens's press target (the same
+// contract job-ticket.tsx's room chip already carries).
+describe('FF&E room heading — the room lens press target', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    mockRooms = [{ id: 'room-1', name: 'Primary bedroom', budget_cents: 0 }];
+    mockItems = [line()];
+    mockInstruments = [];
+    mockTradeScopes = [];
+    mockAuthority = { data: null };
+    mockCoverage = {};
+  });
+
+  const renderProjectInLens = (projectId = 'project-1') =>
+    render(
+      <RoomLensProvider>
+        <FFESection projectId={projectId} projectName="Ellsworth" mode="project" />
+      </RoomLensProvider>,
+    );
+
+  it('carries data-room-chip and flips aria-pressed on press, taking the room in hand', () => {
+    renderProjectInLens();
+    const heading = screen.getByRole('button', { name: /Primary bedroom/ });
+    expect(heading).toHaveAttribute('data-room-chip', 'room-1');
+    expect(heading).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(heading);
+    expect(heading).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(heading);
+    expect(heading).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('never turns "Throughout" — a heading with no room behind it — into a press target', () => {
+    mockItems = [line(), line({ id: 'line-2', project_room_id: null })];
+    renderProjectInLens();
+    const throughoutHeading = screen.getByText('Throughout');
+    expect(throughoutHeading.closest('button')).toBeNull();
+    expect(
+      document.querySelector('[data-room-chip="undefined"]'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not toggle the room lens while bulk-selecting — the tri-state tick owns the press instead', () => {
+    mockAuthority = { data: { state: 'active', agreementId: 'agreement-1' } };
+    renderProjectInLens();
+    fireEvent.click(
+      screen.getByRole('button', { name: /release for authorization/i }),
+    );
+    // In selecting mode the heading's press target is the tri-state tick, not
+    // the room lens — "Primary bedroom" prints as plain text, not a button.
+    const heading = screen.getByText('Primary bedroom');
+    expect(heading.closest('button')).toBeNull();
   });
 });

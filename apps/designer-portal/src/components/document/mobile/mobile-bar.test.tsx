@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MobileBar } from './mobile-bar';
+import { MobileSheets } from './mobile-sheets';
 import {
   MobileShellProvider,
   useMobileActiveDoc,
@@ -10,15 +11,22 @@ import {
 
 let mockPathname = '/doc/proj-1';
 let mockCallSheetOn = true;
+const mockRouterPush = jest.fn();
 
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
+  useRouter: () => ({ push: mockRouterPush }),
 }));
 
 jest.mock('@patina/supabase', () => ({
   useUnreadInboxCount: () => ({ data: 0 }),
   useProcurementUnreadCount: () => ({ data: 0 }),
   useUnseenShipped: () => ({ data: [] }),
+  // The sections sheet (MobileSheets) needs these too — it computes its
+  // margin summary unconditionally, whichever sheet kind is open.
+  useCoordinationItems: () => ({ data: [] }),
+  useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  isProjectArtifactApproval: () => false,
 }));
 
 jest.mock('@/hooks/use-hydrated', () => ({
@@ -39,6 +47,10 @@ jest.mock('@/hooks/document-time-provider', () => ({
   }),
 }));
 
+jest.mock('@/hooks/use-margin-items', () => ({
+  useMarginItems: () => ({ data: [] }),
+}));
+
 jest.mock('../overlays/post-sheet', () => ({
   openPost: jest.fn(),
 }));
@@ -52,6 +64,22 @@ jest.mock('@/lib/analytics/document-events', () => ({
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
   },
+}));
+
+jest.mock('../account/mobile-account-header', () => ({
+  MobileAccountHeader: () => null,
+}));
+
+jest.mock('../account/account-sheet', () => ({
+  openAccount: jest.fn(),
+}));
+
+jest.mock('../command-bar', () => ({
+  openLedger: jest.fn(),
+}));
+
+jest.mock('../margin-bodies', () => ({
+  MarginItemBody: () => null,
 }));
 
 const heldDocument: MobileActiveDoc = {
@@ -313,5 +341,171 @@ describe('the left zone · household and the current stop (OD-11, A-08)', () => 
       ).toBeInTheDocument();
       unmount();
     });
+  });
+});
+
+function mountBarAndSheets({
+  doc = heldDocument,
+  ladderValues,
+}: {
+  doc?: MobileActiveDoc | null;
+  ladderValues?: Record<string, string>;
+} = {}) {
+  return render(
+    <MobileShellProvider>
+      <HoldDocument doc={doc} />
+      <MobileBar />
+      <MobileSheets ladderValues={ladderValues} />
+    </MobileShellProvider>,
+  );
+}
+
+function openSections() {
+  fireEvent.click(screen.getByRole('button', { name: /^Open sections/ }));
+}
+
+function sectionsPanel() {
+  const dialog = screen.getByRole('dialog', {
+    name: 'Sections of this document',
+  });
+  return dialog.querySelector('[data-mobile-sheet-panel]') as HTMLElement;
+}
+
+describe('the sections sheet · the ladder for the open spread (W2, OD-14, reconciliation §13)', () => {
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    mockCallSheetOn = true;
+    mockRouterPush.mockClear();
+    // MobileSheets closes itself above 1179px (every kind but the timer) — a
+    // regime effect this suite's phone-viewport tests all sit below.
+    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })) as unknown as typeof window.matchMedia;
+  });
+
+  it('names itself "Sections of this document" — every sheet kind carries an accessible name', () => {
+    mountBarAndSheets();
+    openSections();
+    expect(
+      screen.getByRole('dialog', { name: 'Sections of this document' }),
+    ).toBeInTheDocument();
+  });
+
+  it('prints Put down first, then one row per ladder stop of the open spread, each min-h-11', () => {
+    mountBarAndSheets();
+    openSections();
+    const panel = sectionsPanel();
+    const rows = within(panel).getAllByRole('button');
+    expect(rows[0]).toHaveTextContent('Put down');
+    expect(rows[0]).toHaveClass('min-h-11');
+
+    [
+      'Client approvals',
+      'Schedule',
+      'Pieces',
+      'Money',
+      'Closing the book',
+      'The record',
+    ].forEach((label) => {
+      const row = within(panel).getByRole('button', { name: label });
+      expect(row).toHaveClass('min-h-11');
+    });
+  });
+
+  it('prints the ladder value when integration hands one, the name alone when not', () => {
+    mountBarAndSheets({ ladderValues: { ffe: '36 lines · 1 damaged' } });
+    openSections();
+    const panel = sectionsPanel();
+    const piecesRow = within(panel).getByRole('button', { name: /Pieces/ });
+    expect(within(piecesRow).getByText('36 lines · 1 damaged')).toBeInTheDocument();
+
+    const scheduleRow = within(panel).getByRole('button', { name: 'Schedule' });
+    expect(scheduleRow).toHaveTextContent('Schedule');
+  });
+
+  it('marks the reading stop aria-current, and no other stop', () => {
+    mountBarAndSheets({ doc: { ...heldDocument, readingIndex: 'money' } });
+    openSections();
+    const panel = sectionsPanel();
+    expect(
+      within(panel).getByRole('button', { name: 'Money' }),
+    ).toHaveAttribute('aria-current', 'true');
+    expect(
+      within(panel).getByRole('button', { name: 'Schedule' }),
+    ).not.toHaveAttribute('aria-current');
+  });
+
+  it('prints the four project doors under "Filed with this job", routing each', () => {
+    mountBarAndSheets();
+    openSections();
+    const panel = sectionsPanel();
+    expect(within(panel).getByText('Filed with this job')).toBeInTheDocument();
+    ['Plan room', 'Spec book', 'Mood boards', 'Call sheet'].forEach((label) => {
+      expect(
+        within(panel).getByRole('button', { name: label }),
+      ).toHaveClass('min-h-11');
+    });
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Plan room' }));
+    expect(mockRouterPush).toHaveBeenCalledWith('/doc/proj-1/plans');
+  });
+
+  it('routes Spec book and Mood boards at this project', () => {
+    const first = mountBarAndSheets();
+    openSections();
+    fireEvent.click(
+      within(sectionsPanel()).getByRole('button', { name: 'Spec book' }),
+    );
+    expect(mockRouterPush).toHaveBeenCalledWith('/doc/proj-1/spec-book');
+    first.unmount();
+
+    mockRouterPush.mockClear();
+    mountBarAndSheets();
+    openSections();
+    fireEvent.click(
+      within(sectionsPanel()).getByRole('button', { name: 'Mood boards' }),
+    );
+    expect(mockRouterPush).toHaveBeenCalledWith('/doc/proj-1/boards');
+  });
+
+  it('opens the call sheet through the doorway the surface already listens on', () => {
+    const opened = jest.fn();
+    window.addEventListener('document:open-call-sheet', opened);
+    mountBarAndSheets();
+    openSections();
+    fireEvent.click(
+      within(sectionsPanel()).getByRole('button', { name: 'Call sheet' }),
+    );
+    expect(opened).toHaveBeenCalledTimes(1);
+    window.removeEventListener('document:open-call-sheet', opened);
+  });
+
+  it('drops the call sheet door when its flag is off, keeping the other three', () => {
+    mockCallSheetOn = false;
+    mountBarAndSheets();
+    openSections();
+    const panel = sectionsPanel();
+    expect(within(panel).queryByRole('button', { name: 'Call sheet' })).toBeNull();
+    expect(within(panel).getByRole('button', { name: 'Plan room' })).toBeInTheDocument();
+  });
+
+  it('prints no ladder and no doors off a project (OD-8: nothing to open)', () => {
+    mountBarAndSheets({
+      doc: { ...heldDocument, projectId: null, sections: [] },
+    });
+    openSections();
+    const panel = sectionsPanel();
+    expect(within(panel).queryByText('Filed with this job')).toBeNull();
+    expect(within(panel).queryByRole('button', { name: /Pieces/ })).toBeNull();
+    // Put down still prints — putting the document down never depends on a
+    // project being behind it.
+    expect(within(panel).getByText('Put down', { exact: false })).toBeInTheDocument();
   });
 });
