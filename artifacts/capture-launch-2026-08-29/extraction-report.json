@@ -1,0 +1,354 @@
+{
+  "generatedAt": "2026-08-29T13:08:14.102Z",
+  "lane": "capture-launch/w0-d1",
+  "notes": [
+    "Ran extractProductData() against each fixture inside jsdom (new JSDOM(html, { url })). jsdom has no layout engine: getBoundingClientRect() always returns zeros, so the position-based component of image scoring (src/lib/extraction/images.ts) never contributes here the way it would in a real browser tab — image counts and JSON-LD- derived scores are representative, but the highest-scored image may differ from what the live extension would pick.",
+    "jsdom does not implement innerText at all (price.ts uses document.body.innerText as a fallback price scan) — this suite polyfills it as an alias for textContent so extraction can run without throwing. That polyfill is not layout-aware: hidden/off- screen price text a real browser would exclude from innerText can be picked up here.",
+    "window.getComputedStyle() background-image lookups (images.ts) will not see rules from external stylesheets, since fixture harvesting strips <link rel=\"stylesheet\"> and non-JSON-LD <script> tags (see fixtures/README.md methodology note).",
+    "sku/mpn/productID presence is a raw JSON-LD text probe, independent of extraction — extractProductData does not read those keys yet; ExtractedProductData has no sku field."
+  ],
+  "fixtures": [
+    {
+      "file": "roomandboard.com.stevens-sofas.html",
+      "url": "https://www.roomandboard.com/catalog/living/sofas-and-loveseats/stevens-sofas",
+      "knownBad": false,
+      "ok": true,
+      "name": "Stevens Sofas - Modern Living Room Furniture",
+      "price": {
+        "value": 289900,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [
+        "width",
+        "height",
+        "depth",
+        "seatHeight",
+        "seatDepth",
+        "armHeight",
+        "legHeight"
+      ],
+      "materialsCount": 12,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 4,
+      "manufacturer": "Room & Board",
+      "retailer": "Room & Board",
+      "confidence": "high",
+      "jsonLdProductBlocks": 3,
+      "skuLikeKeysInJsonLd": [
+        "mpn",
+        "sku"
+      ]
+    },
+    {
+      "file": "dwr.com.eames-lounge-chair-and-ottoman.html",
+      "url": "https://www.dwr.com/living-lounge-chairs/eames-lounge-chair-and-ottoman/5667.html?lang=en_US",
+      "knownBad": false,
+      "ok": true,
+      "name": "Eames Lounge Chair and Ottoman – Design Within Reach",
+      "price": {
+        "value": 652500,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [
+        "width",
+        "height",
+        "depth"
+      ],
+      "materialsCount": 7,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 1,
+      "manufacturer": "Design Within Reach",
+      "retailer": "Design Within Reach",
+      "confidence": "high",
+      "jsonLdProductBlocks": 1,
+      "skuLikeKeysInJsonLd": []
+    },
+    {
+      "file": "rh.com.jennifer-sofa.html",
+      "url": "https://rh.com/us/en/catalog/product/product.jsp/prod39250055",
+      "knownBad": false,
+      "ok": true,
+      "name": "Jennifer Sofa | RH",
+      "price": {
+        "value": 699500,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [],
+      "materialsCount": 2,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 5,
+      "manufacturer": "Restoration Hardware",
+      "retailer": "Restoration Hardware",
+      "confidence": "high",
+      "jsonLdProductBlocks": 1,
+      "skuLikeKeysInJsonLd": []
+    },
+    {
+      "file": "wayfair.com.ebern-designs-sofa.html",
+      "url": "https://www.wayfair.com/furniture/pdp/ebern-designs-traditional-upholstered-standard-sofa-with-square-armrests-and-2-throw-pillows-w112266288.html",
+      "knownBad": false,
+      "ok": true,
+      "name": "Ebern Designs Traditional Upholstered Standard Sofa with Square Armrests and 2 Throw Pillows & Reviews",
+      "price": {
+        "value": 10000,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [],
+      "materialsCount": 1,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 2,
+      "manufacturer": "Wayfair",
+      "retailer": "Wayfair",
+      "confidence": "high",
+      "jsonLdProductBlocks": 2,
+      "skuLikeKeysInJsonLd": []
+    },
+    {
+      "file": "hermanmiller.com.eames-lounge-chair-and-ottoman.html",
+      "url": "https://www.hermanmiller.com/products/seating/lounge-seating/eames-lounge-chair-and-ottoman/",
+      "knownBad": false,
+      "ok": true,
+      "name": "Eames Lounge Chair and Ottoman",
+      "price": null,
+      "dimensionFieldsPresent": [],
+      "materialsCount": 0,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 20,
+      "manufacturer": "Herman Miller",
+      "retailer": "Herman Miller",
+      "confidence": "medium",
+      "jsonLdProductBlocks": 0,
+      "skuLikeKeysInJsonLd": []
+    },
+    {
+      "file": "steelcase.com.gesture.html",
+      "url": "https://www.steelcase.com/products/office-chairs/gesture",
+      "knownBad": false,
+      "ok": true,
+      "name": "Gesture Ergonomic Office & Desk Chair | Steelcase",
+      "price": null,
+      "dimensionFieldsPresent": [],
+      "materialsCount": 0,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 1,
+      "manufacturer": "Steelcase",
+      "retailer": "Steelcase",
+      "confidence": "medium",
+      "jsonLdProductBlocks": 2,
+      "skuLikeKeysInJsonLd": []
+    },
+    {
+      "file": "visualcomfort.com.talia-small-chandelier.html",
+      "url": "https://www.visualcomfort.com/us/p/talia-small-chandelier-jn5110",
+      "knownBad": false,
+      "ok": true,
+      "name": "Talia Small Chandelier - JN5110 | Visual Comfort",
+      "price": {
+        "value": 169900,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [],
+      "materialsCount": 1,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 20,
+      "manufacturer": "Visualcomfort",
+      "retailer": "Visualcomfort",
+      "confidence": "high",
+      "jsonLdProductBlocks": 1,
+      "skuLikeKeysInJsonLd": [
+        "productID",
+        "sku"
+      ]
+    },
+    {
+      "file": "knoll.com.womb-chair.html",
+      "url": "https://www.knoll.com/shop/en_us/living-lounge-chairs/womb-chair/7876.html?sku=100360310",
+      "knownBad": false,
+      "ok": true,
+      "name": "Womb Chair, Standard | Knoll",
+      "price": {
+        "value": 485625,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [
+        "width",
+        "height",
+        "depth"
+      ],
+      "materialsCount": 9,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 7,
+      "manufacturer": "Knoll",
+      "retailer": "Knoll",
+      "confidence": "high",
+      "jsonLdProductBlocks": 1,
+      "skuLikeKeysInJsonLd": []
+    },
+    {
+      "file": "1stdibs.com.rare-1964-eames-lounge-chair.html",
+      "url": "https://www.1stdibs.com/furniture/seating/lounge-chairs/rare-1964-rosewood-herman-miller-eames-lounge-chair-ottoman-w-original-receipt/id-f_48117292/",
+      "knownBad": false,
+      "ok": true,
+      "name": "Rare 1964 Rosewood Herman Miller Eames Lounge chair and Ottoman w/Original Receipt",
+      "price": {
+        "value": 784364,
+        "currency": "CHF"
+      },
+      "dimensionFieldsPresent": [],
+      "materialsCount": 3,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 0,
+      "manufacturer": "1stDibs",
+      "retailer": "1stDibs",
+      "confidence": "medium",
+      "jsonLdProductBlocks": 2,
+      "skuLikeKeysInJsonLd": []
+    },
+    {
+      "file": "chairish.com.george-smith-leather-sofa.html",
+      "url": "https://www.chairish.com/product/36868025/george-smith-english-howard-sons-signature-leather-sofa",
+      "knownBad": false,
+      "ok": true,
+      "name": "George Smith English Howard & Sons Signature Leather Sofa",
+      "price": {
+        "value": 880000,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [
+        "width",
+        "height",
+        "depth"
+      ],
+      "materialsCount": 7,
+      "colorsCount": 2,
+      "finish": "Polished",
+      "imagesCount": 12,
+      "manufacturer": "Chairish",
+      "retailer": "Chairish",
+      "confidence": "high",
+      "jsonLdProductBlocks": 2,
+      "skuLikeKeysInJsonLd": []
+    },
+    {
+      "file": "westelm.com.harris-sofa.html",
+      "url": "https://www.westelm.com/products/harris-sofa-96-h4614/",
+      "knownBad": false,
+      "ok": true,
+      "name": "Harris Sofa (56&quot;&ndash;108&quot;)",
+      "price": {
+        "value": 71920,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [],
+      "materialsCount": 5,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 20,
+      "manufacturer": "West Elm",
+      "retailer": "West Elm",
+      "confidence": "high",
+      "jsonLdProductBlocks": 3,
+      "skuLikeKeysInJsonLd": [
+        "productID",
+        "sku"
+      ]
+    },
+    {
+      "file": "cb2.com.berkeley-velvet-sofa.html",
+      "url": "https://www.cb2.com/berkeley-78-jade-performance-velvet-sofa/s450191",
+      "knownBad": false,
+      "ok": true,
+      "name": "Berkeley 78\" Jade Performance Velvet Sofa + Reviews",
+      "price": {
+        "value": 195400,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [
+        "width",
+        "height",
+        "depth"
+      ],
+      "materialsCount": 4,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 20,
+      "manufacturer": "CB2",
+      "retailer": "CB2",
+      "confidence": "high",
+      "jsonLdProductBlocks": 6,
+      "skuLikeKeysInJsonLd": [
+        "sku"
+      ]
+    },
+    {
+      "file": "hedgehousefurniture.com.white-oak-marie-nightstand.html",
+      "url": "https://hedgehousefurniture.com/products/white-oak-marie-nightstand-114010-in-stock",
+      "knownBad": false,
+      "ok": true,
+      "name": "White oak Marie Nightstand - 114352 - IN STOCK",
+      "price": {
+        "value": 144000,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [],
+      "materialsCount": 1,
+      "colorsCount": 2,
+      "finish": null,
+      "imagesCount": 12,
+      "manufacturer": "Hedgehousefurniture",
+      "retailer": "Hedgehousefurniture",
+      "confidence": "high",
+      "jsonLdProductBlocks": 1,
+      "skuLikeKeysInJsonLd": []
+    },
+    {
+      "file": "pinterest.com.pin-378724649918852625.html",
+      "url": "https://www.pinterest.com/pin/378724649918852625/",
+      "knownBad": true,
+      "ok": false,
+      "error": "unknown pseudo-class selector ':3>*'",
+      "name": null,
+      "price": null,
+      "dimensionFieldsPresent": [],
+      "materialsCount": 0,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 0,
+      "manufacturer": null,
+      "retailer": "Pinterest",
+      "confidence": null,
+      "jsonLdProductBlocks": 0,
+      "skuLikeKeysInJsonLd": []
+    },
+    {
+      "file": "instagram.com.p-DcjKbTzEVTf.html",
+      "url": "https://www.instagram.com/p/DcjKbTzEVTf/",
+      "knownBad": true,
+      "ok": true,
+      "name": "Instagram",
+      "price": {
+        "value": 100,
+        "currency": "USD"
+      },
+      "dimensionFieldsPresent": [],
+      "materialsCount": 0,
+      "colorsCount": 0,
+      "finish": null,
+      "imagesCount": 0,
+      "manufacturer": "Instagram",
+      "retailer": "Instagram",
+      "confidence": "medium",
+      "jsonLdProductBlocks": 0,
+      "skuLikeKeysInJsonLd": []
+    }
+  ]
+}
