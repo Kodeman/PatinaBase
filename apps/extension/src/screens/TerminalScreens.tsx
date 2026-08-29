@@ -13,7 +13,7 @@ function NextActions() {
     <button
       type="button"
       onClick={() => dispatch({ type: 'CAPTURE_NEXT' })}
-      className="mt-5 rounded-md bg-verdigris px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-paper hover:bg-verdigris-ink"
+      className="mt-5 rounded-md bg-verdigris-ink px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-paper transition-all hover:brightness-110"
     >
       Capture another
     </button>
@@ -60,7 +60,7 @@ export function SavedScreen() {
       <button
         type="button"
         onClick={() => dispatch({ type: 'CAPTURE_NEXT' })}
-        className="mt-5 rounded-md bg-verdigris px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-paper hover:bg-verdigris-ink"
+        className="mt-5 rounded-md bg-verdigris-ink px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-paper transition-all hover:brightness-110"
       >
         Capture another
       </button>
@@ -147,25 +147,38 @@ export function ErrorScreen() {
         {isSaveError ? "Couldn't save" : "Couldn't read this page"}
       </h2>
       <p className="mt-1 max-w-[30ch] text-[0.85rem] text-ink-soft">
-        {io.error || 'The page blocked extraction or timed out. Try again, or capture it by hand.'}
+        {isSaveError && retrying
+          ? 'Retrying your save…'
+          : io.error ||
+            'The page blocked extraction or timed out. Try again, or capture it by hand.'}
       </p>
       <div className="mt-5 flex gap-2">
         {isSaveError ? (
-          <button
-            type="button"
-            disabled={retrying}
-            onClick={retrySave}
-            className="rounded-md bg-verdigris-ink px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-paper transition-all hover:brightness-110 disabled:opacity-50"
-          >
-            {retrying ? 'Retrying…' : 'Retry'}
-          </button>
+          <>
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={retrySave}
+              className="rounded-md bg-verdigris-ink px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-paper transition-all hover:brightness-110 disabled:opacity-50"
+            >
+              {retrying ? 'Retrying…' : 'Retry'}
+            </button>
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={() => dispatch({ type: 'NAV', screen: 'C2' })}
+              className="rounded-md border border-line px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-ink-soft hover:border-ink-soft disabled:opacity-50"
+            >
+              Edit the record
+            </button>
+          </>
         ) : (
           <>
             {!isKnownBad && (
               <button
                 type="button"
                 onClick={refresh}
-                className="rounded-md bg-verdigris px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-paper hover:bg-verdigris-ink"
+                className="rounded-md bg-verdigris-ink px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-paper transition-all hover:brightness-110"
               >
                 Retry
               </button>

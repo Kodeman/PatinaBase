@@ -37,9 +37,10 @@ export interface CaptureController {
   portalChecking: boolean;
   currentUrl: string;
   /**
-   * Date.now() at panel mount — the clock `product.captured`'s captureTimeMs
-   * reads from. Optional so hand-built test controllers (error-screen.test.tsx
-   * et al.) don't all need updating for a field they don't exercise.
+   * Date.now() at the start of the current capture cycle (reset on every
+   * C1) — the clock `product.captured`'s captureTimeMs reads from. Optional
+   * so hand-built test controllers (error-screen.test.tsx et al.) don't all
+   * need updating for a field they don't exercise.
    */
   captureStartedAt?: number;
 }
@@ -92,14 +93,15 @@ export function useCaptureController(): CaptureController {
   const dupeWarnings = state.prefs.dupeWarnings;
   const signedIn = state.session.status === 'signed-in';
 
-  // Panel-open clock — captureTimeMs (product.captured) and cancelled's openMs
-  // both read off this. A ref, not state (CL W3-E10): it's timing-only,
-  // never drives a render.
+  // Current-capture-cycle clock — captureTimeMs (product.captured) and
+  // cancelled's openMs both read off this; reset on every C1. A ref, not
+  // state (CL W3-E10): it's timing-only, never drives a render.
   const captureStartedAtRef = useRef(Date.now());
 
-  // Mirror the latest draft/saved-ness into refs so the unmount cleanup below
-  // (a stale closure otherwise — effects with `[]` deps close over mount-time
-  // state) sees what was actually on screen when the panel closed.
+  // Mirror the latest draft/saved-ness into refs so the pagehide/unmount
+  // handlers below (stale closures otherwise — effects with `[]` deps close
+  // over mount-time state) see what was actually on screen when the panel
+  // closed.
   const draftRef = useRef(state.draft);
   useEffect(() => {
     draftRef.current = state.draft;
@@ -108,24 +110,38 @@ export function useCaptureController(): CaptureController {
   useEffect(() => {
     if (state.nav.screen === 'S4' || state.nav.screen === 'S5') savedRef.current = true;
   }, [state.nav.screen]);
+  // Guards pagehide/visibilitychange/unmount from double-firing `cancelled`
+  // for the same capture — pagehide can fire and then React can still
+  // unmount before the tab is fully gone.
+  const cancelledSentRef = useRef(false);
 
   // A fresh capture cycle starts — both EXTRACTION_START and CAPTURE_NEXT
-  // land on 'C1', nothing else does. Reset the saved-ness flag (a stale
-  // `true` from the PREVIOUS capture would suppress `cancelled` on this
-  // one) and re-anchor the clock so captureTimeMs times this capture, not
-  // however long the panel's been open across several captures in a row.
+  // land on 'C1', nothing else does. Reset the saved-ness/sent-ness flags (a
+  // stale `true` from the PREVIOUS capture would suppress `cancelled` on
+  // this one) and re-anchor the clock so captureTimeMs times this capture,
+  // not however long the panel's been open across several captures in a row.
   useEffect(() => {
     if (state.nav.screen === 'C1') {
       savedRef.current = false;
+      cancelledSentRef.current = false;
       captureStartedAtRef.current = Date.now();
     }
   }, [state.nav.screen]);
 
   // capture.extension.cancelled — the panel closed with an unsaved draft.
+  // `pagehide` (falling back to `visibilitychange`→hidden, since MV3 side
+  // panels don't reliably fire pagehide in every Chrome build) is the real
+  // signal — closing the panel tears down the document, and React's own
+  // unmount effect cleanup isn't guaranteed to run before that happens. The
+  // unmount cleanup stays registered as a secondary path for the cases
+  // where the component does unmount cleanly; cancelledSentRef keeps
+  // whichever fires first from being reported twice.
   useEffect(() => {
-    return () => {
+    const sendCancelled = () => {
+      if (cancelledSentRef.current) return;
       const draft = draftRef.current;
       if (!draft || savedRef.current) return;
+      cancelledSentRef.current = true;
       let domain: string | undefined;
       try {
         domain = new URL(draft.sourceUrl).hostname.replace(/^www\./, '');
@@ -136,6 +152,16 @@ export function useCaptureController(): CaptureController {
         domain,
         openMs: Date.now() - captureStartedAtRef.current,
       });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') sendCancelled();
+    };
+    window.addEventListener('pagehide', sendCancelled);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', sendCancelled);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      sendCancelled();
     };
   }, []);
 

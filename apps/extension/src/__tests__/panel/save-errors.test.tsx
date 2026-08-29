@@ -170,6 +170,42 @@ describe('CommitBar save-error handling (CL W3-E10)', () => {
   });
 });
 
+describe('R5 save-error escapes (Opus rework, final pass)', () => {
+  function saveErrorOnR5(): CaptureState {
+    const state = capturedState();
+    state.nav.screen = 'R5';
+    state.io = {
+      ...state.io,
+      error: 'Something went wrong on the server',
+      lastCommitKind: 'library',
+    };
+    return state;
+  }
+
+  it('shows "Retrying your save…" during the in-flight retry window, never the extraction fallback sentence', () => {
+    renderPanel(saveErrorOnR5());
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    // Synchronous: retrySave calls setRetrying(true) before its first
+    // await, and the body text reads the local `retrying` flag directly —
+    // not io.error, which SAVE_START has already nulled by this point.
+    expect(screen.getByText('Retrying your save…')).toBeTruthy();
+    expect(
+      screen.queryByText(
+        'The page blocked extraction or timed out. Try again, or capture it by hand.'
+      )
+    ).toBeNull();
+  });
+
+  it('offers "Edit the record" on a save error, navigating back to C2 with the draft intact', () => {
+    const seen = renderPanel(saveErrorOnR5());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit the record' }));
+
+    expect(seen.state?.nav.screen).toBe('C2');
+    expect(seen.state?.draft).not.toBeNull();
+  });
+});
+
 describe('ErrorScreen on a known-bad domain with a live draft (F3)', () => {
   it('shows the known-bad body (Snapshot + By hand, no Retry) even though a draft is present', () => {
     const state = capturedState();

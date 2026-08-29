@@ -75,6 +75,7 @@
   --verdigris-ink: #22463d;
   --brass: #a07c38; /* trade / decision */
   --brass-2: #c7a052;
+  --brass-ink: #5c4415; /* AA dark brass for text-paper on a primary brass button (7.25:1) */
   --rust: #9a5a3e; /* error / missing / friction */
   --rust-2: #b97a56;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);

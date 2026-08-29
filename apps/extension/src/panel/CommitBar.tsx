@@ -14,11 +14,11 @@ import {
   updateExisting,
   classifySaveError,
 } from '../state/effects';
-import type { CommitTarget } from '../state/types';
+import type { CommitTarget, CommitKind } from '../state/types';
 import { SpecBookPlacementError } from '../lib/spec-book-placement';
 import { ControllerContext } from './controller-context';
 
-type Kind = 'library' | 'inbox' | 'update' | 'reuse';
+type Kind = CommitKind;
 
 export function CommitBar() {
   const state = useCapture();
@@ -136,7 +136,7 @@ export function CommitBar() {
           type="button"
           disabled={disabled}
           onClick={() => run('update')}
-          className="w-full rounded-md bg-brass py-3 text-[0.85rem] font-medium text-paper transition-colors hover:bg-brass-2 disabled:opacity-50"
+          className="w-full rounded-md bg-brass-ink py-3 text-[0.85rem] font-medium text-paper transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass focus-visible:ring-offset-2 disabled:opacity-50"
         >
           {busy === 'update' ? 'Updating…' : `Update “${dedup.match.name}”`}
         </button>
