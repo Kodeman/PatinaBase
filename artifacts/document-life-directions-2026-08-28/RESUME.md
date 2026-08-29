@@ -232,6 +232,55 @@ node ../../artifacts/document-life-directions-2026-08-28/mock/shoot-preview.mjs
   `host-sim.mjs`, `shots/` and `review-shots/` (the evidence PNGs). `node_modules` is a symlink to
   `apps/designer-portal/node_modules`, not staged.
 
+## SHIPPED TO MAIN 2026-08-28
+
+**PR #38 merged** — `chore(designer-portal): merge The Life Review — A with a little of B's colour (#38)`,
+merge commit **`605e83ca5c76a0c8a31edef1f797d42ec507929b`**, `document-life/integration @ 11a553ff1`
+into `main` (verified `document-life/integration` is an ancestor of `origin/main`). Main checkout
+fast-forwarded cleanly from `4b35e0a94` to `605e83ca5`.
+
+**What landed**: the ruled "A, with a little of B's colour" direction, in the product. Direction A's
+skeleton stands as-is — type scale, three rule weights, section head, cream desk ground, untinted
+paper, spine/margin rail, margin chips as lifted paper — with exactly three grafts from B: filled
+status stamps (~1.18:1), the six saturated stage tabs as small plates on roster heads, and 48px
+catalog-linked FF&E thumbnails. New: the hover wash (a roster/FF&E line's own pigment opens under
+the pointer via the portal's ink-pool mechanic, landing at ~1.12:1 over its ground, flat tint under
+reduced motion), the roster settling once per load rather than every render, a fold-in transition,
+and one elevation token (`--elevation-sheet`, the Q04 amendment, not canon) at three sites. An 11px
+mono floor was tightened on affected text. THE STUDIO block on the desk was left untouched per
+Kody's own ruling. Ledger entry **R126** (`docs/design/the-document/DECISIONS.md`).
+
+**Verification summary** (from `research/40-code-review.md`, `research/41-verify-walk.md`):
+jest suite green at **5170** tests; e2e (`e2e/document`, chromium) showed **0 regressions** from
+this branch's commits against **8 pre-existing** failures (4 share one root cause — a GoTrue
+admin `listUsers` `uuid: "undefined"` condition independent of the app code; the other 3 read as
+local-DB id-drift from mid-session resets, not demonstrated app regressions); a live dev-server
+walk was clean (no new console errors, no overflow at 1440/390, reduced-motion sweep unchanged at
+39 pre-existing offenders, hover-wash and settle-once both confirmed under real navigation); PR
+gates (ai-quality-gate, policy-quality) passed. One advisory CI job failed on a `@patina/api-routes`
+dist build error unrelated to this branch's changes — non-blocking, not a merge gate.
+
+**Deploy** (not yet run): Kody runs
+`bash artifacts/document-life-directions-2026-08-28/build/deploy-life.sh` from the repo root on
+`main` — agents are hook-blocked from `infra/`/wrangler/deploy scripts, and the protected-workflow
+path can't pass while `integration.yml` is red at "Start and rebuild local Supabase" (unrelated,
+pre-existing CI infra issue, not this branch). Rollback target: Worker
+**`afe63619-002d-4ea2-90b6-244c41a86c81`** (prior main commit before this merge, `4b35e0a94`).
+
+**OWED**:
+- The deploy itself, plus a prod probe record once it runs.
+- Reduced-motion sweep — 39 app-wide offenders, unchanged across two walks; ruling needed on
+  whether these are pre-existing scope or should be fixed now.
+- `--color-aged-oak` on paper measuring 3.51:1 (not the presented 4.30:1) at roughly 40 sites —
+  pre-existing token combination, not introduced by this branch; needs a ruling.
+- **F24** — the desk's 390px viewport overflow (437px of content in a 390px viewport, 47px
+  overflow) — still has no owner; not fixed by anything in this program.
+- The eight pre-existing e2e failures — re-run against one stable, freshly-seeded local DB before
+  trusting the 3 id-drift-looking ones as real; the 4 GoTrue-`listUsers` ones want one shared
+  investigation, not four.
+- `integration.yml`'s CI runner environment — the "Start and rebuild local Supabase" step is red,
+  blocking the protected-workflow deploy path independent of this program.
+
 ## Resume prompt
 
 "Read `artifacts/document-life-directions-2026-08-28/RESUME.md`. The Life Review is complete and
