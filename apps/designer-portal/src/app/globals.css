@@ -298,6 +298,32 @@
   }
 }
 
+/* R127/D-B21 (W4-L4) — a yield is a STATE that holds at every motion
+   register, never an animation that only reduced motion turns off: this
+   block kills the transitions/animations on the lens's three yielding sites
+   (L-1's line-2 crossfade spans, L-3's ladder segment head-in-frame, L-6's
+   letterhead stage phrase) so they snap instead of crossfading, but the
+   yielded phrase is still `opacity: 0` under EITHER motion register — the
+   instrument for falsifiable sentence (d) is the visible-word set
+   (opacity > 0, visible, displayed), never opacity itself, so this rule may
+   never touch opacity, visibility or display. This amends the design's
+   original "transition: none; opacity: 1" sentence (technical-design.md §5),
+   which would have printed the yielded phrase under reduce and hidden it
+   otherwise (deviations.md D-B21). The Tailwind `motion-reduce:transition-
+   none` already on `doc-spine.tsx:235-237` and `lens-ladder.tsx:387` is the
+   same rule stated locally and stays; this is the design's declared site for
+   it — sited immediately after the pre-existing `.doc-breath` reduced-motion
+   block above, per D-B21's "immediately after globals.css:283". */
+@media (prefers-reduced-motion: reduce) {
+  [data-lens-line='2'] > span,
+  [data-letterhead-in-frame],
+  [data-region-head-in-frame],
+  [data-region-head-in-frame] > * {
+    transition: none;
+    animation: none;
+  }
+}
+
 /* ===== The Life Review (R126) ===================================== */
 
 /* D4 as amended: the ONE depth declaration in this stylesheet, and the only
@@ -1062,6 +1088,47 @@
    stop scrolled into view must not come to rest behind. */
 html:has([data-document-shell]) {
   scroll-padding-bottom: 60px;
+}
+
+/* R127/OD-12 (W4-L4) — a quiet region's body never shrinks its root below the
+   region's own reserve, so promoting it to `full` and mounting its real body
+   never moves anything above it. The six quiet-body lanes (W4-L2/L3) set
+   `--doc-quiet-reserve` on the region root itself — `var(--doc-quiet-reserve-
+   exc)` (112px) when the region prints standing exceptions, `var(--doc-quiet-
+   reserve-min)` (68px) otherwise (the two literals declared once, above). This
+   rule holds AT EVERY DENSITY, not only while quiet: OD-12's own contract is
+   "a body shorter than its reserve never shrinks the region on mount", and a
+   short FULL body is exactly as capable of doing that as a quiet one. The DOM
+   contract (technical-design.md §5) names no separate body-wrapper attribute
+   — `data-passed` and `data-density` are both written on the SAME element
+   that carries `[data-index-region]` — so this selects the region root
+   directly rather than a child "body" element. */
+[data-document-shell] [data-index-region] {
+  min-block-size: var(--doc-quiet-reserve, 68px);
+}
+
+/* R127/OD-4 (W4-L4) — an engine that supports `content-visibility` is told a
+   region already scrolled past (`[data-passed]`, written imperatively by the
+   density observer and never removed) can skip its own rendering work; an
+   engine that doesn't support the property is unaffected by the whole rule
+   (`@supports` gates it, so there is no attribute-removal fallback to
+   maintain — OD-4 names this cost-only-on-unsupported-engines fallback
+   explicitly). The reserved-size fallback favours the LARGER reserve (112px,
+   not the 68px floor above): `contain-intrinsic-size: auto <length>` only
+   spends `<length>` before the engine has ever remembered a real size for the
+   element, and `content-visibility: auto`'s own contract there is "guess
+   generously, don't clip" — under-reserving risks visible overlap the instant
+   the region is promoted back to `full`, over-reserving only costs blank
+   space for one frame. The Wave-4 find-in-page gate (chromium + webkit,
+   `quiet-responsive-shell.spec.ts`) is the only runtime proof of this rule;
+   its pre-agreed failure move is to DELETE this block and log the finding in
+   `deviations.md` as an "OD-4 fallback candidate" — never a CSS change that
+   tries to keep both. */
+@supports (content-visibility: auto) {
+  [data-index-region][data-passed] {
+    content-visibility: auto;
+    contain-intrinsic-size: auto var(--doc-quiet-reserve, 112px);
+  }
 }
 
 /* Typography: now provided by @patina/design-system/styles/typography.css.

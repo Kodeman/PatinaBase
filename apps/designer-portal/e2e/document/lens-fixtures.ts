@@ -21,6 +21,19 @@ export const LONG_PAPER_ID = 'b0000000-0000-0000-0000-0000000000d5';
  *  designer: sent, unopened, no project behind it. */
 export const PRE_WORK_ID = 'b0000000-0000-0000-0000-0000000000d6';
 
+/**
+ * The FOURTH stop's heading id (W4-L4) — `document-index.ts`'s
+ * `PROJECT_PAPER_ORDER[3]` is `money`, whose `headingId` is the fixed string
+ * `'money-region-heading'` (no `projectId` interpolation, so it is stable
+ * across seeds). `lens-density.spec.ts`'s deep-landed-load case navigates to
+ * `` `/doc/${LONG_PAPER_ID}#${FOURTH_STOP_HEADING_ID}` `` and lets the
+ * BROWSER'S OWN fragment-scroll land the page there before any lens code
+ * runs — exactly D-B16's scenario ("a root that is discovered already above
+ * or inside the frame"), reached with no app-level deep-link mechanism at
+ * all, because none exists yet (`page.tsx` has no `location.hash` handling).
+ */
+export const FOURTH_STOP_HEADING_ID = 'money-region-heading';
+
 const count = (sql: string): number => Number(psqlScalar(sql) || '0');
 
 /** Throws unless the long paper is seeded to the shape the walk needs
