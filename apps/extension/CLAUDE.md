@@ -30,9 +30,8 @@ pnpm --filter @patina/extension build # Production build
 
 ## Gotchas
 
-- **Duplicate-React crash**: a nested react@19 (via `@patina/catalog-ui`) against the extension's react@18 causes a null `useState` at runtime. The explicit-file `alias` block in `package.json` dedupes them — keep it intact; it was lost once and the crash came back.
 - **Portal session cookie**: the extension reads the portal's `sb-<project-ref>-auth-token` cookie (`base64-`-prefixed, chunked `.0/.1`). Use the existing decoder — never `JSON.parse` it — and keep the env below pointed at the SAME Supabase project as the portals (Strata in prod), or decode fails.
-- **Offline queue, OCR, and trade pricing were removed in 0.3.0 (capture-launch W1) — do not reintroduce without a producer/assets/linking path.**
+- **Offline queue, OCR, and trade pricing were removed in 0.3.0 (capture-launch W1) — do not reintroduce without a producer/assets/linking path.** Also removed in 0.3.0: `@patina/catalog-ui`, `tesseract.js`, `@plasmohq/storage` deps and vendor certifications (CL-R16).
 
 ## Environment
 

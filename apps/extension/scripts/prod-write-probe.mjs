@@ -48,7 +48,7 @@ const PLAN = [
   "step 2  insert_product              — products insert (extension shape: capture_source=web_extension, layer=personal, owner_user_id/captured_by=uid, status=published — saveToLibrary/saveAsDecision via productRow(draft,uid,'published'), effects.ts:218/299) + select-back with per-field assertions",
   "step 3  insert_vendor               — vendors insert (name=PROBE-VENDOR-<ts>)",
   "step 4  insert_product_style        — product_styles insert for the step-2 product (style_id = first row of styles); a styles LOOKUP failure is reported as its own styles-lookup error, distinct from an insert failure",
-  "step 5  insert_vendor_certifications — one vendor_certifications row for the step-3 vendor (payloads.ts:117-125 buildVendorCertifications / effects.ts:402-405 saveVendor) — vendor_certifications writes are admin-only (migration 00058:114-129), so a plain designer account gets exactly 42501, reported as expected-denied (does not fail the run); any other code is a real error",
+  "step 5  insert_vendor_certifications (legacy — the extension no longer writes this table since 0.3.0/CL-R16; kept as RLS regression coverage, expected-denied 42501) — one vendor_certifications row for the step-3 vendor; vendor_certifications writes are admin-only (migration 00058:114-129), so a plain designer account gets exactly 42501, reported as expected-denied (does not fail the run); any other code is a real error",
   "step 6  place_in_project            — rpc place_product_in_project_v2 (destination=project_inbox); requires PROBE_PROJECT_ID, else skipped",
   "step 7  commit_proposal_capture     — rpc commit_proposal_capture; proposal_id is nullable, uses PROBE_PROPOSAL_ID if set else null",
   "step 8  update_existing             — products.update on the step-2 product (name=PROBE-UPDATED-<ts>) then product_styles delete+reinsert (mirrors updateExisting, effects.ts:354-390) — proves the UPDATE/DELETE RLS policies (00003:27+)",
@@ -322,15 +322,17 @@ if (!userId) {
   }
 }
 
-// ─── Step 5: vendor_certifications insert — buildVendorCertifications shape
-//     (payloads.ts:117-125), called by saveVendor (effects.ts:392-410) when
-//     vendorData.certifications is non-empty. NOTE: vendor_certifications
-//     writes are ADMIN-ONLY ("Admins can manage vendor certifications",
-//     migration 00058:114-129, super_admin/quality_control) — a plain
-//     designer account is EXPECTED to get exactly 42501 here. That single
-//     code is reported as `expected-denied`, not an error (a healthy run
-//     still exits 0); any OTHER code at this step is a real regression and
-//     still fails the run.
+// ─── Step 5: insert_vendor_certifications (legacy — the extension no longer
+//     writes this table since 0.3.0/CL-R16; kept as RLS regression coverage,
+//     expected-denied 42501). Previously mirrored buildVendorCertifications'
+//     shape (removed from payloads.ts by CL-R16), called by the old
+//     saveVendor when vendorData.certifications was non-empty. NOTE:
+//     vendor_certifications writes are ADMIN-ONLY ("Admins can manage vendor
+//     certifications", migration 00058:114-129, super_admin/quality_control)
+//     — a plain designer account is EXPECTED to get exactly 42501 here. That
+//     single code is reported as `expected-denied`, not an error (a healthy
+//     run still exits 0); any OTHER code at this step is a real regression
+//     and still fails the run.
 if (!userId) {
   logSkipped(5, "insert_vendor_certifications", "no session");
 } else if (!created.vendorId) {
@@ -347,7 +349,7 @@ if (!userId) {
   } catch (err) {
     if (err?.code === "42501") {
       console.log(
-        "step 5 insert_vendor_certifications: expected-denied 42501 (admin-only RLS, 00058:114-129)",
+        "step 5 insert_vendor_certifications (legacy — no longer written since 0.3.0/CL-R16): expected-denied 42501 (admin-only RLS, 00058:114-129)",
       );
     } else {
       logError(5, "insert_vendor_certifications", err);

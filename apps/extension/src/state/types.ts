@@ -17,7 +17,7 @@ import type {
 import type { NavState } from './screens';
 import type { PlacementOutcome, SpecBookPlacementRoute } from '../lib/spec-book-placement';
 
-// ─── Routing destination (mirrors @patina/catalog-ui DestinationPicker) ──────
+// ─── Routing destination ──────────────────────────────────────────────────
 
 export type Destination =
   | { type: 'personal' }

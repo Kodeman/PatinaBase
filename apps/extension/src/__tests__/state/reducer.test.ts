@@ -188,7 +188,7 @@ describe('captureReducer — extraction lifecycle', () => {
     expect(s.draft?.images.selected).toEqual([0]);
   });
 
-  it('IMAGE_CAPTURED seeds an image draft (OCR-eligible)', () => {
+  it('IMAGE_CAPTURED seeds an image draft', () => {
     let s = captureReducer(initialCaptureState(), {
       type: 'SESSION_RESOLVED',
       user: fakeUser,

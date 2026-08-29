@@ -18,6 +18,11 @@ if [ ! -d "$BUILD_DIR" ]; then
   exit 1
 fi
 
+if [ -z "$(find "$BUILD_DIR" -type f | head -1)" ]; then
+  echo "build dir is empty" >&2
+  exit 1
+fi
+
 MARKERS=(
   "fonts.googleapis"
   "tesseract"
