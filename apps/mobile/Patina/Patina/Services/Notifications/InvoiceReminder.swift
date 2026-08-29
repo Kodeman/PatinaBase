@@ -74,6 +74,27 @@ enum InvoiceReminder {
     /// Said once when authorization is off, and never repeated.
     static let deniedLine = "Notifications are off for Patina. You can turn them on in Settings."
 
+    // MARK: - The ask
+    //
+    // Its own screen, not SP-08's push primer. That primer promises "a
+    // decision, a proposal, or an invoice" and its button registers for remote
+    // notifications — neither describes what this is about to do, and using it
+    // here would also burn Q7's one ask before the money moment it was ruled
+    // for (steward §7). So: the sentence this will send, what it will not do,
+    // and the two ways out.
+
+    static let primerTitle = "The day before it's due"
+
+    /// Everything this reminder is, past the sentence itself. No badge, no
+    /// repeat, and it is not the notifications Patina sends about your project.
+    static let primerDetail = """
+    That is the whole of it — no badge, no repeat, nothing else. Remove it from this invoice \
+    whenever you like.
+    """
+
+    static let primerAllowLabel = "Turn on the reminder"
+    static let primerDismissLabel = "Not now"
+
     // MARK: - When
 
     /// 09:00 on the day before the due date, or nil when that moment has

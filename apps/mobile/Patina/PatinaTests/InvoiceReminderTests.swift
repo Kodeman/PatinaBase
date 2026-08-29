@@ -2,13 +2,11 @@
 //  InvoiceReminderTests.swift
 //  PatinaTests
 //
-//  The app's only local notification (B §4). The rules that decide whether it
-//  is offered, when it fires, what it says, and that there is never more than
-//  one per invoice.
+//  The app's only local notification (B §4) — the pure rules that decide
+//  whether it is offered, when it fires, and what it says.
 //
-//  `UNUserNotificationCenter` is never touched: the live centre would surface
-//  a real system dialog and hang the run, so `LocalNotificationScheduling` is
-//  stubbed and every rule is exercised against the stub.
+//  The scheduler, its cancellation lifecycle and its authorization ask live in
+//  `InvoiceReminderServiceTests`.
 //
 
 import Foundation
@@ -68,9 +66,10 @@ struct InvoiceReminderTests {
         private(set) var requests: [UNNotificationRequest] = []
         private(set) var cancelled: [String] = []
 
-        func pendingIdentifiers() async -> Set<String> {
-            Set(requests.map(\.identifier))
-        }
+        var grantsAuthorization = true
+        private(set) var authorizationRequests = 0
+
+        func pending() async -> [UNNotificationRequest] { requests }
 
         func schedule(_ request: UNNotificationRequest) async -> Bool {
             guard accepts else { return false }
@@ -87,20 +86,19 @@ struct InvoiceReminderTests {
         }
 
         func authorizationStatus() async -> UNAuthorizationStatus { status }
+
+        /// `[.alert]` only, and no remote registration: the stub records that
+        /// the ask happened and answers it.
+        func requestAlertAuthorization() async -> Bool {
+            authorizationRequests += 1
+            status = grantsAuthorization ? .authorized : .denied
+            return grantsAuthorization
+        }
     }
 
-    private func service(
-        _ scheduler: StubScheduler,
-        hasAsked: Bool = false,
-        arms: Bool = true
-    ) -> InvoiceReminderService {
-        InvoiceReminderService(
-            scheduler: scheduler,
-            armPrompt: { arms },
-            hasAsked: { hasAsked }
-        )
+    private func service(_ scheduler: StubScheduler) -> InvoiceReminderService {
+        InvoiceReminderService(scheduler: scheduler)
     }
-
     // MARK: - When it is offered at all
 
     @Test("a payable invoice with a due date still ahead is offered the reminder")
@@ -200,203 +198,4 @@ struct InvoiceReminderTests {
         #expect(InvoiceReminder.actLabel == "Remind me the day before it's due")
     }
 
-    // MARK: - Scheduling
-
-    @Test("setting the reminder puts one request on the queue with the exact body")
-    func settingSchedulesOneRequest() async throws {
-        let scheduler = StubScheduler()
-        let subject = service(scheduler)
-        let offer = try #require(
-            InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
-        )
-
-        await subject.set(offer)
-
-        #expect(scheduler.requests.count == 1)
-        let request = try #require(scheduler.requests.first)
-        #expect(request.identifier == "patina.invoice.reminder.inv-1")
-        #expect(request.content.body == "Your invoice is due tomorrow — $4,250.00. Nothing else.")
-        #expect(request.content.title.isEmpty)
-        #expect(request.content.badge == nil)
-        #expect(subject.fireDate == offer.fireDate)
-    }
-
-    /// One per invoice — a second tap replaces, never duplicates.
-    @Test("setting twice leaves exactly one reminder")
-    func settingTwiceIsIdempotent() async throws {
-        let scheduler = StubScheduler()
-        let subject = service(scheduler)
-        let offer = try #require(
-            InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
-        )
-
-        await subject.set(offer)
-        await subject.set(offer)
-
-        #expect(scheduler.requests.count == 1)
-    }
-
-    @Test("two invoices keep two separate reminders")
-    func twoInvoicesKeepTwoReminders() async throws {
-        let scheduler = StubScheduler()
-        let subject = service(scheduler)
-        let first = try #require(
-            InvoiceReminder.offer(for: invoice(id: "inv-1", dueDate: day(offset: 4)), now: now)
-        )
-        let second = try #require(
-            InvoiceReminder.offer(for: invoice(id: "inv-2", dueDate: day(offset: 5)), now: now)
-        )
-
-        await subject.set(first)
-        await subject.set(second)
-
-        #expect(scheduler.requests.count == 2)
-        #expect(Set(scheduler.requests.map(\.identifier)) == [
-            "patina.invoice.reminder.inv-1",
-            "patina.invoice.reminder.inv-2"
-        ])
-    }
-
-    @Test("the tap routes to the invoice through the router that already exists")
-    func theTapRoutesToTheInvoice() async throws {
-        let scheduler = StubScheduler()
-        let subject = service(scheduler)
-        let offer = try #require(
-            InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
-        )
-
-        await subject.set(offer)
-
-        let userInfo = try #require(scheduler.requests.first?.content.userInfo)
-        let (route, _) = NotificationRouter.resolve(apnsUserInfo: userInfo)
-        #expect(route == .invoiceDetail(invoiceId: "inv-1"))
-    }
-
-    @Test("removing it takes the request off the queue and clears the row")
-    func removingCancels() async throws {
-        let scheduler = StubScheduler()
-        let subject = service(scheduler)
-        let offer = try #require(
-            InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
-        )
-
-        await subject.set(offer)
-        subject.remove(invoiceId: offer.invoiceId)
-
-        #expect(scheduler.requests.isEmpty)
-        #expect(scheduler.cancelled == ["patina.invoice.reminder.inv-1"])
-        #expect(subject.fireDate == nil)
-    }
-
-    /// The system's queue is the only record. A reminder cleared in Settings,
-    /// or one that has already fired, must not leave the row claiming it is
-    /// still set.
-    @Test("the row reads the system's queue rather than a second copy")
-    func refreshReadsTheSystemQueue() async throws {
-        let scheduler = StubScheduler()
-        let subject = service(scheduler)
-        let offer = try #require(
-            InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
-        )
-
-        await subject.refresh(offer: offer)
-        #expect(subject.fireDate == nil)
-
-        await subject.set(offer)
-        await subject.refresh(offer: offer)
-        #expect(subject.fireDate == offer.fireDate)
-
-        scheduler.cancel(identifiers: ["patina.invoice.reminder.inv-1"])
-        await subject.refresh(offer: offer)
-        #expect(subject.fireDate == nil)
-    }
-
-    // MARK: - Authorization
-
-    @Test("an undecided install is shown the primer once, not the system alert")
-    func anUndecidedInstallSeesThePrimer() async throws {
-        let scheduler = StubScheduler()
-        scheduler.status = .notDetermined
-        let subject = service(scheduler)
-        let offer = try #require(
-            InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
-        )
-
-        await subject.set(offer)
-
-        #expect(subject.isPresentingPrimer)
-        #expect(scheduler.requests.isEmpty)
-        #expect(!subject.isDenied)
-    }
-
-    @Test("granting through the primer schedules the reminder that was asked for")
-    func grantingThroughThePrimerSchedules() async throws {
-        let scheduler = StubScheduler()
-        scheduler.status = .notDetermined
-        let subject = service(scheduler)
-        let offer = try #require(
-            InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
-        )
-
-        await subject.set(offer)
-        scheduler.status = .authorized
-        await subject.primerDecided(offer)
-
-        #expect(!subject.isPresentingPrimer)
-        #expect(scheduler.requests.count == 1)
-        #expect(subject.fireDate == offer.fireDate)
-    }
-
-    @Test("refusing through the primer says so once and schedules nothing")
-    func refusingThroughThePrimerSaysSoOnce() async throws {
-        let scheduler = StubScheduler()
-        scheduler.status = .notDetermined
-        let subject = service(scheduler)
-        let offer = try #require(
-            InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
-        )
-
-        await subject.set(offer)
-        scheduler.status = .denied
-        await subject.primerDecided(offer)
-
-        #expect(subject.isDenied)
-        #expect(scheduler.requests.isEmpty)
-    }
-
-    /// Q7: the install is asked once. An install already asked never sees the
-    /// primer again — it gets one line and no nag.
-    @Test("an install already asked is never asked again")
-    func anInstallAlreadyAskedIsNotAskedAgain() async throws {
-        let scheduler = StubScheduler()
-        scheduler.status = .notDetermined
-        let subject = service(scheduler, hasAsked: true)
-        let offer = try #require(
-            InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
-        )
-
-        await subject.set(offer)
-
-        #expect(!subject.isPresentingPrimer)
-        #expect(subject.isDenied)
-        #expect(scheduler.requests.isEmpty)
-    }
-
-    @Test("a denied install schedules nothing and never prompts")
-    func aDeniedInstallNeverPrompts() async throws {
-        let scheduler = StubScheduler()
-        scheduler.status = .denied
-        let subject = service(scheduler)
-        let offer = try #require(
-            InvoiceReminder.offer(for: invoice(dueDate: day(offset: 4)), now: now)
-        )
-
-        await subject.set(offer)
-
-        #expect(subject.isDenied)
-        #expect(!subject.isPresentingPrimer)
-        #expect(scheduler.requests.isEmpty)
-        #expect(InvoiceReminder.deniedLine
-                == "Notifications are off for Patina. You can turn them on in Settings.")
-    }
 }
