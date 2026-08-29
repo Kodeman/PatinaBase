@@ -193,7 +193,7 @@ describe('F56 · text-grade ink tokens clear WCAG AA', () => {
 /* ── R126 · The Life Review ──────────────────────────────────────────────
  *
  * The direction added three kinds of token the F56 guard above cannot see: a
- * third paper stock, four stamp fills, and six saturated tabs. LIGHT_GROUNDS
+ * third paper stock, five stamp fills, and six saturated tabs. LIGHT_GROUNDS
  * is a hand-authored map, so a new ground is silently unmeasured until someone
  * names it — these describes name them.
  *
@@ -241,6 +241,7 @@ const PAPER_STOCKS = {
 
 const STAMP_FILLS = [
   '--fill-ordered-tint',
+  '--fill-delivered-tint',
   '--fill-decision-tint',
   '--fill-damaged-tint',
   '--fill-anchor-tint',
@@ -309,6 +310,58 @@ describe('R126 · --doc-rail-stock holds the register it prints', () => {
     expect(failuresBelowAA(pairs)).toEqual([]);
   });
 
+  it('prints no rail label in a pigment that fails on it', () => {
+    // The walk measured "On this paper" at 3.51:1 — --color-aged-oak on the
+    // rail — and the running index's inactive values with it. The rail's
+    // register is partial BY RULING, so the guard is the other half of that
+    // ruling: the files that paint ON the rail may only spend inks the rail
+    // holds. aged-oak (3.51) and clay (1.82) are not among them.
+    const rail = resolveToken('--doc-rail-stock');
+    const OFF_REGISTER = ['--color-aged-oak', '--color-clay'] as const;
+    for (const pigment of OFF_REGISTER) {
+      expect(contrastRatio(resolveToken(pigment), rail)).toBeLessThan(
+        AA_NORMAL_TEXT,
+      );
+    }
+
+    const RAIL_FILES = [
+      'src/components/document/spine-running-index.tsx',
+      'src/components/document/spine-shelved-blocks.tsx',
+      'src/components/document/spine-timer.tsx',
+      'src/components/document/doc-spine.tsx',
+      'src/components/document/margin-rail.tsx',
+    ];
+    const offenders = RAIL_FILES.flatMap((file) => {
+      const source = readFileSync(join(APP_ROOT, file), 'utf8');
+      return OFF_REGISTER.flatMap((pigment) =>
+        source.includes(`text-[var(${pigment})]`) ? [`${file} → ${pigment}`] : [],
+      );
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it('holds the inks the rail labels now take, at their measured ratios', () => {
+    // The two labels the walk failed, at the tokens they were moved to.
+    const rail = resolveToken('--doc-rail-stock');
+    const measured = {
+      'On this paper (--text-muted)': Number(
+        contrastRatio(resolveToken('--text-muted'), rail).toFixed(2),
+      ),
+      'running-index value (--text-muted)': Number(
+        contrastRatio(resolveToken('--text-muted'), rail).toFixed(2),
+      ),
+      'spine timer label (--color-quiet-ink)': Number(
+        contrastRatio(resolveToken('--color-quiet-ink'), rail).toFixed(2),
+      ),
+      'clay-ink, where the mockup shows clay': Number(
+        contrastRatio(resolveToken('--color-clay-ink'), rail).toFixed(2),
+      ),
+    };
+    expect(
+      Object.entries(measured).filter(([, ratio]) => ratio < AA_NORMAL_TEXT),
+    ).toEqual([]);
+  });
+
   it('separates from the sheet and the desk ground it flanks', () => {
     // The rail is a GROUND against two other grounds: it has to be seen as a
     // different stock without becoming a second colour field.
@@ -319,7 +372,7 @@ describe('R126 · --doc-rail-stock holds the register it prints', () => {
   });
 });
 
-describe('R126 · the four stamp fills are grounds, and fully gated', () => {
+describe('R126 · the five stamp fills are grounds, and fully gated', () => {
   it.each(STAMP_FILLS)('%s carries charcoal and the muted ramp', (fill) => {
     // The recipe's whole unlock: a CHARCOAL word, not the state's own ink, is
     // what let the fill sit deep enough to read as filled. State is hue;
@@ -331,14 +384,140 @@ describe('R126 · the four stamp fills are grounds, and fully gated', () => {
     expect(failuresBelowAA(pairs)).toEqual([]);
   });
 
-  it('keeps all four at one value, so they separate by hue and not by depth', () => {
+  it('keeps all five at one value, so they separate by hue and not by depth', () => {
     // One recipe at one common value (~1.18:1 off the paper) is the ruling.
+    // S5's DELIVERED joined on the same terms: sage cut to the same value, so
+    // it takes its place on the plane rather than outranking the other four.
     // A fill that drifts deeper would read as a different rank of state.
     const paper = resolveToken('--doc-paper');
     for (const fill of STAMP_FILLS) {
       const ratio = contrastRatio(resolveToken(fill), paper);
       expect(ratio).toBeGreaterThan(1.15);
       expect(ratio).toBeLessThan(1.22);
+    }
+  });
+});
+
+/* T3 — the eighteen hover washes. parseTokens is hex-only, so every rgba wash
+ * was invisible to this guard: FINAL's stated invariant ("every wash lands at
+ * ~1.12:1 over its own ground; the rule is the ratio, not the alpha") was
+ * unmeasured, and a wash IS a ground — body text prints on it the moment a
+ * pointer lands on the row. Composited here over the ground each one actually
+ * paints on, and gated on the inks that print over it. */
+
+interface Wash {
+  name: string;
+  rgba: [number, number, number, number];
+}
+
+function parseWashes(css: string): Wash[] {
+  const washes: Wash[] = [];
+  const declaration =
+    /(--wash-[a-z0-9-]+)\s*:\s*rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)\s*;/g;
+  let match: RegExpExecArray | null;
+  while ((match = declaration.exec(css)) !== null) {
+    washes.push({
+      name: match[1]!,
+      rgba: [
+        Number(match[2]),
+        Number(match[3]),
+        Number(match[4]),
+        Number(match[5]),
+      ],
+    });
+  }
+  return washes;
+}
+
+/** Source-over compositing, which is what the browser does with an rgba
+ *  background on an opaque ground. */
+function composite(
+  rgba: [number, number, number, number],
+  groundHex: string,
+): string {
+  const ground = toRgb(groundHex);
+  const [r, g, b, alpha] = rgba;
+  const mixed = [r, g, b].map((channel, i) =>
+    Math.round(channel * alpha + ground[i]! * (1 - alpha)),
+  );
+  return `#${mixed.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Where each wash is painted. The six stage washes open under a ROSTER line,
+ *  which sits on the desk ground; the three state washes open under an FF&E
+ *  line, which sits on the document sheet. `-still` is the same wash at three
+ *  quarters of the alpha, on the same ground. */
+const ROSTER_WASHES = [
+  'brief',
+  'discovery',
+  'direction',
+  'proposal',
+  'project',
+  'install',
+];
+
+function washGround(name: string): string {
+  const stem = name.replace(/^--wash-/, '').replace(/-still$/, '');
+  return ROSTER_WASHES.includes(stem) ? '#FAF7F2' : '#FCFAF6';
+}
+
+/** What prints on a hovered row: the name, the meta lines, the clay score and
+ *  the overdue clause. */
+const WASH_INKS = [
+  '--text-primary',
+  '--text-muted',
+  '--color-clay-ink',
+  '--color-terracotta-ink',
+] as const;
+
+describe('R126 · every hover wash is a ground, and holds the ink that prints on it', () => {
+  const washes = parseWashes(css);
+
+  it('finds all eighteen, so a renamed or deleted wash fails loudly', () => {
+    // Nine tones × swept and still. A guard that silently measures nothing is
+    // the exact failure this describe exists to close.
+    expect(washes).toHaveLength(18);
+  });
+
+  it.each(washes.map((wash) => [wash.name, wash] as const))(
+    '%s carries body ink, muted, clay-ink and terracotta-ink at 4.5:1',
+    (_name, wash) => {
+      const ground = washGround(wash.name);
+      const composited = composite(wash.rgba, ground);
+      const pairs = WASH_INKS.map(
+        (ink) =>
+          [
+            `${ink} on ${wash.name} over ${ground} (${composited})`,
+            resolveToken(ink),
+            composited,
+          ] as [string, string, string],
+      );
+      expect(failuresBelowAA(pairs)).toEqual([]);
+    },
+  );
+
+  it('holds each wash at ~1.12:1 over its own ground — the ratio, not the alpha', () => {
+    // FINAL: "the alpha follows the pigment's value ... so the highlight reads
+    // the same on both surfaces." A retune of any alpha that breaks the common
+    // value lands here rather than silently.
+    const swept = washes.filter((wash) => !wash.name.endsWith('-still'));
+    for (const wash of swept) {
+      const ground = washGround(wash.name);
+      const ratio = contrastRatio(composite(wash.rgba, ground), ground);
+      expect(ratio).toBeGreaterThan(1.09);
+      expect(ratio).toBeLessThan(1.16);
+    }
+  });
+
+  it('keeps every -still wash lighter than the swept wash it stands in for', () => {
+    // Reduced motion takes three quarters of the alpha: a flat tint, applied
+    // instantly. Lighter, never deeper.
+    for (const wash of washes.filter((w) => w.name.endsWith('-still'))) {
+      const swept = washes.find(
+        (w) => w.name === wash.name.replace(/-still$/, ''),
+      );
+      expect(swept).toBeDefined();
+      expect(wash.rgba[3]).toBeLessThan(swept!.rgba[3]);
     }
   });
 });
