@@ -63,8 +63,8 @@ export function VendorScreen() {
           if (form) form.requestSubmit();
         }}
         disabled={saving}
-        className={`w-full rounded-md py-3 text-[0.85rem] font-medium transition-colors disabled:opacity-50 ${
-          success ? 'bg-verdigris text-paper' : 'bg-ink text-paper hover:bg-ink-2'
+        className={`w-full rounded-md py-3 text-[0.85rem] font-medium disabled:opacity-50 ${
+          success ? 'bg-verdigris-ink text-paper hover:brightness-110 transition-all' : 'bg-ink text-paper hover:bg-ink-2 transition-colors'
         }`}
       >
         {saving ? 'Saving…' : success ? 'Vendor saved' : 'Save vendor'}

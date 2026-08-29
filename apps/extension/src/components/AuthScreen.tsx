@@ -126,8 +126,8 @@ export function AuthScreen() {
             <button
               onClick={handleOpenPortalSignin}
               data-testid="auth.openPortalSignin"
-              className="w-full py-2.5 px-4 bg-verdigris text-paper text-sm font-medium rounded-[3px]
-                       hover:bg-verdigris-ink transition-all shadow-md hover:shadow-lg"
+              className="w-full py-2.5 px-4 bg-verdigris-ink text-paper text-sm font-medium rounded-[3px]
+                       hover:brightness-110 transition-all shadow-md hover:shadow-lg"
             >
               Sign in on patina.cloud
             </button>

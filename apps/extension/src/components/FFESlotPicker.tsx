@@ -338,7 +338,7 @@ export function FFESlotPicker({
           type="button"
           onClick={handleAssign}
           disabled={!currentRoute() || assigning}
-          className="min-h-11 w-full rounded-md bg-verdigris py-2.5 text-[0.82rem] font-medium text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-verdigris focus-visible:ring-offset-2 disabled:opacity-50"
+          className="min-h-11 w-full rounded-md bg-verdigris-ink py-2.5 text-[0.82rem] font-medium text-paper hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-verdigris focus-visible:ring-offset-2 disabled:opacity-50"
         >
           {assigning ? 'Placing…' : error ? 'Retry placement' : 'Place product'}
         </button>
