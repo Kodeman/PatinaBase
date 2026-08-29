@@ -486,7 +486,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
       {/* THE EDITOR — the drafting strip, ordinary in-flow content. One lane per
           phase over month/week graph paper; this is where dates are adjusted. */}
       <div ref={stripRef}>
-        <p className="mb-2 font-mono text-[0.56rem] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
           Frame · Phase dates
         </p>
         <DraftingStrip
@@ -612,7 +612,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
               aria-pressed={showBaseline}
               onClick={() => setShowBaseline((v) => !v)}
               aria-label="Toggle the v1 baseline ghosts"
-              className={`font-mono text-[0.56rem] uppercase tracking-[0.07em] ${
+              className={`font-mono text-[11px] uppercase tracking-[0.07em] ${
                 showBaseline
                   ? 'text-[var(--color-clay-ink)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -630,7 +630,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
               aria-label={`${unplaced.length} unplaced ${
                 unplaced.length === 1 ? 'phase' : 'phases'
               } — reveal the first in the schedule`}
-              className="font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+              className="font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
             >
               Unplaced · {unplaced.length}
             </button>

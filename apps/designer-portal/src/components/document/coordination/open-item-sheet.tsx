@@ -100,7 +100,7 @@ export function Field({
 }) {
   return (
     <label className="mb-3 block">
-      <span className="mb-1.5 block font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+      <span className="mb-1.5 block font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
         {label}
       </span>
       {children}
@@ -238,7 +238,7 @@ export function OpenItemSheet({
       <div className="rounded-[12px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-6 pb-7 pt-6">
         {/* Type chip */}
         <span
-          className="mb-2.5 inline-block rounded-[3px] border-[1.5px] px-[9px] py-[3px] font-mono text-[0.46rem] font-semibold uppercase tracking-[0.08em]"
+          className="mb-2.5 inline-block rounded-[3px] border-[1.5px] px-[9px] py-[3px] font-mono text-[11px] font-semibold uppercase tracking-[0.08em]"
           style={chip}
         >
           {type.label}
@@ -270,7 +270,7 @@ export function OpenItemSheet({
         {/* "⊘ This is blocking" list */}
         {(blockedTasks.length > 0 || blocksFallback) && (
           <div className="my-3 rounded-[7px] border border-[rgba(212,160,144,0.4)] bg-[rgba(212,160,144,0.05)] px-3.5 py-3">
-            <div className="mb-1.5 font-mono text-[0.46rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+            <div className="mb-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               ⊘ This is blocking
             </div>
             {blockedTasks.length > 0 ? (
@@ -291,7 +291,7 @@ export function OpenItemSheet({
                     >
                       <span className="text-[var(--color-terracotta-ink)]">→</span>
                       <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                      <span className="ml-auto inline-flex items-center gap-1 whitespace-nowrap font-mono text-[0.46rem] uppercase tracking-[0.04em] text-[var(--text-muted)]">
+                      <span className="ml-auto inline-flex items-center gap-1 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--text-muted)]">
                         <span
                           aria-hidden
                           className="inline-block h-1.5 w-1.5 rounded-full"
@@ -420,7 +420,7 @@ function Thread({
 
   return (
     <div className="my-4">
-      <div className="mb-2.5 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <div className="mb-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         The thread
       </div>
 
@@ -443,13 +443,13 @@ function Thread({
               <li key={msg.id} className="flex gap-2.5">
                 <span
                   aria-hidden
-                  className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full font-mono text-[0.5rem] font-semibold text-white"
+                  className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-semibold text-white"
                   style={{ background: dot }}
                 >
                   {initialsFor(name)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[0.48rem] font-semibold uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+                  <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
                     {name}
                     <span className="ml-1.5 font-normal normal-case tracking-normal opacity-60">
                       {fmtDay(msg.created_at)}

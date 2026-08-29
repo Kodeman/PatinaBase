@@ -19,7 +19,7 @@ const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toU
 function Fact({ k, children }: { k: string; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-[var(--color-pearl)] px-0.5 py-3">
-      <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+      <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         {k}
       </span>
       <span className="text-right text-[14px] text-[var(--text-primary)]">{children}</span>
@@ -57,7 +57,7 @@ export function CeremonyArrival({
           <blockquote className="border-l-2 border-[var(--color-clay)] pl-5 font-heading text-[19px] italic leading-[1.5] text-[var(--text-primary)]">
             “{lead.project_description}”
           </blockquote>
-          <p className="mt-2.5 pl-5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+          <p className="mt-2.5 pl-5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             The ask, verbatim · from the request
           </p>
         </>
@@ -85,7 +85,7 @@ export function CeremonyArrival({
                 </span>
               </div>
             )}
-            <span className="mt-2 flex items-baseline justify-between px-1 font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            <span className="mt-2 flex items-baseline justify-between px-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
               <span>{primary.scan.room_type ? pretty(primary.scan.room_type) : 'Room scan'}</span>
               <span>
                 {primary.scan.model_url || primary.scan.model_url_gltf
@@ -115,7 +115,7 @@ export function CeremonyArrival({
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <span className="flex h-full w-full items-center justify-center px-1 text-center text-[9px] italic text-[var(--text-muted)]">
+                    <span className="flex h-full w-full items-center justify-center px-1 text-center text-[11px] italic text-[var(--text-muted)]">
                       No preview
                     </span>
                   )}
@@ -135,7 +135,7 @@ export function CeremonyArrival({
               {tags.map((t) => (
                 <span
                   key={t}
-                  className="rounded-full border border-[var(--color-clay)] px-2.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--color-mocha)]"
+                  className="rounded-full border border-[var(--color-clay)] px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-mocha)]"
                 >
                   {t}
                 </span>

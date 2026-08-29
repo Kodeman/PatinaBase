@@ -340,7 +340,7 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
     <div className="min-h-screen bg-[var(--doc-paper)]">
       <div className="mx-auto max-w-[1120px] px-6 pb-24 pt-10 sm:px-9 sm:pt-14">
         {/* Claimed — the truth the client was already told (R106 §1). */}
-        <p className="mb-9 inline-flex items-center gap-2.5 rounded-[3px] border border-[var(--color-pearl)] px-4 py-2.5 font-mono text-[10.5px] tracking-[0.04em] text-[var(--color-mocha)]">
+        <p className="mb-9 inline-flex items-center gap-2.5 rounded-[3px] border border-[var(--color-pearl)] px-4 py-2.5 font-mono text-[11px] tracking-[0.04em] text-[var(--color-mocha)]">
           <span
             aria-hidden
             className="h-[7px] w-[7px] shrink-0 rounded-full bg-[var(--color-sage)]"
@@ -353,7 +353,7 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
         </p>
 
         <header className="mb-10">
-          <p className="mb-2.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
+          <p className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
             The match ceremony
           </p>
           <h1 className="font-heading text-[34px] font-medium leading-[1.12] text-[var(--text-primary)] sm:text-[44px]">
@@ -371,7 +371,7 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
 
           {/* ── The designer's hand ── */}
           <div>
-            <p className="border-b border-[var(--color-pearl)] pb-2.5 font-mono text-[10.5px] uppercase tracking-[0.13em] text-[var(--text-muted)]">
+            <p className="border-b border-[var(--color-pearl)] pb-2.5 font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]">
               {contextLine}
             </p>
 
@@ -390,7 +390,7 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
               </p>
               <p
                 aria-live="polite"
-                className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
+                className="shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
               >
                 {held === 'held'
                   ? 'Draft held'
@@ -403,7 +403,7 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
             {/* The signature under the introduction — optional, one line. */}
             <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1.5 block font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+                <span className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
                   One line under your studio name — optional
                 </span>
                 <input
@@ -415,7 +415,7 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
                 />
               </label>
               <label className="block">
-                <span className="mb-1.5 block font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+                <span className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
                   Portfolio link — optional
                 </span>
                 <input

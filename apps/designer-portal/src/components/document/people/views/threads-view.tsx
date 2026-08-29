@@ -68,7 +68,7 @@ export function ThreadsView({ pendingThreadId, notify }: ThreadsViewProps) {
               type="button"
               onClick={() => setScope(key)}
               aria-pressed={on}
-              className={`rounded-[16px] border px-3 py-1.5 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.05em] transition-colors ${
+              className={`rounded-[16px] border px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.05em] transition-colors ${
                 on
                   ? 'border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-[var(--color-off-white)]'
                   : 'border-[var(--color-pearl)] bg-white text-[var(--color-aged-oak)] hover:border-[var(--color-clay)]'

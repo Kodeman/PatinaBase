@@ -78,7 +78,7 @@ function ContactRow({
         >
           {name}
         </span>
-        <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <span className="mt-0.5 block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           {kindLabel}
           {archived ? ' · archived' : ''}
         </span>
@@ -165,7 +165,7 @@ export function RolodexSeedSheet({
 
   return (
     <RoomSheet open={open} onClose={onClose} title="Seed the rolodex">
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
+      <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         The rolodex · seeded
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">

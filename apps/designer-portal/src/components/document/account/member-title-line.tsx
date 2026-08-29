@@ -62,7 +62,7 @@ export function MemberTitleLine({
     if (!jobTitle) return null;
     return (
       <span
-        className={`block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] ${className ?? ''}`}
+        className={`block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] ${className ?? ''}`}
       >
         {jobTitle}
       </span>
@@ -79,8 +79,8 @@ export function MemberTitleLine({
         aria-expanded={open}
         className={
           jobTitle
-            ? 'da-score-hover block min-h-11 min-w-11 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]'
-            : 'da-score-hover inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] font-medium uppercase tracking-[0.1em] text-[var(--color-clay-ink)] transition-colors disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]'
+            ? 'da-score-hover block min-h-11 min-w-11 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]'
+            : 'da-score-hover inline-flex min-h-11 min-w-11 items-center font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--color-clay-ink)] transition-colors disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]'
         }
       >
         {jobTitle || 'Set title'}
@@ -97,7 +97,7 @@ export function MemberTitleLine({
       )}
 
       {failed && (
-        <p role="alert" className="mt-1 text-[10px] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="mt-1 text-[11px] text-[var(--color-terracotta-ink)]">
           Failed to save the title.
         </p>
       )}

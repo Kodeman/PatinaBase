@@ -179,7 +179,7 @@ export function FeedbackSheet() {
           <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
             Leave a note
           </h2>
-          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             on{' '}
             <span className="text-[var(--color-clay-ink)]">
               {context.screen_name}
@@ -239,7 +239,7 @@ export function FeedbackSheet() {
             role="switch"
             aria-checked={includeShot}
             onClick={() => setIncludeShot((v) => !v)}
-            className="inline-flex min-h-11 items-center gap-2 rounded-[3px] font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="inline-flex min-h-11 items-center gap-2 rounded-[3px] font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             <span
               aria-hidden
@@ -272,7 +272,7 @@ export function FeedbackSheet() {
           <div
             role="radiogroup"
             aria-label="Weight"
-            className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]"
+            className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]"
           >
             <span>Weight</span>
             {WEIGHTS.map((w) => {
@@ -328,7 +328,7 @@ export function FeedbackSheet() {
           </DocumentAction>
           {confirmingDiscard ? (
             <>
-              <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 Discard?
               </span>
               <DocumentAction

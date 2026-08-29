@@ -10,6 +10,19 @@
  * unfolds and then calls `focusRegionHeading(headingId)` (in the same handler
  * or an effect, once the body is on the page) to land focus on the heading the
  * seam was standing in for.
+ *
+ * R126 — fold MOTION, without touching fold STATE: the seam still hard-swaps
+ * with the region body (nothing height-collapses, nothing stays mounted), but
+ * the seam settles in on mount — opacity and a 4px drop — and its arrow flips
+ * over from the ↑ the head was wearing a frame ago.
+ *
+ * C1 — the settle is a CSS KEYFRAME (`.fold-settle` / `.fold-arrow-settle`,
+ * globals.css, both inside a `prefers-reduced-motion: no-preference` block),
+ * not a hydration-gated opacity. A folded region's only control must never be
+ * invisible while it waits for JS: the server-rendered seam paints visible on
+ * the first frame, and `animation-fill-mode: both` holds the from-state for
+ * exactly the one frame before the animation starts. Nothing here is state, so
+ * there is nothing to hydrate and nothing to mismatch.
  */
 
 import type { ReactNode } from 'react';
@@ -50,16 +63,19 @@ export function FoldSeam({
       data-action-region={regionKey}
       data-surface-key={surfaceKey}
       onClick={onUnfold}
-      className="grid min-h-11 w-full grid-cols-[auto_1fr_auto] items-baseline gap-3 px-3 py-2 text-left"
+      className="fold-settle grid min-h-11 w-full grid-cols-[auto_1fr_auto] items-baseline gap-3 px-3 py-2 text-left"
     >
       <span className="font-heading text-[12.5px] font-medium italic text-[var(--color-charcoal)]">
         {name}
       </span>
-      <span className="truncate font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      <span className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
         {summary}
       </span>
-      <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
-        unfold ↓
+      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
+        unfold{' '}
+        <span data-fold-arrow className="fold-arrow-settle inline-block">
+          ↓
+        </span>
       </span>
     </button>
   );

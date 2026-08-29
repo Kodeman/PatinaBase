@@ -388,7 +388,7 @@ export function DiscoverySection({
         <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
           Discovery
         </h2>
-        <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           {ready ? 'ready' : 'in progress'}
         </span>
       </div>
@@ -409,7 +409,7 @@ export function DiscoverySection({
       >
         <StrataMark size="lg" fill={fill} />
         <div className="flex-1">
-          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Working with {clientName}
           </p>
           <p className="mt-0.5 text-[14px] text-[var(--color-charcoal)]">
@@ -443,7 +443,7 @@ export function DiscoverySection({
           band with the server's reason and a retry. Never a toast. */}
       {beginError && (
         <div className="mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.10)] px-4 py-2.5">
-          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
             Couldn&rsquo;t begin the Direction
           </span>
           <span className="text-[12px] leading-snug text-[var(--color-charcoal)]">
@@ -504,7 +504,7 @@ export function DiscoverySection({
         </DocumentAction>
       </DocumentActionGroup>
 
-      <p className="mb-2 flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+      <p className="mb-2 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         The essentials — structured · they open &amp; seed the agreement
         <span className="h-px flex-1 bg-[var(--color-pearl)]" />
       </p>
@@ -523,7 +523,7 @@ export function DiscoverySection({
         </FacetSection>
       ))}
 
-      <p className="mb-2 mt-5 flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+      <p className="mb-2 mt-5 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         Deepen it — a sharper agreement, not required
         <span className="h-px flex-1 bg-[var(--color-pearl)]" />
       </p>

@@ -71,7 +71,7 @@ export function CareSection({
     <section>
       <div className="mb-1.5 mt-5 flex items-baseline justify-between">
         <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">Care</h2>
-        <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           Ongoing
         </span>
       </div>
@@ -92,7 +92,7 @@ export function CareSection({
             </p>
           )}
           {snapshotFacts.length > 0 && (
-            <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               {snapshotFacts.join(' · ')}
             </p>
           )}

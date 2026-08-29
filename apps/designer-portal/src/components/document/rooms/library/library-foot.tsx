@@ -63,7 +63,7 @@ function FootStat({ value, label }: { value: string; label: string }) {
       <span className="font-heading text-[1rem] not-italic text-[var(--color-charcoal)]">
         {value}
       </span>
-      <span className="mt-px block font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <span className="mt-px block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         {label}
       </span>
     </span>

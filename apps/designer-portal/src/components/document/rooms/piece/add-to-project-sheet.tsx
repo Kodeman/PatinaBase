@@ -118,7 +118,7 @@ export function AddToProjectSheet({
           : "The piece lands in the project’s schedule as a TBD line — refine the room, quantity, and price there."}
       </p>
       <fieldset className="mb-4">
-        <legend className="mb-1 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <legend className="mb-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           If this piece is already in the project
         </legend>
         <div className="grid grid-cols-3 gap-1.5">

@@ -51,7 +51,7 @@ export function SplatStage({ url, unavailable, isLoading = false }: SplatStagePr
   return (
     <div className="overflow-hidden rounded-[2px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-front)]">
       <StageBody url={url} unavailable={unavailable} isLoading={isLoading} />
-      <div className="flex items-center justify-between border-t border-[var(--doc-ink-border)] px-3.5 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+      <div className="flex items-center justify-between border-t border-[var(--doc-ink-border)] px-3.5 py-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
         <span>Splat · the room as photographed</span>
         <span>seen, never measured against</span>
       </div>
@@ -96,7 +96,7 @@ function StageMessage({ children, mono = false }: { children: React.ReactNode; m
       <p
         className={
           mono
-            ? 'font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]'
+            ? 'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]'
             : 'text-[12px] italic text-[var(--text-muted)]'
         }
       >

@@ -144,7 +144,7 @@ export function FinalizeHead({
       {note && (
         <p
           role={note.tone === 'err' ? 'alert' : 'status'}
-          className="font-mono text-[10px] uppercase tracking-[0.06em]"
+          className="font-mono text-[11px] uppercase tracking-[0.06em]"
           style={{
             color:
               note.tone === 'ok'

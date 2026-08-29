@@ -119,14 +119,14 @@ export function PlanStage({ geometry, photoLayer, measureLayer, stageCapRight = 
         </svg>
         {chip && (
           <div
-            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-[3px] bg-[var(--color-charcoal)] px-2.5 py-1 font-mono text-[10px] tracking-[0.08em] text-[var(--color-off-white)]"
+            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-[3px] bg-[var(--color-charcoal)] px-2.5 py-1 font-mono text-[11px] tracking-[0.08em] text-[var(--color-off-white)]"
             style={{ left: chip.x, top: chip.y }}
           >
             {chip.text}
           </div>
         )}
       </div>
-      <div className="flex items-center justify-between border-t border-[var(--doc-ink-border)] px-3.5 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+      <div className="flex items-center justify-between border-t border-[var(--doc-ink-border)] px-3.5 py-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
         <span>Plan · drawn from the scan</span>
         <span>{stageCapRight}</span>
       </div>

@@ -119,7 +119,7 @@ export function PartyMiniRow({
           {name}
         </span>
         {meta && (
-          <span className="mt-[0.1rem] block truncate font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <span className="mt-[0.1rem] block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             {meta}
           </span>
         )}

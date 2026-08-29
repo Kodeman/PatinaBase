@@ -71,7 +71,7 @@ function LedgerRow({
 
   return (
     <tr className="border-b border-[var(--doc-ink-border)]/60">
-      <td className="py-2 pr-3 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+      <td className="py-2 pr-3 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
         {row.mark}
       </td>
       <td className="py-2 pr-3">
@@ -84,12 +84,12 @@ function LedgerRow({
         </button>
         {row.kind === "furnishings" &&
           row.instrument.supersededByNumber != null && (
-            <span className="ml-1 text-[10px] text-[var(--text-muted)]">
+            <span className="ml-1 text-[11px] text-[var(--text-muted)]">
               → superseded by № {row.instrument.supersededByNumber}
             </span>
           )}
         {row.kind === "trade" && row.scope.state === "executed" && (
-          <span className="ml-1 text-[10px] text-[var(--text-muted)]">
+          <span className="ml-1 text-[11px] text-[var(--text-muted)]">
             · {tradeProgressLabel(row.scope.progressState)}
           </span>
         )}
@@ -100,7 +100,7 @@ function LedgerRow({
       </td>
       <td className="py-2 text-right">
         <span
-          className="font-mono text-[9px] uppercase tracking-[0.06em]"
+          className="font-mono text-[11px] uppercase tracking-[0.06em]"
           style={{ color: toneColor[status.tone] }}
         >
           {status.label}
@@ -163,7 +163,7 @@ export function AuthorizationsLedger({
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Authorizations &amp; trade scopes
         </p>
         {(rows.length > 0 || isLoading || Boolean(instrumentsQuery.error) || Boolean(tradeScopesQuery.error)) && (
@@ -208,7 +208,7 @@ export function AuthorizationsLedger({
       {rows.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[560px] border-collapse text-left text-[11px]">
-            <thead className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <thead className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               <tr className="border-b border-[var(--doc-ink-border)]">
                 <th className="py-2 pr-3">Kind</th>
                 <th className="py-2 pr-3">Instrument</th>

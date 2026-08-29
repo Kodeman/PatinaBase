@@ -173,7 +173,7 @@ export function MarginNote({
           </span>
           {children}
         </span>
-        <span className="mt-2 block font-mono text-[10px] uppercase tracking-[0.11em] text-[var(--text-faint)]">
+        <span className="mt-2 block font-mono text-[11px] uppercase tracking-[0.11em] text-[var(--text-faint)]">
           {caption}
         </span>
       </p>

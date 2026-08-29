@@ -362,7 +362,7 @@ export function DirectoryView({
       {notice && (
         <p
           role="status"
-          className="mb-4 border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] py-2 pl-3 pr-2 font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[#6f8268]"
+          className="mb-4 border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] py-2 pl-3 pr-2 font-mono text-[11px] uppercase tracking-[0.07em] text-[#6f8268]"
         >
           {notice}
         </p>
@@ -377,7 +377,7 @@ export function DirectoryView({
               type="button"
               onClick={() => onRoleChange(key)}
               aria-pressed={on}
-              className={`rounded-[16px] border px-3 py-1.5 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.05em] transition-colors ${
+              className={`rounded-[16px] border px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.05em] transition-colors ${
                 on
                   ? 'border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-[var(--color-off-white)]'
                   : 'border-[var(--color-pearl)] bg-white text-[var(--color-aged-oak)] hover:border-[var(--color-clay)]'
@@ -407,7 +407,7 @@ export function DirectoryView({
               window.dispatchEvent(new Event('document:open-rolodex-seed-review'));
               setSeedSheetOpen(true);
             }}
-            className="da-score-hover inline-flex min-h-11 items-center underline decoration-1 underline-offset-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="da-score-hover inline-flex min-h-11 items-center underline decoration-1 underline-offset-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             review what seeded
           </button>
@@ -428,7 +428,7 @@ export function DirectoryView({
               type="button"
               onClick={() => onMakerLens(key)}
               aria-current={makerLens === key ? 'true' : undefined}
-              className={`font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors ${
+              className={`font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${
                 makerLens === key
                   ? 'text-[var(--color-clay-ink)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
@@ -437,7 +437,7 @@ export function DirectoryView({
               {label}
             </button>
           ))}
-          <span className="ml-auto font-mono text-[0.46rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             {makerLens === 'marketplace' ? 'save = joins your roster' : `${rows.length} admitted`}
           </span>
         </p>
@@ -464,7 +464,7 @@ export function DirectoryView({
         ) : (
           <>
             {query && (
-              <p className="mb-3 font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+              <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                 {filteredCompanies.length}{' '}
                 {filteredCompanies.length === 1 ? 'match' : 'matches'} for “{search.trim()}”
               </p>
@@ -539,7 +539,7 @@ export function DirectoryView({
       ) : (
         <>
           {query && (
-            <p className="mb-3 font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
               {filteredRows.length} {filteredRows.length === 1 ? 'match' : 'matches'} for “{search.trim()}”
             </p>
           )}

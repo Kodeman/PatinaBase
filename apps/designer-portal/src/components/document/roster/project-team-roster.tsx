@@ -96,7 +96,7 @@ export function ProjectTeamRoster({
       )}
 
       {added && (
-        <p role="status" className="mt-2 text-[10px] text-[var(--color-sage)]">
+        <p role="status" className="mt-2 text-[11px] text-[var(--color-sage)]">
           {added} added to the project roster.
         </p>
       )}

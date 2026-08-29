@@ -146,7 +146,7 @@ export function ShelfPanel({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
             {shelf.eyebrow}
           </p>
           <h2 className="mt-1 font-heading text-[18px] font-medium leading-tight text-[var(--color-charcoal)]">
@@ -157,7 +157,7 @@ export function ShelfPanel({
           ref={closeRef}
           type="button"
           onClick={onClose}
-          className="min-h-11 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.09em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="min-h-11 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.09em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
           ✕ Close
         </button>

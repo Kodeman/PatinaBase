@@ -31,7 +31,7 @@ export interface PastProjectPickerProps {
 export function PastProjectPicker({ projects, onPick, isLoading = false, busy = false }: PastProjectPickerProps) {
   if (isLoading) {
     return (
-      <p className="mt-[0.6rem] font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <p className="mt-[0.6rem] font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         finding your projects…
       </p>
     );
@@ -39,7 +39,7 @@ export function PastProjectPicker({ projects, onPick, isLoading = false, busy = 
 
   if (projects.length === 0) {
     return (
-      <p className="mt-[0.6rem] font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <p className="mt-[0.6rem] font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         No past project with a schedule to copy from yet.
       </p>
     );
@@ -58,7 +58,7 @@ export function PastProjectPicker({ projects, onPick, isLoading = false, busy = 
             <span className="min-w-0 truncate font-heading text-[1rem] text-[var(--color-charcoal)]">
               {p.name}
             </span>
-            <span className="flex-none font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
+            <span className="flex-none font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
               {p.phaseCount} phase{p.phaseCount === 1 ? '' : 's'}
             </span>
           </button>

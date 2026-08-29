@@ -130,7 +130,7 @@ export function CoordinationBand({
         <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
           Coordination
         </h2>
-        <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           the ball-in-court
         </span>
       </div>

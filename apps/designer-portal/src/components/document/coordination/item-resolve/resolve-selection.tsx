@@ -111,7 +111,7 @@ export function ResolveSelection({
                   </span>
                 </span>
                 {isPicked && (
-                  <span className="ml-auto font-mono text-[0.46rem] font-semibold uppercase tracking-[0.05em] text-[var(--color-sage)]">
+                  <span className="ml-auto font-mono text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--color-sage)]">
                     Picked
                   </span>
                 )}

@@ -107,7 +107,7 @@ export function DiscoveryMargin({
         <MarginItem key={row.item_id} row={row} open={false} />
       ))}
 
-      <p className="mt-4 font-mono text-[10px] leading-relaxed text-[var(--color-aged-oak)]">
+      <p className="mt-4 font-mono text-[11px] leading-relaxed text-[var(--color-aged-oak)]">
         Notes only — the call&apos;s read. The structured facts live in the
         blocks and seed the proposal.
       </p>

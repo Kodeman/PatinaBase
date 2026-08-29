@@ -200,7 +200,7 @@ export function RuleDiamond({
       {nudging && !pinned && (
         // counter-rotate: the button is rotate-45, the text must read upright.
         <span
-          className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)] -rotate-45"
+          className="absolute whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)] -rotate-45"
           style={{ left: 8, top: 8 }}
         >
           {label} is anchored — unpin to move it

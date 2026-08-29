@@ -306,7 +306,7 @@ export function PhaseAdvanceControl({
   if (actions == null) {
     return (
       <section aria-label="Phase handoffs" aria-busy className={shellCls}>
-        <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           Reading phase handoffs…
         </p>
       </section>
@@ -370,7 +370,7 @@ export function PhaseAdvanceControl({
     <section aria-labelledby={headingId} className={shellCls}>
       <h3
         id={headingId}
-        className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+        className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
       >
         Phase handoffs
       </h3>

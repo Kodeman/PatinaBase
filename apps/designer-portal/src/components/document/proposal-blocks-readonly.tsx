@@ -46,7 +46,7 @@ const MILESTONE_KIND_LABEL: Record<string, string> = {
 
 function BlockLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]">
+    <p className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]">
       {children}
     </p>
   );
@@ -259,7 +259,7 @@ function LegacyProposalBlocksReadOnly({
                 hasPhases ? 'mt-3 border-t border-[var(--border-default)] pt-2' : ''
               }
             >
-              <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              <p className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                 Key dates
               </p>
               <ul className="space-y-1.5">

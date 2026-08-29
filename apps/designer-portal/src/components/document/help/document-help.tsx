@@ -162,7 +162,7 @@ function DocumentHelpPanel() {
  *  without) any Sanity article content. */
 function SurfaceIntro({ blurb }: { blurb: string }) {
   return (
-    <p className="px-4 pt-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+    <p className="px-4 pt-3 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
       {blurb}
     </p>
   );

@@ -191,7 +191,7 @@ export function ServiceAgreementInstruments({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-2xl">
               <p
-                className="font-mono text-[9px] uppercase tracking-[0.1em]"
+                className="font-mono text-[11px] uppercase tracking-[0.1em]"
                 style={{ color: toneColor[status.tone] }}
               >
                 {status.label}

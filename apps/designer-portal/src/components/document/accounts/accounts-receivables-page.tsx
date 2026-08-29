@@ -50,7 +50,7 @@ export function AccountsReceivablesPage({
     <div>
       {/* Aging buckets — quiet mono pairs, never a chart. */}
       <div className="mb-4 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-b border-[var(--color-pearl)] pb-2.5">
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
+        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
           {fmtUsd(totalBalanceCents)} owed
         </span>
         {buckets
@@ -60,7 +60,7 @@ export function AccountsReceivablesPage({
               <span className="font-heading text-[14px] text-[var(--color-charcoal)]">
                 {fmtUsd(b.balanceCents)}
               </span>
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 {b.label}
               </span>
             </span>
@@ -158,14 +158,14 @@ function ReceivableRow({
           {invoice.invoice_number
             ? `Invoice ${invoice.invoice_number}`
             : 'Draft invoice'}
-          <span className="ml-2 font-mono text-[10px] font-medium text-[var(--color-charcoal)]">
+          <span className="ml-2 font-mono text-[11px] font-medium text-[var(--color-charcoal)]">
             {fmtUsd(balance)}
           </span>
-          <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
+          <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
             folio →
           </span>
         </button>
-        <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+        <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           {[
             invoice.project?.name ?? 'Project',
             invoice.due_date ? `due ${fmtDay(invoice.due_date)}` : null,
@@ -180,7 +180,7 @@ function ReceivableRow({
         </p>
         {note && (
           <p
-            className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.05em]"
+            className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.05em]"
             style={{
               color: note.startsWith('Could not') ? 'var(--color-terracotta-ink)' : 'var(--color-sage-ink)',
             }}
@@ -205,7 +205,7 @@ function ReceivableRow({
           {chasedAt ? 'Chase again' : 'Send reminder'}
         </DocumentAction>
       ) : (
-        <span className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <span className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           in motion
         </span>
       )}
@@ -213,7 +213,7 @@ function ReceivableRow({
       <button
         type="button"
         onClick={() => onOpenDocument(invoice.project_id)}
-        className="min-h-11 whitespace-nowrap rounded-[3px] text-[10.5px] text-[var(--color-clay-ink)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="min-h-11 whitespace-nowrap rounded-[3px] text-[11px] text-[var(--color-clay-ink)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
         document ↗
       </button>

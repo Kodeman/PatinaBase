@@ -45,7 +45,7 @@ export function RuleToday({ xPct, today, pinned }: RuleTodayProps) {
       style={{ left: `${xPct}%`, top, height, width: 1.5, background: 'var(--color-charcoal)' }}
     >
       {!pinned && (
-        <span className="absolute left-[6px] top-[42px] whitespace-nowrap font-mono text-[0.58rem] font-medium uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
+        <span className="absolute left-[6px] top-[42px] whitespace-nowrap font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
           Today · {fmtDay(today)}
         </span>
       )}

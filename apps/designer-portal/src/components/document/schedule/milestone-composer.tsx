@@ -145,7 +145,7 @@ export function MilestoneComposer({
               type="button"
               aria-pressed={selected}
               onClick={() => setKind(k.key)}
-              className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-[0.5rem] py-[0.2rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
+              className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-[0.5rem] py-[0.2rem] font-mono text-[11px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
                 selected
                   ? 'text-[var(--color-charcoal)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -173,7 +173,7 @@ export function MilestoneComposer({
               type="button"
               aria-pressed={selected}
               onClick={() => setWhenMode(w.key)}
-              className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-[0.5rem] py-[0.2rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
+              className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-[0.5rem] py-[0.2rem] font-mono text-[11px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
                 selected
                   ? 'text-[var(--color-charcoal)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -255,7 +255,7 @@ export function MilestoneComposer({
       )}
 
       {shownError && (
-        <div className="mt-[0.35rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
+        <div className="mt-[0.35rem] font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
           {shownError}
         </div>
       )}

@@ -49,14 +49,14 @@ export function DocLetterhead({
   onReleaseRoom?: (() => void) | null;
 }) {
   return (
-    <header id="document-project-status" tabIndex={-1} className="mb-4 border-b border-[var(--color-pearl)] pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
+    <header id="document-project-status" tabIndex={-1} className="doc-rule-mid mb-4 pb-5 pt-3.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
       <div className="mb-2.5">
         <StrataMark state="active" size="lg" fill={fill} label={fill ? 'Document progress' : undefined} />
       </div>
       {projectId ? (
         <LetterheadTitle projectId={projectId} serverTitle={title} />
       ) : (
-        <h1 className="font-heading text-[1.55rem] font-medium leading-tight tracking-[-0.01em] text-[var(--color-charcoal)]">
+        <h1 className="font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)]">
           {title}
         </h1>
       )}
@@ -74,7 +74,7 @@ export function DocLetterhead({
             data-release-room
             onClick={onReleaseRoom}
             aria-label={`Put down ${inHandRoomName}`}
-            className="doc-room-lifted mt-2.5 flex min-h-11 w-full items-baseline justify-between gap-3 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 text-left font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="doc-room-lifted mt-2.5 flex min-h-11 w-full items-baseline justify-between gap-3 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 text-left font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             <span>In hand · {inHandRoomName}</span>
             <span aria-hidden className="shrink-0 text-[var(--color-aged-oak)]">
@@ -84,7 +84,7 @@ export function DocLetterhead({
         ) : (
           <p
             data-in-hand-room
-            className="doc-room-lifted mt-2.5 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
+            className="doc-room-lifted mt-2.5 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
           >
             In hand · {inHandRoomName}
           </p>

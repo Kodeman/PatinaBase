@@ -70,7 +70,7 @@ export function FacetSection({
         {/* ✓ done tick — sage when written, hollow when not (matches compose). */}
         <span
           aria-hidden
-          className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-[4px] border-[1.5px] text-[0.6rem] font-bold transition-colors motion-reduce:transition-none ${
+          className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-[4px] border-[1.5px] text-[11px] font-bold transition-colors motion-reduce:transition-none ${
             done
               ? 'border-[var(--color-sage)] bg-[rgba(168,181,160,0.18)] text-[var(--color-sage)]'
               : 'border-[#cfc8bb] text-transparent'

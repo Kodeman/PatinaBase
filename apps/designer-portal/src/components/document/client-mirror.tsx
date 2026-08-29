@@ -114,13 +114,13 @@ export function ClientMirror({
     >
       {/* The thin charcoal banner — the preview session's frame. */}
       <div className="flex items-baseline justify-between bg-[var(--color-charcoal)] px-7 py-2">
-        <p className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.75)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.75)]">
           You&rsquo;re seeing what they see
         </p>
         <button
           type="button"
           onClick={onClose}
-          className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+          className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
         >
           ← Back to your copy
         </button>
@@ -140,7 +140,7 @@ export function ClientMirror({
 
             {data.decisions.length > 0 && (
               <section className="mb-6">
-                <h2 className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                <h2 className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                   Waiting on you
                 </h2>
                 {(data.decisions as AnyRow[]).map((d) => (
@@ -148,7 +148,7 @@ export function ClientMirror({
                     <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
                       {d.title}
                       {d.status === 'responded' && (
-                        <span className="ml-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-sage-ink)]">
+                        <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-sage-ink)]">
                           answered{d.responded_at ? ` · ${fmtDay(d.responded_at)}` : ''}
                         </span>
                       )}
@@ -157,7 +157,7 @@ export function ClientMirror({
                       <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{d.context}</p>
                     )}
                     {d.status === 'pending' && d.due_date && (
-                      <p className="mt-0.5 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                         by {fmtDay(d.due_date)}
                       </p>
                     )}
@@ -168,13 +168,13 @@ export function ClientMirror({
 
             {data.files.length > 0 && (
               <section className="mb-6">
-                <h2 className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                <h2 className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                   Shared with you
                 </h2>
                 {(data.files as AnyRow[]).map((f) => (
                   <p key={f.id} className="border-b border-dashed border-[var(--color-pearl)] py-1.5 text-[11.5px] text-[var(--color-charcoal)]">
                     {f.title}
-                    <span className="ml-2 font-mono text-[8.5px] uppercase text-[var(--text-muted)]">
+                    <span className="ml-2 font-mono text-[11px] uppercase text-[var(--text-muted)]">
                       {fmtDay(f.created_at)}
                     </span>
                   </p>
@@ -184,7 +184,7 @@ export function ClientMirror({
 
             {data.studioMessages.length > 0 && (
               <section className="mb-6">
-                <h2 className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                <h2 className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                   From the studio
                 </h2>
                 {(data.studioMessages as AnyRow[]).map((m) => (
@@ -192,7 +192,7 @@ export function ClientMirror({
                     <p className="whitespace-pre-wrap text-[11.5px] leading-relaxed text-[var(--color-charcoal)]">
                       {m.body}
                     </p>
-                    <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {fmtDay(m.created_at)}
                     </p>
                   </div>
@@ -203,7 +203,7 @@ export function ClientMirror({
             {/* R33 F2 — the client's own words render as their own. */}
             {data.clientMessages.length > 0 && (
               <section className="mb-6">
-                <h2 className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                <h2 className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                   You asked
                 </h2>
                 {(data.clientMessages as AnyRow[]).map((m) => (
@@ -211,7 +211,7 @@ export function ClientMirror({
                     <p className="whitespace-pre-wrap text-[11.5px] leading-relaxed text-[var(--color-charcoal)]">
                       {m.body}
                     </p>
-                    <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       You · {fmtDay(m.created_at)}
                     </p>
                   </div>
@@ -221,16 +221,16 @@ export function ClientMirror({
 
             {data.milestones.length > 0 && (
               <section className="mb-6">
-                <h2 className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                <h2 className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                   Payment schedule
                 </h2>
                 {(data.milestones as AnyRow[]).map((m) => (
                   <div key={m.id} className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-dashed border-[var(--color-pearl)] py-1.5">
                     <span className="text-[11.5px] text-[var(--color-charcoal)]">{m.label}</span>
-                    <span className="font-mono text-[10px] text-[var(--color-charcoal)]">
+                    <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
                       {fmtUsd(m.amount_cents)}
                     </span>
-                    <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {m.paid_at ? `paid ${fmtDay(m.paid_at)}` : m.status}
                     </span>
                   </div>

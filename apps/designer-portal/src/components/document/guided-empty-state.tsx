@@ -32,7 +32,7 @@ export function GuidedEmptyState({
       <p className="font-heading text-[15px] font-medium text-[var(--color-charcoal)]">{title}</p>
       <p className="mt-1 max-w-2xl text-[11.5px] leading-relaxed text-[var(--text-muted)]">{description}</p>
       {inputs.length > 0 && (
-        <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           Start with · {inputs.join(' · ')}
         </p>
       )}

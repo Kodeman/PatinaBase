@@ -66,7 +66,7 @@ export function TaskDepLine({ task, items, tasks, onOpenBlocker }: TaskDepLinePr
         type="button"
         onClick={() => onOpenBlocker?.(blocked.blockingItemId!)}
         disabled={!onOpenBlocker}
-        className="mt-[3px] flex items-center gap-1 text-left text-[10px] leading-snug hover:opacity-80 disabled:cursor-default disabled:hover:opacity-100"
+        className="mt-[3px] flex items-center gap-1 text-left text-[11px] leading-snug hover:opacity-80 disabled:cursor-default disabled:hover:opacity-100"
         style={{ color: DEP_BLOCKED_INK }}
       >
         <span aria-hidden>⊘</span>
@@ -82,7 +82,7 @@ export function TaskDepLine({ task, items, tasks, onOpenBlocker }: TaskDepLinePr
     const pre = tasks.find((t) => t.id === blocked.waitingOnTaskId);
     return (
       <div
-        className="mt-[3px] flex items-center gap-1 text-[10px] leading-snug"
+        className="mt-[3px] flex items-center gap-1 text-[11px] leading-snug"
         style={{ color: 'var(--color-aged-oak)' }}
       >
         <span aria-hidden>↳</span>
@@ -96,7 +96,7 @@ export function TaskDepLine({ task, items, tasks, onOpenBlocker }: TaskDepLinePr
   // ── Ready: ● ready — nothing blocking.
   return (
     <div
-      className="mt-[3px] flex items-center gap-1 text-[10px] leading-snug"
+      className="mt-[3px] flex items-center gap-1 text-[11px] leading-snug"
       style={{ color: DEP_READY_INK }}
     >
       <span aria-hidden>●</span>
@@ -136,7 +136,7 @@ export function OwnerChip({
     base.label;
 
   return (
-    <span className="mt-px inline-flex flex-shrink-0 items-center gap-1 font-mono text-[8px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+    <span className="mt-px inline-flex flex-shrink-0 items-center gap-1 font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
       <span
         aria-hidden
         className="inline-block h-1.5 w-1.5 rounded-full"

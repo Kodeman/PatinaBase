@@ -91,7 +91,7 @@ export function RefineReadout({
     <div>
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-[14px] text-[var(--color-charcoal)]">{summary}</span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
           {COPY.notCertifiedBadge}
         </span>
       </div>
@@ -101,7 +101,7 @@ export function RefineReadout({
       <Note>{COPY.photosUnaffected}</Note>
 
       <details className="mt-2">
-        <summary className="inline-flex min-h-11 cursor-pointer items-center font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] outline-none transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] outline-none transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
           {COPY.disclosureSummary}
         </summary>
 
@@ -123,7 +123,7 @@ export function RefineReadout({
           {verdictReason && <Row label={COPY.labelVerdict} value={verdictReason} />}
 
           <div className="pt-1">
-            <dt className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+            <dt className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
               {COPY.labelAdvisory}
             </dt>
             <dd className="mt-1">
@@ -131,7 +131,7 @@ export function RefineReadout({
                 // VERBATIM. refine_adapter.py:1116 — "Nothing reads this
                 // string; it exists to be read." No truncation, no ellipsis,
                 // no reformatting: `break-words` wraps it, nothing rewrites it.
-                <code className="block whitespace-pre-wrap break-words font-mono text-[10.5px] leading-relaxed text-[var(--color-charcoal)]">
+                <code className="block whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[var(--color-charcoal)]">
                   {loopConsistencyAdvisory}
                 </code>
               ) : (
@@ -151,7 +151,7 @@ export function RefineReadout({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+      <dt className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
         {label}
       </dt>
       <dd className="font-mono text-[11.5px] text-[var(--color-charcoal)]">{value}</dd>

@@ -121,14 +121,14 @@ export function RegionHead({
     >
       <div className="min-w-0">
         {eyebrow && (
-          <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             {eyebrow}
           </p>
         )}
         <h2
           id={headingId}
           tabIndex={-1}
-          className="font-heading text-[18px] font-medium text-[var(--color-charcoal)] outline-none"
+          className="font-heading text-[24px] font-medium leading-[1.2] text-[var(--text-primary)] outline-none"
         >
           {name}
         </h2>

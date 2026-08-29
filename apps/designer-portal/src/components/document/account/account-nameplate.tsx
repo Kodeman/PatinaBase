@@ -48,7 +48,7 @@ export function AccountNameplate() {
       aria-haspopup="dialog"
       className="ml-1 flex shrink-0 items-center gap-2 rounded-[5px] border border-transparent py-[0.3rem] pl-1 pr-2 transition-colors hover:border-[rgba(196,165,123,0.45)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
-      <span className="relative inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(196,165,123,0.16)] font-mono text-[8.5px] uppercase tracking-wider text-[var(--color-mocha)]">
+      <span className="relative inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(196,165,123,0.16)] font-mono text-[11px] uppercase tracking-wider text-[var(--color-mocha)]">
         {profile?.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
@@ -66,7 +66,7 @@ export function AccountNameplate() {
           {name ?? email ?? 'Account'}
         </span>
         {studio && (
-          <span className="block max-w-[120px] truncate font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <span className="block max-w-[120px] truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             {studio.name}
           </span>
         )}

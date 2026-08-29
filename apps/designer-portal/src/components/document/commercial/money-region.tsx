@@ -67,7 +67,7 @@ function Rung({
         {name}
         {figure ? ` · ${figure}` : ''}
       </p>
-      <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+      <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         {meaning}
       </span>
     </li>
@@ -294,7 +294,7 @@ export function MoneyRegion({
           />
         </ol>
 
-        <p className="mt-3 max-w-2xl text-[10.5px] leading-relaxed text-[var(--text-muted)]">
+        <p className="mt-3 max-w-2xl text-[11px] leading-relaxed text-[var(--text-muted)]">
           Budget &rarr; plan &rarr; authorized &rarr; moved. Moved is what is ordered and
           not yet paid out &mdash; not the contractually owed total above it.
           {committedSettled && draftScopeCount > 0

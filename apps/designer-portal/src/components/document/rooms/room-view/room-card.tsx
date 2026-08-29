@@ -50,7 +50,7 @@ export function RoomCard({ entry }: { entry: RoomRosterEntry }) {
         <RoomPlanThumb geometry={entry.geometry} />
       </div>
 
-      <div className="flex items-center justify-between gap-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <div className="flex items-center justify-between gap-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         <span>{metasLeft}</span>
         {grade && (
           <span className="flex shrink-0 items-center gap-1" style={{ color: qualityGradeColor(grade) }}>
@@ -63,7 +63,7 @@ export function RoomCard({ entry }: { entry: RoomRosterEntry }) {
         <div className="relative z-10 mt-2.5 w-fit border-t border-[var(--doc-ink-border)] pt-2.5">
           <Link
             href={`/doc/${entry.docRef.engagementId}`}
-            className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-mocha)] hover:text-[var(--color-clay-ink)]"
+            className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-mocha)] hover:text-[var(--color-clay-ink)]"
           >
             → the document · {entry.docRef.phaseLabel}
           </Link>

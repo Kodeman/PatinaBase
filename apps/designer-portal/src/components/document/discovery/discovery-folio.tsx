@@ -30,7 +30,7 @@ function Clip({ file }: { file: FolioFile }) {
   }, [file.storage_path, file.doc_type]);
 
   return (
-    <div className="flex h-[68px] w-[96px] shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(243,238,228,0.6)] text-center font-mono text-[9px] text-[var(--text-muted)]">
+    <div className="flex h-[68px] w-[96px] shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(243,238,228,0.6)] text-center font-mono text-[11px] text-[var(--text-muted)]">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt={file.title} className="h-full w-full object-cover" />
@@ -56,7 +56,7 @@ export function DiscoveryFolio({ designerClientId }: { designerClientId: string 
         {(files ?? []).map((f) => (
           <Clip key={f.id} file={f} />
         ))}
-        <label className="flex h-[68px] w-[96px] shrink-0 cursor-pointer items-center justify-center rounded-[3px] border border-dashed border-[var(--color-pearl)] text-center font-mono text-[9.5px] text-[var(--text-muted)] transition-colors hover:border-[var(--color-clay)] hover:text-[var(--color-charcoal)]">
+        <label className="flex h-[68px] w-[96px] shrink-0 cursor-pointer items-center justify-center rounded-[3px] border border-dashed border-[var(--color-pearl)] text-center font-mono text-[11px] text-[var(--text-muted)] transition-colors hover:border-[var(--color-clay)] hover:text-[var(--color-charcoal)]">
           {upload.isPending ? 'Uploading…' : '＋ Add a pin'}
           <input
             type="file"

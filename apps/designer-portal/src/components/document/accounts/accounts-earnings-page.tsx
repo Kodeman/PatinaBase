@@ -46,7 +46,7 @@ function EarnLine({ label, value, sub }: { label: string; value: number; sub?: s
       <span className="text-[12px] text-[var(--color-mocha)]">
         {label}
         {sub && (
-          <span className="ml-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+          <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             {sub}
           </span>
         )}
@@ -87,21 +87,21 @@ export function AccountsEarningsPage({
         <h3 className="mb-1 font-heading text-[14px] italic text-[var(--color-charcoal)]">
           What you earn
         </h3>
-        <p className="mb-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           client-work income
         </p>
         <EarnLine label="Design fees" value={bySource.design_fee} />
         <EarnLine label="Via-Patina commissions" value={bySource.product_commission} />
         {otherCents > 0 && <EarnLine label="Other" value={otherCents} sub="referral · bonus · adjustment" />}
         <div className="flex items-baseline justify-between gap-3 pt-2">
-          <span className="font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
             client work, all time
           </span>
           <span className="font-heading text-[16px] text-[var(--color-charcoal)]">
             {fmtUsd(clientWork)}
           </span>
         </div>
-        <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+        <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           {fmtUsd(stats.paidEarnings)} paid · {fmtUsd(stats.pendingEarnings)} pending
         </p>
       </section>
@@ -111,7 +111,7 @@ export function AccountsEarningsPage({
         <h3 className="mb-1 font-heading text-[14px] italic text-[var(--color-charcoal)]">
           What teaching returns
         </h3>
-        <p className="mb-3 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           taught-taste income · the {Math.round(PLEDGE_RATE * 100)}% Pledge
         </p>
 
@@ -119,7 +119,7 @@ export function AccountsEarningsPage({
         <div className="mb-3 flex items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] pb-2">
           <span className="font-heading text-[12.5px] italic text-[var(--color-charcoal)]">
             The Pledge, returned to you{' '}
-            <span className="font-mono text-[8.5px] not-italic uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+            <span className="font-mono text-[11px] not-italic uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
               year to date
             </span>
           </span>
@@ -139,14 +139,14 @@ export function AccountsEarningsPage({
                 key={`${ev.earnedAt}-${i}`}
                 className="border-b border-dashed border-[var(--color-pearl)] py-2"
               >
-                <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                   {ev.label ?? 'Via Patina'}
                   {ev.earnedAt ? ` · ${fmtDay(ev.earnedAt)}` : ''} · {fmtUsd(ev.commission)} commission
                 </p>
                 {/* The twinned sub-lines — labelled on the face, never blurred. */}
                 <div className="grid grid-cols-2 gap-2">
                   <span className="flex items-baseline justify-between gap-2 rounded-[3px] border border-[rgba(133,148,124,0.3)] px-2 py-1">
-                    <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-sage)]">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-sage)]">
                       returned to you
                     </span>
                     <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
@@ -155,11 +155,11 @@ export function AccountsEarningsPage({
                   </span>
                   <span className="flex items-baseline justify-between gap-2 rounded-[3px] border border-[rgba(196,165,123,0.3)] px-2 py-1">
                     <span className="flex flex-col">
-                      <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
+                      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
                         given to the commons
                       </span>
                       {COMMONS_MATCH_PROVISIONAL && COMMONS_MATCH_RATE != null && (
-                        <span className="font-mono text-[7px] uppercase tracking-[0.04em] text-[rgba(196,165,123,0.7)]">
+                        <span className="font-mono text-[11px] uppercase tracking-[0.04em] text-[rgba(196,165,123,0.7)]">
                           provisional · {Math.round(COMMONS_MATCH_RATE * 100)}%
                         </span>
                       )}
@@ -178,12 +178,12 @@ export function AccountsEarningsPage({
             the FINAL brand/finance number still open (§14.15) — flagged, never
             presented as final, never left as "—". */}
         {COMMONS_MATCH_PROVISIONAL && COMMONS_MATCH_RATE != null && (
-          <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+          <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             the commons share is provisional ({Math.round(COMMONS_MATCH_RATE * 100)}%) — final rate awaits brand config (§14.15)
           </p>
         )}
         {!commonsRateKnown && (
-          <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+          <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             the commons share awaits brand config (§14.15) — never invented
           </p>
         )}

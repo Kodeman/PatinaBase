@@ -173,7 +173,7 @@ function Timeline({
             <span className="mt-0.5 block text-[11px] capitalize text-[var(--color-charcoal)]">
               {statusLabel(revision.status)}
             </span>
-            <span className="block text-[9.5px] text-[var(--text-muted)]">
+            <span className="block text-[11px] text-[var(--text-muted)]">
               {formatRevisionDate(revision.createdAt)}
             </span>
           </button>

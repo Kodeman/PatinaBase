@@ -28,7 +28,7 @@ export function ShippedCard({ note }: { note: Feedback }) {
 
   return (
     <div className="rounded-xl border border-[color-mix(in_srgb,var(--color-sage)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-sage)_10%,transparent)] p-4">
-      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-sage)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-sage)]">
         ✓ Shipped · from your note
       </p>
       {note.note && (
@@ -101,14 +101,14 @@ function ReopenBox({
           type="button"
           disabled={pending}
           onClick={() => onSubmit(comment.trim())}
-          className="rounded-md bg-[var(--color-clay)] px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] disabled:opacity-50"
+          className="rounded-md bg-[var(--color-clay)] px-3 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] disabled:opacity-50"
         >
           {pending ? 'Reopening…' : 'Reopen'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+          className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
         >
           Cancel
         </button>

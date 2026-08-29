@@ -200,7 +200,7 @@ export function RuleBoundaryHandle({
         // collide with the ghost labels below: the nudge is suppressed whenever
         // a session is live, and the ghosts only exist while one is.
         <span
-          className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]"
+          className="absolute whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]"
           style={xPct > 50 ? { right: 8, top: g.labelTop } : { left: 8, top: g.labelTop }}
         >
           {refuseName} is anchored — unpin to move it, or select the bar and press Enter to

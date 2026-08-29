@@ -40,7 +40,7 @@ export function PreviousWork({
         aria-expanded={open}
         aria-controls={contentId}
         onClick={() => setOpen(!open)}
-        className="flex min-h-11 w-full items-center justify-between border-y border-[var(--color-pearl)] py-2 text-left font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="flex min-h-11 w-full items-center justify-between border-y border-[var(--color-pearl)] py-2 text-left font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
         {/* F90 — canon names it The Record (I137); the screen now says so. */}
         <span>The record · {count} complete</span>
@@ -52,7 +52,7 @@ export function PreviousWork({
           <button
             type="button"
             onClick={onOpenApprovals}
-            className="mt-1 flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="mt-1 flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             Client approvals · {approvalsAwaitingPublish} awaiting publish →
           </button>

@@ -23,7 +23,7 @@ import { RolodexPicker } from '../../roster/rolodex-picker';
 export const TRADE_PARTY_KINDS: PartyKind[] = ['sub', 'installer'];
 
 const SCORED_WORD =
-  'da-score-hover min-h-11 inline-flex items-center font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-mocha)]';
+  'da-score-hover min-h-11 inline-flex items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-mocha)]';
 
 export interface TradePartyOption {
   id: string;

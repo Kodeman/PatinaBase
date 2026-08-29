@@ -10,14 +10,17 @@
  * three; never a card; headings never fold; nothing folded on first paint.
  */
 
+import { useEffect, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import type {
   DeskRoster as DeskRosterModel,
+  RosterGroup,
   RosterLine,
 } from '@/lib/document/desk-roster-derivation';
 import { SectionEyebrow } from './section-eyebrow';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { openLedger } from './command-bar';
+import { RowWash, useRowWash, type RowWashTone } from './row-wash';
 
 /** SP-20's device — a quiet need (a setup chore, an unopened proposal, a PO
  *  nobody answered) never wears the red letter's own ink. */
@@ -26,13 +29,70 @@ const MARK_COLOR = {
   quiet: 'var(--color-dusty-blue)',
 } as const;
 
-function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }) {
+type StageKey = RosterGroup['key'];
+
+/** The six saturated stage tabs (R126). Care is the seventh stage on the
+ *  paper and has no pigment of its own, so it takes Install's. */
+const STAGE_TAB: Record<StageKey, string> = {
+  brief: 'bg-[var(--tab-brief)]',
+  discovery: 'bg-[var(--tab-discovery)]',
+  direction: 'bg-[var(--tab-direction)]',
+  proposal: 'bg-[var(--tab-proposal)]',
+  project: 'bg-[var(--tab-project)]',
+  install: 'bg-[var(--tab-install)]',
+  care: 'bg-[var(--tab-install)]',
+};
+
+const STAGE_TONE: Record<StageKey, RowWashTone> = {
+  brief: 'brief',
+  discovery: 'discovery',
+  direction: 'direction',
+  proposal: 'proposal',
+  project: 'project',
+  install: 'install',
+  care: 'install',
+};
+
+/** The roster settles in ONCE per document session. A remount on return to
+ *  /desk must not replay it, so the flag lives on the module, not the tree. */
+let settledOnce = false;
+
+function useSettleOnce(): boolean {
+  const [settle] = useState(() => !settledOnce);
+  // Flipped after the first commit, never during render: React's dev
+  // double-render would otherwise consume the flag before the DOM exists.
+  useEffect(() => {
+    settledOnce = true;
+  }, []);
+  return settle;
+}
+
+function JobLine({
+  line,
+  tone,
+  index,
+  settle,
+  tourAnchor,
+}: {
+  line: RosterLine;
+  tone: RowWashTone;
+  index: number;
+  settle: boolean;
+  tourAnchor?: string;
+}) {
+  const wash = useRowWash();
+
   return (
     <li
+      {...wash}
       data-tour-anchor={tourAnchor}
       data-roster-line={line.engagementId}
-      className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-dashed border-[var(--border-subtle)] py-2.5 last:border-b-0"
+      className={`has-wash doc-rule-hair flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2.5 last:border-b-0${
+        settle ? ' desk-settle' : ''
+      }`}
+      style={settle ? ({ '--i': index } as CSSProperties) : undefined}
     >
+      <RowWash tone={tone} />
       {/* The mark tells a dated overdue item from a setup chore at the margin.
           It never grows a count, a label, or a second urgency tier (C4/D8). */}
       <span
@@ -47,7 +107,7 @@ function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }
       />
       <Link
         href={line.jobHref}
-        className="font-heading text-[16px] font-medium text-[var(--text-primary)] underline decoration-transparent decoration-1 underline-offset-4 transition-colors hover:decoration-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        className="row-wash-score font-heading text-[16px] font-medium text-[var(--text-primary)] underline decoration-transparent decoration-1 underline-offset-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
       >
         {line.name}
       </Link>
@@ -96,6 +156,7 @@ function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }
 }
 
 export function DeskRoster({ roster }: { roster: DeskRosterModel }) {
+  const settle = useSettleOnce();
   let lineIndex = 0;
 
   return (
@@ -124,20 +185,29 @@ export function DeskRoster({ roster }: { roster: DeskRosterModel }) {
               <h3> already navigates a screen reader to each of them. */}
           {roster.groups.map((group) => (
             <div key={group.key} className="mb-8 last:mb-0">
+              {/* The stage tab: a small plate, not a band. The rows below it
+                  stay on the cream ground. */}
               <h3
                 id={`roster-stage-${group.key}`}
-                className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]"
+                data-stage-tab={group.key}
+                className={`mb-1.5 inline-flex items-center rounded-[3px] px-2.5 py-[3px] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-white ${
+                  STAGE_TAB[group.key]
+                }`}
               >
                 {group.label} · {group.count}
               </h3>
               <ul>
                 {group.lines.map((line) => {
                   const anchor = lineIndex === 0 ? 'desk-folio' : undefined;
+                  const index = lineIndex;
                   lineIndex += 1;
                   return (
                     <JobLine
                       key={line.engagementId}
                       line={line}
+                      tone={STAGE_TONE[group.key]}
+                      index={index}
+                      settle={settle}
                       tourAnchor={anchor}
                     />
                   );

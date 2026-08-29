@@ -380,11 +380,11 @@ function PeekChip({
             className="h-[96px] w-full rounded-[1px] object-cover"
           />
         ) : (
-          <div className="flex h-[96px] w-full items-center justify-center rounded-[1px] bg-[var(--color-aged-oak)]/[0.06] font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <div className="flex h-[96px] w-full items-center justify-center rounded-[1px] bg-[var(--color-aged-oak)]/[0.06] font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             no preview
           </div>
         )}
-        <div className="mt-1 flex items-center justify-between font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <div className="mt-1 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           <span>{marker.count > 1 ? `${marker.count} photos` : 'photo'}</span>
           {caption && <span>{caption}</span>}
         </div>

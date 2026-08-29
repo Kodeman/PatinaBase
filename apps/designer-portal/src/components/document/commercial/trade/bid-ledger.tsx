@@ -50,7 +50,7 @@ function partyRfqBadge(
   if (rfq.status === 'responded') {
     const date = when(rfq.respondedAt);
     return (
-      <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-sage)]">
+      <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-sage)]">
         Responded
         {respondedBid ? ` ${money(respondedBid.amountCents)}` : ''}
         {date ? ` · ${date}` : ''}
@@ -60,7 +60,7 @@ function partyRfqBadge(
   if (rfq.status === 'sent') {
     const date = when(rfq.sentAt);
     return (
-      <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         Requested{date ? ` ${date}` : ''}
       </span>
     );
@@ -69,7 +69,7 @@ function partyRfqBadge(
 }
 
 const FIELD_LABEL =
-  'mb-1 block font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
+  'mb-1 block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
 const UNDERLINE_INPUT =
   'min-h-11 w-full border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.85rem] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--color-aged-oak)] focus:border-[var(--color-clay)]';
 
@@ -185,10 +185,10 @@ export function BidLedger({
   return (
     <section aria-label="Bids">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Bids
         </p>
-        <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           Recorded by the studio · never leaves the drawer
         </span>
       </div>
@@ -236,12 +236,12 @@ export function BidLedger({
                     <span className="block truncate text-[12.5px] text-[var(--color-charcoal)]">
                       {bid.partyDisplayName}
                       {bid.source === 'party_response' && (
-                        <span className="ml-2 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-sage)]">
+                        <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-sage)]">
                           Answered
                         </span>
                       )}
                     </span>
-                    <span className="mt-px block truncate text-[10.5px] text-[var(--text-muted)]">
+                    <span className="mt-px block truncate text-[11px] text-[var(--text-muted)]">
                       {[
                         chosen ? 'Selected' : null,
                         bid.status === 'withdrawn' ? 'Withdrawn' : null,
@@ -262,17 +262,17 @@ export function BidLedger({
         </ul>
       )}
 
-      <p className="mt-2 text-[10px] italic text-[var(--text-muted)]">
+      <p className="mt-2 text-[11px] italic text-[var(--text-muted)]">
         Their numbers never appear on client documents.
       </p>
 
       {eligible.length > 0 && (
         <div className="mt-4 border-t border-[var(--color-pearl)] pt-3">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
               Ask for a number
             </p>
-            <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               A private link · no price, no other bids
             </span>
           </div>
@@ -330,7 +330,7 @@ export function BidLedger({
                   {rfqError?.partyId === party.id && (
                     <p
                       role="alert"
-                      className="mt-1 text-[10.5px] text-[var(--color-terracotta-ink)]"
+                      className="mt-1 text-[11px] text-[var(--color-terracotta-ink)]"
                     >
                       {rfqError.message}
                     </p>

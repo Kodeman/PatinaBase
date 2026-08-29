@@ -90,16 +90,16 @@ export function FeedbackDetail({
           style={{ background: bm.colorVar }}
         />
         <span
-          className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
+          className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em]"
           style={{ color: bm.colorVar }}
         >
           {bm.label}
         </span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           ·
         </span>
         <span
-          className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
+          className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em]"
           style={{ color: sm.colorVar }}
         >
           {sm.label}
@@ -181,7 +181,7 @@ export function FeedbackDetail({
               }}
             />
             {t.label}
-            <span className="ml-auto font-mono text-[10px] text-[var(--color-aged-oak)]">
+            <span className="ml-auto font-mono text-[11px] text-[var(--color-aged-oak)]">
               {fmtWhen(t.when)}
             </span>
           </div>
@@ -255,7 +255,7 @@ function TriageActions({
     ).filter((s) => s !== note.status);
     return (
       <div className="mt-4 border-t border-[var(--color-pearl)] pt-3">
-        <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Set status
         </p>
         <DocumentActionGroup surfaceKey="feedback" regionKey="status-triage">
@@ -350,7 +350,7 @@ function BackBar({ onBack }: { onBack: () => void }) {
     <button
       type="button"
       onClick={onBack}
-      className="-ml-1 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+      className="-ml-1 inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
     >
       <ChevronLeft className="h-3.5 w-3.5" /> Feedback
     </button>
@@ -366,7 +366,7 @@ function ContextCell({
 }) {
   return (
     <div>
-      <dt className="text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+      <dt className="text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
         {label}
       </dt>
       <dd className="mt-0.5 truncate text-[var(--color-charcoal)]">

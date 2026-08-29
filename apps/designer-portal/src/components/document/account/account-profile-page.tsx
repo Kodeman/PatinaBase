@@ -23,7 +23,7 @@ import { monogramOf } from '@/lib/document/account-identity';
 const FIELD =
   'w-full max-w-md border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[14px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
 const LABEL =
-  'mb-1 block font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
+  'mb-1 block font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
 const HELP = 'mt-1 text-[11px] leading-relaxed text-[var(--color-aged-oak)]';
 
 export function AccountProfilePage() {
@@ -206,7 +206,7 @@ export function AccountProfilePage() {
             Update password
           </DocumentAction>
           {pwDone && (
-            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-sage)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-sage)]">
               ✓ Saved
             </span>
           )}

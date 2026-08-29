@@ -22,14 +22,14 @@ export function AccountExtensionPage() {
     <div className="pt-1">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.11em] text-[var(--color-clay-ink)]">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.11em] text-[var(--color-clay-ink)]">
             Chrome capture
           </p>
           <h3 className="mt-1 font-heading text-[18px] text-[var(--color-charcoal)]">
             Patina Capture for Chrome
           </h3>
         </div>
-        <span className="rounded-full border border-[rgba(196,165,123,0.4)] px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <span className="rounded-full border border-[rgba(196,165,123,0.4)] px-2 py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           {isWebStore ? "Available" : "Under review"}
         </span>
       </div>
@@ -78,7 +78,7 @@ export function AccountExtensionPage() {
         </section>
       )}
 
-      <p className="mt-6 border-t border-[var(--color-pearl)] pt-4 text-[10.5px] leading-relaxed text-[var(--color-aged-oak)]">
+      <p className="mt-6 border-t border-[var(--color-pearl)] pt-4 text-[11px] leading-relaxed text-[var(--color-aged-oak)]">
         When the reviewed extension is publicly available, Chrome will install and update it through the Web Store.
       </p>
     </div>

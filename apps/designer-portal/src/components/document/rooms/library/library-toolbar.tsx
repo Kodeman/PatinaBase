@@ -225,7 +225,7 @@ export function LibraryToolbar({
         aria-label="Filter by configuration capability"
         className="order-last flex w-full flex-wrap items-center gap-1.5 border-t border-[var(--doc-ink-border)] pt-2"
       >
-        <span className="mr-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
+        <span className="mr-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
           Can be ordered as
         </span>
         {CAPABILITY_FILTERS.map((filter) => (

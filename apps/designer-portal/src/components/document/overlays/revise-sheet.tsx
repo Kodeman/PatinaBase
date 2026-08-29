@@ -33,7 +33,7 @@ import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 const labelCls =
-  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
 export function ReviseSheet({
   proposalId,

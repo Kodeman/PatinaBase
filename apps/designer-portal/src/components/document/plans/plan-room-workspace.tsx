@@ -104,7 +104,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
         </p>
         <Link
           href={`/doc/${routeId}`}
-          className="mt-4 inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
+          className="mt-4 inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
         >
           ← Back to the document
         </Link>
@@ -167,13 +167,13 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-4">
           <Link
             href={`/doc/${routeId}`}
-            className="inline-flex min-h-11 items-center py-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
+            className="inline-flex min-h-11 items-center py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             ← {projectName}
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-heading text-xl">Plan room</h1>
-            <p className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {bundle?.sheets.length ?? 0}{' '}
               {(bundle?.sheets.length ?? 0) === 1 ? 'sheet' : 'sheets'}
               {lastFiledAt ? ` · last filed ${fmtDay(lastFiledAt)}` : ''} ·{' '}
@@ -188,7 +188,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
                 type="button"
                 onClick={() => setView(id)}
                 aria-current={view === id ? 'page' : undefined}
-                className={`min-h-[44px] px-3 py-2 font-mono text-[9px] uppercase tracking-[0.08em] ${
+                className={`min-h-[44px] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] ${
                   view === id
                     ? 'border-b border-[var(--color-clay)] text-[var(--color-charcoal)]'
                     : 'text-[var(--text-muted)]'
@@ -224,7 +224,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
       {dragging && (
         <p
           role="status"
-          className="border-b border-[var(--color-golden-hour)] bg-[var(--color-off-white)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] md:px-8"
+          className="border-b border-[var(--color-golden-hour)] bg-[var(--color-off-white)] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] md:px-8"
         >
           Let it go — the table will split the set and propose where each page belongs
         </p>

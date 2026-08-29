@@ -113,7 +113,7 @@ export function ThreadConversation({
       <button
         type="button"
         onClick={onBack}
-        className="mb-4 inline-block font-mono text-[0.52rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-mocha)]"
+        className="mb-4 inline-block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-mocha)]"
       >
         ← Threads
       </button>
@@ -129,7 +129,7 @@ export function ThreadConversation({
               {counterpart?.name ?? 'Conversation'}
             </div>
             {thread && (
-              <div className="font-mono text-[0.5rem] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+              <div className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                 {scopeLabel(thread.kind)} thread
               </div>
             )}
@@ -181,7 +181,7 @@ export function ThreadConversation({
                         m.body
                       )}
                     </span>
-                    <span className="mt-1 block font-mono text-[0.46rem] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+                    <span className="mt-1 block font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
                       {dayStamp(m.created_at)}
                       {m.edited_at ? ' · edited' : ''}
                     </span>

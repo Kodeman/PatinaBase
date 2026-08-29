@@ -81,7 +81,7 @@ export function BackLink({ onBack }: { onBack: () => void }) {
     <button
       type="button"
       onClick={onBack}
-      className="group mb-4 inline-flex min-h-11 min-w-11 items-center font-mono text-[0.52rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      className="group mb-4 inline-flex min-h-11 min-w-11 items-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
       {/* the 44px box stays on the button; the score belongs to the word */}
       <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">

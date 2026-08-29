@@ -66,6 +66,22 @@ describe('the letterhead, with a room in hand', () => {
     expect(onReleaseRoom).toHaveBeenCalledTimes(1);
   });
 
+  it('prints the title at the Life Review’s 40px and closes on the mid rule', () => {
+    const { container } = render(
+      <DocLetterhead title="Vandersteen residence" vitals="Procurement" />,
+    );
+    const title = screen.getByRole('heading', { name: 'Vandersteen residence' });
+    expect(title).toHaveClass(
+      'font-heading',
+      'text-[40px]',
+      'tracking-[-0.015em]',
+      'text-[var(--text-primary)]',
+    );
+    const header = container.querySelector('header')!;
+    expect(header).toHaveClass('doc-rule-mid');
+    expect(header.className).not.toMatch(/border-b\b/);
+  });
+
   it('carries no shadow (D4)', () => {
     render(
       <DocLetterhead

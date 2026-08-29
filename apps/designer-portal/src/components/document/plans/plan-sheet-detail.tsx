@@ -113,7 +113,7 @@ export function PlanSheetDetail({
         <h2 className="mt-1 font-heading text-2xl text-[var(--color-charcoal)]">
           {sheet.title}
         </h2>
-        <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
           Rev {currentPrint?.rev_letter ?? '—'} ·{' '}
           {prints.length} {prints.length === 1 ? 'print' : 'prints'} filed
           {currentPrint ? ` · current since ${fmtDay(currentPrint.created_at)}` : ''}
@@ -170,7 +170,7 @@ export function PlanSheetDetail({
         {stateError && (
           <p
             role="alert"
-            className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
+            className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
           >
             {stateError}
           </p>
@@ -220,13 +220,13 @@ export function PlanSheetDetail({
                       />
                     )}
                   </span>
-                  <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                  <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                     filed {fmtDay(print.created_at)}
                     {print.source_filename ? ` · ${print.source_filename}` : ''} ·{' '}
                     <span title={print.sha256}>sha {print.sha256.slice(0, 8)}</span>
                   </p>
                   {history && (
-                    <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                    <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                       {history}
                     </p>
                   )}

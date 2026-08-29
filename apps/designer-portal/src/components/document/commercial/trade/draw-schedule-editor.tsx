@@ -105,17 +105,17 @@ export function DrawScheduleEditor({
   return (
     <section aria-label="Draw schedule">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Draws
         </p>
-        <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           What the client pays, and when
         </span>
       </div>
 
       <table className="mt-2 w-full">
         <thead>
-          <tr className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <tr className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             <th scope="col" className="py-1 text-left font-normal">
               Draw
             </th>
@@ -175,7 +175,7 @@ export function DrawScheduleEditor({
                   {draw.gatesOnAcceptance && (
                     <span
                       data-testid="draw-gates-on-acceptance"
-                      className="ml-2 font-mono text-[8px] font-normal uppercase tracking-[0.06em] text-[var(--color-clay-ink)]"
+                      className="ml-2 font-mono text-[11px] font-normal uppercase tracking-[0.06em] text-[var(--color-clay-ink)]"
                     >
                       On acceptance
                     </span>
@@ -201,7 +201,7 @@ export function DrawScheduleEditor({
       </table>
 
       <div className="mt-1 flex items-baseline justify-between gap-3">
-        <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           {Math.round(percentTotal * 100) / 100}% of {money(clientPriceCents)}
         </span>
         {!disabled && (

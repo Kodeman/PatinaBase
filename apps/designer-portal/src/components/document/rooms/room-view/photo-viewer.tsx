@@ -273,7 +273,7 @@ export function PhotoViewer({ photos, index, onIndexChange, onClose }: PhotoView
     >
       {/* header */}
       <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-7 py-3">
-        <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
           {title}
           <span className="ml-3 text-[var(--text-muted)]">
             {safeIndex + 1} / {total}
@@ -282,7 +282,7 @@ export function PhotoViewer({ photos, index, onIndexChange, onClose }: PhotoView
         <button
           type="button"
           onClick={onClose}
-          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:opacity-80"
+          className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:opacity-80"
         >
           ← Back to the room
         </button>
@@ -311,7 +311,7 @@ export function PhotoViewer({ photos, index, onIndexChange, onClose }: PhotoView
             className="max-h-full max-w-full border border-[var(--doc-ink-border)] object-contain"
           />
         ) : (
-          <div className="flex h-40 w-64 items-center justify-center border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-front)] text-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <div className="flex h-40 w-64 items-center justify-center border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-front)] text-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             preview unavailable
           </div>
         )}
@@ -323,11 +323,11 @@ export function PhotoViewer({ photos, index, onIndexChange, onClose }: PhotoView
 
       {/* footer */}
       <div className="border-t border-[var(--color-pearl)] px-7 py-3">
-        <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           {viewerFooterLine(photo, safeIndex, total)}
         </p>
         {qualityNote && (
-          <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             {qualityNote}
           </p>
         )}

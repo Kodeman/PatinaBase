@@ -61,7 +61,7 @@ export function PhaseDeleteConfirm({
   return (
     <div className="mt-[0.5rem]">
       <div className="flex flex-wrap items-baseline gap-x-[0.8rem] gap-y-[0.3rem]">
-        <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
           Delete “{name}”?{detail}
         </span>
         <DocumentActionGroup
@@ -88,7 +88,7 @@ export function PhaseDeleteConfirm({
         </DocumentActionGroup>
       </div>
       {errorText && (
-        <div className="mt-[0.35rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
+        <div className="mt-[0.35rem] font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
           {errorText}
         </div>
       )}

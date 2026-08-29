@@ -365,7 +365,7 @@ export function LetterheadInstruments({
             }
           }}
         >
-          <p className="mb-1.5 text-[10px] italic text-[var(--text-muted)]">
+          <p className="mb-1.5 text-[11px] italic text-[var(--text-muted)]">
             The Pulse handles Fridays; this is for now. It lands in {clientName}
             &rsquo;s portal messages.
           </p>
@@ -528,11 +528,11 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
                 t.value === current ? 'bg-[rgba(196,165,123,0.1)]' : ''
               }`}
             >
-              <span className="block font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
+              <span className="block font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
                 {t.label}
                 {t.value === current ? ' · current' : ''}
               </span>
-              <span className="block text-[10px] leading-snug text-[var(--text-muted)]">
+              <span className="block text-[11px] leading-snug text-[var(--text-muted)]">
                 {t.desc}
               </span>
             </button>
@@ -540,7 +540,7 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
           {error && (
             <span
               role="alert"
-              className="block px-2 pb-1 pt-0.5 text-[10px] text-[var(--color-terracotta-ink)]"
+              className="block px-2 pb-1 pt-0.5 text-[11px] text-[var(--color-terracotta-ink)]"
             >
               {error}
             </span>

@@ -64,7 +64,7 @@ export function SpineRunningIndex({
     <div className="mt-4 border-t border-[var(--color-pearl)] pt-3">
       <p
         id="doc-running-index-label"
-        className="mb-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+        className="mb-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
       >
         On this paper
       </p>
@@ -104,10 +104,10 @@ export function SpineRunningIndex({
                 {entry.label}
               </span>
               <span
-                className={`mt-px block font-mono text-[10px] uppercase tracking-[0.07em] ${
+                className={`mt-px block font-mono text-[11px] uppercase tracking-[0.07em] ${
                   current
                     ? 'text-[var(--color-charcoal)]'
-                    : 'text-[var(--color-aged-oak)]'
+                    : 'text-[var(--text-muted)]'
                 }`}
               >
                 {entry.value}

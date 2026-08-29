@@ -101,10 +101,10 @@ export function DocColophon({
   return (
     <footer className="mt-14 border-t border-[var(--color-pearl)] pb-6 pt-3">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
-        <span className="font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           {studioName ?? 'The studio'}
         </span>
-        <span className="font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           hands on the work: {hands}
         </span>
         <span className="flex-1" />

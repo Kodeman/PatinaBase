@@ -26,7 +26,7 @@ export function TodayRule({ today }: TodayRuleProps) {
       className="mb-[1.4rem] mt-[0.2rem] grid grid-cols-[30px_minmax(0,1fr)] gap-x-[1.1rem]"
     >
       <div className="relative col-span-2 h-[1.5px] bg-[var(--color-charcoal)]">
-        <span className="absolute right-0 top-[-17px] whitespace-nowrap font-mono text-[0.58rem] font-medium uppercase tracking-[0.09em] text-[var(--color-charcoal)]">
+        <span className="absolute right-0 top-[-17px] whitespace-nowrap font-mono text-[11px] font-medium uppercase tracking-[0.09em] text-[var(--color-charcoal)]">
           Today · {fmtDay(today)}
         </span>
       </div>

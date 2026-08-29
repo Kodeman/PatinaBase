@@ -82,7 +82,7 @@ export function IntakeSpreadHeader({
   return (
     <div data-intake-spread-header className="mt-5">
       {arrival && (
-        <p className="mb-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        <p className="mb-0.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           {arrival}
         </p>
       )}

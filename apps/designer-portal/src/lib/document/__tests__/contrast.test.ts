@@ -190,6 +190,355 @@ describe('F56 · text-grade ink tokens clear WCAG AA', () => {
   });
 });
 
+/* ── R126 · The Life Review ──────────────────────────────────────────────
+ *
+ * The direction added three kinds of token the F56 guard above cannot see: a
+ * third paper stock, five stamp fills, and six saturated tabs. LIGHT_GROUNDS
+ * is a hand-authored map, so a new ground is silently unmeasured until someone
+ * names it — these describes name them.
+ *
+ * The rail is gated against the register it ACTUALLY prints, not the
+ * cross-product. Its register is partial by ruling (charcoal, the muted ramp,
+ * clay-ink); terracotta-, golden-hour- and sage-ink never appear on it, and
+ * measuring those three deliberate absences would read them as failures.
+ */
+
+/** `--x: var(--y)` aliases, so a token declared through another resolves to a
+ *  real hex rather than dropping out of parseTokens' hex-only map. */
+function parseAliases(css: string): Map<string, string> {
+  const aliases = new Map<string, string>();
+  const declaration = /(--[a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)\s*;/g;
+  let match: RegExpExecArray | null;
+  while ((match = declaration.exec(css)) !== null) {
+    aliases.set(match[1]!, match[2]!);
+  }
+  return aliases;
+}
+
+const aliases = parseAliases(css);
+
+function resolveToken(name: string): string {
+  let current = name;
+  for (let hop = 0; hop < 8; hop += 1) {
+    const hex = tokens.get(current);
+    if (hex) return hex;
+    const next = aliases.get(current);
+    if (!next) break;
+    current = next;
+  }
+  throw new Error(`${name} resolves to no hex in globals.css`);
+}
+
+/** The three real muted steps (R126). All three were --color-quiet-ink. */
+const MUTED_RAMP = ['--text-muted', '--text-subtle', '--text-faint'] as const;
+
+/** The three paper stocks, and only three. */
+const PAPER_STOCKS = {
+  '--doc-paper': '#FCFAF6',
+  '--color-off-white': '#FAF7F2',
+  '--doc-rail-stock': '#E8E3DB',
+} as const;
+
+const STAMP_FILLS = [
+  '--fill-ordered-tint',
+  '--fill-delivered-tint',
+  '--fill-decision-tint',
+  '--fill-damaged-tint',
+  '--fill-anchor-tint',
+] as const;
+
+const STAGE_TABS = [
+  '--tab-brief',
+  '--tab-discovery',
+  '--tab-direction',
+  '--tab-proposal',
+  '--tab-project',
+  '--tab-install',
+] as const;
+
+const WHITE = '#FFFFFF';
+
+/** Reported as a labelled map so a failure names the pair and the ratio. */
+function failuresBelowAA(
+  pairs: [label: string, ink: string, ground: string][],
+): [string, number][] {
+  return pairs
+    .map(([label, ink, ground]) => [
+      label,
+      Number(contrastRatio(ink, ground).toFixed(2)),
+    ] as [string, number])
+    .filter(([, ratio]) => ratio < AA_NORMAL_TEXT);
+}
+
+describe('R126 · the three muted steps are three, and all three are legible', () => {
+  it('declares muted, subtle and faint as three DIFFERENT values', () => {
+    // The defect this replaces: all three aliased --color-quiet-ink, so the
+    // ramp had one step wearing three names. A regression that re-collapses
+    // any two of them must fail here rather than read as a quiet ramp.
+    const values = MUTED_RAMP.map(resolveToken);
+    expect(new Set(values).size).toBe(MUTED_RAMP.length);
+  });
+
+  it('clears 4.5:1 on the paper, the desk ground and the rail', () => {
+    const pairs = MUTED_RAMP.flatMap((ink) =>
+      Object.entries(PAPER_STOCKS).map(
+        ([ground, groundHex]) =>
+          [`${ink} on ${ground} (${groundHex})`, resolveToken(ink), groundHex] as [
+            string,
+            string,
+            string,
+          ],
+      ),
+    );
+    expect(failuresBelowAA(pairs)).toEqual([]);
+  });
+});
+
+describe('R126 · --doc-rail-stock holds the register it prints', () => {
+  it('is declared, and at the ruled value', () => {
+    // The rail was ruled to #E8E3DB over A's own #EFE7DA — separation over
+    // register — so a retune has to be a ruling, not an edit.
+    expect(tokens.get('--doc-rail-stock')).toBe('#E8E3DB');
+  });
+
+  it('carries charcoal, the muted ramp and clay-ink at 4.5:1', () => {
+    const rail = resolveToken('--doc-rail-stock');
+    const printed = ['--text-primary', ...MUTED_RAMP, '--color-clay-ink'];
+    const pairs = printed.map(
+      (ink) => [`${ink} on the rail`, resolveToken(ink), rail] as [string, string, string],
+    );
+    expect(failuresBelowAA(pairs)).toEqual([]);
+  });
+
+  it('prints no rail label in a pigment that fails on it', () => {
+    // The walk measured "On this paper" at 3.51:1 — --color-aged-oak on the
+    // rail — and the running index's inactive values with it. The rail's
+    // register is partial BY RULING, so the guard is the other half of that
+    // ruling: the files that paint ON the rail may only spend inks the rail
+    // holds. aged-oak (3.51) and clay (1.82) are not among them.
+    const rail = resolveToken('--doc-rail-stock');
+    const OFF_REGISTER = ['--color-aged-oak', '--color-clay'] as const;
+    for (const pigment of OFF_REGISTER) {
+      expect(contrastRatio(resolveToken(pigment), rail)).toBeLessThan(
+        AA_NORMAL_TEXT,
+      );
+    }
+
+    const RAIL_FILES = [
+      'src/components/document/spine-running-index.tsx',
+      'src/components/document/spine-shelved-blocks.tsx',
+      'src/components/document/spine-timer.tsx',
+      'src/components/document/doc-spine.tsx',
+      'src/components/document/margin-rail.tsx',
+    ];
+    const offenders = RAIL_FILES.flatMap((file) => {
+      const source = readFileSync(join(APP_ROOT, file), 'utf8');
+      return OFF_REGISTER.flatMap((pigment) =>
+        source.includes(`text-[var(${pigment})]`) ? [`${file} → ${pigment}`] : [],
+      );
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it('holds the inks the rail labels now take, at their measured ratios', () => {
+    // The two labels the walk failed, at the tokens they were moved to.
+    const rail = resolveToken('--doc-rail-stock');
+    const measured = {
+      'On this paper (--text-muted)': Number(
+        contrastRatio(resolveToken('--text-muted'), rail).toFixed(2),
+      ),
+      'running-index value (--text-muted)': Number(
+        contrastRatio(resolveToken('--text-muted'), rail).toFixed(2),
+      ),
+      'spine timer label (--color-quiet-ink)': Number(
+        contrastRatio(resolveToken('--color-quiet-ink'), rail).toFixed(2),
+      ),
+      'clay-ink, where the mockup shows clay': Number(
+        contrastRatio(resolveToken('--color-clay-ink'), rail).toFixed(2),
+      ),
+    };
+    expect(
+      Object.entries(measured).filter(([, ratio]) => ratio < AA_NORMAL_TEXT),
+    ).toEqual([]);
+  });
+
+  it('separates from the sheet and the desk ground it flanks', () => {
+    // The rail is a GROUND against two other grounds: it has to be seen as a
+    // different stock without becoming a second colour field.
+    const rail = resolveToken('--doc-rail-stock');
+    for (const ground of ['--doc-paper', '--color-off-white'] as const) {
+      expect(contrastRatio(rail, resolveToken(ground))).toBeGreaterThan(1.1);
+    }
+  });
+});
+
+describe('R126 · the five stamp fills are grounds, and fully gated', () => {
+  it.each(STAMP_FILLS)('%s carries charcoal and the muted ramp', (fill) => {
+    // The recipe's whole unlock: a CHARCOAL word, not the state's own ink, is
+    // what let the fill sit deep enough to read as filled. State is hue;
+    // legibility is charcoal.
+    const ground = resolveToken(fill);
+    const pairs = ['--text-primary', ...MUTED_RAMP].map(
+      (ink) => [`${ink} on ${fill}`, resolveToken(ink), ground] as [string, string, string],
+    );
+    expect(failuresBelowAA(pairs)).toEqual([]);
+  });
+
+  it('keeps all five at one value, so they separate by hue and not by depth', () => {
+    // One recipe at one common value (~1.18:1 off the paper) is the ruling.
+    // S5's DELIVERED joined on the same terms: sage cut to the same value, so
+    // it takes its place on the plane rather than outranking the other four.
+    // A fill that drifts deeper would read as a different rank of state.
+    const paper = resolveToken('--doc-paper');
+    for (const fill of STAMP_FILLS) {
+      const ratio = contrastRatio(resolveToken(fill), paper);
+      expect(ratio).toBeGreaterThan(1.15);
+      expect(ratio).toBeLessThan(1.22);
+    }
+  });
+});
+
+/* T3 — the eighteen hover washes. parseTokens is hex-only, so every rgba wash
+ * was invisible to this guard: FINAL's stated invariant ("every wash lands at
+ * ~1.12:1 over its own ground; the rule is the ratio, not the alpha") was
+ * unmeasured, and a wash IS a ground — body text prints on it the moment a
+ * pointer lands on the row. Composited here over the ground each one actually
+ * paints on, and gated on the inks that print over it. */
+
+interface Wash {
+  name: string;
+  rgba: [number, number, number, number];
+}
+
+function parseWashes(css: string): Wash[] {
+  const washes: Wash[] = [];
+  const declaration =
+    /(--wash-[a-z0-9-]+)\s*:\s*rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)\s*;/g;
+  let match: RegExpExecArray | null;
+  while ((match = declaration.exec(css)) !== null) {
+    washes.push({
+      name: match[1]!,
+      rgba: [
+        Number(match[2]),
+        Number(match[3]),
+        Number(match[4]),
+        Number(match[5]),
+      ],
+    });
+  }
+  return washes;
+}
+
+/** Source-over compositing, which is what the browser does with an rgba
+ *  background on an opaque ground. */
+function composite(
+  rgba: [number, number, number, number],
+  groundHex: string,
+): string {
+  const ground = toRgb(groundHex);
+  const [r, g, b, alpha] = rgba;
+  const mixed = [r, g, b].map((channel, i) =>
+    Math.round(channel * alpha + ground[i]! * (1 - alpha)),
+  );
+  return `#${mixed.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Where each wash is painted. The six stage washes open under a ROSTER line,
+ *  which sits on the desk ground; the three state washes open under an FF&E
+ *  line, which sits on the document sheet. `-still` is the same wash at three
+ *  quarters of the alpha, on the same ground. */
+const ROSTER_WASHES = [
+  'brief',
+  'discovery',
+  'direction',
+  'proposal',
+  'project',
+  'install',
+];
+
+function washGround(name: string): string {
+  const stem = name.replace(/^--wash-/, '').replace(/-still$/, '');
+  return ROSTER_WASHES.includes(stem) ? '#FAF7F2' : '#FCFAF6';
+}
+
+/** What prints on a hovered row: the name, the meta lines, the clay score and
+ *  the overdue clause. */
+const WASH_INKS = [
+  '--text-primary',
+  '--text-muted',
+  '--color-clay-ink',
+  '--color-terracotta-ink',
+] as const;
+
+describe('R126 · every hover wash is a ground, and holds the ink that prints on it', () => {
+  const washes = parseWashes(css);
+
+  it('finds all eighteen, so a renamed or deleted wash fails loudly', () => {
+    // Nine tones × swept and still. A guard that silently measures nothing is
+    // the exact failure this describe exists to close.
+    expect(washes).toHaveLength(18);
+  });
+
+  it.each(washes.map((wash) => [wash.name, wash] as const))(
+    '%s carries body ink, muted, clay-ink and terracotta-ink at 4.5:1',
+    (_name, wash) => {
+      const ground = washGround(wash.name);
+      const composited = composite(wash.rgba, ground);
+      const pairs = WASH_INKS.map(
+        (ink) =>
+          [
+            `${ink} on ${wash.name} over ${ground} (${composited})`,
+            resolveToken(ink),
+            composited,
+          ] as [string, string, string],
+      );
+      expect(failuresBelowAA(pairs)).toEqual([]);
+    },
+  );
+
+  it('holds each wash at ~1.12:1 over its own ground — the ratio, not the alpha', () => {
+    // FINAL: "the alpha follows the pigment's value ... so the highlight reads
+    // the same on both surfaces." A retune of any alpha that breaks the common
+    // value lands here rather than silently.
+    const swept = washes.filter((wash) => !wash.name.endsWith('-still'));
+    for (const wash of swept) {
+      const ground = washGround(wash.name);
+      const ratio = contrastRatio(composite(wash.rgba, ground), ground);
+      expect(ratio).toBeGreaterThan(1.09);
+      expect(ratio).toBeLessThan(1.16);
+    }
+  });
+
+  it('keeps every -still wash lighter than the swept wash it stands in for', () => {
+    // Reduced motion takes three quarters of the alpha: a flat tint, applied
+    // instantly. Lighter, never deeper.
+    for (const wash of washes.filter((w) => w.name.endsWith('-still'))) {
+      const swept = washes.find(
+        (w) => w.name === wash.name.replace(/-still$/, ''),
+      );
+      expect(swept).toBeDefined();
+      expect(wash.rgba[3]).toBeLessThan(swept!.rgba[3]);
+    }
+  });
+});
+
+describe('R126 · the six stage tabs are dark grounds for a white label', () => {
+  it.each(STAGE_TABS)('%s reaches 4.5:1 against white', (tab) => {
+    // White is a literal, not a token: naming it as a text token would measure
+    // it against every paper ground it never touches.
+    expect(failuresBelowAA([[`white on ${tab}`, WHITE, resolveToken(tab)]])).toEqual([]);
+  });
+
+  it('steps down in value across the six, so the naming survives greyscale', () => {
+    // The six carry a movement's name on two ladders at once. The value ladder
+    // is the one a colourblind read and a greyscale print are left with.
+    const ratios = STAGE_TABS.map((tab) => contrastRatio(WHITE, resolveToken(tab)));
+    for (let i = 1; i < ratios.length; i += 1) {
+      expect(ratios[i]! / ratios[i - 1]!).toBeGreaterThanOrEqual(1.05);
+    }
+  });
+});
+
 /** Every source file under src/, so a base pigment spent as text is caught
  *  wherever it is written — not only in the five files the finding named. */
 function sourceFiles(dir: string, out: string[] = []): string[] {

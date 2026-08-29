@@ -42,7 +42,13 @@ import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { MobileMarginChips } from './mobile/mobile-margin-chips';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   deriveLineStamp,
   lineStampLabel,
@@ -66,7 +72,8 @@ import {
   type TradeLineHold,
 } from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
-import { Stamp } from './stamp';
+import { Stamp, type StampTone } from './stamp';
+import { RowWash, useRowWash, type RowWashTone } from './row-wash';
 import { LineUnfold } from './line-unfold';
 import { StrataMark } from './strata-mark';
 import { StrataMiniRule } from './strata-mini-rule';
@@ -181,6 +188,52 @@ function stampProps(stamp: LineStamp): {
       return { label, color: cfg.color, ink: STAGE_INK[stamp.kind] };
     }
   }
+}
+
+/** The Life Review's stamp contract (Lane 1, `stamp.tsx`), as amended by S5.
+ *  A fill is a RULED recipe, not a default: four states carry one, and a kind
+ *  with no ruled fill keeps the outline rather than borrowing another state's
+ *  pigment. Money committed and goods arrived are two different answers to
+ *  "where is this piece", so they do not share a plate — the earlier collapse
+ *  showed delivered and installed lines wearing ORDERED's clay.
+ *
+ *  `null` means outline: specified, quoted, approved, partial (delivered but
+ *  inspected short — an open question, not an arrival) and every trade-* kind,
+ *  whose journey is judged work rather than logistics. */
+function ffeStampTone(kind: LineStamp['kind']): StampTone | null {
+  switch (kind) {
+    case 'ordered':
+    case 'production':
+    case 'shipped':
+      return 'ordered';
+    case 'received':
+    case 'delivered':
+    case 'installed':
+      return 'delivered';
+    case 'decision_due':
+      return 'decision';
+    case 'damaged':
+      return 'damaged';
+    default:
+      return null;
+  }
+}
+
+/** The hover wash takes the same three-way split, in the wash's own
+ *  vocabulary (FINAL.md §1/§2: golden for decision due, terracotta for
+ *  damaged/claim, clay everywhere else — including no state at all). */
+function ffeWashTone(kind: LineStamp['kind']): RowWashTone {
+  if (kind === 'decision_due') return 'golden';
+  if (kind === 'damaged') return 'terracotta';
+  return 'clay';
+}
+
+/** A non-empty product image URL off the already-joined `product.images`
+ *  (`useProjectFFEItems`'s `.select()` joins `product:products!product_id(id,
+ *  name, images, brand)` — no hook change needed, see build/00-seams-b). */
+function ffeThumbSrc(item: FFERow): string | null {
+  const src = item.product?.images?.[0];
+  return typeof src === 'string' && src.length > 0 ? src : null;
 }
 
 const UNDERWAY = new Set([
@@ -335,41 +388,69 @@ function FFELine({
   const billing = coverageNote(item, coverage);
   const price =
     item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—';
+  const thumbSrc = ffeThumbSrc(item);
+  const washTone = ffeWashTone(stamp.kind);
+  const tone = ffeStampTone(stamp.kind);
+  const rowWash = useRowWash();
 
   const body = (
     <>
-      <div>
-        <p className="text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
-          {item.name}
-          {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
-        </p>
-        {line && (
-          <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>
+      <div className="flex items-center gap-3.5">
+        {thumbSrc ? (
+          <img
+            src={thumbSrc}
+            alt=""
+            loading="lazy"
+            className="h-12 w-12 shrink-0 rounded-[3px] border border-[var(--doc-ink-border)] object-cover"
+          />
+        ) : (
+          <span
+            aria-hidden
+            className="h-12 w-12 shrink-0 rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-rail-stock)]"
+            style={{
+              backgroundImage:
+                'linear-gradient(to top right, transparent calc(50% - 0.5px), var(--doc-ink-border) calc(50% - 0.5px), var(--doc-ink-border) calc(50% + 0.5px), transparent calc(50% + 0.5px))',
+            }}
+          />
         )}
-        {/* R76: the coverage stamp — the 00187 bridge's per-line truth. */}
-        {billing && (
-          <p
-            className="mt-px font-mono text-[8px] uppercase tracking-[0.08em]"
-            style={{ color: billing.color }}
-          >
-            {billing.text}
+        <div>
+          <p className="row-wash-score text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
+            {item.name}
+            {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
           </p>
-        )}
-        {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
-        {item.added_via === 'engine' && (
-          <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] opacity-70">
-            via the Engine
-          </p>
-        )}
+          {line && (
+            <p className="mt-px text-[11px] text-[var(--text-muted)]">{line}</p>
+          )}
+          {/* R76: the coverage stamp — the 00187 bridge's per-line truth. */}
+          {billing && (
+            <p
+              className="mt-px font-mono text-[11px] uppercase tracking-[0.08em]"
+              style={{ color: billing.color }}
+            >
+              {billing.text}
+            </p>
+          )}
+          {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
+          {item.added_via === 'engine' && (
+            <p className="mt-px font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] opacity-70">
+              via the Engine
+            </p>
+          )}
+        </div>
       </div>
       {/* Ineligibility is a reason, not a refusal — lowercase mono, exactly
           where the logistics stamp sits. */}
       {selecting && !eligible.eligible ? (
-        <span className="whitespace-nowrap font-mono text-[9px] lowercase tracking-[0.04em] text-[var(--text-muted)]">
+        <span className="whitespace-nowrap font-mono text-[11px] lowercase tracking-[0.04em] text-[var(--text-muted)]">
           {eligible.reason}
         </span>
       ) : stamp.kind === 'trade_pending' ? null : (
-        <Stamp label={sp.label} color={sp.color} ink={sp.ink} />
+        <Stamp
+          label={sp.label}
+          color={sp.color}
+          ink={sp.ink}
+          {...(tone ? ({ variant: 'filled', tone } as const) : {})}
+        />
       )}
       {showAuthorization &&
         (tradeHold.onTradeScope ? (
@@ -391,16 +472,16 @@ function FFELine({
       : showAuthorization
         ? 'grid-cols-[1fr_auto_auto_auto]'
         : 'grid-cols-[1fr_auto_auto]'
-  } ${
-    item.id === highlightId
-      ? 'bg-[rgba(196,165,123,0.08)]'
-      : stamp.kind === 'decision_due'
-        ? 'bg-[rgba(232,197,71,0.05)]'
-        : 'hover:bg-[rgba(196,165,123,0.04)]'
-  }`;
+  } ${item.id === highlightId ? 'bg-[rgba(196,165,123,0.08)]' : ''}`;
 
   return (
-    <li id={`ffe-selection-${item.id}`} className="scroll-mt-24 border-b border-[var(--color-pearl)]">
+    <li
+      id={`ffe-selection-${item.id}`}
+      className="has-wash scroll-mt-24 border-b border-[var(--color-pearl)]"
+      onPointerMove={rowWash.onPointerMove}
+      onPointerEnter={rowWash.onPointerEnter}
+    >
+      <RowWash tone={washTone} />
       {selecting ? (
         // The whole row is the tick while the schedule is a selection surface.
         <label
@@ -551,7 +632,7 @@ function RoomHeading({
         <h3 className="font-heading text-[13.5px] font-medium italic text-[var(--color-charcoal)]">
           {name}
         </h3>
-        <span className="ml-auto font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           {meta}
         </span>
       </div>
@@ -634,7 +715,7 @@ function AddRoomInline({ projectId }: { projectId: string }) {
         onChange={(e) => setBudget(e.target.value)}
         placeholder="allocation $"
         aria-label="Budget allocation (dollars)"
-        className="w-24 bg-transparent text-right font-mono text-[9.5px] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]"
+        className="w-24 bg-transparent text-right font-mono text-[11px] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]"
       />
       <DocumentAction
         actionKey="add-project-room"
@@ -1147,7 +1228,7 @@ function FFESectionBody({
           </h2>
           <span className="flex items-baseline gap-3">
             {!selecting && meta && (
-              <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                 {meta}
               </span>
             )}
@@ -1165,7 +1246,7 @@ function FFESectionBody({
               <>
                 <Link
                   href={`/doc/${projectId}/spec-book`}
-                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:text-[var(--color-charcoal)]"
+                  className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:text-[var(--color-charcoal)]"
                 >
                   Spec book →
                 </Link>
@@ -1206,7 +1287,7 @@ function FFESectionBody({
         </div>
       ) : (
         <>
-          <RegionRule className="mt-5" />
+          <RegionRule className="mt-5" weight="strong" />
           {ffeFold.folded ? (
             <FoldSeam
               headingId={ffeHeadingId}

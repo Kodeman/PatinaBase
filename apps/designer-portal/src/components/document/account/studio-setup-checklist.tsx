@@ -79,7 +79,7 @@ function ChecklistRow({
     <div className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-3 border-b border-dashed border-[var(--color-pearl)] py-2 last:border-b-0">
       <span
         aria-hidden
-        className="relative inline-flex h-[15px] w-[15px] items-center justify-center rounded-[2px] border-[1.5px] text-[8px] font-bold leading-none text-white"
+        className="relative inline-flex h-[15px] w-[15px] items-center justify-center rounded-[2px] border-[1.5px] text-[11px] font-bold leading-none text-white"
         style={{
           borderColor: done ? 'var(--color-sage)' : 'var(--doc-ink-border)',
           background: done ? 'var(--color-sage)' : 'transparent',
@@ -131,7 +131,7 @@ export function StudioSetupChecklist({
   if (allDone) {
     return (
       <p
-        className={`font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] ${className ?? ''}`}
+        className={`font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] ${className ?? ''}`}
       >
         {settledLabel}
       </p>
@@ -145,10 +145,10 @@ export function StudioSetupChecklist({
   return (
     <div className={className}>
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Still to do
         </span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           {steps.filter((s) => !s.done).length}
         </span>
       </div>
@@ -194,7 +194,7 @@ export function StudioSetupChecklist({
               type="button"
               onClick={onSkipSeed}
               disabled={skipSeedPending}
-              className="da-score-hover inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="da-score-hover inline-flex min-h-11 min-w-11 items-center font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Skip
             </button>
@@ -209,7 +209,7 @@ export function StudioSetupChecklist({
               disabled
               title="coming with the rolodex"
               aria-disabled="true"
-              className="da-score-hover inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)] opacity-50 disabled:cursor-not-allowed"
+              className="da-score-hover inline-flex min-h-11 min-w-11 items-center font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)] opacity-50 disabled:cursor-not-allowed"
             >
               Skip
             </button>

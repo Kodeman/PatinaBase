@@ -34,7 +34,7 @@ import { Avatar, ConsentChip, RoleBadge, StatusDot } from '../person-bits';
 function RolodexMarker() {
   return (
     <span
-      className="inline-flex shrink-0 items-center rounded-[16px] border border-[var(--color-clay)] px-2 py-[1px] font-mono text-[8px] uppercase tracking-[0.14em] text-[var(--color-mocha)]"
+      className="inline-flex shrink-0 items-center rounded-[16px] border border-[var(--color-clay)] px-2 py-[1px] font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-mocha)]"
     >
       Rolodex
     </span>

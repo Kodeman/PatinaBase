@@ -182,7 +182,7 @@ function SendWallLine({
         className="mt-1"
         aria-label="Proposal state"
       >
-        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
           {line.sentText} —
         </span>
         {!standDown && line.verb === 'nudge' && (
@@ -197,7 +197,7 @@ function SendWallLine({
           </DocumentAction>
         )}
         {stateWord && (
-          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             {stateWord}
           </span>
         )}
@@ -206,7 +206,7 @@ function SendWallLine({
       {note && (
         <p
           role={note.tone === 'err' ? 'alert' : 'status'}
-          className="font-mono text-[10px] uppercase tracking-[0.06em]"
+          className="font-mono text-[11px] uppercase tracking-[0.06em]"
           style={{
             color:
               note.tone === 'ok'
@@ -350,7 +350,7 @@ function LegacyProposalInstruments({
             label={`Drafting the proposal — ${pct}% written`}
           />
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Drafting the proposal
             </p>
             <p className="mt-0.5 text-[14px] leading-snug text-[var(--color-charcoal)]">

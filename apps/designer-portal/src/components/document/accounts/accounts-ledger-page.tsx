@@ -122,11 +122,11 @@ function InvoiceRows({
                 {inv.invoice_number
                   ? `Invoice ${inv.invoice_number}`
                   : 'Draft invoice'}
-                <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
+                <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
                   folio →
                 </span>
               </p>
-              <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+              <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                 {[
                   inv.project?.name ?? 'Project',
                   fmtUsd(inv.total_cents),
@@ -136,14 +136,14 @@ function InvoiceRows({
                   .join(' · ')}
               </p>
             </button>
-            <span className="whitespace-nowrap font-mono text-[10px] text-[var(--color-mocha)]">
+            <span className="whitespace-nowrap font-mono text-[11px] text-[var(--color-mocha)]">
               {tail}
             </span>
             <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
             <button
               type="button"
               onClick={() => onOpenDocument(inv.project_id)}
-              className="whitespace-nowrap text-[10.5px] text-[var(--color-clay-ink)] hover:underline"
+              className="whitespace-nowrap text-[11px] text-[var(--color-clay-ink)] hover:underline"
             >
               document ↗
             </button>

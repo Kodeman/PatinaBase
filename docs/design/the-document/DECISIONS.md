@@ -9977,3 +9977,104 @@ I114 session; the O10/O11 items; the four e2e fixture defects already fixed at s
 integration lane. The deploy record follows as I152/I153.
 
 *Entries add: I151 · last id = I151*
+
+### R126 · The Life Review — final direction ruled; D4 amended for three sites — 2026-08-28
+
+The visual-life review put three directions to a simulated panel and to Kody. The team chose **B —
+Honest Materials**, and the first build took them at their word: B on A's skeleton, with six
+movement-tinted desk bands bled to the page edge, a Project-stock document sheet, and one charcoal band
+carrying the letterhead, the instrument row and the red letter. Kody reversed on the mockup, verbatim:
+
+> "the desk is starting to look silly with the banded colors edge to edge. and the document with the
+> dark header and yellow body looks terrible. Direction A would have been better guidance, pulling in
+> a little more of direction B's color, Maybe an animated color highlight on hover."
+
+**The ruling: A, with a little of B's colour.** Direction A — Ink on Paper — is the whole skeleton and
+the whole material register: three paper stocks and only three (the desk keeps today's cream `#FAF7F2`,
+the document is one untinted sheet `--doc-paper #FCFAF6`, the spine and the margin are one deeper stock
+`--doc-rail-stock #E8E3DB` with a margin chip drawn as a lifted piece of the sheet on it); three rule
+weights for three ranks (`--rule-hair` ends a row, `--rule-mid` ends a section, the double rule opens a
+movement) with dashed back to meaning "not filled in" and appearing nowhere; and three real muted inks
+`--text-muted #4E4339` / `--text-subtle #5A4E43` / `--text-faint #65594E`, where all three were
+`--color-quiet-ink` wearing three names. The letterhead, the instrument row and the red-letter zone all
+sit on the paper, in today's order (R35) and today's materials — the charcoal band is gone, and the one
+charcoal surface left is the 390 mobile bar, which is today's own.
+
+**B's colour survives at exactly three sites and nowhere else**: the filled stamps (one recipe — the
+state's own canon pigment composited over the sheet to a common ~1.18:1, a 1.5px pigment border, and a
+**charcoal word** at 11.7:1; *state is hue, legibility is charcoal*), the six saturated stage tabs on
+the roster heads (`--tab-brief … --tab-install`, unchanged, printing as a small plate on the head line —
+there is no tinted band under a stage group), and 48px product crops on catalog-linked lines. The six
+`--stock-*` movement tints are deleted; the document's own movement word gave up its plate and takes A's
+mono eyebrow. **Typography goes no further than the mockup**, and — Kody, same day — **THE STUDIO
+contents block on the desk keeps its deployed typography exactly**: *"the currently deployed studio at
+the bottom of the desk looks great, dont change the typography."* No direction restyles it.
+
+**And one new thing — the hover wash.** *"Maybe an animated color highlight on hover."* Every roster
+line and every FF&E line opens a warm wash under the pointer: the row's own pigment laid over the ground
+it sits on and swept open as a `clip-path` circle from the exact point of contact, by the same mechanic
+the Scored Ink bead uses (`--ink-x`/`--ink-y` written on pointermove), 260ms in on `--ease-editorial`,
+200ms out; the name's score turns clay at the same time. **The rule is the ratio, not the alpha** — every
+wash lands at ~1.12:1 over its own ground and the alpha follows the pigment's value: 8% for the six dark
+stage pigments, 16 / 24 / 16% for the three light state pigments. Under `prefers-reduced-motion: reduce`
+the wash is a flat tint at three quarters of that alpha, applied instantly with no sweep; keyboard focus
+takes the same static wash plus the ring. The row never moves and no text ever changes colour.
+
+**D4 is amended.** D4 reads "No shadows. Anywhere. No exceptions." R72 already relaxed it for the folio
+pickup and the dock's hairline surface. This ruling replaces that with one token, `--elevation-sheet:
+0 1px 2px rgba(44,41,38,.08)`, spent at **exactly three sites** — the margin chips, the open ledger
+sheet, and the studio drawer — and nowhere else. It is enforced by a new
+`lib/document/__tests__/shadow-gate.test.ts` **at the CSS level**, which is the half that was never
+covered: the D4 `no-restricted-syntax` rules in `eslint.config.mjs` read `.ts`/`.tsx` only, no stylelint
+config exists anywhere in this repo, and a shadow written straight into a stylesheet has therefore never
+been caught by anything. R72's `.folio-face` exception is the proof — it shipped as a
+`filter: drop-shadow(...)` in `globals.css`, was referenced by zero components, and sat untripped until
+this lane deleted it. The gate holds one shadow declaration in `globals.css` (`.doc-elevated`, by
+selector as well as by value), a frozen inventory for every other stylesheet under `src/` (naming the one
+pre-existing non-Document declaration, `components/timeline/MilestoneCard.module.css`, rather than hiding
+it behind an ignore list), no drop-shadow or shadow filter anywhere, one `--elevation-sheet` declaration,
+and at most three TSX files under `components/document/**` wearing `doc-elevated`.
+
+`contrast.test.ts` is extended to gate the new tokens on their real values: the three muted steps are
+asserted to be three *different* values and to clear 4.5:1 on all three paper stocks; the rail is gated
+against **the register it actually prints** (charcoal, the muted ramp, clay-ink — terracotta-,
+golden-hour- and sage-ink never appear on it, and measuring those deliberate absences would read them as
+failures); the four fills are gated as grounds for charcoal and the muted ramp, and held to one common
+value so they separate by hue and not by depth; each `--tab-*` is gated as a dark ground for a white
+label and the six are held to a descending value ladder, so the naming survives a colourblind read and a
+greyscale print.
+
+**Implementation note (added after the adversarial review, 2026-08-28).** Three things landed on the
+branch that this entry did not rule, and one review finding is accepted with a note. **The mono floor:**
+a 236-file sweep raised 911 sub-11px font-size literals to `11px` across the whole Document surface, not
+only the surfaces the mockup draws — it is recorded here because it is the largest change on the branch
+and it goes further than "typography goes no further than the mockup". The floor now also covers the four
+files this direction itself restyled (`ffe-section.tsx`, `doc-letterhead.tsx`, `region/fold-seam.tsx`,
+`stamp.tsx`, whose `xs` mark went 10px → 11px), which the sweep had skipped; deliberate micro-marks
+(Strata mark bars, dots) are exempt, and the five `✓` glyphs the sweep raised inside fixed `h-[13px]`
+tick boxes are reverted to 8px, because an 11px bold glyph does not fit a 10px content box. **The
+RegionRule default stays `strong`** — the mockup draws exactly one strong rule, on the Pieces head, but
+it draws *none* of the eleven other call sites (mood boards, care, schedule, money, the approval
+document), so a `mid` default would have demoted all eleven from a 6px double rule to a 1.5px single line
+by omission rather than by ruling; `mid` is opt-in. **The FF&E decision-due resting tint**
+(`rgba(232,197,71,0.05)`) is retired: the golden **filled stamp** is the at-a-glance signal now, and a
+resting 5% wash under a row that also has a hover wash reads as two answers to one question. **Filled
+stamps take a fifth tone, `delivered`** (sage `#A8B5A0` at 26% over `#FCFAF6` = `--fill-delivered-tint
+#E6E8E0`, 1.186:1 off the paper, charcoal at 11.69:1, border `--color-sage-ink`), because eight FF&E
+states had collapsed onto ORDERED's clay plate — money committed and goods arrived are two different
+answers to "where is this piece". Any state with no ruled fill keeps the **outline**; a fill is a recipe,
+not a default. **`DocSheet` carries the elevation** and every Document overlay built on it inherits it:
+that is accepted, not a leak — `DocSheet` *is* the ledger-sheet primitive, so "the open ledger sheet" and
+"every DocSheet" name the same object; the budget stays three code sites. The **fold seam** settles on a
+CSS keyframe rather than a hydration-gated opacity, so a folded region's only control is never invisible
+while it waits for JS. The **spine's rail labels** (`On this paper` and the running index's inactive
+values) moved off `--color-aged-oak` (3.51:1 on `#E8E3DB`) to `--text-muted` (7.52:1), and
+`contrast.test.ts` now gates the rail's off-register pigments at the source as well as the eighteen
+`--wash-*` tokens, composited over the ground each actually paints on.
+
+Deck: https://claude.ai/code/artifact/f333f3f1-c2d5-4d79-8480-7e22f7330500 · clickable mockup:
+https://claude.ai/code/artifact/bf781dba-3938-464d-849d-5787bbd79cd7. Implementation branches:
+`document-life/foundation` (tokens, the wash mechanic and component, the two gates, this entry) → the
+lanes → `document-life/integration` → main.
+
+*Entries add: R126 · last id = R126*

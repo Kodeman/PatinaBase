@@ -65,7 +65,7 @@ export function ScheduleGlanceStrip({
           {months.map((m) => (
             <span
               key={m.key}
-              className="absolute top-0 font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]"
+              className="absolute top-0 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]"
               style={{ left: `${m.xPct}%` }}
             >
               {m.label}

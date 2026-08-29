@@ -427,7 +427,7 @@ function DraftingRoomEditor({
                 </span>
                 <span
                   aria-live="polite"
-                  className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+                  className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
                 >
                   {draftingWritePending ? 'Saving proposal changes…' : ''}
                 </span>

@@ -148,7 +148,7 @@ export function EngineResults({
     return (
       <div className="flex items-center gap-2.5 py-5">
         <StrataSweep size="sm" label="The Engine is reading your shelves" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
           reading your shelves…
         </span>
       </div>
@@ -156,7 +156,7 @@ export function EngineResults({
   }
 
   const restingNote = resting ? (
-    <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-80">
+    <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-80">
       the Engine is resting — keyword results for now
     </p>
   ) : null;
@@ -180,7 +180,7 @@ export function EngineResults({
       {/* Place target — the held document, or a quiet picker (R38 Place →). */}
       {!inDocument && (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <span className="mr-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             Place into
           </span>
           {targets.length === 0 ? (
@@ -233,7 +233,7 @@ export function EngineResults({
                     loading="lazy"
                   />
                 ) : (
-                  <span className="font-mono text-[7px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] opacity-50">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] opacity-50">
                     {piece.category ?? 'piece'}
                   </span>
                 )}
@@ -242,14 +242,14 @@ export function EngineResults({
                 <span className="block truncate text-[12.5px] font-medium text-[var(--color-charcoal)]">
                   {piece.name}
                 </span>
-                <span className="block truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                <span className="block truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                   {piece.brand ?? piece.layer} ·{' '}
                   {LAYER_NOTE[piece.layer] ?? piece.layer}
                   {matchNote(piece.matched_on)}
                 </span>
               </span>
               {placed ? (
-                <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-sage)]">
+                <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-sage)]">
                   placed ✓
                 </span>
               ) : (
@@ -278,7 +278,7 @@ export function EngineResults({
         </p>
       )}
 
-      <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] opacity-70">
+      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] opacity-70">
         The Engine · every ask teaches your eye · Designer-Taught Intelligence
       </p>
     </div>

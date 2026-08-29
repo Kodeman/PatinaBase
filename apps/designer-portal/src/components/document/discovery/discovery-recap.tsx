@@ -29,7 +29,7 @@ const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toU
 function RecapRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-dashed border-[var(--color-pearl)] py-2 last:border-b-0">
-      <span className="w-[96px] shrink-0 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <span className="w-[96px] shrink-0 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         {label}
       </span>
       <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-[var(--color-charcoal)]">{children}</span>
@@ -140,7 +140,7 @@ export function DiscoveryRecap({
         </RecapRow>
       )}
       {row.site_notes && <RecapRow label="Site notes">{row.site_notes}</RecapRow>}
-      <p className="mt-3 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         Captured in Discovery{row.ready_at ? ` · ready ${fmtDay(row.ready_at)}` : ''} · read-only
       </p>
     </div>

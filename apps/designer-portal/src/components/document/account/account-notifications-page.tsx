@@ -85,7 +85,7 @@ export function AccountNotificationsPage() {
             with the teammate, file, project, and time.
           </span>
         </span>
-        <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           In app
         </span>
       </div>

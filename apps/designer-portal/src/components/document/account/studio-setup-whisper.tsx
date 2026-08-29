@@ -37,7 +37,7 @@ export function StudioSetupWhisper({
         <button
           type="button"
           onClick={() => openAccountPage('studio')}
-          className="da-score-hover inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="da-score-hover inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
           Finish setting up
         </button>

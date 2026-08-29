@@ -42,7 +42,7 @@ export function BriefScanStrip({ leadId }: { leadId: string }) {
 
   return (
     <div className="mb-3.5 border-b border-[var(--color-pearl)] pb-3.5">
-      <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         {rows.length === 1 ? 'Room scan' : `Room scans · ${rows.length}`}
       </p>
       <div className="flex flex-wrap gap-2">
@@ -73,14 +73,14 @@ export function BriefScanStrip({ leadId }: { leadId: string }) {
                   className="h-full w-full object-cover transition-opacity group-hover:opacity-80"
                 />
               ) : (
-                <span className="flex h-full w-full items-center justify-center px-1 text-center text-[9px] italic text-[var(--text-muted)]">
+                <span className="flex h-full w-full items-center justify-center px-1 text-center text-[11px] italic text-[var(--text-muted)]">
                   No preview
                 </span>
               )}
               {row.is_primary && (
                 <span
                   aria-hidden
-                  className="absolute bottom-0 left-0 right-0 bg-[rgba(44,41,38,0.72)] px-1 py-[1.5px] text-center font-mono text-[7px] uppercase tracking-[0.06em] text-white"
+                  className="absolute bottom-0 left-0 right-0 bg-[rgba(44,41,38,0.72)] px-1 py-[1.5px] text-center font-mono text-[11px] uppercase tracking-[0.06em] text-white"
                 >
                   Primary
                 </span>

@@ -60,7 +60,7 @@ type AnyRecord = any;
 const FIELD_CLS =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-1.5 text-[11.5px] text-[var(--color-charcoal)] placeholder:italic placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)] focus:outline-none';
 const LABEL_CLS =
-  'mb-1 block font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'mb-1 block font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
 function closeErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -216,7 +216,7 @@ export function CareBand({
         aria-label="Project closeout ownership"
         className="mt-8 border-l-2 border-[var(--color-sage)] px-3.5 py-2.5"
       >
-        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
           Project closeout · owner action
         </p>
         <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--color-charcoal)]">
@@ -340,7 +340,7 @@ export function CareBand({
           role="status"
           className="mt-3 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.08)] px-3.5 py-2.5"
         >
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
             Operational closeout still open
           </p>
           <ul className="mt-1 space-y-0.5 text-[11.5px] text-[var(--color-charcoal)]">
@@ -411,7 +411,7 @@ export function CareBand({
       {/* The portfolio snapshot — what this project becomes once it's a
           memory. Persisted by the same one act. */}
       <div className="mt-3">
-        <p className="mb-2 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        <p className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
           The portfolio snapshot
         </p>
         <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">

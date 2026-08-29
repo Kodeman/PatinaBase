@@ -397,7 +397,7 @@ export function useProposalMirrorData(proposalId: string) {
 
 function MirrorSectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+    <h2 className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
       {children}
     </h2>
   );
@@ -456,7 +456,7 @@ function TierInstrument({
 
   return (
     <div className="mb-5">
-      <p className="mb-1.5 font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+      <p className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
         What the client sees
       </p>
       <div className="flex flex-wrap gap-1">
@@ -470,7 +470,7 @@ function TierInstrument({
                 onClick={() => choose(t)}
                 disabled={update.isPending}
                 aria-pressed={active}
-                className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50 motion-reduce:transition-none ${
+                className={`group inline-flex min-h-11 min-w-11 items-center justify-center px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50 motion-reduce:transition-none ${
                   active
                     ? 'text-[var(--color-charcoal)]'
                     : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -490,17 +490,17 @@ function TierInstrument({
       </div>
       <div className="min-h-4" aria-live="polite">
         {feedback === 'saving' && (
-          <p role="status" className="font-mono text-[8.5px] text-[var(--text-muted)]">
+          <p role="status" className="font-mono text-[11px] text-[var(--text-muted)]">
             Updating client preview…
           </p>
         )}
         {feedback === 'saved' && (
-          <p role="status" className="font-mono text-[8.5px] text-[var(--color-sage)]">
+          <p role="status" className="font-mono text-[11px] text-[var(--color-sage)]">
             Client preview updated
           </p>
         )}
         {feedback === 'error' && (
-          <p role="alert" className="font-mono text-[8.5px] text-[var(--color-terracotta-ink)]">
+          <p role="alert" className="font-mono text-[11px] text-[var(--color-terracotta-ink)]">
             {feedbackError ?? 'Could not update the client preview.'}
           </p>
         )}
@@ -528,7 +528,7 @@ export function ProposalPreviewRail({
         <button
           type="button"
           onClick={() => void refetch()}
-          className="mt-2 font-mono text-[9px] uppercase tracking-[0.08em] underline underline-offset-4"
+          className="mt-2 font-mono text-[11px] uppercase tracking-[0.08em] underline underline-offset-4"
         >
           Retry preview
         </button>
@@ -596,7 +596,7 @@ export function ProposalPreviewRail({
                   {r.name}
                 </span>
                 {r.room_type && (
-                  <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     {r.room_type}
                   </span>
                 )}
@@ -614,7 +614,7 @@ export function ProposalPreviewRail({
             .map((pal) => (
               <div key={pal.id} className="mb-3 last:mb-0">
                 {pal.name && (
-                  <p className="mb-1 text-[10.5px] text-[var(--text-muted)]">
+                  <p className="mb-1 text-[11px] text-[var(--text-muted)]">
                     {pal.name}
                   </p>
                 )}
@@ -761,7 +761,7 @@ export function MirrorNarrativeSection({ section }: { section: AnyRow }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={floorPlanUrl} alt="Space plan" className="h-full w-full object-contain" />
           ) : (
-            <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               Space plan pending
             </span>
           )}

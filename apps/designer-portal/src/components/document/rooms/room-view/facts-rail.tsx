@@ -149,7 +149,7 @@ export function FactsRail({
             <span className="da-score-hover">
               {plural(photos.count, 'photo')}
             </span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+            <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               view
             </span>
           </button>
@@ -174,7 +174,7 @@ export function FactsRail({
             className="group inline-flex min-h-11 items-center gap-1.5 font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-charcoal)] no-underline outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             <span className="da-score-hover">drawing set</span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+            <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               open
             </span>
           </Link>
@@ -237,7 +237,7 @@ export function FactsRail({
 function Fact({ k, children }: { k: string; children: ReactNode }) {
   return (
     <div className="border-b border-[var(--doc-ink-border)] py-[11px]">
-      <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
+      <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
         {k}
       </div>
       <div className="mt-0.5 text-[14px] text-[var(--color-charcoal)]">

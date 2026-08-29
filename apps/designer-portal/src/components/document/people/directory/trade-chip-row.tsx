@@ -24,7 +24,7 @@ import {
 export type TradeChipDomain = 'trade' | 'specialty';
 
 const WORD =
-  'da-score-hover min-h-11 inline-flex items-center font-mono text-[8.5px] lowercase tracking-[0.04em] transition-colors';
+  'da-score-hover min-h-11 inline-flex items-center font-mono text-[11px] lowercase tracking-[0.04em] transition-colors';
 const WORD_ON = 'da-score-on text-[var(--color-charcoal)]';
 const WORD_OFF = 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]';
 

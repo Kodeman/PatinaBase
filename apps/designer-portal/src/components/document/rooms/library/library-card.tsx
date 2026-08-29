@@ -154,7 +154,7 @@ export function LibraryCard({
           {sub}
         </div>
         {fieldProvenance && (
-          <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-body)]">
+          <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-body)]">
             {fieldProvenance}
           </div>
         )}
@@ -166,7 +166,7 @@ export function LibraryCard({
           {configurationLabels.map((label) => (
             <li
               key={label}
-              className="rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] text-[var(--color-charcoal)]"
+              className="rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-charcoal)]"
             >
               {label}
             </li>

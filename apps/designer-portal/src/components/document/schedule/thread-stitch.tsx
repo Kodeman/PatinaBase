@@ -25,7 +25,7 @@ export function ThreadStitch({ name, start, end, meta }: ThreadStitchProps) {
   const range = start && end ? ` · ${fmtDay(start)} – ${fmtDay(end)}` : '';
   return (
     <div
-      className="mt-[0.55rem] inline-flex items-center gap-[0.5rem] font-mono text-[0.6rem] uppercase tracking-[0.07em]"
+      className="mt-[0.55rem] inline-flex items-center gap-[0.5rem] font-mono text-[11px] uppercase tracking-[0.07em]"
       // The slide darkens the thread INK below the stitch's dusty-blue for
       // legibility on the paper (#5f7488) — port the rendered ink, not the var.
       style={{ color: '#5f7488' }}

@@ -63,7 +63,7 @@ export function PlanRoomBand({
         {behind.map((holder) => (
           <p
             key={holder.partyKey}
-            className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-golden-hour)]"
+            className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-golden-hour)]"
           >
             {holderSentence(holder)}
           </p>

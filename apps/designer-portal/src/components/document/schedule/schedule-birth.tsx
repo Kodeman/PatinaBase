@@ -111,16 +111,16 @@ export function ScheduleBirth({
   return (
     <div className="mt-5 max-w-[720px]">
       <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] pb-[0.5rem]">
-        <span className="font-mono text-[0.6rem] uppercase tracking-[0.07em] text-[var(--color-charcoal)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-charcoal)]">
           Compose a schedule · Three starting points
         </span>
-        <span className="font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
           {surface === 'proposal' ? 'Born in the proposal' : 'Typographic · No wizards'}
         </span>
       </div>
 
       {errorText && (
-        <div className="mt-[0.6rem] font-mono text-[0.6rem] uppercase tracking-[0.07em] text-[var(--color-terracotta-ink)]">
+        <div className="mt-[0.6rem] font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-terracotta-ink)]">
           {errorText}
         </div>
       )}
@@ -144,7 +144,7 @@ export function ScheduleBirth({
                 {row.body}
               </span>
             </span>
-            <span className="whitespace-nowrap font-mono text-[0.56rem] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
+            <span className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
               {row.tag}
             </span>
           </button>

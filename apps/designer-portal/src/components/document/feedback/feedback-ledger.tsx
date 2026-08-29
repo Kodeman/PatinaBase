@@ -71,7 +71,7 @@ export function FeedbackLedger() {
         <button
           type="button"
           onClick={() => setSort((s) => (s === 'date' ? 'weight' : 'date'))}
-          className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+          className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
         >
           Sort · {sort === 'date' ? 'Newest' : 'Weight'} ▾
         </button>
@@ -121,7 +121,7 @@ export function FeedbackLedger() {
                   </span>
                   <WeightDots weight={weightDots(n.weight)} />
                   <StatusPill status={n.status} />
-                  <span className="w-7 shrink-0 text-right font-mono text-[10px] text-[var(--color-aged-oak)]">{age(n.created_at)}</span>
+                  <span className="w-7 shrink-0 text-right font-mono text-[11px] text-[var(--color-aged-oak)]">{age(n.created_at)}</span>
                 </button>
               </li>
             ))}
@@ -137,7 +137,7 @@ function FilterChip({ label, color, on, onClick }: { label: string; color?: stri
     <button
       type="button"
       onClick={onClick}
-      className="rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.05em] transition-colors"
+      className="rounded-md border px-2 py-1 font-mono text-[11px] uppercase tracking-[0.05em] transition-colors"
       style={{
         borderColor: on ? color ?? 'var(--color-clay)' : 'var(--color-pearl)',
         color: on ? 'var(--color-charcoal)' : 'var(--color-aged-oak)',
@@ -164,7 +164,7 @@ function StatusPill({ status }: { status: FeedbackStatus }) {
   const sm = statusMeta(status);
   return (
     <span
-      className="shrink-0 rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em]"
+      className="shrink-0 rounded-full border px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.06em]"
       style={{ borderColor: `color-mix(in srgb, ${sm.colorVar} 45%, var(--color-pearl))`, color: sm.colorVar }}
     >
       {sm.label}
@@ -189,7 +189,7 @@ function EmptyState({ filtered }: { filtered: boolean }) {
       <button
         type="button"
         onClick={() => openFeedbackSheet()}
-        className="mt-3 rounded-md bg-[var(--color-clay)] px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]"
+        className="mt-3 rounded-md bg-[var(--color-clay)] px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]"
       >
         Leave the first note
       </button>

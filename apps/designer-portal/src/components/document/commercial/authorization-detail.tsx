@@ -50,7 +50,7 @@ const depositCopy: Record<
 function Figure({ label, value }: { label: string; value: string }) {
   return (
     <span>
-      <span className="block font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <span className="block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         {label}
       </span>
       <strong className="text-[13px] text-[var(--color-charcoal)]">{value}</strong>
@@ -113,17 +113,17 @@ function DispatchRetryBand({
   return (
     <>
       {hasCommittedDelivery && deliveryStatus.isLoading && (
-        <p role="status" className="mt-2 text-[10.5px] text-[var(--text-muted)]">
+        <p role="status" className="mt-2 text-[11px] text-[var(--text-muted)]">
           Checking email delivery…
         </p>
       )}
       {deliveryStatus.isError && (
-        <p role="alert" className="mt-2 text-[10.5px] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">
           Email delivery status is unavailable. Refresh before retrying.
         </p>
       )}
       {!hasCommittedDelivery && (
-        <p role="alert" className="mt-2 text-[10.5px] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">
           Email delivery status is incomplete. Refresh before retrying.
         </p>
       )}
@@ -141,7 +141,7 @@ function DispatchRetryBand({
               ? " Retrying uses the existing send and will not create a duplicate."
               : " Confirm delivery with the client directly."}
           </p>
-          {delivery.detail && <p className="mt-1 text-[10px]">{delivery.detail}</p>}
+          {delivery.detail && <p className="mt-1 text-[11px]">{delivery.detail}</p>}
           {delivery.retryable && (
             <Button
               className="mt-2"
@@ -171,7 +171,7 @@ function DispatchRetryBand({
         </div>
       )}
       {deliveryError && (
-        <p role="alert" className="mt-2 text-[10.5px] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">
           {deliveryError}
         </p>
       )}
@@ -267,7 +267,7 @@ export function AuthorizationDetail({
       wide
     >
       <div>
-        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
           Authorization № {instrument.number}
         </p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
@@ -307,7 +307,7 @@ export function AuthorizationDetail({
           <Figure label="lines PO-ready" value={String(readyLineCount)} />
         </div>
 
-        <p className="mt-3 text-[10.5px] leading-relaxed text-[var(--text-muted)]">
+        <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
           {instrument.checkpointId
             ? "Linked to a budget checkpoint"
             : "No budget checkpoint linked"}{" "}
@@ -318,13 +318,13 @@ export function AuthorizationDetail({
         <DispatchRetryBand instrument={instrument} />
 
         {instrument.state === "executed" && executedOnPaper && (
-          <p className="mt-2 text-[10.5px] italic text-[var(--text-muted)]">
+          <p className="mt-2 text-[11px] italic text-[var(--text-muted)]">
             {signedOnPaperNote(paperSignature?.paperSignedOn)}
           </p>
         )}
 
         <div className="mt-5">
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             What was signed
           </p>
           {items.length === 0 ? (
@@ -339,7 +339,7 @@ export function AuthorizationDetail({
               >
                 {Array.from(roomGroups.entries()).map(([roomName, roomItems]) => (
                   <div key={roomName} className="mt-3">
-                    <p className="font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {roomName}
                     </p>
                     <table className="mt-1 w-full min-w-[440px] text-left text-[11px]">
@@ -348,7 +348,7 @@ export function AuthorizationDetail({
                           <tr key={item.id} className="border-t border-[var(--doc-ink-border)]/60">
                             <td className="py-2 pr-2">
                               {item.name}
-                              <span className="block text-[9px] text-[var(--text-muted)]">
+                              <span className="block text-[11px] text-[var(--text-muted)]">
                                 {item.itemType}
                               </span>
                             </td>
@@ -374,7 +374,7 @@ export function AuthorizationDetail({
                   </div>
                 ))}
               </div>
-              <p className="mt-3 text-[10px] text-[var(--text-muted)]">
+              <p className="mt-3 text-[11px] text-[var(--text-muted)]">
                 Quantities, client prices, and checkpoint linkage are immutable in
                 this authorization snapshot. ▲/▼ compares a line to the
                 schedule&rsquo;s current figure for the same item.

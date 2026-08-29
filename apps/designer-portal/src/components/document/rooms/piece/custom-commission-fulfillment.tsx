@@ -179,7 +179,7 @@ export function CustomCommissionFulfillment({
               </p>
               {enabled && !complete && (
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <label className="text-[10px] text-[var(--text-muted)] sm:col-span-2">
+                  <label className="text-[11px] text-[var(--text-muted)] sm:col-span-2">
                     Evidence note
                     <Textarea
                       rows={2}
@@ -194,7 +194,7 @@ export function CustomCommissionFulfillment({
                       placeholder="What was reviewed, received, or verified?"
                     />
                   </label>
-                  <label className="text-[10px] text-[var(--text-muted)] sm:col-span-2">
+                  <label className="text-[11px] text-[var(--text-muted)] sm:col-span-2">
                     Drawing, photo, or document references · one per line
                     <Textarea
                       rows={2}
@@ -236,7 +236,7 @@ export function CustomCommissionFulfillment({
                 </div>
               )}
               {milestone && (milestone.eventCount ?? 0) > 0 && (
-                <p className="mt-2 text-[10px] text-[var(--text-muted)]">
+                <p className="mt-2 text-[11px] text-[var(--text-muted)]">
                   {milestone.eventCount} immutable ledger
                   {milestone.eventCount === 1 ? " entry" : " entries"}
                 </p>

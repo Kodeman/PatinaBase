@@ -73,7 +73,7 @@ const MANUAL_METHODS: Exclude<InvoicePaymentMethod, 'stripe'>[] = [
   'other',
 ];
 
-const LABEL = 'font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
+const LABEL = 'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
 const INPUT =
   'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11.5px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
@@ -337,7 +337,7 @@ export function InvoiceFolio({
           <h2 className="font-heading text-[20px] font-medium text-[var(--color-charcoal)]">
             {invoice.invoice_number ? `Invoice ${invoice.invoice_number}` : 'Draft invoice'}
           </h2>
-          <p className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          <p className="mt-0.5 truncate font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {[
               invoice.client?.full_name ?? invoice.client?.email,
               invoice.project?.name,
@@ -369,14 +369,14 @@ export function InvoiceFolio({
       <div className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-b border-t border-[var(--color-pearl)] py-2">
         <span className="flex items-baseline gap-1.5">
           <span className={LABEL}>issued</span>
-          <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
+          <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
             {formatInvoiceDate(invoice.issue_date)}
           </span>
         </span>
         <span className="flex items-baseline gap-1.5">
           <span className={LABEL}>due</span>
           <span
-            className="font-mono text-[10.5px]"
+            className="font-mono text-[11px]"
             style={{
               color: overdue ? TERRACOTTA_INK : 'var(--color-charcoal)',
             }}
@@ -387,20 +387,20 @@ export function InvoiceFolio({
         </span>
         <span className="flex items-baseline gap-1.5">
           <span className={LABEL}>total</span>
-          <span className="font-mono text-[10.5px] font-semibold text-[var(--color-charcoal)]">
+          <span className="font-mono text-[11px] font-semibold text-[var(--color-charcoal)]">
             {formatCurrency(invoice.total_cents, invoice.currency)}
           </span>
         </span>
         <span className="flex items-baseline gap-1.5">
           <span className={LABEL}>paid</span>
-          <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
+          <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
             {formatCurrency(invoice.amount_paid_cents, invoice.currency)}
           </span>
         </span>
         <span className="flex items-baseline gap-1.5">
           <span className={LABEL}>balance</span>
           <span
-            className="font-mono text-[10.5px] font-semibold"
+            className="font-mono text-[11px] font-semibold"
             style={{
               color:
                 invoice.status === 'void'
@@ -433,17 +433,17 @@ export function InvoiceFolio({
               <span className="min-w-0 text-[11.5px] text-[var(--color-charcoal)]">
                 {line.description}
                 {line.kind === 'milestone' && (
-                  <span className="ml-1.5 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  <span className="ml-1.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     milestone
                   </span>
                 )}
                 {line.kind === 'ffe' && (
-                  <span className="ml-1.5 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  <span className="ml-1.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     ff&e
                   </span>
                 )}
                 {line.kind === 'time' && (
-                  <span className="ml-1.5 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  <span className="ml-1.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     logged time
                     {timeLineHoursLabel(line.metadata)
                       ? ` · ${timeLineHoursLabel(line.metadata)}`
@@ -453,15 +453,15 @@ export function InvoiceFolio({
               </span>
               {/* Time lines are one rolled-up amount — "1 × $X" would read like
                   an hourly rate, so qty/unit dash (the old page's rule). */}
-              <span className="text-right font-mono text-[10px] text-[var(--text-muted)]">
+              <span className="text-right font-mono text-[11px] text-[var(--text-muted)]">
                 {line.kind === 'time' ? '—' : Number(line.quantity)}
               </span>
-              <span className="text-right font-mono text-[10px] text-[var(--text-muted)]">
+              <span className="text-right font-mono text-[11px] text-[var(--text-muted)]">
                 {line.kind === 'time'
                   ? '—'
                   : formatCurrency(line.unit_amount_cents, invoice.currency)}
               </span>
-              <span className="text-right font-mono text-[10.5px] text-[var(--color-charcoal)]">
+              <span className="text-right font-mono text-[11px] text-[var(--color-charcoal)]">
                 {formatCurrency(line.amount_cents, invoice.currency)}
               </span>
             </li>
@@ -472,7 +472,7 @@ export function InvoiceFolio({
         <div className="ml-auto mt-2 max-w-[240px]">
           <div className="flex justify-between py-0.5">
             <span className={LABEL}>subtotal</span>
-            <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
+            <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
               {formatCurrency(invoice.subtotal_cents, invoice.currency)}
             </span>
           </div>
@@ -481,7 +481,7 @@ export function InvoiceFolio({
               tax ({(Number(invoice.tax_rate) * 100).toFixed(2).replace(/\.?0+$/, '') || '0'}
               %)
             </span>
-            <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
+            <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
               {formatCurrency(invoice.tax_cents, invoice.currency)}
             </span>
           </div>
@@ -508,7 +508,7 @@ export function InvoiceFolio({
                 key={p.id}
                 className="grid grid-cols-[92px_1fr_auto_92px] items-baseline gap-2 border-b border-dashed border-[var(--color-pearl)] py-1.5"
               >
-                <span className="font-mono text-[10px] text-[var(--color-charcoal)]">
+                <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
                   {formatInvoiceDate(p.received_at ?? p.created_at)}
                 </span>
                 <span className="min-w-0 truncate text-[11px] text-[var(--color-charcoal)]">
@@ -526,7 +526,7 @@ export function InvoiceFolio({
                   )}
                 </span>
                 <span
-                  className="font-mono text-[8px] uppercase tracking-[0.06em]"
+                  className="font-mono text-[11px] uppercase tracking-[0.06em]"
                   style={{
                     color:
                       p.status === 'succeeded'
@@ -538,7 +538,7 @@ export function InvoiceFolio({
                 >
                   {p.status}
                 </span>
-                <span className="text-right font-mono text-[10.5px] text-[var(--color-charcoal)]">
+                <span className="text-right font-mono text-[11px] text-[var(--color-charcoal)]">
                   {formatCurrency(p.amount_cents, invoice.currency)}
                 </span>
               </li>
@@ -612,8 +612,8 @@ export function InvoiceFolio({
           <p
             className={
               failed
-                ? 'mt-2 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1.5 font-mono text-[9px] uppercase tracking-[0.05em]'
-                : 'mt-2 font-mono text-[9px] uppercase tracking-[0.05em]'
+                ? 'mt-2 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1.5 font-mono text-[11px] uppercase tracking-[0.05em]'
+                : 'mt-2 font-mono text-[11px] uppercase tracking-[0.05em]'
             }
             style={{ color: failed ? TERRACOTTA_INK : SAGE_INK }}
             role={failed ? 'alert' : 'status'}
@@ -631,7 +631,7 @@ export function InvoiceFolio({
           >
             {hasClientPortalAccount ? (
               <>
-                <p className="text-[10.5px] text-[var(--color-charcoal)]">
+                <p className="text-[11px] text-[var(--color-charcoal)]">
                   Email did not reach the client. Their linked portal account can still open this
                   issued invoice:
                 </p>
@@ -639,7 +639,7 @@ export function InvoiceFolio({
                   href={clientInvoiceUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-1 block break-all font-mono text-[9px] text-[var(--color-clay-ink)] underline"
+                  className="mt-1 block break-all font-mono text-[11px] text-[var(--color-clay-ink)] underline"
                 >
                   {clientInvoiceUrl}
                 </a>
@@ -657,7 +657,7 @@ export function InvoiceFolio({
                 </DocumentAction>
               </>
             ) : (
-              <p className="text-[10.5px] text-[var(--color-charcoal)]">
+              <p className="text-[11px] text-[var(--color-charcoal)]">
                 Email did not reach the client, and this household has no linked portal account.
                 Invite or link the client from the Clients book before sharing a portal URL, then
                 resend the invoice.
@@ -771,7 +771,7 @@ export function InvoiceFolio({
             </div>
             {amountCents > balance && (
               <p
-                className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em]"
+                className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em]"
                 style={{ color: TERRACOTTA_INK }}
               >
                 amount exceeds the remaining balance

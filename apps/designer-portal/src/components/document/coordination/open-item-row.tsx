@@ -67,7 +67,7 @@ export function OpenItemRow({ item, tasks, onOpen, court }: OpenItemRowProps) {
         {/* type chip — mono, fixed 80px, the brand border+tint+ink trio (D4:
             a 1.5px flat border + faint tint, no shadow). */}
         <span
-          className="w-20 flex-shrink-0 rounded-[3px] border-[1.5px] px-2 py-[3px] text-center font-mono text-[8px] font-semibold uppercase tracking-[0.07em]"
+          className="w-20 flex-shrink-0 rounded-[3px] border-[1.5px] px-2 py-[3px] text-center font-mono text-[11px] font-semibold uppercase tracking-[0.07em]"
           style={chipStyle(item.coordination_kind)}
         >
           {token.label}
@@ -79,7 +79,7 @@ export function OpenItemRow({ item, tasks, onOpen, court }: OpenItemRowProps) {
             {item.title}
           </span>
           {blocks && (
-            <span className="mt-[1px] flex items-center gap-1.5 text-[10px] text-[var(--color-aged-oak)]">
+            <span className="mt-[1px] flex items-center gap-1.5 text-[11px] text-[var(--color-aged-oak)]">
               {blocked && (
                 <span aria-hidden className="font-mono" style={{ color: 'var(--color-terracotta-ink)' }}>
                   ⊘
@@ -99,7 +99,7 @@ export function OpenItemRow({ item, tasks, onOpen, court }: OpenItemRowProps) {
             when `court` isn't passed) */}
         {courtToken && (
           <span
-            className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.04em]"
+            className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.04em]"
             style={{ color: courtLate ? 'var(--color-terracotta-ink)' : 'var(--color-aged-oak)' }}
           >
             <span
@@ -114,7 +114,7 @@ export function OpenItemRow({ item, tasks, onOpen, court }: OpenItemRowProps) {
         {/* due read — mono, terracotta ink when due-soon, aged-oak otherwise */}
         {due && (
           <span
-            className="flex-shrink-0 whitespace-nowrap text-right font-mono text-[9px] uppercase tracking-[0.04em]"
+            className="flex-shrink-0 whitespace-nowrap text-right font-mono text-[11px] uppercase tracking-[0.04em]"
             style={{ color: soon ? 'var(--color-terracotta-ink)' : 'var(--color-aged-oak)' }}
           >
             {soon ? `due ${fmtDay(due)}` : fmtDay(due)}

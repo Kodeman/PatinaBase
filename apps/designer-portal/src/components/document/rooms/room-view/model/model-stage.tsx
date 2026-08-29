@@ -67,7 +67,7 @@ export function ModelStage({ modelUrl, isSigning = false }: ModelStageProps) {
           This scan has no mesh file yet — Plan carries the measurements.
         </StageMessage>
       )}
-      <div className="flex items-center justify-between border-t border-[var(--doc-ink-border)] px-3.5 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+      <div className="flex items-center justify-between border-t border-[var(--doc-ink-border)] px-3.5 py-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
         <span>Mesh · the room as scanned</span>
         <span>drag to orbit · scroll to move closer</span>
       </div>
@@ -83,7 +83,7 @@ function StageMessage({ children, mono = false }: { children: React.ReactNode; m
       <p
         className={
           mono
-            ? 'font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]'
+            ? 'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]'
             : 'text-[12px] italic text-[var(--text-muted)]'
         }
       >

@@ -41,7 +41,7 @@ import { DrawScheduleEditor, defaultDrawSchedule } from './draw-schedule-editor'
 import { PartyField } from './party-field';
 
 const FIELD_LABEL =
-  'mb-1 block font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
+  'mb-1 block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
 const UNDERLINE_INPUT =
   'min-h-11 w-full border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.85rem] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--color-aged-oak)] focus:border-[var(--color-clay)]';
 
@@ -312,10 +312,10 @@ export function TradeScopeDraftSheet({
           {/* ── The work ── */}
           <section aria-label="The work">
             <div className="flex items-baseline justify-between gap-3">
-              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+              <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
                 The work
               </p>
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                 Written the way you would say it standing in the room
               </span>
             </div>
@@ -416,10 +416,10 @@ export function TradeScopeDraftSheet({
           {/* ── Who does it ── */}
           <section className="mt-6" aria-label="Who does it">
             <div className="flex items-baseline justify-between gap-3">
-              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+              <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
                 Who does it
               </p>
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                 From the project&rsquo;s parties — subs and installers
               </span>
             </div>
@@ -474,10 +474,10 @@ export function TradeScopeDraftSheet({
           {/* ── Client price ── */}
           <section className="mt-6" aria-label="Client price">
             <div className="flex items-baseline justify-between gap-3">
-              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+              <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
                 Client price
               </p>
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                 What the client is asked to authorize
               </span>
             </div>
@@ -493,7 +493,7 @@ export function TradeScopeDraftSheet({
                 placeholder="6,800"
                 className={`${UNDERLINE_INPUT} font-heading text-[15px]`}
               />
-              <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                 {money(clientPriceCents)}
               </p>
             </div>
@@ -556,7 +556,7 @@ export function TradeScopeDraftSheet({
               Release the trade scope
             </DocumentAction>
           </DocumentActionGroup>
-          <p className="mt-1 text-right text-[10px] italic text-[var(--text-muted)]">
+          <p className="mt-1 text-right text-[11px] italic text-[var(--text-muted)]">
             Prices lock on release.
           </p>
         </div>

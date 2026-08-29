@@ -690,7 +690,7 @@ function TeamProfile({
 
       <div className="mt-[1.3rem] grid grid-cols-1 gap-7 lg:grid-cols-[1.4fr_1fr]">
         <div>
-          <div className="mb-[0.7rem] font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <div className="mb-[0.7rem] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             The colophon · margin visibility
           </div>
           <p className="text-[0.78rem] leading-relaxed text-[var(--color-charcoal)]">

@@ -338,7 +338,7 @@ export function RecordOnPaperSheet({
   return (
     <DocSheet open={open} onClose={onClose} title={copy.sheetTitle}>
       <form onSubmit={submit} className="mx-auto w-full max-w-[34rem]">
-        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
           {copy.eyebrow}
         </span>
         <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-charcoal)]">
@@ -379,14 +379,14 @@ export function RecordOnPaperSheet({
                   // different file under a stale scan id.
                   setUploadedScanId(null);
                 }}
-                className="block w-full text-[12px] text-[var(--color-mocha)] file:mr-3 file:rounded-[3px] file:border file:border-[var(--color-pearl)] file:bg-transparent file:px-3 file:py-1.5 file:font-mono file:text-[10px] file:uppercase file:tracking-[0.08em] file:text-[var(--color-charcoal)]"
+                className="block w-full text-[12px] text-[var(--color-mocha)] file:mr-3 file:rounded-[3px] file:border file:border-[var(--color-pearl)] file:bg-transparent file:px-3 file:py-1.5 file:font-mono file:text-[11px] file:uppercase file:tracking-[0.08em] file:text-[var(--color-charcoal)]"
               />
               {scanFile && (
-                <span className="mt-1 block text-[10.5px] text-[var(--text-muted)]">
+                <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
                   {scanFile.name}
                 </span>
               )}
-              <span className="mt-1 block text-[10.5px] text-[var(--text-muted)]">
+              <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
                 The signed copy files to the client&rsquo;s folio — they can see it.
               </span>
             </Field>
@@ -450,7 +450,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <span className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         {label}
       </span>
       {children}

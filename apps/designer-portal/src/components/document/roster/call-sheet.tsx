@@ -130,13 +130,13 @@ export function CallSheet({
             Everyone on {projectTitle}, and how to reach them.
           </p>
           {clientName && (
-            <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
+            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
               {clientName}
             </p>
           )}
           <p
             data-call-sheet-vitals
-            className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+            className="mt-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
           >
             {vitals}
           </p>

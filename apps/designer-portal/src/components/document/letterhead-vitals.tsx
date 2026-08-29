@@ -89,7 +89,7 @@ function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | nul
     <span
       role="status"
       aria-live="polite"
-      className={`ml-1 font-mono text-[8px] uppercase tracking-[0.05em] ${
+      className={`ml-1 font-mono text-[11px] uppercase tracking-[0.05em] ${
         state === 'error' ? 'text-[var(--color-terracotta-ink)]' : 'text-[var(--color-sage)]'
       }`}
     >
@@ -164,7 +164,7 @@ function VitalDate({
 
   return (
     <span className="relative inline-flex items-baseline gap-1">
-      <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+      <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         {label}
       </span>
       <button
@@ -173,7 +173,7 @@ function VitalDate({
         aria-label={label}
         onClick={() => setOpen(true)}
         disabled={state === 'saving'}
-        className="border-b border-transparent bg-transparent font-mono text-[10px] text-[var(--text-muted)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
+        className="border-b border-transparent bg-transparent font-mono text-[11px] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
       >
         {value ? fmtDay(value) : '—'}
       </button>
@@ -183,7 +183,7 @@ function VitalDate({
           aria-label={`Clear ${label.toLowerCase()}`}
           onClick={clear}
           disabled={state === 'saving'}
-          className="font-mono text-[9px] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)] disabled:opacity-50"
+          className="font-mono text-[11px] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)] disabled:opacity-50"
         >
           ×
         </button>
@@ -265,7 +265,7 @@ function VitalMoney({
         }}
         disabled={state === 'saving'}
         size={Math.max(4, value.length + 1)}
-        className="border-b border-transparent bg-transparent text-right font-mono text-[10px] text-[var(--text-muted)] placeholder:text-[var(--color-aged-oak)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
+        className="border-b border-transparent bg-transparent text-right font-mono text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
       />
       <SaveDot state={state} errorMsg={errorMsg} />
     </span>
@@ -310,13 +310,13 @@ function PhasesFold({ projectId }: { projectId: string }) {
             const logged = actualMinutes?.[p.phase_key ?? ''] ?? 0;
             return (
               <tr key={p.id}>
-                <td className="pr-4 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                <td className="pr-4 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                   {p.name ?? prettyPhase(p.phase_key)}
                 </td>
-                <td className="pr-2 text-right font-mono text-[9px] text-[var(--text-muted)]">
+                <td className="pr-2 text-right font-mono text-[11px] text-[var(--text-muted)]">
                   {logged > 0 ? fmtHours(logged) : '—'}
                 </td>
-                <td className="pr-1 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                <td className="pr-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                   of
                 </td>
                 <td>
@@ -341,9 +341,9 @@ function PhasesFold({ projectId }: { projectId: string }) {
                         e.currentTarget.blur();
                       }
                     }}
-                    className="w-10 border-b border-transparent bg-transparent text-right font-mono text-[9px] text-[var(--text-muted)] placeholder:text-[var(--color-aged-oak)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none"
+                    className="w-10 border-b border-transparent bg-transparent text-right font-mono text-[11px] text-[var(--text-muted)] placeholder:text-[var(--color-aged-oak)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none"
                   />
-                  <span className="font-mono text-[9px] text-[var(--text-muted)]">h est.</span>
+                  <span className="font-mono text-[11px] text-[var(--text-muted)]">h est.</span>
                 </td>
               </tr>
             );
@@ -351,7 +351,7 @@ function PhasesFold({ projectId }: { projectId: string }) {
         </tbody>
       </table>
       {rowError && (
-        <p role="alert" className="mt-0.5 text-[10px] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="mt-0.5 text-[11px] text-[var(--color-terracotta-ink)]">
           {rowError}
         </p>
       )}
@@ -393,7 +393,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           while open (no portal, by the Folio's own house rule — see
           folio-popover.tsx), and a <div> can never legally nest inside a
           <p> (the browser silently closes it, a hydration hazard). */}
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-muted)]">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-primary)]">
         {phaseWord && <span>{phaseWord}</span>}
         <VitalDate
           projectId={projectId}
@@ -411,16 +411,16 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           <button
             type="button"
             onClick={() => setBandOpen(true)}
-            className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             Set a budget band
           </button>
         ) : (
           <span className="inline-flex items-baseline gap-0.5">
-            <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               Band
             </span>
-            <span className="font-mono text-[10px] text-[var(--text-muted)]">$</span>
+            <span className="font-mono text-[11px] text-[var(--text-primary)]">$</span>
             <VitalMoney
               projectId={projectId}
               column="budget_min"
@@ -429,7 +429,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
               placeholder="from"
               autoFocus={bandOpen}
             />
-            <span className="font-mono text-[10px] text-[var(--text-muted)]">–</span>
+            <span className="font-mono text-[11px] text-[var(--text-primary)]">–</span>
             <VitalMoney
               projectId={projectId}
               column="budget_max"
@@ -440,13 +440,13 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           </span>
         )}
         {total != null && total !== 0 && (
-          <span className="font-mono text-[10px]">{contractTotal(total)}</span>
+          <span className="font-mono text-[11px]">{contractTotal(total)}</span>
         )}
         <button
           type="button"
           aria-expanded={phasesOpen}
           onClick={() => setPhasesOpen((v) => !v)}
-          className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)]"
+          className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
         >
           Phases {phasesOpen ? '▾' : '▸'}
         </button>
@@ -488,7 +488,7 @@ export function LetterheadTitle({
   };
 
   return (
-    <h1 className="flex items-baseline gap-2 font-heading text-[1.55rem] font-medium leading-tight tracking-[-0.01em] text-[var(--color-charcoal)]">
+    <h1 className="flex items-baseline gap-2 font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)]">
       <input
         type="text"
         aria-label="Project title"
@@ -506,7 +506,7 @@ export function LetterheadTitle({
           }
         }}
         disabled={state === 'saving'}
-        className="min-w-0 flex-1 border-b border-transparent bg-transparent font-heading text-[1.55rem] font-medium leading-tight tracking-[-0.01em] text-[var(--color-charcoal)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60"
+        className="min-w-0 flex-1 border-b border-transparent bg-transparent font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60"
       />
       <SaveDot state={state} errorMsg={errorMsg} />
     </h1>

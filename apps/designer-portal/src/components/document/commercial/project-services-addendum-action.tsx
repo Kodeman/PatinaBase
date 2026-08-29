@@ -47,7 +47,7 @@ export function ProjectServicesAddendumAction({
       >
         Create services addendum
       </DocumentAction>
-      <span className="text-[10.5px] text-[var(--text-muted)]">
+      <span className="text-[11px] text-[var(--text-muted)]">
         The current authority stays active until the addendum is countersigned.
       </span>
       {error && (

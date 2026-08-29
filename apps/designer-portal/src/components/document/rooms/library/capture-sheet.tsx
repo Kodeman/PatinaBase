@@ -67,7 +67,7 @@ export function CaptureSheet({
 
   return (
     <RoomSheet open={open} onClose={onClose} title="Capture into My Library">
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
+      <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Capture · into My Library
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
@@ -78,7 +78,7 @@ export function CaptureSheet({
         when you’re ready.
       </p>
 
-      <label className="mb-1 block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+      <label className="mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
         Paste a product URL
       </label>
       <input
@@ -89,7 +89,7 @@ export function CaptureSheet({
         className="mb-4 w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
       />
 
-      <label className="mb-1 block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+      <label className="mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
         …or name it by hand
       </label>
       <input

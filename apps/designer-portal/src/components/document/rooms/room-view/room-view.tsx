@@ -313,7 +313,7 @@ export function RoomView({
         {docLink && (
           <Link
             href={docLink.href}
-            className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
+            className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
           >
             {docLink.label}
           </Link>
@@ -369,7 +369,7 @@ export function RoomView({
           className="-mb-px cursor-not-allowed border-b-2 border-transparent px-5 pb-3 pt-2.5 font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-mocha)] opacity-35"
         >
           Walk
-          <span className="mt-0.5 block text-[8px] tracking-[0.1em] text-[var(--color-clay-ink)] opacity-100">
+          <span className="mt-0.5 block text-[11px] tracking-[0.1em] text-[var(--color-clay-ink)] opacity-100">
             arrives with Place
           </span>
         </span>

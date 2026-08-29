@@ -64,7 +64,7 @@ export function RuleThread({ leftPct, widthPct, name, start, end, laneIndex }: R
         className="absolute right-0"
         style={{ top: -2.5, width: 1, height: 6, background: 'var(--color-aged-oak)', opacity: 0.7 }}
       />
-      <span className="absolute left-0 top-[-15px] whitespace-nowrap font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
+      <span className="absolute left-0 top-[-15px] whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
         {name} runs alongside{range}
       </span>
     </div>
