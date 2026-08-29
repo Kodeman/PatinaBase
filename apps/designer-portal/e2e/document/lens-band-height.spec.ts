@@ -177,7 +177,10 @@ const LEDGER_MAX_ROWS = 2;
 const FIRST_HEAD_MAX_Y_390 = 390;
 
 const LETTERHEAD = '#document-project-status';
-const LEDGER = `${LETTERHEAD} [data-action-region="letterhead-actions"]`;
+// `role="group"` matters: `DocumentAction` copies `data-action-region` onto
+// every button from the group's context, so the bare attribute matches the
+// container AND its four acts.
+const LEDGER = `${LETTERHEAD} [role="group"][data-action-region="letterhead-actions"]`;
 
 /** How many rows the ledger's acts actually occupy. */
 function ledgerRows(page: AuthenticatedPage): Promise<number> {
@@ -194,11 +197,12 @@ function ledgerRows(page: AuthenticatedPage): Promise<number> {
 }
 
 test.describe('the letterhead grid', () => {
+
   test.beforeAll(() => {
     assertLongPaper();
   });
 
-  test(`is ≤${LETTERHEAD_MAX_1440}px at 1440, with an unclipped title and one-row vitals`, async ({
+  test('prints an unclipped title, one-row vitals and a bounded ledger at 1440', async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 1440, 900);
@@ -209,7 +213,6 @@ test.describe('the letterhead grid', () => {
     const box = await letterhead.boundingBox();
     expect(box).not.toBeNull();
     console.log(`W3-R4 · letterhead height at 1440, rest: ${box!.height}px`);
-    expect(box!.height).toBeLessThanOrEqual(LETTERHEAD_MAX_1440);
 
     // The title takes the whole measure, so nothing of it is hidden.
     const title = page.locator(`${LETTERHEAD} input[aria-label="Project title"]`);
@@ -238,7 +241,7 @@ test.describe('the letterhead grid', () => {
     expect(rows).toBeLessThanOrEqual(LEDGER_MAX_ROWS);
   });
 
-  test(`is ≤${LETTERHEAD_MAX_390}px at 390, ledger still mounted, first head at or above ${FIRST_HEAD_MAX_Y_390}px`, async ({
+  test('keeps every element at 390 — mark, chip, vitals and a ≤2-line ledger', async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 390, 844);
@@ -249,7 +252,6 @@ test.describe('the letterhead grid', () => {
     const box = await letterhead.boundingBox();
     expect(box).not.toBeNull();
     console.log(`W3-R4 · letterhead height at 390, rest: ${box!.height}px`);
-    expect(box!.height).toBeLessThanOrEqual(LETTERHEAD_MAX_390);
 
     // D-B20 — nothing is dropped at 390: the mark, the chip and the ledger all
     // stand, the ledger stacked under the vitals by the single column.
@@ -260,12 +262,61 @@ test.describe('the letterhead grid', () => {
     expect(rows).toBeGreaterThan(0);
     expect(rows).toBeLessThanOrEqual(LEDGER_MAX_ROWS);
 
+  });
+
+  /**
+   * The two BUDGET numbers stand apart from the four assertions above, because
+   * they are a ruling and those are a defect. The defect B5 named — a title
+   * amputated to `Aspen Lo`, four-line vitals, a three-row ledger — is closed
+   * and asserted above. The budgets are not met, and the arithmetic says they
+   * cannot be met as W3-R4 states them:
+   *
+   *   1440, measured: pt 14 + mark row 51.25 (40 + 11.25 mb) + title 44.1 +
+   *   gap-y 9 + ledger row 101.4 (TWO rows) + pb 18 = 238.7.
+   *   W3-R4 priced the mark row at 44, no grid gap, and a ONE-row ledger at 44
+   *   → 170. Even with a one-row ledger the shipped chrome measures ≈185.
+   *
+   *   The ledger cannot be one row inside `minmax(18rem,24rem)` = 432px:
+   *   `DocumentAction` prints 12px mono at `tracking-[0.1em]`, not the 11px /
+   *   7.5px-per-char W3-R4's arithmetic assumed. Measured act boxes at 1440:
+   *   MESSAGE 72 + PREVIEW 71 + SHARING · MILESTONES 180 + CALL SHEET · 0 130
+   *   = 453px, plus 3 × 13.5px gaps = 493.5px.
+   *
+   *   390, measured 271.9 against 240, the same two-row ledger.
+   *
+   * Two levers exist and both are the DESIGN LEAD's, not this lane's: widen
+   * the right track past 24rem, or shorten the labels again at 1440 the way
+   * 390 already shortens them. Left failing rather than weakened, so the miss
+   * is visible in the run.
+   */
+  test(`letterhead is ≤${LETTERHEAD_MAX_1440}px at 1440 (W3-R4 budget — OWED A RULING)`, async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page, LONG_PAPER_ID, 1440, 900);
+    await scrollTo(page, 0);
+    const box = await page.locator(LETTERHEAD).boundingBox();
+    expect(box!.height).toBeLessThanOrEqual(LETTERHEAD_MAX_1440);
+  });
+
+  test(`letterhead is ≤${LETTERHEAD_MAX_390}px at 390 (W3-R4 budget — OWED A RULING)`, async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page, LONG_PAPER_ID, 390, 844);
+    await scrollTo(page, 0);
+    const box = await page.locator(LETTERHEAD).boundingBox();
+    expect(box!.height).toBeLessThanOrEqual(LETTERHEAD_MAX_390);
+  });
+
+  test(`first [data-region-head] is at or above ${FIRST_HEAD_MAX_Y_390}px at 390 (W3-R4 budget — OWED A RULING)`, async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page, LONG_PAPER_ID, 390, 844);
+    await scrollTo(page, 0);
     const firstHead = page
       .locator('[data-document-paper] [data-region-head]')
       .first();
     await expect(firstHead).toBeVisible({ timeout: 20_000 });
     const headBox = await firstHead.boundingBox();
-    expect(headBox).not.toBeNull();
     console.log(`W3-R4 · first [data-region-head] top at 390, rest: ${headBox!.y}px`);
     expect(headBox!.y).toBeLessThanOrEqual(FIRST_HEAD_MAX_Y_390);
   });
@@ -285,11 +336,11 @@ test.describe('the letterhead grid', () => {
  * phone's primary act was shipping a ~20px target against a 44px contract.
  */
 test.describe('line 2’s act is a whole 44px target at 390 (C-02)', () => {
+
   test('is not clipped by the line it stands in', async ({
     authenticatedPage: page,
   }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await openPaper(page, LONG_PAPER_ID);
+    await openPaper(page, LONG_PAPER_ID, 390, 844);
 
     const line2 = page.locator('[data-lens-line="2"]');
     await expect(line2).toBeVisible();
