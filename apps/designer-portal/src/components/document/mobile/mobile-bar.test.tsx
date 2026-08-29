@@ -254,3 +254,64 @@ describe('the elected act at 390', () => {
     );
   });
 });
+
+describe('the left zone · household and the current stop (OD-11, A-08)', () => {
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    mockCallSheetOn = true;
+  });
+
+  it('prints the household, not the active section, on the second line', () => {
+    mountBar();
+    const doorway = screen.getByRole('button', { name: 'Open sections' });
+    expect(within(doorway).getByText('Vandersteen')).toBeInTheDocument();
+    expect(within(doorway).queryByText('Project')).toBeNull();
+  });
+
+  it('falls back to the document title when there is no household name', () => {
+    mountBar({ doc: { ...heldDocument, clientName: '' } });
+    const doorway = screen.getByRole('button', { name: 'Open sections' });
+    expect(
+      within(doorway).getByText('Vandersteen residence'),
+    ).toBeInTheDocument();
+  });
+
+  it('omits the third line and reads "Open sections" with no reading index', () => {
+    mountBar();
+    const bar = screen.getByTestId('mobile-bar');
+    expect(bar).toHaveAttribute('data-reading-index', '');
+    expect(screen.queryByText(/^At /)).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Open sections' }),
+    ).toBeInTheDocument();
+  });
+
+  it('prints "At <stop>" and publishes data-reading-index once a stop is held', () => {
+    mountBar({ doc: { ...heldDocument, readingIndex: 'ffe' } });
+    const bar = screen.getByTestId('mobile-bar');
+    expect(bar).toHaveAttribute('data-reading-index', 'ffe');
+    expect(screen.getByText('At Pieces')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Open sections, at Pieces' }),
+    ).toBeInTheDocument();
+  });
+
+  it('names every stop with the running index labels', () => {
+    (
+      [
+        ['approvals', 'At Client approvals', 'Open sections, at Client approvals'],
+        ['schedule', 'At Schedule', 'Open sections, at Schedule'],
+        ['money', 'At Money', 'Open sections, at Money'],
+      ] as const
+    ).forEach(([readingIndex, line, ariaLabel]) => {
+      const { unmount } = mountBar({
+        doc: { ...heldDocument, readingIndex },
+      });
+      expect(screen.getByText(line)).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: ariaLabel }),
+      ).toBeInTheDocument();
+      unmount();
+    });
+  });
+});

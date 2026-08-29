@@ -131,8 +131,10 @@ const SHEET_RETURN_FALLBACKS: Record<
 > = {
   drawer: ['[data-studio-books-doorway]', MOBILE_MORE_DOORWAY],
   timer: [
-    '[data-compact-spine-timer-doorway]',
-    '[data-full-spine-timer] [data-action-key="open-manual-time-entry"]',
+    // The studio drawer's `In hand today` clock is the timer's doorway at
+    // every width from W1; the spine's two (`[data-compact-spine-timer-doorway]`,
+    // `[data-full-spine-timer]`) went with `spine-timer.tsx` (OD-16).
+    '[data-drawer-timer-doorway]',
     MOBILE_MORE_DOORWAY,
     '[data-studio-books-doorway]',
   ],
@@ -250,11 +252,14 @@ function Sheet({
       ref={dialogRef}
       id={compactTimer ? 'mobile-timer-sheet' : undefined}
       data-mobile-sheet-kind={kind}
+      // W1 — the timer sheet lost its ceiling with `spine-timer.tsx`: the
+      // studio drawer's clock is its doorway at 1440 too, so it is the one
+      // sheet with no width regime at all.
       data-mobile-sheet-regime={
-        compactTimer ? 'through-1439' : 'below-1180-only'
+        compactTimer ? 'every-width' : 'below-1180-only'
       }
       className={`fixed inset-0 z-[58] ${
-        compactTimer ? 'min-[1440px]:hidden' : 'min-[1180px]:hidden'
+        compactTimer ? '' : 'min-[1180px]:hidden'
       }`}
       role="dialog"
       aria-label={compactTimer ? 'Time in hand' : undefined}
@@ -340,10 +345,13 @@ export function MobileSheets() {
 
   useEffect(() => {
     if (!sheetKind) return;
+    // The timer sheet has no width regime any more: from W1 it is the only
+    // place Pause / Resume / `+ Log manually` live, and the studio drawer's
+    // clock opens it at 1440 as well as below. Every other sheet still closes
+    // when the compact regime ends.
+    if (sheetKind === 'timer') return;
 
-    const validRegime = window.matchMedia(
-      sheetKind === 'timer' ? '(max-width: 1439px)' : '(max-width: 1179px)',
-    );
+    const validRegime = window.matchMedia('(max-width: 1179px)');
     const closeOutsideRegime = () => {
       if (!validRegime.matches) closeSheet();
     };

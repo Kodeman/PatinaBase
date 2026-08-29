@@ -80,19 +80,6 @@ jest.mock('../strata-mark', () => ({
   ),
 }));
 
-jest.mock('../spine-timer', () => ({
-  SpineTimer: () => <div data-testid="spine-timer">Timer</div>,
-  CompactSpineTimerDoorway: () => (
-    <button
-      type="button"
-      data-testid="compact-spine-timer"
-      className="hidden min-[1180px]:flex min-[1440px]:hidden"
-    >
-      Compact timer
-    </button>
-  ),
-}));
-
 jest.mock('@/lib/document/fill-state', () => ({
   fillStateAtSection: () => ({ kind: 'empty' }),
 }));
@@ -180,18 +167,19 @@ describe('quiet responsive document shell', () => {
 
   it('exposes a compact index at 1180px and the full labelled spine at 1440px', () => {
     const onJump = jest.fn();
-    render(<DocSpine sections={sections} others={[]} onJump={onJump} />);
+    render(<DocSpine sections={sections} onJump={onJump} />);
 
     const spine = screen.getByRole('complementary', { name: 'Document spine' });
     expect(spine).toHaveAttribute(
       'data-spine-regime',
-      'sheet-below-1180-compact-to-1439-full-from-1440',
+      'sheet-below-1180-narrow-to-1439-full-from-1440',
     );
     expect(spine).toHaveClass(
       'min-[1180px]:block',
       'min-[1180px]:box-border',
       'min-[1180px]:overflow-x-hidden',
       'min-[1180px]:w-full',
+      'min-[1180px]:px-3',
       'min-[1440px]:w-auto',
     );
 
@@ -210,15 +198,13 @@ describe('quiet responsive document shell', () => {
       screen.queryByRole('button', { name: /Direction/ }),
     ).not.toBeInTheDocument();
 
-    expect(screen.getByTestId('spine-timer').parentElement).toHaveClass(
-      'hidden',
-      'min-[1440px]:block',
-    );
-    expect(screen.getByTestId('compact-spine-timer')).toHaveClass(
-      'hidden',
-      'min-[1180px]:flex',
-      'min-[1440px]:hidden',
-    );
+    expect(screen.queryByTestId('spine-timer')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('compact-spine-timer'),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-spine-timer-regime]'),
+    ).not.toBeInTheDocument();
   });
 
   it('opens the laptop margin as a labelled, keyboard-contained sheet', async () => {
@@ -496,9 +482,9 @@ describe('the 390 bar', () => {
     expect(controls).toHaveLength(3);
 
     const [context, act, more] = controls;
-    expect(context).toHaveAccessibleName(
-      'Open sections, current section Project',
-    );
+    // OD-11 (W1-L3): the sections door names the reading STOP, not the
+    // section — `held` above carries no `readingIndex`, so it names none.
+    expect(context).toHaveAccessibleName('Open sections');
     expect(act).toHaveAttribute('data-action-key', 'pick-the-fabric');
     expect(act.querySelector('.da-label')?.textContent).toBe(
       'Pick the fabric for the Okonkwo sofa',
@@ -619,11 +605,20 @@ function TicketPaper({ section }: { section: SectionKey }) {
 
   return (
     <>
-      <DocLetterhead
-        title="Vandersteen residence"
-        vitals="Procurement & Orders"
-        inHandRoomName={heldRoomName}
-        onReleaseRoom={heldRoomId ? () => toggleRoom(heldRoomId) : null}
+      <DocLetterhead title="Vandersteen residence" vitals="Procurement & Orders" />
+      {/* C-1 — the room in hand and its release moved to the rail head in W1;
+          the letterhead prints neither. The spine is rendered here so the
+          hold's two printings (the rail's line, the ticket's chip) can be
+          asserted together, as they were when the letterhead carried one. */}
+      <DocSpine
+        sections={[]}
+        household="Vandersteen"
+        roomInHand={
+          heldRoomId && heldRoomName
+            ? { id: heldRoomId, name: heldRoomName }
+            : null
+        }
+        onReleaseRoom={toggleRoom}
       />
       <JobTicket
         rows={rows}
@@ -690,6 +685,17 @@ describe('the ticket, mounted by the document', () => {
 });
 
 describe('a room in hand, carried down the widths', () => {
+  // W1 re-point (C-1). These two cases used to read the hold off the
+  // letterhead's `Put down Living room`; the rail head owns both the naming
+  // (`IN HAND · LIVING ROOM`, inside `[data-spine-head]`) and the release
+  // (`Put down the room`) from this wave, and the letterhead prints neither.
+  // The release assertions are unchanged in substance — only the act they
+  // press moved.
+  const railHead = () =>
+    document.querySelector<HTMLElement>('[data-spine-head]');
+  const releaseAct = () =>
+    screen.queryByRole('button', { name: 'Put down the room' });
+
   it('survives 1440 → 1280 → 390 with a release reachable at each', () => {
     const media = installWidthMatchMedia(1440);
     renderTicketPaper('project');
@@ -697,54 +703,52 @@ describe('a room in hand, carried down the widths', () => {
     fireEvent.click(ticketRow('rooms')!.querySelector('button')!);
     fireEvent.click(roomChip('living')!);
 
-    // 1440 — the letterhead names it, and both controls are on screen.
+    // 1440 — the rail head names it, and both controls are on screen.
     expect(roomChip('living')).toHaveAttribute('aria-pressed', 'true');
-    expect(
-      screen.getByRole('button', { name: 'Put down Living room' }),
-    ).toBeInTheDocument();
+    expect(railHead()).toHaveTextContent('In hand · Living room');
+    expect(releaseAct()).toBeInTheDocument();
 
-    // 1280 — the width that used to drop the hold on the floor.
+    // 1280 — the width that used to drop the hold on the floor. The 136px rail
+    // prints words, so the head carries the same two lines it does at 1440.
     act(() => media.resizeTo(1280));
-    expect(
-      screen.getByRole('button', { name: 'Put down Living room' }),
-    ).toBeInTheDocument();
+    expect(railHead()).toHaveTextContent('In hand · Living room');
+    expect(releaseAct()).toBeInTheDocument();
     expect(roomChip('living')).toHaveAttribute('aria-pressed', 'true');
 
-    // 390 — the ticket rests as the seam, so the letterhead is the release
-    // that is already on screen; unfolding brings the chip back.
+    // 390 — the rail is display:none below 1180 (a CSS fact jsdom cannot
+    // render, so it is not asserted here; `quiet-responsive-shell.spec.ts`
+    // holds it). The ticket rests as the seam and unfolding brings the chip
+    // back: the chip is the release at this width, and the hold survived the
+    // trip down.
     act(() => media.resizeTo(390));
     expect(document.querySelector('[data-job-ticket]')).not.toHaveAttribute(
       'data-unfolded',
     );
-    expect(
-      screen.getByRole('button', { name: 'Put down Living room' }),
-    ).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole('button', { name: 'Unfold ↓' }));
     expect(roomChip('living')).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('puts the room down from the ticket, and from the letterhead', () => {
-    const media = installWidthMatchMedia(1440);
+  it('puts the room down from the ticket, and from the rail head', () => {
+    installWidthMatchMedia(1440);
     renderTicketPaper('project');
 
     fireEvent.click(ticketRow('rooms')!.querySelector('button')!);
     fireEvent.click(roomChip('living')!);
     fireEvent.click(roomChip('living')!);
     expect(roomChip('living')).toHaveAttribute('aria-pressed', 'false');
-    expect(
-      screen.queryByRole('button', { name: 'Put down Living room' }),
-    ).not.toBeInTheDocument();
+    expect(releaseAct()).not.toBeInTheDocument();
 
-    // Taken again and carried to the phone: the letterhead alone puts it down.
+    // Taken again: the rail head alone puts it down.
     fireEvent.click(roomChip('living')!);
-    act(() => media.resizeTo(390));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Put down Living room' }),
-    );
+    expect(releaseAct()).toBeInTheDocument();
+    fireEvent.click(releaseAct()!);
+
+    expect(releaseAct()).not.toBeInTheDocument();
+    expect(roomChip('living')).toHaveAttribute('aria-pressed', 'false');
     expect(
-      screen.queryByRole('button', { name: 'Put down Living room' }),
-    ).not.toBeInTheDocument();
+      document.querySelector('[data-spine-room-in-hand]'),
+    ).toBeNull();
+    // The letterhead's old printing is gone for good.
     expect(document.querySelector('[data-in-hand-room]')).toBeNull();
   });
 });

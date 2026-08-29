@@ -16,6 +16,7 @@ import {
   useUnseenShipped,
 } from '@patina/supabase';
 import { ALL_STUDIO_SURFACES, boardsRoutePath } from '@/lib/document/registry';
+import { DOCUMENT_INDEX_LABELS } from '@/lib/document/document-index';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
@@ -114,6 +115,12 @@ export function MobileBar() {
   const context = inDocument
     ? (activeSection?.label ?? 'Document')
     : surfaceLabel(pathname);
+  // OD-11/A-08: the left zone's second line names the household (not the
+  // active section, which `context` above still carries for the studio
+  // case); the third line names the current reading stop.
+  const household = activeDoc?.clientName || activeDoc?.title || 'Document';
+  const readingIndex = activeDoc?.readingIndex ?? null;
+  const stopLabel = readingIndex ? DOCUMENT_INDEX_LABELS[readingIndex] : null;
 
   // F49 — the shelves the spine prints at 1440, as doors a phone can reach.
   // The boards now have a page of their own (B1-L4), so the row that used to
@@ -208,18 +215,23 @@ export function MobileBar() {
     (action) => action.actionKey !== primaryAction?.actionKey,
   );
 
+  // OD-11: three lines in the left zone (overline, household, stop) need
+  // more than the old two-line 64px reserve — bumped to 72px.
   return (
     <nav
       aria-label="Document bar"
       data-testid="mobile-bar"
       data-mobile-edge-owner="document-bar"
-      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[64px] items-center gap-2 border-t border-[rgba(250,247,242,0.16)] bg-[var(--color-charcoal)] px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 min-[1180px]:hidden"
+      data-reading-index={readingIndex ?? ''}
+      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[72px] items-center gap-2 border-t border-[rgba(250,247,242,0.16)] bg-[var(--color-charcoal)] px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 min-[1180px]:hidden"
     >
       {inDocument ? (
         <button
           type="button"
           onClick={openSpine}
-          aria-label={`Open sections, current section ${context}`}
+          aria-label={
+            stopLabel ? `Open sections, at ${stopLabel}` : 'Open sections'
+          }
           className="flex min-h-11 min-w-0 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
           {STRATA}
@@ -228,8 +240,17 @@ export function MobileBar() {
               In this document
             </span>
             <span className="block truncate font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
-              {context}
+              {household}
             </span>
+            {stopLabel && (
+              // F56/contrast.test.ts: mobile-bar.tsx is a charcoal ground —
+              // `--color-clay-ink` reads 2.41:1 there and fails AA; the base
+              // `--color-clay` pigment (6.21:1) is this file's established
+              // dark-ground accent (see the elapsed-time text below).
+              <span className="block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)]">
+                At {stopLabel}
+              </span>
+            )}
           </span>
         </button>
       ) : (
