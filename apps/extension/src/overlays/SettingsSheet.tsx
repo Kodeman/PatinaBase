@@ -4,10 +4,8 @@ import { OverlaySheet } from '../panel/OverlaySheet';
 import type { Prefs } from '../state/types';
 
 const TOGGLES: { key: keyof Prefs; label: string; hint: string }[] = [
-  { key: 'tradeLayer', label: 'Trade layer', hint: 'Show the trade pricing region' },
   { key: 'dupeWarnings', label: 'Duplicate warnings', hint: 'Flag look-alikes already in your library' },
   { key: 'snapshotFallbackEnabled', label: 'Snapshot fallback', hint: 'Offer a screenshot when a page blocks extraction' },
-  { key: 'ocrEnabled', label: 'Read text from images', hint: 'Use OCR to pre-fill from snapshots' },
   { key: 'autoDetect', label: 'Auto-detect vendor pages', hint: 'Switch to vendor mode on brand pages' },
 ];
 

@@ -14,7 +14,7 @@ import type {
 import { supabase } from '../lib/supabase';
 import { detectModeFromUrl } from '../lib/mode-detection';
 import { bestProductMatch } from '../lib/product-similarity';
-import { ocrTextToFields } from '../lib/ocr';
+import { textToFields } from '../lib/text-to-fields';
 
 interface PendingIntent {
   kind: 'capture-page' | 'capture-image' | 'capture-selection';
@@ -385,7 +385,7 @@ export function useCaptureController(): CaptureController {
     }
     if (intent?.kind === 'capture-selection' && intent.selectionText) {
       dispatch({ type: 'MANUAL_START', url: currentUrl });
-      const fields = ocrTextToFields(intent.selectionText);
+      const fields = textToFields(intent.selectionText);
       if (fields.name) dispatch({ type: 'FIELD_EDIT', field: 'name', value: fields.name });
       if (fields.price)
         dispatch({ type: 'FIELD_EDIT', field: 'price', value: (fields.price.value / 100).toFixed(2) });
