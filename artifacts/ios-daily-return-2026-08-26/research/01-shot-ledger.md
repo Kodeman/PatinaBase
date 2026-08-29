@@ -1493,3 +1493,332 @@ disabled/tax-gated `Continue to payment` before any RPC fired; count stayed **0*
 
 Leave state: signed in as `client@patina.dev`, flag off, on the Daily Room, light appearance,
 default text size (`w5-17`).
+
+## w6-x2
+
+Lane X2, W6. Clone `dr-w6-x2` `05F96C3D-FC4F-4C6B-AC07-503261141C8F` (iPhone 17 Pro / iOS 26.5,
+402×874 pt), signed adhoc from
+`.codex/worktrees/agent-dr-w6-x2/.build/dd/Build/Products/Debug-iphonesimulator/Patina.app`
+(the `xcodebuild test` product — **not** `CODE_SIGNING_ALLOWED=NO`). Launched
+`-DeploymentTarget local -PatinaFlags house-widget`, signed in as `client@patina.dev` against the
+local stack. Every frame from `xcrun simctl io <udid> screenshot`; taps from blitz with the explicit
+udid. No `screencapture`.
+
+| Shot | What it shows | Quoted |
+|---|---|---|
+| `w6-x2-01-today-record.png` | Today, flag on, the Record painted | AX: `Your invoice is due. INV-2026-0142. $4,250.00 · due Sep 2.` · MOVED: `Meadow Linen Sectional arrived. Ordered by Leah. Aug 28.` · house rail first card `Guest Bedroom` |
+| `w6-x2-02-invoice-reminder-offered.png` | Invoice detail, the act offered under `Due Sep 2` | `Remind me the day before it's due` (AXUniqueId `invoiceDetail.reminder`) over `We'll send one notification: “Your invoice is due tomorrow — $4,250.00. Nothing else.”` |
+| `w6-x2-03-reminder-set.png` | The same row, set | `Reminder set for Sep 1.` + `Remove` — Sep 1 is the day before Sep 2 |
+| `w6-x2-04-reminder-removed.png` | After `Remove` | back to `Remind me the day before it's due`; nothing left claiming a reminder |
+| `w6-x2-05-reminder-survives-relaunch.png` | Re-set, then `simctl terminate` + fresh `launch` | `Reminder set for Sep 1.` — read back from `UNUserNotificationCenter`'s own pending queue, not from a second copy the app keeps |
+
+**The two files in the shared container, quoted from the device.** The App Group container **was**
+honoured on this build (as `w2/r2-notes.md` §3 recorded, and unlike the empty-entitlements case
+`w2/r1-notes.md` §7 recorded) —
+`…/Devices/05F96C3D-…/data/Containers/Shared/AppGroup/11192F24-DF96-4E56-81A9-1759F1B189F1/`:
+
+```
+house-record.json    keys ['hasMoreMoved','hasMoreNeedsYou','moved','needsYou','window']
+                     needsYou ['invoice:b0…e142', 'proposal:b0…0002', 'decision:b0…2c02']
+widget-snapshot.json keys ['flagOn','movedRows','refreshedAt']
+                     movedRows ['order:fulfillment:f5000000-…-0001', 'story:a8b3f8a0-…-1a01']
+                     flagOn true   refreshedAt 2026-08-28T23:38:06Z → 23:39:58Z after relaunch
+```
+
+The record on disk carries three NEEDS YOU rows; the widget's file carries **none of them, and no
+count** — Q8 / C5 / B §4, made structural rather than reviewed. `refreshedAt` advanced on the
+relaunch, so the write and the `reloadTimelines(ofKind: "PatinaHouseWidget")` fire on every record
+save. `houseLine` is absent because nothing calls `noteHouseLine` yet (integration note, X2 §1).
+
+`Library/Preferences/group.cloud.patina.app.plist` in the same container:
+
+```
+"patina.flags.resolved" => { "direct-orders" => false, "house-first" => false, "house-widget" => true }
+"patina.house.lastSeenAt" => 1787960286.728326
+"patina.house.recordOwnerId" => "A0000000-0000-0000-0000-000000000005"
+```
+
+The flag mirror lands beside the visit stamp and the owner stamp, in the suite the widget reads.
+
+**Claim level: sim-verified.** The App Group being genuinely shared between the app process and a
+widget process remains a **device** claim; no widget was installed and none was drawn. Notification
+authorization was granted through `PushPrimerView` → the system alert (`Allow`) on this clone; APNs
+delivery was not exercised and is not claimed.
+
+### w6-x2 · fix round (X2 review F1–F6)
+
+Same clone `dr-w6-x2` `05F96C3D-FC4F-4C6B-AC07-503261141C8F`, signed adhoc from the `xcodebuild test`
+product in the same worktree. **Uninstalled and reinstalled first**, so notification authorization
+returned to `notDetermined` — the fix round's whole subject is the ask, and the earlier walk had
+already granted it. Launched `-DeploymentTarget local -PatinaFlags house-widget`; the Supabase
+session survived the reinstall in the keychain, so the app came back signed in as the same client.
+Every frame from `xcrun simctl io <udid> screenshot`; taps from blitz with the explicit udid. No
+`screencapture`.
+
+| Shot | What it shows | Quoted |
+|---|---|---|
+| `w6-x2-fix-01-sp08-primer-untouched.png` | SP-08's push primer, fired by the money-moment trigger on a fresh install — **not** by the reminder | `Before we interrupt you` / `We'll tell you when your designer sends something that needs you — a decision, a proposal, or an invoice. Nothing else.` (`PushPrimerView.Allow` / `.NotNow`). Tapped **Not now** — arms Q7's gate, leaves authorization undecided |
+| `w6-x2-fix-02-today-record.png` | Today, flag on, the Record painted | NEEDS YOU `Your invoice is due. INV-2026-0142. $4,250.00 · due Sep 2.` · MOVED `Meadow Linen Sectional arrived.` · house rail first card `Guest Bedroom` |
+| `w6-x2-fix-03-reminder-offered.png` | Invoice detail, the act under `Due Sep 2`, consent sentence now at 12 pt (F12) | `Remind me the day before it's due` over `We'll send one notification: “Your invoice is due tomorrow — $4,250.00. Nothing else.”` |
+| `w6-x2-fix-04-reminder-own-primer.png` | **F4** — the reminder's own primer, on an install whose Q7 ask is already spent | `The day before it's due` / the promise verbatim / `That is the whole of it — no badge, no repeat, nothing else. Remove it from this invoice whenever you like.` / `invoiceDetail.reminder.primer.allow` `Turn on the reminder` · `.dismiss` `Not now`. Pre-fix this path printed `Notifications are off for Patina.` (F9) |
+| `w6-x2-fix-05-reminder-set.png` | After `Turn on the reminder` → system alert → `Allow` | `Reminder set for Sep 1.` + `Remove` — Sep 1 is the day before Sep 2, and the date now comes from the queued trigger, not a recomputed due date (F8) |
+| `w6-x2-fix-06-paid-row-gone.png` | **F1** — `invoices.status → 'paid'` in the local stack, pull-to-refresh | header `Paid in full`; `invoiceDetail.reminder` is present at **zero height** — the row is mounted and drawing nothing, which is what lets its `.task` run on the transition |
+| `w6-x2-fix-07-reminder-cancelled-by-payment.png` | **F1, the proof** — `status → 'sent'` again, pull-to-refresh | **`Remind me the day before it's due`** — not `Reminder set for Sep 1.` The row's only source is `UNUserNotificationCenter`'s pending queue, so reading *unset* means the request was genuinely cancelled while the invoice was paid |
+
+**The two files in the shared container, quoted from the device** (a fresh container after the
+reinstall — `…/AppGroup/C4C75B2E-969A-445E-A4F6-F3B89C45EFCA/`):
+
+```
+widget-snapshot.json keys ['flagOn','movedRows','refreshedAt','sinceDate']
+                     sinceDate   2026-08-21T05:00:00Z      ← F2, new
+                     refreshedAt 2026-08-29T00:32:31Z   flagOn true   houseLine ABSENT (F3, owed)
+                     movedRows ['order:fulfillment:f5000000-…-0001', 'story:a8b3f8a0-…-1a01']
+house-record.json    needsYou ['invoice:b0…e142', 'proposal:b0…0002', 'decision:b0…2c02']
+                     window   {'start': '2026-08-21T05:00:00Z', duration 675151.27}
+```
+
+`sinceDate` is byte-identical to the record's window start — the window the app computed, not a day
+derived from "now". 2026-08-21 is a **Friday**, so X1's widget now draws `Since Fri` and
+`Nothing moved since Friday.` — M6b's strings — instead of the `What moved` / `Nothing moved.`
+fallbacks. The record still carries three NEEDS YOU rows and the widget's file still carries none of
+them and no count: the C5 / Q8 rule survived the change.
+
+`houseLine` is still absent. Nothing calls `noteHouseLine` yet — F3, owed, one line in
+`DailyRoomView`, the steward's (`x2-notes.md` §1).
+
+**F5, measured on the same clone.** `launchArgumentOverrideWins` names `house-first,house-widget`;
+run alone, the real suite read back afterwards:
+
+```
+"patina.flags.resolved" => { "direct-orders" => false, "house-first" => false, "house-widget" => false }
+```
+
+All three false — the test's values went to its own throwaway suite. The falses are the app host's
+own launch resolution, which is the app doing what it does at every launch.
+
+Leave state: signed in as the seeded client on the invoice detail, `house-widget` on, notification
+authorization **granted**, no reminder scheduled, `INV-2026-0142` restored to `sent` / `$0.00 paid`
+(the two temporary DB writes were reverted; `paid_at` back to null).
+
+**Claim level: sim-verified.** A genuinely shared App Group between app and widget processes stays a
+**device** claim — no widget installed, none drawn. Notification *delivery* was not exercised: the
+walk proves the request enters and leaves the pending queue, not that iOS presents it on Sep 1. No
+APNs claim; the reminder registers for nothing remote by design.
+
+
+## w6-x1
+
+Lane X1 (the widget target, its timeline, the deep links), worktree
+`.codex/worktrees/agent-dr-w6-x1`, simulator clone **dr-w6-x1**
+`C0F004CB-95D4-4BC5-AAD3-25E6513BD180` (iPhone 17 Pro, iOS 26.5). Build installed:
+`.build/dd/Build/Products/Debug-iphonesimulator/Patina.app` — the signed test build, **not** a
+`CODE_SIGNING_ALLOWED=NO` product. Every launch carried `-DeploymentTarget local`.
+Every shot is `xcrun simctl io <udid> screenshot`; no desktop capture was used.
+
+| Shot | What it shows |
+|---|---|
+| `w6-x1-01-launch-on-lane-clone.png` | The lane build launched with `-PatinaFlags house-widget` on the signed-in clone (owner `A0000000-0000-0000-0000-000000000005`). `PushPrimerView` on top — SP-08's sentence, dismissed with `Not now`. |
+| `w6-x1-02-record-link-lands-on-studio.png` | `patina://record/order:fulfillment:f5000000-0000-4000-8000-000000000001` — the widget's row door — opens the order detail **on the Studio tab** (`Studio` bold in the bar). The row id is `HouseRecordRow.id` verbatim, taken from the record the app itself wrote. |
+| `w6-x1-03-today-link-lands-on-today.png` | `patina://today` — M6d's "opens M1 plain" — selects **Today** and pops it to root: the Record card, NEEDS YOU over MOVED, the designer seat, `YOUR HOUSE`. |
+| `w6-x1-04-routeless-row-opens-today-plain.png` | `patina://record/story:a8b3f8a0-…` — a MOVED row whose `route` is nil — opens **Today plain** from the Studio screen. A widget tap never dead-ends and never lands somewhere the widget did not name. |
+
+### The `.appex` is embedded
+
+```
+$ ls .build/dd/Build/Products/Debug-iphonesimulator/Patina.app/PlugIns/
+PatinaTests.xctest   PatinaWidget.appex
+
+$ ls …/Patina.app/PlugIns/PatinaWidget.appex/
+Info.plist  PatinaWidget  PatinaWidget.debug.dylib  PatinaDesignKit_PatinaDesignKit.bundle  __preview.dylib
+
+$ /usr/libexec/PlistBuddy -c "Print :NSExtension" …/PatinaWidget.appex/Info.plist
+Dict { NSExtensionPointIdentifier = com.apple.widgetkit-extension }
+$ /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" …/PatinaWidget.appex/Info.plist
+cloud.patina.app.widget
+```
+
+`PatinaDesignKit_PatinaDesignKit.bundle` inside the appex is the SPM resource bundle carrying
+Playfair, Inter and DM Mono — what `PatinaFonts.registerAll()` reads, and why the widget links the
+design package instead of vendoring tokens.
+
+### The App Group container is honoured on this clone
+
+```
+$ xcrun simctl get_app_container <udid> cloud.patina.app groups
+group.cloud.patina.app  …/Containers/Shared/AppGroup/11192F24-DF96-4E56-81A9-1759F1B189F1
+```
+
+The lane's own launch wrote `house-record.json` there. Its MOVED rows are
+`order:fulfillment:f5000000-…` ("Meadow Linen Sectional arrived.", Aug 28) and
+`story:a8b3f8a0-…` ("A new story from the workshop.", Aug 27) — the two ids the shots above route
+on. This matches `w2/r2-notes.md` §3 and remains **not** a device claim.
+
+### ⚠ BLOCKED — the widget could not be added to the Home Screen
+
+The Home Screen widget gallery needs a long press, and **long presses stopped delivering to
+SpringBoard on this clone**. The first long press worked (the jiggle-mode tree with `Edit` / `Done`
+was returned); every later attempt — `tap` with `duration` 1200/1500/2000/3000 on the wallpaper and
+on the app icon, and `swipe` with a 1 pt delta over 2.5–3 s — returned "Tapped"/"Swiped" and left
+the Home Screen unchanged. Page swipes stopped landing too (`Page 2 of 2`, unmoved). Plain taps
+still worked throughout (the primer's `Not now` and the HOME button both landed), so this is a
+long-press/drag failure, not a dead channel.
+
+Per the wave's rule ("if gestures stop delivering, stop and report") no further gestures were
+improvised. The AppleScript fallback (`shots/_tap.sh` → `_geom.sh`) was deliberately **not** used:
+it addresses the Simulator by `window 1`, and four simulators are booted in this wave, so it could
+have driven another lane's device.
+
+**Not captured, therefore not claimed:** the widget drawn on the Home Screen with data, the
+Lock Screen accessories, the gallery preview, and the flag-off placeholder as rendered pixels.
+Those belong to the walker after integration. What IS proven here: the appex builds, embeds and
+carries the right identity; the payload contract decodes through the widget's own decoder
+(`HouseWidgetPayloadTests`); and both widget URLs route correctly in the running app on real data
+(the three shots above).
+
+**Claim level: compile-green for the widget's drawing, sim-verified for the deep links.** No device
+claim of any kind; the shared App Group between an app process and a widget process is still owed a
+device pass.
+
+## w6 walk
+
+Acceptance walker · review device `973D1724-90BF-4A0A-B02D-481D561547B3` (iPhone 17 Pro), 2026-08-28
+into 2026-08-29. Installed `.codex/worktrees/agent-dr-w6-integration/.build/dd/…/Patina.app`
+(`xcrun simctl install`, unsandboxed) — the same signed product `w6/integration.md` gated, no
+rebuild. `-DeploymentTarget local` on every launch. Already signed in as `client@patina.dev` from
+the W5 walk; no fresh sign-in needed.
+
+**Gesture delivery failed mid-walk.** The first long-press on the Patina Home Screen icon reached
+jiggle mode (screenshot confirmed `Edit`/`Done`); the very next tap, meant to open the widget-add
+menu, instead exited jiggle mode with no menu ever drawn, and no `device_action` call landed
+afterward — not `tap` (five different targets, three screens), not `swipe`, not `button: HOME`
+(after the first two). `simctl launch` from the host kept foregrounding/backgrounding the app
+correctly throughout, proving the simulator stayed responsive — the failure is blitz's WDA input
+delivery to this udid, not a frozen device. Same class of failure as `w6-x1`'s own note above
+("long presses stopped delivering to SpringBoard"), broader here (plain taps too). Per the wave's
+rule, no desktop-tooling substitute was used; retried ~9 times across ~15 minutes before stopping.
+
+**Substitute for anything not requiring an on-screen tap:** `xcrun simctl openurl <udid>
+"patina://…"` — the OS's own URL-scheme delivery, the same path a real widget/Lock-Screen tap
+invokes (`.onOpenURL` → `route(forWidgetLink:in:)`), not a coordinate-clicking or screen-capture
+workaround.
+
+| Shot | State | What it shows |
+|---|---|---|
+| `w6-01-flagon-launch-dailyroom.png` | `-PatinaFlags house-widget` | Daily Room, W2 root (no tab bar) — NEEDS YOU ×3, MOVED ×2, Leah's seat, `YOUR HOUSE` rail |
+| `w6-02-check-launch.png` | same, after a `simctl launch` re-foreground probe | Confirms the device/app is alive and responsive at the OS level while blitz gestures were failing |
+| `w6-03-widgetlink-orderrow-flagon-house-widget-only.png` | `patina://record/order:fulfillment:f5000000-…-000000000001` (the top MOVED row's id) via `simctl openurl`, W2 root | Order-detail screen, `Meadow Linen Sectional`, rail at **Delivered**, back chevron, no tab bar — correct destination |
+| `w6-04-flagon-housefirst-launch.png` | `-PatinaFlags house-widget,house-first` | Same Daily Room content, now under the W3 root: tab bar `Today · Spaces · Pieces · Studio` + Companion slot |
+| `w6-05-widgetlink-orderrow-flagon-housefirst.png` | same widget-link URL, W3 root | Identical order-detail screen, **`Studio` tab bolded/selected** in the tab bar — the right tab per `RouteTabTable.tab(for: .orderDetail) == .studio` |
+| `w6-06-flagoff-dailyroom.png` | `-PatinaFlags none` | Daily Room unchanged, W2 root |
+| `w6-07-widgetlink-storyrow-noroute-fallback-heroframe.png` | `patina://record/story:a8b3f8a0-…` (the second MOVED row, which carries no `route` in `house-record.json`) via `simctl openurl` | Lands on Today (`.heroFrame`) rather than dead-ending — the documented fallback held |
+| `w6-08-leavestate-flagoff-client-daily-room.png` | `-PatinaFlags none`, leave state | Daily Room, signed in as `client@patina.dev` |
+
+**File evidence, not screenshots:** `widget-snapshot.json` in the App Group container
+(`11192F24-DF96-4E56-81A9-1759F1B189F1/`) re-verified after each launch. Flag on:
+`movedRows` = exactly the two MOVED rows with real dates, `houseLine: "Guest Bedroom"` (matching the
+rail), `sinceDate` present, `flagOn: true`. Flag off: `flagOn: false`, same rows carried forward
+(never blanked). `grep -ioE "needsYou|badge|count|pending|awaiting|isNew"` over the file →
+**no match**, both states — Q8/C5 hold structurally on the artefact the widget reads.
+
+**Item results** (full table in `waves/w6/walk.md`): item 2 (record saves) **PASS**; item 6 (tap a
+row → right route, right tab, both roots) **PASS via the openurl substitute**; items 5 and 7
+(no-count content, flag-off placeholder) **PASS at the data-contract level, not pixel-verified**;
+items 3, 4, 8, 9 (widget added to Home/Lock Screen, dark/XXL gallery, the invoice reminder set/show/
+remove) **BLOCKED** — gesture-delivery failure, not a product finding; none of these four could be
+reached without a working tap/long-press channel back to the simulator, and none has a non-gesture
+substitute (no debug deep-link launch-arg exists, and the invoice reminder's only entry is a
+button tap on `InvoiceReminderRow`).
+
+**Claim level:** sim-verified for items 2 and 6 (6 via the OS's own URL-scheme delivery, not a
+screen tap); data-contract-verified-not-pixel-verified for items 5 and 7; unverified/BLOCKED for
+items 3, 4, 8, 9 — tooling failure, named as such, not folded into a false PASS or a silent gap. No
+device claim anywhere in this walk.
+
+No secret value was read, printed, or written. No new `auth.users`/`profiles`/`comms_*` rows — this
+walk never reached a screen with a send affordance.
+
+Leave state: signed in as `client@patina.dev`, flags off, on the Daily Room (`w6-08`).
+
+## w6-x3
+
+Lane X3 (resumed), W6. Device **`dr-w6-x3r` `7AB6C26E-3D2A-4323-AA71-49FA34B0C52E`** — created for
+this lane (iPhone 17 Pro / iOS 26.5, 402×874 pt), never the review device. Signed adhoc build from
+`.codex/worktrees/agent-dr-w6-x3/.build/dd/Build/Products/Debug-iphonesimulator/Patina.app` (the
+`xcodebuild test` product, **not** `CODE_SIGNING_ALLOWED=NO`), installed with `simctl install`.
+Launched `-DeploymentTarget local` with `-PatinaFlags house-first` (flag on) and `-PatinaFlags none`
+(flag off). Signed in as `client@patina.dev` against the local stack. Every frame from
+`xcrun simctl io <udid> screenshot`; **no `screencapture`, no desktop capture at any point.**
+
+| Shot | What it shows | Quoted |
+|---|---|---|
+| `w6-x3-01-client-today.png` | Today, flag on, the Record + the seat + the tab bar | NEEDS YOU `Your invoice is due. $4,250.00 · DUE SEP 2` · `Leah Hartwell sent a proposal to review. BY SEP 11` · `Leah asked about Dining chairs - Shaker Oak vs Windsor Elm. BY SEP 2`; MOVED `Meadow Linen Sectional arrived. AUG 28`; seat `Leah Hartwell / Aspen Loft Refresh`; bar `Today · Spaces · Pieces · Studio · ≡` |
+| `w6-x3-01-client-ask-leah.png` | The ask sheet after Send | `Ask Leah` / `MEADOW LINEN SECTIONAL` / `WOODWARD & SONS · $6,800.00` / `Can we use the Meadow Linen Sectional?` / **`Sent`** / `Leah has the piece and the price.` — no error sheet |
+| `w6-x3-02-client-studio.png` | The Studio hub for `client@patina.dev` | `Client User` · `MEMBER SINCE AUG 28, 2026` · `1 ROOMS` `0 SAVED` · `The work around your home, in one place.` · `5 things need your eye` |
+| `w6-x3-03-flagoff-root.png` | The flag-off root (`-PatinaFlags none`) — no tab bar, floating orb, `Studio 5` pill | the same Record draws; seat `Leah Hartwell / Aspen Loft Refresh`; `YOUR HOUSE` rail `Guest Bedroom · 180 sq ft · budget $9,000` |
+| `w6-x3-04-client-threads.png` | Conversations after the ask | `Aspen Loft Refresh — You: Can we use the Meadow Linen Sectiona… 13m` above `Birch Hollow — You: Can we use the Heirloom Oak Dinin… 5:41 PM` — the new ask on the urgent project, W5's on `.first`'s |
+| `w6-x3-05-blocked-open-alert.png` | Where the walk stopped | iOS's `Open in "Patina"?` for the `patina://auth/callback` hand-off; the one tap it needs could not be delivered (input delivery dead — see `waves/w6/x3-notes.md` §7) |
+
+**psql, run against the local stack (`127.0.0.1:54322`):**
+
+```
+select t.id, t.project_id, p.name, t.created_by from comms_threads t
+  left join projects p on p.id = t.project_id order by t.created_at desc limit 3;
+
+ 32fdec87-a6a6-42a0-a21e-55edf587246b | b0000000-…-d1 | Aspen Loft Refresh | a0000000-…-0005  ← this lane
+ 85016582-cf6e-4489-9734-c3613906a5fc |               |                    | f25f5e06-…       ← W5, James, direct
+ 3b5ab10b-4fa9-4c53-b9a9-ca4ab35dc87d | b0000000-…-d3 | Birch Hollow       | a0000000-…-0005  ← W5, the wrong project
+```
+
+**Foreground rebuild, on the file rather than on the code:** on the Studio → `Aspen Loft Refresh`
+screen, `…/AppGroup/…/house-record.json` was last written `20:38:18`; backgrounding the app and
+returning rewrote it at `20:44:58` (`stat -f %Sm`). `widget-snapshot.json` does not exist at this
+lane's base — X1/X2's writer is on `daily-return/integration`, not on `main 4b35e0a94` — so the
+widget half of Q8 is not observable here and was not claimed.
+
+**Claim level: compile-green + partially sim-verified.** No device claim. The account-switch leg is
+BLOCKED, not passed — see `waves/w6/x3-notes.md` §7 for what failed and what was tried.
+
+## w6 walk 2
+
+Walker (Sonnet), 2026-08-28/29, review device **`973D1724-90BF-4A0A-B02D-481D561547B3`**. X3's
+items only (`integration.md` §9, X3 landed at `9a8af5d28`/`f48e11d20` after walk 1 ran). Full
+detail: `waves/w6/walk.md` "## walk 2 — X3". All frames `xcrun simctl io <udid> screenshot`; no
+desktop capture.
+
+| Shot | What it shows |
+|---|---|
+| `w6-09-initial-state.png` | Welcome/Sign In after the fresh `ddapp` install reset the container (disclosed deviation from walk 1's left-behind session) |
+| `w6-10-client-today-before-switch.png` | `client@patina.dev` re-signed-in; Today matches walk 1's/integration's recorded baseline (NEEDS YOU ×3, MOVED ×2, Leah's seat) |
+| `w6-11-signed-out.png` | Settings → Sign Out → confirm → back at Sign In (SP-20 reachable) |
+| `w6-12-james-signed-in.png` | `james.okafor@example.com` signed in; own Today underneath the Save-Password sheet: `Awaiting you 0`, matched-with-Leah, no active projects |
+| `w6-13-james-studio.png` | James's Studio: 0 rooms, 0 saved, "Nothing needs your attention right now." — no forbidden strings |
+| `w6-14-james-housefirst.png` | Relaunched `-PatinaFlags house-first` to reach the Pieces tab from James's account |
+| `w6-15-james-ask-leah-sent.png` | James's Ask Leah sheet on Live-Edge Coffee Table → `Sent` / "Leah has the piece and the price." — no error |
+| `w6-16-client-back-signed-in.png` | Signed back into `client@patina.dev`; own 5-items-awaiting data intact, undisturbed by James's session |
+| `w6-17-client-ask-leah-sent.png` | Client's Ask Leah sheet on Oak Reading Chair → `Sent` — psql confirms it lands on `Aspen Loft Refresh`'s thread (`32fdec87-…`), the project carrying the open NEEDS YOU items, not `.first`-by-`updated_at` |
+| `w6-18-studio-foreground-refresh.png` | Studio tab still selected after a background/foreground round trip; `widget-snapshot.json`'s `refreshedAt` advanced `03:36:04Z → 03:39:03Z` while off Today — confirms the root-level foreground fix |
+| `w6-19-leavestate-flagoff-client-daily-room.png` | Leave state: `client@patina.dev`, flags off, W2 Daily Room root |
+
+**psql, run against the local stack (`127.0.0.1:54322`):**
+
+```
+-- James's ask (existing direct thread, no project — correct for a lead-only relationship)
+select thread_id, body, created_at from comms_messages
+  where body ilike '%Live-Edge Coffee Table%' order by created_at desc limit 1;
+ 85016582-cf6e-4489-9734-c3613906a5fc | Can we use the Live-Edge Coffee Table?... | 2026-08-29 03:33:10
+
+-- the client's ask (existing project thread — Aspen Loft Refresh, the urgent project)
+select t.id, t.project_id, p.name from comms_threads t
+  left join projects p on p.id = t.project_id
+  where t.id = '32fdec87-a6a6-42a0-a21e-55edf587246b';
+ 32fdec87-a6a6-42a0-a21e-55edf587246b | b0000000-…-d1 | Aspen Loft Refresh
+```
+
+**Foreground refresh, off Today:** `widget-snapshot.json` mtime `22:36:04 → 22:39:03` (local) after
+`simctl launch com.apple.mobilesafari` (background) → `simctl launch cloud.patina.app` (same pid
+`2188`, a real foreground) while the Studio tab was on screen — X3's `RecordForeground` fix
+(`integration.md` §9.2) confirmed on the artefact, not just by unit test.
+
+**Claim level: sim-verified**, including two psql-confirmed server-side facts. No device claim.
+Nothing here supersedes walk 1's verdicts on items 1–9 (still BLOCKED-HARNESS where recorded); this
+pass covers X3's items only, and no gesture failure occurred in this pass.
