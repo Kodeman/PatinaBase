@@ -7,7 +7,14 @@ Plasmo-based extension for product capture from e-commerce sites.
 ```bash
 pnpm --filter @patina/extension dev   # Dev mode with HMR
 pnpm --filter @patina/extension build # Production build
+
+# Gate (PR-time, via scripts/verify-affected.sh):
+pnpm --filter @patina/extension type-check && pnpm --filter @patina/extension test && pnpm --filter @patina/extension build && bash apps/extension/scripts/check-bundle.sh
 ```
+
+## Lint
+
+No ESLint for the extension in v1 — there is no shared ESLint config in the repo for it to extend. This is a decision, not an omission: the gate is type-check + vitest + the bundle-marker check above.
 
 ## Architecture
 
@@ -32,6 +39,7 @@ pnpm --filter @patina/extension build # Production build
 
 - **Portal session cookie**: the extension reads the portal's `sb-<project-ref>-auth-token` cookie (`base64-`-prefixed, chunked `.0/.1`). Use the existing decoder — never `JSON.parse` it — and keep the env below pointed at the SAME Supabase project as the portals (Strata in prod), or decode fails.
 - **Offline queue, OCR, and trade pricing were removed in 0.3.0 (capture-launch W1) — do not reintroduce without a producer/assets/linking path.** Also removed in 0.3.0: `@patina/catalog-ui`, `tesseract.js`, `@plasmohq/storage` deps and vendor certifications (CL-R16).
+- **Permissions model**: `https://*/*` host permission, with the justification in `docs/design/capture-launch/permissions-justification.md`; `http://*/*` dropped in 0.3.0.
 
 ## Environment
 

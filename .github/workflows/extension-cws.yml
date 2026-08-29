@@ -121,12 +121,7 @@ jobs:
           pnpm --filter @patina/extension build
           pnpm --filter @patina/extension package
 
-      # TODO(capture-launch W2): make blocking once fonts are bundled and OCR
-      # removed. Today's tree still legitimately ships fonts.googleapis and
-      # tesseract, so this step is expected to fail — continue-on-error keeps
-      # the workflow usable until that wave lands.
       - name: Check bundle
-        continue-on-error: true
         run: bash apps/extension/scripts/check-bundle.sh
 
       - name: Find built zip
