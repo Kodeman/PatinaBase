@@ -159,6 +159,17 @@ describe('field visibility on the C2 record screen', () => {
       // plain substring check against data.manufacturer).
       const brandVisible = !!screen.queryByText('Brand');
 
+      // CL-R1 (capture-launch/w2-d4): RecordRegion now renders Dimensions,
+      // Materials, and Finish rows between Price and Description. Each row
+      // always renders its Label + FieldBadge; when the field has a value
+      // (or its status isn't 'missing') the row shows its editable inputs,
+      // otherwise a "+ Add …" button stands in for the (hidden) inputs. So
+      // "visible" here means the row's Label is present in the DOM — which
+      // is unconditional — not that the value happens to be populated.
+      const dimensionsRowVisible = !!screen.queryByText('Dimensions');
+      const materialsRowVisible = !!screen.queryByText('Materials');
+      const finishRowVisible = !!screen.queryByText('Finish');
+
       const dimensionFieldCount = data.dimensions
         ? Object.entries(data.dimensions).filter(
             ([k, v]) => k !== 'unit' && k !== 'raw' && v !== null && v !== undefined
@@ -192,26 +203,30 @@ describe('field visibility on the C2 record screen', () => {
           price: !!priceInput,
           description: !!descriptionTextarea,
           brand: brandVisible,
-          // Dimensions, materials, colors, and finish have no rendered value
-          // anywhere on C2: RecordRegion renders inputs only for
-          // name/price/description plus a plain-text Brand row; InsightRegion
-          // and RouteCommitRegion don't touch these fields at all. The only
-          // DOM trace of them is
-          // InsightRegion's flagged-field-key summary line ("materials,
-          // colors, finish, dimensions need a look") when the field is
-          // missing — that's the field's *key name* appearing as a flag
-          // label, not its extracted *value*, so it does not count as
-          // "visible" here. Hard-coded false rather than pattern-matched:
-          // a substring scan against bodyText produced false positives in
-          // testing (real vendor description copy incidentally contains
-          // words that also appear as material/color names or the brand
-          // name — e.g. DWR's own description text reads "...at Design
-          // Within Reach.", and 1stDibs' product name contains "Rosewood",
-          // one of its own extracted materials).
-          dimensions: false,
-          materials: false,
+          // CL-R1: RecordRegion now renders a Dimensions row, a Materials
+          // row, and a Finish row (each Label + FieldBadge, always present;
+          // editable inputs when the field has a value, otherwise a
+          // "+ Add …" button) between Price and Description. Both fixtures
+          // have materials, so the Materials row shows populated chips. DWR's
+          // fixture extracts 0 dimension fields (dimensionFieldCount: 0
+          // below) — its Dimensions row renders the "+ Add dimensions"
+          // button rather than populated inputs, but the row (Label +
+          // FieldBadge) is still present, which is what this flag tracks.
+          // Neither fixture extracts a finish, so both Finish rows render
+          // "+ Add finish". Colors remain untouched by CL-R1 (not ruled) and
+          // still have no rendered value anywhere on C2 — InsightRegion and
+          // RouteCommitRegion don't touch that field either, and the only
+          // trace of it is InsightRegion's flagged-field-key summary line,
+          // which surfaces the key name, not the value. Hard-coded false
+          // rather than pattern-matched: a substring scan against bodyText
+          // produced false positives in testing (real vendor description
+          // copy incidentally contains words that also appear as color
+          // names or the brand name — e.g. DWR's own description text reads
+          // "...at Design Within Reach.").
+          dimensions: dimensionsRowVisible,
+          materials: materialsRowVisible,
           colors: false,
-          finish: false,
+          finish: finishRowVisible,
           images: container.querySelectorAll('img[src]').length > 0,
         },
         routeRegion,

@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-08-29T13:20:52.996Z",
+  "generatedAt": "2026-08-29T16:42:36.530Z",
   "lane": "capture-launch/w0-d1",
   "notes": [
-    "RecordScreen (RecordRegion + TradeRegion + InsightRegion + RouteCommitRegion) mounted directly under <CaptureProvider initial={...}> in state C2 — the same seam src/__tests__/state/CaptureProvider.test.tsx and src/__tests__/spec-books/route-commit-ga.test.tsx use — rather than through PanelShell, which pulls in useCaptureController()/useSettingsSync() side effects not needed for this survey.",
+    "RecordScreen (RecordRegion + InsightRegion + RouteCommitRegion) mounted directly under <CaptureProvider initial={...}> in state C2 — the same seam src/__tests__/state/CaptureProvider.test.tsx and src/__tests__/spec-books/route-commit-ga.test.tsx use — rather than through PanelShell, which pulls in useCaptureController()/useSettingsSync() side effects not needed for this survey.",
     "FFESlotPicker and useReferenceData were left real (not mocked away) so the route region select/input counts reflect actual render output; supabase is mocked via src/__tests__/mocks/supabase.ts so those queries resolve to empty projects/styles without a network call."
   ],
   "cases": [
@@ -25,10 +25,10 @@
         "price": true,
         "description": true,
         "brand": false,
-        "dimensions": false,
-        "materials": false,
+        "dimensions": true,
+        "materials": true,
         "colors": false,
-        "finish": false,
+        "finish": true,
         "images": true
       },
       "routeRegion": {
@@ -55,10 +55,10 @@
         "price": true,
         "description": true,
         "brand": false,
-        "dimensions": false,
-        "materials": false,
+        "dimensions": true,
+        "materials": true,
         "colors": false,
-        "finish": false,
+        "finish": true,
         "images": false
       },
       "routeRegion": {
