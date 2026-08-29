@@ -219,7 +219,7 @@
      a fixed organ, so every consumer names a constant instead. */
   --doc-region-gap: 24px; /* R127: the one gap between region roots on the paper */
   --doc-band-height: 56px; /* R127: the lens band's declared height — what the `sticky top-0` organs stand under */
-  --doc-landing-clear: calc(var(--doc-band-height) + 1rem); /* R127: 72px — where a jumped-to stop or focused control comes to rest, clear of the band */
+  --doc-landing-clear: calc(var(--doc-band-height) + 16px); /* R127: 72px — where a jumped-to stop or focused control comes to rest, clear of the band. The gap is an absolute 16px, not 1rem: this route's root font-size is 18px, so a `1rem` arm computes to 74px against the proposal's declared 72. */
   --doc-quiet-reserve-min: 68px; /* R127/OD-12: a quiet region's floor — head + count line + one leader */
   --doc-quiet-reserve-exc: 112px; /* R127/OD-12: the same floor when the region also prints standing exceptions */
 }

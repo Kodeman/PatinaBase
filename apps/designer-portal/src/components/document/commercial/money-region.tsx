@@ -226,7 +226,7 @@ export function MoneyRegion({
       <section
         aria-label="Money"
         data-index-region="money"
-        className="mb-5 mt-[var(--doc-region-gap)]"
+        className="mt-[var(--doc-region-gap)]"
         style={SEAM_CLEARANCE}
       >
         <RegionRule weight="mid" />
@@ -247,7 +247,7 @@ export function MoneyRegion({
     <section
       aria-label="Money"
       data-index-region="money"
-      className="mb-5 mt-[var(--doc-region-gap)]"
+      className="mt-[var(--doc-region-gap)]"
       style={SEAM_CLEARANCE}
     >
       <RegionRule />

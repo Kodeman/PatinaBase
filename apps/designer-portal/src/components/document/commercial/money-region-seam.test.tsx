@@ -106,12 +106,28 @@ describe('the Money seam, on the Delivery table', () => {
     // whichever one the index jumps to lands the money clear of the band.
     expect(section.style.scrollMarginTop).toBe('var(--doc-landing-clear)');
 
+    // W3 integration — one region-spacing token, owned by the root, in both
+    // postures: no `mb-*` beside it (L4 audited the other six roots).
+    expect(section).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      section.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(section.className).not.toMatch(/\bmb-/);
+
     fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
 
     // Same section element, now carrying the whole region: head, six rungs,
     // and the detail surfaces the rungs summarise.
     expect(container.querySelector('[data-index-region="money"]')).toBe(section);
     expect(section.style.scrollMarginTop).toBe('var(--doc-landing-clear)');
+
+    // W3 integration — one region-spacing token, owned by the root, in both
+    // postures: no `mb-*` beside it (L4 audited the other six roots).
+    expect(section).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      section.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(section.className).not.toMatch(/\bmb-/);
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.getByText('$17,600 remaining · $62,400 authorized')).toBeVisible();
     expect(screen.getByText('Budget · $80,000 approved')).toBeVisible();
