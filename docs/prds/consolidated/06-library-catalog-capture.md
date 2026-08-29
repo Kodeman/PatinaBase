@@ -19,7 +19,7 @@
 | Manufacturer Portal onboarding → catalog product creation | Planned — scaffold only |
 | Studio→Catalog auto-link on nomination "live" | Partial — trigger + RPC exist, unreachable end-to-end without Manufacturer Portal |
 | Chrome extension product capture | Shipped |
-| Chrome extension vendor-only capture, trade pricing, offline queue | Shipped |
+| Chrome extension vendor-only capture, trade pricing, offline queue | Removed in extension 0.3.0 (capture-launch, 2026-08-29): offline queue had no producer, OCR had no bundled assets, trade pricing had no account-linking path |
 | In-portal manual add / CSV import | Shipped (CSV import unverified on prod) |
 | iOS Field Capture app | Partial — validation-build only, backend migrations shipped, app not merged/not on prod |
 | Aesthete-vector-driven catalog match/sort | Planned — column re-typed, scoring not live |
