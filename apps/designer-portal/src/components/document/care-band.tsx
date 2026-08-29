@@ -54,6 +54,13 @@ const HEADING_ID = 'care-band-heading';
 const BODY_ID = 'care-band-body';
 /** The guide's care act names this checklist (`document-guide.ts`). */
 const CHECKLIST_ID = 'closing-the-book';
+/**
+ * W2 (C-2, `document-index.ts`) — the running index's stable id for this
+ * region root. Not fixed in `document-index.ts` on this branch yet
+ * (`DocumentIndexKey` does not carry `'care' | 'record'` here — W2-L2 adds
+ * those keys), so this is the literal fallback named by the build plan.
+ */
+const CARE_INDEX_HEADING_ID = 'care-region-heading';
 
 type AnyRecord = any;
 
@@ -78,6 +85,7 @@ function closeErrorMessage(error: unknown): string {
 export function CareBand({
   projectId,
   onCloseoutReady,
+  indexRoot = false,
 }: {
   projectId: string;
   /** A3-L7 — the closure gate, published to the page so the guide's care rest
@@ -85,6 +93,15 @@ export function CareBand({
    *  (the eight closeout queries and the checklist's own state), so it states
    *  the answer once rather than the page deriving a second one. */
   onCloseoutReady?: (ready: boolean) => void;
+  /**
+   * W2 (C-2) — marks this mount as the running index's `care` region root.
+   * `CareBand` mounts twice (the Project section here, and again on the
+   * Install section per `page.tsx:2158`); only ONE of those two may claim
+   * the `care` key, or the index has two roots answering to one key. Default
+   * `false` so an unmigrated caller changes nothing; the project mount
+   * (`page.tsx:2134`) is the one that should pass `true`.
+   */
+  indexRoot?: boolean;
 }) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
   const { user, isLoading: authLoading } = useAuth();
@@ -199,6 +216,14 @@ export function CareBand({
     }
   }, [fold.folded]);
 
+  // W2 (C-2) — the one attribute pair that makes this mount the running
+  // index's `care` root, applied identically across all four return
+  // branches below (never on `RegionHead` or `FoldSeam`, which only exist
+  // in one branch each and would leave the other branches unmarked).
+  const indexRootAttrs = indexRoot
+    ? { 'data-index-region': 'care' as const, id: CARE_INDEX_HEADING_ID }
+    : {};
+
   if (!project || project.status === 'completed') return null;
   if (authLoading) return null;
 
@@ -213,6 +238,7 @@ export function CareBand({
 
     return (
       <section
+        {...indexRootAttrs}
         aria-label="Project closeout ownership"
         className="mt-8 border-l-2 border-[var(--color-sage)] px-3.5 py-2.5"
       >
@@ -232,7 +258,10 @@ export function CareBand({
   // R51 — the quiet inline confirmation while the read models re-derive.
   if (closed) {
     return (
-      <div className="mt-8 rounded-[3px] bg-[rgba(168,181,160,0.16)] px-4 py-3.5">
+      <div
+        {...indexRootAttrs}
+        className="mt-8 rounded-[3px] bg-[rgba(168,181,160,0.16)] px-4 py-3.5"
+      >
         <p className="text-[13px] text-[var(--color-charcoal)]">
           <b>The book is closed.</b>{' '}
           <span className="text-[var(--text-muted)]">
@@ -246,7 +275,7 @@ export function CareBand({
   // The folded quiet line — closure stays reachable without wearing a band.
   if (fold.folded) {
     return (
-      <div className="mt-8">
+      <div {...indexRootAttrs} className="mt-8">
         <RegionRule />
         <FoldSeam
           headingId={HEADING_ID}
@@ -300,7 +329,10 @@ export function CareBand({
   ];
 
   return (
-    <div className="mt-8 rounded-[3px] bg-[rgba(229,221,208,0.5)] px-4 py-3.5">
+    <div
+      {...indexRootAttrs}
+      className="mt-8 rounded-[3px] bg-[rgba(229,221,208,0.5)] px-4 py-3.5"
+    >
       <RegionRule />
       {/* The band head — R68.1: mark · mono label · reading · the solid act. */}
       <div className="flex items-center gap-4">
