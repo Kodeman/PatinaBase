@@ -30,6 +30,7 @@ import {
   useState,
 } from 'react';
 import type { SpineSection } from '@/lib/document/section-derivation';
+import type { DocumentIndexKey } from '@/lib/document/document-index';
 
 export interface MobileActiveDoc {
   projectId: string | null;
@@ -39,6 +40,13 @@ export interface MobileActiveDoc {
   sections: SpineSection[];
   /** R25: room headings join the spine sheet as jump rows. */
   rooms?: { id: string; name: string }[];
+  /**
+   * A-08: the current reading stop, mirrored from the page's running index
+   * (`activeKey`) so the mobile bar can print "AT <STOP>" without its own
+   * subscription. Optional so a caller that predates A-08 still type-checks;
+   * treated as null when absent.
+   */
+  readingIndex?: DocumentIndexKey | null;
 }
 
 type Sheet =

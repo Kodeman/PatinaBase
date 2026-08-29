@@ -95,7 +95,7 @@ export function MobileMarginChips({
       {anchoredGates.map((gate) => (
         <span
           key={gate.id}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] py-[0.32rem] pl-2 pr-2.5 text-[11px] text-[var(--color-charcoal)]"
+          className="inline-flex max-w-full items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] py-1.5 pl-2 pr-2.5 text-[11px] text-[var(--color-charcoal)]"
           style={{ borderLeft: '2.5px solid var(--color-golden-hour)' }}
         >
           <span className="truncate">
@@ -111,7 +111,7 @@ export function MobileMarginChips({
             type="button"
             id={row.kind === 'pulse' ? 'document-pulse-control-mobile' : undefined}
             onClick={() => openMarginItem(row.item_id)}
-            className="inline-flex max-w-full items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] py-[0.32rem] pl-2 pr-2.5 text-[11px] text-[var(--color-charcoal)] active:border-[#cfc8bb]"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] py-1.5 pl-2 pr-2.5 text-[11px] text-[var(--color-charcoal)] active:border-[#cfc8bb]"
             style={{ borderLeft: `2.5px solid ${accent.border}` }}
           >
             <span
