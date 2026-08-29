@@ -245,14 +245,15 @@ final class DailyRoomViewModel { // swiftlint:disable:this type_body_length
                 // only ever return the same row, which is why the same card
                 // appeared on every home, in dark mode, and after every
                 // relaunch. The unread dot comes off the same record.
-                let candidates = try await EditorialStoriesAPIClient.shared.fetchCandidates()
+                // The pick itself lives in `RecordForeground`, which is where
+                // the root's foreground rebuild reaches it too — the card and
+                // the record's MOVED story row read one answer, not two.
+                let remote = try await RecordForeground.todaysStoryRow()
                 // `Task` inherits the enclosing `@MainActor` isolation, so the
                 // continuation already resumes on the main actor — no explicit
                 // `MainActor.run` bounce needed (PT-3-4).
                 guard let self else { return }
                 let reads = StoryReadStore()
-                let pickedId = reads.nextStoryId(from: candidates.map(\.id))
-                let remote = candidates.first { $0.id == pickedId }
                 self.todayStory = remote.map {
                     DailyStory(from: $0, isUnread: reads.isUnread(storyId: $0.id))
                 }
@@ -369,33 +370,17 @@ final class DailyRoomViewModel { // swiftlint:disable:this type_body_length
         // that is already in flight rather than building without it and
         // showing the row one open late.
         await storyTask?.value
-        // The record's `orderMoved` rows read what the orders service holds,
-        // the same way the rest of the builder reads what `BadgeCountService`
-        // already fetched — one holder, so the card and Studio → Ordered can
-        // never disagree about what moved.
-        await OrdersService.shared.refresh()
-        savedItems = fetchSavedItems()
-        let products = await fetchSavedPieceProducts(for: savedItems)
-        let saved = savedItems
-        let story = todayStoryRow
 
-        RecordRefresh.run(
-            sessionUserId: AuthService.shared.currentUserId,
-            build: { previous, lastSeenAt in
-                HouseRecordBuilder.build(
-                    from: BadgeCountService.shared,
-                    saved: saved,
-                    products: products,
-                    story: story,
-                    liveLead: DesignRequestStatusService.shared.liveLead,
-                    lastSeen: lastSeenAt,
-                    orders: OrdersService.shared.movedOrders,
-                    now: Date(),
-                    previous: previous
-                )
-            },
+        // The rebuild itself lives in `RecordForeground`, which the app root
+        // calls on every foreground: one spelling of what a rebuild is, and
+        // overlapping asks coalesce onto the first rather than building twice
+        // against the visit stamp the first one wrote.
+        let outcome = await RecordForeground.run(
+            context: modelContext,
+            story: todayStoryRow,
             paint: { [weak self] painted in self?.record = painted }
         )
+        if let outcome { savedItems = outcome.saved }
     }
 
     /// The catalogue's genuinely new rows. A guest sees this block too, so the
@@ -443,44 +428,6 @@ final class DailyRoomViewModel { // swiftlint:disable:this type_body_length
     var houseRoomCards: [HouseRoomCard] {
         HouseRoomCard.cards(projectRooms: projectRooms, localRooms: roomModels)
     }
-
-    private func fetchSavedItems() -> [TableItemModel] {
-        guard let ctx = modelContext else { return [] }
-        let descriptor = FetchDescriptor<TableItemModel>(
-            sortBy: [SortDescriptor(\.savedAt, order: .reverse)]
-        )
-        return (try? ctx.fetch(descriptor)) ?? []
-    }
-
-    /// The saved pieces' catalogue rows, **withdrawn ones included** — the
-    /// only read that can feed the record's "no longer available" row, because
-    /// `get_recommendations` filters a withdrawn product out by construction
-    /// (r1-notes §1). A failure here costs the two discovering rows and
-    /// nothing else: they draw nothing rather than a guess (C5).
-    private func fetchSavedPieceProducts(for saved: [TableItemModel]) async -> [Product] {
-        let ids = Array(Set(saved.compactMap(\.productId)))
-        guard !ids.isEmpty else { return [] }
-        // Chunked: every id goes into one `id=in.(…)` query string, and a few
-        // hundred saved pieces would push the URL past what PostgREST and the
-        // edge in front of it will accept — costing both discovering rows.
-        var products: [Product] = []
-        for chunk in stride(from: 0, to: ids.count, by: Self.productIdsPerRead) {
-            let slice = Array(ids[chunk..<min(chunk + Self.productIdsPerRead, ids.count)])
-            do {
-                products += try await ProductAPIClient.shared.fetchProducts(ids: slice)
-            } catch {
-                #if DEBUG
-                PatinaLog.ui.error("[DailyRoomVM] saved-piece products failed: \(error)")
-                #endif
-                return []
-            }
-        }
-        return products
-    }
-
-    /// Ids per `id=in.(…)` read. A uuid plus its separator is ~37 characters,
-    /// so 100 keeps the query string well inside every hop's limit.
-    private static let productIdsPerRead = 100
 
     /// True while the Message tap is opening (or finding) the thread.
     var isOpeningDesignerThread: Bool = false

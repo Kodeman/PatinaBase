@@ -130,6 +130,19 @@ final class BadgeCountService {
 
     private var pendingRefresh: Task<Void, Never>?
 
+    /// The refresh currently running. A foreground fans two asks at this
+    /// service within the same tick — the app root's (`RecordForeground
+    /// .onForeground`) and Today's own `scenePhase` hook — and each ask is six
+    /// PostgREST reads. The second joins the first instead of doubling them.
+    private var inFlightRefresh: Task<Void, Never>?
+
+    /// Stamped on the refresh that is in flight, and bumped by every session
+    /// change. A refresh that left for the PREVIOUS account and answers after
+    /// the reset must not write its rows back over the cleared service — which
+    /// is the whole point of the reset, and the one way joining an in-flight
+    /// refresh could reintroduce it.
+    private var refreshToken = 0
+
     /// Private on purpose: this service exists because two surfaces read two
     /// different objects and printed two different numbers. A second instance
     /// reproduces that by accident.
@@ -145,6 +158,22 @@ final class BadgeCountService {
     /// trip — the rail hides counts in guest mode anyway. Failures keep
     /// the previous counts (a stale floor beats a flickering zero).
     func refresh() async {
+        if let existing = inFlightRefresh {
+            await existing.value
+            return
+        }
+        refreshToken += 1
+        let token = refreshToken
+        let task = Task { @MainActor [weak self] in
+            await self?.performRefresh(token: token)
+            guard let self, self.refreshToken == token else { return }
+            self.inFlightRefresh = nil
+        }
+        inFlightRefresh = task
+        await task.value
+    }
+
+    private func performRefresh(token: Int) async {
         guard AuthService.shared.isAuthenticated else {
             pendingDecisionCount = 0
             unreadMessageCount = 0
@@ -173,6 +202,10 @@ final class BadgeCountService {
             decisionsFetch, summariesFetch, proposalsFetch, invoicesFetch, projectsFetch
         )
         let fetchedRoster = await rosterFetch
+
+        // The account changed while these were in the air: these are the
+        // previous account's rows and there is nothing here to write them to.
+        guard token == refreshToken else { return }
 
         apply(
             decisions: decisions, summaries: summaries, proposals: proposals,
@@ -238,6 +271,38 @@ final class BadgeCountService {
         if let fetchedRoster {
             roster = fetchedRoster
         }
+    }
+
+    /// Drop the previous account's rows and counts, and cancel the refresh
+    /// that was going to land on top of them.
+    ///
+    /// `hasLoaded` and `projectsLoaded` go back to false rather than staying
+    /// true over empty arrays: `projectsLoaded` is what W5's R3 reads to tell
+    /// "this client has no designer" from "the projects answer has not
+    /// arrived", and a cleared service that claims to have loaded would draw
+    /// Buy for a client who has one.
+    func resetForSessionChange() {
+        refreshToken += 1
+        pendingRefresh?.cancel()
+        pendingRefresh = nil
+        // Dropped rather than awaited: the next `refresh()` must start a fetch
+        // for the NEW account, not join the one already in the air for the old.
+        inFlightRefresh?.cancel()
+        inFlightRefresh = nil
+        pendingDecisionCount = 0
+        unreadMessageCount = 0
+        proposalsAwaitingSignatureCount = 0
+        payableInvoiceCount = 0
+        projectCount = 0
+        pendingDecisions = []
+        pendingProposals = []
+        payableInvoices = []
+        threadSummaries = []
+        projects = []
+        roster = []
+        hasLoaded = false
+        projectsLoaded = false
+        lastRefreshFailed = false
     }
 
     /// Debounced refresh for bursty triggers (push receipt can deliver a

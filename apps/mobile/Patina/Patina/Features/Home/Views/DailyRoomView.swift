@@ -135,6 +135,14 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                 .scanForRecoverableSessions(in: modelContext)
             resumableScan = candidates.max(by: { $0.createdAt < $1.createdAt })
         }
+        .onChange(of: viewModel.houseRoomCards.first?.name, initial: true) { _, line in
+            // The widget's house line is the rail's first room, and the rail is
+            // built here — `RecordRefresh` knows the record and not the rooms
+            // (w6 `x2-notes.md` §1). Safe to re-fire: an unchanged line neither
+            // writes nor reloads, and with no record on disk the line is held
+            // until the next save carries it in.
+            RecordSnapshotStore.shared.noteHouseLine(line)
+        }
         .onChange(of: viewModel.selectedRoomID) { _, _ in
             syncCompanionContext()
         }

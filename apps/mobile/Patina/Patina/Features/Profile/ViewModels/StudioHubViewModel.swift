@@ -110,6 +110,20 @@ final class StudioHubViewModel {
         #endif
     }
 
+    /// Drop the previous account's Studio.
+    ///
+    /// Deliberately NOT `resetForGuest()`, which leaves `hasLoaded` true — that
+    /// is the right answer for a guest, who has nothing to load, and the wrong
+    /// one here: it would keep `loadIfNeeded()` from ever asking for the new
+    /// account's rows, and the hub would sit empty until something forced a
+    /// full `load()`.
+    func resetForSessionChange() {
+        snapshot = .empty
+        failedSources = []
+        isLoading = false
+        hasLoaded = false
+    }
+
     private func resetForGuest() {
         snapshot = .empty
         failedSources = []

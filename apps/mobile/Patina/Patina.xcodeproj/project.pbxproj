@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		54FC3B9B227AA5B2CC74A443 /* PatinaWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 96F46438BB46451D838BDE43 /* PatinaWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7410B547FF7E633239030200 /* PatinaDesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = 42B5169FCD24D837D3755484 /* PatinaDesignKit */; };
 		CBA446972F6C5997005441C3 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = CBA446962F6C5997005441C3 /* PostHog */; };
 		CBB2D0C32F1D65F8007686CD /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C22F1D65F8007686CD /* Auth */; };
 		CBB2D0C52F1D65F8007686CD /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C42F1D65F8007686CD /* Functions */; };
@@ -19,6 +21,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		8C2D1DCA6192D004DE9B1E27 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CBB2D00E2F1D20F7007686CD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C58A6FB2C10E1C9F9B8DE5FE;
+			remoteInfo = PatinaWidget;
+		};
 		CBB2D0242F1D20F8007686CD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CBB2D00E2F1D20F7007686CD /* Project object */;
@@ -36,6 +45,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		5B8315A74B4D3E6AD1C34EC7 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				54FC3B9B227AA5B2CC74A443 /* PatinaWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DE516B1700000000000000A5 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -50,12 +70,20 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		96F46438BB46451D838BDE43 /* PatinaWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PatinaWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		CBB2D0162F1D20F7007686CD /* Patina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Patina.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CBB2D0232F1D20F8007686CD /* PatinaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PatinaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CBB2D02D2F1D20F8007686CD /* PatinaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PatinaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		378A45804A983FA9D3F5F011 /* Exceptions for "PatinaWidget" folder in "PatinaWidget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C58A6FB2C10E1C9F9B8DE5FE /* PatinaWidget */;
+		};
 		CBB2D51B2F26AF69007686CD /* Exceptions for "Patina" folder in "Patina" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -67,6 +95,21 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		26C54B5540028E457738D2DD /* PatinaWidgetShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = PatinaWidgetShared;
+			sourceTree = "<group>";
+		};
+		B2B628D89424D556828BAD29 /* PatinaWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				378A45804A983FA9D3F5F011 /* Exceptions for "PatinaWidget" folder in "PatinaWidget" target */,
+			);
+			path = PatinaWidget;
+			sourceTree = "<group>";
+		};
 		CBB2D0182F1D20F7007686CD /* Patina */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -77,17 +120,29 @@
 		};
 		CBB2D0262F1D20F8007686CD /* PatinaTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = PatinaTests;
 			sourceTree = "<group>";
 		};
 		CBB2D0302F1D20F8007686CD /* PatinaUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = PatinaUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		63774DD02F5E603522182F10 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7410B547FF7E633239030200 /* PatinaDesignKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CBB2D0132F1D20F7007686CD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -126,6 +181,8 @@
 				CBB2D0182F1D20F7007686CD /* Patina */,
 				CBB2D0262F1D20F8007686CD /* PatinaTests */,
 				CBB2D0302F1D20F8007686CD /* PatinaUITests */,
+				B2B628D89424D556828BAD29 /* PatinaWidget */,
+				26C54B5540028E457738D2DD /* PatinaWidgetShared */,
 				CBB2D0172F1D20F7007686CD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -136,6 +193,7 @@
 				CBB2D0162F1D20F7007686CD /* Patina.app */,
 				CBB2D0232F1D20F8007686CD /* PatinaTests.xctest */,
 				CBB2D02D2F1D20F8007686CD /* PatinaUITests.xctest */,
+				96F46438BB46451D838BDE43 /* PatinaWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -143,6 +201,30 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		C58A6FB2C10E1C9F9B8DE5FE /* PatinaWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C8117F5D5DC61332E0D95D2E /* Build configuration list for PBXNativeTarget "PatinaWidget" */;
+			buildPhases = (
+				956814481EB9FB6796EAD81E /* Sources */,
+				63774DD02F5E603522182F10 /* Frameworks */,
+				03DD6EB903AB88AD00483C5E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B2B628D89424D556828BAD29 /* PatinaWidget */,
+				26C54B5540028E457738D2DD /* PatinaWidgetShared */,
+			);
+			name = PatinaWidget;
+			packageProductDependencies = (
+				42B5169FCD24D837D3755484 /* PatinaDesignKit */,
+			);
+			productName = PatinaWidget;
+			productReference = 96F46438BB46451D838BDE43 /* PatinaWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		CBB2D0152F1D20F7007686CD /* Patina */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = CBB2D0372F1D20F8007686CD /* Build configuration list for PBXNativeTarget "Patina" */;
@@ -152,11 +234,13 @@
 				CBB2D0132F1D20F7007686CD /* Frameworks */,
 				CBB2D0142F1D20F7007686CD /* Resources */,
 				DE516B1700000000000000A5 /* Embed Frameworks */,
+				5B8315A74B4D3E6AD1C34EC7 /* Embed Foundation Extensions */,
 				CBB2D0412F1D5E34007686CD /* SwiftLint */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				7FDE486D6EF7FC0F80C5131E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				CBB2D0182F1D20F7007686CD /* Patina */,
@@ -191,10 +275,9 @@
 			);
 			fileSystemSynchronizedGroups = (
 				CBB2D0262F1D20F8007686CD /* PatinaTests */,
+				26C54B5540028E457738D2DD /* PatinaWidgetShared */,
 			);
 			name = PatinaTests;
-			packageProductDependencies = (
-			);
 			productName = PatinaTests;
 			productReference = CBB2D0232F1D20F8007686CD /* PatinaTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -216,8 +299,6 @@
 				CBB2D0302F1D20F8007686CD /* PatinaUITests */,
 			);
 			name = PatinaUITests;
-			packageProductDependencies = (
-			);
 			productName = PatinaUITests;
 			productReference = CBB2D02D2F1D20F8007686CD /* PatinaUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -232,6 +313,9 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					C58A6FB2C10E1C9F9B8DE5FE = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					CBB2D0152F1D20F7007686CD = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -255,7 +339,7 @@
 			mainGroup = CBB2D00D2F1D20F7007686CD;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				DE516B1700000000000000A1 /* XCLocalSwiftPackageReference "../PatinaDesignKit" */,
+				DE516B1700000000000000A1 /* XCLocalSwiftPackageReference "PatinaDesignKit" */,
 				CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				CBA446952F6C5997005441C3 /* XCRemoteSwiftPackageReference "posthog-ios" */,
 				CBC32DEA2F8687DE006575E7 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
@@ -268,11 +352,19 @@
 				CBB2D0152F1D20F7007686CD /* Patina */,
 				CBB2D0222F1D20F8007686CD /* PatinaTests */,
 				CBB2D02C2F1D20F8007686CD /* PatinaUITests */,
+				C58A6FB2C10E1C9F9B8DE5FE /* PatinaWidget */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		03DD6EB903AB88AD00483C5E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CBB2D0142F1D20F7007686CD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -338,6 +430,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		956814481EB9FB6796EAD81E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CBB2D0122F1D20F7007686CD /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -362,6 +461,12 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		7FDE486D6EF7FC0F80C5131E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = PatinaWidget;
+			target = C58A6FB2C10E1C9F9B8DE5FE /* PatinaWidget */;
+			targetProxy = 8C2D1DCA6192D004DE9B1E27 /* PBXContainerItemProxy */;
+		};
 		CBB2D0252F1D20F8007686CD /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = CBB2D0152F1D20F7007686CD /* Patina */;
@@ -375,6 +480,70 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		23B5EE79D4DB380D26F472B6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PatinaWidget/PatinaWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PatinaWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Patina;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cloud.patina.app.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		5A4A6B96D96DFA11D3DA194E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PatinaWidget/PatinaWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PatinaWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Patina;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cloud.patina.app.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		CBB2D0352F1D20F8007686CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -679,6 +848,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		C8117F5D5DC61332E0D95D2E /* Build configuration list for PBXNativeTarget "PatinaWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A4A6B96D96DFA11D3DA194E /* Debug */,
+				23B5EE79D4DB380D26F472B6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		CBB2D0112F1D20F7007686CD /* Build configuration list for PBXProject "Patina" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -718,7 +896,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		DE516B1700000000000000A1 /* XCLocalSwiftPackageReference "../PatinaDesignKit" */ = {
+		DE516B1700000000000000A1 /* XCLocalSwiftPackageReference "PatinaDesignKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../PatinaDesignKit;
 		};
@@ -752,6 +930,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		42B5169FCD24D837D3755484 /* PatinaDesignKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PatinaDesignKit;
+		};
 		CBA446962F6C5997005441C3 /* PostHog */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = CBA446952F6C5997005441C3 /* XCRemoteSwiftPackageReference "posthog-ios" */;

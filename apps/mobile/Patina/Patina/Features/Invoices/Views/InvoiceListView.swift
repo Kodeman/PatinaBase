@@ -24,8 +24,17 @@ struct InvoiceListView: View {
         // U18: standard pushed-screen chrome — the header above carries
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
-        .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
+        // The list is where the app learns that an invoice was settled
+        // somewhere other than here. A reminder left queued against it would
+        // put a balance that no longer exists on a Lock Screen.
+        .task {
+            await viewModel.load()
+            await InvoiceReminderService.cancelStaleReminders(among: viewModel.invoices)
+        }
+        .refreshable {
+            await viewModel.load()
+            await InvoiceReminderService.cancelStaleReminders(among: viewModel.invoices)
+        }
     }
 
     private var header: some View {
