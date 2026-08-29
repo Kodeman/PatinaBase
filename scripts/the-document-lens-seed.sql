@@ -32,9 +32,10 @@
 DO $$
 DECLARE
   -- ── People / existing fixtures ──────────────────────────────────────────
-  uid_designer UUID := 'a0000000-0000-0000-0000-000000000004';
-  uid_client   UUID := 'a0000000-0000-0000-0000-000000000005';
-  v_dc_id      UUID;
+  uid_designer     UUID := 'a0000000-0000-0000-0000-000000000004';
+  uid_client       UUID := 'a0000000-0000-0000-0000-000000000005';
+  uid_manufacturer UUID := 'a0000000-0000-0000-0000-000000000006'; -- dev-accounts.sql fixture; comms_threads.kind='vendor_brief' needs exactly 2 active participants
+  v_dc_id          UUID;
 
   -- ── This project + its sibling pre-work document ────────────────────────
   v_project_id  UUID := 'b0000000-0000-0000-0000-0000000000d5';
@@ -602,10 +603,17 @@ BEGIN
      NOW() - INTERVAL '1 days', 'line',
      ('b0000000-0000-0000-0005-' || lpad(to_hex(2000 + 19), 12, '0'))::uuid);
 
+  -- comms_check_thread_cardinality (00101_comms_tables.sql) requires exactly
+  -- 2 active participants for kind IN ('direct','vendor_brief'); v_thread_po
+  -- is 'vendor_brief', so it needs the designer plus a counterpart — using
+  -- the standing dev-accounts.sql manufacturer fixture as the vendor side.
+  -- v_thread_console is kind='project' (no cardinality constraint), so it
+  -- keeps its single designer participant.
   INSERT INTO public.comms_thread_participants (thread_id, profile_id, role)
   VALUES
     (v_thread_console, uid_designer, 'designer'),
-    (v_thread_po, uid_designer, 'designer');
+    (v_thread_po, uid_designer, 'designer'),
+    (v_thread_po, uid_manufacturer, 'vendor');
 
   INSERT INTO public.comms_messages (id, thread_id, sender_id, body, created_at) VALUES
     (v_msg_console, v_thread_console, uid_designer,
