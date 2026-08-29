@@ -291,6 +291,9 @@ export function extractBrand(): string | null {
 
 const MAX_SKU_LENGTH = 64;
 
+/** Values a template emits when it has no SKU to print. */
+const SKU_PLACEHOLDERS = new Set(['n/a', 'na', 'null', 'undefined', 'none', '-']);
+
 /**
  * A usable SKU string, or null. Anything longer than 64 characters is a
  * description or a serialized blob, not a part number.
@@ -300,6 +303,7 @@ function cleanSku(value: unknown, stripSkuPrefix = false): string | null {
   let text = String(value).trim();
   if (stripSkuPrefix) text = text.replace(/^sku:\s*/i, '').trim();
   if (!text || text.length > MAX_SKU_LENGTH) return null;
+  if (SKU_PLACEHOLDERS.has(text.toLowerCase())) return null;
   return text;
 }
 
@@ -352,6 +356,12 @@ function addressesPage(url: string, here: string): boolean {
   }
 }
 
+/**
+ * On a miss this deliberately diverges from price.ts: where that file falls back
+ * to the floor of the variants' price range, a SKU has no floor — an unselected
+ * variant's part number names a size or colour the page isn't showing. So when
+ * no variant addresses the page we take the group's own sku, or nothing.
+ */
 function skuFromProductNode(node: Record<string, unknown>, here: string): string | null {
   if (skuSchemaTypes(node).includes('ProductGroup') && Array.isArray(node.hasVariant)) {
     for (const entry of node.hasVariant) {

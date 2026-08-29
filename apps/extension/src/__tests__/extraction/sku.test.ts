@@ -149,6 +149,18 @@ describe('extractSku — shape', () => {
     expect(extractSku(doc)).toBe('26982');
   });
 
+  it.each(['n/a', 'N/A', 'na', 'NA', 'null', 'NULL', 'undefined', 'Undefined', 'none', 'None', '-'])(
+    'rejects the placeholder %s',
+    (placeholder) => {
+      expect(extractSku(docFrom(jsonLd({ '@type': 'Product', sku: placeholder })))).toBeNull();
+    }
+  );
+
+  it('falls past a placeholder sku to a real mpn', () => {
+    const doc = docFrom(jsonLd({ '@type': 'Product', sku: 'N/A', mpn: 'MPN-9' }));
+    expect(extractSku(doc)).toBe('MPN-9');
+  });
+
   it('accepts a 64-character sku but rejects anything longer', () => {
     const atCap = 'A'.repeat(64);
     expect(extractSku(docFrom(jsonLd({ '@type': 'Product', sku: atCap })))).toBe(atCap);

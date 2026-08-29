@@ -8,6 +8,7 @@ import type { DraftFieldKey } from '../../state/types';
 const FIELD_KEYS: DraftFieldKey[] = [
   'name',
   'price',
+  'sku',
   'description',
   'materials',
   'colors',
