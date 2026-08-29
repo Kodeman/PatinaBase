@@ -199,3 +199,57 @@ button copy.
 3. **Raw `{confidence} confidence` badge** (`InsightRegion.tsx:43`, `InsightSheet.tsx:29`) — the extractor's internal scoring band shown as-is, the clearest single violation of "technology is the silent enabler."
 4. **"a client decision" / bare "Decision"** (`DecisionSheet.tsx:61`, `RecentCapturesSheet.tsx:17`) — unexplained internal object name for the client-approval feature.
 5. **"verified, priced, and routed"** puffery in the onboarding step-0 pitch (`onboarding.tsx:106`) — "verified" oversells what a best-effort extractor actually does, as this lane's own extraction-report.json demonstrates (wrong currency on 1stDibs, missed dimensions, a hard crash on Pinterest).
+
+## Resolved 2026-08-29 (W2-D7/D5/D9)
+
+All five Top-5 findings above have shipped. Exact current strings, read from
+source on this date (worktree `capture-launch/w3-e11` @ `80cdbf3eb`):
+
+1. **False privacy claim — RESOLVED.** `onboarding.tsx:148-150` (step 2) now
+   reads: *"To read a product's name, price, and images, Patina reads the
+   page you're on when you capture — only then, only that tab. What it reads
+   goes to your Patina workspace. We keep light usage stats — what you do in
+   the extension, never the page. Chrome words this permission broadly
+   ('Read and change all your data on all websites'); we use it only at the
+   moment you capture."* No claim that "nothing leaves your workspace"
+   remains — it's rewritten truthful per CL-R5's ruling (analytics/Supabase
+   both plainly acknowledged).
+2. **"Save & fill slot" / "Save & create line" — RESOLVED.** `CommitBar.tsx`'s
+   primary button now reads, state-dependent: *"Save into this room"*
+   (`fill_slot`, line 153), *"Add to this room"* (`create_line`, line 155),
+   *"Save to project inbox"* (line 157), or *"Save to library"* (line 158).
+   The dedup path also lost its internal nouns: `Use "{name}" here` (reuse,
+   line 103) / `Save as new` (line 111) / `Update "{name}"` (line 124) /
+   `Save as new` (line 132). No "slot"/"line"/bare "decision" remains in any
+   primary button per CL-R10.
+3. **Raw `{confidence} confidence` badge — RESOLVED.** `InsightRegion.tsx`
+   no longer renders a confidence string at all — its body copy is now
+   *"Read {n} of {m} fields from {host}."* with a flagged-fields callout
+   (lines 44-49), no raw score. `InsightSheet.tsx` similarly dropped the
+   score line; its body copy is *"Pulled from {host}. Verdigris means we're
+   confident; rust means it needs your eye."* (lines 30-33). `FieldBadge.tsx`
+   shows only `verified`/`read`/`edited`/`needs check` — never a numeric or
+   named confidence tier. Per CL-R15.
+4. **"a client decision" / bare "Decision" — PARTIALLY RESOLVED, one item
+   remains (this lane's fix, below).** `DecisionSheet.tsx`'s subtitle is now
+   *"Ask the client to choose"* (no longer "Create a client decision") and
+   its title stays the plain *"Send for approval"* — the internal-object
+   framing is gone there. `RecentCapturesSheet.tsx:16`'s `TARGET_LABEL` map
+   still read `decision: 'Decision'` as of the start of this lane (W3-E11) —
+   **fixed in this same lane** to `'Client choosing'`, closing the last
+   instance of this finding.
+5. **"verified, priced, and routed" puffery — RESOLVED.** `onboarding.tsx:105`
+   (step 0 pitch) now reads *"Pull any furniture page into your Patina
+   library — read, priced, and routed to the right project."* — "verified"
+   replaced with "read," matching what the extractor actually does.
+
+## Still open (not touched by this lane)
+
+Lower-severity notes from the original audit that no in-flight lane has
+addressed, carried forward for a future copy pass:
+
+- `AuthScreen.tsx:104` — "Signing in..." uses a three-dot ellipsis, inconsistent with the single-glyph "…" used elsewhere in the panel (e.g. `CommitBar.tsx`).
+- `TradeRegion.tsx:28-30` — "resolves against {vendor}" / "surface trade pricing" are dev-register verbs; a plainer designer-facing phrasing was suggested but not applied.
+- `TerminalScreens.tsx:91` — the error screen's fallback string still says "extraction" ("The page blocked extraction or timed out").
+- `SettingsSheet.tsx` — "Trade layer" / "region" (line 7's hint) and "vendor mode" (line 11's hint) are still internal-architecture nouns in toggle copy.
+- `TerminalScreens.tsx:47-49` (S4 save-outcome subline) — "held for review" still names an internal moderation state without saying who reviews or why.
