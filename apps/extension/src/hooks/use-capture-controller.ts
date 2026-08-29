@@ -399,6 +399,13 @@ export function useCaptureController(): CaptureController {
       return;
     }
 
+    // CL-R14: refuse before the mode branch — facebook.com/<page>/about reads
+    // as a vendor URL, and the vendor screen would extract it just as wrongly.
+    if (isKnownBadDomain(currentUrl)) {
+      dispatch({ type: 'EXTRACTION_ERROR', error: KNOWN_BAD_DOMAIN_MESSAGE });
+      return;
+    }
+
     const mode = detectModeFromUrl(currentUrl);
     if (mode.mode === 'vendor') {
       dispatch({ type: 'NAV', screen: 'vendor' });

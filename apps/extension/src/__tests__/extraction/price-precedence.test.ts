@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { readFileSync } from 'fs';
 import path from 'path';
-import { extractPriceWithSource } from '../../lib/extraction/price';
+import { extractPriceWithSource, STRICT_DOLLAR_PATTERN } from '../../lib/extraction/price';
 import { extractProductData } from '../../lib/extraction';
 
 const FIXTURES_DIR = path.join(__dirname, '../fixtures');
@@ -62,6 +62,34 @@ describe('offer currency selection (CL-R13)', () => {
   });
 });
 
+describe('STRICT_DOLLAR_PATTERN (CL-R13)', () => {
+  const accepts: Array<[string, string]> = [
+    ['$1,499.00', '1,499.00'],
+    ['$1,499', '1,499'],
+    ['$12,345.67', '12,345.67'],
+    // Unseparated forms — West Elm and Wayfair both ship these.
+    ['$1499', '1499'],
+    ['$1499.00', '1499.00'],
+    ['$12345.00', '12345.00'],
+    ['$999999', '999999'],
+    ['$ 249.99', '249.99'],
+  ];
+
+  it.each(accepts)('accepts %s', (input, expected) => {
+    expect(input.match(STRICT_DOLLAR_PATTERN)?.[1]).toBe(expected);
+  });
+
+  const rejects = [
+    '$1,23456', // half-grouped junk
+    '$12345678', // more digits than any furniture price
+    '$', // bare glyph
+  ];
+
+  it.each(rejects)('rejects %s', (input) => {
+    expect(STRICT_DOLLAR_PATTERN.test(input)).toBe(false);
+  });
+});
+
 describe('price precedence (CL-R13)', () => {
   it('takes Wayfair\'s lead price, not the "under $100" nav promo', () => {
     loadFixture(
@@ -86,6 +114,26 @@ describe('price precedence (CL-R13)', () => {
     const result = extractPriceWithSource();
     expect(result?.source).toBe('json-ld');
     expect(result?.price.value).toBe(245000);
+  });
+
+  it('prices a ProductGroup at the variant the page URL selects', () => {
+    loadFixture(
+      'westelm.com.harris-sofa.html',
+      'https://www.westelm.com/products/harris-sofa-96-h4614/?sku=3627456'
+    );
+
+    // sku 3627456 is the "Harris 96in Sofa" variant at $1,699.
+    expect(extractPriceWithSource()?.price.value).toBe(169900);
+  });
+
+  it('prices an unselected ProductGroup at the floor of its variants', () => {
+    loadFixture('westelm.com.harris-sofa.html', 'https://www.westelm.com/products/harris-sofa-96-h4614/');
+
+    // Ten size/bench variants ($1,399–$1,899) all share this pathname and are
+    // distinguished only by ?sku=, so nothing is selected: take the floor, the
+    // same choice the range and "from $X" patterns make.
+    expect(extractPriceWithSource()?.price.value).toBe(139900);
+    expect(extractPriceWithSource()?.source).toBe('json-ld');
   });
 
   it('prefers a product:price:amount meta tag over JSON-LD', () => {
@@ -133,6 +181,29 @@ describe('body-text price guard (CL-R13)', () => {
     const result = extractPriceWithSource();
     expect(result?.source).toBe('body-text');
     expect(result?.price.value).toBe(245000);
+  });
+
+  it('reads an unseparated body-text price', () => {
+    setPage('<p>Priced at $1499 today</p>');
+    expect(extractPriceWithSource()?.price.value).toBe(149900);
+  });
+
+  it('skips a display:none clearance banner that precedes the real price', () => {
+    setPage(`
+      <div style="display:none">Clearance from $199.00</div>
+      <p>Priced at $2,450.00 today</p>
+    `);
+    expect(extractPriceWithSource()?.price.value).toBe(245000);
+  });
+
+  it('skips hidden and aria-hidden subtrees', () => {
+    setPage(`
+      <div hidden><span>Was $199.00</span></div>
+      <div aria-hidden="true"><span>Members pay $249.00</span></div>
+      <div style="visibility:hidden">Bundle price $299.00</div>
+      <p>Priced at $2,450.00 today</p>
+    `);
+    expect(extractPriceWithSource()?.price.value).toBe(245000);
   });
 
   it('never scores high confidence when the price is only a body-text hit', async () => {

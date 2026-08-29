@@ -9,8 +9,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { readFileSync } from 'fs';
 import path from 'path';
-import { extractPageBrand } from '../../lib/extraction/manufacturer';
+import { extractPageBrand, extractManufacturerFromPage } from '../../lib/extraction/manufacturer';
 import { extractRetailer, RETAILER_MAP } from '../../lib/extraction/retailer';
+import { extractProductData } from '../../lib/extraction';
 
 const FIXTURES_DIR = path.join(__dirname, '../fixtures');
 
@@ -91,6 +92,85 @@ describe('extractPageBrand (CL-R12)', () => {
     expect(extractPageBrand()).toBeNull();
     // The retailer is still known — a null maker never falls back to it.
     expect(extractRetailer(url).name).toBe('Herman Miller');
+  });
+});
+
+describe('JSON-LD brand shapes (CL-R12)', () => {
+  function setJsonLd(json: string): void {
+    document.head.innerHTML = '';
+    document.body.innerHTML = `<script type="application/ld+json">${json}</script>`;
+  }
+
+  it('reads a brand given as an array of objects', () => {
+    setJsonLd('{"@type":"Product","name":"Chair","brand":[{"@type":"Brand","name":"Vitra"}]}');
+    expect(extractPageBrand()?.name).toBe('Vitra');
+  });
+
+  it('reads a brand given as an array of strings', () => {
+    setJsonLd('{"@type":"Product","name":"Chair","brand":["Muuto","Ignored"]}');
+    expect(extractPageBrand()?.name).toBe('Muuto');
+  });
+
+  it('reads a brand when @type is an array that includes Product', () => {
+    setJsonLd('{"@type":["Thing","Product"],"name":"Chair","brand":{"name":"Fritz Hansen"}}');
+    expect(extractPageBrand()?.name).toBe('Fritz Hansen');
+  });
+
+  it('reads a ProductGroup top-level brand', () => {
+    setJsonLd(
+      '{"@type":"ProductGroup","name":"Harris Sofa","brand":{"@type":"Brand","name":"West Elm"},' +
+        '"hasVariant":[{"@type":"Product","name":"Harris 96in"}]}'
+    );
+    expect(extractPageBrand()?.name).toBe('West Elm');
+  });
+
+  it('falls back to manufacturer when no brand is published', () => {
+    setJsonLd('{"@type":"Product","name":"Chair","manufacturer":{"name":"Knoll"}}');
+    expect(extractPageBrand()?.name).toBe('Knoll');
+  });
+
+  it('ignores an empty brand array', () => {
+    setJsonLd('{"@type":"Product","name":"Chair","brand":[]}');
+    expect(extractPageBrand()).toBeNull();
+  });
+});
+
+describe('inline-script brand slugs (CL-R12)', () => {
+  function setInlineBrand(slug: string): void {
+    document.head.innerHTML = '';
+    document.body.innerHTML = `<script>window.__cfg = {"brand":"brands-${slug}"};</script>`;
+  }
+
+  const cases: Array<[string, string]> = [
+    ['b-b-italia', 'B&B Italia'],
+    ['rh-modern', 'RH Modern'],
+    ['cb2', 'CB2'],
+    ['hay', 'HAY'],
+    ['dwr', 'Design Within Reach'],
+    // Not in the map — title-cased.
+    ['herman-miller', 'Herman Miller'],
+    ['ligne-roset', 'Ligne Roset'],
+  ];
+
+  it.each(cases)('resolves brands-%s to %s', (slug, expected) => {
+    setInlineBrand(slug);
+    expect(extractPageBrand()?.name).toBe(expected);
+  });
+});
+
+describe('D2C divergence (CL-R12)', () => {
+  it('keeps the maker on the capture while the vendor slot reads "no separate maker"', async () => {
+    const url = 'https://www.roomandboard.com/catalog/living/sofas-and-loveseats/stevens-sofas';
+    loadFixture('roomandboard.com.stevens-sofas.html', url);
+
+    // The capture records the brand the page names, even when it equals the
+    // retailer — a designer specifying a Room & Board sofa needs the maker.
+    const data = await extractProductData(url);
+    expect(data.manufacturer).toBe('Room & Board');
+
+    // The vendor-linking path deliberately reports null instead: there is no
+    // *separate* manufacturer vendor to link on a direct-to-consumer site.
+    expect(extractManufacturerFromPage(url)).toBeNull();
   });
 });
 

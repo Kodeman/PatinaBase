@@ -41,11 +41,14 @@ const SKIP_PRICE_CLASSES = [
 ];
 
 // Body-text scanning is the weakest source, so it demands a well-formed money
-// token: a dollar sign, then 1-3 digits, then only comma-grouped thousands and
-// an optional 2-decimal cents part. The looser PRICE_PATTERNS entry matches
-// regex backreferences like the `$1$2s` token Instagram ships in its script
-// payloads.
-const STRICT_DOLLAR_PATTERN = /\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)(?![\d,])/;
+// token: either comma-grouped thousands ($1,499.00) or an unseparated amount
+// ($1499, $1499.00, $999999), each with an optional 2-decimal cents part and
+// no trailing digit or comma. Half-grouped junk like `$1,23456` is rejected.
+// This is a well-formedness guard, not the defence against Instagram's `$1$2s`
+// backreference token — that lives in a <script>, and visibleBodyText() is
+// what keeps script text out of the scan.
+export const STRICT_DOLLAR_PATTERN =
+  /\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{1,7}(?:\.\d{2})?)(?![\d,])/;
 
 // Selectors commonly used for prices (sale/current prices first for priority)
 const PRICE_SELECTORS = [
@@ -215,13 +218,38 @@ function extractFromPriceSelectors(): PriceWithSource | null {
   return null;
 }
 
+/** True for text a reader cannot see: hidden subtrees and display/visibility off. */
+function isHiddenFromReader(el: Element): boolean {
+  try {
+    if (el.closest('[hidden], [aria-hidden="true"]')) return true;
+  } catch {
+    // Selector unsupported in this document — fall through to style checks.
+  }
+
+  // jsdom's getComputedStyle only resolves inline styles, so this catches the
+  // common `style="display:none"` case without pretending to be a layout engine.
+  if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+    try {
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') return true;
+    } catch {
+      // Not styleable in this environment — treat as visible.
+    }
+  }
+
+  return false;
+}
+
 /**
- * Body text with <script>/<style>/<noscript>/<template> content removed.
+ * Body text with <script>/<style>/<noscript>/<template> and reader-hidden
+ * content removed.
  *
  * A real browser's innerText already excludes those; the jsdom polyfill used
  * by the fixture suite aliases innerText to textContent, which does not — and
  * script payloads carry money-shaped tokens (Instagram ships a `$1$2s` regex
- * backreference). Walking text nodes keeps both environments honest.
+ * backreference), while hidden clearance/promo banners carry real-looking
+ * prices that are not this product's. Walking text nodes keeps both
+ * environments honest.
  */
 function visibleBodyText(): string {
   const body = document.body;
@@ -232,6 +260,7 @@ function visibleBodyText(): string {
     acceptNode(node) {
       const parent = node.parentElement;
       if (!parent || skipped.has(parent.tagName)) return NodeFilter.FILTER_REJECT;
+      if (isHiddenFromReader(parent)) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });
@@ -329,6 +358,82 @@ function pickOfferPrice(offers: unknown[]): ExtractedPrice | null {
   return (explicit ?? priced[0]).price;
 }
 
+/** JSON-LD `@type` is a string or an array of strings. */
+function schemaTypes(obj: Record<string, unknown>): string[] {
+  const type = obj['@type'];
+  if (typeof type === 'string') return [type];
+  if (Array.isArray(type)) return type.filter((t): t is string => typeof t === 'string');
+  return [];
+}
+
+/** Every URL a variant advertises: its own, plus any on its offers. */
+function variantUrls(variant: Record<string, unknown>): string[] {
+  const urls: string[] = [];
+  if (typeof variant.url === 'string') urls.push(variant.url);
+  const offers = variant.offers;
+  const offerList = Array.isArray(offers) ? offers : [offers];
+  for (const offer of offerList) {
+    if (offer && typeof offer === 'object') {
+      const url = (offer as Record<string, unknown>).url;
+      if (typeof url === 'string') urls.push(url);
+    }
+  }
+  return urls;
+}
+
+/**
+ * True when a variant URL addresses the page we are on: same pathname, and
+ * either no query of its own or the same query (variants are usually
+ * distinguished by a `?sku=` the address bar carries when one is selected).
+ */
+function addressesCurrentPage(url: string): boolean {
+  if (typeof window === 'undefined' || !window.location?.href) return false;
+  try {
+    const candidate = new URL(url, window.location.href);
+    const here = new URL(window.location.href);
+    if (candidate.pathname !== here.pathname) return false;
+    return candidate.search === '' || candidate.search === here.search;
+  } catch {
+    return false;
+  }
+}
+
+function variantPrice(variant: Record<string, unknown>): ExtractedPrice | null {
+  const offers = variant.offers;
+  if (Array.isArray(offers)) return pickOfferPrice(offers);
+  if (offers && typeof offers === 'object') {
+    return extractOfferPrice(offers as Record<string, unknown>);
+  }
+  return extractOfferPrice(variant);
+}
+
+/**
+ * Price a ProductGroup by its variants.
+ *
+ * Prefer the variant whose URL addresses this page (a selected sku). West Elm's
+ * Harris Sofa publishes ten size/bench variants that all share the page's
+ * pathname and differ only by `?sku=`, so nothing is selected — for a size
+ * configurator like that the honest capture is the floor of the range, which is
+ * also what the range and "from $X" patterns take elsewhere in this file.
+ */
+function pickVariantPrice(variants: unknown[]): ExtractedPrice | null {
+  const priced: Array<{ urls: string[]; price: ExtractedPrice }> = [];
+
+  for (const entry of variants) {
+    if (!entry || typeof entry !== 'object') continue;
+    const variant = entry as Record<string, unknown>;
+    const price = variantPrice(variant);
+    if (price) priced.push({ urls: variantUrls(variant), price });
+  }
+
+  if (priced.length === 0) return null;
+
+  const selected = priced.find((v) => v.urls.some(addressesCurrentPage));
+  if (selected) return selected.price;
+
+  return priced.reduce((low, v) => (v.price.value < low.price.value ? v : low)).price;
+}
+
 /**
  * Find price in JSON-LD structured data
  */
@@ -336,9 +441,15 @@ function findPriceInJsonLd(data: unknown): ExtractedPrice | null {
   if (!data || typeof data !== 'object') return null;
 
   const obj = data as Record<string, unknown>;
+  const types = schemaTypes(obj);
+
+  if (types.includes('ProductGroup') && Array.isArray(obj.hasVariant)) {
+    const price = pickVariantPrice(obj.hasVariant);
+    if (price) return price;
+  }
 
   // Check for Product schema
-  if (obj['@type'] === 'Product' || obj['@type'] === 'Offer') {
+  if (types.includes('Product') || types.includes('Offer')) {
     const offers = obj.offers || obj;
     if (Array.isArray(offers)) {
       const price = pickOfferPrice(offers);

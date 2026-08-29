@@ -12,6 +12,31 @@ export interface ExtractedManufacturer {
   source: 'json-ld' | 'meta-tag' | 'dom-element' | 'inline-script';
 }
 
+/** JSON-LD `@type` is a string or an array of strings. */
+function schemaTypes(obj: Record<string, unknown>): string[] {
+  const type = obj['@type'];
+  if (typeof type === 'string') return [type];
+  if (Array.isArray(type)) return type.filter((t): t is string => typeof t === 'string');
+  return [];
+}
+
+/** A brand/manufacturer value: a string, a {name}, or an array of either. */
+function brandValueToName(value: unknown): string | null {
+  if (typeof value === 'string') return value.length > 0 ? value : null;
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const name = brandValueToName(entry);
+      if (name) return name;
+    }
+    return null;
+  }
+  if (value && typeof value === 'object') {
+    const name = (value as Record<string, unknown>).name;
+    if (typeof name === 'string' && name.length > 0) return name;
+  }
+  return null;
+}
+
 /**
  * Find brand/manufacturer in JSON-LD structured data
  */
@@ -19,32 +44,15 @@ function findBrandInJsonLd(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
 
   const obj = data as Record<string, unknown>;
+  const types = schemaTypes(obj);
 
-  // Check for Product type with brand or manufacturer
-  if (obj['@type'] === 'Product') {
-    // Check brand field
-    const brand = obj.brand;
-    if (typeof brand === 'string' && brand.length > 0) {
-      return brand;
-    }
-    if (typeof brand === 'object' && brand !== null) {
-      const brandObj = brand as Record<string, unknown>;
-      if (typeof brandObj.name === 'string') {
-        return brandObj.name;
-      }
-    }
+  // A configurator publishes its brand on the ProductGroup, not the variants.
+  if (types.includes('Product') || types.includes('ProductGroup')) {
+    const brand = brandValueToName(obj.brand);
+    if (brand) return brand;
 
-    // Check manufacturer field
-    const manufacturer = obj.manufacturer;
-    if (typeof manufacturer === 'string' && manufacturer.length > 0) {
-      return manufacturer;
-    }
-    if (typeof manufacturer === 'object' && manufacturer !== null) {
-      const mfgObj = manufacturer as Record<string, unknown>;
-      if (typeof mfgObj.name === 'string') {
-        return mfgObj.name;
-      }
-    }
+    const manufacturer = brandValueToName(obj.manufacturer);
+    if (manufacturer) return manufacturer;
   }
 
   // Recurse into arrays
@@ -170,7 +178,18 @@ function extractFromItemprop(): ExtractedManufacturer | null {
  */
 const BRAND_SLUG_PATTERN = /"brand"\s*:\s*"brands-([a-z0-9]+(?:-[a-z0-9]+)*)"/;
 
+/** Slugs whose real name title-casing would mangle. */
+const BRAND_SLUG_NAMES: Record<string, string> = {
+  'b-b-italia': 'B&B Italia',
+  'rh-modern': 'RH Modern',
+  cb2: 'CB2',
+  hay: 'HAY',
+  dwr: 'Design Within Reach',
+};
+
 function brandNameFromSlug(slug: string): string {
+  const known = BRAND_SLUG_NAMES[slug];
+  if (known) return known;
   return slug
     .split('-')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))

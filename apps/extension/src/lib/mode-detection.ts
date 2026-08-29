@@ -57,6 +57,7 @@ export function scorePageMode(signals: PageModeSignals): ModeScore {
  */
 const KNOWN_BAD_DOMAINS = [
   'pinterest.com',
+  'pin.it',
   'instagram.com',
   'facebook.com',
   'tiktok.com',
@@ -69,10 +70,14 @@ export const KNOWN_BAD_DOMAIN_MESSAGE =
 
 /**
  * True when the URL is on a known-bad domain (or one of its subdomains).
+ *
+ * Pinterest runs a per-country TLD (pinterest.co.uk, pinterest.de, …), so any
+ * host that starts `pinterest.` counts too.
  */
 export function isKnownBadDomain(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    if (hostname.startsWith('pinterest.')) return true;
     return KNOWN_BAD_DOMAINS.some(
       (domain) => hostname === domain || hostname.endsWith('.' + domain)
     );

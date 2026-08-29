@@ -228,6 +228,21 @@ describe('isKnownBadDomain (CL-R14)', () => {
     expect(isKnownBadDomain('https://ro.pinterest.com/pin/123/')).toBe(true);
   });
 
+  it('refuses Pinterest short links and country TLDs', () => {
+    expect(isKnownBadDomain('https://pin.it/abc123')).toBe(true);
+    expect(isKnownBadDomain('https://www.pinterest.co.uk/pin/123/')).toBe(true);
+    expect(isKnownBadDomain('https://pinterest.de/pin/123/')).toBe(true);
+    expect(isKnownBadDomain('https://pinterest.com.au/pin/123/')).toBe(true);
+  });
+
+  it('refuses a facebook about page that would otherwise route to vendor mode', () => {
+    const url = 'https://www.facebook.com/somemaker/about';
+    // The URL heuristic reads this as a vendor page, so the known-bad guard
+    // has to run BEFORE the mode branch in use-capture-controller.
+    expect(detectModeFromUrl(url).mode).toBe('vendor');
+    expect(isKnownBadDomain(url)).toBe(true);
+  });
+
   it('allows vendor domains that merely contain a known-bad name', () => {
     expect(isKnownBadDomain('https://www.westelm.com/products/harris-sofa-96-h4614/')).toBe(false);
     expect(isKnownBadDomain('https://notinstagram.com/p/abc/')).toBe(false);

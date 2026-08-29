@@ -1,6 +1,7 @@
 /** Terminal + error screens: S4 (saved to library), S5 (sent to inbox), R5 (error). */
 import { useCapture, useCaptureDispatch } from '../state/CaptureProvider';
 import { useController } from '../panel/controller-context';
+import { KNOWN_BAD_DOMAIN_MESSAGE } from '../lib/mode-detection';
 
 function NextActions() {
   const dispatch = useCaptureDispatch();
@@ -77,22 +78,28 @@ export function InboxSavedScreen() {
 
 export function ErrorScreen() {
   const { refresh, currentUrl } = useController();
+  const { io } = useCapture();
   const dispatch = useCaptureDispatch();
+  // CL-R14: a known-bad domain will never extract, so retrying is a dead end —
+  // only Snapshot and by-hand remain.
+  const isKnownBad = io.error === KNOWN_BAD_DOMAIN_MESSAGE;
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <span className="font-display text-[1.4rem] text-rust">—</span>
       <h2 className="mt-2 font-display text-[1.2rem] text-ink">Couldn't read this page</h2>
       <p className="mt-1 max-w-[30ch] text-[0.85rem] text-ink-soft">
-        The page blocked extraction or timed out. Try again, or capture it by hand.
+        {io.error || 'The page blocked extraction or timed out. Try again, or capture it by hand.'}
       </p>
       <div className="mt-5 flex gap-2">
-        <button
-          type="button"
-          onClick={refresh}
-          className="rounded-md bg-verdigris px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-paper hover:bg-verdigris-ink"
-        >
-          Retry
-        </button>
+        {!isKnownBad && (
+          <button
+            type="button"
+            onClick={refresh}
+            className="rounded-md bg-verdigris px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-paper hover:bg-verdigris-ink"
+          >
+            Retry
+          </button>
+        )}
         <button
           type="button"
           onClick={() => dispatch({ type: 'NAV', screen: 'R2' })}
