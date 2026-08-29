@@ -547,16 +547,17 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     mockLensDensity = null;
   });
 
-  it('prints the head, one count line, one leader and the state line — and no rungs', () => {
+  it('prints the head, one count line and the state line — and no rungs', () => {
     liveMoney();
     render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
     const count = screen.getByText('$1,750 OWED YOU · 1 PO');
     expect(count.textContent!.length).toBeLessThanOrEqual(40);
+    // The head's own acts are the only acts (mockup governs what prints).
     expect(
-      screen.getByRole('button', { name: 'See the money →' }),
-    ).toHaveAttribute('data-action-variant', 'inked');
+      screen.queryByRole('button', { name: /See the money/ }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
 
     expect(document.querySelectorAll('ol > li')).toHaveLength(0);
@@ -569,9 +570,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
 
     expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
     expect(screen.queryByText(/OWED YOU|POS?$/)).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'See the money →' }),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
   });
 
   it('publishes its density and its short reserve on the index root (OD-12)', () => {
@@ -600,15 +599,6 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     ).toHaveAttribute('data-density', 'full');
     expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
     expect(screen.getByText(/^Owed · /)).toBeInTheDocument();
-  });
-
-  it('opens on the leader, over the same wire a rung press sends', () => {
-    liveMoney();
-    render(<MoneyRegion projectId="project-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'See the money →' }));
-
-    expect(screen.getByText(/^Owed · /)).toBeInTheDocument();
-    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
   });
 
   it('lets the fold she made outrank the lens, whatever the lens says', () => {

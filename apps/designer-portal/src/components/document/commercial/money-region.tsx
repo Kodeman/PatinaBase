@@ -28,11 +28,9 @@ import { usePurchaseOrders } from '@patina/supabase';
 import { useAccountPage } from '@/hooks/use-account-page';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
-import { requestRegionUnfold } from '@/lib/document/document-index';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { type MoneyRung } from '@/lib/document/money-ladder';
 import { money } from '@/lib/document/project-commerce';
-import { DocumentAction, DocumentActionRow } from '../document-action';
 import { AccountBand } from '../account-band';
 import { openInvoiceComposer } from '../accounts/invoice-overlays';
 import { openLedger } from '../command-bar';
@@ -221,9 +219,6 @@ export function MoneyRegion({
   ]
     .filter(Boolean)
     .join(' · ');
-  // The same wire a ladder rung's press sends: `openMoneyRegion` below answers
-  // it, and the explicit voice it sets takes the stop out of the lens's reach.
-  const openMoneyFromQuiet = useCallback(() => requestRegionUnfold('money'), []);
 
   const ledger: RegionLedgerEntry[] = [
     // R74b — draw an invoice for THIS engagement: the anti-wizard composer,
@@ -306,15 +301,6 @@ export function MoneyRegion({
               {countLine}
             </p>
           )}
-          <DocumentActionRow surfaceKey="accounts" regionKey="money-quiet">
-            <DocumentAction
-              actionKey="open-money-region"
-              variant="inked"
-              onClick={openMoneyFromQuiet}
-            >
-              See the money →
-            </DocumentAction>
-          </DocumentActionRow>
           <p className="sr-only">Quiet — opens as you read</p>
         </div>
       ) : (

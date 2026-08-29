@@ -363,7 +363,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     mockLensDensity = null;
   });
 
-  it('prints the head, one count line, one leader and the state line — and no lines', () => {
+  it('prints the head, one count line and the state line — and no lines', () => {
     mockItems = [
       line({ id: 'ffe-1' }),
       line({ id: 'ffe-2', project_room_id: null, room: null }),
@@ -373,9 +373,10 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
     const count = screen.getByText('2 LINES · 1 ROOM');
     expect(count.textContent!.length).toBeLessThanOrEqual(40);
+    // The head's own acts are the only acts (mockup governs what prints).
     expect(
-      screen.getByRole('button', { name: 'See the lines →' }),
-    ).toHaveAttribute('data-action-variant', 'inked');
+      screen.queryByRole('button', { name: /See the lines/ }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
 
     // The schedule is not on the paper: no line, no room head, no Throughout.
@@ -445,14 +446,6 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     ).toHaveAttribute('data-density', 'full');
     expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
     expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
-  });
-
-  it('opens on the leader, over the same wire a rung press sends', () => {
-    renderProject();
-    fireEvent.click(screen.getByRole('button', { name: 'See the lines →' }));
-
-    expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
-    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
   });
 
   it('lets the fold she made outrank the lens, whatever the lens says', () => {

@@ -13,7 +13,6 @@ import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { useRegionFold } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
-import { requestRegionUnfold } from '@/lib/document/document-index';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
 import {
@@ -572,12 +571,6 @@ export function ProjectApprovalDocument({
   ]
     .filter(Boolean)
     .join(' · ');
-  // The same wire a ladder rung's press sends: `openApprovalsRegion` answers
-  // it, and the explicit voice it sets takes the stop out of the lens's reach.
-  const openApprovalsFromQuiet = useCallback(
-    () => requestRegionUnfold('approvals'),
-    [],
-  );
 
   useEffect(() => {
     if (!fold.folded && unfoldFocusRef.current) {
@@ -646,18 +639,6 @@ export function ProjectApprovalDocument({
               {countLine}
             </p>
           )}
-          <DocumentActionRow
-            surfaceKey="open-document"
-            regionKey="approvals-quiet"
-          >
-            <DocumentAction
-              actionKey="open-approvals-region"
-              variant="inked"
-              onClick={openApprovalsFromQuiet}
-            >
-              See the approvals &rarr;
-            </DocumentAction>
-          </DocumentActionRow>
           <p className="sr-only">Quiet — opens as you read</p>
         </div>
       ) : (

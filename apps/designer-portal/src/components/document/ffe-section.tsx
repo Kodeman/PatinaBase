@@ -104,7 +104,7 @@ import {
   electFfeLeader,
   type FfeLeaderKind,
 } from '@/lib/document/ffe-leader';
-import { DocumentAction, DocumentActionRow } from './document-action';
+import { DocumentAction } from './document-action';
 import { SectionLoadingLine } from './section-loading-line';
 import { RegionHead, type RegionLedgerEntry } from './region/region-head';
 import { RegionRule } from './region/region-rule';
@@ -118,7 +118,6 @@ import {
 import { useRoomLens } from './room-lens-context';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
-import { requestRegionUnfold } from '@/lib/document/document-index';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -1263,10 +1262,6 @@ function FFESectionBody({
   ]
     .filter(Boolean)
     .join(' · ');
-  // The same wire a ladder rung's press sends (`UNFOLD_REGION_EVENT`): the
-  // region's own listener answers it by setting the explicit voice open, which
-  // takes the stop out of the lens's reach and prints the body.
-  const openFfeFromQuiet = useCallback(() => requestRegionUnfold('ffe'), []);
 
   return (
     <section
@@ -1398,15 +1393,6 @@ function FFESectionBody({
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             {ffeCountLine}
           </p>
-          <DocumentActionRow surfaceKey="project" regionKey="ffe-quiet">
-            <DocumentAction
-              actionKey="open-ffe-region"
-              variant="inked"
-              onClick={openFfeFromQuiet}
-            >
-              See the lines →
-            </DocumentAction>
-          </DocumentActionRow>
           <p className="sr-only">Quiet — opens as you read</p>
         </div>
       )}

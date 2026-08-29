@@ -234,7 +234,7 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
     approvals = [overdue, open2];
   });
 
-  it('prints the head, one count line, one leader and the state line — and no approvals', () => {
+  it('prints the head, one count line and the state line — and no approvals', () => {
     renderDocument();
 
     expect(
@@ -242,9 +242,10 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
     ).toBeInTheDocument();
     const count = screen.getByText('1 OVERDUE · 2 OPEN');
     expect(count.textContent!.length).toBeLessThanOrEqual(40);
+    // The head's own acts are the only acts (mockup governs what prints).
     expect(
-      screen.getByRole('button', { name: 'See the approvals →' }),
-    ).toHaveAttribute('data-action-variant', 'inked');
+      screen.queryByRole('button', { name: /See the approvals/ }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
 
     expect(
@@ -263,9 +264,7 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
       screen.getByRole('heading', { name: 'Client approvals' }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/OVERDUE|OPEN/)).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'See the approvals →' }),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
   });
 
   it('publishes its density and its short reserve on the index root (OD-12)', () => {
@@ -311,18 +310,6 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
         /Bind each request to one issued plan, client-ready specification/,
       ),
     ).toBeInTheDocument();
-  });
-
-  it('opens on the leader, over the same wire a rung press sends', () => {
-    renderDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'See the approvals →' }));
-
-    expect(
-      screen.getByText(
-        /Bind each request to one issued plan, client-ready specification/,
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
   });
 
   it('lets the fold she made outrank the lens, whatever the lens says', () => {
