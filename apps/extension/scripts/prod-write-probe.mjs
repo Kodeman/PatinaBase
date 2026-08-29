@@ -15,11 +15,16 @@
  *
  * Env (all required unless noted):
  *   SUPABASE_URL, SUPABASE_ANON_KEY, PROBE_EMAIL, PROBE_PASSWORD
- *   PROBE_PROJECT_ID   (optional — skips placement + decision steps if absent)
- *   PROBE_PROPOSAL_ID  (optional — commit_proposal_capture's p_proposal_id is
- *                       nullable, so this is never required; when absent the
- *                       inbox step is called with proposal_id = null)
- *   PROBE_CLIENT_ID    (optional — skips the decision step if absent)
+ *   PROBE_PROJECT_ID     (optional — skips placement + decision steps if absent)
+ *   PROBE_PROPOSAL_ID    (optional — commit_proposal_capture's p_proposal_id is
+ *                         nullable, so this is never required; when absent the
+ *                         inbox step is called with proposal_id = null)
+ *   PROBE_CLIENT_ID      (optional — required, with PROBE_ALLOW_DECISION=1, to
+ *                         run the decision step)
+ *   PROBE_ALLOW_DECISION (optional — set to "1" to opt into step 7, which
+ *                         creates a PENDING client decision that may notify
+ *                         the client and leaves rows behind. Skipped by
+ *                         default.)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -33,8 +38,8 @@ const PLAN = [
   'step 4  insert_vendor          — vendors insert (name=PROBE-VENDOR-<ts>)',
   'step 5  place_in_project       — rpc place_product_in_project_v2 (destination=project_inbox); requires PROBE_PROJECT_ID, else skipped',
   'step 6  commit_proposal_capture — rpc commit_proposal_capture; proposal_id is nullable, uses PROBE_PROPOSAL_ID if set else null',
-  'step 7  create_decision        — rpc create_client_decision; requires PROBE_CLIENT_ID + PROBE_PROJECT_ID, else skipped',
-  'cleanup — delete product_styles, proposal_captures (by product id), project_ffe_items (by product id), decision rows (best effort), products, vendors',
+  'step 7  create_decision        — OPT-IN: requires PROBE_ALLOW_DECISION=1 and PROBE_CLIENT_ID (+ PROBE_PROJECT_ID), else skipped (set PROBE_ALLOW_DECISION=1 — creates a PENDING client decision that may notify the client and leaves rows); inserts its OWN PROBE-DECISION-<ts> product via rpc create_client_decision',
+  'cleanup — delete product_styles, proposal_captures (by product id), step-6/step-2/decision products, vendors (best effort); project_ffe_items is NOT attempted (authenticated has no DELETE grant on it)',
 ];
 
 if (DRY_RUN) {
@@ -51,6 +56,7 @@ const PROBE_PASSWORD = env.PROBE_PASSWORD;
 const PROBE_PROJECT_ID = env.PROBE_PROJECT_ID || null;
 const PROBE_PROPOSAL_ID = env.PROBE_PROPOSAL_ID || null;
 const PROBE_CLIENT_ID = env.PROBE_CLIENT_ID || null;
+const PROBE_ALLOW_DECISION = env.PROBE_ALLOW_DECISION === '1';
 
 const required = { SUPABASE_URL, SUPABASE_ANON_KEY, PROBE_EMAIL, PROBE_PASSWORD };
 const missing = Object.entries(required)
@@ -61,13 +67,10 @@ if (missing.length) {
   process.exit(1);
 }
 if (!PROBE_PROJECT_ID) {
-  console.log('PROBE_PROJECT_ID not set — steps 5 (placement) and 7 (decision) will be skipped.');
+  console.log('PROBE_PROJECT_ID not set — step 5 (placement) will be skipped, and step 7 (decision) requires it too.');
 }
 if (!PROBE_PROPOSAL_ID) {
   console.log('PROBE_PROPOSAL_ID not set — step 6 will call commit_proposal_capture with p_proposal_id = null.');
-}
-if (!PROBE_CLIENT_ID) {
-  console.log('PROBE_CLIENT_ID not set — step 7 (decision) will be skipped.');
 }
 
 const ts = Date.now();
@@ -85,8 +88,44 @@ const created = {
   vendorId: null,
   ffeSelectionId: null,
   captureRowId: null,
+  inboxProductId: null,
   decisionId: null,
+  decisionProductId: null,
 };
+
+/** Same shape as step 2's productPayload (payloads.ts:25-83 / effects.ts:46-51). */
+function baseProductPayload(name, sourceUrl) {
+  const nowIso = new Date().toISOString();
+  return {
+    name,
+    description: null,
+    source_url: sourceUrl,
+    images: [],
+    price_retail: null,
+    materials: [],
+    colors: null,
+    finish: null,
+    available_colors: null,
+    capture_source: 'web_extension',
+    capture_provenance: {
+      captureOptions: {
+        colors: [],
+        finishes: [],
+        materials: [],
+        source: 'web_extension',
+        capturedAt: nowIso,
+      },
+    },
+    dimensions: null,
+    vendor_id: null,
+    retailer_id: null,
+    captured_by: userId,
+    captured_at: nowIso,
+    layer: 'personal',
+    owner_user_id: userId,
+    status: 'draft',
+  };
+}
 
 function logOk(n, name, extra = '') {
   console.log(`step ${n} ${name}: ok${extra ? ' ' + extra : ''}`);
@@ -121,36 +160,7 @@ try {
 //     (payloads.ts:25-83, effects.ts:46-51), status mirrors saveToInbox's 'draft'.
 if (userId) {
   try {
-    const nowIso = new Date().toISOString();
-    const productPayload = {
-      name: `PROBE-${ts}`,
-      description: null,
-      source_url: `https://probe.invalid/${ts}`,
-      images: [],
-      price_retail: null,
-      materials: [],
-      colors: null,
-      finish: null,
-      available_colors: null,
-      capture_source: 'web_extension',
-      capture_provenance: {
-        captureOptions: {
-          colors: [],
-          finishes: [],
-          materials: [],
-          source: 'web_extension',
-          capturedAt: nowIso,
-        },
-      },
-      dimensions: null,
-      vendor_id: null,
-      retailer_id: null,
-      captured_by: userId,
-      captured_at: nowIso,
-      layer: 'personal',
-      owner_user_id: userId,
-      status: 'draft',
-    };
+    const productPayload = baseProductPayload(`PROBE-${ts}`, `https://probe.invalid/${ts}`);
     const { data: inserted, error: insertError } = await supabase
       .from('products')
       .insert(productPayload)
@@ -325,8 +335,35 @@ if (userId) {
 }
 
 // ─── Step 7: create_client_decision — mirrors saveAsDecision (effects.ts:289-351).
-if (created.productId && PROBE_CLIENT_ID && PROBE_PROJECT_ID) {
+// OPT-IN: creates a PENDING decision (may notify the client) and, per the
+// decision-integrity trigger, permanently pins its product — so this step
+// mints its OWN product rather than reusing step 2's, keeping step 2's
+// product cleanable regardless of whether step 7 runs.
+if (!PROBE_ALLOW_DECISION || !PROBE_CLIENT_ID) {
+  logSkipped(
+    7,
+    'create_decision',
+    'set PROBE_ALLOW_DECISION=1 — creates a PENDING client decision that may notify the client and leaves rows'
+  );
+} else if (!PROBE_PROJECT_ID) {
+  logSkipped(7, 'create_decision', 'PROBE_PROJECT_ID not set');
+} else if (!userId) {
+  logSkipped(7, 'create_decision', 'no authenticated user from step 1');
+} else {
   try {
+    const decisionProductPayload = baseProductPayload(
+      `PROBE-DECISION-${ts}`,
+      `https://probe.invalid/decision/${ts}`
+    );
+    const { data: decisionProduct, error: productError } = await supabase
+      .from('products')
+      .insert(decisionProductPayload)
+      .select('id')
+      .single();
+    if (productError) throw productError;
+    if (!decisionProduct?.id) throw new Error('insert returned no id');
+    created.decisionProductId = decisionProduct.id;
+
     const decisionId = globalThis.crypto.randomUUID();
     const decisionPayload = {
       designer_client_id: PROBE_CLIENT_ID,
@@ -340,10 +377,10 @@ if (created.productId && PROBE_CLIENT_ID && PROBE_PROJECT_ID) {
       status: 'pending',
     };
     const optionPayload = {
-      name: `PROBE-${ts}`,
+      name: `PROBE-DECISION-${ts}`,
       image_url: null,
       designer_note: null,
-      product_id: created.productId,
+      product_id: created.decisionProductId,
       is_recommended: true,
       price: null,
       quantity: 1,
@@ -359,16 +396,10 @@ if (created.productId && PROBE_CLIENT_ID && PROBE_PROJECT_ID) {
     if (error) throw error;
     if (!data) throw new Error('RPC returned no decision row');
     created.decisionId = decisionId;
-    logOk(7, 'create_decision', `(id ${decisionId})`);
+    logOk(7, 'create_decision', `(id ${decisionId}, product ${created.decisionProductId})`);
   } catch (err) {
     logError(7, 'create_decision', err);
   }
-} else if (!created.productId) {
-  logSkipped(7, 'create_decision', 'no product id from step 2');
-} else if (!PROBE_CLIENT_ID) {
-  logSkipped(7, 'create_decision', 'PROBE_CLIENT_ID not set');
-} else {
-  logSkipped(7, 'create_decision', 'PROBE_PROJECT_ID not set');
 }
 
 // ─── Cleanup ────────────────────────────────────────────────────────────────
@@ -409,25 +440,17 @@ try {
     created.inboxProductId ?? null,
     'RLS forbade delete'
   );
-  await cleanupDelete(
-    'project_ffe_items',
-    'id',
-    created.ffeSelectionId,
-    'RLS forbade delete'
+
+  // project_ffe_items: NOT attempted — `authenticated` has no table-level
+  // DELETE grant on it at all (confirmed against local Postgres grants), only
+  // the SECURITY DEFINER RPCs can touch it, so a delete attempt here would
+  // only ever surface the same 42501 every time. Informational only.
+  console.log(
+    created.ffeSelectionId
+      ? `cleanup project_ffe_items: not attempted (no DELETE grant for authenticated; row for selection ${created.ffeSelectionId} remains — admin cleanup)`
+      : 'cleanup project_ffe_items: not attempted (nothing created)'
   );
-  await cleanupDelete(
-    'client_decisions',
-    'id',
-    created.decisionId,
-    'row is not status=draft — client_decisions_studio_legacy_draft_delete only allows deleting draft decisions (00399)'
-  );
-  await cleanupDelete(
-    'products',
-    'id',
-    created.productId,
-    'RLS forbade delete (a decision option likely still references it — see step 7)',
-    'products (step 2)'
-  );
+
   await cleanupDelete(
     'products',
     'id',
@@ -435,6 +458,47 @@ try {
     'RLS forbade delete',
     'products (step 6)'
   );
+  await cleanupDelete('products', 'id', created.productId, 'RLS forbade delete', 'products (step 2)');
+
+  await cleanupDelete(
+    'client_decisions',
+    'id',
+    created.decisionId,
+    'row is not status=draft — client_decisions_studio_legacy_draft_delete only allows deleting draft decisions (00399)'
+  );
+
+  // products (decision): expected to fail — a live pending decision option
+  // still points at it, and the decision-integrity trigger (23514) blocks
+  // deleting a product referenced by a non-canonical-workflow change while
+  // that decision exists.
+  if (!created.decisionProductId) {
+    console.log('cleanup products (decision): skipped (nothing created)');
+  } else {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', created.decisionProductId)
+        .select('id');
+      if (error) throw error;
+      console.log(
+        !data || data.length === 0
+          ? 'cleanup products (decision): skipped (RLS forbade delete)'
+          : 'cleanup products (decision): ok'
+      );
+    } catch (err) {
+      if (err?.code === '23514') {
+        console.log(
+          `cleanup products (decision): left (referenced by pending decision ${created.decisionId ?? 'unknown'})`
+        );
+      } else {
+        const code = err?.code ?? err?.status ?? 'unknown';
+        const message = err?.message ?? String(err);
+        console.log(`cleanup products (decision): error ${code} ${message}`);
+      }
+    }
+  }
+
   await cleanupDelete(
     'vendors',
     'id',
