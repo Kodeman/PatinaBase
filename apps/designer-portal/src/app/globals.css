@@ -212,6 +212,16 @@
   --space-16: 4rem;
   --space-20: 5rem;
   --space-24: 6rem;
+
+  /* — The Smart Lens (R127): the declared lengths —
+     Lengths only, declared exactly once here (C-7) and never redeclared. The
+     old seam measured itself at runtime and published its height; the band is
+     a fixed organ, so every consumer names a constant instead. */
+  --doc-region-gap: 24px; /* R127: the one gap between region roots on the paper */
+  --doc-band-height: 56px; /* R127: the lens band's declared height — what the `sticky top-0` organs stand under */
+  --doc-landing-clear: calc(var(--doc-band-height) + 1rem); /* R127: 72px — where a jumped-to stop or focused control comes to rest, clear of the band */
+  --doc-quiet-reserve-min: 68px; /* R127/OD-12: a quiet region's floor — head + count line + one leader */
+  --doc-quiet-reserve-exc: 112px; /* R127/OD-12: the same floor when the region also prints standing exceptions */
 }
 
 /* The Document owns one persistent viewport edge at every width: MobileBar
@@ -1016,25 +1026,40 @@
   }
 }
 
-/* Two organs stick to the top of the paper: the job ticket's pinned seam,
-   which has to ride with the reader (R124), and the schedule's own pinned
-   glance. Both are `sticky top-0`, and the glance is later in the same scroll
-   container, so it used to paint over the seam for the whole length of the
-   Schedule region. The seam publishes its height while it is pinned; the
-   glance stands under it, and falls back to the top when nothing is pinned. */
+/* Two organs stick to the top of the paper: the lens band, which has to ride
+   with the reader (R127), and the schedule's own pinned glance. Both are
+   `sticky top-0`, and the glance is later in the same scroll container, so it
+   used to paint over the band for the whole length of the Schedule region.
+   The band's height is DECLARED, not measured, so the glance stands under a
+   constant and there is no published length to fall back from. */
 [data-document-shell] section[aria-label='Schedule rule'] {
-  top: var(--doc-seam-height, 0px);
+  top: var(--doc-band-height);
 }
 
-/* Every region root the ticket's rows and the running index land on stands
-   clear of the pinned seam, not the Money one alone: `scrollToRegion` lands
-   each of them at `block: start`, and the seam is what is holding that top.
-   The FF&E region keeps the 4rem breathing room it already had as its floor. */
+/* Every region root the band's rows and the running index land on stands clear
+   of the band, not the Money one alone: `scrollToRegion` lands each of them at
+   `block: start`, and the band is what is holding that top. FF&E's own 4rem
+   floor is retired rather than kept as a `max()` arm: --doc-landing-clear is
+   72px, which already clears 64px, so the floor can never bind again. */
 [data-document-shell] [data-index-region] {
-  scroll-margin-top: var(--doc-seam-height, 0px);
+  scroll-margin-top: var(--doc-landing-clear);
 }
-[data-document-shell] [data-index-region='ffe'] {
-  scroll-margin-top: max(var(--doc-seam-height, 0px), 4rem);
+
+/* R127 — a keyboard landing is a landing too. Tab and browser find-in-page
+   scroll a focusable into view on their own, with no `scrollToRegion` to route
+   through, so the clearance has to live on the element itself or the band eats
+   the thing that just took focus. */
+[data-document-paper] :is(a, button, input, select, textarea, [tabindex]) {
+  scroll-margin-top: var(--doc-landing-clear);
+}
+
+/* R127 — the paper's scrolling root is the WINDOW: `[data-document-shell]` is
+   a `min-h-screen` grid with no overflow of its own, so the scroll padding
+   belongs on `html`, scoped by the shell so no other portal surface inherits
+   it. 60px is the persistent bottom edge (mobile bar / studio drawer) that a
+   stop scrolled into view must not come to rest behind. */
+html:has([data-document-shell]) {
+  scroll-padding-bottom: 60px;
 }
 
 /* Typography: now provided by @patina/design-system/styles/typography.css.
