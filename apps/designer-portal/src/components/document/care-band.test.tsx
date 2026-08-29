@@ -226,3 +226,103 @@ describe('CareBand fold', () => {
     expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
   });
 });
+
+describe('CareBand running index root (W2 C-2)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('is absent from the non-owner branch when indexRoot is not set', () => {
+    useAuth.mockReturnValue({
+      user: { id: 'collaborator-1' },
+      isLoading: false,
+    });
+
+    const { container } = render(<CareBand projectId="project-1" />);
+
+    expect(container.querySelector('[data-index-region="care"]')).toBeNull();
+  });
+
+  it('marks the non-owner branch as the care root when indexRoot is set', () => {
+    useAuth.mockReturnValue({
+      user: { id: 'collaborator-1' },
+      isLoading: false,
+    });
+
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute('id', 'care-region-heading');
+    expect(
+      screen.getByRole('region', { name: 'Project closeout ownership' }),
+    ).toBe(root);
+  });
+
+  it('is absent from the open branch when indexRoot is not set', () => {
+    const { container } = render(<CareBand projectId="project-1" />);
+
+    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    expect(container.querySelector('[data-index-region="care"]')).toBeNull();
+  });
+
+  it('marks the open branch as the care root when indexRoot is set', () => {
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute('id', 'care-region-heading');
+  });
+
+  it('marks the folded (quiet seam) branch as the care root when indexRoot is set', () => {
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'active',
+        current_phase: 'design_development',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    expect(screen.getByRole('button', { name: /closing the book/i })).toBeInTheDocument();
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute('id', 'care-region-heading');
+  });
+
+  it('marks the closed (post-close confirmation) branch as the care root when indexRoot is set', () => {
+    closeMutate.mockImplementation(
+      (
+        _input: unknown,
+        callbacks: { onSuccess: () => void },
+      ) => {
+        callbacks.onSuccess();
+      },
+    );
+
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    for (const label of [
+      'Final walkthrough completed with client',
+      'All punch list items resolved',
+      'Professional photography scheduled',
+      'Final project photos on file (for portfolio)',
+      'Project case study written for portfolio',
+    ]) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Close the book' }));
+
+    expect(screen.getByText(/The book is closed\./)).toBeInTheDocument();
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute('id', 'care-region-heading');
+  });
+});

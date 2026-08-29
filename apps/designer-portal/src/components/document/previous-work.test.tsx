@@ -4,14 +4,17 @@ import { PreviousWork } from './previous-work';
 describe('PreviousWork', () => {
   it('is closed by default and exposes an accessible disclosure', () => {
     render(<PreviousWork count={3}><div>Brief recap</div></PreviousWork>);
-    const button = screen.getByRole('button', { name: 'The record · 3 complete' });
+    const button = screen.getByRole('button', { name: 'Open the record' });
     expect(button).toHaveAttribute('aria-expanded', 'false');
-    expect(document.getElementById(button.getAttribute('aria-controls')!)).toBeInTheDocument();
+    expect(screen.getByText('The record')).toBeInTheDocument();
+    expect(screen.getByText('3 complete')).toBeInTheDocument();
     expect(screen.queryByText('Brief recap')).not.toBeInTheDocument();
     fireEvent.click(button);
-    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Fold ↑' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     expect(screen.getByText('Brief recap')).toBeInTheDocument();
-    expect(document.getElementById(button.getAttribute('aria-controls')!)).toBeVisible();
   });
 
   it('leaves the line alone when no approval is awaiting publish', () => {
@@ -20,7 +23,7 @@ describe('PreviousWork', () => {
         <div>Brief recap</div>
       </PreviousWork>,
     );
-    expect(screen.getByRole('button', { name: 'The record · 3 complete' })).toBeVisible();
+    expect(screen.getByText('3 complete')).toBeInTheDocument();
     expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
   });
 
@@ -41,8 +44,8 @@ describe('PreviousWork', () => {
       </PreviousWork>,
     );
 
-    // The disclosure's accessible name promises only what its body holds.
-    const disclosure = screen.getByRole('button', { name: 'The record · 4 complete' });
+    // The disclosure toggle promises only what its body holds.
+    const disclosure = screen.getByRole('button', { name: 'Open the record' });
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
 
     const door = screen.getByRole('button', {
@@ -51,5 +54,40 @@ describe('PreviousWork', () => {
     fireEvent.click(door);
     expect(openApprovals).toHaveBeenCalledTimes(1);
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  // W2 (C-2) — `record` root must ALWAYS be emitted, empty body when
+  // `count === 0` (this used to return null).
+  describe('the record root (W2 C-2)', () => {
+    it('always emits the region root, even with nothing settled', () => {
+      const { container } = render(<PreviousWork count={0}>{null}</PreviousWork>);
+
+      const root = container.querySelector('[data-index-region="record"]');
+      expect(root).not.toBeNull();
+      expect(root).toHaveAttribute('aria-label', 'The record');
+    });
+
+    it('prints the empty status line and is not a press target at count 0', () => {
+      render(<PreviousWork count={0}>{null}</PreviousWork>);
+
+      expect(screen.getByText('The record')).toBeInTheDocument();
+      expect(screen.getByText('Nothing settled yet')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open the record/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /fold/i })).not.toBeInTheDocument();
+    });
+
+    it('marks the root and prints the count line with N settled bars', () => {
+      const { container } = render(
+        <PreviousWork count={2}>
+          <div>Brief recap</div>
+        </PreviousWork>,
+      );
+
+      const root = container.querySelector('[data-index-region="record"]');
+      expect(root).not.toBeNull();
+      expect(root).toHaveAttribute('aria-label', 'The record');
+      expect(screen.getByText('2 complete')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open the record' })).toBeInTheDocument();
+    });
   });
 });
