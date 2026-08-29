@@ -92,6 +92,11 @@ function SpineBlocks({
       rooms.length
     } ${rooms.length === 1 ? 'room' : 'rooms'}`,
     money: moneyIndexValue,
+    // The closeout band and the record carry no value line in this block; the
+    // ladder (W2-L1) is what prints theirs. Blank is what they rendered before
+    // the key union widened, so this is the type catching up, not a change.
+    care: '',
+    record: '',
   };
 
   const entries = regions.map((region) => ({
