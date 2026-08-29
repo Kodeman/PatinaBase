@@ -14,6 +14,7 @@ import {
   buildCommitProposalCaptureArgs,
   buildDecisionInsertPayload,
   buildDecisionOptionInsertPayload,
+  withCaptureNote,
   type BuildCapturePayloadInput,
   type BuildDecisionPayloadInput,
   type BuildDecisionOptionPayloadInput,
@@ -354,6 +355,15 @@ export async function updateExisting(
   user: User
 ): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const full = productRow(draft, user.id, 'published');
+  // The capture note lives in capture_provenance.note (CL-R1 / c), not on a
+  // dedicated column — read the existing row's capture_provenance first so
+  // the update only touches the note key and preserves whatever else (e.g.
+  // captureOptions from the original capture) already lives there.
+  const { data: existingProduct } = await supabase
+    .from('products')
+    .select('capture_provenance')
+    .eq('id', existingId)
+    .single();
   const { error } = await supabase
     .from('products')
     .update({
@@ -368,7 +378,10 @@ export async function updateExisting(
       dimensions: full.dimensions,
       vendor_id: full.vendor_id,
       retailer_id: full.retailer_id,
-      usage_notes: full.usage_notes,
+      capture_provenance: withCaptureNote(
+        existingProduct?.capture_provenance as Record<string, unknown> | null | undefined,
+        draft.note
+      ),
       updated_at: new Date().toISOString(),
     })
     .eq('id', existingId);

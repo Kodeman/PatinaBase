@@ -16,8 +16,6 @@ const PRODUCTS_COLUMNS = new Set([
   'layer', 'owner_user_id',
   // 00232 field-capture origin (now also written by the extension, P2-8)
   'capture_source', 'capture_provenance',
-  // capture note (CL-R1 / c)
-  'usage_notes',
 ]);
 
 function makeExtractedData(overrides: Partial<ExtractedProductData> = {}): ExtractedProductData {
@@ -226,8 +224,8 @@ describe('buildProductInsertPayload', () => {
     });
   });
 
-  describe('usage_notes (CL-R1 / c)', () => {
-    it('trims and carries the capture note into usage_notes', () => {
+  describe('capture note lives in capture_provenance.note, not usage_notes (CL-R1 / c)', () => {
+    it('trims and carries the capture note into capture_provenance.note', () => {
       const payload = buildProductInsertPayload({
         productName: 'Chair',
         extractedData: makeExtractedData(),
@@ -238,10 +236,10 @@ describe('buildProductInsertPayload', () => {
         userId: 'u1',
         note: '  Check the client likes the walnut finish  ',
       });
-      expect(payload.usage_notes).toBe('Check the client likes the walnut finish');
+      expect(payload.capture_provenance.note).toBe('Check the client likes the walnut finish');
     });
 
-    it('defaults usage_notes to null when no note is provided', () => {
+    it('omits capture_provenance.note when no note is provided', () => {
       const payload = buildProductInsertPayload({
         productName: 'Chair',
         extractedData: makeExtractedData(),
@@ -251,10 +249,11 @@ describe('buildProductInsertPayload', () => {
         retailerId: null,
         userId: 'u1',
       });
-      expect(payload.usage_notes).toBeNull();
+      expect(payload.capture_provenance.note).toBeUndefined();
+      expect('note' in payload.capture_provenance).toBe(false);
     });
 
-    it('treats a whitespace-only note as null', () => {
+    it('treats a whitespace-only note as omitted', () => {
       const payload = buildProductInsertPayload({
         productName: 'Chair',
         extractedData: makeExtractedData(),
@@ -265,7 +264,21 @@ describe('buildProductInsertPayload', () => {
         userId: 'u1',
         note: '   ',
       });
-      expect(payload.usage_notes).toBeNull();
+      expect('note' in payload.capture_provenance).toBe(false);
+    });
+
+    it('never writes products.usage_notes — that column belongs to studio promotion, not capture', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+        note: 'Check the finish sample',
+      });
+      expect('usage_notes' in payload).toBe(false);
     });
   });
 });

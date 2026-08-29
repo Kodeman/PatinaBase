@@ -11,19 +11,27 @@
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ExtractedProductData } from '@patina/shared';
+import type { ExtractedProductData, Project } from '@patina/shared';
 
-function chainable() {
+/** project_rooms resolves a room matching PROJECT_ONE.id/'room-1' so tests that
+ * seed a project+room don't get self-healed away by the rooms-fetch effect's
+ * own "not in the fetched list → clear it" logic (FFESlotPicker.tsx). Every
+ * other table (project_ffe_items, etc.) resolves empty. */
+function chainable(rows: unknown[] = []) {
   const chain: Record<string, ReturnType<typeof vi.fn>> = {};
   chain.select = vi.fn(() => chain);
   chain.eq = vi.fn(() => chain);
   chain.is = vi.fn(() => chain);
-  chain.order = vi.fn(() => Promise.resolve({ data: [] }));
+  chain.order = vi.fn(() => Promise.resolve({ data: rows }));
   return chain;
 }
 
 vi.mock('../../lib/supabase', () => ({
-  supabase: { from: vi.fn(() => chainable()) },
+  supabase: {
+    from: vi.fn((table: string) =>
+      table === 'project_rooms' ? chainable([{ id: 'room-1', name: 'Living Room' }]) : chainable([])
+    ),
+  },
 }));
 
 vi.mock('../../hooks/use-reference-data', () => ({
@@ -31,10 +39,21 @@ vi.mock('../../hooks/use-reference-data', () => ({
 }));
 
 import { RouteCommitRegion } from '../../panel/regions/RouteCommitRegion';
+import { FFESlotPicker } from '../../components/FFESlotPicker';
 import { CaptureProvider, useCapture } from '../../state/CaptureProvider';
 import { draftFromExtraction } from '../../state/draft';
 import { initialCaptureState } from '../../state/reducer';
 import { SPEC_BOOK_PLACEMENT_CONTEXT_KEY } from '../../lib/spec-book-placement';
+
+const PROJECT_ONE: Project = {
+  id: 'project-1',
+  name: 'The Overlook',
+  clientProfileId: null,
+  status: 'active',
+  notes: null,
+  createdAt: '2026-08-10T00:00:00Z',
+  updatedAt: '2026-08-10T00:00:00Z',
+};
 
 function capturedState() {
   const state = initialCaptureState();
@@ -108,6 +127,27 @@ describe('RouteCommitRegion — sticky route kind (CL-R1 / D5)', () => {
         },
       })
     );
+  });
+});
+
+describe('FFESlotPicker — assigningExisting wins over a remembered library routeKind', () => {
+  it('mounts in fill_slot for an explicit placement even when the sticky context remembered library', async () => {
+    render(
+      <FFESlotPicker
+        projects={[PROJECT_ONE]}
+        productId="product-1"
+        productName="Chair"
+        initialContext={{ projectId: 'project-1', roomId: 'room-1', routeKind: 'library' }}
+      />
+    );
+
+    // assigningExisting (productId set) hides the "Capture destination"
+    // select entirely — fill_slot is only observable via the project/room/
+    // slot selects it unlocks (routeKind !== 'library').
+    expect(screen.getByText('Place Chair')).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Capture destination' })).toBeNull();
+    expect(await screen.findByRole('combobox', { name: 'Project' })).toBeTruthy();
+    expect(await screen.findByRole('combobox', { name: 'Open spot' })).toBeTruthy();
   });
 });
 
