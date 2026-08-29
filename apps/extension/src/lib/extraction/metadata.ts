@@ -287,6 +287,158 @@ export function extractBrand(): string | null {
   return null;
 }
 
+// ─── SKU / model number (CL-R1) ────────────────────────────────────────────
+
+const MAX_SKU_LENGTH = 64;
+
+/** Values a template emits when it has no SKU to print. */
+const SKU_PLACEHOLDERS = new Set(['n/a', 'na', 'null', 'undefined', 'none', '-']);
+
+/**
+ * A usable SKU string, or null. Anything longer than 64 characters is a
+ * description or a serialized blob, not a part number.
+ */
+function cleanSku(value: unknown, stripSkuPrefix = false): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  let text = String(value).trim();
+  if (stripSkuPrefix) text = text.replace(/^sku:\s*/i, '').trim();
+  if (!text || text.length > MAX_SKU_LENGTH) return null;
+  if (SKU_PLACEHOLDERS.has(text.toLowerCase())) return null;
+  return text;
+}
+
+/** sku → mpn → productID, on one schema.org node. */
+function skuFromKeys(node: Record<string, unknown>): string | null {
+  return (
+    cleanSku(node.sku) ??
+    cleanSku(node.mpn) ??
+    cleanSku(node.productID, true)
+  );
+}
+
+/** JSON-LD `@type` is a string or an array of strings (mirrors price.ts). */
+function skuSchemaTypes(obj: Record<string, unknown>): string[] {
+  const type = obj['@type'];
+  if (typeof type === 'string') return [type];
+  if (Array.isArray(type)) return type.filter((t): t is string => typeof t === 'string');
+  return [];
+}
+
+/** Every URL a variant advertises: its own, plus any on its offers (mirrors price.ts). */
+function variantUrls(variant: Record<string, unknown>): string[] {
+  const urls: string[] = [];
+  if (typeof variant.url === 'string') urls.push(variant.url);
+  const offers = variant.offers;
+  const offerList = Array.isArray(offers) ? offers : [offers];
+  for (const offer of offerList) {
+    if (offer && typeof offer === 'object') {
+      const url = (offer as Record<string, unknown>).url;
+      if (typeof url === 'string') urls.push(url);
+    }
+  }
+  return urls;
+}
+
+/**
+ * Mirrors price.ts's ProductGroup variant rule (its helpers are module-private):
+ * a variant addresses this page when its URL shares the pathname and either
+ * carries no query of its own or repeats the page's — variants are usually
+ * distinguished by a `?sku=` the address bar carries once one is selected.
+ */
+function addressesPage(url: string, here: string): boolean {
+  try {
+    const candidate = new URL(url, here);
+    const current = new URL(here);
+    if (candidate.pathname !== current.pathname) return false;
+    return candidate.search === '' || candidate.search === current.search;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * On a miss this deliberately diverges from price.ts: where that file falls back
+ * to the floor of the variants' price range, a SKU has no floor — an unselected
+ * variant's part number names a size or colour the page isn't showing. So when
+ * no variant addresses the page we take the group's own sku, or nothing.
+ */
+function skuFromProductNode(node: Record<string, unknown>, here: string): string | null {
+  if (skuSchemaTypes(node).includes('ProductGroup') && Array.isArray(node.hasVariant)) {
+    for (const entry of node.hasVariant) {
+      if (!entry || typeof entry !== 'object') continue;
+      const variant = entry as Record<string, unknown>;
+      if (!variantUrls(variant).some((url) => addressesPage(url, here))) continue;
+      const sku = skuFromKeys(variant);
+      if (sku) return sku;
+    }
+  }
+  return skuFromKeys(node);
+}
+
+function findSkuInJsonLd(data: unknown, here: string): string | null {
+  if (!data || typeof data !== 'object') return null;
+
+  const obj = data as Record<string, unknown>;
+  const types = skuSchemaTypes(obj);
+
+  if (types.includes('Product') || types.includes('ProductGroup')) {
+    const sku = skuFromProductNode(obj, here);
+    if (sku) return sku;
+  }
+
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const sku = findSkuInJsonLd(item, here);
+      if (sku) return sku;
+    }
+    return null;
+  }
+
+  // Recurse into nested objects (e.g. @graph) but never into hasVariant: an
+  // unselected variant's SKU belongs to a size or colour the page isn't showing.
+  for (const [key, value] of Object.entries(obj)) {
+    if (key === 'hasVariant') continue;
+    if (typeof value === 'object' && value !== null) {
+      const sku = findSkuInJsonLd(value, here);
+      if (sku) return sku;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract the product's SKU / model number (CL-R1).
+ *
+ * JSON-LD Product/ProductGroup first (sku → mpn → productID), then the
+ * OpenGraph product tag, then microdata.
+ */
+export function extractSku(doc: Document): string | null {
+  const here = doc.defaultView?.location?.href ?? doc.baseURI;
+
+  const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
+  for (const script of jsonLdScripts) {
+    try {
+      const sku = findSkuInJsonLd(JSON.parse(script.textContent || ''), here);
+      if (sku) return sku;
+    } catch {
+      // Invalid JSON
+    }
+  }
+
+  const metaSku = cleanSku(
+    doc.querySelector('meta[property="product:retailer_item_id"]')?.getAttribute('content')
+  );
+  if (metaSku) return metaSku;
+
+  const itemprop = doc.querySelector('[itemprop="sku"]');
+  if (itemprop) {
+    return cleanSku(itemprop.getAttribute('content')) ?? cleanSku(itemprop.textContent);
+  }
+
+  return null;
+}
+
 /**
  * Find brand in JSON-LD data
  */

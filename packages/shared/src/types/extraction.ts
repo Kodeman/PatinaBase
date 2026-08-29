@@ -272,6 +272,10 @@ export interface ExtendedExtractedProductData {
     alt: string;
   }[];
   manufacturer: string | null;
+  /** Vendor SKU / model number the page publishes (CL-R1); editable in the panel. */
+  sku?: string;
+  /** ISO code the capture is denominated in (CL-R13); defaults to 'USD'. */
+  currency?: string;
   url: string;
   extractedAt: string;
   confidence: 'high' | 'medium' | 'low';

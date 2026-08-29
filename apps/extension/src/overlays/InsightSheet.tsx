@@ -7,6 +7,7 @@ import type { DraftFieldKey } from '../state/types';
 const ROWS: { key: DraftFieldKey; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'price', label: 'Price' },
+  { key: 'sku', label: 'SKU / model #' },
   { key: 'description', label: 'Description' },
   { key: 'materials', label: 'Materials' },
   { key: 'colors', label: 'Colors' },

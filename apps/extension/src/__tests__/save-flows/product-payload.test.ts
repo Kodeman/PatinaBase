@@ -16,6 +16,9 @@ const PRODUCTS_COLUMNS = new Set([
   'layer', 'owner_user_id',
   // 00232 field-capture origin (now also written by the extension, P2-8)
   'capture_source', 'capture_provenance',
+  // 00060 catalog columns — CL-R1 writes the captured SKU here, NOT the
+  // normalizer-owned vendor_sku from 00306.
+  'sku',
 ]);
 
 function makeExtractedData(overrides: Partial<ExtractedProductData> = {}): ExtractedProductData {
@@ -143,6 +146,37 @@ describe('buildProductInsertPayload', () => {
       userId: 'u1',
     });
     expect(payload.name).toBe('Extracted Name');
+  });
+
+  describe('sku (CL-R1)', () => {
+    function withSku(sku?: string | null) {
+      return buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        sku,
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+      });
+    }
+
+    it('writes a trimmed sku', () => {
+      expect(withSku('  H4614 ').sku).toBe('H4614');
+    });
+
+    it('writes null for a blank, whitespace-only, or absent sku', () => {
+      expect(withSku('').sku).toBeNull();
+      expect(withSku('   ').sku).toBeNull();
+      expect(withSku(null).sku).toBeNull();
+      expect(withSku().sku).toBeNull();
+    });
+
+    it('never writes vendor_sku — that column belongs to the catalog normalizer (00306)', () => {
+      const payload = withSku('H4614');
+      expect('vendor_sku' in payload).toBe(false);
+    });
   });
 
   describe('capture_source / capture_provenance (P2-8)', () => {
