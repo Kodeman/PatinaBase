@@ -76,6 +76,13 @@ jest.mock('@patina/supabase', () => ({
   mapMilestoneRowToScheduleInput: () => ({}),
 }));
 
+// W4 — the lens is a page-level observer and never runs in jsdom, so a stop
+// would arrive quiet here and print no body. Every claim in this suite is about
+// today's FULL body, which is what the lens says once it has reached the root.
+jest.mock('@/hooks/use-lens-density', () => ({
+  useLensDensityStore: () => 'full',
+}));
+
 jest.mock('@/hooks/use-section-work', () => ({
   useSectionTasks: () => ({ data: [] }),
 }));

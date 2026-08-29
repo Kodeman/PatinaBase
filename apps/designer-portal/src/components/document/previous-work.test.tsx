@@ -1,7 +1,21 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { PreviousWork } from './previous-work';
 
+// W4 — the lens is a page-level observer; in jsdom it never runs, so the store
+// is mocked per suite. `'full'` is the reading these W2/W3 claims were written
+// against (the reader is AT the record); the quiet cases below drive `null`,
+// which is the lens being silent — the state every unpromoted stop starts in.
+const mockLensDensity = jest.fn<'full' | null, [string]>(() => 'full');
+jest.mock('@/hooks/use-lens-density', () => ({
+  useLensDensityStore: (region: string) => mockLensDensity(region),
+}));
+
 describe('PreviousWork', () => {
+  beforeEach(() => {
+    mockLensDensity.mockReset();
+    mockLensDensity.mockReturnValue('full');
+  });
+
   it('is closed by default and exposes an accessible disclosure', () => {
     render(<PreviousWork count={3}><div>Brief recap</div></PreviousWork>);
     const button = screen.getByRole('button', { name: 'Open the record' });
@@ -110,6 +124,95 @@ describe('PreviousWork', () => {
       expect(root).toHaveAttribute('aria-label', 'The record');
       expect(screen.getByText('2 complete')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Open the record' })).toBeInTheDocument();
+    });
+  });
+
+  // W4 (L-4, OD-12, OD-13) — the quiet body: the same head, one count line, one
+  // leader that presses the region open, and the sr-only state line. The cards
+  // are not on the paper until the lens reaches this root.
+  describe('the quiet body (W4)', () => {
+    const renderQuiet = (count = 2) => {
+      mockLensDensity.mockReturnValue(null);
+      return render(
+        <PreviousWork count={count}>
+          <div>Brief recap</div>
+        </PreviousWork>,
+      );
+    };
+
+    it('prints head, count line, leader and the sr-only state line — and no cards', () => {
+      const { container } = renderQuiet();
+
+      const root = container.querySelector('[data-index-region="record"]');
+      expect(root).toHaveAttribute('data-density', 'quiet');
+      expect(root).toHaveStyle({
+        '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+      });
+
+      expect(screen.getByRole('heading', { name: 'The record' })).toBeInTheDocument();
+      expect(screen.getByText('2 COMPLETE')).toBeInTheDocument();
+      expect(screen.getByText('2 COMPLETE').textContent!.length).toBeLessThanOrEqual(40);
+      // The quiet body grows NO act of its own: the mockup's condensed head
+      // prints the head's own leader and nothing beside it, so a second inked
+      // word would put two leaders on one region.
+      expect(
+        container.querySelectorAll('[data-action-variant="inked"]'),
+      ).toHaveLength(1);
+      expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+
+      // The disclosure's own body is not on the paper at all while quiet.
+      expect(screen.queryByText('Brief recap')).not.toBeInTheDocument();
+      expect(container.querySelector('div[id^="previous-work-"]')).toBeNull();
+    });
+
+    it('keeps the SAME head element across quiet → full', () => {
+      mockLensDensity.mockReturnValue(null);
+      const { container, rerender } = render(
+        <PreviousWork count={2}>
+          <div>Brief recap</div>
+        </PreviousWork>,
+      );
+      const quietHead = container.querySelector('[data-region-head="record"]');
+      const quietHeading = document.getElementById('previous-work-heading');
+      expect(quietHead).not.toBeNull();
+
+      mockLensDensity.mockReturnValue('full');
+      rerender(
+        <PreviousWork count={2}>
+          <div>Brief recap</div>
+        </PreviousWork>,
+      );
+
+      expect(container.querySelector('[data-region-head="record"]')).toBe(quietHead);
+      expect(document.getElementById('previous-work-heading')).toBe(quietHeading);
+      expect(screen.queryByText('2 COMPLETE')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Quiet — opens as you read'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('2 complete')).toBeInTheDocument();
+    });
+
+    it('prints the same Nothing yet head at count 0, quiet or full, and is never a press target', () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockLensDensity.mockReturnValue(null);
+      const { container, rerender } = render(<PreviousWork count={0}>{null}</PreviousWork>);
+
+      expect(container.querySelector('[data-index-region="record"]')).toHaveAttribute(
+        'data-density',
+        'quiet',
+      );
+      expect(screen.getByText('Nothing yet')).toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+
+      mockLensDensity.mockReturnValue('full');
+      rerender(<PreviousWork count={0}>{null}</PreviousWork>);
+
+      expect(screen.getByText('Nothing yet')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open/i })).not.toBeInTheDocument();
+      // `allowNoActs` still stands the guard down in both densities.
+      expect(errorSpy).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
     });
   });
 });

@@ -1,8 +1,10 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useState, type CSSProperties } from 'react';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { RegionHead } from './region/region-head';
+import type { RegionDensity } from './region/use-region-fold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
 
 /**
  * W2 (C-2, `document-index.ts`) — the running index's stable id for this
@@ -11,6 +13,14 @@ import { RegionHead } from './region/region-head';
  * those keys), so this is the literal fallback named by the build plan.
  */
 const RECORD_HEADING_ID = 'previous-work-heading';
+
+/**
+ * OD-12 — the quiet height, held at EVERY density so a body shorter than its
+ * reserve cannot shrink the region on mount. W3-L3 declares both floors as
+ * tokens; `-exc` is for a head that prints standing exceptions, and the
+ * record's head prints none, so this root takes the minimum.
+ */
+const QUIET_RESERVE = 'var(--doc-quiet-reserve-min)';
 
 export function PreviousWork({
   count,
@@ -41,15 +51,29 @@ export function PreviousWork({
     documentEvents.historyToggled({ expanded: next, completed_count: count });
   };
 
+  // W4 (C-8) — the lens's reading of this root, taken from the store and never
+  // from the DOM. `record` is not a `RegionFoldKey` (the record is a
+  // disclosure, not a fold — there is no `useRegionFold` here to carry the
+  // fourth voice), so the same expression C-8 states for a stop with no
+  // explicit choice is written directly: the lens speaks `full` or is silent,
+  // and silence means quiet.
+  const density: RegionDensity = useLensDensityStore('record') ?? 'quiet';
+
   // W2 (C-2) — the `record` root is now ALWAYS emitted, empty body when
   // `count === 0` (this used to return null, which left the running index
   // with no `record` root to observe on a project with nothing settled).
   // A zero-count project isn't a press target: no ledger entry, no toggle.
   const hasHistory = count > 0;
 
+  // A zero-record paper has no count to print and no body to promote, so it
+  // prints exactly its `Nothing yet` head at either density.
+  const quiet = density === 'quiet' && hasHistory;
+
   return (
     <section
       data-index-region="record"
+      data-density={density}
+      style={{ '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties}
       className="mt-[var(--doc-region-gap)]"
       aria-label="The record"
     >
@@ -85,21 +109,35 @@ export function PreviousWork({
             : []
         }
       />
-      {approvalsAwaitingPublish !== null &&
-        approvalsAwaitingPublish > 0 &&
-        onOpenApprovals && (
-          <button
-            type="button"
-            onClick={onOpenApprovals}
-            className="mt-1 flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      {quiet ? (
+        <>
+          <p
+            data-region-count-line
+            className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
           >
-            Client approvals · {approvalsAwaitingPublish} awaiting publish →
-          </button>
-        )}
-      {hasHistory && (
-        <div id={contentId} hidden={!open} className="pt-2">
-          {open ? children : null}
-        </div>
+            {`${count} COMPLETE`}
+          </p>
+          <p className="sr-only">Quiet — opens as you read</p>
+        </>
+      ) : (
+        <>
+          {approvalsAwaitingPublish !== null &&
+            approvalsAwaitingPublish > 0 &&
+            onOpenApprovals && (
+              <button
+                type="button"
+                onClick={onOpenApprovals}
+                className="mt-1 flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              >
+                Client approvals · {approvalsAwaitingPublish} awaiting publish →
+              </button>
+            )}
+          {hasHistory && (
+            <div id={contentId} hidden={!open} className="pt-2">
+              {open ? children : null}
+            </div>
+          )}
+        </>
       )}
     </section>
   );
