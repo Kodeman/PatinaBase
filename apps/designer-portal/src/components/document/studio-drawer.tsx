@@ -42,6 +42,7 @@ import { HoursLedger } from './hours-ledger';
 import { FeedbackLedger } from './feedback/feedback-ledger';
 import { openFeedbackSheet } from './feedback/feedback-sheet';
 import { useDocumentTime } from '@/hooks/document-time-provider';
+import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useMobileShell } from './mobile/mobile-shell';
 import { fmtMinutes } from '@/lib/document/time-derivation';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
@@ -141,15 +142,7 @@ function presenceSentence(others: string[]): string | null {
   return `You and ${others.length} others`;
 }
 
-export interface StudioDrawerProps {
-  /** Names of the other people in the held document this session (D6's
-   *  presence channel). Defaults to nobody: the drawer is studio chrome and
-   *  mounts from `app/(document)/layout.tsx`, above any engagement, so the
-   *  document's own page passes this down. */
-  others?: string[];
-}
-
-export function StudioDrawer({ others = [] }: StudioDrawerProps = {}) {
+export function StudioDrawer() {
   const router = useRouter();
   const pathname = usePathname();
   const hydrated = useHydrated();
@@ -170,8 +163,11 @@ export function StudioDrawer({ others = [] }: StudioDrawerProps = {}) {
   );
   const openDoor = LEDGERS.find((l) => l.key === openLedger) ?? null;
   const open = openLedger === FEEDBACK_SHEET.key ? FEEDBACK_SHEET : openDoor;
-  const { inHandToday } = useDocumentTime();
-  const presence = presenceSentence(others);
+  const { inHandToday, heldEngagementId } = useDocumentTime();
+  // F-3 route 1 — the drawer mounts in `(document)/layout.tsx`, above any
+  // engagement, so it takes the channel's key off the document in hand rather
+  // than off a prop the layout has no engagement to fill.
+  const presence = presenceSentence(useDocumentPresence(heldEngagementId));
   const { openTimer } = useMobileShell();
   // The Post's Record merges the inbox + procurement feeds, so the bell's
   // awareness dot must read both unreads or it would lie about the sheet.

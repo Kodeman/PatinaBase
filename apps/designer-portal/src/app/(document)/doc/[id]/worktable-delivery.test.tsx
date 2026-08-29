@@ -129,9 +129,6 @@ jest.mock('@/components/document/account-band', () => ({
   AccountBand: () => <div data-accounts-surface="band" />,
 }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: () => null,
-}));
 jest.mock('@/components/document/shelves/document-shelves', () => ({
   DocumentShelves: () => null,
 }));

@@ -151,7 +151,6 @@ import {
   RoomLensProvider,
   useRoomLens,
 } from '@/components/document/room-lens-context';
-import { DocSpineShelvedBlocks } from '@/components/document/spine-shelved-blocks';
 import { JobTicket } from '@/components/document/job-ticket';
 import {
   deriveTicket,
@@ -167,6 +166,10 @@ import {
   type TicketSlotKey,
   type TicketUnansweredPo,
 } from '@/lib/document/ticket-derivation';
+import {
+  deriveLadderDoors,
+  deriveLadderSegments,
+} from '@/lib/document/lens-ladder-derivation';
 import { boardsRoutePath } from '@/lib/document/registry';
 import { deriveMoneyLadder, type MoneyLadder } from '@/lib/document/money-ladder';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
@@ -410,6 +413,7 @@ function JobTicketMount({
   onOpenLeaf,
   onUnfoldRegion,
   onRows,
+  onInput,
   clientCopy,
 }: {
   projectId: string;
@@ -443,6 +447,7 @@ function JobTicketMount({
    *  mount, so the leader can only speak from what the ticket prints if the
    *  rows travel back up. */
   onRows: (rows: readonly TicketRow[]) => void;
+  onInput: (input: TicketInput) => void;
   /** The proposal's own copy — the ninth row, and only on the Finalize table. */
   clientCopy: TicketClientCopy | null;
 }) {
@@ -577,6 +582,7 @@ function JobTicketMount({
       onOpenLeaf={onOpenLeaf}
       onUnfoldRegion={onUnfoldRegion}
       onRows={onRows}
+      onInput={onInput}
     />
   );
 }
@@ -608,6 +614,7 @@ function ProjectlessTicketMount({
   onOpenLeaf,
   onUnfoldRegion,
   onRows,
+  onInput,
 }: {
   routeId: string;
   /** The proposal this paper is composed from, where it has one. */
@@ -619,6 +626,7 @@ function ProjectlessTicketMount({
   onOpenLeaf: (key: ShelfKey) => void;
   onUnfoldRegion: (region: DocumentIndexKey) => void;
   onRows: (rows: readonly TicketRow[]) => void;
+  onInput: (input: TicketInput) => void;
 }) {
   // The proposal's OWN three populations — the same reads the Speccing table's
   // rail, scheme and strip make from the same cache. All three are `enabled`
@@ -719,6 +727,7 @@ function ProjectlessTicketMount({
       onOpenLeaf={onOpenLeaf}
       onUnfoldRegion={onUnfoldRegion}
       onRows={onRows}
+      onInput={onInput}
     />
   );
 }
@@ -734,12 +743,18 @@ function TicketFace({
   onOpenLeaf,
   onUnfoldRegion,
   onRows,
+  onInput,
 }: {
   input: TicketInput;
   routeId: string;
   onOpenLeaf: (key: ShelfKey) => void;
   onUnfoldRegion: (region: DocumentIndexKey) => void;
   onRows: (rows: readonly TicketRow[]) => void;
+  /** W2 · the ladder reads the SAME input the ticket does (OD-8): one source,
+   *  two registers, and no second query. The reads that compose it are here
+   *  because this is where they are cheap, so the input travels back up the
+   *  way the rows already do. */
+  onInput: (input: TicketInput) => void;
 }) {
   // The top of the paper on every document: the derivation runs when a fact
   // changes, not on every render one of the reads beneath it causes.
@@ -755,6 +770,10 @@ function TicketFace({
   useEffect(() => {
     onRows(ticket.rows);
   }, [ticket.rows, onRows]);
+
+  useEffect(() => {
+    onInput(input);
+  }, [input, onInput]);
 
   return (
     <JobTicket
@@ -777,6 +796,29 @@ function TicketFace({
       }
     />
   );
+}
+
+/** The subset of the ticket's input the ladder's registers are read from
+ *  (`lens-ladder-derivation.ts`). Two inputs with the same signature print the
+ *  same rail, whatever their object identity. */
+function ladderFactsSignature(input: TicketInput): string {
+  return JSON.stringify({
+    section: input.section,
+    paperRegions: input.paperRegions ?? null,
+    project: input.project,
+    clientCopy: input.clientCopy,
+    rooms: input.rooms,
+    pieces: {
+      settled: input.pieces.settled,
+      lines: input.pieces.lines.map((line) => [line.stamp, line.roomId]),
+    },
+    dates: input.dates,
+    money: {
+      settled: input.money.settled,
+      failed: input.money.failed,
+      ladder: input.money.ladder,
+    },
+  });
 }
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -1047,6 +1089,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       setCallSheetOpen(true);
     }
     return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
+  }, []);
+
+  // DL-04 — the sections sheet's fifth door (`The client's copy`). The sheet
+  // mounts in `(document)/layout.tsx`, above the leaf's state, so it asks by
+  // the same wire the call sheet already uses and the page performs the same
+  // act the ticket's ninth row does.
+  useEffect(() => {
+    const onOpenLeaf = (e: Event) => {
+      const leaf = (e as CustomEvent<{ leaf?: ShelfLeafKey }>).detail?.leaf;
+      if (!leaf) return;
+      setOpenShelf((current) => (current === leaf ? null : leaf));
+    };
+    window.addEventListener('document:open-leaf', onOpenLeaf);
+    return () => window.removeEventListener('document:open-leaf', onOpenLeaf);
   }, []);
 
   // R25 rooms (spine-sheet jump rows + headings) · R23 gates (settled stamps).
@@ -1360,6 +1416,23 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       sameTicketRows(previous, rows) ? previous : rows,
     );
   }, []);
+  // W2 · the ticket's own input, reported up by whichever mount stands on this
+  // paper. The ladder's values are the rail's register of the SAME counts
+  // (OD-8), so they are read off this rather than off a second set of queries.
+  // Null until the mount's first report — the rail then prints OD-2's empty
+  // track for that one paint.
+  const [ticketInput, setTicketInput] = useState<TicketInput | null>(null);
+  const acceptTicketInput = useCallback((input: TicketInput) => {
+    // The mount rebuilds its input object whenever any read beneath it
+    // re-renders, so identity is not news. Only the facts the LADDER reads
+    // are: adopting on identity alone is a render loop, the same trap
+    // `sameTicketRows` guards the rows against.
+    setTicketInput((previous) =>
+      previous && ladderFactsSignature(previous) === ladderFactsSignature(input)
+        ? previous
+        : input,
+    );
+  }, []);
   // The Desk composition enriches guidance; it never gates it. A cold deep-link
   // renders the document's own derivation on first paint and upgrades in place
   // if the Desk read later contributes a need the row alone cannot carry.
@@ -1422,16 +1495,112 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // (`data-index-region`); the margin rail's group counts and the mobile bar's
   // `AT <STOP>` line both need the answer, so the page owns the call — above
   // every early return, so the hook order cannot change between renders.
-  // D-B6: `spine-shelved-blocks.tsx` still runs its own observer over the same
-  // roots; that duplication retires with the block in Wave 2.
+  // W2 (D-B6, retired): this is now the ONE call on the document. The rail's
+  // own observer went with `spine-shelved-blocks.tsx`; the ladder is handed
+  // `activeKey` and `jump` as props.
   const runningIndexRegions =
     row?.engagement_kind === 'project' && row.project_id
       ? paperRegionsForSection(row.active_section)
       : [];
-  const { activeKey } = useDocumentRunningIndex(
+  const { activeKey, jump: jumpToRegion } = useDocumentRunningIndex(
     runningIndexRegions.map((region) => region.key),
     row?.project_id ?? '',
   );
+
+  // W2 · THE LADDER — one segment per stop the spread puts on the paper, and
+  // the doors filed beneath them. Derived once, here, and printed twice: by
+  // `LensLadder` at both desktop tiers and by the sections sheet at 390. Every
+  // value is the rail's ≤30-char register of a count the ticket already states
+  // in sentences (OD-8), read off the ticket's OWN input rather than from a
+  // second set of queries.
+  const approvalRecords = approvalsQuery.data ?? [];
+  // The approvals region's own figures — `deriveTicket` states no approvals
+  // row, so these are passed in. `isSealed`'s test, kept in step with
+  // `project-approval-document.tsx`: a question is open until it is answered
+  // for good.
+  const unsettledApprovals = approvalRecords.filter(
+    (approval) =>
+      approval.disposition === 'active' && approval.outcome !== 'approved',
+  );
+  const overdueApprovals = unsettledApprovals.filter(
+    (approval) => approval.isOverdue,
+  );
+  const oldestOverdueDueAt =
+    overdueApprovals
+      .map((approval) => approval.dueAt)
+      .filter((due): due is string => Boolean(due))
+      .sort()[0] ?? null;
+  const ladderSegments = ticketInput
+    ? deriveLadderSegments({
+        ticket: ticketInput,
+        approvals: {
+          settled: !approvalsQuery.isLoading,
+          awaiting: unsettledApprovals.length - overdueApprovals.length,
+          overdue: overdueApprovals.length,
+          overdueDays: oldestOverdueDueAt
+            ? Math.max(
+                0,
+                Math.floor(
+                  (gateNow.getTime() -
+                    new Date(oldestOverdueDueAt).getTime()) /
+                    86_400_000,
+                ),
+              )
+            : null,
+          records: approvalRecords.length,
+        },
+        // The closeout checklist's numerator is `CareBand`'s own: it is
+        // composed from eight reads and the band's local ticks, and the band
+        // reports only whether the book CAN be closed. Nothing on this page
+        // can state `N of M` without repeating those reads, so the stop takes
+        // its fallback (D-B9) rather than printing a number it does not have.
+        care: { settled: true, closed: 0, total: 0 },
+        record: {
+          settled: true,
+          complete: sections.filter((section) => section.state === 'settled')
+            .length,
+        },
+        // The carrier window on the damaged line is not on the ticket's input:
+        // a `TicketLine` carries a stamp and a room, never a date (D-B9).
+        damagedOn: null,
+        heldRoomId,
+      })
+    : [];
+  const ladderDoors = ticketInput
+    ? deriveLadderDoors({
+        ticket: ticketInput,
+        held: Boolean(heldRoomId),
+        routes: {
+          planroom: shelfRouteFor('planroom', id),
+          specbook: shelfRouteFor('specbook', id),
+          moodboards: shelfRouteFor('moodboards', id),
+          // Null, both of them: the call sheet is an overlay and the client's
+          // copy is reached by the Preview act below 1440 (`shelves.ts`), so
+          // each stays a press rather than becoming a link to nowhere.
+          callsheet: shelfRouteFor('callsheet', id),
+          clientcopy: shelfRouteFor('clientcopy', id),
+        },
+        onOpenLeaf: toggleShelf,
+        onOpenCallSheet: () =>
+          window.dispatchEvent(
+            new CustomEvent('document:open-call-sheet', {
+              detail: { mode: 'sheet' },
+            }),
+          ),
+        onReleaseRoom: () => {
+          if (heldRoomId) toggleRoom(heldRoomId);
+        },
+      })
+    : [];
+  // The sections sheet mounts in `(document)/layout.tsx`, above this page, so
+  // the ladder's values ride the published document rather than a prop the
+  // layout has no way to fill.
+  const ladderValues = Object.fromEntries(
+    ladderSegments.map((segment) => [
+      segment.key,
+      segment.narrowValue ?? segment.fallback ?? undefined,
+    ]),
+  ) as Partial<Record<DocumentIndexKey, string>>;
 
   // D13: publish the held document to the mobile shell (bar + spine sheet).
   useMobileActiveDoc(
@@ -1444,6 +1613,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           sections,
           rooms: (docRooms ?? []).map((r) => ({ id: r.id, name: r.name })),
           readingIndex: activeKey,
+          ladderValues,
+          clientCopy: ticketInput?.clientCopy != null,
         }
       : null,
   );
@@ -1571,30 +1742,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   settledCountRef.current = settled.length;
   const heldRoomName =
     (docRooms ?? []).find((r) => r.id === heldRoomId)?.name ?? null;
-  // B1 — the rooms and the shelves left the spine for the ticket, so the
-  // widened section predicate goes with them: the one block left is the running
-  // index, and the only thing it needs is regions to name. `paperRegionsForSection`
-  // already answers empty for a spread that mounts none (C11), so the gate is
-  // read off the regions themselves rather than kept as a second list of
-  // section names that can drift from it.
-  const paperRegions =
-    row.engagement_kind === 'project' && row.project_id
-      ? paperRegionsForSection(row.active_section)
-      : [];
-  const shelvedSpine =
-    row.project_id && paperRegions.length > 0 ? (
-      <DocSpineShelvedBlocks
-        projectId={row.project_id}
-        regions={paperRegions}
-        rooms={docRooms ?? []}
-        scheduleValue={scheduleFacts?.positionText ?? 'Not scheduled'}
-        approvalsValue={
-          approvalsQuery.isLoading
-            ? 'Reading…'
-            : `${(approvalsQuery.data ?? []).length} in the log`
-        }
-      />
-    ) : null;
   // W1 — the letterhead's setup chip. deriveNeed returns at most one need per
   // document, so this list holds one entry or none; `undefined` (the Desk has
   // not answered) and `null` (it answered "nothing") both render nothing. The
@@ -1751,6 +1898,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         onOpenLeaf={toggleShelf}
         onUnfoldRegion={unfoldRegion}
         onRows={acceptTicketRows}
+        onInput={acceptTicketInput}
         clientCopy={clientCopy}
       />
     ) : (
@@ -1764,6 +1912,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         onOpenLeaf={toggleShelf}
         onUnfoldRegion={unfoldRegion}
         onRows={acceptTicketRows}
+        onInput={acceptTicketInput}
       />
     );
   const seal = lineage?.signedAt
@@ -1795,7 +1944,22 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       <DocSpine
         sections={sections}
         onJump={jumpToSection}
-        shelved={shelvedSpine}
+        projectId={row.project_id}
+        segments={ladderSegments}
+        doors={ladderDoors}
+        activeKey={activeKey}
+        onJumpRegion={jumpToRegion}
+        onToggleRoom={toggleRoom}
+        // W3 wires the head-in-frame observer; until then nothing yields.
+        headInFrame={null}
+        // The head names the PHASE and where it stands — `PROCUREMENT &
+        // ORDERS` over `4 OF 6` (reconciliation §7 / W1 walk differs #1) —
+        // from the same derivation the letterhead's vitals and the ticket's
+        // identity line read. With no phase placed it keeps the section label.
+        stageWord={ticketPhase ? ticketPhase.name.toUpperCase() : null}
+        stageIndex={
+          ticketPhase ? `${ticketPhase.position} OF ${ticketPhase.of}` : null
+        }
         household={row.client_name}
         roomInHand={
           heldRoomId && heldRoomName
@@ -2153,8 +2317,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     />
                   )}
                   {/* R80: the Care band — closure stays reachable from an active
-                    project (a quiet folded line until install nears). */}
-                  <CareBand projectId={row.project_id} onCloseoutReady={setClosureReady} />
+                    project (a quiet folded line until install nears).
+                    W2 (C-2): the project spread's mount is the running index's
+                    `care` root — one root per stop, so the scrollspy cannot
+                    see two. */}
+                  <CareBand
+                    projectId={row.project_id}
+                    onCloseoutReady={setClosureReady}
+                    indexRoot
+                  />
                 </>
               )}
             {spreadSection === 'install' && row.project_id && (

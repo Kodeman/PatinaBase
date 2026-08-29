@@ -13,6 +13,10 @@ const mockOpenTimer = jest.fn();
 let mockUnseenFeedback: Array<{ id: string }> = [];
 let mockPathname = '/desk';
 let mockInHandToday = 0;
+// W2 (F-3 route 1): the drawer takes the presence channel's key off the held
+// document and calls `useDocumentPresence` itself — there is no `others` prop
+// any more, so the hook is what these three cases drive.
+let mockPresenceOthers: string[] = [];
 
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
@@ -38,7 +42,14 @@ jest.mock('@/hooks/use-hydrated', () => ({
 }));
 
 jest.mock('@/hooks/document-time-provider', () => ({
-  useDocumentTime: () => ({ inHandToday: mockInHandToday }),
+  useDocumentTime: () => ({
+    inHandToday: mockInHandToday,
+    heldEngagementId: 'engagement-1',
+  }),
+}));
+
+jest.mock('@/hooks/use-document-presence', () => ({
+  useDocumentPresence: () => mockPresenceOthers,
 }));
 
 jest.mock('@/lib/help-system/use-sheet-surface-key', () => ({
@@ -97,6 +108,7 @@ describe('StudioDrawer', () => {
     mockOpenTimer.mockClear();
     mockPathname = '/desk';
     mockInHandToday = 0;
+    mockPresenceOthers = [];
     mockUnseenFeedback = [];
     jest.mocked(openFeedbackSheet).mockClear();
     window.localStorage.clear();
@@ -251,7 +263,8 @@ describe('StudioDrawer', () => {
   });
 
   it('W1/F-3 — names the other person in the account zone, once there is one', () => {
-    render(<StudioDrawer others={['Marit']} />);
+    mockPresenceOthers = ['Marit'];
+    render(<StudioDrawer />);
 
     expect(
       document.querySelector('[data-drawer-presence]'),
@@ -259,7 +272,8 @@ describe('StudioDrawer', () => {
   });
 
   it('W1/F-3 — counts the others past one rather than listing them', () => {
-    render(<StudioDrawer others={['Marit', 'Tomas']} />);
+    mockPresenceOthers = ['Marit', 'Tomas'];
+    render(<StudioDrawer />);
 
     expect(
       document.querySelector('[data-drawer-presence]'),

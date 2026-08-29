@@ -9,17 +9,18 @@
  * headings because a folded region unmounts its body: heading and fold seam
  * swap, the root does not move.
  *
- * Attachment is a QUERY, not a subscription — there is no event when a region
- * mounts. Regions arrive as their own queries settle, several paints after this
- * hook first runs, so a single attach would silently observe two of four roots
- * forever. The effect therefore re-queries on a short retry until every root it
- * expects is found (or the window lapses), and re-runs whenever the key list
- * changes. A region that mounts after that window is genuinely not picked up;
- * that is the known limit, not an oversight.
+ * Attachment is a SUBSCRIPTION: a MutationObserver on the paper root
+ * (`[data-document-paper]`) re-attaches whenever region roots are added or
+ * removed. Regions arrive as their own queries settle, several paints after
+ * this hook first runs, and the foot of the paper (care, the record) can mount
+ * far later still — the retry window this replaces gave up after ~2s and left
+ * those roots unobserved forever, which reads as a rail that goes quiet at the
+ * foot rather than as an error.
  *
- * A jump LOCKS the line onto its target for the length of the smooth scroll,
- * so the line commits to where you asked to go instead of walking every region
- * the scroll passes through.
+ * A jump LOCKS the line onto its target for the length of the smooth scroll
+ * (L-10), so the line commits to where you asked to go instead of walking every
+ * region the scroll passes through: while the lock holds, the target IS the
+ * reading stop and every intermediate root reporting itself is ignored.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -33,9 +34,18 @@ import {
 
 const READING_BAND = '-20% 0px -62% 0px';
 const JUMP_LOCK_MS = 700;
-/** Re-query for roots that have not mounted yet: ~2s at 8 tries. */
-const ATTACH_RETRY_MS = 250;
-const ATTACH_RETRIES = 8;
+const PAPER_ROOT_SELECTOR = '[data-document-paper]';
+
+/**
+ * Every root lookup is scoped to the PAPER. W2 gave the rail's ladder a
+ * `data-index-region` button per stop (C-4), and the rail is the grid's first
+ * column — so an unscoped `document.querySelector` returns the rail's own row
+ * instead of the region it names, and the index would observe itself.
+ */
+function regionRoot(key: DocumentIndexKey): Element | null {
+  const paper = document.querySelector(PAPER_ROOT_SELECTOR);
+  return (paper ?? document).querySelector(regionAnchorSelector(key));
+}
 
 export interface DocumentRunningIndex {
   activeKey: DocumentIndexKey | null;
@@ -93,7 +103,7 @@ export function useDocumentRunningIndex(
       const anchor = window.innerHeight * 0.25;
       let best = present[0];
       for (const key of present) {
-        const el = document.querySelector(regionAnchorSelector(key));
+        const el = regionRoot(key);
         if (el && el.getBoundingClientRect().top <= anchor) best = key;
       }
       setActiveKey(best);
@@ -112,26 +122,55 @@ export function useDocumentRunningIndex(
       { rootMargin: READING_BAND, threshold: 0 },
     );
 
-    // `observe` is idempotent per element, so a retry that re-finds an
-    // already-observed root costs nothing and simply picks up the new ones.
-    let retriesLeft = ATTACH_RETRIES;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    // `observe` is idempotent per element, so re-running this over roots that
+    // are already observed costs nothing and simply picks up the new ones. A
+    // root that has LEFT the DOM is unobserved and drops out of `attached`, or
+    // the line would go on marking a region the spread has since unmounted.
+    const observing = new Map<DocumentIndexKey, Element>();
 
     const attach = () => {
-      retryTimer = null;
       for (const key of ordered) {
-        const el = document.querySelector(regionAnchorSelector(key));
-        if (!el) continue;
+        const el = regionRoot(key);
+        const previous = observing.get(key);
+        if (previous && previous !== el) observer.unobserve(previous);
+        if (!el) {
+          observing.delete(key);
+          attached.delete(key);
+          continue;
+        }
         observer.observe(el);
+        observing.set(key, el);
         attached.add(key);
       }
       resolve();
-      if (attached.size < ordered.length && retriesLeft > 0) {
-        retriesLeft -= 1;
-        retryTimer = setTimeout(attach, ATTACH_RETRY_MS);
-      }
     };
     attach();
+
+    // One rAF of debounce: a spread mounting several regions in one commit
+    // produces one batch of records, and re-attaching per record would query
+    // the whole list once per root.
+    let attachQueued = false;
+    const queueAttach = () => {
+      if (attachQueued) return;
+      attachQueued = true;
+      window.requestAnimationFrame(() => {
+        attachQueued = false;
+        attach();
+      });
+    };
+
+    const paper = document.querySelector(PAPER_ROOT_SELECTOR);
+    const mutations =
+      typeof MutationObserver === 'undefined'
+        ? null
+        : new MutationObserver(queueAttach);
+    // The paper is the subtree the roots live in; before it exists (the first
+    // paint of a still-loading document) watch the body, so the paper's own
+    // arrival is the mutation that attaches the roots inside it.
+    mutations?.observe(paper ?? document.body, {
+      childList: true,
+      subtree: true,
+    });
 
     let ticking = false;
     const onScroll = () => {
@@ -145,7 +184,7 @@ export function useDocumentRunningIndex(
     window.addEventListener('scroll', onScroll, { passive: true });
 
     return () => {
-      if (retryTimer) clearTimeout(retryTimer);
+      mutations?.disconnect();
       observer.disconnect();
       window.removeEventListener('scroll', onScroll);
     };
@@ -208,7 +247,7 @@ export function scrollToRegion(
   ).matches;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      const root = document.querySelector(regionAnchorSelector(key));
+      const root = regionRoot(key);
       root?.scrollIntoView({
         block: 'start',
         behavior: reduceMotion ? 'auto' : 'smooth',

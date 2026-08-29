@@ -171,21 +171,6 @@ jest.mock('@/components/document/schedule/install-window-ceremony', () => ({
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
 jest.mock('@/components/document/commercial/money-region', () => ({ MoneyRegion: () => null }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-// A1-L2's contract: the page hands this component the exact `regions` subset
-// `paperRegionsForSection` returned for the spread. Render that list as
-// testable rows here — the component's OWN rendering of them (labels, scroll
-// targets, fold state) is `shelved-spine.test.tsx`'s job (A1-L2), not this
-// integration suite's; this mock exists only to prove the page wired the
-// right subset through.
-jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: (props: { regions: ReadonlyArray<{ key: string }> }) => (
-    <ul data-testid="shelved-spine-regions" aria-label="On this paper">
-      {props.regions.map((region) => (
-        <li key={region.key}>{region.key}</li>
-      ))}
-    </ul>
-  ),
-}));
 jest.mock('@/components/document/shelves/document-shelves', () => ({
   DocumentShelves: () => null,
 }));
@@ -209,18 +194,25 @@ jest.mock('@/components/document/mobile/mobile-shell', () => ({
 }));
 
 jest.mock('@/components/document/doc-spine', () => ({
-  // F14/C11: the page passes its shelved-blocks element (or null) as `shelved`
-  // — render it, or `DocSpineShelvedBlocks`'s own mock above never mounts.
+  // W2 (C-3): the page hands the rail the exact ladder `deriveLadderSegments`
+  // returned for the spread. Render those keys as testable rows here — the
+  // rail's OWN rendering of them (registers, the bracket, the doors) is
+  // `lens-ladder.test.tsx`'s job, not this integration suite's; this mock
+  // exists only to prove the page wired the right stops through.
   DocSpine: ({
     onJump,
-    shelved,
+    segments = [],
   }: {
     onJump: (section: string) => void;
-    shelved?: ReactNode;
+    segments?: ReadonlyArray<{ key: string }>;
   }) => (
     <>
       <button type="button" onClick={() => onJump('brief')}>Jump to brief</button>
-      {shelved}
+      <ul data-testid="ladder-segments" aria-label="This paper">
+        {segments.map((segment) => (
+          <li key={segment.key}>{segment.key}</li>
+        ))}
+      </ul>
     </>
   ),
 }));
@@ -1176,13 +1168,13 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
   });
 
-  // ── A1-L2: F14/C11 — the shelved spine mounts on install/care, and its index
-  // derives from the spread's own regions (paperRegionsForSection). The
-  // per-row rendering (labels, scroll targets, fold state) is
-  // shelved-spine.test.tsx's job; this integration suite only proves the page
-  // wires the right region SET through for each spread. ──
-  describe('the shelved spine mount (F14/C11)', () => {
-    it('mounts on an install document with the two regions that spread prints', () => {
+  // ── W2 (C-3, F14/C11) — the ladder mounts on every project-backed spread,
+  // and its stops derive from the spread's own regions
+  // (`paperRegionsForSection`, carried on the ticket's input). The per-row
+  // rendering is lens-ladder.test.tsx's job; this integration suite only
+  // proves the page wires the right stop SET through for each spread. ──
+  describe('the ladder mount (C-3, F14/C11)', () => {
+    it('mounts on an install document with the regions that spread prints', () => {
       asProjectDocument();
       const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
       mockDocumentQuery = {
@@ -1196,13 +1188,13 @@ describe('DocumentPage guide activation', () => {
       // and no schedule row (nor does ScheduleSpine, the only
       // data-index-region="schedule" root) — a row for either would be a jump
       // target with nothing behind it.
-      const index = screen.getByTestId('shelved-spine-regions');
+      const index = screen.getByTestId('ladder-segments');
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-        'approvals', 'ffe',
+        'approvals', 'ffe', 'care', 'record',
       ]);
     });
 
-    it('mounts on a care document with the same two regions', () => {
+    it('mounts on a care document with the same regions', () => {
       asProjectDocument();
       const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
       mockDocumentQuery = {
@@ -1216,20 +1208,20 @@ describe('DocumentPage guide activation', () => {
       // and no schedule row (nor does ScheduleSpine, the only
       // data-index-region="schedule" root) — a row for either would be a jump
       // target with nothing behind it.
-      const index = screen.getByTestId('shelved-spine-regions');
+      const index = screen.getByTestId('ladder-segments');
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-        'approvals', 'ffe',
+        'approvals', 'ffe', 'care', 'record',
       ]);
     });
 
-    it('still mounts all four regions, money included, on the project section', () => {
+    it('still mounts all six stops, money and the record included, on the project section', () => {
       asProjectDocument();
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      const index = screen.getByTestId('shelved-spine-regions');
+      const index = screen.getByTestId('ladder-segments');
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-        'approvals', 'schedule', 'ffe', 'money',
+        'approvals', 'schedule', 'ffe', 'money', 'care', 'record',
       ]);
     });
   });
@@ -1705,10 +1697,14 @@ describe('DocumentPage guide activation', () => {
     expect(
       screen.getByRole('button', { name: 'Client approvals · 1 awaiting publish →' }),
     ).toBeVisible();
-    // The recap disclosure promises only what its own body holds.
-    expect(
-      screen.getByRole('button', { name: /^The record · \d+ complete$/ }),
-    ).toBeVisible();
+    // The recap disclosure promises only what its own body holds. W2 (C-2)
+    // gave the record a `RegionHead`, so the one line became two registers —
+    // the name and the count — on the region's own root.
+    const record = document.querySelector<HTMLElement>(
+      '[data-index-region="record"]',
+    )!;
+    expect(within(record).getByText('The record')).toBeVisible();
+    expect(within(record).getByText(/^\d+ complete$/)).toBeVisible();
   });
 
   it('says nothing about approvals while that read is unanswered', () => {

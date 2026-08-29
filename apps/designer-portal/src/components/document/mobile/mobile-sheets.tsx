@@ -29,8 +29,6 @@ import { ACTIVITIES, fmtElapsed } from '@/lib/document/time-derivation';
 import { MarginItemBody } from '../margin-bodies';
 import { useHandoffGates } from '../margin-handoff-item';
 import { overdueStampLabel } from '@/lib/document/overdue-condition';
-import { StrataMark } from '../strata-mark';
-import { fillStateAtSection } from '@/lib/document/fill-state';
 import { openLedger } from '../command-bar';
 import { openAccount } from '../account/account-sheet';
 import { MobileAccountHeader } from '../account/mobile-account-header';
@@ -41,6 +39,15 @@ import {
   topActiveModalDialog,
 } from '../overlays/active-dialog';
 import { useMobileShell } from './mobile-shell';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { boardsRoutePath } from '@/lib/document/registry';
+import {
+  paperRegionsForSection,
+  DOCUMENT_INDEX_LABELS,
+  requestRegionUnfold,
+  type DocumentIndexKey,
+} from '@/lib/document/document-index';
+import { scrollToRegion } from '@/hooks/use-document-running-index';
 
 const SHEET_FOCUSABLE = [
   'a[href]:not([tabindex="-1"])',
@@ -174,6 +181,18 @@ function restoreSheetFocus(
   });
 }
 
+/** One accessible name per sheet kind — every `role="dialog"` this file opens
+ *  names itself, the sections sheet included (it carried none before). */
+const SHEET_ARIA_LABEL: Record<
+  'drawer' | 'timer' | 'spine' | 'margin-item',
+  string
+> = {
+  drawer: 'Studio actions',
+  timer: 'Time in hand',
+  spine: 'Sections of this document',
+  'margin-item': 'Margin item',
+};
+
 function Sheet({
   tone,
   kind,
@@ -262,7 +281,7 @@ function Sheet({
         compactTimer ? '' : 'min-[1180px]:hidden'
       }`}
       role="dialog"
-      aria-label={compactTimer ? 'Time in hand' : undefined}
+      aria-label={SHEET_ARIA_LABEL[kind]}
       aria-modal="true"
     >
       <button
@@ -299,10 +318,20 @@ function Sheet({
   );
 }
 
-export function MobileSheets() {
+export function MobileSheets({
+  ladderValues: ladderValuesProp,
+}: {
+  /** W2-L1's per-stop derivation. This sheet mounts in
+   *  `(document)/layout.tsx`, above the page that derives them, so in product
+   *  the values ride `MobileActiveDoc`; the prop is the direct route tests
+   *  take. */
+  ladderValues?: Partial<Record<DocumentIndexKey, string>>;
+} = {}) {
   const { sheet, activeDoc, closeSheet, openMarginItem, openSpine } =
     useMobileShell();
+  const ladderValues = ladderValuesProp ?? activeDoc?.ladderValues ?? {};
   const router = useRouter();
+  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const projectId = activeDoc?.projectId ?? null;
   const proposalId = activeDoc?.proposalId ?? null;
   const { data: items } = useMarginItems(projectId, proposalId);
@@ -445,9 +474,18 @@ export function MobileSheets() {
     );
   }
 
-  // ── Spine (paper): sections + "In the margin · N" (D3-3) ──
+  // ── Spine (paper): the ladder for the open spread + "In the margin · N"
+  //    (D3-3, W2 reconciliation §13/OD-14). The whole-document section
+  //    stepper this sheet used to print is retired: the ladder names the
+  //    six regions of the spread actually in hand, which is what the
+  //    desktop rail's LensLadder prints for the same spread. ──
   if (sheet.kind === 'spine') {
     const open = allItems.filter((i) => i.kind !== 'time');
+    const activeSectionKey =
+      activeDoc?.sections.find((s) => s.state === 'active')?.key ?? null;
+    const ladderRegions = activeSectionKey
+      ? paperRegionsForSection(activeSectionKey)
+      : [];
     return (
       <Sheet tone="paper" kind="spine" onClose={closeSheet}>
         <button
@@ -461,58 +499,141 @@ export function MobileSheets() {
           ← Put down · back to the Desk
         </button>
         <ul className="mt-1">
-          {(activeDoc?.sections ?? []).map((s) => {
-            const inner = (
-              <>
-                <StrataMark
-                  size="sm"
-                  fill={fillStateAtSection(s.key)}
-                  breathing={s.state === 'active'}
-                />
-                <span className={s.state === 'future' ? 'opacity-45' : ''}>
+          {ladderRegions.map((region) => {
+            const current = activeDoc?.readingIndex === region.key;
+            const value = ladderValues[region.key];
+            return (
+              <li key={region.key}>
+                <button
+                  type="button"
+                  aria-current={current ? 'true' : undefined}
+                  onClick={() => {
+                    closeSheet();
+                    requestRegionUnfold(region.key);
+                    scrollToRegion(region.key, projectId ?? '');
+                  }}
+                  className={`flex min-h-11 w-full flex-col justify-center gap-0.5 py-1.5 text-left ${
+                    current ? 'doc-room-lifted' : ''
+                  }`}
+                >
                   <span
                     className={`block text-[14px] ${
-                      s.state === 'active'
+                      current
                         ? 'font-semibold text-[var(--color-charcoal)]'
-                        : s.state === 'settled'
-                          ? 'text-[var(--color-aged-oak)]'
-                          : 'text-[var(--text-muted)]'
+                        : 'text-[var(--color-charcoal)]'
                     }`}
                   >
-                    {s.label}
+                    {DOCUMENT_INDEX_LABELS[region.key]}
                   </span>
-                  <span className="block font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                    {s.sub}
-                  </span>
-                </span>
-              </>
+                  {value && (
+                    <span className="block truncate font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      {value}
+                    </span>
+                  )}
+                </button>
+              </li>
             );
-            // Settled + active rows jump to (and unfold) their section via the
-            // page's open-section listener; future rows stay inert.
-            return (
-              <li key={s.key}>
-                {s.state === 'future' ? (
-                  <div className="flex items-center gap-2.5 py-2">{inner}</div>
-                ) : (
+          })}
+        </ul>
+
+        {/* Override 3 — the four doors every spread scoped to a project
+            opens; a pre-work document with no project behind it prints
+            none (OD-8). */}
+        {projectId && (
+          <>
+            <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+              Filed with this job
+            </p>
+            <ul className="mt-1">
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    router.push(`/doc/${projectId}/plans`);
+                  }}
+                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  Plan room
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    router.push(`/doc/${projectId}/spec-book`);
+                  }}
+                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  Spec book
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    router.push(boardsRoutePath(projectId));
+                  }}
+                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  Boards
+                </button>
+              </li>
+              {callSheetOn && (
+                <li>
                   <button
                     type="button"
                     onClick={() => {
                       closeSheet();
                       window.dispatchEvent(
-                        new CustomEvent('document:open-section', {
-                          detail: s.key,
+                        new CustomEvent('document:open-call-sheet', {
+                          detail: { mode: 'sheet' },
                         }),
                       );
                     }}
-                    className="flex w-full items-center gap-2.5 py-2 text-left"
+                    className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
                   >
-                    {inner}
+                    Call sheet
                   </button>
-                )}
+                </li>
+              )}
+            </ul>
+          </>
+        )}
+
+        {/* DL-04 — the fifth door, on the proposal spread that carries a
+            client's copy. The leaf is the page's state, so the sheet asks for
+            it by the same wire the call sheet uses rather than holding a
+            second copy of it. */}
+        {activeDoc?.clientCopy && (
+          <>
+            {!projectId && (
+              <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+                Filed with this job
+              </p>
+            )}
+            <ul className={projectId ? '' : 'mt-1'}>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    window.dispatchEvent(
+                      new CustomEvent('document:open-leaf', {
+                        detail: { leaf: 'clientcopy' },
+                      }),
+                    );
+                  }}
+                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  The client’s copy
+                </button>
               </li>
-            );
-          })}
-        </ul>
+            </ul>
+          </>
+        )}
 
         {/* R25: room headings as jump rows — tap lands on the heading. */}
         {(activeDoc?.rooms ?? []).length > 0 && (
