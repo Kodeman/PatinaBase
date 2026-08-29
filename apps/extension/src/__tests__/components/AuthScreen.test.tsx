@@ -1,8 +1,9 @@
 /**
- * AuthScreen component — portal sign-in button behaviour.
+ * AuthScreen component — portal sign-in / sign-up button behaviour.
  *
- * Confirms that clicking "Use email code on patina.cloud" calls
- * chrome.tabs.create with the expected URL containing ?source=ext.
+ * Confirms that the primary "Sign in on patina.cloud" and secondary
+ * "Create an account" buttons call chrome.tabs.create with the expected
+ * URLs containing ?source=ext.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
@@ -58,14 +59,15 @@ describe('AuthScreen — portal sign-in button', () => {
     cleanup();
   });
 
-  it('renders the "Use email code on patina.cloud" button', () => {
+  it('renders the "Sign in on patina.cloud" primary button', () => {
     render(<AuthScreen />);
     expect(
       screen.getByTestId('auth.openPortalSignin')
     ).toBeTruthy();
+    expect(screen.getByText('Sign in on patina.cloud')).toBeTruthy();
   });
 
-  it('calls chrome.tabs.create with the correct URL when clicked', async () => {
+  it('calls chrome.tabs.create with the sign-in URL when the primary button is clicked', async () => {
     render(<AuthScreen />);
     const button = screen.getByTestId('auth.openPortalSignin');
     await userEvent.click(button);
@@ -73,6 +75,30 @@ describe('AuthScreen — portal sign-in button', () => {
     expect(tabsCreateMock).toHaveBeenCalledWith({
       url: 'https://app.patina.cloud/auth/signin?source=ext',
     });
+  });
+
+  it('renders "Create an account" and calls chrome.tabs.create with the sign-up URL when clicked', async () => {
+    render(<AuthScreen />);
+    const button = screen.getByTestId('auth.openPortalSignup');
+    expect(screen.getByText('Create an account')).toBeTruthy();
+    await userEvent.click(button);
+    expect(tabsCreateMock).toHaveBeenCalledOnce();
+    expect(tabsCreateMock).toHaveBeenCalledWith({
+      url: 'https://app.patina.cloud/auth/signup?source=ext',
+    });
+  });
+
+  it('orders the primary sign-in button before "Create an account" before the QR pairing section', () => {
+    render(<AuthScreen />);
+    const signIn = screen.getByTestId('auth.openPortalSignin');
+    const signUp = screen.getByTestId('auth.openPortalSignup');
+    const qrHint = screen.getByText('Scan with the Patina iOS app');
+    expect(
+      signIn.compareDocumentPosition(signUp) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      signUp.compareDocumentPosition(qrHint) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it('does not modify the QR code section', () => {

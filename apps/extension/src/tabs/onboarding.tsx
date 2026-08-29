@@ -103,7 +103,7 @@ function Onboarding() {
   if (step === 0) {
     return (
       <Shell step={0} eyebrow="Welcome" title={<>Capture, in<br />one keystroke.</>} primary="Get started" onPrimary={next}>
-        Pull any furniture page into your Patina library — verified, priced, and
+        Pull any furniture page into your Patina library — read, priced, and
         routed to the right project. Let's set it up; it takes a minute.
       </Shell>
     );
@@ -114,13 +114,20 @@ function Onboarding() {
         step={1}
         eyebrow="Connect workspace"
         title="Sign in to Patina"
-        primary="Open Patina to sign in"
-        onPrimary={() => window.open(`${PORTAL_URL}/auth/signin?source=ext`, '_blank')}
+        primary="Create a Patina account"
+        onPrimary={() => window.open(`${PORTAL_URL}/auth/signup?source=ext`, '_blank')}
         onBack={back}
       >
         Capture saves straight into your workspace. Sign in to the Patina portal
-        and the extension adopts your session automatically — then come back here.
-        <div className="mt-4">
+        and the extension picks up your sign-in on its own — then come back here.
+        <div className="mt-4 flex flex-col items-start gap-2">
+          <button
+            type="button"
+            onClick={() => window.open(`${PORTAL_URL}/auth/signin?source=ext`, '_blank')}
+            className="font-mono text-[0.68rem] uppercase tracking-[0.06em] text-ink-soft hover:text-ink"
+          >
+            Already have one? Sign in
+          </button>
           <button
             type="button"
             onClick={next}
@@ -135,9 +142,12 @@ function Onboarding() {
   if (step === 2) {
     return (
       <Shell step={2} eyebrow="Why page access" title="Reading the page" primary="Makes sense" onPrimary={next} onBack={back}>
-        To pull a product's name, price, and images, Patina reads the page you're
-        on when you capture — only then, only that tab. Nothing is read in the
-        background, and nothing leaves your workspace.
+        To read a product's name, price, and images, Patina reads the page you're
+        on when you capture — only then, only that tab. What it reads goes to
+        your Patina workspace. We keep light usage stats — which screens, how
+        long — never the page. Chrome words this permission broadly ('read and
+        change all your data on all websites'); we use it only at the moment
+        you capture.
       </Shell>
     );
   }

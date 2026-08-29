@@ -58,7 +58,7 @@ export function DecisionSheet() {
   return (
     <OverlaySheet
       title="Send for approval"
-      subtitle="Create a client decision"
+      subtitle="Ask the client to choose"
       footer={
         <button
           type="button"
