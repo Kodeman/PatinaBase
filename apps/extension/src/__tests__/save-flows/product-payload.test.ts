@@ -223,4 +223,62 @@ describe('buildProductInsertPayload', () => {
       expect(payload.available_colors).toEqual(['Walnut', 'Ebony']);
     });
   });
+
+  describe('capture note lives in capture_provenance.note, not usage_notes (CL-R1 / c)', () => {
+    it('trims and carries the capture note into capture_provenance.note', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+        note: '  Check the client likes the walnut finish  ',
+      });
+      expect(payload.capture_provenance.note).toBe('Check the client likes the walnut finish');
+    });
+
+    it('omits capture_provenance.note when no note is provided', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+      });
+      expect(payload.capture_provenance.note).toBeUndefined();
+      expect('note' in payload.capture_provenance).toBe(false);
+    });
+
+    it('treats a whitespace-only note as omitted', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+        note: '   ',
+      });
+      expect('note' in payload.capture_provenance).toBe(false);
+    });
+
+    it('never writes products.usage_notes — that column belongs to studio promotion, not capture', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+        note: 'Check the finish sample',
+      });
+      expect('usage_notes' in payload).toBe(false);
+    });
+  });
 });

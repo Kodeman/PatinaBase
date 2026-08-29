@@ -20,10 +20,30 @@ export interface BuildProductPayloadInput {
   vendorId: string | null;
   retailerId: string | null;
   userId: string;
+  /** The capture note (CL-R1 / c) — optional so existing callers are unaffected. */
+  note?: string | null;
+}
+
+/**
+ * Merges a capture note into a capture_provenance object (CL-R1 / c). NOT
+ * products.usage_notes — that column is the Layer-2 "how a designer should
+ * use this piece" field, always user-supplied at studio-promotion time
+ * (00152; promote-to-studio-modal.tsx; promote_to_studio overwrites it;
+ * rendered as "Usage notes" in piece-room.tsx). The extension's capture note
+ * lives in its own JSONB namespace instead, beside captureOptions. A blank
+ * note removes any prior `note` key rather than writing an empty string.
+ */
+export function withCaptureNote(
+  base: Record<string, unknown> | null | undefined,
+  note: string | null | undefined
+): Record<string, unknown> {
+  const { note: _priorNote, ...rest } = (base ?? {}) as Record<string, unknown>;
+  const trimmed = note?.trim();
+  return trimmed ? { ...rest, note: trimmed } : rest;
 }
 
 export function buildProductInsertPayload(input: BuildProductPayloadInput) {
-  const { productName, extractedData, price, images, vendorId, retailerId, userId } = input;
+  const { productName, extractedData, price, images, vendorId, retailerId, userId, note } = input;
   const capturedAt = new Date().toISOString();
 
   return {
@@ -43,15 +63,18 @@ export function buildProductInsertPayload(input: BuildProductPayloadInput) {
     // surface multi-value color/finish/material groups for human confirmation
     // (P2-8). The flat scalar writes above stay for back-compat.
     capture_source: 'web_extension' as const,
-    capture_provenance: {
-      captureOptions: {
-        colors: extractedData.availableColors ?? [],
-        finishes: extractedData.availableFinishes ?? [],
-        materials: extractedData.materials ?? [],
-        source: 'web_extension' as const,
-        capturedAt,
+    capture_provenance: withCaptureNote(
+      {
+        captureOptions: {
+          colors: extractedData.availableColors ?? [],
+          finishes: extractedData.availableFinishes ?? [],
+          materials: extractedData.materials ?? [],
+          source: 'web_extension' as const,
+          capturedAt,
+        },
       },
-    },
+      note
+    ),
     dimensions: extractedData.dimensions
       ? {
           width: extractedData.dimensions.width,
