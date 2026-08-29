@@ -1,0 +1,799 @@
+<title>The Smart Lens</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ==========================================================================
+   1. THE MOCK KIT (kit.css, inlined by build.mjs — its @import is stripped;
+      the <link> above carries the same three families).  Everything below the
+      marker is the deck's own chrome and never redefines a --pat-* token.
+   ========================================================================== */
+/* @@FONTS@@ */
+
+/* @@KIT@@ */
+
+/* @@LENS@@ */
+
+/* ==========================================================================
+   2. DECK TOKENS
+      The bare :root is the complete light palette.  The two dark blocks
+      redefine the same names and nothing else.  Ground is a linen one step
+      greyer and deeper than the app's own paper (#FAF7F2) so a phone plate
+      reads as inset stock — separation by value and a hairline, never a
+      heavier shadow than the app's own.
+      --dk-ev* is the deck-only evidence ink (a slate-teal).  It never appears
+      inside a phone frame: the app has no such colour.
+   ========================================================================== */
+:root{
+  /* paper */
+  --dk-ground:#ECE6DB;
+  --dk-plate:#FBF8F3;
+  --dk-plate-2:#F4EFE6;
+  --dk-ink:#1E1B18;
+  --dk-body:#4B4137;
+  --dk-faint:#6A5C4D;
+  --dk-hair:rgba(30,27,24,.14);
+  --dk-hair-2:rgba(30,27,24,.28);
+  --dk-hair-3:rgba(30,27,24,.58);
+  --dk-tint:rgba(30,27,24,.045);
+  --dk-tint-2:rgba(30,27,24,.085);
+
+  /* the app's accent, used only where the app would use it */
+  --dk-clay:#C4A57B;
+  --dk-oak:#8A6A34;
+  --dk-oak-wash:rgba(138,106,52,.10);
+
+  /* deck-only evidence ink */
+  --dk-ev:#2E4B54;
+  --dk-ev-wash:rgba(46,75,84,.09);
+  --dk-ev-ground:#14171A;
+  --dk-ev-plate:#1D2226;
+  --dk-ev-ink:#E2E7EA;
+  --dk-ev-body:#B9C4CA;
+  --dk-ev-faint:#8C9AA2;
+  --dk-ev-hair:rgba(226,231,234,.16);
+  --dk-ev-hair-2:rgba(226,231,234,.30);
+  --dk-ev-accent:#86B4C0;
+
+  /* severity — semantic, deliberately not the clay accent */
+  --dk-s0:#A03B29;  --dk-s0-wash:rgba(160,59,41,.10);
+  --dk-s1:#8A6118;  --dk-s1-wash:rgba(138,97,24,.11);
+  --dk-s2:#4F6B57;  --dk-s2-wash:rgba(79,107,87,.11);
+  --dk-s3:#6B6156;  --dk-s3-wash:rgba(107,97,86,.09);
+
+  --dk-focus:#8A6A34;
+  --dk-new-wash:rgba(138,106,52,.08);
+
+  /* surface scope — every component paints from these; the two registers
+     below repoint them.  Declared here so nothing is defined only inside a
+     register, a media query or a [data-theme] block. */
+  --sf-bg:var(--dk-plate);
+  --sf-ink:var(--dk-ink);
+  --sf-body:var(--dk-body);
+  --sf-faint:var(--dk-faint);
+  --sf-hair:var(--dk-hair);
+  --sf-hair-2:var(--dk-hair-2);
+  --sf-accent:var(--dk-oak);
+
+  --dk-serif:'Playfair Display',Georgia,'Times New Roman',serif;
+  --dk-sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --dk-mono:'DM Mono','SF Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+  --dk-wrap:1560px;
+  --dk-measure:66ch;
+  --dk-index-h:52px;
+
+}
+
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --dk-ground:#14120F;
+    --dk-plate:#1F1C19;
+    --dk-plate-2:#262220;
+    --dk-ink:#F2ECE2;
+    --dk-body:#CCC0B2;
+    --dk-faint:#9E9184;
+    --dk-hair:rgba(242,236,226,.15);
+    --dk-hair-2:rgba(242,236,226,.28);
+    --dk-hair-3:rgba(242,236,226,.62);
+    --dk-tint:rgba(242,236,226,.05);
+    --dk-tint-2:rgba(242,236,226,.09);
+
+    --dk-clay:#C4A57B;
+    --dk-oak:#D3B283;
+    --dk-oak-wash:rgba(211,178,131,.13);
+
+    --dk-ev:#8FBAC6;
+    --dk-ev-wash:rgba(143,186,198,.11);
+    --dk-ev-ground:#0C0E11;
+    --dk-ev-plate:#161A1D;
+    --dk-ev-ink:#E2E7EA;
+    --dk-ev-body:#B4BFC6;
+    --dk-ev-faint:#87949C;
+    --dk-ev-hair:rgba(226,231,234,.14);
+    --dk-ev-hair-2:rgba(226,231,234,.26);
+    --dk-ev-accent:#8FBAC6;
+
+    --dk-s0:#E08A76;  --dk-s0-wash:rgba(224,138,118,.13);
+    --dk-s1:#D7B061;  --dk-s1-wash:rgba(215,176,97,.13);
+    --dk-s2:#8FB395;  --dk-s2-wash:rgba(143,179,149,.13);
+    --dk-s3:#A2968A;  --dk-s3-wash:rgba(162,150,138,.11);
+
+    --dk-focus:#D3B283;
+    --dk-new-wash:rgba(211,178,131,.10);
+  }
+}
+:root[data-theme="dark"]{
+  --dk-ground:#14120F;
+  --dk-plate:#1F1C19;
+  --dk-plate-2:#262220;
+  --dk-ink:#F2ECE2;
+  --dk-body:#CCC0B2;
+  --dk-faint:#9E9184;
+  --dk-hair:rgba(242,236,226,.15);
+  --dk-hair-2:rgba(242,236,226,.28);
+  --dk-hair-3:rgba(242,236,226,.62);
+  --dk-tint:rgba(242,236,226,.05);
+  --dk-tint-2:rgba(242,236,226,.09);
+
+  --dk-clay:#C4A57B;
+  --dk-oak:#D3B283;
+  --dk-oak-wash:rgba(211,178,131,.13);
+
+  --dk-ev:#8FBAC6;
+  --dk-ev-wash:rgba(143,186,198,.11);
+  --dk-ev-ground:#0C0E11;
+  --dk-ev-plate:#161A1D;
+  --dk-ev-ink:#E2E7EA;
+  --dk-ev-body:#B4BFC6;
+  --dk-ev-faint:#87949C;
+  --dk-ev-hair:rgba(226,231,234,.14);
+  --dk-ev-hair-2:rgba(226,231,234,.26);
+  --dk-ev-accent:#8FBAC6;
+
+  --dk-s0:#E08A76;  --dk-s0-wash:rgba(224,138,118,.13);
+  --dk-s1:#D7B061;  --dk-s1-wash:rgba(215,176,97,.13);
+  --dk-s2:#8FB395;  --dk-s2-wash:rgba(143,179,149,.13);
+  --dk-s3:#A2968A;  --dk-s3-wash:rgba(162,150,138,.11);
+
+  --dk-focus:#D3B283;
+  --dk-new-wash:rgba(211,178,131,.10);
+}
+
+/* ==========================================================================
+   3. BASE
+   ========================================================================== */
+.dk-page *{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;}
+body{
+  margin:0;
+  background:var(--dk-ground);
+  color:var(--dk-body);
+  font-family:var(--dk-sans);
+  font-size:16.5px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
+.dk-page img{max-width:100%;display:block;}
+/* A file:line token is one unbreakable word to the browser; without this it
+   pushes the measure sideways at 390 and starves a table column at 1440. */
+.dk-page code{overflow-wrap:anywhere;word-break:break-word;}
+/* Only an unclassed link takes the default treatment. A classed anchor — an
+   index row, a finding chip — owns its own colour, and a blanket `.dk-page a`
+   would out-specify every one of them. */
+.dk-page a{text-decoration:none;}
+.dk-page a:not([class]){color:var(--dk-oak);border-bottom:1px solid var(--dk-hair-2);}
+.dk-page a:not([class]):hover{border-bottom-color:currentColor;}
+:focus-visible{outline:2px solid var(--dk-focus);outline-offset:3px;border-radius:2px;}
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto;}
+  .dk-page *,.dk-page *::before,.dk-page *::after{animation:none!important;transition:none!important;}
+}
+
+/* ==========================================================================
+   4. THE STICKY INDEX
+      A thin log bar: the deck is timestamped, so its index is too.  Rows are
+      grouped by the day-part they belong to; the hairline under it doubles as
+      a read-progress rule.
+   ========================================================================== */
+.dk-index{
+  position:sticky;top:0;z-index:60;
+  background:var(--dk-ground);
+  background:color-mix(in srgb, var(--dk-ground) 92%, transparent);
+  -webkit-backdrop-filter:saturate(1.4) blur(10px);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--dk-hair);
+}
+.dk-index-inner{
+  max-width:var(--dk-wrap);margin-inline:auto;
+  padding:0 clamp(16px,4vw,64px);
+  min-height:var(--dk-index-h);
+  display:flex;align-items:center;gap:18px;
+}
+.dk-index-mark{
+  font-family:var(--dk-serif);font-size:15px;font-weight:500;color:var(--dk-ink);
+  white-space:nowrap;flex:0 0 auto;
+}
+.dk-index-mark span{
+  display:block;font-family:var(--dk-mono);font-size:8.5px;font-weight:400;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--dk-faint);margin-top:1px;
+}
+.dk-index-scroll{
+  flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  scroll-padding-inline:12px 26px;
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent);
+  mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent);
+}
+.dk-index-scroll::-webkit-scrollbar{height:0;}
+.dk-index-list{
+  display:flex;align-items:center;gap:0;margin:0;padding:0;list-style:none;
+  white-space:nowrap;
+}
+.dk-index-list li{display:flex;align-items:center;}
+.dk-index-day{
+  font-family:var(--dk-mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dk-faint);padding:0 12px 0 4px;
+  border-left:1px solid var(--dk-hair);margin-left:12px;
+}
+.dk-index-list li:first-child .dk-index-day{border-left:0;margin-left:0;padding-left:0;}
+.dk-index-link{
+  display:block;padding:6px 9px;border:0;
+  font-family:var(--dk-mono);font-size:10.5px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--dk-faint);
+  border-bottom:2px solid transparent;
+  transition:color .18s ease,border-color .18s ease;
+}
+.dk-index-link:hover{color:var(--dk-ink);}
+.dk-index-link[aria-current="true"]{color:var(--dk-ink);border-bottom-color:var(--dk-oak);}
+.dk-theme{
+  flex:0 0 auto;appearance:none;cursor:pointer;
+  background:transparent;border:1px solid var(--dk-hair-2);border-radius:2px;
+  padding:5px 10px;color:var(--dk-faint);
+  font-family:var(--dk-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+}
+.dk-theme:hover{color:var(--dk-ink);border-color:var(--dk-hair-3);}
+.dk-progress{
+  position:absolute;left:0;bottom:-1px;height:1px;width:0;
+  background:var(--dk-oak);
+}
+@media (max-width: 820px){
+  .dk-index-mark span{display:none;}
+  .dk-index-day{display:none;}
+}
+
+/* ==========================================================================
+   5. SECTIONS, THE DAY SPINE, THE GRID
+   ========================================================================== */
+.dk-main{display:block;}
+.dk-sec{padding:clamp(56px,7vw,116px) 0;border-top:1px solid var(--dk-hair);}
+.dk-sec:first-child{border-top:0;}
+.dk-wrap{max-width:var(--dk-wrap);margin-inline:auto;padding-inline:clamp(20px,4vw,64px);}
+
+/* the day-spine eyebrow — a timestamp, not a section number */
+.hour{
+  display:flex;align-items:center;gap:12px;
+  margin:0 0 22px;
+  font-family:var(--dk-mono);font-weight:400;font-size:10.5px;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--dk-faint);
+  font-variant-numeric:tabular-nums;
+}
+.hour b{font-weight:500;color:var(--dk-oak);letter-spacing:.12em;}
+.hour::after{
+  content:"";flex:1 1 auto;height:1px;background:var(--dk-hair);
+}
+.reg-dark .hour{color:var(--dk-ev-faint);}
+.reg-dark .hour b{color:var(--dk-ev-accent);}
+.reg-dark .hour::after{background:var(--dk-ev-hair);}
+
+.dk-h1{
+  font-family:var(--dk-serif);font-weight:500;
+  font-size:clamp(38px,5.4vw,62px);line-height:1.06;letter-spacing:-.012em;
+  color:var(--dk-ink);margin:0 0 20px;text-wrap:balance;
+}
+.dk-h2{
+  font-family:var(--dk-serif);font-weight:500;
+  font-size:clamp(29px,3.4vw,44px);line-height:1.12;letter-spacing:-.008em;
+  color:var(--dk-ink);margin:0 0 18px;text-wrap:balance;
+}
+.dk-h3{
+  font-family:var(--dk-serif);font-weight:500;font-size:23px;line-height:1.24;
+  color:var(--dk-ink);margin:34px 0 10px;text-wrap:balance;
+}
+.dk-h4{
+  font-family:var(--dk-mono);font-weight:500;font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dk-faint);margin:30px 0 10px;
+}
+.reg-dark .dk-h1,.reg-dark .dk-h2,.reg-dark .dk-h3{color:var(--dk-ev-ink);}
+.reg-dark .dk-h4{color:var(--dk-ev-faint);}
+
+.dk-lede{
+  font-size:20px;line-height:1.52;color:var(--dk-ink);
+  max-width:var(--dk-measure);margin:0 0 22px;
+}
+.dk-lede em{font-family:var(--dk-serif);font-style:italic;font-size:22px;}
+.dk-p{max-width:var(--dk-measure);margin:0 0 16px;}
+.dk-p:last-child{margin-bottom:0;}
+.dk-p strong{color:var(--dk-ink);font-weight:600;}
+.reg-dark .dk-lede{color:var(--dk-ev-ink);}
+.reg-dark .dk-p{color:var(--dk-ev-body);}
+.reg-dark .dk-p strong{color:var(--dk-ev-ink);}
+
+.dk-note{
+  max-width:var(--dk-measure);margin:0 0 16px;
+  font-size:14px;line-height:1.55;color:var(--dk-faint);
+}
+.reg-dark .dk-note{color:var(--dk-ev-faint);}
+
+.dk-ul{max-width:var(--dk-measure);margin:0 0 18px;padding-left:0;list-style:none;}
+.dk-ul li{position:relative;padding-left:20px;margin-bottom:9px;}
+.dk-ul li::before{
+  content:"";position:absolute;left:2px;top:.68em;
+  width:6px;height:1px;background:var(--dk-hair-3);
+}
+.reg-dark .dk-ul li::before{background:var(--dk-ev-hair-2);}
+
+.dk-rule{height:1px;background:var(--dk-hair);border:0;margin:38px 0;}
+.reg-dark .dk-rule{background:var(--dk-ev-hair);}
+
+/* 12 columns: prose 1-5, stage 6-12.  Stacked below 1100. */
+.dk-grid{
+  display:grid;grid-template-columns:repeat(12,minmax(0,1fr));
+  gap:clamp(28px,3vw,56px);align-items:start;
+}
+.dk-prose{grid-column:1 / -1;min-width:0;}
+.dk-stage{grid-column:1 / -1;min-width:0;}
+.dk-full{grid-column:1 / -1;min-width:0;}
+@media (min-width:1100px){
+  .dk-prose{grid-column:1 / 6;position:sticky;top:calc(var(--dk-index-h) + 34px);}
+  .dk-stage{grid-column:6 / 13;}
+  .dk-grid--flip .dk-prose{grid-column:8 / 13;}
+  .dk-grid--flip .dk-stage{grid-column:1 / 8;}
+  .dk-grid--even .dk-prose{grid-column:1 / 7;position:static;}
+  .dk-grid--even .dk-stage{grid-column:7 / 13;}
+  .dk-prose--static{position:static;}
+}
+
+/* ==========================================================================
+   6. THE TWO REGISTERS
+      .reg-paper  — analysis and proposal.  Deck paper, warm.
+      .reg-dark   — evidence.  A darkroom band in both themes: a shot is a
+                    photograph of a lit screen and does not belong on paper.
+                    Warm paper vs cool dark is what separates them in dark mode.
+   ========================================================================== */
+.reg-paper{
+  --sf-bg:var(--dk-plate);
+  --sf-ink:var(--dk-ink);
+  --sf-body:var(--dk-body);
+  --sf-faint:var(--dk-faint);
+  --sf-hair:var(--dk-hair);
+  --sf-hair-2:var(--dk-hair-2);
+  --sf-accent:var(--dk-oak);
+  background:var(--dk-ground);color:var(--dk-body);
+}
+.reg-dark{
+  --sf-bg:var(--dk-ev-plate);
+  --sf-ink:var(--dk-ev-ink);
+  --sf-body:var(--dk-ev-body);
+  --sf-faint:var(--dk-ev-faint);
+  --sf-hair:var(--dk-ev-hair);
+  --sf-hair-2:var(--dk-ev-hair-2);
+  --sf-accent:var(--dk-ev-accent);
+  background:var(--dk-ev-ground);color:var(--dk-ev-body);
+  border-top:1px solid var(--dk-ev-hair);
+}
+.reg-dark + .reg-paper,.reg-paper + .reg-dark{border-top-color:transparent;}
+.reg-dark a:not([class]){color:var(--dk-ev-accent);border-bottom-color:var(--dk-ev-hair-2);}
+
+/* a plate: the deck's card.  Flat fill, hairline, radius — no accent rail. */
+.dk-plate{
+  background:var(--sf-bg);border:1px solid var(--sf-hair);border-radius:4px;
+  padding:clamp(18px,2vw,28px);
+}
+.dk-plate--tint{background:var(--dk-tint);}
+.reg-dark .dk-plate--tint{background:rgba(226,231,234,.045);}
+
+/* ==========================================================================
+   7. MOCK FRAMES (the CSS-built directions) — no phone chrome in this kit.
+      Each mock is a desk/document screen drawn at its native CSS width,
+      scaled here to fit a COLUMN-px deck column (build.mjs), never redrawn.
+      Grafted from artifacts/document-wayfinding-directions-2026-08-25/
+      mock/deck-parts/00-head.html:331-346.
+   ========================================================================== */
+.dk-mock{margin:26px 0 10px;max-width:100%;}
+.dk-mock-viewport{
+  position:relative;overflow:hidden;border:1px solid var(--dk-hair-2);
+  background:var(--dk-plate);box-sizing:content-box;max-width:100%;
+}
+.dk-mock-scale{transform-origin:top left;}
+.dk-mock-scale > .mock-frame{
+  display:block;border:0;border-radius:0;overflow:visible;background:transparent;
+  margin:0;vertical-align:top;
+}
+.dk-mock-cap{
+  margin:9px 0 0;font-family:var(--dk-mono);font-size:10.5px;line-height:1.7;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--dk-faint);max-width:none;
+}
+.dk-mock-cap b{color:var(--dk-ink);font-weight:500;}
+.dk-mock-cap i{font-style:normal;color:var(--dk-oak);}
+
+/* ── Two-up compare (wayfinding 00-head.html:349-354) ───────────────────── */
+.dk-two{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin:0 0 12px;}
+.dk-two > div > p,.dk-two > div > ul{max-width:none;}
+@media (max-width:900px){.dk-two{grid-template-columns:1fr;gap:26px;}}
+.dk-col-head{
+  margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid var(--dk-hair-3);
+  font-family:var(--dk-mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--dk-ink);
+}
+
+/* ── Ledger blocks — Keeps / Refuses / Costs (wayfinding 00-head.html:359-369) ── */
+.dk-ledger{margin:0 0 26px;border-top:1px solid var(--dk-hair-3);}
+.dk-ledger-row{
+  display:grid;grid-template-columns:132px 1fr;gap:22px;
+  padding:14px 0;border-bottom:1px solid var(--dk-hair);
+}
+.dk-ledger-row > dt{
+  font-family:var(--dk-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dk-oak);padding-top:3px;
+}
+.dk-ledger-row > dd{margin:0;font-size:15px;line-height:1.6;}
+@media (max-width:640px){.dk-ledger-row{grid-template-columns:1fr;gap:6px;}}
+
+/* ── "One column, four ways" strip (09-strip) — 4 cols, 2 cols <=1100px, 1 col <=640px.
+      minmax(0,1fr), not bare 1fr: a bare 1fr track's automatic minimum falls
+      back to the item's content-based min size, and a .dk-mock's inline
+      pixel width (its viewport, sized by build.mjs/fitMocks) is exactly that
+      kind of unshrinkable content — a percentage max-width on a descendant
+      can't rescue it, because the item's own width is still indefinite when
+      that minimum is computed. Without minmax(0,1fr) the grid (and the doc
+      after it) is forced open to fit the mock at native width, same as
+      .dk-grid already guards against at 00-head.html:348. */
+.dk-strip-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px;}
+@media (max-width:1100px){.dk-strip-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width:640px){.dk-strip-grid{grid-template-columns:minmax(0,1fr);}}
+
+/* ── the screen sheet: frame + its detail table ───────────────────────────
+   Deck apparatus, not app UI — it is painted in deck tokens, not --pat-*. */
+.dk-screen{
+  display:grid;grid-template-columns:minmax(0,1fr);
+  gap:clamp(20px,2.4vw,40px);align-items:start;
+}
+.dk-screen__stage{min-width:0;}
+.dk-screen__sheet{min-width:0;}
+@media (min-width:1100px){
+  /* deterministic columns so the fit routine can measure the stage cell
+     directly — a content-sized column would depend on the scale it feeds. */
+  .dk-screen{grid-template-columns:minmax(0,1fr) minmax(0,.58fr);}
+  .dk-screen--under{grid-template-columns:minmax(0,1fr);}
+}
+.dk-screen + .dk-screen{margin-top:clamp(36px,4vw,64px);}
+
+.dk-sheet{overflow-x:auto;max-width:100%;}
+.dk-sheet .sheet-table{width:100%;min-width:340px;font-variant-numeric:tabular-nums;}
+.dk-sheet .sheet-table caption{
+  font-family:var(--dk-mono);font-weight:500;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--sf-faint);padding-bottom:12px;
+}
+.dk-sheet .sheet-table th,
+.dk-sheet .sheet-table td{border-top-color:var(--sf-hair);padding:9px 14px 9px 0;}
+.dk-sheet .sheet-table tr:last-child th,
+.dk-sheet .sheet-table tr:last-child td{border-bottom-color:var(--sf-hair);}
+.dk-sheet .sheet-table th{
+  font-family:var(--dk-mono);font-size:9.5px;letter-spacing:.13em;color:var(--sf-faint);
+  width:124px;white-space:normal;
+}
+.dk-sheet .sheet-table td{font-family:var(--dk-sans);font-size:13.5px;line-height:1.5;color:var(--sf-body);}
+.dk-sheet .sheet-table td code,.dk-sheet .sheet-table td .mono{
+  font-family:var(--dk-mono);font-size:11.5px;color:var(--sf-accent);
+}
+/* the "new vs today" row is the one a reader must not miss */
+.dk-sheet .sheet-table tr.is-new{background:var(--dk-new-wash);}
+.dk-sheet .sheet-table tr.is-new th{color:var(--dk-oak);}
+.dk-sheet .sheet-table tr.is-new td{color:var(--sf-ink);font-weight:500;}
+.dk-sheet .sheet-table tr.is-new th,
+.dk-sheet .sheet-table tr.is-new td{border-top-color:var(--dk-oak-wash);}
+.reg-dark .dk-sheet .sheet-table tr.is-new th{color:var(--dk-ev-accent);}
+.reg-dark .dk-sheet .sheet-table tr.is-new{background:var(--dk-ev-wash);}
+
+/* a register band inside a section of the other register: bleeds to the wrap
+   edge, never past it, so the page body can never scroll sideways */
+.dk-band{
+  padding:clamp(24px,3vw,40px) clamp(20px,2.4vw,36px);
+  border-top:1px solid var(--sf-hair);border-bottom:1px solid var(--sf-hair);
+}
+/* only a band that is a direct child of the wrap bleeds — inside a grid cell
+   the negative margins would push it out over the neighbouring column */
+.dk-wrap > .dk-band{
+  margin-inline:calc(-1 * clamp(20px,4vw,64px));
+  padding-inline:clamp(20px,4vw,64px);
+}
+.dk-band + .dk-band{border-top:0;}
+.dk-stage > .dk-band:first-child,.dk-full > .dk-band:first-child{margin-top:0;}
+.dk-stage > .dk-band,.dk-full > .dk-band{margin-block:clamp(24px,3vw,40px);}
+
+/* a strip of evidence shots that scrolls inside itself */
+.dk-shotstrip{
+  display:flex;gap:16px;overflow-x:auto;max-width:100%;
+  padding-bottom:10px;scroll-snap-type:x proximity;
+}
+.dk-shotstrip > *{flex:0 0 auto;width:196px;scroll-snap-align:start;}
+.dk-shotstrip::-webkit-scrollbar{height:6px;}
+.dk-shotstrip::-webkit-scrollbar-thumb{background:var(--sf-hair-2);border-radius:3px;}
+
+/* ==========================================================================
+   8. EVIDENCE FIGURE — a shot, its caption, its level chip
+   ========================================================================== */
+.ev-grid{
+  display:grid;gap:clamp(18px,2vw,30px);align-items:start;
+  grid-template-columns:repeat(auto-fill,minmax(212px,1fr));
+}
+.ev-grid--wide{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));}
+.ev-fig{margin:0;display:flex;flex-direction:column;gap:10px;}
+.ev-fig__shot{
+  background:#000;border:1px solid var(--sf-hair);border-radius:3px;
+  overflow:hidden;line-height:0;display:flex;justify-content:center;align-items:flex-start;padding:11px;
+}
+.ev-fig__shot img{display:block;width:auto;height:auto;max-width:100%;max-height:720px;margin:0 auto;object-fit:contain;}
+.ev-fig__cap{
+  font-family:var(--dk-mono);font-size:10px;line-height:1.55;letter-spacing:.02em;
+  color:var(--sf-faint);
+}
+.ev-fig__cap b{font-weight:500;color:var(--sf-ink);letter-spacing:.06em;text-transform:uppercase;font-size:9.5px;display:block;margin-bottom:3px;}
+.ev-fig__meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+
+/* evidence-level chip — squared hairline box, deliberately a different shape
+   from the capsule finding chip so the two never read as the same badge */
+.lvl{
+  display:inline-block;padding:2px 6px;border-radius:2px;
+  border:1px solid currentColor;
+  font-family:var(--dk-mono);font-weight:500;font-size:8.5px;letter-spacing:.14em;
+  text-transform:uppercase;line-height:1.5;white-space:nowrap;
+}
+.lvl--sim{color:var(--dk-ev);background:var(--dk-ev-wash);}
+.reg-dark .lvl--sim{color:var(--dk-ev-accent);}
+.lvl--code{color:var(--dk-oak);background:var(--dk-oak-wash);}
+.lvl--inf{color:var(--sf-faint);border-style:dashed;background:transparent;}
+
+/* ==========================================================================
+   9. FINDING CHIPS — capsule, severity-tinted
+   ========================================================================== */
+.f-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px;}
+.f-chip{
+  display:inline-flex;align-items:flex-start;gap:6px;
+  padding:2px 9px 2px 7px;border-radius:9999px;
+  font-family:var(--dk-mono);font-size:10px;letter-spacing:.08em;line-height:1.7;
+  white-space:normal;border:0;max-width:100%;
+  background:var(--dk-s3-wash);color:var(--dk-s3);
+}
+.f-chip::before{
+  content:"";width:5px;height:5px;border-radius:9999px;background:currentColor;flex:0 0 auto;
+  margin-top:.55em;
+}
+.f-chip--s0{background:var(--dk-s0-wash);color:var(--dk-s0);}
+.f-chip--s1{background:var(--dk-s1-wash);color:var(--dk-s1);}
+.f-chip--s2{background:var(--dk-s2-wash);color:var(--dk-s2);}
+.f-chip--s3{background:var(--dk-s3-wash);color:var(--dk-s3);}
+.f-chip span{color:var(--sf-body);letter-spacing:0;font-family:var(--dk-sans);font-size:12px;}
+a.f-chip{border-bottom:0;}
+a.f-chip:hover{filter:brightness(.94);}
+
+/* ==========================================================================
+   10. SEAT VOICE — a synthesized panel quote, never customer research
+   ========================================================================== */
+.voice{
+  margin:0 0 20px;padding:0 0 0 20px;
+  border-left:2px solid var(--sf-hair-2);
+  max-width:var(--dk-measure);
+}
+.voice__q{
+  font-family:var(--dk-serif);font-style:italic;font-weight:400;
+  font-size:20px;line-height:1.44;color:var(--sf-ink);margin:0 0 10px;
+}
+.voice__who{
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;
+  font-family:var(--dk-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--sf-faint);
+}
+.voice__seat{color:var(--sf-accent);font-weight:500;}
+.voice__role{letter-spacing:.02em;text-transform:none;font-family:var(--dk-sans);font-size:12.5px;}
+.voice--wide{max-width:none;}
+
+/* ==========================================================================
+   11. TABLES — judge scoreboard, compare
+   ========================================================================== */
+.dk-tablewrap{overflow-x:auto;max-width:100%;}
+.dk-table{
+  width:100%;min-width:520px;border-collapse:collapse;text-align:left;
+  font-variant-numeric:tabular-nums;
+}
+.dk-table caption{
+  text-align:left;padding-bottom:12px;
+  font-family:var(--dk-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--sf-faint);
+}
+.dk-table th,.dk-table td{
+  border-top:1px solid var(--sf-hair);padding:11px 16px 11px 0;vertical-align:top;
+}
+.dk-table thead th{
+  border-top:0;border-bottom:1px solid var(--sf-hair-2);
+  font-family:var(--dk-mono);font-weight:500;font-size:9.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--sf-faint);padding-bottom:9px;
+}
+.dk-table td{font-size:14px;line-height:1.5;color:var(--sf-body);}
+.dk-table td strong,.dk-table th.dk-row-h{color:var(--sf-ink);font-weight:600;}
+.dk-table th.dk-row-h{font-size:14px;font-family:var(--dk-sans);text-transform:none;letter-spacing:0;}
+.dk-table tbody tr:last-child th,.dk-table tbody tr:last-child td{border-bottom:1px solid var(--sf-hair);}
+.dk-num{font-family:var(--dk-mono);font-size:14px;color:var(--sf-ink);}
+.dk-win{color:var(--dk-oak);font-weight:500;}
+.dk-table--score td.dk-num{width:88px;}
+.dk-table--compare th:first-child{width:26%;}
+.dk-table--compare3 th:first-child{width:22%;}
+.dk-table--fixed{table-layout:fixed;}
+
+/* Below 700px no table scrolls sideways: every row restacks as definition
+   rows, with the column head reprinted over each cell (99-script §5b writes
+   the data-l labels from the table's own thead). A and B end up one under
+   the other rather than one of them off canvas. */
+@media (max-width:700px){
+  .dk-tablewrap{overflow-x:visible;}
+  .dk-table,.dk-sheet .sheet-table{min-width:0;width:100%;}
+  .dk-table caption{display:block;width:auto;}
+  .dk-table,.dk-table thead,.dk-table tbody,.dk-table tr,.dk-table th,.dk-table td{
+    display:block;width:auto;}
+  .dk-table thead{display:none;}
+  .dk-table tbody tr{border-top:1px solid var(--sf-hair);padding:14px 0 4px;}
+  .dk-table tbody tr:last-child{border-bottom:1px solid var(--sf-hair);}
+  .dk-table tbody th,.dk-table tbody td{border:0;padding:0 0 10px;}
+  .dk-table tbody tr:last-child th,.dk-table tbody tr:last-child td{border-bottom:0;}
+  .dk-table th.dk-row-h{font-size:15px;font-weight:600;color:var(--sf-ink);padding-bottom:8px;}
+  .dk-table--score td.dk-num,.dk-table--compare th:first-child{width:auto;}
+  .dk-table td[data-l]::before,.dk-table th[data-l]::before{
+    content:attr(data-l);display:block;
+    font-family:var(--dk-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--sf-faint);margin-bottom:3px;}
+}
+
+/* ==========================================================================
+   12. PLANK LIST
+   ========================================================================== */
+.plank-list{display:flex;flex-direction:column;gap:0;margin:0;padding:0;list-style:none;}
+.plank{
+  display:grid;grid-template-columns:78px minmax(0,1fr);gap:0 18px;
+  padding:16px 0;border-top:1px solid var(--sf-hair);
+}
+.plank:last-child{border-bottom:1px solid var(--sf-hair);}
+.plank__id{
+  font-family:var(--dk-mono);font-weight:500;font-size:11px;letter-spacing:.1em;
+  color:var(--sf-accent);padding-top:2px;
+}
+.plank__title{font-size:16px;font-weight:500;color:var(--sf-ink);margin:0 0 4px;}
+.plank__why{font-size:14px;line-height:1.55;color:var(--sf-body);margin:0;}
+.plank__meta{margin-top:8px;margin-bottom:0;}
+@media (max-width:560px){
+  .plank{grid-template-columns:1fr;gap:6px;}
+}
+
+/* ==========================================================================
+   13. QUESTION CARDS
+   ========================================================================== */
+.q-grid{display:grid;gap:clamp(14px,1.6vw,22px);grid-template-columns:repeat(auto-fill,minmax(300px,1fr));}
+.q-card{
+  background:var(--sf-bg);border:1px solid var(--sf-hair);border-radius:4px;
+  padding:22px 22px 20px;display:flex;flex-direction:column;gap:10px;
+}
+.q-card__n{
+  font-family:var(--dk-mono);font-weight:500;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--sf-accent);
+}
+.q-card__q{
+  font-family:var(--dk-serif);font-weight:500;font-size:20px;line-height:1.28;
+  color:var(--sf-ink);margin:0;text-wrap:balance;
+}
+.q-card__why{font-size:14px;line-height:1.55;color:var(--sf-body);margin:0;}
+.q-card__meta{margin-top:2px;margin-bottom:0;}
+
+/* ==========================================================================
+   14. COVER + COLOPHON
+   ========================================================================== */
+.dk-cover{padding-top:clamp(40px,6vw,88px);}
+.dk-cover__mark{
+  font-family:var(--dk-mono);font-size:10px;letter-spacing:.34em;text-transform:uppercase;
+  color:var(--dk-faint);margin:0 0 clamp(28px,4vw,54px);
+}
+.dk-cover__title{
+  font-family:var(--dk-serif);font-weight:500;
+  font-size:clamp(52px,10vw,124px);line-height:.94;letter-spacing:-.022em;
+  color:var(--dk-ink);margin:0 0 26px;text-wrap:balance;
+}
+.dk-cover__thesis{
+  font-family:var(--dk-serif);font-style:italic;font-weight:400;
+  font-size:clamp(21px,2.4vw,30px);line-height:1.4;color:var(--dk-body);
+  max-width:30ch;margin:0 0 clamp(28px,4vw,48px);
+}
+.dk-cover__meta{
+  display:flex;flex-wrap:wrap;gap:0 40px;row-gap:14px;
+  border-top:1px solid var(--dk-hair);padding-top:20px;
+}
+.dk-cover__meta div{min-width:140px;}
+.dk-cover__meta dt{
+  font-family:var(--dk-mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dk-faint);margin:0 0 4px;
+}
+.dk-cover__meta dd{margin:0;font-size:14px;color:var(--dk-ink);}
+.dk-daybar{
+  display:flex;flex-wrap:wrap;gap:0;margin:clamp(30px,4vw,54px) 0 0;
+  border-top:1px solid var(--dk-hair);
+}
+.dk-daybar div{
+  flex:1 1 160px;padding:16px 18px 16px 0;border-right:1px solid var(--dk-hair);
+}
+.dk-daybar div:last-child{border-right:0;}
+.dk-daybar b{
+  display:block;font-family:var(--dk-mono);font-weight:500;font-size:11px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--dk-oak);margin-bottom:5px;
+  font-variant-numeric:tabular-nums;
+}
+.dk-daybar span{font-size:13.5px;line-height:1.45;color:var(--dk-faint);}
+
+.dk-colophon{font-size:14px;}
+.dk-kv{display:grid;grid-template-columns:170px minmax(0,1fr);gap:0;margin:0;}
+.dk-kv dt{
+  font-family:var(--dk-mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--sf-faint);padding:11px 16px 11px 0;border-top:1px solid var(--sf-hair);
+}
+.dk-kv dd{
+  margin:0;padding:11px 0;border-top:1px solid var(--sf-hair);
+  font-size:14px;line-height:1.55;color:var(--sf-body);
+}
+@media (max-width:560px){
+  .dk-kv{grid-template-columns:1fr;}
+  .dk-kv dd{border-top:0;padding-top:0;}
+}
+
+/* a standing disclosure — the panel is simulated, and the deck says so */
+.dk-disclosure{
+  border:1px solid var(--sf-hair-2);border-radius:3px;
+  padding:16px 18px;max-width:var(--dk-measure);
+  font-size:14px;line-height:1.55;color:var(--sf-body);
+}
+.dk-disclosure b{
+  display:block;font-family:var(--dk-mono);font-weight:500;font-size:9.5px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--sf-accent);margin-bottom:6px;
+}
+
+/* ==========================================================================
+   15. PRINT
+   ========================================================================== */
+@media print{
+  .dk-index{display:none;}
+  body{background:#fff;color:#1E1B18;font-size:11pt;}
+  .reg-dark{background:#fff;color:#1E1B18;border-top:1px solid #ccc;
+    --sf-bg:#fff;--sf-ink:#1E1B18;--sf-body:#3A322A;--sf-faint:#6B6156;
+    --sf-hair:rgba(0,0,0,.16);--sf-hair-2:rgba(0,0,0,.3);--sf-accent:#6B5333;}
+  .reg-paper{background:#fff;}
+  .dk-sec{padding:28pt 0;break-inside:auto;}
+  .dk-h1,.dk-h2,.dk-h3,.hour{break-after:avoid;}
+  .ev-fig,.q-card,.dk-screen,.plank,.voice{break-inside:avoid;}
+  .dk-prose{position:static!important;}
+  .dk-table,.dk-sheet .sheet-table{min-width:0;}
+}
+</style>
+
+<div class="dk-page">
+
+<nav class="dk-index" aria-label="Deck sections">
+  <div class="dk-index-inner">
+    <div class="dk-index-mark">The Smart Lens<span>Patina Designer Portal &middot; 28 Aug 2026</span></div>
+    <div class="dk-index-scroll">
+      <ul class="dk-index-list" id="dk-index-list"></ul>
+    </div>
+    <button type="button" class="dk-theme" id="dk-theme-toggle" aria-live="polite">Match system</button>
+    <div class="dk-progress" id="dk-progress" aria-hidden="true"></div>
+  </div>
+</nav>
+
+<main class="dk-main" id="dk-main">

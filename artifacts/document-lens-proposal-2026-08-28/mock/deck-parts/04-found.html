@@ -1,0 +1,166 @@
+<section id="found" class="dk-sec reg-dark" data-index-title="What we found">
+  <div class="dk-wrap">
+    <p class="hour"><b>FINDINGS</b></p>
+
+    <div class="dk-grid dk-grid--even">
+      <div class="dk-prose">
+        <h2 class="dk-h2">Ten simulated seats walked the same document. A hundred and sixty-four findings went in; a hundred and fifty-two survived three refuters.</h2>
+        <p class="dk-p">Five attention-and-access lenses, four practitioner personas, one engineering-feasibility seat &mdash; each walked the same sixteen tasks against the live portal on local dev, post-R126 main. Every claim below traces to <code>research/31-verified-findings.md</code> and its refutation wave: twelve findings were dropped, eleven of them killed by a direct code read that showed the seat had misread the DOM.</p>
+      </div>
+      <div class="dk-prose">
+        <p class="dk-note">Every seat named on this page &mdash; P1, P3, E1 and the rest &mdash; is a simulated seat: an agent reasoning from the running app, the code, and the plan, not a design team or a customer panel. No usage data was available to this review.</p>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <h3 class="dk-h4">The findings that carried the most seats</h3>
+    <div class="dk-tablewrap">
+      <table class="dk-table">
+        <caption>Top fifteen survivors, ordered as <code>31-verified-findings.md</code> orders them &mdash; by seat count descending, then severity descending.</caption>
+        <thead>
+          <tr><th>Finding</th><th>Seats</th><th>Severity</th><th>Scroll state</th><th>Defect</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a class="f-chip f-chip--s0" href="#found">F01</a></td>
+            <td class="dk-num">7</td><td>blocker</td><td>top</td>
+            <td>First region head lands a full frame below the fold</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip" href="#found">F03</a></td>
+            <td class="dk-num">6</td><td>medium</td><td>all</td>
+            <td>Studio drawer labels overprint at 1280</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip f-chip--s1" href="#found">F04</a></td>
+            <td class="dk-num">5</td><td>blocker</td><td>seam</td>
+            <td>Ticket pin/fold is a single-frame cut with no hysteresis band</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip" href="#found">F05</a></td>
+            <td class="dk-num">5</td><td>medium</td><td>all</td>
+            <td>Seed has 3 FF&amp;E lines / 0 rooms &mdash; every FF&amp;E finding understates real scroll co&hellip;</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip" href="#found">F06</a></td>
+            <td class="dk-num">4</td><td>blocker</td><td>all</td>
+            <td>No door anywhere answers &lsquo;everything in install&rsquo;</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip" href="#found">F07</a></td>
+            <td class="dk-num">4</td><td>high</td><td>all</td>
+            <td>Stage word breaks mid-syllable in the glyph rail</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip f-chip--s2" href="#found">F08</a></td>
+            <td class="dk-num">4</td><td>high</td><td>mid</td>
+            <td>Folding a region drops keyboard focus to &lt;body&gt;</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip f-chip--s1" href="#found">F09</a></td>
+            <td class="dk-num">3</td><td>high</td><td>seam</td>
+            <td>Boards, drawings, spec and people vanish below the top</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip" href="#found">F10</a></td>
+            <td class="dk-num">3</td><td>high</td><td>all</td>
+            <td>Five money statements, four numbers, one screen</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip f-chip--s1" href="#found">F11</a></td>
+            <td class="dk-num">3</td><td>high</td><td>seam</td>
+            <td>One screen scrolled and nothing has condensed yet</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip" href="#found">F12</a></td>
+            <td class="dk-num">3</td><td>high</td><td>all</td>
+            <td>On a proposal the rail is almost entirely empty</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip" href="#found">F13</a></td>
+            <td class="dk-num">2</td><td>blocker</td><td>all</td>
+            <td>Below the fold the paper stops naming the job</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip" href="#found">F14</a></td>
+            <td class="dk-num">2</td><td>blocker</td><td>all</td>
+            <td>At 390 there is no way to jump to a region</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip" href="#found">F15</a></td>
+            <td class="dk-num">2</td><td>blocker</td><td>all</td>
+            <td>At 1280 the spine is six unlabeled bars, no words at all</td>
+          </tr>
+          <tr>
+            <td><a class="f-chip f-chip--s0" href="#found">F16</a></td>
+            <td class="dk-num">2</td><td>high</td><td>top</td>
+            <td>Pre-work spreads have no region DOM to index at all</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="dk-note">A finding marked <code>all</code> holds at every scroll state and carries no single-state tint; its chip is left untinted rather than assigned one of the four.</p>
+
+    <div class="dk-rule"></div>
+
+    <h3 class="dk-h4">What the frame spent on the task, by scroll state</h3>
+    <div class="dk-tablewrap">
+      <table class="dk-table dk-table--compare">
+        <caption>Mean share of the frame carrying the task, per scroll state &mdash; from the Frame budget line of every walk in <code>25-panel-p1.md</code> through <code>28-panel-p4.md</code>, collated in <code>research/30-collated-findings.md</code>.</caption>
+        <thead><tr><th>Scroll state</th><th>Mean % of frame carrying the task</th><th>Walk lines behind it</th></tr></thead>
+        <tbody>
+          <tr><th class="dk-row-h">top</th><td class="dk-num">8.8%</td><td class="dk-num">27</td></tr>
+          <tr><th class="dk-row-h">seam</th><td class="dk-num">17.0%</td><td class="dk-num">3</td></tr>
+          <tr><th class="dk-row-h">mid</th><td class="dk-num">26.4%</td><td class="dk-num">12</td></tr>
+          <tr><th class="dk-row-h">foot</th><td class="dk-num">18.2%</td><td class="dk-num">4</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="dk-note">These are the panel's own estimates from simulated walks, in each seat's own prose ("about a sixth," "one 36px row of 900px"), converted to a percentage and averaged &mdash; not a measurement. <code>seam</code> rests on three lines and one outlier and the source collation flags it as provisional; <code>mid</code>'s mean is carried almost entirely by one task (fabric-swap editing) &mdash; stripped of it, <code>mid</code> falls to 11.2%, level with <code>top</code>.</p>
+
+    <div class="dk-rule"></div>
+
+    <h3 class="dk-h4">In the panel's own words</h3>
+
+    <blockquote class="voice">
+      <p class="voice__q">I never get to relax into the page, because I am either wading through it or checking that I am still in the right house.</p>
+      <p class="voice__who">
+        <span class="voice__seat">Audit seat</span>
+        <span class="voice__role">P1 &middot; solo residential principal &middot; simulated seat</span>
+      </p>
+    </blockquote>
+
+    <blockquote class="voice">
+      <p class="voice__q">That is worse than absence; it&#8217;s a wrong answer at a glance.</p>
+      <p class="voice__who">
+        <span class="voice__seat">Audit seat</span>
+        <span class="voice__role">P1 &middot; solo residential principal &middot; simulated seat</span>
+      </p>
+    </blockquote>
+
+    <blockquote class="voice">
+      <p class="voice__q">The paper never once says &ldquo;furniture schedule,&rdquo; &ldquo;purchase order,&rdquo; or &ldquo;punch list&rdquo; &mdash; it says &ldquo;Pieces,&rdquo; &ldquo;The job,&rdquo; &ldquo;Closing the book,&rdquo; and &ldquo;Authorizations &amp; trade scopes,&rdquo; and at 1280px the entire left spine loses even those words and becomes six unlabeled colored bars I would have to guess at, in front of a client, on my first week.</p>
+      <p class="voice__who">
+        <span class="voice__seat">Audit seat</span>
+        <span class="voice__role">P3 &middot; junior designer, week one &middot; simulated seat</span>
+      </p>
+    </blockquote>
+
+    <blockquote class="voice">
+      <p class="voice__q">Is &ldquo;Pieces&rdquo; the furniture schedule? The word never appears on screen except in that one small subtitle line &mdash; I&#8217;d have to read the small print to confirm &ldquo;FF&amp;E&rdquo; is what I&#8217;m looking at.</p>
+      <p class="voice__who">
+        <span class="voice__seat">Audit seat</span>
+        <span class="voice__role">P3 &middot; junior designer, week one &middot; simulated seat</span>
+      </p>
+    </blockquote>
+
+    <blockquote class="voice">
+      <p class="voice__q">A continuous seam is not a header change, it is a navigation change.</p>
+      <p class="voice__who">
+        <span class="voice__seat">Audit seat</span>
+        <span class="voice__role">E1 &middot; engineering feasibility &middot; simulated seat</span>
+      </p>
+    </blockquote>
+  </div>
+</section>

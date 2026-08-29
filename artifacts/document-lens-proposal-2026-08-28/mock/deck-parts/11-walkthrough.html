@@ -1,0 +1,83 @@
+<section id="walkthrough" class="dk-sec reg-paper" data-index-title="Walkthrough">
+  <div class="dk-wrap">
+    <p class="hour"><b>WALKTHROUGH</b></p>
+
+    <div class="dk-grid dk-grid--even">
+      <div class="dk-prose">
+        <h2 class="dk-h2">Four states, in the order a designer meets them.</h2>
+        <p class="dk-lede">Every step below is a real link into the clickable mockup, and names the dev-bar button that puts it in that state.</p>
+        <p class="dk-p">The mockup's dev bar carries seven buttons &mdash; <b>Rest</b>, <b>Condensed</b>, <b>Region in focus</b>, <b>1280</b>, <b>390</b>, <b>Reduced motion</b>, <b>Slow motion 4x</b> &mdash; each reversible from any other by pressing Rest again.</p>
+      </div>
+      <div class="dk-stage">
+        <p class="dk-p"><a href="https://claude.ai/code/artifact/65b060ad-0c98-4163-afb5-37d4f7c2b2af">Open the clickable mockup</a></p>
+      </div>
+    </div>
+
+    <ol class="plank-list">
+      <li class="plank">
+        <span class="plank__id">S0</span>
+        <div>
+          <p class="plank__title">At rest &mdash; the paper as it opens</p>
+          <p class="plank__why">She has just opened the document; the scroll position is 0. The band sits in flow, unpinned, 56px: line 1 prints <code>$17,500 OUT</code> only, line 2 the worst standing exception with its act, or the guide sentence when nothing stands. At this same offset today, the frame is 81.8% header and 0% document &mdash; the ticket, the needs block, the instruments. In the target frame it is 33.1% header and <b>60.2% work</b>, because the ticket has dissolved into the band and the first region head has moved from 1005.31px to 298px.</p>
+          <p class="f-chips">
+            <a class="f-chip f-chip--s0" href="#found">F01 <span>First region head lands a full frame below the fold</span></a>
+          </p>
+          <p class="plank__meta"><a href="https://claude.ai/code/artifact/65b060ad-0c98-4163-afb5-37d4f7c2b2af">Click <b>Rest</b> in the dev bar</a> to see it.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">S1</span>
+        <div>
+          <p class="plank__title">The seam &mdash; the band pins</p>
+          <p class="plank__why">She scrolls past the ticket sentinel. The band pins to the top of the frame at the same 56px it held in flow &mdash; measured stable at scrollY 0, 400 and 1200, on all three widths. Line 1 switches to identity, phase count, install date and the standing money figure; line 2 keeps the worst exception, now with its act, at every offset including the foot. Today the equivalent moment is a single React commit: the ticket swaps 347.25px &rarr; 64.06px with no interpolation in either direction, and the first region head's document Y jumps &minus;283.19px in that one frame.</p>
+          <p class="f-chips">
+            <a class="f-chip f-chip--s1" href="#found">F04 <span>Ticket pin/fold is a single-frame cut with no hysteresis band</span></a>
+          </p>
+          <p class="plank__meta"><a href="https://claude.ai/code/artifact/65b060ad-0c98-4163-afb5-37d4f7c2b2af">Click <b>Condensed</b> in the dev bar</a> &mdash; it scrolls the 1440 frame to 400, the condensed state, reached the way a designer reaches it.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <p class="dk-p">The two states above, side by side with the paper's own resting and pinned forms:</p>
+      </div>
+      <div class="dk-stage">
+        <!-- FRAGMENT lens-s0-1440 -->
+        <!-- FRAGMENT lens-s1-1440 -->
+      </div>
+    </div>
+
+    <ol class="plank-list" start="3">
+      <li class="plank">
+        <span class="plank__id">S2</span>
+        <div>
+          <p class="plank__title">A region in focus &mdash; exactly one, always</p>
+          <p class="plank__why">She keeps reading and reaches Pieces. Two IntersectionObserver bands promote a region to <code>full</code> and demote the one she left, so exactly one region carries the whole ledger at a time; its neighbours yield to their condensed line. The frame budget moves from today's 13.9 / 0 / 86.1 / 0 (chrome / header / work / other) to a target of 12.9 / 0 / 87.1 / 0 &mdash; the 64px seam becomes a 56px band and the difference goes to the region itself.</p>
+          <p class="plank__meta"><a href="https://claude.ai/code/artifact/65b060ad-0c98-4163-afb5-37d4f7c2b2af">Click <b>Region in focus</b> in the dev bar</a> &mdash; it scrolls the 1440 frame so FF&amp;E is the one region reading <code>full</code>.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">S3</span>
+        <div>
+          <p class="plank__title">The foot &mdash; The Record, and nothing lies about where it went</p>
+          <p class="plank__why">She scrolls to the end. The band is still there, still 56px, line 2 still naming the worst standing exception &mdash; the state machine's reading state runs unbroken from the seam to the last stop. The paper carries a 520px foot margin (460 at 1280, 560 at 390) so that pressing the rail's last stop lands its head at exactly 72px, the same landing every other stop gets, instead of stopping short because the document ran out of paper first. Today's frame at the foot is 13.9 / 0 / 50.9 / 35.2; the target is 12.9 / 0 / &ge;62 / &le;25.1, because the two stops at the foot become indexed regions in their own right.</p>
+          <p class="plank__meta">The dev bar has no dedicated foot state &mdash; <a href="https://claude.ai/code/artifact/65b060ad-0c98-4163-afb5-37d4f7c2b2af">click <b>Region in focus</b></a>, then click the rail's last segment, <b>The Record</b>, to land there.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <p class="dk-p">Pieces at <code>full</code>, its neighbours yielded:</p>
+      </div>
+      <div class="dk-stage">
+        <!-- FRAGMENT lens-s2-1440 -->
+      </div>
+    </div>
+
+    <p class="dk-note">The mockup is a stylesheet and a script over invented data, not the product.</p>
+  </div>
+</section>

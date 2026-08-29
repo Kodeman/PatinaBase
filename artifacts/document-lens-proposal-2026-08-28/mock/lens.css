@@ -1,0 +1,248 @@
+/* lens.css -- the .lens-* namespace for this program's mechanics. Filled in
+   W4 (M0). Depth only via var(--elevation-sheet) references, never a shadow
+   primitive of any kind -- keep this file's grep for that family at zero.
+
+   ONE SHADOW LINE IN THIS FILE: the .doc-elevated rule below, one line, is
+   the ONLY depth-via-shadow declaration this file contains (NG2, D4 --
+   exactly one token, --elevation-sheet, at three sites: the margin chip, the
+   open ledger sheet, the studio drawer). The gate command counting that
+   family of declarations, run from the repo, must print 1.
+
+   REDUCED MOTION, one mechanism, not two rulesets. Every .lens-* transition
+   and animation duration in this file is written
+   calc(<base>ms * var(--motion-scale, 1)) (rule 3 / SPEC C.6). Rather than
+   writing every animated class's reduced-motion form a second time -- the
+   drift SPEC C.6 calls a probe blocker -- this file sets --motion-scale to 0
+   from BOTH triggers named in SPEC C.6 ("written once and the toggle setting
+   the media-query-equivalent state" is the SPEC's own second option):
+     @media (prefers-reduced-motion: reduce) { :root { --motion-scale: 0 } }
+     [data-motion="reduced"]                 {         --motion-scale: 0 }
+   Both setters assign the identical literal 0 -- there is no second value for
+   them to disagree about, so there is nothing to drift. Every class's own
+   duration formula (written once) resolves to 0ms under either trigger,
+   which is exactly the reduced-motion form the table's "Reduced-motion
+   equivalent" column describes for L-1, L-3, L-6, L-7, L-8 and L-11 (the new
+   state prints already-settled, on the first frame, with no crossfade). L-2,
+   L-4, L-5, L-9 and L-10 carry no CSS transition/animation to begin with (the
+   table's own "Duration & easing" column says none/0ms/JS-driven), so they
+   need no --motion-scale gate and none is added. */
+
+/* -------------------------------------------------------------------------
+   0 -- tokens this file adds. ONLY these ten: --lens-h-open, --lens-h-closed,
+   --doc-region-gap, --density-ink-full, --density-ink-reading,
+   --density-ink-condensed (the six named in the brief), plus the two R126
+   tokens the kit lacks (--doc-rail-stock, --elevation-sheet, brief item 4)
+   and the two motion-scale defaulting rules above (not new tokens -- they
+   set an existing, already-sanctioned variable, per SPEC C.6/C.7 item 5,
+   which owns --motion-scale; declaring it nowhere in the kit today, this
+   file's :root default of 1 is the only place a fallback other than the
+   inline var(--motion-scale, 1) exists, so it is listed here for the record
+   though it is not counted against the six-token budget). Nothing else.
+   ------------------------------------------------------------------------- */
+
+:root {
+  /* the lens line's two reserved heights (C.4) */
+  --lens-h-open: 319px;   /* SC1 on the Vandersteen specimen: letterhead 148 + --doc-region-gap 24 + the 56px band + the approvals RegionRule's 14 + the 24px gap above it that the band itself does not carry -- see source/proposal.md "SC1 = 319px" */
+  --lens-h-closed: 56px;  /* the band alone once the letterhead has scrolled past and the band is the whole of the header stack -- h-14, declared never measured (source/proposal.md "The band, precisely"); SC3's ceiling is <=64px, this clears it by 8px */
+
+  /* the one region-spacing token (shared-planks.md, brief R1) */
+  --doc-region-gap: 24px; /* replaces mt-6/py-6, mb-4, mt-2, mt-5, mb-5 -- one answer, same whether the region is open, quiet or folded (SP-01) */
+
+  /* the density scale's three ink levels -- aliased to the existing R126
+     muted ramp (canon latitude, NG4: "muted ramp #4E4339/#5A4E43/#65594E"),
+     not a new pigment. Full density reads at the darkest step; condensed,
+     the quietest, at the ramp's own lightest step. */
+  --density-ink-full: #4E4339;      /* 9.22:1 on --doc-paper #FCFAF6 */
+  --density-ink-reading: #5A4E43;   /* 7.73:1 on --doc-paper #FCFAF6 */
+  --density-ink-condensed: #65594E; /* 6.51:1 on --doc-paper #FCFAF6 */
+
+  /* R126 tokens the kit lacks (brief item 4) */
+  --doc-rail-stock: #E8E3DB; /* contrast: ignore */ /* a ground/background token, not text; matches the checker's GROUND regex ("stock") and, being this file's only other ground token, would otherwise become the SOLE ground the pairwise check runs against, crowding out the kit's --doc-paper/--doc-sheet-* grounds entirely -- ignored here so the check keeps using the kit's grounds. Value unchanged, still declared for use elsewhere. */
+  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, .08);
+
+  /* default motion multiplier; the dev bar's Slow-motion button overwrites
+     this to 4 (SPEC C.6), the reduced-motion gate below overwrites it to 0 */
+  --motion-scale: 1;
+}
+
+/* the ONE allowed shadow declaration in this file (NG2, D4, three sites:
+   margin chip, open ledger sheet, studio drawer) -- kept on one line so the
+   line-based grep count stays exactly 1 */
+.doc-elevated { box-shadow: var(--elevation-sheet); }
+
+/* the shared reduced-motion gate (see file header) -- sets the SAME token to
+   the SAME literal value from both SPEC C.6 triggers */
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion-scale: 0; }
+}
+[data-motion="reduced"] { --motion-scale: 0; }
+
+/* -------------------------------------------------------------------------
+   1 -- the lens line / header organ: its open and closed reserved heights,
+   and the transition between them. Proposal source/proposal.md "The header"
+   + "H5 -- zero layout shift, by mechanism": the band itself never resizes
+   (56px before the pin, 56px after); what condenses is the STACK above it --
+   the letterhead retreats and only the sticky band remains. --lens-height is
+   the SPEC C.5 custom property the probe samples SC3 off without measuring.
+   ------------------------------------------------------------------------- */
+
+.lens-line {
+  --lens-height: var(--lens-h-open);
+  block-size: var(--lens-height);
+  transition: block-size calc(200ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lens-line[data-lens-open="true"] {
+  --lens-height: var(--lens-h-open); /* from->to: var(--lens-h-closed) -> var(--lens-h-open) */
+}
+.lens-line[data-lens-open="false"] {
+  --lens-height: var(--lens-h-closed); /* from->to: var(--lens-h-open) -> var(--lens-h-closed) */
+}
+
+/* -------------------------------------------------------------------------
+   2 -- the three density states (SPEC C.5 data-density values). One region
+   root carries exactly one of these at a time (SC11).
+   ------------------------------------------------------------------------- */
+
+.lens-density-full {
+  color: var(--density-ink-full);
+  transition: color calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lens-density-reading {
+  color: var(--density-ink-reading);
+  transition: color calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lens-density-condensed {
+  color: var(--density-ink-condensed);
+  transition: color calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+/* -------------------------------------------------------------------------
+   3 -- one class per section-3 mechanic (proposal.md "3 - Lens mechanics table").
+   Every from->to is the row's own value, verbatim, so the CSS and the table
+   cannot drift.
+   ------------------------------------------------------------------------- */
+
+/* L-1 - the sentence turns: outgoing/incoming spans of the band's line 2 */
+.lens-sentence-outgoing {
+  opacity: 1; /* from->to: opacity 1 -> 0 */
+  transition: opacity calc(90ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lens-sentence-outgoing[data-leaving="true"] { opacity: 0; }
+.lens-sentence-incoming {
+  opacity: 0; /* from->to: opacity 0 -> 1 */
+  transition: opacity calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lens-sentence-incoming[data-arrived="true"] { opacity: 1; }
+
+/* L-2 - the reading window travels: the rule-mid bracket in the ladder's
+   gutter. Position-linked 1:1 with scroll, no duration, no easing -- the
+   table's own "Duration & easing" cell -- so this class carries geometry
+   only, no transition property at all. */
+.lens-reading-window {
+  position: absolute;
+  inset-inline-start: 0;
+  border-inline-start: var(--rule-mid, 1.5px solid #2C2926);
+  /* from->to (1440, specimen scroll range): top 202px -> 512px, height 74px -> 158px */
+  block-size: var(--lens-reading-window-h, 74px);
+  inset-block-start: var(--lens-reading-window-y, 202px);
+}
+
+/* L-3 - a segment changes register: the value line under a passed region's
+   name yields while that region's own head is in frame */
+.lens-segment-value {
+  opacity: 1; /* from->to: "36 LINES - 1 DAMAGED SEP 26" -> "" (and back) */
+  transition: opacity calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lens-segment-value[data-region-head-in-frame="true"] { opacity: 0; }
+
+/* L-4 - a region ahead opens: 0ms, one commit, entirely below the frame's
+   bottom edge -- no transition property at all, by the table's own rule */
+.lens-region-reserve {
+  block-size: var(--lens-region-reserve-h, 112px); /* from->to (specimen): FF&E 112px -> 1840px, Money 112px -> 430px */
+}
+.lens-region-reserve[data-region-open="true"] {
+  block-size: auto;
+}
+
+/* L-5 - a region behind is never taken back: content-visibility, not layout.
+   0ms; there is no visual change of any kind to reduce. */
+.lens-region-passed[data-passed="true"] {
+  content-visibility: auto;                 /* from->to: content-visibility visible -> auto */
+  contain-intrinsic-size: auto var(--lens-region-passed-h, 1840px); /* painted height held to the pixel */
+}
+
+/* L-6 - the rail head yields at s0: the name/stage lines print, then don't */
+.lens-rail-head-line {
+  opacity: 1; /* from->to: "Vandersteen" / "PROCUREMENT & ORDERS" / "4 OF 6" -> "" */
+  transition: opacity calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lens-rail-head-line[data-letterhead-in-frame="true"] { opacity: 0; }
+
+/* L-7 - she folds a region: the seam / the fold itself */
+.lens-seam {
+  border-inline-start: var(--rule-strong, 2px solid #2C2926); /* from->to: --rule-strong -> --rule-mid at the call site */
+  animation: lens-fold-in calc(300ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+.lens-seam[data-folded="true"] {
+  border-inline-start: var(--rule-mid, 1.5px solid #2C2926);
+}
+.lens-seam-arrow {
+  animation: lens-fold-arrow-flip calc(300ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+@keyframes lens-fold-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lens-fold-arrow-flip { from { transform: rotate(0deg); } to { transform: rotate(180deg); } }
+
+/* L-8 - the pen goes down: the editing row's own rule and ground */
+.lens-row-editing {
+  border-inline-start: var(--rule-hair, 1px solid rgba(44, 41, 38, .10)); /* from->to: --rule-hair 1px @10% -> 1.5px var(--color-clay-ink) */
+  background-color: transparent; /* from->to: transparent -> rgba(196,165,123,0.12) */
+  transition: border-color calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1)),
+              background-color calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lens-row-editing[data-editing="true"] {
+  border-inline-start: 1.5px solid var(--color-clay-ink, #7C5E30);
+  background-color: rgba(196, 165, 123, 0.12);
+}
+
+/* L-9 - the lens settles: an arithmetic gate, no move of its own -- carries
+   the announcement text, never an animated property */
+.lens-settled[data-lens-settled="true"] { /* gates L-1, L-2, L-3, L-4; moves nothing itself */ }
+
+/* L-10 - the press lands: the 700ms jump lock's landing offset */
+.lens-jump-target {
+  scroll-margin-top: var(--doc-landing-clear, 72px); /* resolves once, correctly, at any fling speed */
+}
+
+/* L-11 - the standing sheet opens */
+.lens-sheet-panel {
+  transform: translateY(8px); /* from->to: translateY 8px -> 0 */
+  opacity: 0;                 /* from->to: opacity 0 -> 1 */
+  transition: transform calc(200ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1)),
+              opacity calc(200ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lens-sheet-panel[data-open="true"] {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* -------------------------------------------------------------------------
+   4 -- the navigator and the reading line in the rail. Distinct from
+   .lens-reading-window (the bracket drawn on the paper's own gutter, L-2
+   above) -- these are the rail-side reflections SPEC C.5 names
+   data-reading-index.
+   ------------------------------------------------------------------------- */
+
+.lens-nav-segment {
+  color: var(--text-muted, #65594E);
+}
+.lens-nav-segment[data-reading-index="true"] {
+  color: var(--text-primary, #2C2926); /* the segment holding the frame's current stop prints at full ink, per L-2/L-9 */
+}
+.lens-nav-room-rung {
+  block-size: 0; /* from->to: 0 -> 28px, while the reading window's bracket touches Pieces, or a room is in hand (override 2) */
+  overflow: hidden;
+  transition: block-size calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.lens-nav-room-rung[data-room-visible="true"] {
+  block-size: 28px;
+}

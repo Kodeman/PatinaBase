@@ -1,0 +1,30 @@
+<section class="mock-frame patina-mock" data-screen="spine-before-360" data-width="200">
+<div style="width:200px;height:360px" class="frag-spine-before-360">
+<style>
+.frag-spine-before-360{overflow:hidden;position:relative;background:var(--rail-stock,#E8E3DB);box-sizing:border-box;padding:24px 16px;font-family:var(--font-body);}
+.frag-spine-before-360 .sb-putdown{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-meta);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--color-charcoal,var(--text-primary));margin-bottom:20px;}
+.frag-spine-before-360 .sb-marks{display:flex;gap:6px;margin-bottom:18px;}
+.frag-spine-before-360 .sb-marks i{display:block;width:18px;height:2px;border-radius:1px;background:var(--color-clay);}
+.frag-spine-before-360 .sb-marks i:nth-child(5),
+.frag-spine-before-360 .sb-marks i:nth-child(6),
+.frag-spine-before-360 .sb-marks i:nth-child(7){background:var(--color-pearl);}
+.frag-spine-before-360 .sb-proj{font-size:13px;font-weight:600;color:var(--color-charcoal,var(--text-primary));display:block;}
+.frag-spine-before-360 .sb-active{font-family:var(--font-meta);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--color-clay-ink);display:block;margin-top:1px;margin-bottom:22px;}
+.frag-spine-before-360 .sb-label{font-family:var(--font-meta);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:14px;}
+.frag-spine-before-360 .sb-row{padding:8px 0 8px 12px;margin-bottom:2px;}
+.frag-spine-before-360 .sb-row.is-current{border-left:2px solid var(--color-clay);margin-left:-12px;padding-left:12px;background:rgba(196,165,123,.10);}
+.frag-spine-before-360 .sb-row .sb-name{display:block;font-size:13px;color:var(--color-charcoal,var(--text-primary));line-height:1.2;}
+.frag-spine-before-360 .sb-row.is-current .sb-name{font-weight:600;}
+.frag-spine-before-360 .sb-row .sb-value{display:block;margin-top:2px;font-family:var(--font-meta);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);}
+</style>
+<span class="sb-putdown">&larr; PUT DOWN</span>
+<div class="sb-marks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<span class="sb-proj">Project</span>
+<span class="sb-active">ACTIVE</span>
+<p class="sb-label">ON THIS PAPER</p>
+<div class="sb-row is-current"><span class="sb-name">Client approvals</span><span class="sb-value">0 IN THE LOG</span></div>
+<div class="sb-row"><span class="sb-name">Schedule</span><span class="sb-value">NOT SCHEDULED</span></div>
+<div class="sb-row"><span class="sb-name">Pieces</span></div>
+</div>
+<figcaption>The rail as it is &mdash; 200px, cropped to its own top 360px. Put down, the seven-mark row, the project/active line, then the running index starting to repeat information the letterhead already states. Drawn from <code>mock/kit.css</code> primitives to match <code>shots/w1440-spine-full.png</code> (crop; real column width 200px per <code>research/12-layout-measurements.json</code> rich/1440/s0 <code>spine.spineRect.width</code>).</figcaption>
+</section>

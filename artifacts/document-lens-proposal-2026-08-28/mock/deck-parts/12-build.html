@@ -1,0 +1,204 @@
+<section id="build" class="dk-sec reg-paper" data-index-title="What it takes to build">
+<div class="dk-wrap">
+<p class="hour"><b>BUILD</b> · six waves</p>
+<div class="dk-grid">
+<div class="dk-prose">
+<h2 class="dk-h2">Six waves, three declared dependencies, one that no flag can roll back.</h2>
+<p class="dk-lede">Each wave is worth shipping on its own. The bands are the engineering seat’s: <code>days</code> is one to three, <code>week</code> about one, <code>weeks</code> two or more.</p>
+<p class="dk-p"><code>doc-lens</code> is not one mount gate. Across Waves 1, 2 and 4 it switches which children the rail mounts, which grid template <code>page.tsx:1764</code> renders, whether the ladder or the shipped list fills the <code>shelved</code> slot at <code>doc-spine.tsx:141</code>, and whether the density observer attaches. It does not gate Wave 3: a deleted component is not flaggable, and this path does not pretend otherwise.</p>
+<p class="dk-note">Paths sit under <code>apps/designer-portal/src/</code>, component paths under <code>components/document/</code> unless shown. Every one was opened; those marked <strong>new</strong> do not exist yet. <span class="lvl lvl--code">code-read</span></p>
+</div>
+<div class="dk-stage">
+<p class="dk-h4">Wave 0 · days · no dependency</p>
+<h3 class="dk-h3">Two tripwires and a probe</h3>
+<ul class="dk-ul">
+<li><strong>Alone</strong> a suite that fails for the reason it says it does. Both things it repairs fail silently today; no product code moves.</li>
+<li><strong>Files</strong> <code>lib/document/__tests__/stage2-approval-cutover-contract.test.ts · lib/document/__tests__/contrast.test.ts · app/(document)/doc/[id]/page.test.tsx · e2e/document/quiet-responsive-shell.spec.ts · apps/designer-portal/package.json</code></li>
+<li><strong>Mechanism</strong> delete the source-character regex; turn <code>contrast.test.ts</code>’s hard-coded five-filename <code>RAIL_FILES</code> list at <code>:327-333</code> into a glob, so Wave 2’s new file is scanned the day it lands; assert a landed head sits within 4px of <code>--doc-landing-clear</code>; declare a <code>browserslist</code> key, of which there is none today.</li>
+<li><strong>Tests</strong> delete <code>stage2-approval-cutover-contract.test.ts:19</code>, replacement into <code>page.test.tsx</code>; one case added to <code>quiet-responsive-shell.spec.ts</code>.</li>
+<li><strong>Gate</strong> the suite as it stands, plus the two files repaired here.</li>
+<li><strong>Rollback</strong> revert two test files, one spec case, one <code>package.json</code> key.</li>
+</ul>
+<p class="f-chips">
+<a class="f-chip f-chip--s0" href="#found">F36 <span>Regex passes on a comment</span></a>
+<a class="f-chip f-chip--s0" href="#found">F70 <span>Gate hard-codes five filenames</span></a>
+<a class="f-chip f-chip--s1" href="#found">F38 <span>Seam assertions are all jsdom</span></a>
+<a class="f-chip f-chip--s0" href="#found">F35 <span>No browserslist declared</span></a>
+</p>
+<p class="dk-h4">Wave 1 · week · no dependency</p>
+<h3 class="dk-h3">The rail earns its column</h3>
+<ul class="dk-ul">
+<li><strong>Alone</strong> a 1180–1439 rail printing words rather than broken glyphs, and one in-hand clock rather than two that disagree.</li>
+<li><strong>Files</strong> <code>doc-spine.tsx · app/(document)/doc/[id]/page.tsx:1763-1764 · spine-timer.tsx · studio-drawer.tsx · doc-letterhead.tsx:69-78 · letterhead-vitals.tsx · margin-rail.tsx · margin-note.tsx · mobile/mobile-bar.tsx:230-231 · mobile/mobile-margin-chips.tsx</code></li>
+<li><strong>Mechanism</strong> the rail’s column goes 56px to 136px at 1180–1439 in the file the width actually lives in: <code>page.tsx:1764</code>, not <code>doc-spine.tsx:44</code>, which carries only <code>min-[1440px]:w-auto</code>. The 1440 template is untouched.</li>
+<li><strong>Rewritten</strong> <code>doc-spine.test.tsx:23-29, :31-47 · __tests__/responsive-document-shell.test.tsx:185-195, :212-220 · e2e/document/quiet-responsive-shell.spec.ts:223-228 · e2e/document/quiet-release-contracts.spec.ts:105-118 · mobile/mobile-timer-sheet.test.tsx:250-257</code></li>
+<li><strong>Deleted</strong> <code>quiet-release-contracts.spec.ts:169-299</code> whole — “keeps one focused timer doorway at 1280px”. Every step, all four viewport handoffs included, runs on an element this wave evicts; the unit that dies is the <code>it</code>, not a line range.</li>
+<li><strong>Gate</strong> <code>shadow-gate.test.ts · contrast.test.ts · region-rule.test.tsx:59-74 · margin-handoffs.spec.ts:67-70, :102-105 · workflow-stage-responsive.spec.ts:30-32, :47</code></li>
+<li><strong>Rollback</strong> <code>doc-lens</code> off restores every evicted child, the 56px template and both timers; the files stay on disk.</li>
+</ul>
+<p class="f-chips">
+<a class="f-chip f-chip--s0" href="#found">F07 <span>Stage word breaks mid-syllable</span></a>
+<a class="f-chip f-chip--s0" href="#found">F15 <span>1280 spine is six unlabeled bars</span></a>
+<a class="f-chip f-chip--s0" href="#found">F82 <span>Two in-hand clocks, different times</span></a>
+<a class="f-chip f-chip--s0" href="#found">F13 <span>The paper stops naming the job</span></a>
+</p>
+<p class="dk-h4">Wave 2 · week · depends on Wave 0</p>
+<h3 class="dk-h3">The ladder</h3>
+<ul class="dk-ul">
+<li><strong>Alone</strong> a rail naming every stop on the paper, at both desktop tiers, that no longer goes quiet at the foot.</li>
+<li><strong>Files</strong> <strong>new</strong> <code>spine/lens-ladder.tsx · spine-running-index.tsx · hooks/use-document-running-index.ts · lib/document/document-index.ts · care-band.tsx · previous-work.tsx:37 · ffe-section.tsx:1427-1480 · mobile/mobile-sheets.tsx</code></li>
+<li><strong>Mechanism</strong> segment extents come from counts, not measured rects, so nothing the lens does to a region’s height can move the instrument that draws it. <code>DocumentIndexKey</code> at <code>document-index.ts:17</code> gains <code>'care'</code> and <code>'record'</code>; <code>regionHeadingId</code> keeps throwing at <code>:100</code>, the guard that makes both new keys safe. <code>spine-running-index.tsx</code> stays on disk, unmounted, so it stays inside the contrast scan.</li>
+<li><strong>Rewritten</strong> <code>__tests__/shelved-spine.test.tsx:82-98, :217-236, :238-262 · doc-spine.test.tsx:31-47 · quiet-responsive-shell.spec.ts:165</code></li>
+<li><strong>Gate</strong> <code>shadow-gate.test.ts</code>, the ladder being drawn in rules not depth · <code>contrast.test.ts</code>, now globbing, per Wave 0.</li>
+<li><strong>Rollback</strong> the ladder mounts in the <code>shelved</code> slot at <code>doc-spine.tsx:141</code>; <code>doc-lens</code> off renders the shipped list. Both new keys are additive.</li>
+</ul>
+<p class="f-chips">
+<a class="f-chip f-chip--s0" href="#found">F12 <span>On a proposal the rail is empty</span></a>
+<a class="f-chip f-chip--s0" href="#found">F22 <span>Index gives no size or trouble</span></a>
+<a class="f-chip f-chip--s0" href="#found">F55 <span>Seven marks, equal weight</span></a>
+<a class="f-chip f-chip--s3" href="#found">F116 <span>Rail says Money, frame shows roster</span></a>
+</p>
+<p class="dk-h4">Wave 3 · week · depends on Wave 2</p>
+<h3 class="dk-h3">The lens line</h3>
+<ul class="dk-ul">
+<li><strong>Alone</strong> the eight-row ticket replaced by a two-line band of declared height, and four homeless doors given Wave 2’s home.</li>
+<li><strong>Files</strong> <strong>new</strong> <code>lens-band.tsx · job-ticket.tsx</code>, deleted · <code>app/(document)/doc/[id]/page.tsx · red-letter-zone.tsx · document-guide.tsx · overlays/doc-sheet.tsx · doc-letterhead.tsx · region/use-region-fold.ts · app/globals.css · commercial/money-region.tsx:48</code>. <code>lib/document/ticket-derivation.ts</code> is untouched and keeps deriving all eight rows.</li>
+<li><strong>Mechanism</strong> both band lines are single lines by construction — <code>white-space: nowrap, overflow: hidden, text-overflow: ellipsis</code>, under a stated truncation order — so the box cannot grow and its height is a declaration, not a measurement.</li>
+<li><strong>Deleted</strong> <code>__tests__/job-ticket.test.tsx</code> entire, 541 lines: the component is gone, and <code>:519, :524, :529</code>’s seam-variable lifecycle has no subject.</li>
+<li><strong>Rewritten</strong> the whole <code>describe</code> at <code>page.test.tsx:1243-1411</code>, except <code>:1351-1358</code> and <code>:1361-1382</code>, which survive as a rename to <code>[data-lens-band]</code>: <code>sentinel.nextElementSibling</code> is the only thing stopping a later edit putting a block between sentinel and band · <code>responsive-document-shell.test.tsx:655-690, :692-750 · quiet-responsive-shell.spec.ts:173-176, :183-186, :190-196 · region/__tests__/use-region-fold.test.tsx:38-41</code>, as a rewrite and not an addition.</li>
+<li><strong>Added</strong> <strong>new</strong> <code>e2e/document/lens-band-height.spec.ts</code>, the falsifiable sentence: sample the band’s <code>boundingBox().height</code> at scrollY 0, 400 and 1200 on both documents at 1440, 1280 and 390, and assert 56 in all eighteen cells.</li>
+<li><strong>Gate</strong> <code>shadow-gate.test.ts</code>, depth being removed from the page’s needs and none added · <code>contrast.test.ts</code>.</li>
+<li><strong>Rollback</strong> the weakest in the path, named as such: deleting a component is not flaggable, so it reverts by <code>git revert</code> of one commit. Waves 1 and 2 keep working, because the ladder never depended on the ticket.</li>
+</ul>
+<p class="f-chips">
+<a class="f-chip f-chip--s0" href="#found">F01 <span>First region head a frame below</span></a>
+<a class="f-chip f-chip--s1" href="#found">F04 <span>Pin/fold is a single-frame cut</span></a>
+<a class="f-chip f-chip--s1" href="#found">F09 <span>Four ticket doors vanish</span></a>
+<a class="f-chip f-chip--s1" href="#found">F44 <span>Seam height is content-dependent</span></a>
+<a class="f-chip f-chip--s2" href="#found">F120 <span>Only region roots clear the seam</span></a>
+</p>
+<p class="dk-h4">Wave 4 · week · depends on Wave 3</p>
+<h3 class="dk-h3">Density, in one direction</h3>
+<ul class="dk-ul">
+<li><strong>Alone</strong> regions that arrive quiet and open as she reaches them, at a render cost that does not grow with the schedule.</li>
+<li><strong>Files</strong> <strong>new</strong> <code>hooks/use-lens-density.ts · region/use-region-fold.ts · app/globals.css</code> · the six region bodies: <code>ffe-section.tsx, commercial/money-region.tsx, approvals/project-approval-document.tsx, schedule/schedule-rule-region.tsx, care-band.tsx, previous-work.tsx</code></li>
+<li><strong>Mechanism</strong> one <code>IntersectionObserver</code> per region root, one threshold in one direction 240px below the frame’s bottom edge, <code>data-density</code> written imperatively in the rAF handler. React re-renders nothing: the tree holds zero <code>startTransition</code> calls today and gains none. Six bodies, six count lines, which is why the wave is a week.</li>
+<li><strong>Added</strong> the cases from Wave 3’s <code>use-region-fold.test.tsx</code> rewrite — scroll never writes storage; <code>explicit</code> outranks the lens both ways · <strong>new</strong> <code>e2e/document/lens-density.spec.ts</code>: at 1440 on a seeded 60-line, 4-room schedule, a region’s <code>getBoundingClientRect().top</code> is unchanged across a scroll-up past three opened regions.</li>
+<li><strong>Gate</strong> one find-in-page assertion in <code>quiet-responsive-shell.spec.ts</code>, run in WebKit as well as Chromium: at the foot, text on a line 2,000px above resolves. If it fails, <code>[data-passed]</code> loses the attribute and the cost is render time, not correctness.</li>
+<li><strong>Rollback</strong> <code>doc-lens</code> off; the observer never attaches, every region renders full, the page is Wave 3’s. The fourth fold voice is inert without the observer and writes nothing.</li>
+</ul>
+<p class="f-chips">
+<a class="f-chip f-chip--s2" href="#found">F39 <span>No non-persisting fold voice</span></a>
+<a class="f-chip f-chip--s2" href="#found">F53 <span>The fold is the only render-cost control</span></a>
+<a class="f-chip f-chip--s2" href="#found">F64 <span>A late default closes an open region</span></a>
+</p>
+<p class="dk-h4">Wave 5 · weeks · depends on Wave 0</p>
+<h3 class="dk-h3">The pre-work spreads</h3>
+<ul class="dk-ul">
+<li><strong>Alone</strong> a rail on a brief, a discovery, a direction and a proposal, where today there is nothing to index.</li>
+<li><strong>Files</strong> <code>app/(document)/doc/[id]/page.tsx · lib/document/document-index.ts</code></li>
+<li><strong>Mechanism</strong> wrap the four spreads’ bodies in real regions with real region heads. Today the proposal’s content is inline with a plain head at <code>page.tsx:2006</code>, and the spread renders zero <code>[data-region-head]</code> and zero <code>[data-index-region]</code> elements. A row may print with no value: <code>NOTHING YET</code> or <code>NOT KNOWN YET</code>, a sentence not a dash.</li>
+<li><strong>Rewritten</strong> <code>__tests__/shelved-spine.test.tsx:155-197</code>, which asserts precisely the empty array this wave changes. The regex is already gone, which is what makes <code>page.tsx</code> surgery safe.</li>
+<li><strong>Rollback</strong> the per-section order table returns an empty array for the four spreads; the ladder falls back to Wave 2’s behaviour.</li>
+</ul>
+<p class="f-chips">
+<a class="f-chip f-chip--s0" href="#found">F16 <span>Pre-work has no region DOM</span></a>
+</p>
+</div>
+</div>
+<div class="dk-rule"></div>
+<p class="dk-h4">The three load-bearing mechanisms, answered before the waves</p>
+<div class="dk-two">
+<div>
+<h3 class="dk-h3">(a) Three voices become four, across eight keys</h3>
+<p class="dk-p"><code>region/use-region-fold.ts</code>. <code>forceOpen</code> stays supreme and stays a <em>fold</em> override at <code>:121</code>, so a deep link lands on a body at full ink. <code>explicit</code> — the localStorage key read at <code>:111-114</code>, written at <code>:129-135</code> — stays a hard fold and survives every scroll. Scroll may never write it.</p>
+<p class="dk-p"><code>latchedDefault</code> at <code>:104-119</code> becomes the region’s <strong>initial density</strong> rather than its initial fold, and a fourth, lowest, non-persisting voice — the lens — moves a region only between full and quiet, never to folded, writing nothing.</p>
+<p class="dk-p">The return widens from <code>{folded, toggle, setFolded}</code> at <code>:90-94</code> to add <code>density</code>, across all <strong>eight</strong> keys declared at <code>:25-40</code>: <code>approvals · schedule · schedule-rule · ffe · money · money-table · boards · care</code>. One key short leaves <code>money-table</code>, the money region’s second posture, without a density. <span class="lvl lvl--code">code-read</span> <code>apps/designer-portal/src/components/document/region/use-region-fold.ts:25-40</code></p>
+<p class="dk-note">A visible change to the first screen, shipped in Wave 3: <code>Client approvals</code> stops arriving as a 55.5px fold seam at y 791.8.</p>
+</div>
+<div>
+<h3 class="dk-h3">(c) The reading band and jump lock are left alone</h3>
+<p class="dk-p"><code>hooks/use-document-running-index.ts</code>. <code>READING_BAND</code> at <code>:34</code> — <code>-20% 0px -62% 0px</code> — is <strong>unchanged</strong>, and gains the job of naming the reading stop for the ladder’s window and the band’s second line. It measured clean: three <code>aria-current</code> transitions across one scripted scroll, no flicker across four index clicks. The arbitration exists, so this path uses it. <code>resolve()</code> at <code>:68</code> is not rewritten.</p>
+<p class="dk-p"><code>JUMP_LOCK_MS</code> at <code>:35</code> — 700 — keeps holding the reading line through a smooth scroll and gains exactly one job: for its 700ms it forces the target stop to be the reading stop, at <code>:176</code>.</p>
+<p class="dk-p">The mount observer is a <strong>second, separate</strong> one, in <code>hooks/use-lens-density.ts</code>: one threshold, no release, a <code>MutationObserver</code> on <code>[data-document-paper]</code> for attach. It does not inherit the index’s query-with-retry at <code>:117-131</code> — eight tries at 250ms, about two seconds — a silent hole for a root that mounts late. <span class="lvl lvl--code">code-read</span> <code>apps/designer-portal/src/hooks/use-document-running-index.ts:34-35</code></p>
+<p class="f-chips">
+<a class="f-chip f-chip--s2" href="#found">F75 <span>Index attaches by query-retry</span></a>
+<a class="f-chip f-chip--s2" href="#found">F88 <span>Density must not be a React transition</span></a>
+</p>
+</div>
+</div>
+<h3 class="dk-h3">(b) The seam variable is deleted from the tree</h3>
+<p class="dk-p"><code>job-ticket.tsx</code> is deleted as a component, with its sentinel at <code>:347</code>, its <code>IntersectionObserver</code> at <code>:218-228</code>, its pin effect at <code>:235-242</code> and its publication at <code>:248-259</code>. <code>lib/document/ticket-derivation.ts</code> is untouched. <code>lens-band.tsx</code> becomes the paper’s only sticky element and the sentinel’s owner, and publishes nothing, because its height is declared. Two constants replace the variable in <code>app/globals.css</code>: <code>--doc-band-height: 56px</code> and <code>--doc-landing-clear: calc(var(--doc-band-height) + 1rem)</code>, 72px.</p>
+<div class="dk-tablewrap">
+<table class="dk-table dk-table--compare3">
+<caption>Every <code>--doc-seam-height</code> consumer, by grep — four in product code, plus one rule the tree lacks</caption>
+<thead><tr><th>Consumer</th><th>file:line</th><th>What happens</th></tr></thead>
+<tbody>
+<tr><th class="dk-row-h">Schedule glance offset</th><td><code>app/globals.css:1026</code></td><td>Becomes <code>top: var(--doc-band-height)</code>. The glance stands under the band’s lower rule and can never re-resolve, because 56px is a constant. <code>schedule-rule.tsx:548</code>’s <code>h-0</code> is left alone; reserving a height there would create the shift it removes.</td></tr>
+<tr><th class="dk-row-h">Region landing clearance</th><td><code>app/globals.css:1034</code></td><td><code>scroll-margin-top: var(--doc-landing-clear)</code>, 72px, so the band’s rule, the region gap and the double rule are not three weights inside 35px of the frame top.</td></tr>
+<tr><th class="dk-row-h">FF&amp;E landing floor</th><td><code>app/globals.css:1037</code></td><td>The same constant. The <code>max(…, 4rem)</code> arm goes, because 72 is more than 64 — so FF&amp;E keeps more air than today, not less.</td></tr>
+<tr><th class="dk-row-h">Money inline clearance</th><td><code>commercial/money-region.tsx:48</code></td><td>The local <code>SEAM_CLEARANCE</code> constant reads <code>--doc-landing-clear</code>. Declared locally, so a fix applied only in CSS would leave this one wrong.</td></tr>
+<tr><th class="dk-row-h">New — every focusable in the paper</th><td><code>app/globals.css</code></td><td>Region roots were never the only landing targets. Every anchor, button, input, select, textarea and <code>[tabindex]</code> in the paper takes the same clearance, plus <code>scroll-padding-bottom: 60px</code> on the root.</td></tr>
+<tr><th class="dk-row-h">The <code>var(…, 0px)</code> fallback arms</th><td>all four sites</td><td>Gone with the variable. Nothing is registered and nothing needs to be: a declared constant has no fallback case.</td></tr>
+</tbody>
+</table>
+</div>
+<p class="dk-note"><span class="lvl lvl--code">code-read</span> Confirmed by grep over <code>apps/designer-portal/src</code>: <code>app/globals.css:1026, :1034, :1037</code> and <code>components/document/commercial/money-region.tsx:48</code>, and no others.</p>
+<h3 class="dk-h3">The regex, and the two gates that stay green</h3>
+<div class="dk-two">
+<div>
+<p class="dk-p"><strong>The regex.</strong> <code>lib/document/__tests__/stage2-approval-cutover-contract.test.ts:19</code> reads <code>/data-active-section[\s\S]{0,1500}?&lt;SectionStageLineMount/</code> over the <em>raw source text</em> of <code>page.tsx</code>, via <code>fs.readFileSync</code>. Its unit is source characters, not DOM, so a provider, a wrapper, a <code>&lt;Suspense&gt;</code> boundary, two more drag handlers or one more comment turns it red with no rendered difference at all.</p>
+<p class="dk-p">Wave 0 <strong>deletes it</strong>. The replacement — render the page, assert the mount follows <code>[data-active-section]</code> in DOM order — goes into <code>app/(document)/doc/[id]/page.test.tsx</code>, which already carries the harness. The source file stays a <code>readFileSync</code> contract and keeps its four other assertions at <code>:15-17, :21-23, :24</code> and <code>:25-27</code>. <span class="lvl lvl--code">code-read</span> <code>apps/designer-portal/src/lib/document/__tests__/stage2-approval-cutover-contract.test.ts:19</code></p>
+</div>
+<div>
+<p class="dk-p"><strong><code>lib/document/__tests__/shadow-gate.test.ts</code> stays green.</strong> No depth of any kind is declared, and no fourth wearer of <code>.doc-elevated</code>. The band’s separation from the paper is a rule weight and the stock value step, which is what NG2 leaves available. The caveat: the gate is a <code>readFileSync</code> plus a regex by construction, and NG2 asks for a computed-style sweep. Green here is a source fact, not the sweep.</p>
+<p class="dk-p"><strong><code>lib/document/__tests__/contrast.test.ts</code> stays green.</strong> No clay text is added to the rail, and the muted ramp’s lightest step already computes to 6.5:1 on paper, so a quiet region needs no new grey. What it does need is Wave 0’s glob: today it scans five hard-coded filenames, and a rename drops a file from the scan with no failure — a green test that has stopped testing.</p>
+</div>
+</div>
+<h3 class="dk-h3">Three risks, and what proves each real in the first week of building</h3>
+<p class="dk-p">The path names six. These are the three whose falsifying observation falls inside the build. The other three — the rail is still the cluttered thing; one line at rest is less than the block it replaces; the document grows under her scrollbar — can only be settled by working in it.</p>
+<div class="dk-tablewrap">
+<table class="dk-table dk-table--compare3">
+<caption>Risk · where it lands · what falsifies it</caption>
+<thead><tr><th>Risk</th><th>Where it lands, and its band</th><th>The falsifying observation</th></tr></thead>
+<tbody>
+<tr>
+<th class="dk-row-h">R2 — the band’s one line is not enough for a real exception</th>
+<td><strong>new</strong> <code>lens-band.tsx</code>, fallback upstream in <code>lib/document/ticket-derivation.ts</code>. Wave 3, <strong>week</strong>. Line 2 holds about 110 characters; the specimen’s worst is 96 before its act. The height contract rests on the truncation rule.</td>
+<td>Render the specimen’s two red-letter rows and the longest live seam exception into the band at 1440, 1280 and 390, and read them. If truncation under the stated order — act’s words first, then qualifiers, never the number, day-count or room — leaves a sentence she cannot act on at 390’s 334px measure, the ranking drops the qualifier upstream before the band ships.</td>
+</tr>
+<tr>
+<th class="dk-row-h">R4 — one frame of lookahead is the wrong distance on a fling</th>
+<td><strong>new</strong> <code>hooks/use-lens-density.ts</code> and <code>ffe-section.tsx</code>, 1,549 lines, unvirtualized. Wave 4, <strong>week</strong>. The seat’s own Rank 2, and the one it says the synthetic seed — three FF&amp;E lines, no rooms — can never show.</td>
+<td>Seed a 60-line, 4-room schedule with catalog crops, open it at 1440, fling top to foot, and record blank paper where a region should be for more than one frame. A fling suppresses the settle by design, so the opens fire together at the landing; if the landing still shows an unmounted body, the lookahead has to grow — and a larger lookahead means the lens is doing less.</td>
+</tr>
+<tr>
+<th class="dk-row-h">R6 — two new index keys break a throw that exists to protect the index</th>
+<td><code>lib/document/document-index.ts:100</code>, roots in <code>care-band.tsx</code> and <code>previous-work.tsx</code>. Wave 2. The type widening alone is <strong>days</strong> in the seat’s bands; the wave carrying it is a <strong>week</strong>, each root being emitted at exactly one mount site.</td>
+<td>Pressing <code>Closing the book</code> throws in the console on the first branch build — or the ladder’s bottom two segments never highlight, because the <code>MutationObserver</code> attach never sees a root. That second failure presents not as an error but as a rail going quiet at the foot, the thing the wave was built to fix.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="dk-note">The seat’s Rank 1 — a continuously-changing <code>--doc-seam-height</code> — has no risk row here, because this path refuses the mechanism that carries it. <span class="lvl lvl--inf">inferred</span> from the seat’s ranking against the path’s refusals.</p>
+<h3 class="dk-h3">Where the engineering seat and this path disagree</h3>
+<p class="dk-p">Eight places, both sides named. A build section that hides the engineering seat’s doubt is worse than none at all.</p>
+<div class="dk-tablewrap">
+<table class="dk-table dk-table--compare3">
+<caption>The seat and the critique, against the ratified path</caption>
+<thead><tr><th>The point</th><th>The seat, or the critique</th><th>This path</th></tr></thead>
+<tbody>
+<tr><th class="dk-row-h">The seam’s height</th><td>Forks three costed branches — three discrete states at <strong>days</strong>, continuous in JS at a <strong>week</strong>, a scroll timeline at <strong>weeks</strong> — and asks the authors to name one.</td><td>Names none. The variable is deleted, so the seat’s mitigation — freezing the seam at its floor during a programmatic scroll — is never built: nothing is left to freeze.</td></tr>
+<tr><th class="dk-row-h"><code>content-visibility: auto</code></th><td>Recommends it, then flags the containment’s stacking context against <code>.row-wash</code>’s <code>z-index: -1</code> and asks for it to be re-proved in a browser. The critique records both candidate proposals refusing it on that ground.</td><td>Takes it, on passed regions only, where it changes no height. The refutation wave killed the objection by code truth: <code>.has-wash</code> already declares <code>isolation: isolate</code> at <code>globals.css:322-325</code>, so every washed row is its own stacking context today.</td></tr>
+<tr><th class="dk-row-h">How many fold keys</th><td>Says the widening runs across all <strong>seven</strong> keys. The critique agrees, and calls seven right.</td><td><strong>Eight.</strong> The file declares <code>money-table</code> alongside the other seven at <code>use-region-fold.ts:25-40</code>, and this deck opened it. Widening seven leaves that key without a density.</td></tr>
+<tr><th class="dk-row-h">The regex’s headroom</th><td>Three numbers in circulation: the seat measures 1,128 of distance and 372 of headroom; the critique measures 1,109 and 143, calling the seat wrong; the anatomy estimated about 600.</td><td>Reconciles them: 1,128 of distance, of which 1,109 fall inside the <code>{0,1500}</code> window because the 19-character literal is not counted, leaving 391. All three agree it passes on a comment today.</td></tr>
+<tr><th class="dk-row-h">What replaces the regex</th><td>Asks for the mount as the <em>first element child</em> of <code>[data-active-section]</code>. The critique answers that this moves a pure <code>readFileSync</code> test into a render needing <code>page.test.tsx</code>’s scaffolding.</td><td>Not first element child: a comment sits at <code>page.tsx:1959-1963</code>, so that assertion would be false on landing. DOM <em>order</em> instead, in <code>page.test.tsx</code>, which already carries the harness.</td></tr>
+<tr><th class="dk-row-h">The rail’s width at 1180–1439</th><td>Prices widening the compact rail to roughly 96–120px at <strong>weeks</strong>, the widest blast radius in its review; its <strong>days</strong> alternative keeps 56px and prints a position-only reading line, no text.</td><td>Widens it to 136px and prices the wave at a <strong>week</strong>. The sharpest cost disagreement in the path, and the argument is about two Playwright bounds specs, not the design.</td></tr>
+<tr><th class="dk-row-h">The unit of a test break</th><td>Its standing objection to both candidate proposals: the unit is the <code>it</code>, not the line. Both named line ranges inside blocks that die whole.</td><td>Wave 1 kills one whole test by name, <code>quiet-release-contracts.spec.ts:169-299</code>, and says why: every step runs on an evicted element.</td></tr>
+<tr><th class="dk-row-h">Does the shadow gate prove NG2</th><td>The critique notes the gate is a source grep by construction, while NG2 asks for a computed-style sweep. Citing it as proof was the same shortcut in both candidate proposals.</td><td>It stays green and the deck says what it does not prove. The sweep is a separate act, and a passing grep is not presented as one.</td></tr>
+</tbody>
+</table>
+</div>
+<p class="dk-note">Sources: <code>source/proposal.md</code> §9, §10 · <code>research/29-panel-e1.md</code> §§1–6 · <code>source/critique-feasibility.md</code> §§2.2–2.7 · <code>research/10-code-anatomy.md</code> §8, §9. Every repo path was checked to exist before it was printed; those marked <strong>new</strong> are the five files this path creates. No usage data was available to this review, and no number here is estimated.</p>
+</div>
+</section>

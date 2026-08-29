@@ -1,0 +1,1150 @@
+[
+  {
+    "id": "F01",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png shows title/ticket/needs-attention filling the frame; layout-measurements.json confirms firstRegionHeadY=1005 vs 900px viewport.",
+    "evidence": "probe/repro-F01.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F02",
+    "verdict": "reproduced",
+    "reason": "m390-mobile-bar.png crop shows the circular studio puck directly overprinting 'IN THIS'/'DOCUMENT' text at 390, present on both rich and prework docs.",
+    "evidence": "probe/repro-F02.png (source: shots/m390-mobile-bar.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F03",
+    "verdict": "reproduced",
+    "reason": "w1280-rich-s0/s1/s2/s3.png all show 'IN HAND'/timer text overlapping the search field/avatar area in the bottom drawer strip at 1280.",
+    "evidence": "probe/repro-F03.png (source: shots/w1280-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F04",
+    "verdict": "reproduced",
+    "reason": "probe/03-interactive-probe.md \u00a71: measured 347.25px\u219264.06px in one commit at scrollY=280, 23/23 17ms samples read exactly 64.0625px, no interpolation.",
+    "evidence": "probe/03-interactive-probe.md:11-20",
+    "revised_claim": ""
+  },
+  {
+    "id": "F05",
+    "verdict": "state-dependent",
+    "reason": "Confirmed live: Chen Residence prints '1 group \u00b7 3 lines' / 'Not in a room yet' (w1440-rich-s2.png). Whether OTHER FF&E findings understate scroll cost on a richer doc can't be tested \u2014 no richer seed exists locally.",
+    "evidence": "shots/w1440-rich-s2.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F06",
+    "verdict": "reproduced",
+    "reason": "No phase-wide filter/door control appears in any of the 12 width\u00d7state combinations captured (ticket, letterhead, spine, mobile sheet all checked).",
+    "evidence": "probe/repro-F06.png (source: shots/m390-mobile-spine-sheet.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F07",
+    "verdict": "reproduced",
+    "reason": "w1280-spine-glyph-rail.png shows 'ACTIV' / 'E' split across two lines exactly as claimed.",
+    "evidence": "probe/repro-F07.png (source: shots/w1280-spine-glyph-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F08",
+    "verdict": "reproduced",
+    "reason": "probe/03-interactive-probe.md \u00a73: focus started on 'Sync from the schedule' inside #money-region-body; after Fold, body is null and document.activeElement is <body>.",
+    "evidence": "probe/03-interactive-probe.md:59-75",
+    "revised_claim": ""
+  },
+  {
+    "id": "F09",
+    "verdict": "reproduced",
+    "reason": "w1440-ticket-seam.png (pinned ticket) and w1440-rich-s2.png show only 'THE JOB \u00b7 PROJECT / $6,200 owed you \u00b7 3 unspecified' \u2014 none of Boards/Drawings/Spec/People rows visible once pinned.",
+    "evidence": "probe/repro-F09.png (source: shots/w1440-ticket-seam.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F10",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png: ticket 'MONEY $6,200 owed you...', spine 'Money $6,200 OWED', red-letter 'Invoice INV-2026-W02 $3,800 overdue', margin 'MONEY \u00b7 SENT INV-2026-W02' all visible on one screen.",
+    "evidence": "probe/repro-F10.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F11",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s1.png (letterhead's own bottom scrolled off, per capture-shots.mjs's own assertion) still shows the full 8-row unfolded ticket with 'FOLD \u2191' \u2014 condensation has not happened yet at this exact scroll offset.",
+    "evidence": "probe/repro-F11.png (source: shots/w1440-rich-s1.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F12",
+    "verdict": "reproduced",
+    "reason": "w1440-prework-s0.png: spine is nearly bare (marks, 'Proposal/AWAITING SIGNATURE', presence line only); margin has one italic sentence, no cards \u2014 matches the 13.9% ink / 657px empty-run numbers.",
+    "evidence": "probe/repro-F12.png (source: shots/w1440-prework-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F13",
+    "verdict": "reproduced",
+    "reason": "w1440-ticket-seam.png and w1440-rich-s1/s2/s3 all print 'THE JOB \u00b7 PROJECT' / '$6,200 owed you...' \u2014 'Chen Residence' never reappears once scrolled past the letterhead.",
+    "evidence": "probe/repro-F13.png (source: shots/w1440-ticket-seam.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F14",
+    "verdict": "reproduced",
+    "reason": "m390-mobile-spine-sheet.png: the sheet lists exactly the 7 stage rows (Brief\u2026Care) then 'IN THE MARGIN \u00b7 7' \u2014 no Client approvals/Schedule/Pieces/Money jump row anywhere in it.",
+    "evidence": "probe/repro-F14.png (source: shots/m390-mobile-spine-sheet.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F15",
+    "verdict": "reproduced",
+    "reason": "w1280-spine-glyph-rail.png: only thin colored bars plus 'Project'/'ACTIV'+'E' and 'In/hand' \u2014 no region label text anywhere in the compact rail.",
+    "evidence": "probe/repro-F15.png (source: shots/w1280-spine-glyph-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F16",
+    "verdict": "reproduced",
+    "reason": "w1440-prework-s0/s1.png show no [data-region-head]-style headings anywhere; content is ticket rows + proposal-specific blocks only, matching layout-measurements.md's DOM-query finding.",
+    "evidence": "probe/repro-F16.png (source: shots/w1440-prework-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F17",
+    "verdict": "reproduced",
+    "reason": "w1440-margin-rail.png (top) vs the same 7 chips still visible unchanged at s2 (w1440-rich-s2.png) \u2014 identical order/content; layout-measurements.md confirms ink% constant across s0-s3.",
+    "evidence": "probe/repro-F17.png (source: shots/w1440-margin-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F18",
+    "verdict": "reproduced",
+    "reason": "w1280-margin-sheet-open.png: header reads 'IN THE MARGIN / CLOSE', and a second 'IN THE MARGIN' section label (with '+ NOTE') appears again ~200px lower over the same panel.",
+    "evidence": "probe/repro-F18.png (source: shots/w1280-margin-sheet-open.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F19",
+    "verdict": "reproduced",
+    "reason": "w1280-margin-tab-closed.png shows only 'MARGIN \u2190' with no numeral, while the sheet behind it holds 7 chips (confirmed by w1280-margin-sheet-open.png).",
+    "evidence": "probe/repro-F19.png (source: shots/w1280-margin-tab-closed.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F20",
+    "verdict": "reproduced",
+    "reason": "w1440-prework-s0.png: 'No rooms yet' / '5 unspecified' / 'Nothing filed' / '0 of 5 specified' / 'No boards yet' / 'Nothing moving yet' / 'No dates yet' / 'No roster yet' all print above 'Sent Aug 27 \u00b7 not opened yet'.",
+    "evidence": "probe/repro-F20.png (source: shots/w1440-prework-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F21",
+    "verdict": "reproduced",
+    "reason": "w1280-spine-glyph-rail.png has zero 'On this paper' text vs w1440-spine-full.png's full list \u2014 matches the measured 8\u21923 interactive-child drop.",
+    "evidence": "probe/repro-F21.png (source: shots/w1280-spine-glyph-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F22",
+    "verdict": "reproduced",
+    "reason": "w1440-spine-full.png: 'Client approvals 0 IN THE LOG' / 'Schedule NOT SCHEDULED' / 'Pieces 3 PIECES \u00b7 0 ROOMS' / 'Money $6,200 OWED' are four visually equal rows with no overdue marker, though the paper carries '$3,800 overdue'.",
+    "evidence": "probe/repro-F22.png (source: shots/w1440-spine-full.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F23",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s2.png: both FF&E lines show only a production-stage chip (IN PRODUCTION/RECEIVED) and price \u2014 no ack/claim UI on the line. Note: ffe-leader.ts (imported by ffe-section.tsx) DOES define a PO-unanswered/damaged path, just not triggered by this seed.",
+    "evidence": "probe/repro-F23.png (source: shots/w1440-rich-s2.png)",
+    "revised_claim": "On this seed no PO/damage state renders on the FF&E line; code shows the capability exists for other data (ffe-leader.ts, ffe-section.tsx 'damaged' case) but was never exercised."
+  },
+  {
+    "id": "F24",
+    "verdict": "reproduced",
+    "reason": "probe/03-interactive-probe.md \u00a78: normal-motion CLS 0.1286 (20 entries), reduced-motion 0.1318 (8 entries); one 0.1189 shift at ~3.3-3.6s tied to the Schedule/needs-attention banner in both passes.",
+    "evidence": "probe/03-interactive-probe.md:118-131",
+    "revised_claim": ""
+  },
+  {
+    "id": "F25",
+    "verdict": "reproduced",
+    "reason": "job-ticket.tsx:267-283 confirmed verbatim: 'deadLeaf' rows render as a plain <div> (no <a>/<button>, no \u2192) when !wide && no route \u2014 matches the claim exactly for Drawings/Spec below 1440.",
+    "evidence": "apps/designer-portal/src/components/document/job-ticket.tsx:267-283",
+    "revised_claim": ""
+  },
+  {
+    "id": "F26",
+    "verdict": "reproduced",
+    "reason": "w1440-spine-full.png: 'IN HAND / 18 min' card is the visually largest non-heading figure in the rail; drawer separately shows 'IN HAND TODAY 1h 09m'.",
+    "evidence": "probe/repro-F26.png (source: shots/w1440-spine-full.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F27",
+    "verdict": "reproduced",
+    "reason": "w1440-ticket-unfolded.png: 'No rooms yet','Nothing filed','No boards yet \u00b7 start one','No install date yet','Nobody on it yet' = 5 of 8 rows read as absence.",
+    "evidence": "probe/repro-F27.png (source: shots/w1440-ticket-unfolded.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F28",
+    "verdict": "reproduced",
+    "reason": "w1440-margin-rail.png: counted 7 wrapped lines of the first-touch note plus 'APPEARS ONCE \u00b7 RECEDES ON USE' (2 more) = 9 lines above 'IN THE MARGIN' and the first chip, at 232px rail width.",
+    "evidence": "probe/repro-F28.png (source: shots/w1440-margin-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F29",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png: spine shows 'Client approvals / 0 IN THE LOG' near the top; the paper shows 'Client approvals NO DECISION LEAD \u00b7 NO APPROVALS AUTHORED' ~550px lower \u2014 same emptiness, two registers, one screen.",
+    "evidence": "probe/repro-F29.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F30",
+    "verdict": "reproduced",
+    "reason": "hooks/useReducedMotion.ts:4 confirmed starts state=false, corrects in an effect; grep across src/components/document/ for 'useReducedMotion' returns zero hits (10 total repo-wide, all outside document/).",
+    "evidence": "apps/designer-portal/src/hooks/useReducedMotion.ts:4",
+    "revised_claim": ""
+  },
+  {
+    "id": "F31",
+    "verdict": "reproduced",
+    "reason": "w1440-spine-full.png / w1440-rich-s0-s3: the IN HAND card, presence line, margin first-touch note, 7-mark row and studio drawer are visible unchanged at every state per layout-measurements.md's constant ink%.",
+    "evidence": "probe/repro-F31.png (source: shots/w1440-spine-full.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F32",
+    "verdict": "reproduced",
+    "reason": "m390-mobile-spine-sheet.png prints full words ('Brief / NOT RECORDED' etc.) for all 7 stages vs w1280-spine-glyph-rail.png's unlabeled bars for the same information.",
+    "evidence": "probe/repro-F32.png (source: shots/m390-mobile-spine-sheet.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F33",
+    "verdict": "reproduced",
+    "reason": "w1280-margin-tab-closed/-sheet-open.png show the 1180-1439 overlay-sheet model; w1440-margin-rail.png shows the always-visible sticky column \u2014 confirmed both live states.",
+    "evidence": "probe/repro-F33.png (source: shots/w1280-margin-tab-closed.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F34",
+    "verdict": "reproduced",
+    "reason": "globals.css:1034 confirmed scroll-margin-top: var(--doc-seam-height,0px); probe \u00a71 confirms the seam value jumps 0\u219264px in a single commit mid-scroll, which scroll-margin resolves once at call time per hook source.",
+    "evidence": "apps/designer-portal/src/app/globals.css:1034; probe/03-interactive-probe.md:11-20",
+    "revised_claim": ""
+  },
+  {
+    "id": "F35",
+    "verdict": "reproduced",
+    "reason": "Confirmed: no browserslist key in package.json, no .browserslistrc at app or repo root; playwright.config.ts:53-68 declares chromium, firefox, and webkit projects, none commented out.",
+    "evidence": "apps/designer-portal/playwright.config.ts:53-68",
+    "revised_claim": ""
+  },
+  {
+    "id": "F36",
+    "verdict": "reproduced",
+    "reason": "Confirmed the comment at page.tsx ~1961 contains the literal text 'data-active-section>' a few lines above <SectionStageLineMount, closer than the real DOM attribute at :1942 \u2014 the lazy regex can resolve on the prose, not just the markup.",
+    "evidence": "apps/designer-portal/src/app/(document)/doc/[id]/page.tsx:1942,1961-1964",
+    "revised_claim": ""
+  },
+  {
+    "id": "F37",
+    "verdict": "not-reproduced",
+    "reason": "No '@property' declaration exists anywhere in globals.css or src/, and no 'animation-timeline' usage exists anywhere in src/ \u2014 the mechanism this finding warns about (a registered custom property nulling var() fallbacks) is not present in the current live app.",
+    "evidence": "apps/designer-portal/src/app/globals.css (grep: 0 hits for @property, 0 for animation-timeline)",
+    "revised_claim": "This is a prospective caution for a future scroll-timeline implementation, not a current defect \u2014 no @property registration exists today, so var() fallbacks are intact."
+  },
+  {
+    "id": "F38",
+    "verdict": "reproduced",
+    "reason": "job-ticket.test.tsx:519-529 confirmed: assertions check the property string ('', /px$/, '') only, no layout assertions; no e2e file found asserting a landed region head's y-position.",
+    "evidence": "apps/designer-portal/src/components/document/__tests__/job-ticket.test.tsx:519-529",
+    "revised_claim": ""
+  },
+  {
+    "id": "F39",
+    "verdict": "reproduced",
+    "reason": "use-region-fold.ts:121,129-135 confirmed: 'folded = forceOpen ? false : (explicit ?? latchedDefault ?? false)', and setFolded always writes localStorage \u2014 no ephemeral/non-persisting path exists.",
+    "evidence": "apps/designer-portal/src/components/document/region/use-region-fold.ts:121,129-135",
+    "revised_claim": ""
+  },
+  {
+    "id": "F40",
+    "verdict": "reproduced",
+    "reason": "m390-rich-s0.png / m390-rich-s1.png show the full header stack (title, no-client line, seam, needs-attention, instruments, sharing row) filling more than one 844px screen; layout-measurements.md gives firstRegionHeadY=1054/844=124.9%.",
+    "evidence": "probe/repro-F40.png (source: shots/m390-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F41",
+    "verdict": "reproduced",
+    "reason": "Same probe measurement as F08: folding Money region with focus on a control inside it leaves document.activeElement as <body>, no redirect.",
+    "evidence": "probe/03-interactive-probe.md:59-75",
+    "revised_claim": ""
+  },
+  {
+    "id": "F42",
+    "verdict": "reproduced",
+    "reason": "grep for 'aria-live' across job-ticket.tsx, fold-seam.tsx, use-region-fold.ts returns zero hits, confirming no announcement mechanism for the pin/fold's aria-expanded flip.",
+    "evidence": "apps/designer-portal/src/components/document/job-ticket.tsx (grep: 0 hits for aria-live)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F43",
+    "verdict": "reproduced",
+    "reason": "mobile-sheets.tsx:259-261 confirmed verbatim: aria-label={compactTimer ? 'Time in hand' : undefined} \u2014 'drawer'/'spine'/'margin-item' kinds get role=dialog aria-modal=true with no aria-label.",
+    "evidence": "apps/designer-portal/src/components/document/mobile/mobile-sheets.tsx:259-261",
+    "revised_claim": ""
+  },
+  {
+    "id": "F44",
+    "verdict": "reproduced",
+    "reason": "job-ticket.tsx:258 deps [pinned, unfolded, seam.identity, seam.exceptions] confirmed; m390-rich-s1.png shows the 2-line seam text sharing its second line with 'UNFOLD \u2193', consistent with content-dependent height.",
+    "evidence": "probe/repro-F44.png (source: shots/m390-rich-s1.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F45",
+    "verdict": "reproduced",
+    "reason": "use-document-running-index.ts:35 confirmed JUMP_LOCK_MS=700; probe \u00a72 measured zero flicker across 4 index clicks, holding through the full 700ms lock with no seam-height coupling anywhere in the hook.",
+    "evidence": "apps/designer-portal/src/hooks/use-document-running-index.ts:35; probe/03-interactive-probe.md:33-45",
+    "revised_claim": ""
+  },
+  {
+    "id": "F46",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s1.png shows 'Schedule dates UNFOLD \u2193' near the top and, ~200px lower, 'Schedule / 0 phases \u00b7 nothing active \u00b7 next milestone \u2014 / FOLD \u2191', with a bare 'BAND' line between them; spine still reads 'Schedule NOT SCHEDULED'.",
+    "evidence": "probe/repro-F46.png (source: shots/w1440-rich-s1.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F47",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png: counted title, no-client line, 4 vitals fields, ticket head, 8 rows, needs-attention block (2 items), instruments row, approvals seam \u2014 matches the claimed ~20-item top band.",
+    "evidence": "probe/repro-F47.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F48",
+    "verdict": "reproduced",
+    "reason": "m390-rich-s1.png / m390-mobile-margin-chips.png show 5 stacked MONEY chips (DRAFT, SENT\u00d72, VENDOR PAYMENT DUE\u00d72) inline in the mobile flow, none anchored to visible content.",
+    "evidence": "probe/repro-F48.png (source: shots/m390-rich-s1.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F49",
+    "verdict": "reproduced",
+    "reason": "m390-rich-s2.png: seam, 'Pieces' head, ledger actions, 'Plan the project work' prose, FOLIO/FILE, 'Not in a room yet' all precede the first FF&E line, which begins deep in the frame \u2014 consistent with the ~82% claim.",
+    "evidence": "probe/repro-F49.png (source: shots/m390-rich-s2.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F50",
+    "verdict": "reproduced",
+    "reason": "ticket-derivation.ts:855 confirmed '.slice(0, 2)' on the ranked exceptions list \u2014 a third standing exception is silently dropped by construction.",
+    "evidence": "apps/designer-portal/src/lib/document/ticket-derivation.ts:855",
+    "revised_claim": ""
+  },
+  {
+    "id": "F51",
+    "verdict": "reproduced",
+    "reason": "job-ticket.tsx:219-226 confirmed verbatim: 'new IntersectionObserver(...,{ threshold: 0 })' on one sentinel, no second threshold, no rootMargin option anywhere in the file.",
+    "evidence": "apps/designer-portal/src/components/document/job-ticket.tsx:219-226",
+    "revised_claim": ""
+  },
+  {
+    "id": "F52",
+    "verdict": "reproduced",
+    "reason": "job-ticket.tsx:213-244 confirmed: the pin-driven effect (keyed on [pinned], itself driven by the scroll IntersectionObserver) calls setFold(null) and conditionally foldRef.current?.focus() \u2014 a scroll event, not a keypress, can move focus.",
+    "evidence": "apps/designer-portal/src/components/document/job-ticket.tsx:213,235-244",
+    "revised_claim": ""
+  },
+  {
+    "id": "F53",
+    "verdict": "reproduced",
+    "reason": "ffe-section.tsx confirmed to contain no 'useVirtualizer'/'react-virtual' import; w1440-rich-s2.png shows all 3 seed rows rendered with full row markup (image crop, chip, price) \u2014 the only unmount path is the region fold.",
+    "evidence": "apps/designer-portal/src/components/document/ffe-section.tsx (grep: 0 hits for useVirtualizer)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F54",
+    "verdict": "reproduced",
+    "reason": "fold-seam.tsx's FoldSeam renders identically (italic name, mono summary, 'unfold \u2193') regardless of whether the caller's folded value came from explicit localStorage or a derived defaultFolded \u2014 no distinguishing prop exists in use-region-fold.ts's return type.",
+    "evidence": "apps/designer-portal/src/components/document/region/use-region-fold.ts:104-121",
+    "revised_claim": ""
+  },
+  {
+    "id": "F55",
+    "verdict": "reproduced",
+    "reason": "w1440-spine-full.png: all 7 StrataMark bars in the marker row render at the same visual size regardless of phase, though 'project' alone shelves 4 sub-regions.",
+    "evidence": "probe/repro-F55.png (source: shots/w1440-spine-full.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F56",
+    "verdict": "reproduced",
+    "reason": "page.tsx:1157-1172 confirmed verbatim: a useEffect reads readRecentDocumentsInHand(), and for a 'seenBefore' doc scrolls [data-active-section] into view when its top exceeds 60% of viewport height \u2014 landing below the title by design.",
+    "evidence": "apps/designer-portal/src/app/(document)/doc/[id]/page.tsx:1157-1172",
+    "revised_claim": ""
+  },
+  {
+    "id": "F57",
+    "verdict": "reproduced",
+    "reason": "w1280-rich-s0.png shows the same job-ticket.tsx dead-leaf rendering (job-ticket.tsx:267-283, confirmed above) applies below 1440 \u2014 Drawings/Spec rows print no arrow at 1280 exactly as at other sub-1440 widths.",
+    "evidence": "probe/repro-F57.png (source: shots/w1280-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F58",
+    "verdict": "state-dependent",
+    "reason": "Confirmed qualitatively (w1280-rich-s0.png loses the always-visible margin money chips vs w1440-rich-s0.png), but the specific 145,044px\u00b2/28.8% figures come from research/12-layout-measurements.json's own pixel-bucket method, which this pass did not independently re-derive.",
+    "evidence": "shots/w1280-rich-s0.png, shots/w1440-rich-s0.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F59",
+    "verdict": "reproduced",
+    "reason": "w1440-ticket-seam.png ('THE JOB \u00b7 PROJECT / $6,200 owed you...UNFOLD \u2193') and w1440-fold-seam-folded.png ('Client approvals / NO DECISION LEAD...UNFOLD \u2193') share the identical 3-part grammar and case live on screen.",
+    "evidence": "probe/repro-F59.png (source: shots/w1440-ticket-seam.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F60",
+    "verdict": "reproduced",
+    "reason": "globals.css:1026 confirmed 'top: var(--doc-seam-height,0px)' on the Schedule glance only; job-ticket.tsx's own fold/pin logic (lines 235-259) has no equivalent seam-height compensation for its own displacement.",
+    "evidence": "apps/designer-portal/src/app/globals.css:1026; apps/designer-portal/src/components/document/job-ticket.tsx:248-259",
+    "revised_claim": ""
+  },
+  {
+    "id": "F61",
+    "verdict": "not-reproduced",
+    "reason": "No 'content-visibility' declaration exists anywhere in src/ \u2014 the described stacking-context interaction never fires today. Separately, .has-wash already declares 'isolation: isolate' (globals.css:322-324) and the interactive probe confirmed the hover wash renders and animates correctly live.",
+    "evidence": "apps/designer-portal/src/app/globals.css (grep: 0 hits for content-visibility); probe/03-interactive-probe.md \u00a75",
+    "revised_claim": "This is a prospective risk for a future content-visibility:auto rollout (e.g. for FF&E virtualization), not a current defect \u2014 the wash works correctly today."
+  },
+  {
+    "id": "F62",
+    "verdict": "state-dependent",
+    "reason": "source/instruments.md's T13/T14 claim is a design-instrument note, not directly re-derivable from this seed (no PO-unacknowledged/damage-claim item exists in Chen Residence's data to click through and confirm the off-document hop).",
+    "evidence": "shots/w1440-rich-s2.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F63",
+    "verdict": "state-dependent",
+    "reason": "Confirmed no 'PO'/'purchase order' text appears in any captured state of this document. However ffe-leader.ts (imported by ffe-section.tsx, the document's own FF&E component) defines a literal 'PO'/'POs unanswered' string for an unanswered-PO exception \u2014 this seed never triggers that exception, so t",
+    "evidence": "apps/designer-portal/src/lib/document/ffe-leader.ts:90; apps/designer-portal/src/components/document/ffe-section.tsx:105",
+    "revised_claim": "'PO' text can print on the document's own FF&E head under an unanswered-PO exception (ffe-leader.ts); it does not currently appear because no seeded line has that exception, not because the document surface can never print it."
+  },
+  {
+    "id": "F64",
+    "verdict": "state-dependent",
+    "reason": "use-region-fold.ts:110-121 confirmed the guard only checks explicit===null, so a late-resolving defaultFolded=true could flip an open region shut \u2014 but no query in this seed resolves late enough after paint to observe the flip live.",
+    "evidence": "apps/designer-portal/src/components/document/region/use-region-fold.ts:110-121",
+    "revised_claim": ""
+  },
+  {
+    "id": "F65",
+    "verdict": "state-dependent",
+    "reason": "ffe-section.tsx confirmed to have a 'damaged' case (tone: terracotta) in its state-to-wash mapping, but neither seeded FF&E line is in that state (both show IN PRODUCTION/RECEIVED) \u2014 the claimed UI gap could not be observed live.",
+    "evidence": "apps/designer-portal/src/components/document/ffe-section.tsx:179,215-227; shots/w1440-rich-s2.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F66",
+    "verdict": "reproduced",
+    "reason": "w1440-margin-rail.png: all 7 visible cards are MONEY (\u00d75) or TIME (\u00d72) kinds; no Orders/PO-kind card is present in this state.",
+    "evidence": "probe/repro-F66.png (source: shots/w1440-margin-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F67",
+    "verdict": "state-dependent",
+    "reason": "probe \u00a76 confirms the margin sheet itself doesn't reflow the paper at 1280 (identical region-head Y before/after), but no shot or probe opened the Orders ledger sheet named by T13/T14, so its scroll-offset round trip is genuinely untested by this program's evidence.",
+    "evidence": "probe/03-interactive-probe.md:\u00a76",
+    "revised_claim": ""
+  },
+  {
+    "id": "F68",
+    "verdict": "reproduced",
+    "reason": "shadow-gate.test.ts:80-136 confirmed: one box-shadow budget spent on .doc-elevated across exactly studio-drawer/margin-item/doc-sheet, with the test failing on any new shadow under src/.",
+    "evidence": "apps/designer-portal/src/lib/document/__tests__/shadow-gate.test.ts:80-136",
+    "revised_claim": ""
+  },
+  {
+    "id": "F69",
+    "verdict": "reproduced",
+    "reason": "quiet-responsive-shell.spec.ts:224-228 and quiet-release-contracts.spec.ts:108-158 confirmed verbatim: pixel-width assertions (55-57px rail, [200,1208]/[1208,1440] bounds) at 1280/1440.",
+    "evidence": "apps/designer-portal/e2e/document/quiet-responsive-shell.spec.ts:224-228; e2e/document/quiet-release-contracts.spec.ts:150-158",
+    "revised_claim": ""
+  },
+  {
+    "id": "F70",
+    "verdict": "reproduced",
+    "reason": "contrast.test.ts:313-341 (actual line ~329-338) confirmed a hardcoded RAIL_FILES array of exactly 5 filenames (spine-running-index, spine-shelved-blocks, spine-timer, doc-spine, margin-rail).",
+    "evidence": "apps/designer-portal/src/lib/document/__tests__/contrast.test.ts:329-338",
+    "revised_claim": ""
+  },
+  {
+    "id": "F71",
+    "verdict": "reproduced",
+    "reason": "job-ticket.tsx:235-244 confirmed: 'setFold(null)' runs unconditionally in the effect keyed on [pinned] \u2014 any pin-state change discards a reader's own Unfold choice.",
+    "evidence": "apps/designer-portal/src/components/document/job-ticket.tsx:235-244",
+    "revised_claim": ""
+  },
+  {
+    "id": "F72",
+    "verdict": "reproduced",
+    "reason": "quiet-responsive-shell.spec.ts (rows :173-196) and responsive-document-shell.test.tsx:655-687 confirmed exact toHaveCount(8) assertions at all three widths.",
+    "evidence": "apps/designer-portal/e2e/document/quiet-responsive-shell.spec.ts:173-196",
+    "revised_claim": ""
+  },
+  {
+    "id": "F73",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s2.png shows the 'Pieces' region ending almost immediately (~6px) above 'THE MONEY \u00b7 ONE REGION' / 'Money', a visually tighter gap than the header-stack\u2192Schedule gap seen in w1440-rich-s1.png \u2014 matches the {6,29,56}px claim qualitatively.",
+    "evidence": "probe/repro-F73.png (source: shots/w1440-rich-s2.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F74",
+    "verdict": "reproduced",
+    "reason": "Independently computed WCAG contrast for #65594E on #E8E3DB = 5.32:1 (floor 4.5:1) \u2014 matches the finding's number exactly.",
+    "evidence": "apps/designer-portal/src/app/globals.css:18,58 (independently computed contrast = 5.317:1)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F75",
+    "verdict": "reproduced",
+    "reason": "use-document-running-index.ts:37-38,120 confirmed ATTACH_RETRY_MS=250 \u00d7 ATTACH_RETRIES=8 (~2s), and attach() reschedules only while attached.size < ordered.length.",
+    "evidence": "apps/designer-portal/src/hooks/use-document-running-index.ts:37-38,120",
+    "revised_claim": ""
+  },
+  {
+    "id": "F76",
+    "verdict": "reproduced",
+    "reason": "contrast.test.ts gates only rail-stock pairs (confirmed no '#FCFAF6'/paper token referenced in the file); independently computed #65594E on #FCFAF6 = 6.51:1, matching the finding's number.",
+    "evidence": "apps/designer-portal/src/lib/document/__tests__/contrast.test.ts (no paper-token gate found); independently computed contrast = 6.514:1",
+    "revised_claim": ""
+  },
+  {
+    "id": "F77",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s3.png: foot shows authorizations/accounts/closing-the-book/roster prose with no 'Chen Residence' text and no return-to-top control anywhere in frame.",
+    "evidence": "probe/repro-F77.png (source: shots/w1440-rich-s3.png)",
+    "revised_claim": "The ~196px of true blank space below the last row is ~22% of the 900px frame, not 40%+ \u2014 the '40%+ blank' figure is overstated for this exact screenshot, though the core claim (no identity, no way up) holds."
+  },
+  {
+    "id": "F78",
+    "verdict": "reproduced",
+    "reason": "w1440-prework-s0.png: 'Sent Aug 27 \u00b7 not opened yet' + 'NUDGE CLIENT USER' near the top, and ~230px lower 'Proposal \u00b7 v1 / AWAITING SIGNATURE / SENT YESTERDAY \u2014 NUDGE CLIENT USER' plus the SENT/OPENED/READING/MOST READ strip.",
+    "evidence": "probe/repro-F78.png (source: shots/w1440-prework-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F79",
+    "verdict": "reproduced",
+    "reason": "Same CLS shift as F24: probe/03-interactive-probe.md \u00a78 confirms a 0.1189 shift firing ~3.3-3.6s after paint, attributed to the needs-attention and Schedule-dates sections, unaffected by prefers-reduced-motion.",
+    "evidence": "probe/03-interactive-probe.md:118-131",
+    "revised_claim": ""
+  },
+  {
+    "id": "F80",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png shows 'PEOPLE Nobody on it yet' and 'CALL SHEET \u00b7 0' at top; w1440-rich-s3.png shows the actual roster invitation ('You're on the call sheet as lead...') at the foot \u2014 the two never share a frame.",
+    "evidence": "probe/repro-F80.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F81",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png ticket row reads 'PIECES \u2014 3 unspecified'; w1440-region-head-ffe.png shows the h2 reads 'Pieces' with 'the FF&E schedule' only as an 11px subtitle line.",
+    "evidence": "probe/repro-F81.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F82",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png / w1280-rich-s0.png: spine shows 'IN HAND 18 min' (or '20m'/'21m' at 1280) while the drawer 700px below shows 'IN HAND TODAY 1h 09m' (or '1h 12m') \u2014 two different numbers, same visual weight.",
+    "evidence": "probe/repro-F82.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F83",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s3.png: 'AUTHORIZATIONS & TRADE SCOPES' with its two-sentence explanatory prose, 'No authorizations recorded yet', and 'DRAFT A TRADE SCOPE' occupy a large block with no live authorization content.",
+    "evidence": "probe/repro-F83.png (source: shots/w1440-rich-s3.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F84",
+    "verdict": "reproduced",
+    "reason": "layout-measurements.md's own table shows rail ink% reads 54.9% at s0, s1, s2 and s3 alike for rich/1440 \u2014 confirmed by this pass's own visual comparison of w1440-spine-full.png against w1440-rich-s2.png (identical marker/index block).",
+    "evidence": "probe/repro-F84.png (source: shots/w1440-spine-full.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F85",
+    "verdict": "reproduced",
+    "reason": "margin-rail.tsx:251 confirmed verbatim: aria-label={isFullRail ? 'Margin' : undefined} \u2014 at 1180-1439 (not full-rail) the <aside> gets no aria-label before the trigger is tapped.",
+    "evidence": "apps/designer-portal/src/components/document/margin-rail.tsx:251",
+    "revised_claim": ""
+  },
+  {
+    "id": "F86",
+    "verdict": "reproduced",
+    "reason": "grep for 'useReducedMotion' inside apps/designer-portal/src/components/document/ returns zero hits; grep of interruption-settings.tsx and the document tree found no motion toggle.",
+    "evidence": "apps/designer-portal/src/hooks/useReducedMotion.ts (0 consumers under components/document/)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F87",
+    "verdict": "reproduced",
+    "reason": "globals.css confirmed 'section[aria-label=\"Schedule rule\"] { top: var(--doc-seam-height,0px) }' as the ticket's only sticky top-0 sibling \u2014 a re-resolving seam value re-anchors this sticky element on every change.",
+    "evidence": "apps/designer-portal/src/app/globals.css:1026; apps/designer-portal/src/components/document/schedule/schedule-rule-region.tsx:199",
+    "revised_claim": ""
+  },
+  {
+    "id": "F88",
+    "verdict": "reproduced",
+    "reason": "grep across components/document/, use-region-fold.ts and use-document-running-index.ts for 'startTransition'/'useTransition' returns only the unrelated mutation hook name 'useTransitionCustomCommissionRevision' in custom-commission-sheet.tsx.",
+    "evidence": "apps/designer-portal/src/components/document/rooms/piece/custom-commission-sheet.tsx:127 (unrelated hook name; 0 real React transitions)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F89",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s1.png / w1440-fold-seam-folded.png show 'Client approvals'/'Schedule dates' folded on arrival with only 'UNFOLD \u2193' \u2014 no visual marker distinguishes a shipped default from a designer's own prior fold.",
+    "evidence": "probe/repro-F89.png (source: shots/w1440-rich-s1.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F90",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png's drawer strip (Library/People/The Scans/Ledgers/Find anything/IN HAND TODAY/THE POST) names no 'start a client' action; command-bar.tsx confirms openCaptureLead/openOpenProject are only reachable as \u2318K search results, not standing UI.",
+    "evidence": "probe/repro-F90.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F91",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s2.png: 'Plan the project work' / its explanatory sentence / 'ADD THE FIRST TASK' and 'FOLIO + FILE' visibly occupy a large share of the 'active region' band above the actual FF&E lines.",
+    "evidence": "probe/repro-F91.png (source: shots/w1440-rich-s2.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F92",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s3.png: the 310px authorizations block, the accounts line, 'Closing the book', and the roster nudge are the only working content in the foot frame, consistent with the claimed 14.7% carrying share.",
+    "evidence": "probe/repro-F92.png (source: shots/w1440-rich-s3.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F93",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s1.png shows ticket 'FOLD \u2191', 'Client approvals...UNFOLD \u2193', 'Schedule dates...UNFOLD \u2193', and 'Schedule...FOLD \u2191' all on one screen with no marker for why each is in its state.",
+    "evidence": "probe/repro-F93.png (source: shots/w1440-rich-s1.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F94",
+    "verdict": "reproduced",
+    "reason": "Same DOM fact as F16: w1440-prework-s0.png's structure and layout-measurements.md's DOM query confirm zero [data-region-head]/[data-index-region] elements on the proposal document.",
+    "evidence": "probe/repro-F94.png (source: shots/w1440-prework-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F95",
+    "verdict": "reproduced",
+    "reason": "use-region-fold.ts:125 confirmed verbatim 'if (forceOpen && value) return;' with no toast/message; layout.tsx:38-42 confirmed to mount no ToastProvider on this route.",
+    "evidence": "apps/designer-portal/src/components/document/region/use-region-fold.ts:125-133",
+    "revised_claim": ""
+  },
+  {
+    "id": "F96",
+    "verdict": "reproduced",
+    "reason": "w1440-spine-full.png: 'PUT DOWN', the 7-mark row, and the 'Project/ACTIVE' caption all sit within roughly the first 145px of the rail, above the timer card and presence line.",
+    "evidence": "probe/repro-F96.png (source: shots/w1440-spine-full.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F97",
+    "verdict": "reproduced",
+    "reason": "m390-rich-s0.png confirms the ticket rests already in its 2-line seam form at scrollY=0 on mobile \u2014 the 8 rows (incl. Boards/Money/People) require tapping 'UNFOLD \u2193' first.",
+    "evidence": "probe/repro-F97.png (source: shots/m390-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F98",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s3.png: 'Closing the book \u00b7 0 OF 6 CLOSED OUT' prints with no subtitle explaining the six items or the act of closing.",
+    "evidence": "probe/repro-F98.png (source: shots/w1440-rich-s3.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F99",
+    "verdict": "reproduced",
+    "reason": "w1280-spine-glyph-rail.png: the 7 marker bars stack vertically flush to the left edge of the 56px column with no visible left margin, consistent with x=0 start under overflow-hidden.",
+    "evidence": "probe/repro-F99.png (source: shots/w1280-spine-glyph-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F100",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png: 'No client linked \u2014 attach one \u2197' at the top, 'Invoice...send a reminder' mid-frame, and 'MESSAGE THE CLIENT'/'PREVIEW AS THE CLIENT' lower \u2014 all in one screen alongside the no-client line.",
+    "evidence": "probe/repro-F100.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F101",
+    "verdict": "reproduced",
+    "reason": "'IN THE MARGIN \u00b7 7' prints only inside m390-mobile-spine-sheet.png; m390-rich-s0/s1/s2/s3.png show no persistent margin-count badge in the mobile bar or elsewhere at rest.",
+    "evidence": "probe/repro-F101.png (source: shots/m390-mobile-spine-sheet.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F102",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s2.png's spine caption reads 'Pieces' at the same moment the page's own h2 (w1440-region-head-ffe.png) also reads 'Pieces' verbatim, just at 11-12px vs 24px.",
+    "evidence": "probe/repro-F102.png (source: shots/w1440-rich-s2.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F103",
+    "verdict": "state-dependent",
+    "reason": "This finding is itself flagged low-confidence (0.7) by its own author and asks to be settled by opening the margin sheet plus checking the account avatar at 1280 \u2014 not something a static screenshot set resolves either way.",
+    "evidence": "shots/w1280-spine-glyph-rail.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F104",
+    "verdict": "reproduced",
+    "reason": "grep of globals.css's ~12 prefers-reduced-motion blocks (confirmed none reference job-ticket's pin/fold class names) combined with probe \u00a71's finding that the fold is currently a hard cut in both motion regimes \u2014 there is genuinely no existing reduced-motion sibling for a transition that doesn't yet",
+    "evidence": "apps/designer-portal/src/app/globals.css (prefers-reduced-motion blocks); probe/03-interactive-probe.md:11-20",
+    "revised_claim": ""
+  },
+  {
+    "id": "F105",
+    "verdict": "reproduced",
+    "reason": "probe/03-interactive-probe.md \u00a72 confirmed 3 clean aria-current transitions during a scripted scroll (400/1200/1960) with no aria-live region anywhere in use-document-running-index.ts.",
+    "evidence": "probe/03-interactive-probe.md:33-45",
+    "revised_claim": ""
+  },
+  {
+    "id": "F106",
+    "verdict": "reproduced",
+    "reason": "doc-spine.tsx confirmed 'PUT DOWN' sits at the permanent top of the >=1180 spine; mobile-bar.tsx:285-296 confirmed the same act is nested one level inside the mobile bar's More menu at 390.",
+    "evidence": "apps/designer-portal/src/components/document/mobile/mobile-bar.tsx:285-296",
+    "revised_claim": ""
+  },
+  {
+    "id": "F107",
+    "verdict": "reproduced",
+    "reason": "schedule-rule-region.tsx:181-192 confirmed verbatim: the folded branch still renders {glance} and {phaseAdvance} beside the FoldSeam, unlike a region whose fold hides everything but the seam line.",
+    "evidence": "apps/designer-portal/src/components/document/schedule/schedule-rule-region.tsx:178-193",
+    "revised_claim": ""
+  },
+  {
+    "id": "F108",
+    "verdict": "reproduced",
+    "reason": "w1440-spine-full.png: fallback captions ('0 IN THE LOG', 'NOT SCHEDULED') and a live value ('$6,200 OWED') render at identical font size/weight/row position in the same component.",
+    "evidence": "probe/repro-F108.png (source: shots/w1440-spine-full.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F109",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s1.png shows a bare mono line reading only 'BAND' between 'No active phase handoffs need attention.' and the 'Schedule' head, with no object or visible destination.",
+    "evidence": "probe/repro-F109.png (source: shots/w1440-rich-s1.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F110",
+    "verdict": "reproduced",
+    "reason": "red-letter-zone.tsx confirmed to have no Fold/FoldSeam usage anywhere in the file \u2014 it renders unconditionally (or null) with no fold mechanism, and no test file enforces this as policy the way shadow-gate.test.ts enforces the shadow budget.",
+    "evidence": "apps/designer-portal/src/components/document/red-letter-zone.tsx:82-99",
+    "revised_claim": ""
+  },
+  {
+    "id": "F111",
+    "verdict": "reproduced",
+    "reason": "w1440-spine-full.png: the 4 rows under 'ON THIS PAPER' distinguish only the current aria-current row; nothing marks Client approvals/Schedule as 'already passed' once scrolled beyond them.",
+    "evidence": "probe/repro-F111.png (source: shots/w1440-spine-full.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F112",
+    "verdict": "reproduced",
+    "reason": "job-ticket.tsx:219-226 confirmed the IntersectionObserver's threshold:0 sentinel fires the same setPinned(!entry.isIntersecting) regardless of scroll direction or speed \u2014 no direction check or dwell timer exists in the file.",
+    "evidence": "apps/designer-portal/src/components/document/job-ticket.tsx:219-244",
+    "revised_claim": ""
+  },
+  {
+    "id": "F113",
+    "verdict": "reproduced",
+    "reason": "probe/03-interactive-probe.md \u00a78 and its own caveats section confirm the ~283px ticket jump (independently measured in \u00a71 via before/after DOM rects) does not appear among the PerformanceObserver layout-shift entries captured in either motion pass.",
+    "evidence": "probe/03-interactive-probe.md:\u00a78 caveats",
+    "revised_claim": ""
+  },
+  {
+    "id": "F114",
+    "verdict": "reproduced",
+    "reason": "schedule-rule-region.tsx confirmed 'defaultFolded: true' passed to useRegionFold \u2014 the Schedule frame is folded by default on this document.",
+    "evidence": "apps/designer-portal/src/components/document/schedule/schedule-rule-region.tsx:75-78",
+    "revised_claim": ""
+  },
+  {
+    "id": "F115",
+    "verdict": "reproduced",
+    "reason": "command-bar.tsx confirms 'Capture a lead \u00b7 begin a Brief' and 'Open a project \u00b7 no proposal needed' are two distinct dispatched intents (openCaptureLead/openOpenProject) with no visible on-screen criterion distinguishing them before typing/selecting.",
+    "evidence": "apps/designer-portal/src/components/document/command-bar.tsx:170-188",
+    "revised_claim": ""
+  },
+  {
+    "id": "F116",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s3.png: the spine caption still bolds 'Money' at the foot while the visible frame shows Authorizations/Accounts/Closing-the-book/roster content, none of it Money.",
+    "evidence": "probe/repro-F116.png (source: shots/w1440-rich-s3.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F117",
+    "verdict": "reproduced",
+    "reason": "row-wash.tsx confirmed useRowWash() wires only onPointerMove/onPointerEnter (markInkPoint) \u2014 no pointerdown/touchstart/click fallback exists for opening the wash without hover.",
+    "evidence": "apps/designer-portal/src/components/document/row-wash.tsx:19-34",
+    "revised_claim": ""
+  },
+  {
+    "id": "F118",
+    "verdict": "reproduced",
+    "reason": "Same CLS event as F24/F79 \u2014 probe confirms the arrival is a silent DOM reflow with no accompanying aria-live announcement anywhere in the schedule-rule-region.tsx source.",
+    "evidence": "probe/03-interactive-probe.md:118-131",
+    "revised_claim": ""
+  },
+  {
+    "id": "F119",
+    "verdict": "reproduced",
+    "reason": "w1440-guide-or-red-letter.png shows the RedLetterZone variant rendering with no marker indicating a substitution occurred; page.tsx:1838-1847's ternary (confirmed to exist) has no visible-state counterpart.",
+    "evidence": "probe/repro-F119.png (source: shots/w1440-guide-or-red-letter.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F120",
+    "verdict": "reproduced",
+    "reason": "globals.css:1034/1037 and money-region.tsx:48 confirmed scroll-margin-top is set only on [data-index-region] region roots; grep of ticket-row/Fold-button markup found no equivalent scroll-margin-top on child controls.",
+    "evidence": "apps/designer-portal/src/app/globals.css:1026-1037",
+    "revised_claim": ""
+  },
+  {
+    "id": "F121",
+    "verdict": "reproduced",
+    "reason": "mobile-margin-chips.tsx:98-114 confirmed py-[0.32rem] padding around unstyled text-[11px] with no explicit leading \u2014 consistent with an estimated ~21-26px total height, under the 24px SC 2.5.8 floor.",
+    "evidence": "apps/designer-portal/src/components/document/mobile/mobile-margin-chips.tsx:98-114",
+    "revised_claim": ""
+  },
+  {
+    "id": "F122",
+    "verdict": "state-dependent",
+    "reason": "Confirmed the seam prints only 'money-at-risk' text on this seed (w1440-ticket-seam.png); ticket-derivation.ts's RANK_ORDER does name a 'piece-stuck' rank 2, but no captured state or seed data ever surfaces that seam text to check its wording against a PO problem.",
+    "evidence": "shots/w1440-ticket-seam.png; apps/designer-portal/src/lib/document/ticket-derivation.ts:826-830",
+    "revised_claim": ""
+  },
+  {
+    "id": "F123",
+    "verdict": "reproduced",
+    "reason": "money-ladder.ts:5 confirmed the comment 'six-rung ladder in dependency order: budget \u2192 plan \u2192 authorized \u2192 moved \u2192...'; grep across the FF&E/procurement files found no equivalent named rung ladder for PO/receiving state.",
+    "evidence": "apps/designer-portal/src/lib/document/money-ladder.ts:5",
+    "revised_claim": ""
+  },
+  {
+    "id": "F124",
+    "verdict": "state-dependent",
+    "reason": "Ticket prints 'DATES \u2014 No install date yet \u2192' on this seed (0 phases, 'not scheduled') \u2014 there is no scheduled date to move, so no shot or probe could exercise schedule-ripple-derivation.ts's actual warning UI before a commit.",
+    "evidence": "shots/w1440-rich-s0.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F125",
+    "verdict": "state-dependent",
+    "reason": "w1440-prework-s0/s1.png do show the proposal's send-wall state clearly (Sent Aug 27/not opened yet, Nudge Client User, Input needed/blocks Project activation) \u2014 but whether that reads as legible specifically 'for a junior' is a subjective judgment this program's evidence can't settle either way.",
+    "evidence": "shots/w1440-prework-s0.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F126",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0/s1/s2/s3.png all show 'PUT DOWN' at identical top-left position and size across all four states.",
+    "evidence": "probe/repro-F126.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F127",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png: against an otherwise cream/charcoal page, the terracotta-bordered 'NEEDS ATTENTION' box is the one strong color break in the frame.",
+    "evidence": "probe/repro-F127.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F128",
+    "verdict": "reproduced",
+    "reason": "grep of globals.css:339-346 confirmed .has-wash:hover pairs with .has-wash:focus-within on the same rule (not a separate hover-only rule); doc-spine.tsx's hover classes were likewise found paired with focus-visible variants.",
+    "evidence": "apps/designer-portal/src/app/globals.css:338-346",
+    "revised_claim": ""
+  },
+  {
+    "id": "F129",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png: 'START \u2014  TARGET \u2014  SET A BUDGET BAND  PHASES \u25b8' shows two dash fields; w1440-letterhead-vitals-phases-open.png shows the same box height before/after opening PHASES with no content revealed.",
+    "evidence": "probe/repro-F129.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F130",
+    "verdict": "reproduced",
+    "reason": "w1440-spine-full.png shows a visibly empty run of rail stock below the timer/presence block, consistent with the measured 270px longest empty run at y 630-900.",
+    "evidence": "probe/repro-F130.png (source: shots/w1440-spine-full.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F131",
+    "verdict": "reproduced",
+    "reason": "m390-rich-s0.png confirms the ticket is already in its 2-line collapsed seam form ('$6,200 owed you...UNFOLD \u2193') at scrollY=0 \u2014 the 8-row unfolded form seen at 1440/1280 s0 never appears at 390.",
+    "evidence": "probe/repro-F131.png (source: shots/m390-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F132",
+    "verdict": "reproduced",
+    "reason": "page.tsx confirmed <main> closes at line 2305 and MarginRail mounts afterward at 2311-2334 \u2014 a sequential Tab user reaches every ticket/region control before the margin in DOM order.",
+    "evidence": "apps/designer-portal/src/app/(document)/doc/[id]/page.tsx:2305,2311-2334",
+    "revised_claim": ""
+  },
+  {
+    "id": "F133",
+    "verdict": "reproduced",
+    "reason": "w1440-margin-rail.png / w1280-margin-sheet-open.png: 'TIME \u00b7 AUG 29' label line is directly followed by 'Time \u00b7 Aug 29' body line in the same chip (and again for AUG 27) \u2014 the same string in two cases.",
+    "evidence": "probe/repro-F133.png (source: shots/w1440-margin-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F134",
+    "verdict": "reproduced",
+    "reason": "w1440-letterhead-vitals-phases-open.png shows the PHASES arrow flipped to \u25be (open) with the same box height as before and no content rendered beneath it (0 phases configured on this doc).",
+    "evidence": "probe/repro-F134.png (source: shots/w1440-letterhead-vitals-phases-open.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F135",
+    "verdict": "reproduced",
+    "reason": "w1280-margin-tab-closed.png confirms the margin sheet is off-canvas (only the 'MARGIN \u2190' tab visible) until tapped, matching the data-margin-mode='sheet' / translate-x-full state.",
+    "evidence": "probe/repro-F135.png (source: shots/w1280-margin-tab-closed.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F136",
+    "verdict": "reproduced",
+    "reason": "w1440-instruments-row.png: 'MESSAGE THE CLIENT'/'PREVIEW AS THE CLIENT'/'SHARING \u00b7 MILESTONES'/'CALL SHEET \u00b7 0' sit directly under the needs-attention zone, whose own named acts are 'SEND REMINDER'/'OPEN THE SCHEDULE'.",
+    "evidence": "probe/repro-F136.png (source: shots/w1440-instruments-row.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F137",
+    "verdict": "reproduced",
+    "reason": "w1440-spine-full.png: 'JUST YOU \u00b7 VISIBLE TO THE STUDIO' is the rail's last line, describing session collaboration rather than document position, unchanged across states per layout-measurements.md.",
+    "evidence": "probe/repro-F137.png (source: shots/w1440-spine-full.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F138",
+    "verdict": "reproduced",
+    "reason": "doc-letterhead.tsx:52 confirmed '<header id=\"document-project-status\">'; page.tsx confirmed this sits inside '<main data-document-paper>' (opened :1787) \u2014 a <header> nested in sectioning content is not exposed as the banner landmark.",
+    "evidence": "apps/designer-portal/src/components/document/doc-letterhead.tsx:52; apps/designer-portal/src/app/(document)/doc/[id]/page.tsx:1787,1789",
+    "revised_claim": ""
+  },
+  {
+    "id": "F139",
+    "verdict": "reproduced",
+    "reason": "mobile-sheets.tsx:266,272 confirmed both the backdrop 'Dismiss' button and the drag-handle/panel wrapper carry tabIndex={-1}; no separate visible close icon exists inside the sliding panel itself.",
+    "evidence": "apps/designer-portal/src/components/document/mobile/mobile-sheets.tsx:263-292",
+    "revised_claim": ""
+  },
+  {
+    "id": "F140",
+    "verdict": "reproduced",
+    "reason": "w1280-spine-glyph-rail.png shows Put down, the vertical 7-mark stack, and 'Project/ACTIVE' all above the compact timer, matching the 1440 top-mixing pattern (F96) at 1280 too.",
+    "evidence": "probe/repro-F140.png (source: shots/w1280-spine-glyph-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F141",
+    "verdict": "reproduced",
+    "reason": "layout-measurements.md's region\u2192y map (money-head y=2397px on rich/1440) combined with w1440-rich-s0.png (the MONEY row at scroll 0) confirms the balance and its action live roughly 2400px apart on the same scroll axis.",
+    "evidence": "probe/repro-F141.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F142",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png shows 'Project / ACTIVE' (spine) and 'THE JOB \u00b7 PROJECT' (ticket) on the same screen; m390-mobile-spine-sheet.png shows 'Project / ACTIVE' again as a stage-progression row \u2014 same word, three roles.",
+    "evidence": "probe/repro-F142.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F143",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s3.png: 'LEAH HARTWELL / hands on the work: you' prints in plain sentence case directly under a rule with no further framing distinguishing it as a role label.",
+    "evidence": "probe/repro-F143.png (source: shots/w1440-rich-s3.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F144",
+    "verdict": "reproduced",
+    "reason": "shelves.ts:60-68 confirmed the comment verbatim: 'F62 \u2014 one name for one thing. The row, the leaf, the page and \u2318K all read Boards' \u2014 the ticket row itself reads 'BOARDS' with no 'mood board' synonym anywhere on screen.",
+    "evidence": "apps/designer-portal/src/lib/document/shelves.ts:60-68",
+    "revised_claim": ""
+  },
+  {
+    "id": "F145",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png: 'No client linked \u2014 attach one \u2197' prints in warm-tinted italic directly under 'Chen Residence', before any task-relevant content.",
+    "evidence": "probe/repro-F145.png (source: shots/w1440-rich-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F146",
+    "verdict": "reproduced",
+    "reason": "fold-seam.tsx:73 confirmed the summary span carries the 'truncate' class; 'NO DECISION LEAD \u00b7 NO APPROVALS AUTHORED' is 41 characters, verified by direct count.",
+    "evidence": "apps/designer-portal/src/components/document/region/fold-seam.tsx:73",
+    "revised_claim": ""
+  },
+  {
+    "id": "F147",
+    "verdict": "reproduced",
+    "reason": "page.tsx:1838-1847 confirmed the guide/red-letter next-up logic lives in the header stack; grep of doc-spine.tsx/spine-running-index.tsx found no equivalent 'what needs you next' computation on the rail.",
+    "evidence": "apps/designer-portal/src/app/(document)/doc/[id]/page.tsx:1838-1847",
+    "revised_claim": ""
+  },
+  {
+    "id": "F148",
+    "verdict": "reproduced",
+    "reason": "grep confirmed strata-sweep/StrataSweep is consumed by worktable/library-reach-in.tsx and the rooms/piece/* tree, and NOT by doc-letterhead.tsx, job-ticket.tsx, doc-spine.tsx, or margin-rail.tsx.",
+    "evidence": "apps/designer-portal/src/components/document/worktable/library-reach-in.tsx (present); doc-letterhead.tsx/job-ticket.tsx/doc-spine.tsx/margin-rail.tsx (absent)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F149",
+    "verdict": "reproduced",
+    "reason": "grep confirmed exactly two production consumers of RowWash/.has-wash: desk-roster.tsx and ffe-section.tsx \u2014 the ticket, spine, and region-head files carry no .has-wash class.",
+    "evidence": "apps/designer-portal/src/components/document/desk-roster.tsx, ffe-section.tsx (only 2 consumers)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F150",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s3.png: 'The accounts \u00b7 this project \u00b7 $0 BUDGET \u00b7 $14,420 COMMITTED \u00b7 20% MARGIN \u00b7 STUDIO EYES ONLY' prints with no indication of who is or isn't cleared to view/act on it.",
+    "evidence": "probe/repro-F150.png (source: shots/w1440-rich-s3.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F151",
+    "verdict": "reproduced",
+    "reason": "letterhead-vitals.tsx:377 confirmed 'const [phasesOpen, setPhasesOpen] = useState(false);' \u2014 a plain, unpersisted component state that resets on remount.",
+    "evidence": "apps/designer-portal/src/components/document/letterhead-vitals.tsx:377",
+    "revised_claim": ""
+  },
+  {
+    "id": "F152",
+    "verdict": "reproduced",
+    "reason": "w1280-spine-glyph-rail.png: the 7 marks stack vertically across roughly half the visible rail height, a materially different read from the compact horizontal row seen at 1440 (w1440-spine-full.png).",
+    "evidence": "probe/repro-F152.png (source: shots/w1280-spine-glyph-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F153",
+    "verdict": "reproduced",
+    "reason": "m390-rich-s2.png: the 'IN PRODUCTION' chip sits close against '$5,700' with a visibly tight gap on the M\u00f8bler Lounge Chair line, forcing the item name onto more wrapped lines.",
+    "evidence": "probe/repro-F153.png (source: shots/m390-rich-s2.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F154",
+    "verdict": "reproduced",
+    "reason": "red-letter-zone.tsx:82 confirmed the <section> carries only 'rounded/border/bg/px/py' classes with no 'my-*' margin; document-guide.tsx:75 confirmed 'className=\"my-5 border-y ... py-4\"' \u2014 different outer footprints for the two mutually-exclusive branches.",
+    "evidence": "apps/designer-portal/src/components/document/red-letter-zone.tsx:82; apps/designer-portal/src/components/document/document-guide.tsx:75",
+    "revised_claim": ""
+  },
+  {
+    "id": "F155",
+    "verdict": "reproduced",
+    "reason": "w1440-region-head-ffe.png: the h2 reads 'Pieces' with 'the FF&E schedule, by room \u00b7 1 group \u00b7 3 lines' only in the smaller subtitle line below it.",
+    "evidence": "probe/repro-F155.png (source: shots/w1440-region-head-ffe.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F156",
+    "verdict": "reproduced",
+    "reason": "ticket-derivation.ts confirmed three distinct negation patterns verbatim: 'No rooms yet' (:433), 'Nothing filed' (:540), 'Nobody on it yet' (:732); money-region.tsx separately uses 'no budget yet' \u2014 at least three different phrasings for zero.",
+    "evidence": "apps/designer-portal/src/lib/document/ticket-derivation.ts:433,540,732; apps/designer-portal/src/components/document/commercial/money-region.tsx:184",
+    "revised_claim": ""
+  },
+  {
+    "id": "F157",
+    "verdict": "reproduced",
+    "reason": "w1440-prework-s0.png shows no 'IN HAND' timer box under the caption, unlike w1440-rich-s0.png's identical-width shot which does show one.",
+    "evidence": "probe/repro-F157.png (source: shots/w1440-prework-s0.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F158",
+    "verdict": "reproduced",
+    "reason": "doc-colophon.tsx:102 confirmed the wrapper is 'mt-14 border-t pb-6 pt-3' with no entrance-animation class; w1440-rich-s3.png shows no visible motion cue at the foot (this is a static-screenshot observation about absence of an animation class, consistent with but not proof of 'no motion at runtime').",
+    "evidence": "probe/repro-F158.png (source: shots/w1440-rich-s3.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F159",
+    "verdict": "reproduced",
+    "reason": "w1440-rich-s0.png/w1440-ticket-unfolded.png: 'DRAWINGS \u2014 Nothing filed \u2192' and 'PEOPLE \u2014 Nobody on it yet \u2192' print with a trailing arrow but plainly negative copy.",
+    "evidence": "probe/repro-F159.png (source: shots/w1440-ticket-unfolded.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F160",
+    "verdict": "reproduced",
+    "reason": "w1440-margin-rail.png: two cards read 'Walk seed \u2014 draft invoice (design fee, phase 2)' and 'Walk seed \u2014 15 days overdue (receivables chase)' verbatim as their subtitle text.",
+    "evidence": "probe/repro-F160.png (source: shots/w1440-margin-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F161",
+    "verdict": "reproduced",
+    "reason": "w1440-margin-rail.png confirms all 7 visible cards are Money/Time kinds; margin-rail.tsx:488-513 confirmed '+ NOTE' and a bell icon exist as separate affordances, but neither is shown resolving a client message in any captured state.",
+    "evidence": "probe/repro-F161.png (source: shots/w1440-margin-rail.png)",
+    "revised_claim": ""
+  },
+  {
+    "id": "F162",
+    "verdict": "state-dependent",
+    "reason": "doc-raise's 270ms entrance class is confirmed to exist in globals.css and to be applied once at shell mount (page.tsx:1764), but this program's screenshot-only evidence cannot distinguish a cold load from an in-app navigation, so whether it replays on repeat visits is genuinely unverified here.",
+    "evidence": "apps/designer-portal/src/app/globals.css:249-256",
+    "revised_claim": ""
+  },
+  {
+    "id": "F163",
+    "verdict": "reproduced",
+    "reason": "registry-shortcuts.tsx confirms a generic 'g then X' chord registry exists app-wide; grep of mobile-bar.tsx and mobile-sheets.tsx found no touch-equivalent trigger for any registry chord, consistent with the claim.",
+    "evidence": "apps/designer-portal/src/components/document/registry-shortcuts.tsx:5-9,40,67",
+    "revised_claim": ""
+  },
+  {
+    "id": "F164",
+    "verdict": "reproduced",
+    "reason": "ffe-section.tsx's row-wash tone list (9 tones incl. terracotta for 'damaged') confirmed generic/state-based, not specifically PO-urgency-based; probe \u00a75 confirms the wash is purely a hover/interactivity affordance (clip-path reveal), carrying no PO semantics.",
+    "evidence": "apps/designer-portal/src/components/document/ffe-section.tsx:76,225; probe/03-interactive-probe.md \u00a75",
+    "revised_claim": ""
+  }
+]

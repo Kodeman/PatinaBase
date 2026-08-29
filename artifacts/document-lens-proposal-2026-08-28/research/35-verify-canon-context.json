@@ -1,0 +1,1150 @@
+[
+  {
+    "id": "F01",
+    "verdict": "open",
+    "reason": "Header/composition open ground; not covered by any of A-D.",
+    "evidence": "Cap the resting header at one third of the frame; everything below the guide sentence starts condensed.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F02",
+    "verdict": "amends:D8",
+    "reason": "D8: 'Studio Drawer persistent on every screen' -- moving its corner touches this.",
+    "evidence": "Below 1180 the studio puck yields its corner to the document bar's identity zone.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F03",
+    "verdict": "open",
+    "reason": "Drawer label truncation at 1280 is layout polish, not ruled ground.",
+    "evidence": "Drop or truncate one drawer zone below 1440 rather than letting two labels share the same run.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F04",
+    "verdict": "amends:I149",
+    "reason": "I149 ships the ticket's 'sticky two-line seam on scroll'; hysteresis band amends that mechanism.",
+    "evidence": "Make the seam height continuous over the pin band so the paper never jumps.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F05",
+    "verdict": "open",
+    "reason": "Process/seed-data note, not a design ruling.",
+    "evidence": "Re-run this walk against a seeded 4-room, 30+ line FF&E schedule before shipping any FF&E-region redesign.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F06",
+    "verdict": "open",
+    "reason": "Fix itself declines the cross-doc idea per D1 (out of scope); nothing here collides with NG1.",
+    "evidence": "Out of scope for a single-document lens per D1, but worth a desk-level cross-project install roster.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F07",
+    "verdict": "amends:I136",
+    "reason": "I136 gates the running index to '>=1440px only'; bringing it to 1180-1439 amends that gate.",
+    "evidence": "Bring the running index to 1180\u20131439 as glyph+number rows; never break a status word.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F08",
+    "verdict": "open",
+    "reason": "Focus-management bug, not addressed by any ruling.",
+    "evidence": "Park focus on the fold seam when a body unmounts; a scroll-driven density must never move focus at all.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F09",
+    "verdict": "amends:I149",
+    "reason": "The four shelf rows (Boards/Drawings/Spec/People) are I149's ticket rows; a door strip amends the seam.",
+    "evidence": "Give the seam a persistent, one-glyph door strip for the four shelf rows.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F10",
+    "verdict": "amends:I149",
+    "reason": "Money row consolidation touches I149's eight constant ticket rows.",
+    "evidence": "One money statement per frame; the others print only the number the frame lacks.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F11",
+    "verdict": "amends:I149",
+    "reason": "Changes when I149's sticky seam begins condensing.",
+    "evidence": "Start condensing the ticket with the letterhead's exit, not with a sentinel one screen lower.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F12",
+    "verdict": "amends:I136",
+    "reason": "Narrowing rails on sparse spreads amends I136's index-every-region default.",
+    "evidence": "Index every spread, or narrow both rails on spreads with nothing to index.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F13",
+    "verdict": "amends:I149",
+    "reason": "Reordering the seam's line-one content amends I149's ticket seam layout.",
+    "evidence": "Put the household name in line one of the seam, ahead of `THE JOB \u00b7 PROJECT`.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F14",
+    "verdict": "amends:I21",
+    "reason": "I21 already built the mobile Sections sheet; adding region rows amends that build, doesn't invent new ground.",
+    "evidence": "Put the four region rows in the Sections sheet under the stage list, same labels as desktop.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F15",
+    "verdict": "amends:I136",
+    "reason": "I136's running index is '>=1440px only'; keeping text labels at 1280 amends that gate.",
+    "evidence": "Keep the four index labels as text at 1280, even abbreviated, rather than dropping to glyphs only.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F16",
+    "verdict": "amends:I136",
+    "reason": "Wrapping spread bodies in real regions is prep work for I136's region-indexing doctrine.",
+    "evidence": "Indexing pre-work means first wrapping four spreads' bodies in real regions inside page.tsx \u2014 structure, not a data change.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F17",
+    "verdict": "open",
+    "reason": "Margin ordering by region-in-frame is open composition ground.",
+    "evidence": "Order the margin by the region in frame; anchor-matched items rise, the rest settle below a rule.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F18",
+    "verdict": "open",
+    "reason": "Margin heading/duplication at 1280 is open ground.",
+    "evidence": "One heading for the sheet; and let anchored items ride the paper as line chips at this tier.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F19",
+    "verdict": "open",
+    "reason": "Margin tab count label is open ground; not specified by D8 or any ruling.",
+    "evidence": "Tab prints `MARGIN \u00b7 7`; zero items prints `MARGIN` with no number.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F20",
+    "verdict": "amends:I146",
+    "reason": "I146 shipped 'seven stage sentences' for per-stage ticket content; row-folding by stage amends that.",
+    "evidence": "The ticket keeps rows the stage can carry; the rest fold to one counted line.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F21",
+    "verdict": "amends:I136",
+    "reason": "Proposes a condensed running-index at 1180-1439, amending I136's '>=1440px only' mount gate.",
+    "evidence": "Give 1180\u20131439 a condensed running-index form instead of none \u2014 even 4 one-word labels beat zero.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F22",
+    "verdict": "amends:I136",
+    "reason": "Adding extent/exception marks to index rows amends I136's running-index row content.",
+    "evidence": "Give each index row an extent bar and an exception mark drawn from the same needs data as the red letter.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F23",
+    "verdict": "open",
+    "reason": "FF&E line stamp content is open ground; not specified in canon.",
+    "evidence": "Let the line's stamp carry ack/damage, and open the claim from the line the damage is on.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F24",
+    "verdict": "open",
+    "reason": "Data-fetch CLS is an engineering defect, not canon ground.",
+    "evidence": "Reserve the Schedule banner's height before the query resolves; a lens inherits this shift and will be blamed for it.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F25",
+    "verdict": "open",
+    "reason": "Drawings/Spec routing at compact widths is open ground (D3 only gates the true mobile milestone).",
+    "evidence": "Give Drawings/Spec a real 390 route (a sheet, not a redirect-to-desktop) before a lens spends more real estate on the same dead rows.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F26",
+    "verdict": "amends:D8",
+    "reason": "D8: Studio Drawer already 'carries IN HAND TODAY'; moving the timer there amends drawer content.",
+    "evidence": "Move the timer and presence line to the drawer, which already carries `IN HAND TODAY`.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F27",
+    "verdict": "amends:I149",
+    "reason": "Collapsing empty ticket rows amends I149's eight constant rows.",
+    "evidence": "Rows with nothing behind them collapse to one line: `Nothing filed in 5 of 8`.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F28",
+    "verdict": "open",
+    "reason": "Margin note placement is open ground.",
+    "evidence": "Move the first-touch note under the first item, or make it one line with the rest on press.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F29",
+    "verdict": "open",
+    "reason": "Rail/region duplication logic is open ground.",
+    "evidence": "The rail prints a region's value only while that region is out of frame.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F30",
+    "verdict": "amends:R15",
+    "reason": "R15 ties the sanctioned motion to 'prefers-reduced-motion disables it'; a CSS-first contract amends the enforcement mechanism, not the ruling itself.",
+    "evidence": "Keep the lens's reduced-motion contract in CSS; any JS gate inherits one render of wrong answer on first paint.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F31",
+    "verdict": "amends:D8",
+    "reason": "Timer/presence eviction targets the Studio Drawer (D8) as the destination.",
+    "evidence": "Evict the timer card and presence line to the rail's foot sheet; keep the exit.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F32",
+    "verdict": "amends:I136",
+    "reason": "Borrowing the mobile sheet's text list for 1180-1439 amends I136's '>=1440px only' gate.",
+    "evidence": "Let the 1180-1439 rail borrow the mobile sheet's text list, at least on demand.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F33",
+    "verdict": "open",
+    "reason": "Margin overlay->sticky transition notice is open ground.",
+    "evidence": "No fix required if intentional \u2014 but the transition itself should carry a beat (a one-time notice) the first time a designer crosses it.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F34",
+    "verdict": "amends:I149",
+    "reason": "Freezing seam height during programmatic scroll amends I149's sticky-seam mechanism.",
+    "evidence": "Freeze the seam at its condensed floor for the duration of any programmatic scroll; extend the 700ms jump lock to own it.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F35",
+    "verdict": "open",
+    "reason": "Browser support/testing infra, not canon ground.",
+    "evidence": "Ship any scroll-timeline behind CSS.supports() with the rAF path as the default, and add a real browserslist before pricing the no-fallback branch.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F36",
+    "verdict": "open",
+    "reason": "Test-quality fix, not canon ground.",
+    "evidence": "Delete the character-count regex; assert in the DOM that SectionStageLineMount is the first element child of [data-active-section].",
+    "revised_claim": ""
+  },
+  {
+    "id": "F37",
+    "verdict": "open",
+    "reason": "CSS var fallback cleanup, not canon ground.",
+    "evidence": "If the seam is registered, delete every var() fallback arm and pin the correctness on the registration's initial-value instead.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F38",
+    "verdict": "open",
+    "reason": "Test coverage gap, not canon ground.",
+    "evidence": "Add one Playwright assertion: after a Money-row click, the money head's top sits within 4px of the seam's bottom.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F39",
+    "verdict": "open",
+    "reason": "New fold-voice taxonomy is open ground.",
+    "evidence": "Add a fourth, lowest, non-persisting voice that may only move full<->reduced and never to folded.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F40",
+    "verdict": "amends:D3",
+    "reason": "D3 gates the mobile milestone (390) where margin/spine collapse; header/vitals collapse at 390 amends that milestone's scope.",
+    "evidence": "At 390 collapse the instrument row and the letterhead vitals into the seam by default.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F41",
+    "verdict": "open",
+    "reason": "Focus-management bug, not addressed by any ruling.",
+    "evidence": "Park focus on the resulting FoldSeam button (mirror the unfold path's focusRegionHeading contract).",
+    "revised_claim": ""
+  },
+  {
+    "id": "F42",
+    "verdict": "open",
+    "reason": "SR live-region announcement is open ground (a11y gap).",
+    "evidence": "Add one polite live region announcing pin-state crossings only, debounced against the threshold-0 observer.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F43",
+    "verdict": "open",
+    "reason": "Sheet aria-label coverage is open ground.",
+    "evidence": "Give every Sheet kind a real aria-label (e.g. 'Sections', 'Margin item', 'Studio actions'), not only the timer.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F44",
+    "verdict": "amends:I149",
+    "reason": "Seam-height computation method amends I149's sticky seam implementation.",
+    "evidence": "Interpolate between two measured endpoints via ResizeObserver, never between two hard-coded pixel values.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F45",
+    "verdict": "amends:I149",
+    "reason": "Extends the jump-lock inside I149's seam mechanism.",
+    "evidence": "Extend the jump lock to pin the seam at its condensed floor for its whole duration, so landings are computed once.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F46",
+    "verdict": "amends:R99",
+    "reason": "R99: the Rule 'pins beneath the project title on scroll at reduced height'; merging two schedule doors amends this precedent.",
+    "evidence": "One schedule door on the paper; the rule becomes a line inside the region, not a sibling seam.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F47",
+    "verdict": "open",
+    "reason": "Capping the resting top band is open composition ground.",
+    "evidence": "Cap the resting top band at five items; everything else earns its way in.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F48",
+    "verdict": "open",
+    "reason": "390 money-chip layout is open ground.",
+    "evidence": "At 390 print only chips anchored to the region in frame; the rest live in the sheet.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F49",
+    "verdict": "open",
+    "reason": "390 FF&E ledger-act collapse is open ground.",
+    "evidence": "At 390 the region head's ledger acts collapse to one primary plus an overflow glyph.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F50",
+    "verdict": "amends:I149",
+    "reason": "Seam exception count display amends I149's seam content.",
+    "evidence": "Print the two, then the count it withheld: `\u00b7 +2 more`.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F51",
+    "verdict": "amends:I149",
+    "reason": "Schmitt-trigger pin/unpin points amend I149's scroll-pin mechanism (built on an IntersectionObserver at threshold:0).",
+    "evidence": "Give pin and unpin separate trigger points 60-80px apart (a Schmitt trigger), not one shared boundary.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F52",
+    "verdict": "amends:I149",
+    "reason": "Focus relocation on pin change is part of I149's sticky-seam behavior.",
+    "evidence": "Don't move focus on a scroll-driven pin change unless the control that had focus is about to be unmounted.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F53",
+    "verdict": "open",
+    "reason": "content-visibility as a render-cost technique is open ground (engineering choice).",
+    "evidence": "Replace the unmount's render-cost role with content-visibility: auto before removing it; the seed's 3 lines will never show the cost.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F54",
+    "verdict": "amends:R8",
+    "reason": "R8: 'affordances that do nothing teach the document to lie' -- distinguishing default vs. chosen fold state extends this honesty doctrine.",
+    "evidence": "A small dot or word in the seam distinguishing \"closed by you\" from \"closed by default.\"",
+    "revised_claim": ""
+  },
+  {
+    "id": "F55",
+    "verdict": "open",
+    "reason": "Mark-length variation by content is open ground.",
+    "evidence": "Vary mark length/weight by the region content each phase actually shelves.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F56",
+    "verdict": "amends:I149",
+    "reason": "Return-visit landing/seam identity touches I149's ticket seam.",
+    "evidence": "Either land at the top after a long absence, or make the seam carry the household name.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F57",
+    "verdict": "open",
+    "reason": "Real routes for Drawings/Spec at 1280 is open ground.",
+    "evidence": "Give Drawings and Spec real routes at 1280 (my studio's actual laptop width) instead of an inert row.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F58",
+    "verdict": "amends:I136",
+    "reason": "Chip visibility in the 1180-1439 compact tier touches I136's index/margin gate.",
+    "evidence": "At 1180\u20131439 keep positional chips on canvas; hide only the non-anchored ones.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F59",
+    "verdict": "amends:R8",
+    "reason": "A distinguishing pin-glyph for scroll-condensed vs. chosen-fold state extends R8's honest-affordance doctrine.",
+    "evidence": "Give scroll-condensed strips a distinct visual cue (e.g. a subtle pin glyph) that a chosen fold never wears.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F60",
+    "verdict": "amends:R99",
+    "reason": "Directly proposes extending R99's own 'sticky-anchored, var-driven' pattern from Schedule to the Ticket.",
+    "evidence": "Extend the var-driven sticky-anchored pattern from the Schedule glance to the Ticket's own collapse.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F61",
+    "verdict": "amends:NG4",
+    "reason": "R126's hover wash is specified as sweeping 'roster/FF&E lines'; content-visibility interaction is an implementation risk to that named mechanic.",
+    "evidence": "Prove the wash in a browser under content-visibility before adopting it on FF&E; otherwise confine c-v to approvals and money.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F62",
+    "verdict": "open",
+    "reason": "PO-ack/damage badge on the FF&E line is open ground; not specified in canon.",
+    "evidence": "Surface PO-ack and damage-claim state as a small badge on the FF&E line itself, even if filing still happens on the ledger sheet.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F63",
+    "verdict": "open",
+    "reason": "Terminology audit, not canon ground.",
+    "evidence": "Confirm on the live Orders sheet whether \"PO\" appears there; if the document itself never uses the term, a junior has no search string to start from.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F64",
+    "verdict": "open",
+    "reason": "Async fold-default latching is an engineering timing fix, not canon ground.",
+    "evidence": "Latch the FIRST resolved default before first paint (skeleton state), never flip an already-rendered-open body shut. What would settle this: throttle the regio\u2026",
+    "revised_claim": ""
+  },
+  {
+    "id": "F65",
+    "verdict": "open",
+    "reason": "Damage-report door placement is open ground.",
+    "evidence": "Add a damage-report door directly on the affected FF&E line, even if it opens the same off-document sheet.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F66",
+    "verdict": "open",
+    "reason": "New margin-card kind (procurement exception) is open ground; D8 only bars badges/pulsing counts on ledger sheets, not new card kinds.",
+    "evidence": "Give the margin a procurement-exception card kind (PO unacknowledged / damage claim) alongside Money and Time.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F67",
+    "verdict": "open",
+    "reason": "Scroll-offset restoration is a QA/verification gap, not canon ground.",
+    "evidence": "Probe the Orders sheet's open/close from a scrolled FF&E position and assert scrollY is restored, not just region-head Y.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F68",
+    "verdict": "amends:NG2",
+    "reason": "NG2 grants zero shadow budget outside the three named sites; fix explicitly complies by using rule-weight/value-step instead of depth -- not a collision.",
+    "evidence": "Separate the pinned seam from the paper with a rule weight or the paper/rail-stock value step, never depth.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F69",
+    "verdict": "open",
+    "reason": "e2e pixel-pinning is a test-maintenance note, not canon ground.",
+    "evidence": "Treat any rail widening as a weeks-band change touching two pixel-bound e2e specs and the shelf panel's left offset.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F70",
+    "verdict": "open",
+    "reason": "Contrast-gate file coverage is a test-maintenance note.",
+    "evidence": "Make the scan a glob over components/document/spine-*.tsx plus margin-rail.tsx before any spine refactor lands.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F71",
+    "verdict": "amends:I149",
+    "reason": "Explicit-Unfold vs. scroll-pin precedence is part of I149's sticky-seam behavior contract.",
+    "evidence": "A lens that condenses on scroll must decide whether her explicit expand outranks position; today it does not.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F72",
+    "verdict": "amends:I149",
+    "reason": "I149 defines the ticket as eight constant rows; rewriting the e2e contract amends how that invariant is asserted, not the invariant's canon status.",
+    "evidence": "Rewrite the count assertions as 'the rows this state promises', keyed off a data attribute the lens publishes.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F73",
+    "verdict": "open",
+    "reason": "Spacing-token consolidation is open ground.",
+    "evidence": "One spacing token per rank, declared by the page, not by each region.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F74",
+    "verdict": "amends:NG4",
+    "reason": "NG4 fixes the exact muted-ramp tokens (#4E4339/#5A4E43/#65594E); any new lighter-than-those text state touches that named register.",
+    "evidence": "Any new 'condensed, quieter ink' text state must not go lighter than ~#65594E's luminance on rail stock unless restricted to large/bold text (3:1 floor, L<=0.2\u2026",
+    "revised_claim": ""
+  },
+  {
+    "id": "F75",
+    "verdict": "open",
+    "reason": "Observer implementation choice, not canon ground.",
+    "evidence": "Any density observer should use a MutationObserver on <main> rather than inheriting this retry window.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F76",
+    "verdict": "open",
+    "reason": "Contrast-gate coverage gap, not canon ground.",
+    "evidence": "Extend contrast.test.ts to gate every condensed-density ink pair against #FCFAF6 at 4.5:1 before shipping reduced ink.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F77",
+    "verdict": "amends:I137",
+    "reason": "I137/C11 places the Record 'immediately before the colophon'; adding a press-to-top and household name amends colophon content.",
+    "evidence": "Print the household in the colophon line and give the seam a press-to-top on its identity.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F78",
+    "verdict": "open",
+    "reason": "Sent-state duplication is open ground.",
+    "evidence": "One sent-state line with one nudge; the activity strip carries detail, not a second verdict.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F79",
+    "verdict": "open",
+    "reason": "Needs-block height reservation is an engineering fix, not canon ground.",
+    "evidence": "Reserve the needs block's height before its query resolves so the one thing I read never moves.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F80",
+    "verdict": "open",
+    "reason": "Roster door consolidation is open ground.",
+    "evidence": "One roster door; the foot nudge should be the `PEOPLE` row's own empty state, not a second site.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F81",
+    "verdict": "open",
+    "reason": "FF&E vs. 'Pieces' naming/sizing is open ground; NG4 fixes type scale, not label choice.",
+    "evidence": "Print \"FF&E\" or \"Furniture schedule\" at the same size as \"Pieces,\" not only in the subtitle.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F82",
+    "verdict": "amends:D8",
+    "reason": "D8's drawer already carries 'IN HAND TODAY'; consolidating to one clock touches that drawer content.",
+    "evidence": "One clock. Keep the drawer's day total; the session figure lives in its sheet.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F83",
+    "verdict": "amends:I137",
+    "reason": "Foot/colophon teaching-copy reduction touches I137's Record-at-foot placement.",
+    "evidence": "Teach once per document like the margin note; then print the act alone.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F84",
+    "verdict": "open",
+    "reason": "Rail ink-density-on-scroll is open ground.",
+    "evidence": "Give the rail a live position signal that visibly changes with scroll, not just the caption text.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F85",
+    "verdict": "open",
+    "reason": "aria-label for the closed 1180-1439 aside is open ground.",
+    "evidence": "Give the closed 1180-1439 <aside> a static aria-label='Margin' regardless of open state.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F86",
+    "verdict": "amends:R15",
+    "reason": "R15 is the one ruling naming a specific reduced-motion contract ('prefers-reduced-motion disables it'); an in-app toggle would sit alongside that OS-only mechanism.",
+    "evidence": "Keep any new lens condensation a discrete, instant, prefers-reduced-motion-gated swap rather than a continuous scroll-scrub, sidestepping the need for a new to\u2026",
+    "revised_claim": ""
+  },
+  {
+    "id": "F87",
+    "verdict": "amends:R99",
+    "reason": "Binding the Schedule glance to the seam's floor rather than live height amends R99's condense-on-scroll mechanism.",
+    "evidence": "Bind the glance to the seam's condensed floor, not its live height, so only one thing moves.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F88",
+    "verdict": "open",
+    "reason": "React vs. DOM-attribute implementation choice, not canon ground.",
+    "evidence": "Write density as a DOM data-attribute imperatively in the rAF scroll handler; let CSS carry it and React re-render nothing.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F89",
+    "verdict": "amends:R8",
+    "reason": "Marking reader-set vs. default fold differently extends R8's honest-affordance doctrine to fold state.",
+    "evidence": "Mark a reader-set fold differently from a default one \u2014 one word on the seam is enough.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F90",
+    "verdict": "open",
+    "reason": "Desk-level 'start a new client' discoverability is Desk ground, outside the single-document lens (D1 scopes the document, not the Desk).",
+    "evidence": "Name both verbs on the desk; the document need not carry them, but recall alone should not.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F91",
+    "verdict": "open",
+    "reason": "Measurement-methodology bug in the audit tooling itself, not canon ground.",
+    "evidence": "Split the active-region bucket into body-rows vs region-chrome before setting targets.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F92",
+    "verdict": "amends:I137",
+    "reason": "Directly restates I137's own ruling: 'The Record moves to the foot of the paper... immediately before the colophon.'",
+    "evidence": "The foot condenses to the Record and the colophon; the rest yields on approach.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F93",
+    "verdict": "amends:R8",
+    "reason": "Chosen-fold-prints-verb vs. born-folded-prints-summary extends R8's affordance-honesty doctrine.",
+    "evidence": "A chosen fold prints its verb; a born-folded region prints its summary only.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F94",
+    "verdict": "amends:I136",
+    "reason": "A degraded navigator state for pre-project docs touches I136's running-index mount conditions.",
+    "evidence": "A lens's navigator needs its own honest empty/degraded state for pre-project documents, not silence.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F95",
+    "verdict": "open",
+    "reason": "Disabling vs. hiding the Fold control under forceOpen is open ground.",
+    "evidence": "Disable (not hide) the Fold control while forceOpen is true, with a tooltip naming why.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F96",
+    "verdict": "open",
+    "reason": "Rail top-zone visual separation is open composition ground.",
+    "evidence": "Separate the exit affordance from the live position readout visually (extra rule or spacing).",
+    "revised_claim": ""
+  },
+  {
+    "id": "F97",
+    "verdict": "amends:I149",
+    "reason": "I149's ticket ships default-collapsed on mobile; adding a second fold layer amends that state's intended depth.",
+    "evidence": "A lens should not add a second fold layer on top of the ticket's default-collapsed 390 state.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F98",
+    "verdict": "amends:I137",
+    "reason": "A colophon subtitle touches I137's Record/colophon placement and content.",
+    "evidence": "Add a one-line subtitle the way \"Authorizations & trade scopes\" and \"Pieces\" already get.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F99",
+    "verdict": "open",
+    "reason": "Compact-tier marker-bar sizing is open ground.",
+    "evidence": "Give the compact marks their own 24px glyph rather than a scaled-down bar set.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F100",
+    "verdict": "amends:R27",
+    "reason": "R27 defines the letterhead instruments row; gating client-bound instruments on client-linked state amends that row's mount logic.",
+    "evidence": "Client-bound instruments do not mount while the letterhead says no client is linked.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F101",
+    "verdict": "amends:D3",
+    "reason": "D3/I21's mobile bar is the relevant surface; surfacing a margin count there amends the mobile-bar's content, not its existence.",
+    "evidence": "Put a small margin count on the mobile bar itself, not only inside a sheet she has to open first.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F102",
+    "verdict": "amends:I136",
+    "reason": "Fusing the caption into I136's running-index reading-line marker amends that navigator's own mechanism.",
+    "evidence": "Fuse the caption into the running index's own reading-line marker rather than a separate text block.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F103",
+    "verdict": "open",
+    "reason": "Presence indicator at 1180-1439 is open ground.",
+    "evidence": "Surface presence somewhere persistent at 1180-1439 (e.g. beside the account avatar) rather than only in the full rail.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F104",
+    "verdict": "amends:R15",
+    "reason": "R15 is the precedent for 'exactly one' ambient motion with a reduced-motion fallback; a new ticket transition inherits that same reduced-motion-sibling requirement.",
+    "evidence": "Ship a reduced-motion block that keeps today's instant swap as the fallback once the animated version exists.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F105",
+    "verdict": "open",
+    "reason": "aria-current announcement for spine changes is open ground (a11y).",
+    "evidence": "Hand to U5: consider a polite aria-live region or aria-current alone (SR-dependent) for spine section changes.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F106",
+    "verdict": "amends:NG1",
+    "reason": "NG1: 'Esc or Put down is the only exit... one trip.' The finding itself argues for preserving that one-trip guarantee on mobile, aligning with, not violating, NG1.",
+    "evidence": "A lens must not push Put down a further level deeper on mobile; if anything, surface it, since D1's exit is the one act NG1 requires to always be one trip.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F107",
+    "verdict": "open",
+    "reason": "'Fold' vocabulary consistency across regions is open ground.",
+    "evidence": "Name this region's collapsed state something other than \"fold\" (e.g. \"glance\") so the vocabulary doesn't overpromise uniformity.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F108",
+    "verdict": "amends:I136",
+    "reason": "Visually receding empty-state index rows amends I136's running-index row rendering.",
+    "evidence": "Visually recede empty-state index rows (lighter weight, italic) distinct from populated ones.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F109",
+    "verdict": "open",
+    "reason": "Empty BAND label is open ground.",
+    "evidence": "Print the band's subject or drop the label; a lone eyebrow with no body is noise.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F110",
+    "verdict": "amends:I135",
+    "reason": "I135 establishes region-head doctrine ('always-visible-never-hover' overflow); codifying a never-yield rule for red-letter/money extends that same region-head discipline.",
+    "evidence": "A one-line comment or lint rule stating the yield rule from \u00a7Q4, so a future region inherits the constraint on purpose.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F111",
+    "verdict": "amends:I136",
+    "reason": "A visited/unvisited row state is a new feature on I136's running-index rows.",
+    "evidence": "Add a lightweight visited/unvisited state to the running index's own rows.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F112",
+    "verdict": "amends:I149",
+    "reason": "Asymmetric collapse/expand dwell timing amends I149's scroll-driven pin mechanism (IntersectionObserver threshold:0).",
+    "evidence": "Collapse eagerly on downward momentum; require ~150-200ms dwell above the unpin threshold before re-expanding.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F113",
+    "verdict": "open",
+    "reason": "CLS-tooling limitation is a QA/measurement note, not canon ground.",
+    "evidence": "Don't rely on CLS tooling alone to catch a lens's own sticky-height jumps; measure directly as this probe did.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F114",
+    "verdict": "amends:I136-errata",
+    "reason": "I136-errata: the schedule frame 'folds by default under key schedule-rule'; auto-unfolding on ripple risk amends that default.",
+    "evidence": "Auto-unfold the schedule frame when a date-move ripple would touch other rows; keep folded only when nothing downstream is affected.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F115",
+    "verdict": "amends:I148",
+    "reason": "I148 shipped the \u2318K 'WHERE THE WORK STANDS' group; a disambiguator line amends that palette's result presentation.",
+    "evidence": "Add a one-line disambiguator under each \u2318K result explaining when to pick it.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F116",
+    "verdict": "open",
+    "reason": "Rail fallback-key verification is a QA note, not canon ground.",
+    "evidence": "Verify the foot-of-paper fallback (last present key) reads correctly against what's actually visible at the foot.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F117",
+    "verdict": "amends:NG4",
+    "reason": "R126's hover wash is specified as pointer-driven ('sweeping open under the pointer'); a tap-driven equivalent would extend that named mechanic to touch.",
+    "evidence": "Confirm whether wash also plays on tap/focus at 390; if not, name a tap-driven equivalent so the affordance isn't desktop-only.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F118",
+    "verdict": "open",
+    "reason": "Async-insertion SR announcement is open ground (a11y).",
+    "evidence": "Hand to U5: confirm whether this insertion is announced; if not, add a polite live region or move it out of the async path.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F119",
+    "verdict": "open",
+    "reason": "Guide/red-letter substitution trace is a QA verification note.",
+    "evidence": "What would settle this: force deskGuidanceFailed=true in dev and confirm no distinguishing marker appears in either branch's markup.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F120",
+    "verdict": "open",
+    "reason": "Keyboard-tab clearance under the pinned seam is a QA verification note.",
+    "evidence": "A live keyboard Tab-walk past the pin threshold would settle whether a mid-region control ever lands under the seam.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F121",
+    "verdict": "open",
+    "reason": "Mobile chip tap-target sizing is open ground (a11y measurement note).",
+    "evidence": "Measure a live chip's getBoundingClientRect().height; add explicit leading or min-height if under 24px.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F122",
+    "verdict": "amends:I149",
+    "reason": "Seeding a piece-stuck exception to verify the seam's second line touches I149's ticket-seam exception display.",
+    "evidence": "Seed a piece-stuck exception and confirm the seam's second line actually names a PO/damage state legibly.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F123",
+    "verdict": "amends:I148",
+    "reason": "I148 shipped the six-rung money ladder; a parallel PO-status ladder would be a new sibling to that named ladder.",
+    "evidence": "A parallel PO-status ladder (Placed \u00b7 Confirmed \u00b7 In production \u00b7 Shipped \u00b7 Received \u00b7 Exception) would give procurement the same at-a-glance rung money gets.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F124",
+    "verdict": "open",
+    "reason": "Unseeded schedule-ripple verification is a QA/seed-data note.",
+    "evidence": "Seed a populated schedule and re-shoot the ripple UI directly; cannot judge blind-move risk from this seed.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F125",
+    "verdict": "open",
+    "reason": "Unverified send-wall legibility is a QA/seed-data note.",
+    "evidence": "Capture a proposal-stage document's send-wall state before finalizing this task's difficulty rating. What would settle this: an actual screenshot.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F126",
+    "verdict": "amends:NG1",
+    "reason": "NG1: 'Esc or Put down is the only exit.' The fix asks to keep this control exactly as-is -- a preservation request consistent with, not against, NG1.",
+    "evidence": "Keep this control exactly as-is when redesigning the spine \u2014 do not let it grow, move, or become conditional.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F127",
+    "verdict": "open",
+    "reason": "Preserving the tan needs-attention box as sole color signal aligns with Kody's recorded taste (large tint = 'silly'; color on small state-carrying things) but is not itself a ruling ID -- filed as context alignment, not amendment of a specific ruling.",
+    "evidence": "Preserve this as the single loudest element on first screen; do not add competing color.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F128",
+    "verdict": "open",
+    "reason": "No-fix-required record of current behavior; nothing to label against canon.",
+    "evidence": "No fix needed \u2014 record as a constraint a lens must keep true, not a defect.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F129",
+    "verdict": "amends:R8",
+    "reason": "Directly extends R8: a fold with nothing behind it not rendering its trigger is the same 'affordances that do nothing teach the document to lie' doctrine.",
+    "evidence": "A fold with nothing behind it does not render its trigger.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F130",
+    "verdict": "open",
+    "reason": "Unused rail-foot space is open composition ground.",
+    "evidence": "Spend the rail's lower third on depth content (extent/exception markers) rather than leaving it blank.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F131",
+    "verdict": "amends:D3",
+    "reason": "D3 governs the mobile milestone where the ticket already collapses; documenting the divergence is squarely D3's territory.",
+    "evidence": "Intentional divergence \u2014 document it explicitly as the mobile form of the same lens, not an inconsistency, in the proposal's motion table.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F132",
+    "verdict": "open",
+    "reason": "Tab-order documentation is open ground (a11y note).",
+    "evidence": "Landmark-jump already covers this at >=1180; document it as the sanctioned path rather than leaving Tab as the only discoverable one.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F133",
+    "verdict": "open",
+    "reason": "Margin chip string duplication is open ground.",
+    "evidence": "Suppress the body line when it restates the label; a chip should say the label plus one new fact.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F134",
+    "verdict": "amends:R8",
+    "reason": "A trigger revealing nothing extends R8's affordance-honesty doctrine to the PHASES control.",
+    "evidence": "Hide the trigger with no phases, or make it the act that names them.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F135",
+    "verdict": "open",
+    "reason": "Closed-margin-tab count badge is open ground.",
+    "evidence": "Surface a count badge on the closed margin tab so I know whether opening it is worth the tap.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F136",
+    "verdict": "amends:R27",
+    "reason": "R27 defines the letterhead instruments row; condensing to an overflow glyph amends that row's presentation.",
+    "evidence": "Instruments condense to an overflow glyph unless one of them is the named act.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F137",
+    "verdict": "open",
+    "reason": "Presence-line placement is open ground.",
+    "evidence": "Move the presence line beside the collaborator avatar already shown in the document's chrome.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F138",
+    "verdict": "open",
+    "reason": "Letterhead landmark role is open ground (a11y gap).",
+    "evidence": "Give the letterhead a distinct landmark role/label so SR users can jump straight to it.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F139",
+    "verdict": "open",
+    "reason": "Mobile sheet close-button visibility is open ground (a11y note, not a WCAG failure per the finding itself).",
+    "evidence": "Not a WCAG failure (Escape works), but a visible close affordance would help a keyboard-attached mobile user who doesn't know the Escape convention applies her\u2026",
+    "revised_claim": ""
+  },
+  {
+    "id": "F140",
+    "verdict": "open",
+    "reason": "Compact-rail top-zone separation is open ground (same ground as F96).",
+    "evidence": "Same separation treatment as the 1440 finding, adapted to the narrower column.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F141",
+    "verdict": "amends:I148",
+    "reason": "A 'Bill the deposit' shortcut beside the MONEY ticket row touches both I148's money ladder and I149's ticket row.",
+    "evidence": "Add a 'Bill the deposit' shortcut next to the MONEY ticket row so the two halves of one task sit together.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F142",
+    "verdict": "amends:I149",
+    "reason": "The ticket's eyebrow wording collision is part of I149's ticket-row content.",
+    "evidence": "Give the ticket's own eyebrow a distinct word from the stage-progression label.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F143",
+    "verdict": "open",
+    "reason": "Label styling for 'Hands on the work' is open ground.",
+    "evidence": "Style it visibly as a label/value pair rather than inline prose.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F144",
+    "verdict": "open",
+    "reason": "Boards/Mood-boards terminology subtitle is open ground.",
+    "evidence": "Consider a one-time subtitle (\"Boards \u00b7 your mood boards\") on first view for new studio members.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F145",
+    "verdict": "open",
+    "reason": "No-client-linked prompt placement is open ground.",
+    "evidence": "Demote this prompt below the ticket/guide, or fold it into the setup-chip pattern already used elsewhere.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F146",
+    "verdict": "open",
+    "reason": "Approvals fold-summary copy length is open ground.",
+    "evidence": "Shorten to \"No decisions \u00b7 no approvals\" or drop the redundant \"NO\" prefix pair.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F147",
+    "verdict": "open",
+    "reason": "Rail 'next stop' pointer is open ground.",
+    "evidence": "Surface a 'next stop' pointer on the rail instead of only in the folding header.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F148",
+    "verdict": "amends:R35",
+    "reason": "R35/R15 is the named precedent ('the breath', Strata Mark) for the system's one sanctioned motion; reusing strata-sweep rather than inventing a new spinner is explicitly the R35-aligned choice.",
+    "evidence": "If the lens adds async loading to the ticket/spine/margin, reuse strata-sweep rather than inventing a new spinner (R35 precedent).",
+    "revised_claim": ""
+  },
+  {
+    "id": "F149",
+    "verdict": "amends:NG4",
+    "reason": "R126's hover wash is scoped to 'roster/FF&E lines... and nowhere else' implicitly; the finding asks the proposal state that scarcity explicitly, which is squarely about NG4's named mechanic.",
+    "evidence": "State explicitly in the proposal that this scarcity is deliberate \u2014 do not spread wash to spine/ticket rows just because the mechanism exists.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F150",
+    "verdict": "open",
+    "reason": "'STUDIO EYES ONLY' wording/visibility clarity is open ground; not a THE STUDIO typography change (NG4 only locks that block's typography, not its copy).",
+    "evidence": "State plainly who can see this (e.g. \"visible to principals only\" vs a role-agnostic caption).",
+    "revised_claim": ""
+  },
+  {
+    "id": "F151",
+    "verdict": "open",
+    "reason": "Phases-fold persistence-on-remount is open ground (implementation contract choice).",
+    "evidence": "Fold Phases into the same use-region-fold persistence contract other regions use, or explicitly accept it as ephemeral and say so.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F152",
+    "verdict": "open",
+    "reason": "Vertical mark-stack visual cohesion is open ground.",
+    "evidence": "Compress or bind the vertical mark stack visually (a single connecting rule) so it still reads as one arc.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F153",
+    "verdict": "open",
+    "reason": "Mobile FF&E status-chip/price spacing is open ground.",
+    "evidence": "Add explicit spacing or stack chip above price on narrow FF&E line cards; would settle with a live 390px DOM inspection.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F154",
+    "verdict": "open",
+    "reason": "Guide/red-letter zone height normalization is open ground.",
+    "evidence": "Normalize the two zones to the same vertical footprint so scroll position stays predictable across documents.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F155",
+    "verdict": "open",
+    "reason": "FF&E vs 'Pieces' naming is open ground (duplicate of F81's ground).",
+    "evidence": "None needed if the subtitle is judged sufficient; note only for a procurement-fluent audience that scans for the acronym.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F156",
+    "verdict": "open",
+    "reason": "Shared empty-state vocabulary template is open ground.",
+    "evidence": "A shared \"nothing yet\" phrase template across ticket rows, fold summaries, and spine entries.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F157",
+    "verdict": "open",
+    "reason": "Pre-work rail timer-mount condition is a verification note, not canon ground.",
+    "evidence": "Confirm whether the timer's mount condition is intentional or a session-state edge case worth documenting.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F158",
+    "verdict": "amends:R15",
+    "reason": "R15 establishes 'exactly one' ambient motion (the breath) and that 'nothing on the Desk ever moves' beyond it; a new foot-arrival motion cue would be a second ambient motion, touching that same doctrine.",
+    "evidence": "A lens could use a one-shot settle (fold-in-class) on the colophon to mark 'you have reached the end' \u2014 needs a mockup pass to confirm it isn't decoration.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F159",
+    "verdict": "amends:I149",
+    "reason": "Empty-state copy verbs for ticket rows ('Nothing filed', 'Nobody on it yet') are part of I149's ticket-row content.",
+    "evidence": "Pair the empty copy with a lighter action verb ('start one', matched to the Boards row's own better phrasing).",
+    "revised_claim": ""
+  },
+  {
+    "id": "F160",
+    "verdict": "open",
+    "reason": "Seed/debug copy leak risk is a verification note, not canon ground.",
+    "evidence": "Confirm this is seed-only content and not a template string that could leak to production copy \u2014 what would settle this: reading the live subtitle-generation c\u2026",
+    "revised_claim": ""
+  },
+  {
+    "id": "F161",
+    "verdict": "open",
+    "reason": "Message-kind margin card is open ground (D8 only restricts badges/pulsing on ledger sheets).",
+    "evidence": "Capture a message-kind margin item directly, or make the Post/Note distinction explicit in the margin header row.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F162",
+    "verdict": "amends:D12",
+    "reason": "D12 owns the raise-to-fill ~270ms pick-up motion ('doc-raise'); whether it replays on remount is a question about that named motion's own trigger condition.",
+    "evidence": "What would settle this: confirm via probe whether client-side nav between two docs remounts the shell (and replays doc-raise) or not.",
+    "revised_claim": ""
+  },
+  {
+    "id": "F163",
+    "verdict": "open",
+    "reason": "Touch equivalent for a keyboard chord is open ground (a11y/input-parity note).",
+    "evidence": "Confirm whether a touch equivalent exists elsewhere (the Orders sheet's own entry point) before assuming this is a real gap; what would settle this: a full rea\u2026",
+    "revised_claim": ""
+  },
+  {
+    "id": "F164",
+    "verdict": "amends:NG4",
+    "reason": "R126's hover wash is one named mechanic (~1.12:1, warm pigment wash); reserving a distinct tone for PO exceptions would be a new variant of that same named mechanic.",
+    "evidence": "Consider reserving one wash tone for a line carrying an open procurement exception, distinct from ordinary hover.",
+    "revised_claim": ""
+  }
+]

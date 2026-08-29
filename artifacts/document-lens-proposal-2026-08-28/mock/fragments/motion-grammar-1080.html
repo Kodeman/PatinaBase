@@ -1,0 +1,37 @@
+<section class="mock-frame patina-mock" data-screen="motion-grammar-1080" data-width="1080">
+<div style="width:1080px;height:620px" class="frag-motion-grammar">
+<style>
+.frag-motion-grammar{overflow:hidden;position:relative;background:var(--doc-paper,#FCFAF6);box-sizing:border-box;padding:28px 32px;font-family:var(--font-body);}
+.frag-motion-grammar .mg-eyebrow{font-family:var(--font-meta);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin:0 0 4px;}
+.frag-motion-grammar .mg-title{font-family:var(--font-display);font-size:20px;font-weight:500;color:var(--text-primary);margin:0 0 14px;}
+.frag-motion-grammar table{width:100%;border-collapse:collapse;font-size:11px;}
+.frag-motion-grammar thead th{text-align:left;font-family:var(--font-meta);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--color-clay-ink);border-bottom:2px solid var(--text-primary);padding:0 10px 8px 0;}
+.frag-motion-grammar tbody td{padding:6px 10px 6px 0;border-bottom:1px solid rgba(44,41,38,.08);vertical-align:top;color:var(--text-body);}
+.frag-motion-grammar tbody tr:last-child td{border-bottom:none;}
+.frag-motion-grammar td.mg-id{font-family:var(--font-meta);font-size:10px;font-weight:600;color:var(--text-primary);white-space:nowrap;}
+.frag-motion-grammar td.mg-trigger{color:var(--text-muted);}
+.frag-motion-grammar td.mg-fromto{font-family:var(--font-meta);font-size:9.5px;color:var(--color-clay-ink);}
+.frag-motion-grammar td.mg-dur{font-family:var(--font-meta);font-size:9.5px;color:var(--text-muted);white-space:nowrap;}
+.frag-motion-grammar td.mg-never{color:var(--color-terracotta-ink,#9C5340);font-size:10.5px;}
+</style>
+<p class="mg-eyebrow">SOURCE/PROPOSAL.MD &sect;3</p>
+<h2 class="mg-title">Lens mechanics &mdash; eleven rows, as a strip</h2>
+<table>
+<thead><tr><th>Mechanic</th><th>Trigger</th><th>from &rarr; to</th><th>Duration</th><th>What never moves</th></tr></thead>
+<tbody>
+<tr><td class="mg-id">L-1 sentence turns</td><td class="mg-trigger">reading stop commits, on settle</td><td class="mg-fromto">line 2 fade 0&rarr;1, band 56&rarr;56px</td><td class="mg-dur">90ms out / 150ms in, ease-editorial</td><td class="mg-never">band box, line 1, words above, scroll offset</td></tr>
+<tr><td class="mg-id">L-2 window travels</td><td class="mg-trigger">scroll, rAF-throttled</td><td class="mg-fromto">top 202&rarr;512px, h 74&rarr;158px</td><td class="mg-dur">position-linked, no duration</td><td class="mg-never">segment stack, every line, the paper</td></tr>
+<tr><td class="mg-id">L-3 segment register</td><td class="mg-trigger">its head enters/leaves frame</td><td class="mg-fromto">value text &rarr; '' &rarr; back</td><td class="mg-dur">150ms crossfade, ease-editorial</td><td class="mg-never">segment y, height, track, window</td></tr>
+<tr><td class="mg-id">L-4 region opens</td><td class="mg-trigger">top within 240px of frame bottom</td><td class="mg-fromto">reserve 112&rarr;1,840px (FF&amp;E)</td><td class="mg-dur">0ms &mdash; one commit, off-screen</td><td class="mg-never">every pixel at/above frame bottom</td></tr>
+<tr><td class="mg-id">L-5 region kept</td><td class="mg-trigger">its bottom passes above frame top</td><td class="mg-fromto">content-visibility visible&rarr;auto</td><td class="mg-dur">0ms</td><td class="mg-never">everything</td></tr>
+<tr><td class="mg-id">L-6 rail head yields</td><td class="mg-trigger">letterhead box intersects frame</td><td class="mg-fromto">name/stage lines &rarr; '' &rarr; back</td><td class="mg-dur">150ms crossfade, ease-editorial</td><td class="mg-never">100px head, 7-mark arc, ladder</td></tr>
+<tr><td class="mg-id">L-7 fold/unfold</td><td class="mg-trigger">press on Fold/Unfold</td><td class="mg-fromto">folded false&rarr;true</td><td class="mg-dur">300ms ease-editorial</td><td class="mg-never">--doc-region-gap</td></tr>
+<tr><td class="mg-id">L-8 pen goes down</td><td class="mg-trigger">focusin on an editable control</td><td class="mg-fromto">rule hair&rarr;1.5px clay; ground tint</td><td class="mg-dur">150ms duration-fast</td><td class="mg-never">the siblings &mdash; no other row changes</td></tr>
+<tr><td class="mg-id">L-9 lens settles</td><td class="mg-trigger">scroll velocity &lt;40px/frame, 120ms</td><td class="mg-fromto">settled false&rarr;true</td><td class="mg-dur">none &mdash; arithmetic gate</td><td class="mg-never">everything &mdash; gates L-1/2/3/4</td></tr>
+<tr><td class="mg-id">L-10 press lands</td><td class="mg-trigger">press on a segment, door or act</td><td class="mg-fromto">regions forced full, then scroll</td><td class="mg-dur">700ms jump lock</td><td class="mg-never">the target's own top</td></tr>
+<tr><td class="mg-id">L-11 sheet opens</td><td class="mg-trigger">press +3 MORE on band line 2</td><td class="mg-fromto">translateY 8&rarr;0, opacity 0&rarr;1</td><td class="mg-dur">200ms ease-editorial</td><td class="mg-never">the paper, scroll offset, band, rail</td></tr>
+</tbody>
+</table>
+</div>
+<figcaption>The lens mechanics table, drawn as a strip &mdash; all eleven rows of <code>source/proposal.md</code> &sect;3, condensed to five columns. Every reduced-motion form is a printed mark, not a fade; see the table's own reduced-motion column for the equivalent of each row.</figcaption>
+</section>

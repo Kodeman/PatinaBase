@@ -1,0 +1,151 @@
+<section id="thesis" class="dk-sec reg-paper" data-index-title="The thesis">
+  <div class="dk-wrap">
+    <p class="hour"><b>THESIS</b></p>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h2 class="dk-h2">A lens is a mechanism. Every sentence in it has a number behind it.</h2>
+        <p class="dk-lede">The header is only true at the top of the paper, and one fact travels with her forever.</p>
+        <p class="dk-p">So the header goes back to being the top of a piece of paper, and one 56px line under it carries what needs her, with its act, at every offset. The rail becomes the map: a drawn ladder of this paper&#8217;s own stops, one line per stop, printing what the paper is not saying. The lens only ever opens what is still ahead of her, so nothing above the reading line can move.</p>
+        <p class="dk-p">Three sentences, three organs. None of them is a description of a feeling. The band&#8217;s height is a declared constant, not a measured one. The ladder&#8217;s extents are derived from the counts the ticket derivation already produces, never from a rendered box. And &ldquo;adjusting focus&rdquo; resolves to a single geometric predicate: a region&#8217;s height changes only while the entire region, and every pixel above it, is below the frame&#8217;s bottom edge.</p>
+        <p class="dk-p">That predicate is what makes the whole proposal checkable rather than arguable. It is also what the mockup measures: a 30-step scripted scroll from the top of the paper to its foot, in both motion registers, reports a cumulative layout shift of <b>0</b> and zero shift entries.</p>
+        <p class="dk-note">Mechanism from <code>source/proposal.md</code> &sect;1 and &sect;4; the shift measurement from <code>mock/final/REVIEW-2.md</code> item 8, a <code>PerformanceObserver</code> over <code>#frame-1440</code>. <span class="lvl lvl--sim">sim-verified</span></p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">The falsifiable sentence</p>
+        <blockquote>
+          <p class="dk-lede"><code>[data-lens-band]</code>&#8217;s measured height reads <b>56px</b> at scrollY 0, 400 and 1200, on all seven spreads, at <b>1440, 1280 and 390</b> &mdash; and the first <code>[data-region-head]</code> lands at <b>298px</b> at 1440 at rest, against today&#8217;s 1005.31.</p>
+        </blockquote>
+        <p class="dk-note">Quoted verbatim from <code>source/proposal.md</code> &sect;1. One sentence, three offsets, three widths: if the band measures anything but 56 at any of them, the proposal is wrong and a prober says so in one run.</p>
+
+        <p class="dk-h4">What the mockup measured against it</p>
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>The clickable mockup, <code>#frame-1440</code>, <code>transform: none</code>, <code>clientHeight = 898px</code></caption>
+            <thead><tr><th>Offset</th><th>Band box</th><th>First region head</th><th>Reading index</th></tr></thead>
+            <tbody>
+              <tr><th class="dk-row-h">0</th><td class="dk-num">56</td><td class="dk-num">320</td><td><code>approvals</code></td></tr>
+              <tr><th class="dk-row-h">400</th><td class="dk-num">56</td><td class="dk-num">-80</td><td><code>approvals</code></td></tr>
+              <tr><th class="dk-row-h">1200</th><td class="dk-num">56</td><td class="dk-num">-880</td><td><code>ffe</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="dk-note">All values in px, from <code>mock/final/REVIEW-2.md</code> item 16. The mockup draws the Vandersteen specimen, which is why the head lands at 320 rather than the seed&#8217;s 298; the proposal states both numbers for that reason. <span class="lvl lvl--sim">sim-verified</span></p>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-full">
+      <p class="dk-h4">The four lens laws, and the sentence that makes each one falsifiable</p>
+      <p class="dk-p">The laws are the brief&#8217;s, in the brief&#8217;s own words, and they are not renamed here. Under each is the mechanism this proposal answers it with &mdash; the form in which a prober, or a designer with a still screenshot, can catch it failing.</p>
+
+      <div class="q-grid">
+        <div class="q-card">
+          <p class="q-card__n">Law 1</p>
+          <p class="q-card__q">What is in frame is full.</p>
+          <p class="q-card__why">The region she is reading is at complete strength: every line, every number, every act, at the ratified R126 weight. There is no state in which the thing she is looking at is a summary of itself.</p>
+          <p class="q-card__why"><b>Falsifiable as:</b> every region intersecting the frame is <code>full</code>, every region she has passed stays <code>full</code>, never zero &mdash; and no region prints zero readable text. The brief asked for <i>exactly one</i>; that target is refused with the geometry, because a design where nothing above the reading line moves must hold two regions full when two touch the frame.</p>
+          <p class="f-chips q-card__meta">
+            <a class="f-chip f-chip--s1" href="#found">F11 <span>One screen scrolled and nothing has condensed yet</span></a>
+            <a class="f-chip f-chip--s2" href="#found">F53 <span>The fold is the only render-cost control</span></a>
+          </p>
+        </div>
+
+        <div class="q-card">
+          <p class="q-card__n">Law 2</p>
+          <p class="q-card__q">What is out of frame yields.</p>
+          <p class="q-card__why">A region she is not in condenses to its head plus one status line. It <b>keeps its place</b> in the paper&#8217;s order &mdash; the same y-position in the scroll, the same neighbours, the same distance from the top &mdash; and it <b>never disappears</b>.</p>
+          <p class="q-card__why"><b>Falsifiable as:</b> yielding runs in one direction only. A body mounts when its root&#8217;s top comes within 240px of the frame&#8217;s bottom edge, off screen, always; there is no release threshold, so a region she has read is never taken back. The word <code>scrollBy</code> appears nowhere in the proposal.</p>
+          <p class="f-chips q-card__meta">
+            <a class="f-chip f-chip--s1" href="#found">F04 <span>Ticket pin/fold is a single-frame cut with no hysteresis band</span></a>
+            <a class="f-chip f-chip--s1" href="#found">F87 <span>Schedule glance drifts continuously under a moving seam</span></a>
+          </p>
+        </div>
+
+        <div class="q-card">
+          <p class="q-card__n">Law 3</p>
+          <p class="q-card__q">The spine is the map, not a second copy of the paper.</p>
+          <p class="q-card__why">Something earns the left edge only if it is true across the whole document at once, or true outside this document. A running index that reprints the headings she can already see is failing that test with a straight face.</p>
+          <p class="q-card__why"><b>Falsifiable as:</b> a segment prints <b>nothing at all</b> while its own <code>[data-region-head]</code> is in frame, and un-yields the moment that head scrolls off. At most one segment is ever silent, and it is the one the reading window brackets.</p>
+          <p class="f-chips q-card__meta">
+            <a class="f-chip" href="#found">F22 <span>The index lists regions but not their size or trouble</span></a>
+            <a class="f-chip" href="#found">F102 <span>Active label pair duplicates the on-page region heading</span></a>
+          </p>
+        </div>
+
+        <div class="q-card">
+          <p class="q-card__n">Law 4</p>
+          <p class="q-card__q">Nothing hides.</p>
+          <p class="q-card__why">Every condensation is reversible in <b>one act</b>, and its state is readable <b>without hover</b> &mdash; from a still screenshot, by someone who did not perform the transition. The specific failure to avoid: <b>condensed must be distinguishable from empty on sight.</b></p>
+          <p class="q-card__why"><b>Falsifiable as:</b> a region with a number is quiet; a region with no number is empty; and the cause of a fold is printed in words, <code>CLOSED BY YOU</code>, never carried on a coloured tick. Clay measures 1.82:1 on rail stock, which <code>contrast.test.ts:319-325</code> already asserts is below AA.</p>
+          <p class="f-chips q-card__meta">
+            <a class="f-chip f-chip--s2" href="#found">F54 <span>A folded region never shows whether she or the system closed it</span></a>
+            <a class="f-chip f-chip--s0" href="#found">F89 <span>I cannot tell a shipped fold from one I chose</span></a>
+            <a class="f-chip f-chip--s0" href="#found">F108 <span>An empty region&#8217;s index line looks identical to a live one</span></a>
+          </p>
+        </div>
+      </div>
+      <p class="dk-note">Law text quoted verbatim from <code>source/brief.md</code> &sect;A.1. The mechanisms are <code>source/proposal.md</code> &sect;3 (L-3, L-4, L-5), &sect;4 and &sect;6. <span class="lvl lvl--code">code-read</span> for <code>src/lib/document/__tests__/contrast.test.ts:319-325</code>.</p>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-full">
+      <p class="dk-h4">What it is not</p>
+      <p class="dk-p">Six things a reader arrives expecting from a proposal with the word <i>lens</i> in it. Each is refused rather than deferred, and the reason is a number or a mechanism, not a schedule.</p>
+
+      <div class="dk-tablewrap">
+        <table class="dk-table dk-table--compare">
+          <caption>The refuses, from <code>source/proposal.md</code> &sect;11</caption>
+          <thead><tr><th>What a reader will expect</th><th>The refusal</th><th>Why refused rather than deferred</th></tr></thead>
+          <tbody>
+            <tr>
+              <th class="dk-row-h">A rail that draws each region at its true height</th>
+              <td>No proportional-extent map rail. On the specimen <code>Pieces</code> is 177px against <code>Money</code>&#8217;s 50px &mdash; <b>3.5:1 drawn for a true 10:1</b>.</td>
+              <td>Every segment takes a 36px floor first, and a proportionally-drawn <code>Money</code> rung would be a 6px press target &mdash; a 2.5.8 failure before it is a taste failure. The drawing carries order and reach; the count in the value line carries scale. The phrase <i>true proportional extent</i> is withdrawn rather than defended.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">The current region&#8217;s head pinned under the band</th>
+              <td>No standing rule.</td>
+              <td>Two stacked sticky bands are a header again, and SC2&#8217;s 52px of unspent budget would be spent on chrome rather than saved. The fact it would carry &mdash; which region she is inside &mdash; is printed exactly once per frame, on the paper, and the ladder&#8217;s window says where that is.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">A seam whose height eases as she scrolls</th>
+              <td>No continuous seam, and no discrete one. The engineering seat&#8217;s three costed branches &mdash; <code>days</code>, <code>week</code>, <code>weeks</code> &mdash; are all declined.</td>
+              <td>That seat&#8217;s own sentence is the reason: <i>a continuous seam is not a header change, it is a navigation change.</i> Every branch pays somewhere in <code>scrollToRegion</code>&#8217;s once-resolved <code>scroll-margin-top</code>, and every one is invisible to the suite because every seam assertion is jsdom. The variable is deleted and its replacements are declared constants.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">A narrower rail, to give the margin its room</th>
+              <td>No 160px rail at &ge;1440, and no 272px margin.</td>
+              <td><code>200 + 1040 + 232 = 1472 &gt; 1440</code>, so narrowing recovers 32px of measure at exactly 1440 and nothing at 1472 and above &mdash; three characters on a 15px line &mdash; and costs the rail 40px of its 168px inner measure, which is the whole value line. The margin&#8217;s answer to <i>cramped</i> is roughly 160px of vertical returned and 0px of width.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">Regions that condense again once she has passed them</th>
+              <td>No re-quieting, and no scroll correction.</td>
+              <td>Every alternative &mdash; a same-frame <code>scrollBy(&minus;&#916;)</code>, <code>overflow-anchor</code>, a scroll-position correction &mdash; is a mechanism that has to be right every frame, on every fling, in a browser matrix that had no declared <code>browserslist</code> until Wave 0, to avoid moving a paragraph she is reading.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">New doors for the gaps the audit found</th>
+              <td>No new capability: no PO-acknowledgement badge, no damage-claim door, no phase-wide install roster, no cross-document surface.</td>
+              <td>The ask is to make the same information and the same acts occupy less attention. Each gap is real, several cost a practitioner a trip out of the document, and they are named so the next program can pick them up. The one thing taken from that set is the <b>dates</b> &mdash; a carrier window is a deadline, and deadlines are what both organs already carry.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="f-chips">
+        <a class="f-chip" href="#found">F22 <span>index lists regions but not size or trouble</span></a>
+        <a class="f-chip f-chip--s1" href="#found">F34 <span>Continuous seam height breaks every region landing</span></a>
+        <a class="f-chip f-chip--s1" href="#found">F38 <span>Every seam assertion is jsdom; landings are untested</span></a>
+        <a class="f-chip" href="#found">F35 <span>No browserslist; only Playwright declares a browser matrix</span></a>
+        <a class="f-chip f-chip--s2" href="#found">F23 <span>The line shows production state but not vendor or damage state</span></a>
+        <a class="f-chip" href="#found">F62 <span>PO acknowledgment and damage-claim filing both require leaving the doc</span></a>
+        <a class="f-chip" href="#found">F63 <span>&ldquo;PO&rdquo; is never printed anywhere on the document</span></a>
+        <a class="f-chip" href="#found">F06 <span>No door anywhere answers &lsquo;everything in install&rsquo;</span></a>
+      </p>
+      <p class="dk-note">Refusal text and every figure in the table are <code>source/proposal.md</code> &sect;11, quoted or paraphrased without changing a number. <span class="lvl lvl--inf">inferred</span> nowhere in this section: each figure is either measured in <code>research/12-layout-measurements.md</code> or computed in the proposal from a <code>file:line</code> it names.</p>
+    </div>
+  </div>
+</section>

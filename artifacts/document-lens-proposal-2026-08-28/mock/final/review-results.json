@@ -1,0 +1,318 @@
+{
+  "results": [
+    {
+      "n": 1,
+      "title": "External requests = 0 (network census over the whole load)",
+      "ok": true,
+      "observed": "0 non-file/data/about request(s) []"
+    },
+    {
+      "n": 2,
+      "title": "Page errors = 0 (console errors AND unhandled rejections)",
+      "ok": true,
+      "observed": "pageerror=0 []; console.error=0 []; unhandledrejection=0 []"
+    },
+    {
+      "n": 3,
+      "title": "window.__mockReady is true under file:// AND under host-sim.mjs",
+      "ok": true,
+      "observed": "file://: __mockReady=true (__mockError=null); host-sim.mjs: mockReady=true, {\"pageErrors\":\"?\",\"consoleErrors\":\"?\"}"
+    },
+    {
+      "n": 4,
+      "title": "box-shadow = only the three --elevation-sheet sites, token value; drop-shadow = 0",
+      "ok": true,
+      "observed": "29 element(s) with a non-none box-shadow across 3079 elements, in 3 distinct class-site(s): {\"button.margin-chip.doc-elevated\":21,\"div.drawer.doc-elevated\":2,\"div.lens-sheet-panel.doc-elevated\":6}; off-token values=0; stray site classes=[]; drop-shadow=0"
+    },
+    {
+      "n": 5,
+      "title": "Non-ASCII = 0 (LC_ALL=C)",
+      "ok": true,
+      "observed": "0 non-ASCII byte(s); file size 603180 bytes"
+    },
+    {
+      "n": 6,
+      "title": "Every dev-bar state reachable and reversible (Rest restores every C.5 attribute)",
+      "ok": true,
+      "observed": "condensed: contract=OK reversible=true | ffe: contract=OK reversible=true | w1280: contract=OK reversible=true | w390: contract=OK reversible=true | reduced: contract=OK reversible=true | slow: contract=OK reversible=true :: the fifth C.5 state has no button -- [data-pen] focus on input#spec-mudroom-3-1440.spec-input gives data-lens-state=editing, blur returns condensed :: NOTE Rest also calls setMotion(baseMotion()), so pressing Rest clears data-motion=\"reduced\"/\"slow\""
+    },
+    {
+      "n": 7,
+      "title": "Condensation reaches steady state; no oscillation at any boundary at --motion-scale 4",
+      "ok": true,
+      "observed": "--motion-scale=4, extent=4381px, 20 steps each way + a 20-step 48px sweep across each of 6 bisected boundaries [562,976,3067,3505,3943,3993]; flip-backs in the coarse sweep=0 []; unstable boundaries=0 []"
+    },
+    {
+      "n": 8,
+      "title": "CLS = 0 over a scripted 0-to-foot scroll at 1440, in both registers",
+      "ok": true,
+      "observed": "normal CLS=0 (0 entries); reduced CLS=0 (0 entries); extent=5106px"
+    },
+    {
+      "n": 9,
+      "title": "Nothing moves under the pointer across a density threshold",
+      "ok": true,
+      "observed": "parked div.sched-row at (349,546); scrolled 6px across the threshold; element under the pointer after = div.sched-row; same node = true; parked row displaced 6px (scroll alone accounts for 6px, excess 0px)"
+    },
+    {
+      "n": 10,
+      "title": "Reduced-motion parity: identical visible text, and 0 non-zero durations 1s after each state (media query AND toggle)",
+      "ok": true,
+      "observed": "text diffs vs media-query=0 []; vs toggle=0 []; duration census media-query=rest:0,condensed:0,ffe:0,w1280:0,w390:0; toggle=rest:0(motion=reduced),condensed:0(motion=reduced),ffe:0(motion=reduced),w1280:0(motion=reduced),w390:0(motion=reduced); page errors in the reduced context=0"
+    },
+    {
+      "n": 11,
+      "title": "Keyboard order survives condensation; nothing focused sits under the pinned lens line (2.4.11)",
+      "ok": true,
+      "observed": "@0: 54 stops order=true obscured=0 noFocusRing=0 | @400: 54 stops order=true obscured=0 noFocusRing=0 | @1200: 54 stops order=true obscured=0 noFocusRing=0"
+    },
+    {
+      "n": 12,
+      "title": "Nothing escapes the frame at 390 (scrollWidth <= clientWidth on the frame and every descendant)",
+      "ok": false,
+      "observed": "frame 388/388 (frame itself PASS); 26 descendant(s) with scrollWidth > clientWidth, 21 of them with a visible child hanging past their own edge: [\"div.paper-measure 337>332 :: span.da-pool overhangs 5px\",\"div#sentinel-390.lens-sentinel 337>332 :: span.da-pool overhangs 5px\",\"div.letterhead 337>332 :: span.da-pool overhangs 5px\",\"p.vitals 337>332 :: span.da-pool overhangs 5px\",\"span.vital-act 55>50 :: span.da-pool overhangs 5px\",\"button.act.is-quiet 55>50 :: span.da-pool overhangs 5px\"]; 0 painting past the frame edge; document 1560/1560; same census at 1440=62, 1280=57"
+    },
+    {
+      "n": 13,
+      "title": "Composite contrast >= 4.5:1 per lens state (rendered colours, density-reduced text included)",
+      "ok": true,
+      "observed": "rest (scroll 0): 132 runs min=5.32 fails=0 | condensed (scroll 400): 120 runs min=5.32 fails=0 | region in focus (FF&E full): 116 runs min=5.32 fails=0 | reading (scroll 1200): 119 runs min=5.32 fails=0"
+    },
+    {
+      "n": 14,
+      "title": "The navigator lands where it says (head under the lens line, index matches after the 700ms lock)",
+      "ok": true,
+      "observed": "approvals: headTop=62 underBand=true index=approvals | schedule: headTop=73 underBand=true index=schedule | ffe: headTop=73 underBand=true index=ffe | money: headTop=73 underBand=true index=money | care: headTop=73 underBand=true index=care | record: headTop=73 underBand=true index=record"
+    },
+    {
+      "n": 15,
+      "title": "1280 shows the margin as a sheet (not a column, not missing); opens, traps focus, Escape returns focus",
+      "ok": true,
+      "observed": "margin column visible=false; tab=\"MARGIN · 7 · 1 OVERDUE\"; opened role=dialog aria-modal=true size=360x700 chips=7 focus landed on button.act.is-lead \"CAPTURE A NOTE\" inside=true; Escape -> data-open=false focus returned to button.margin-tab (margin-tab=true)"
+    },
+    {
+      "n": 16,
+      "title": "SC1-SC4 and SC11-SC12 printed at scroll 0 / 400 / 1200",
+      "ok": true,
+      "observed": "SC1=320px (<=405 PASS); SC2=57px (<=108 PASS); SC3=319px/56px/56px (condensed 56px <=64 PASS, stable=true); SC4=40.8% merged-ink (343/840px, 18 runs) / 92.2% first-to-last-ink span (>=70% FAIL on the strict reading, PASS on the generous one); SC11=true; SC12=true; frame scrollHeight=5279 client=898"
+    },
+    {
+      "n": 17,
+      "title": "Fonts loaded; no fallback face rendering",
+      "ok": true,
+      "observed": "check() 400: Playfair=true Inter=true DM Mono=true; italic Playfair=true; painted: {\"letterhead 40px\":\"Playfair Display\",\"region head 24px\":\"Playfair Display\",\"band mono\":\"DM Mono\"}; real-vs-fallback widths differ: playfair=true inter=true mono=true"
+    },
+    {
+      "n": 18,
+      "title": "Full tab-through: every focusable has an accessible name",
+      "ok": true,
+      "observed": "118 tab stops; 0 unnamed []; positive tabindex=0"
+    }
+  ],
+  "sc": {
+    "SC1": 320,
+    "SC2": 57,
+    "SC3": [
+      "319px",
+      "56px",
+      "56px"
+    ],
+    "SC4": 0.408,
+    "SC11": [
+      "0:{\"approvals\":\"full\",\"schedule\":\"reading\",\"ffe\":\"reading\",\"money\":\"condensed\",\"care\":\"condensed\",\"record\":\"condensed\"}",
+      "400:{\"approvals\":\"full\",\"schedule\":\"reading\",\"ffe\":\"reading\",\"money\":\"condensed\",\"care\":\"condensed\",\"record\":\"condensed\"}",
+      "1200:{\"approvals\":\"reading\",\"schedule\":\"reading\",\"ffe\":\"full\",\"money\":\"condensed\",\"care\":\"condensed\",\"record\":\"condensed\"}"
+    ],
+    "SC12": [
+      "0:approvals",
+      "400:approvals",
+      "1200:ffe"
+    ]
+  },
+  "scRaw": {
+    "0": {
+      "scrollTop": 0,
+      "scrollHeight": 5279,
+      "clientHeight": 898,
+      "firstHeadY": 320,
+      "headYs": [
+        {
+          "id": "head-approvals-1440",
+          "y": 320
+        },
+        {
+          "id": "head-schedule-1440",
+          "y": 672
+        },
+        {
+          "id": "head-ffe-1440",
+          "y": 1085
+        },
+        {
+          "id": "head-money-1440",
+          "y": 4103
+        },
+        {
+          "id": "head-care-1440",
+          "y": 4304
+        },
+        {
+          "id": "head-record-1440",
+          "y": 4462
+        }
+      ],
+      "lensHeightVar": "319px",
+      "lensBoxH": 56,
+      "lensOpen": "true",
+      "bandH": 56,
+      "headerStackH": 282,
+      "rail": {
+        "inkPx": 343,
+        "spanPx": 775,
+        "railPx": 840,
+        "util": 0.408,
+        "spanUtil": 0.922,
+        "runs": 18
+      },
+      "density": {
+        "approvals": "full",
+        "schedule": "reading",
+        "ffe": "reading",
+        "money": "condensed",
+        "care": "condensed",
+        "record": "condensed"
+      },
+      "fulls": [
+        "approvals"
+      ],
+      "readingIndexFrame": "approvals",
+      "readingIndexRail": "approvals",
+      "lensState": "rest"
+    },
+    "400": {
+      "scrollTop": 400,
+      "scrollHeight": 5279,
+      "clientHeight": 898,
+      "firstHeadY": -80,
+      "headYs": [
+        {
+          "id": "head-approvals-1440",
+          "y": -80
+        },
+        {
+          "id": "head-schedule-1440",
+          "y": 272
+        },
+        {
+          "id": "head-ffe-1440",
+          "y": 685
+        },
+        {
+          "id": "head-money-1440",
+          "y": 3703
+        },
+        {
+          "id": "head-care-1440",
+          "y": 3904
+        },
+        {
+          "id": "head-record-1440",
+          "y": 4062
+        }
+      ],
+      "lensHeightVar": "56px",
+      "lensBoxH": 56,
+      "lensOpen": "false",
+      "bandH": 56,
+      "headerStackH": 57,
+      "rail": {
+        "inkPx": 374,
+        "spanPx": 775,
+        "railPx": 840,
+        "util": 0.446,
+        "spanUtil": 0.922,
+        "runs": 18
+      },
+      "density": {
+        "approvals": "full",
+        "schedule": "reading",
+        "ffe": "reading",
+        "money": "condensed",
+        "care": "condensed",
+        "record": "condensed"
+      },
+      "fulls": [
+        "approvals"
+      ],
+      "readingIndexFrame": "approvals",
+      "readingIndexRail": "approvals",
+      "lensState": "condensed"
+    },
+    "1200": {
+      "scrollTop": 1200,
+      "scrollHeight": 5279,
+      "clientHeight": 898,
+      "firstHeadY": -880,
+      "headYs": [
+        {
+          "id": "head-approvals-1440",
+          "y": -880
+        },
+        {
+          "id": "head-schedule-1440",
+          "y": -528
+        },
+        {
+          "id": "head-ffe-1440",
+          "y": -115
+        },
+        {
+          "id": "head-money-1440",
+          "y": 2903
+        },
+        {
+          "id": "head-care-1440",
+          "y": 3104
+        },
+        {
+          "id": "head-record-1440",
+          "y": 3262
+        }
+      ],
+      "lensHeightVar": "56px",
+      "lensBoxH": 56,
+      "lensOpen": "false",
+      "bandH": 56,
+      "headerStackH": 57,
+      "rail": {
+        "inkPx": 374,
+        "spanPx": 775,
+        "railPx": 840,
+        "util": 0.446,
+        "spanUtil": 0.922,
+        "runs": 18
+      },
+      "density": {
+        "approvals": "reading",
+        "schedule": "reading",
+        "ffe": "full",
+        "money": "condensed",
+        "care": "condensed",
+        "record": "condensed"
+      },
+      "fulls": [
+        "ffe"
+      ],
+      "readingIndexFrame": "ffe",
+      "readingIndexRail": "ffe",
+      "lensState": "condensed"
+    }
+  },
+  "shadows": {
+    "button.margin-chip.doc-elevated": 21,
+    "div.drawer.doc-elevated": 2,
+    "div.lens-sheet-panel.doc-elevated": 6
+  },
+  "tabStops": 118,
+  "unnamed": 0
+}

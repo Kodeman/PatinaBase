@@ -1,0 +1,42 @@
+<section class="mock-frame patina-mock" data-screen="header-before-720" data-width="900">
+<div style="width:900px;height:720px" class="frag-header-before-720">
+<style>
+.frag-header-before-720{overflow:hidden;position:relative;background:var(--doc-paper,#FCFAF6);padding:36px 0 0;box-sizing:border-box;font-family:var(--font-body);}
+.frag-header-before-720 .hb-crumb{display:flex;flex-direction:column;gap:6px;margin-bottom:24px;}
+.frag-header-before-720 .hb-crumb i{display:block;height:2px;background:var(--color-pearl);border-radius:1px;}
+.frag-header-before-720 .hb-crumb i:nth-child(1){width:120px;}
+.frag-header-before-720 .hb-crumb i:nth-child(2){width:64px;background:var(--color-dusty-blue);}
+.frag-header-before-720 .hb-title{font-family:var(--font-display);font-size:40px;font-weight:500;line-height:1.15;color:var(--color-charcoal,var(--text-primary));margin:0 0 6px;}
+.frag-header-before-720 .hb-sub{font-family:var(--font-display);font-style:italic;font-size:15px;color:var(--color-terracotta-ink,#9C5340);margin:0 0 8px;}
+.frag-header-before-720 .hb-sub a{color:inherit;text-decoration:underline;}
+.frag-header-before-720 .hb-vitals{font-family:var(--font-meta);font-size:11px;letter-spacing:.04em;color:var(--text-muted);display:flex;gap:18px;padding-bottom:16px;border-bottom:1px solid var(--rail-stock,#E8E3DB);margin-bottom:0;}
+.frag-header-before-720 .hb-vitals b{color:var(--color-clay-ink);font-weight:600;}
+.frag-header-before-720 .hb-ticket{padding-top:18px;}
+.frag-header-before-720 .hb-ticket-head{display:flex;justify-content:space-between;font-family:var(--font-meta);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid var(--color-charcoal,#2C2926);padding-bottom:10px;margin-bottom:2px;}
+.frag-header-before-720 .hb-ticket-head span:last-child{color:var(--color-clay-ink);}
+.frag-header-before-720 .hb-row{display:grid;grid-template-columns:110px 1fr 20px;align-items:baseline;padding:11px 0;border-bottom:1px solid rgba(44,41,38,.08);}
+.frag-header-before-720 .hb-row .hb-label{font-family:var(--font-meta);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--color-clay-ink);}
+.frag-header-before-720 .hb-row .hb-value{font-size:14px;color:var(--color-charcoal,var(--text-primary));}
+.frag-header-before-720 .hb-row .hb-value b{font-weight:600;}
+.frag-header-before-720 .hb-row .hb-arrow{color:var(--color-clay);text-align:right;}
+.frag-header-before-720 .hb-attn{margin-top:14px;border-left:2px solid var(--color-terracotta,#D4A090);background:rgba(212,160,144,.08);padding:10px 14px;font-family:var(--font-meta);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#C4836F;font-weight:600;}
+</style>
+<div class="hb-crumb"><i></i><i></i></div>
+<h1 class="hb-title">Chen Residence</h1>
+<p class="hb-sub">No client linked &mdash; <a href="#">attach one &#8599;</a></p>
+<p class="hb-vitals"><span>START &mdash;</span><span>TARGET &mdash;</span><span>SET A BUDGET BAND</span><b>PHASES &#9662;</b></p>
+<div class="hb-ticket">
+  <div class="hb-ticket-head"><span>THE JOB &middot; PROJECT</span><span>FOLD &uarr;</span></div>
+  <div class="hb-row"><span class="hb-label">ROOMS</span><span class="hb-value">No rooms yet</span><span class="hb-arrow">&rarr;</span></div>
+  <div class="hb-row"><span class="hb-label">PIECES</span><span class="hb-value">3 unspecified</span><span class="hb-arrow">&rarr;</span></div>
+  <div class="hb-row"><span class="hb-label">DRAWINGS</span><span class="hb-value">Nothing filed</span><span class="hb-arrow">&rarr;</span></div>
+  <div class="hb-row"><span class="hb-label">SPEC</span><span class="hb-value">0 of 3 specified &middot; by room</span><span class="hb-arrow">&rarr;</span></div>
+  <div class="hb-row"><span class="hb-label">BOARDS</span><span class="hb-value">No boards yet &middot; start one</span><span class="hb-arrow">&rarr;</span></div>
+  <div class="hb-row"><span class="hb-label">MONEY</span><span class="hb-value"><b>$6,200 owed you, 15 days</b> &middot; $16,330 deposit not drawn</span><span class="hb-arrow">&rarr;</span></div>
+  <div class="hb-row"><span class="hb-label">DATES</span><span class="hb-value">No install date yet</span><span class="hb-arrow">&rarr;</span></div>
+  <div class="hb-row"><span class="hb-label">PEOPLE</span><span class="hb-value">Nobody on it yet</span><span class="hb-arrow">&rarr;</span></div>
+  <div class="hb-attn">NEEDS ATTENTION &middot; IN ONE PLACE</div>
+</div>
+</div>
+<figcaption>The header stack as it is &mdash; 900px paper column, top 720px at rest: crumb, 40px Playfair title, vitals, the eight-row job ticket unfolded, and the needs-attention band already crowding in before a single region has appeared. Drawn from <code>mock/kit.css</code> primitives to match <code>shots/w1440-rich-s0.png</code>, <code>w1440-ticket-unfolded.png</code> and <code>w1440-letterhead-vitals-phases-open.png</code>; the frame-budget picture (research/12-layout-measurements.json rich/1440/s0: letterhead 189px + ticket 347px + needs-attention 153px = 707px before <code>firstRegionHeadY</code> at 1005px).</figcaption>
+</section>

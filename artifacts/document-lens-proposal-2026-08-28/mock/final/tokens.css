@@ -1,0 +1,121 @@
+:root {
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta: 'DM Mono', 'SF Mono', 'Fira Code', monospace;
+
+  /* grounds -- A's three paper stocks, and only three (Revision 2026-08-28).
+     The desk keeps today's cream; the document is ONE untinted sheet; the spine
+     and the margin are one deeper stock, and a margin chip is a lifted piece of
+     the sheet on it. The six movement stocks and the charcoal band are gone --
+     "the desk is starting to look silly with the banded colors edge to edge. and
+     the document with the dark header and yellow body looks terrible." */
+  --desk-ground: #FAF7F2;
+  --doc-paper: #FCFAF6;
+  --rail-stock: #E8E3DB; /* contrast: ignore */ /* 1.225:1 off the sheet, 1.195:1
+     off the desk ground. The rail carries a PARTIAL register by ruling --
+     charcoal, the muted ramp and clay-ink only (4.70-11.32:1); terracotta-,
+     golden-hour- and sage-ink never print on it. The gate's all-inks-on-all-
+     grounds cross-product would read those three absences as failures, so the
+     rail's nine ratios are printed in FINAL.md section 7 item 1 instead. */
+  --band-quiet-chrome: #2C2926; /* the 390 mobile bar ONLY -- today's own strip */
+  --stage-ground: #EBE7E0;
+
+  /* filled stamps -- the FIRST of the three things B's colour survives as.
+     ONE recipe: the state's OWN canon pigment composited over the sheet the
+     stamp actually sits on -- which is now --doc-paper #FCFAF6, because the
+     tinted sheet was removed and the ground changed -- to a common ~1.18:1, a
+     1.5px pigment border (currentColor, the state's own -ink) and a CHARCOAL
+     word. State is carried by hue, in the border and in the fill; legibility is
+     carried by charcoal, which reads 11.7:1 on every one of them. Sage is
+     canon's settled pigment and never marks something the designer still owes,
+     so DECISION DUE is golden hour. All four sit darker than any ground the four
+     warm pigment inks can be read on. The old fills were composited over the
+     tinted sheet and had to carry the checker's own skip; these four are light
+     enough that EVERY canon ink clears 4.5:1 on them (floor 4.56, terracotta-ink
+     on ORDERED), so all four are now FULLY GATED and the skip is gone. Ratios:
+     FINAL.md section 2. */
+  --fill-ordered-tint: #EFE6DA;  /* clay @23% - paper 1.185, charcoal 11.71 */
+  --fill-decision-tint: #F5E7B9; /* golden hour @35% - paper 1.184, charcoal 11.72 */
+  --fill-damaged-tint: #F3E5DF;  /* terracotta @23% - paper 1.179, charcoal 11.76 */
+  --fill-anchor-tint: #E7E8E8;   /* dusty-blue @19% - paper 1.178, charcoal 11.78 */
+
+  /* inks -- three real muted inks (A/SP-02) + the I151 paper inks (B) */
+  --text-primary: #2C2926;
+  --text-body: #5C4A3C;
+  --text-muted: #4E4339;
+  --text-subtle: #5A4E43;
+  --text-faint: #65594E;
+  --color-clay-ink: #7C5E30;
+  --color-terracotta-ink: #9C5340;
+  --color-golden-hour-ink: #79651E;
+
+  /* the 390 mobile bar's own register -- the one charcoal surface left in the
+     mock, and today's own (A: "the mobile bar stays the charcoal strip it
+     already is"). `quiet` marks the pairs that never occur on paper, exactly as
+     direction-b.css does: on a charcoal ground the I151 darkening INVERTS
+     (globals.css:28-33), so the bar keeps the BASE pigment. */
+  --band-quiet-ink: #FAF7F2;
+  --band-clay-quiet-ink: #C4A57B;
+
+  /* base pigments -- marks and rules only, never text */
+  --color-clay: #C4A57B;
+  --color-pearl: #E5E2DD;
+  --color-sage: #A8B5A0;
+  --color-terracotta: #D4A090;
+  --color-dusty-blue: #8B9CAD;
+
+  /* saturated stage tabs -- the SECOND of the three things B's colour survives
+     as. Six pigments on BOTH ladders: no two hues closer than 30deg, and each a
+     clear value step (>= 1.08:1) darker than the one before it, cool to warm
+     across the six movements. White ink 5.22-8.20:1. They print as a small plate
+     on the roster head line and NOWHERE else -- there is no tinted band under a
+     stage group any more -- and the same six pigments are what the hover wash
+     takes at 8%. */
+  --tab-brief: #497093;     /* hue 208 - white 5.22 */
+  --tab-discovery: #307063; /* hue 168 - white 5.80 */
+  --tab-direction: #366A3A; /* hue 125 - white 6.40 */
+  --tab-proposal: #575D1D;  /* hue  66 - white 7.03 */
+  --tab-project: #6D4E24;   /* hue  35 - white 7.59 */
+  --tab-install: #823832;   /* hue   5 - white 8.20 */
+
+  /* three rule weights (A/SP-03) */
+  --rule-hair: 1px solid rgba(44, 41, 38, .10);
+  --rule-mid: 1.5px solid #2C2926;
+
+  /* the amendment (Q04) -- not canon today. Three sites, no fourth. */
+  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, .08);
+
+  /* motion, from globals.css:112-123 */
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --press-in: 70ms;
+  --press-out: 240ms;
+
+  --doc-spine-w: 200px;
+  --doc-margin-w: 232px;
+  --doc-drawer-h: 60px;
+  --doc-mobile-bar-h: 64px;
+
+  /* -------------------------------------------------------------------
+     W4 (M0) additions -- The Smart Lens, 2026-08-28. Everything above this
+     block is the R126 register, unedited (NG4 floor). Only the four
+     families SPEC C.4 names are appended below, and nothing else:
+     --lens-h-open / --lens-h-closed, --doc-region-gap, and the three
+     --density-ink-* steps. Full rationale and the section-3 mechanics they serve
+     are in mock/lens.css and mock/KIT.md.
+     ------------------------------------------------------------------- */
+
+  /* the lens line's two reserved heights (SPEC C.4) */
+  --lens-h-open: 319px;   /* SC1 on the Vandersteen specimen -- letterhead 148 + --doc-region-gap 24 + the 56px band + approvals RegionRule 14 + its own 24px gap; source/proposal.md "SC1 = 319px" */
+  --lens-h-closed: 56px;  /* the band alone once the letterhead has scrolled past; SC3 ceiling is <=64px, clears by 8px */
+
+  /* the one region-spacing token (shared-planks.md, brief R1) */
+  --doc-region-gap: 24px; /* replaces mt-6/py-6, mb-4, mt-2, mt-5, mb-5 -- one answer at every fold state (SP-01) */
+
+  /* the density scale's three ink levels -- aliased to the register's own
+     muted ramp (#4E4339/#5A4E43/#65594E), not a new pigment */
+  --density-ink-full: #4E4339;      /* 9.22:1 on --doc-paper #FCFAF6 */
+  --density-ink-reading: #5A4E43;   /* 7.73:1 on --doc-paper #FCFAF6 */
+  --density-ink-condensed: #65594E; /* 6.51:1 on --doc-paper #FCFAF6 */
+}

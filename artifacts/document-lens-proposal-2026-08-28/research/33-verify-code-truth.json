@@ -1,0 +1,1150 @@
+[
+ {
+  "id": "F01",
+  "verdict": "stands",
+  "reason": "The mount order and the spacing sites in the code compose exactly this stack: letterhead, eight-row ticket, guide/red-letter, instruments, then approvals opening with mt-6 + border + py-6 before its own rule and head.",
+  "evidence": "page.tsx:1797-1900 (mount order); doc-letterhead.tsx:52; job-ticket.tsx:401-407; approvals/project-approval-document.tsx:584-590",
+  "revised_claim": ""
+ },
+ {
+  "id": "F02",
+  "verdict": "misread",
+  "reason": "No product code draws a circular puck in the mobile bar: the identity zone is a flex row (items-center gap-2) whose only mark is STRATA, three 12px clay bars, and the studio drawer is hidden below 1180. The black circle with an N in the shot is the Next.js dev-tools indicator.",
+  "evidence": "mobile-bar.tsx:36-42 (STRATA = three bars); mobile-bar.tsx:221-232 (flex items-center gap-2); studio-drawer.tsx:289 ('hidden ... min-[1180px]:grid')",
+  "revised_claim": "In the 390 capture a Next.js dev-tools indicator (a dev-only overlay, not product chrome) overprints the bar's identity zone; the bar's own layout has no overlapping element."
+ },
+ {
+  "id": "F03",
+  "verdict": "stands",
+  "reason": "The drawer strip is one fixed 60px grid whose columns are [1fr_auto_1fr] with gap-4 and px-22; at 1280 the right column's 'IN HAND TODAY 1h 12m' runs back over the centre 'Find anything', as the capture shows.",
+  "evidence": "studio-drawer.tsx:289; shots/w1280-rich-s0.png (bottom strip)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F04",
+  "verdict": "stands",
+  "reason": "unfolded is a pure derivation of a boolean pin, and the sticky section carries no transition or animation class, so the swap is one commit.",
+  "evidence": "job-ticket.tsx:244 (`const unfolded = fold ?? (!pinned && !seamAtRest)`); job-ticket.tsx:219-226 (threshold 0); job-ticket.tsx:362 (className has no transition)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F05",
+  "verdict": "stands",
+  "reason": "The head's counts are read straight off the data, so a three-line one-group seed is what those strings report; nothing in the code inflates or normalises them.",
+  "evidence": "ffe-section.tsx:1084 (`const ffeStatus = \\`the FF&E schedule, by room · ${ffeCounts}\\``)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F06",
+  "verdict": "stands",
+  "reason": "deriveTicket returns a fixed eight rows and none of them is a filter; the spine's marks jump to sections, not phases; the ⌘K registry's verbs are surfaces and acts, with no phase predicate.",
+  "evidence": "ticket-derivation.ts:780-793; doc-spine.tsx:106-115 (onJump(s.key)); registry.tsx:259-295",
+  "revised_claim": ""
+ },
+ {
+  "id": "F07",
+  "verdict": "stands",
+  "reason": "The caption span carries `break-words`, and the comment beside it states the break is deliberately preferred over being clipped by the rail's overflow-x-hidden.",
+  "evidence": "doc-spine.tsx:129 (`block break-words text-[11px] ... min-[1440px]:text-[12px]`); doc-spine.tsx:123-128 (the rationale comment)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F08",
+  "verdict": "stands",
+  "reason": "The fold path is asymmetric by construction: every unfold sets a ref and calls focusRegionHeading, while every onFold is a bare setFolded(true) that unmounts the head and body with no focus handling.",
+  "evidence": "project-approval-document.tsx:600 (`onFold={() => fold.setFolded(true)}`) vs :569-573 (unfoldFocusRef + focusRegionHeading); fold-seam.tsx:41-44",
+  "revised_claim": ""
+ },
+ {
+  "id": "F09",
+  "verdict": "stands",
+  "reason": "The eight rows are inside `{unfolded && ...}`, so pinning unmounts them outright; the seam prints only the identity line and at most two exception phrases.",
+  "evidence": "job-ticket.tsx:401-407; ticket-derivation.ts:849-856 (`.slice(0, 2)`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F10",
+  "verdict": "stands",
+  "reason": "Four independent derivations print money on one screen — the ticket's Money row, the running index's money rung, the red-letter rows and the margin's money cards — with no shared suppression.",
+  "evidence": "ticket-derivation.ts:653-657; spine-shelved-blocks.tsx:58-67; red-letter-zone.tsx:85-99; margin-rail.tsx:635",
+  "revised_claim": ""
+ },
+ {
+  "id": "F11",
+  "verdict": "stands",
+  "reason": "The capture at s1 shows FOLD ↑ and all eight rows still standing, which is what the code allows: the pin only fires when the ticket's own sentinel leaves the viewport, and the sentinel sits immediately above the sticky element.",
+  "evidence": "shots/w1440-rich-s1.png; job-ticket.tsx:345-348 (sentinel in flow directly above the section); job-ticket.tsx:219-226",
+  "revised_claim": ""
+ },
+ {
+  "id": "F12",
+  "verdict": "stands",
+  "reason": "Both rail blocks are structurally absent on a proposal: paperRegionsForSection returns [] for every pre-work section so SpineRunningIndex renders null, and SpineTimer returns null without a held project.",
+  "evidence": "document-index.ts:76-82 (`return []`); spine-running-index.tsx:61; spine-timer.tsx:100 (`if (!heldProjectId) return null`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F13",
+  "verdict": "stands",
+  "reason": "deriveTicketIdentity composes only `The job · <Section>` plus an optional phase; the client's name is never an input. The rail caption prints the section label, not the household.",
+  "evidence": "ticket-derivation.ts:795-802; doc-spine.tsx:128-135",
+  "revised_claim": ""
+ },
+ {
+  "id": "F14",
+  "verdict": "stands",
+  "reason": "The spine sheet iterates sections, then rooms, then margin items — there is no region list in it — and the running index is gated to ≥1440.",
+  "evidence": "mobile-sheets.tsx:455-507 (sections), :509-536 (rooms), :538-575 (margin); doc-spine.tsx:141 (`hidden min-[1440px]:block`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F15",
+  "verdict": "narrows",
+  "reason": "Words do print at 1280: 'Put down' is min-[1180px]:inline and the active caption block is hidden min-[1180px]:block, which is why the seat's own observation quotes 'ACTIV/E' and 'In/hand'. There are seven marks, not six, and each carries an aria-label.",
+  "evidence": "doc-spine.tsx:52 (`min-[1180px]:inline`); doc-spine.tsx:122-136; doc-spine.tsx:64-120 (seven sections, aria-label per cell)",
+  "revised_claim": "At 1280 the spine's seven section marks are unlabelled glyphs — the only words the rail prints are 'Put down', the active section's own two-line caption, and the compact timer."
+ },
+ {
+  "id": "F16",
+  "verdict": "stands",
+  "reason": "paperRegionsForSection returns an empty array for every section that is not project/install/care, so a proposal mounts no [data-index-region] root and the index renders null.",
+  "evidence": "document-index.ts:76-82; spine-running-index.tsx:61 (`if (entries.length === 0) return null`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F17",
+  "verdict": "stands",
+  "reason": "Margin ordering is needs-action floats, then anchor order, then the settled fold — a memo over the item rows with no scroll or viewport input anywhere in the component.",
+  "evidence": "margin-rail.tsx:345-350 (the ordering comment and useMemo); margin-rail.tsx:635 (`{raised.map(renderItem)}`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F18",
+  "verdict": "stands",
+  "reason": "The sheet header prints 'In the margin' and is hidden only from 1440; MarginRail's own body header prints the same words again, so both are on screen in the 1180-1439 sheet.",
+  "evidence": "margin-rail.tsx:264-275 (`sticky ... min-[1440px]:hidden`, 'In the margin'); margin-rail.tsx:489-491",
+  "revised_claim": ""
+ },
+ {
+  "id": "F19",
+  "verdict": "stands",
+  "reason": "The trigger's children are exactly the word 'Margin' and an arrow; no count, badge or aria-description is passed.",
+  "evidence": "margin-rail.tsx:227-237",
+  "revised_claim": ""
+ },
+ {
+  "id": "F20",
+  "verdict": "stands",
+  "reason": "deriveTicket always returns the same eight rows, and regionDoor degrades to `none` rather than dropping the row when the spread does not mount that region.",
+  "evidence": "ticket-derivation.ts:780-793; ticket-derivation.ts:781-788 (regionDoor → {kind:'none'})",
+  "revised_claim": ""
+ },
+ {
+  "id": "F21",
+  "verdict": "stands",
+  "reason": "Both the running-index wrapper and the SpineTimer/presence block are `hidden min-[1440px]:block`, so the whole scent layer is a breakpoint away.",
+  "evidence": "doc-spine.tsx:141; doc-spine.tsx:145-154",
+  "revised_claim": ""
+ },
+ {
+  "id": "F22",
+  "verdict": "stands",
+  "reason": "Each index row renders exactly a label span and a value span; no exception rank, extent or distance is passed into SpineRunningIndex.",
+  "evidence": "spine-running-index.tsx:96-114; spine-shelved-blocks.tsx:88-101 (the four values built)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F23",
+  "verdict": "narrows",
+  "reason": "The line's own state vocabulary does include damage: LineStamp resolves a 'damaged' kind and the hover wash turns terracotta for it, and the line unfold carries claim lifecycle acts. What is genuinely absent is a PO-acknowledgement state and a file-a-claim act.",
+  "evidence": "ffe-section.tsx:214-216 (`case 'damaged': return 'damaged'`); ffe-section.tsx:224-229 (ffeWashTone); line-unfold.tsx:188-260 (ClaimActs)",
+  "revised_claim": "The FF&E line carries production and damage state but no PO-acknowledgement state, and no act that files a claim — the line's claim controls only advance a claim that already exists."
+ },
+ {
+  "id": "F24",
+  "verdict": "stands",
+  "reason": "Nothing in the schedule region or the needs block is animated; both bodies swap on query settle, and no reduced-motion rule in globals.css touches a data-arrival swap.",
+  "evidence": "schedule-rule-region.tsx:178-211 (both branches are plain conditional renders); globals.css:283-1523 (the nine reduce blocks all target animations/transitions)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F25",
+  "verdict": "misread",
+  "reason": "planroom and specbook both declare routeSegments, and the page passes shelfRouteFor for both, so `routes[door.shelf]` is truthy and the deadLeaf branch never applies to those two rows. Below 1440 they render as `<a href='/doc/{id}/plans'>` and `/spec-book`.",
+  "evidence": "shelves.ts:50-62 (routeSegment 'plans' / 'spec-book'); page.tsx:762-765 (`planroom: shelfRouteFor('planroom', routeId) ?? undefined`); job-ticket.tsx:283-289",
+  "revised_claim": ""
+ },
+ {
+  "id": "F26",
+  "verdict": "stands",
+  "reason": "The elapsed figure is font-mono text-[17px]; every other string in the rail is 11-12px.",
+  "evidence": "spine-timer.tsx:140 (`font-mono text-[17px] tracking-[0.04em]`); doc-spine.tsx:129-135, spine-running-index.tsx:97-113",
+  "revised_claim": ""
+ },
+ {
+  "id": "F27",
+  "verdict": "stands",
+  "reason": "The eight rows are unconditional, so a spread with nothing recorded pays the same eight-row height in honest empties.",
+  "evidence": "ticket-derivation.ts:780-793; job-ticket.tsx:402-407 (one wrapper per row, unconditionally mapped)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F28",
+  "verdict": "stands",
+  "reason": "The first-touch note is the first child of MarginRail's body on every project document, above the 'In the margin' header row, and carries the default 'Appears once · Recedes on use' caption.",
+  "evidence": "margin-rail.tsx:462-468; margin-note.tsx:99 (caption default); margin-rail.tsx:488-491 (the header that follows)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F29",
+  "verdict": "stands",
+  "reason": "The rail's approvals value and the paper's approvals fold summary are two separate derivations of the same emptiness, printed in two different type registers on one screen.",
+  "evidence": "spine-shelved-blocks.tsx:88-95 (approvalsValue into the index); project-approval-document.tsx:556-572 (`${leadPhrase} · ${authoredPhrase}`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F30",
+  "verdict": "stands",
+  "reason": "useState(false) is the initial value and the media query is only read in an effect; a grep for the hook across components/document returns no importer.",
+  "evidence": "useReducedMotion.ts:4 (`useState(false)`), :6-10; no match for `useReducedMotion` under components/document",
+  "revised_claim": ""
+ },
+ {
+  "id": "F31",
+  "verdict": "stands",
+  "reason": "All five elements are unconditional at ≥1440 and none takes scroll, section or region as an input, so they occupy the same pixels in every state.",
+  "evidence": "doc-spine.tsx:143-154; spine-timer.tsx:128-181; margin-rail.tsx:462-468; studio-drawer.tsx:289",
+  "revised_claim": ""
+ },
+ {
+  "id": "F32",
+  "verdict": "stands",
+  "reason": "The mobile sheet prints label and sub for all seven sections as text rows; the compact rail prints the same seven as bare marks plus one caption.",
+  "evidence": "mobile-sheets.tsx:455-507 (label at :466, sub at :476); doc-spine.tsx:64-120",
+  "revised_claim": ""
+ },
+ {
+  "id": "F33",
+  "verdict": "stands",
+  "reason": "One element carries both regimes: fixed/translate-x-full sheet from 1180 with a scrim and a focus trap, sticky col-start-3 from 1440.",
+  "evidence": "margin-rail.tsx:258-262; margin-rail.tsx:242-250 (scrim); margin-rail.tsx:135-198 (trap)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F34",
+  "verdict": "narrows",
+  "reason": "The mechanism is real but today's error is bounded by one seam height, not 283px: the ticket publishes --doc-seam-height only in the pinned-and-folded state and removes it otherwise, so a jump started unpinned resolves scroll-margin at 0 and lands under a ~64px seam that appears mid-scroll.",
+  "evidence": "job-ticket.tsx:248-259 (removeProperty when `!pinned || unfolded`); globals.css:1034; use-document-running-index.ts:206-215 (scrollIntoView at call time)",
+  "revised_claim": "A seam whose height changes during a smooth scroll mis-lands the region head by up to one seam height (~64px today, more under a continuously-condensing seam), because scroll-margin-top is resolved once at scrollIntoView call time."
+ },
+ {
+  "id": "F35",
+  "verdict": "stands",
+  "reason": "No `browserslist` key in apps/designer-portal/package.json or the repo root, and no .browserslistrc anywhere; playwright.config.ts declares chromium, firefox and webkit.",
+  "evidence": "playwright.config.ts:54-68; apps/designer-portal/package.json (no browserslist key)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F36",
+  "verdict": "stands",
+  "reason": "Measured: the attribute at :1942 is 1109 chars from `<SectionStageLineMount` (391 headroom), and the comment at :1962 carries the same literal within ~160 chars of the mount, so the regex has a prose fallback once the real window exceeds 1500.",
+  "evidence": "stage2-approval-cutover-contract.test.ts:19; page.tsx:1942 (attribute), :1962 (comment containing `<div data-active-section>`), :1964 (mount)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F37",
+  "verdict": "stands",
+  "reason": "There are exactly four `var(--doc-seam-height, 0px)` sites, all relying on the fallback arm while the property is unregistered and the ticket removes it whenever unpinned.",
+  "evidence": "globals.css:1026, :1034, :1037; money-region.tsx:48; job-ticket.tsx:250-253 (removeProperty)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F38",
+  "verdict": "stands",
+  "reason": "All three seam assertions read only the property string on documentElement, and no e2e file measures a landed region head's box — a grep for boundingBox across e2e/document returns only shell/spine/margin/paper column checks.",
+  "evidence": "job-ticket.test.tsx:519, :524, :529; e2e/document/quiet-release-contracts.spec.ts:74-161 (column boxes only)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F39",
+  "verdict": "stands",
+  "reason": "setFolded is the only mutator and it always calls writeExplicit; the sole non-persisting input is the caller's defaultFolded/forceOpen props.",
+  "evidence": "use-region-fold.ts:118-136 (`setExplicit(value); writeExplicit(docId, region, value)`); use-region-fold.ts:121",
+  "revised_claim": ""
+ },
+ {
+  "id": "F40",
+  "verdict": "stands",
+  "reason": "At 390 the ticket rests as the seam, and the stack below it still mounts the guide/red-letter zone, the instruments row and the letterhead margin chips before any region head.",
+  "evidence": "job-ticket.tsx:202, :244; page.tsx:1838-1889; shots/m390-rich-s0.png",
+  "revised_claim": ""
+ },
+ {
+  "id": "F41",
+  "verdict": "stands",
+  "reason": "Same defect as F08 at the seam state: onFold is a bare setFolded(true) with no focus contract, while the unfold path lands focus on the heading.",
+  "evidence": "region-head.tsx:177-187 (the Fold control calls onFold and nothing else); project-approval-document.tsx:600; fold-seam.tsx:41-44",
+  "revised_claim": ""
+ },
+ {
+  "id": "F42",
+  "verdict": "narrows",
+  "reason": "There is no aria-live in job-ticket.tsx, but the collapse is not unannounced for every reader: when the reader was standing inside the ticket, focus is moved onto the Fold button, whose label and aria-expanded flip together. The silence is for a reader who was NOT inside the ticket.",
+  "evidence": "job-ticket.tsx:235-242 (`foldRef.current?.focus()`), :388-398 (`aria-expanded={unfolded}` + 'Unfold ↓'); no aria-live anywhere in job-ticket.tsx",
+  "revised_claim": "A scroll-driven ticket collapse is announced only to a reader who was already focused inside the ticket (focus moves to the Fold button); for every other screen-reader user the 283px change is silent, since job-ticket.tsx declares no live region."
+ },
+ {
+  "id": "F43",
+  "verdict": "stands",
+  "reason": "aria-label is `compactTimer ? 'Time in hand' : undefined` on the role=dialog wrapper, and no aria-labelledby is set for the other three kinds.",
+  "evidence": "mobile-sheets.tsx:255-261 (`aria-label={compactTimer ? 'Time in hand' : undefined}` beside `role=\"dialog\" aria-modal=\"true\"`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F44",
+  "verdict": "stands",
+  "reason": "The publish effect measures getBoundingClientRect().height at run time and re-runs on seam.identity and seam.exceptions, so a longer exception line republishes a taller seam.",
+  "evidence": "job-ticket.tsx:254-258 (`Math.round(height)`, deps `[pinned, unfolded, seam.identity, seam.exceptions]`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F45",
+  "verdict": "stands",
+  "reason": "The lock only sets activeKey and a ref; it never touches the ticket, the seam variable or scroll.",
+  "evidence": "use-document-running-index.ts:35, :161-180 (setActiveKey + lockRef only)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F46",
+  "verdict": "stands",
+  "reason": "Two different regions both name themselves Schedule with two different fold keys: the rule's 'Schedule dates' seam and the ledger's 'Schedule' head, deliberately kept separate in the fold-key union.",
+  "evidence": "schedule-rule-region.tsx:181-192 (name='Schedule dates'), :199-210 (name='Schedule'); use-region-fold.ts:27-31 ('schedule' vs 'schedule-rule' comment)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F47",
+  "verdict": "stands",
+  "reason": "The mount order in page.tsx puts letterhead, ticket, guide/red-letter, instruments, mobile chips and the approvals mount all above the fold with no density control between them.",
+  "evidence": "page.tsx:1797-1900",
+  "revised_claim": ""
+ },
+ {
+  "id": "F48",
+  "verdict": "stands",
+  "reason": "The mobile chips are an unbounded flex-wrap of every anchored margin row at that anchor, with no cap and no scroll container.",
+  "evidence": "mobile-margin-chips.tsx:89 (`flex flex-wrap gap-1.5 ... min-[980px]:hidden`), :110-125 (`chips.map`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F49",
+  "verdict": "stands",
+  "reason": "The FF&E region head is preceded by a rule with mt-5 and followed by mb-1.5, with the status line, exception line and full ledger all above the first folio and line.",
+  "evidence": "ffe-section.tsx:1290 (`RegionRule className='mt-5'`), :1302-1315 (head wrapper `mb-1.5` + status + exceptions + actions)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F50",
+  "verdict": "stands",
+  "reason": "The seam takes the worst two by rank and drops the rest with `.slice(0, 2)`; no count, no ellipsis, no residue.",
+  "evidence": "ticket-derivation.ts:849-856",
+  "revised_claim": ""
+ },
+ {
+  "id": "F51",
+  "verdict": "stands",
+  "reason": "One observer, one sentinel, `{ threshold: 0 }`, no rootMargin, no debounce, setPinned called straight from the callback.",
+  "evidence": "job-ticket.tsx:219-226",
+  "revised_claim": ""
+ },
+ {
+  "id": "F52",
+  "verdict": "narrows",
+  "reason": "The relocation is deliberate and conditional, not indiscriminate: it fires only when the reader was inside the ticket AND focus has already fallen out of it, and it lands on the Fold button — the control that puts the rows back — with the rationale stated in the comment above.",
+  "evidence": "job-ticket.tsx:213 (focusWithin ref), :229-242 (`if (!focusWithin.current || stillInside) return; foldRef.current?.focus()`)",
+  "revised_claim": "A scroll-driven pin relocates keyboard focus onto the ticket's Fold button for a reader who was standing on a row that the pin unmounts — a scroll gesture producing a focus move, though a deliberate and bounded one."
+ },
+ {
+  "id": "F53",
+  "verdict": "stands",
+  "reason": "ffe-section.tsx is 1549 lines with no virtualiser import of any kind; the region fold's unmount is the only thing that keeps rows out of the DOM.",
+  "evidence": "ffe-section.tsx (1549 lines, no `virtual` match anywhere); use-region-fold.ts:121; ffe-section.tsx:1291-1300 (folded → FoldSeam only)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F54",
+  "verdict": "stands",
+  "reason": "FoldSeam's props are headingId, name, summary, onUnfold, surfaceKey and regionKey — no origin, and the hook returns only the resolved boolean.",
+  "evidence": "fold-seam.tsx:46-82; use-region-fold.ts:121, :138 (returns `{ folded, toggle, setFolded }`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F55",
+  "verdict": "narrows",
+  "reason": "Size and weight are uniform — every mark is `xs` at ≥1440 — but the marks are not visually identical: each takes `fill={fillStateAtSection(s.key)}` and only the active one breathes.",
+  "evidence": "doc-spine.tsx:66-88 (fill + breathing per mark), :103, :113-114 (xs at ≥1440); strata-mark.tsx:41",
+  "revised_claim": "The seven spine marks are all one size and weight, so a phase that shelves four regions reads no larger than one that shelves none — only fill level and the active mark's breath distinguish them."
+ },
+ {
+  "id": "F56",
+  "verdict": "stands",
+  "reason": "The resume-landing effect scrolls [data-active-section] into view whenever the doc is in the recent list and the section sits below 60% of the viewport, so the letterhead is skipped past.",
+  "evidence": "page.tsx:1166-1174",
+  "revised_claim": ""
+ },
+ {
+  "id": "F57",
+  "verdict": "misread",
+  "reason": "Same refutation as F25: shelfRouteFor supplies /doc/{id}/plans and /doc/{id}/spec-book, so those rows are `<a href>` links below 1440, not dead leaves. A dead leaf only occurs for a shelf whose routeSegment is null (callsheet, clientcopy), and those rows are not leaf doors.",
+  "evidence": "shelves.ts:50-62, :130-135; page.tsx:762-765; job-ticket.tsx:266-267, :283-289",
+  "revised_claim": ""
+ },
+ {
+  "id": "F58",
+  "verdict": "stands",
+  "reason": "At 1180-1439 the margin panel is translate-x-full and pointer-events-none until the trigger is pressed, so its content contributes nothing to the resting frame while the paper gains only the 56px→0 spine difference.",
+  "evidence": "margin-rail.tsx:200-201, :259-262",
+  "revised_claim": ""
+ },
+ {
+  "id": "F59",
+  "verdict": "narrows",
+  "reason": "The grammar rhymes but the type does not: the ticket seam sets its identity in the mono SEAM_IDENTITY_CLASS over a 13.5px medium sentence, while a region seam sets an italic serif name beside a mono summary in a three-column grid.",
+  "evidence": "job-ticket.tsx:381-386 + :106 (SEAM_IDENTITY_CLASS); fold-seam.tsx:64-79 (`font-heading text-[12.5px] italic` + `truncate font-mono text-[11px]`)",
+  "revised_claim": "The pinned ticket seam and a chosen region fold share the same three-part grammar (name · summary · unfold verb) and so read as one kind of thing, though their type treatments differ."
+ },
+ {
+  "id": "F60",
+  "verdict": "stands",
+  "reason": "The only zero-shift device in the shell is the schedule glance's zero-height sticky wrapper reading the seam variable; the ticket's own fold is a plain conditional render with no compensation for the 283px it removes.",
+  "evidence": "schedule-rule.tsx:546-548 (`pointer-events-none sticky top-0 z-[3] h-0`); globals.css:1026; job-ticket.tsx:401 (`{unfolded && (`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F61",
+  "verdict": "misread",
+  "reason": "`.has-wash` already declares `isolation: isolate`, so every washed row is its own stacking context today and the wash's z-index:-1 already paints behind the row's content and above its ground. An added content-visibility container does not change that, and inset:0 overflows nothing.",
+  "evidence": "globals.css:321-325 (`.has-wash { position: relative; isolation: isolate; }`); globals.css:327-336 (`.row-wash` inset:0, z-index:-1); ffe-section.tsx:480 (`has-wash` on the line)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F62",
+  "verdict": "narrows",
+  "reason": "The document does reach PO material without leaving: the FF&E line unfold labels a Purchase order and opens the PO preview, and it carries claim lifecycle acts. What is off-document is the acknowledgement itself and the filing of a new claim.",
+  "evidence": "line-unfold.tsx:390 (`label=\"Purchase order\"`); po-preview.tsx:292; line-unfold.tsx:188-260 (ClaimActs); orders-book-receiving.tsx:83 (the claim lifecycle's home)",
+  "revised_claim": "Acknowledging a PO and filing a new damage claim both require leaving the document, though the FF&E line unfold does surface the purchase order and can advance a claim that already exists."
+ },
+ {
+  "id": "F63",
+  "verdict": "narrows",
+  "reason": "True of the ticket rows, region heads and margin cards, but not of the document: the FF&E line unfold prints the words `Purchase order` and opens a sheet headed the same.",
+  "evidence": "line-unfold.tsx:390; po-preview.tsx:292 ('Resend purchase order' / 'Purchase order')",
+  "revised_claim": "No ticket row, region head, margin card or spine label prints 'PO' or 'purchase order' — the words appear only once an FF&E line is unfolded."
+ },
+ {
+  "id": "F64",
+  "verdict": "stands",
+  "reason": "The latch effect refuses a late default only when an EXPLICIT choice already exists; with explicit === null a defaultFolded that resolves true after first paint latches and folds a region rendered open.",
+  "evidence": "use-region-fold.ts:110-116 (`setLatchedDefault((current) => (explicit === null ? defaultFolded : current))`), :121",
+  "revised_claim": ""
+ },
+ {
+  "id": "F65",
+  "verdict": "narrows",
+  "reason": "Filing is indeed off-document, but the line unfold is not inert on claims: it renders ClaimActs for an open item-grain claim, and the line's hover wash turns terracotta for a damaged line.",
+  "evidence": "line-unfold.tsx:182-260 (ClaimActs, 'notify-vendor-of-ffe-claim' / 'open-resolve-ffe-claim'); ffe-section.tsx:224-229; orders-book-receiving.tsx:83",
+  "revised_claim": "Damage is visible on the FF&E line and an existing claim can be advanced from the line unfold, but FILING a claim exists only on the Receiving page, off the document."
+ },
+ {
+  "id": "F66",
+  "verdict": "stands",
+  "reason": "MarginRail renders whatever kinds the margin query returns; no PO-ack, damage or backorder kind is constructed anywhere in the component, and the accent map has no such entry.",
+  "evidence": "margin-rail.tsx:294-679; margin-item.tsx:52-62 (`deriveKindLine(row)`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F67",
+  "verdict": "stands",
+  "reason": "No probe or shot exercises the Orders ledger sheet; the DocSheet primitive that would carry it leaves the document mounted, so the question is untested rather than answered.",
+  "evidence": "overlays/doc-sheet.tsx:199+ (the document beneath stays mounted); probe/03-interactive-probe.md §6",
+  "revised_claim": ""
+ },
+ {
+  "id": "F68",
+  "verdict": "stands",
+  "reason": "The gate is three-fold and all three are already spent: one box-shadow rule in globals.css, and it must be `.doc-elevated`; no new shadow anywhere under src/; and at most three files under components/document may wear the class — currently studio-drawer, margin-item and doc-sheet.",
+  "evidence": "shadow-gate.test.ts:84-95, :97-105, :129-136; globals.css:294-296",
+  "revised_claim": ""
+ },
+ {
+  "id": "F69",
+  "verdict": "stands",
+  "reason": "Two independent e2e specs assert the compact spine's box at 55-57px, and shelf-panel.test.tsx pins a class derived from the 200px full spine.",
+  "evidence": "quiet-responsive-shell.spec.ts:220-228; quiet-release-contracts.spec.ts:108-118, :150-158; shelf-panel.test.tsx:145",
+  "revised_claim": ""
+ },
+ {
+  "id": "F70",
+  "verdict": "stands",
+  "reason": "RAIL_FILES is a literal array of five paths read with readFileSync; a renamed or split file simply drops out of the scan and the assertion still passes on an empty offender list.",
+  "evidence": "contrast.test.ts:325-341 (`const RAIL_FILES = [...]`, `expect(offenders).toEqual([])`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F71",
+  "verdict": "stands",
+  "reason": "setFold(null) is the first statement of an effect keyed on [pinned], so any pin transition erases the reader's explicit fold and re-derives from `!pinned && !seamAtRest`.",
+  "evidence": "job-ticket.tsx:234-236; job-ticket.tsx:244",
+  "revised_claim": ""
+ },
+ {
+  "id": "F72",
+  "verdict": "stands",
+  "reason": "Eight rows are asserted at 1440, at 1280, and at 390 after an explicit Unfold, plus a jsdom assertion of eight rows with data-unfolded='true' at 1440.",
+  "evidence": "quiet-responsive-shell.spec.ts:175, :185, :195; responsive-document-shell.test.tsx:655-687",
+  "revised_claim": ""
+ },
+ {
+  "id": "F73",
+  "verdict": "stands",
+  "reason": "There is no shared inter-region spacing token or wrapper: each region declares its own margin, ranging from mt-8 through mt-6, mt-5, mt-4, mt-2, mb-5 and nothing at all.",
+  "evidence": "care-band.tsx:249; project-approval-document.tsx:588 vs :565 (folded carries no spacing at all); ffe-section.tsx:1204-1210 (`scroll-mt-16` only); money-region.tsx:227-230; schedule-spine.tsx:1055-1060",
+  "revised_claim": ""
+ },
+ {
+  "id": "F74",
+  "verdict": "stands",
+  "reason": "Computed from the declared tokens: --text-faint #65594E on --doc-rail-stock #E8E3DB is 5.317:1 against a 4.5:1 floor, with relative luminance 0.1046 — the figures the seat states.",
+  "evidence": "globals.css:104 (`--text-faint: #65594E`), :58 (`--doc-rail-stock: #E8E3DB`); contrast.test.ts:233, :304-311",
+  "revised_claim": ""
+ },
+ {
+  "id": "F75",
+  "verdict": "stands",
+  "reason": "attach() re-queries every root and re-schedules itself only while attached.size < ordered.length, eight times at 250ms; the docstring names the late-mount case as a known limit.",
+  "evidence": "use-document-running-index.ts:36-38, :120-133 (`if (attached.size < ordered.length && retriesLeft > 0)`), :12-19",
+  "revised_claim": ""
+ },
+ {
+  "id": "F76",
+  "verdict": "misread",
+  "reason": "contrast.test.ts DOES gate ink on paper: PAPER_STOCKS includes --doc-paper #FCFAF6, and the whole muted ramp is asserted at 4.5:1 against all three stocks. The seat's own 6.5:1 figure for #65594E on paper is exactly what that test enforces.",
+  "evidence": "contrast.test.ts:233-240 (MUTED_RAMP, PAPER_STOCKS incl. '--doc-paper': '#FCFAF6'), :282-295 ('clears 4.5:1 on the paper, the desk ground and the rail')",
+  "revised_claim": ""
+ },
+ {
+  "id": "F77",
+  "verdict": "stands",
+  "reason": "The colophon prints the studio name, the hands line and two acts; it takes no client name and declares no return-to-top control.",
+  "evidence": "doc-colophon.tsx:101-135",
+  "revised_claim": ""
+ },
+ {
+  "id": "F78",
+  "verdict": "stands",
+  "reason": "The send state is derived independently by the guide/needs zone and by the proposal head block in page.tsx, with no cross-suppression.",
+  "evidence": "page.tsx:1838-1847 (guide/red-letter); page.tsx:2006 (the proposal head, `mb-1.5 mt-5 flex items-baseline justify-between`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F79",
+  "verdict": "stands",
+  "reason": "Both surfaces named in the shift render straight off query state with no reserved height and no motion to reduce, so the reflow is a data arrival that reduced motion cannot suppress.",
+  "evidence": "schedule-rule-region.tsx:178-211; red-letter-zone.tsx:82 (`if (rows.length === 0) return null`); probe/03-interactive-probe.md:206-224",
+  "revised_claim": ""
+ },
+ {
+  "id": "F80",
+  "verdict": "stands",
+  "reason": "The People row's door is the call-sheet overlay and prints its own emptiness at the top; the roster invitation is a separate foot-of-paper surface with its own acts.",
+  "evidence": "ticket-derivation.ts:735-741; doc-colophon.tsx:101-109",
+  "revised_claim": ""
+ },
+ {
+  "id": "F81",
+  "verdict": "stands",
+  "reason": "The region's name is the literal 'Pieces' and 'FF&E' appears only inside the status sentence beneath it.",
+  "evidence": "ffe-section.tsx:1084 (`the FF&E schedule, by room · ...`); ffe-section.tsx:1291 (`name=\"Pieces\"`); ticket-derivation.ts:524-531",
+  "revised_claim": ""
+ },
+ {
+  "id": "F82",
+  "verdict": "stands",
+  "reason": "Two independent elapsed readouts render simultaneously at ≥1440 from two different clocks — the spine's session timer and the drawer's day total — in the same mono register.",
+  "evidence": "spine-timer.tsx:128-140; studio-drawer.tsx:289 (the fixed strip that carries 'In hand today')",
+  "revised_claim": ""
+ },
+ {
+  "id": "F83",
+  "verdict": "stands",
+  "reason": "Confirmed verbatim, though in a different file than cited: the label, the three-line explanation, the GuidedEmptyState 'No authorizations recorded yet' and its 'Draft a trade scope' action are one block, and with zero rows the head's own action is suppressed so the act prints once.",
+  "evidence": "commercial/authorizations-ledger.tsx:165-168 (label), :181-185 (prose), :198-205 (GuidedEmptyState), :169 (head action gated on rows.length > 0)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F84",
+  "verdict": "narrows",
+  "reason": "The rail's ink AREA is constant, but one element in it does answer to scroll: the running index's aria-current row and the 2px reading rule measured off the active button move as the reading band crosses regions.",
+  "evidence": "spine-running-index.tsx:44-59 (measure on activeKey), :76-82 (the moving rule), :86 (`aria-current`); doc-spine.tsx:46-154 (nothing else reads scroll)",
+  "revised_claim": "Nothing in the rail changes weight, size or ink area across scroll states; the only scroll-responsive element is the running index's current-row bolding and its 2px reading rule."
+ },
+ {
+  "id": "F85",
+  "verdict": "misread",
+  "reason": "A closed compact margin is not a landmark at all: the aside carries aria-hidden and inert while `!visible`, so AT never reaches it; once open it takes role=dialog with aria-labelledby pointing at the 'In the margin' title.",
+  "evidence": "margin-rail.tsx:249-255 (`aria-labelledby={openAsSheet ? titleId : undefined}`, `aria-hidden={!visible || ...}`, `inert={...}`); margin-rail.tsx:266-271 (the title element)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F86",
+  "verdict": "stands",
+  "reason": "The only reduced-motion source is the OS media query — nine CSS blocks plus Tailwind's motion-safe/motion-reduce variants — and interruption-settings.tsx contains no motion setting at all.",
+  "evidence": "useReducedMotion.ts (no consumer under components/document); interruption-settings.tsx (no 'motion' match); globals.css:283-1523",
+  "revised_claim": ""
+ },
+ {
+  "id": "F87",
+  "verdict": "narrows",
+  "reason": "The selector is live but resolves against schedule-rule.tsx, not schedule-rule-region.tsx, and it targets a ZERO-HEIGHT sticky wrapper — so today the glance simply parks at the published seam height. The continuous drift is a property of a proposed condensing seam, not of the current code.",
+  "evidence": "globals.css:1026; schedule-rule.tsx:546-548 (`aria-label=\"Schedule rule\"`, `pointer-events-none sticky top-0 z-[3] h-0`); job-ticket.tsx:248-259 (two-value publication)",
+  "revised_claim": "Under a continuously-condensing seam the schedule's zero-height pinned glance, which offsets itself by top: var(--doc-seam-height), would re-resolve its sticky constraint every frame and slide against the paper."
+ },
+ {
+  "id": "F88",
+  "verdict": "stands",
+  "reason": "A grep for startTransition/useTransition across components/document returns only an unrelated mutation-hook name in the custom-commission sheet.",
+  "evidence": "components/document/rooms/piece/custom-commission-sheet.tsx:365 (`useTransitionCustomCommissionRevision`) is the only match",
+  "revised_claim": ""
+ },
+ {
+  "id": "F89",
+  "verdict": "stands",
+  "reason": "The persisted choice and the derived default resolve into one boolean before the seam is rendered, and the seam takes no argument that could distinguish them.",
+  "evidence": "use-region-fold.ts:42-58 (the storage key), :121; fold-seam.tsx:46-82",
+  "revised_claim": ""
+ },
+ {
+  "id": "F90",
+  "verdict": "stands",
+  "reason": "Both verbs are registry entries with global scope reached through the command bar's events; nothing in the spine, the letterhead, the ticket or the drawer strip names them.",
+  "evidence": "registry.tsx:259-285 (`scope: 'global'`); command-bar.tsx:176-188 (openCaptureLead / openOpenProject); studio-drawer.tsx:289",
+  "revised_claim": ""
+ },
+ {
+  "id": "F91",
+  "verdict": "stands",
+  "reason": "The FF&E region root is one element, so any classifier keyed on it counts the empty-state prose and the folio strip as active region.",
+  "evidence": "ffe-section.tsx:1204-1210 (one `<section data-index-region=\"ffe\">` wrapping head, empty states and lines)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F92",
+  "verdict": "stands",
+  "reason": "The foot mounts explanatory blocks and closing furniture, none of which is a working control on the document's current job.",
+  "evidence": "commercial/authorizations-ledger.tsx:165-205; care-band.tsx:249-262; doc-colophon.tsx:101-135",
+  "revised_claim": ""
+ },
+ {
+  "id": "F93",
+  "verdict": "stands",
+  "reason": "Four fold controls with three implementations — the ticket's Fold/Unfold, a region head's tertiary Fold, and two FoldSeams — and none carries a reason or an origin.",
+  "evidence": "job-ticket.tsx:388-398; region-head.tsx:177-187; fold-seam.tsx:46-82; use-region-fold.ts:97-142",
+  "revised_claim": ""
+ },
+ {
+  "id": "F94",
+  "verdict": "stands",
+  "reason": "A proposal document is a pre-work section, and paperRegionsForSection returns [] for those, so no [data-index-region] root and no index block exist.",
+  "evidence": "document-index.ts:76-82; spine-running-index.tsx:61; doc-spine.tsx:141",
+  "revised_claim": ""
+ },
+ {
+  "id": "F95",
+  "verdict": "misread",
+  "reason": "The scenario cannot occur: forceOpen has exactly one consumer, and that consumer's open branch passes RegionHead neither bodyId nor onFold, so showFold is false and no Fold control is rendered under forceOpen at all.",
+  "evidence": "care-band.tsx:188-191 (`forceOpen: nearClose` — the only usage); care-band.tsx:313-330 (RegionHead without bodyId/onFold); region-head.tsx:84 (`const showFold = Boolean(bodyId && onFold)`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F96",
+  "verdict": "stands",
+  "reason": "Put down, the seven-mark list and the active caption are the first three children of the aside, in that order, before any timer or index.",
+  "evidence": "doc-spine.tsx:46-55, :64-120, :122-136",
+  "revised_claim": ""
+ },
+ {
+  "id": "F97",
+  "verdict": "stands",
+  "reason": "seamAtRest is true below 1180, so `unfolded = fold ?? (!pinned && !seamAtRest)` resolves false at rest and the eight rows are unmounted until the reader presses Unfold.",
+  "evidence": "job-ticket.tsx:202, :244, :401",
+  "revised_claim": ""
+ },
+ {
+  "id": "F98",
+  "verdict": "stands",
+  "reason": "The seam's summary is `${done} of ${items.length} closed out` beside the bare name 'Closing the book'; no subtitle or eyebrow explains the six items in the folded form.",
+  "evidence": "care-band.tsx:249-262",
+  "revised_claim": ""
+ },
+ {
+  "id": "F99",
+  "verdict": "narrows",
+  "reason": "Clipping is real but symmetric and small: the `sm` mark is 48px wide against a 44px inner rail (56px minus px-1.5 on both sides), and the jump button centres it, so roughly 2px is lost at each side to overflow-x-hidden — not a left-only cut.",
+  "evidence": "strata-mark.tsx:41 (`sm: { w: 48, ... }`); doc-spine.tsx:44 (`min-[1180px]:overflow-x-hidden min-[1180px]:px-1.5`); doc-spine.tsx:106-115 (`w-full min-w-11 ... justify-center`)",
+  "revised_claim": "At 1280 the seven 48px `sm` marks overflow the rail's 44px inner measure and lose about 2px at each end to the spine's own overflow-x-hidden."
+ },
+ {
+  "id": "F100",
+  "verdict": "stands",
+  "reason": "The contradiction is structural, not seed-specific: canSendNote is `Boolean(projectId || clientProfileId)`, so 'Message …' renders on any project document whether or not a household is linked, while the chip beside it prints 'No client linked — attach one'.",
+  "evidence": "letterhead-instruments.tsx:301 (`const canSendNote = Boolean(projectId || clientProfileId)`), :317-331; household-chip.tsx:57",
+  "revised_claim": ""
+ },
+ {
+  "id": "F101",
+  "verdict": "stands",
+  "reason": "The 'In the margin · N' heading is rendered only inside the spine sheet; the mobile bar's three zones are the section handle, the primary action or timer, and More — no count.",
+  "evidence": "mobile-sheets.tsx:538-540; mobile-bar.tsx:213-298",
+  "revised_claim": ""
+ },
+ {
+  "id": "F102",
+  "verdict": "narrows",
+  "reason": "The cited caption cannot print 'Pieces': doc-spine.tsx renders activeSection.label, which is one of the seven section labels. The duplication the seat saw is the running index's own row.",
+  "evidence": "doc-spine.tsx:128-131 (`{activeSection.label}`); section-derivation.ts:59-77 (ORDER/labels); spine-running-index.tsx:96-105 (`{entry.label}`)",
+  "revised_claim": "The running index's 'Pieces' row duplicates the page's own <h2> 'Pieces' region head verbatim, at 13px against the head's 24px."
+ },
+ {
+  "id": "F103",
+  "verdict": "stands",
+  "reason": "The presence line lives inside the ≥1440-only block, and no other document surface at 1180-1439 prints it — the margin panel's header carries only the title and Close.",
+  "evidence": "doc-spine.tsx:145-154 (`hidden min-[1440px]:mt-4 min-[1440px]:block`); margin-rail.tsx:264-283",
+  "revised_claim": ""
+ },
+ {
+  "id": "F104",
+  "verdict": "stands",
+  "reason": "The ticket's sticky section carries no transition or animation class, so no reduced-motion rule targets it — and none would have anything to neutralise today.",
+  "evidence": "job-ticket.tsx:362; globals.css:283-1523 (the nine reduce blocks name no ticket selector)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F105",
+  "verdict": "stands",
+  "reason": "aria-current is toggled per row on every resolve with no live region and no status element anywhere in the index or its hook.",
+  "evidence": "spine-running-index.tsx:86 (`aria-current={current ? 'true' : 'false'}`); use-document-running-index.ts:101-113 (resolve on every intersection and scroll frame)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F106",
+  "verdict": "narrows",
+  "reason": "Put down at 390 is one tap, not two: the spine sheet's FIRST control is '← Put down · back to the Desk', and the sheet opens straight from the bar's section handle.",
+  "evidence": "mobile-sheets.tsx:444-455; mobile-bar.tsx:218-232 (`onClick={openSpine}`)",
+  "revised_claim": "At ≥1180 'Put down' sits permanently at the top of the spine; at 390 the same act is one level deeper, as the first row of the sections sheet."
+ },
+ {
+  "id": "F107",
+  "verdict": "stands",
+  "reason": "The schedule rule's folded branch renders the glance strip and the phase-advance control alongside the seam; approvals, money and care all render RegionRule + FoldSeam and nothing else.",
+  "evidence": "schedule-rule-region.tsx:180-195 (`{glance}{phaseAdvance}` inside the folded branch); money-region.tsx:225-243; project-approval-document.tsx:565-579; care-band.tsx:249-262",
+  "revised_claim": ""
+ },
+ {
+  "id": "F108",
+  "verdict": "stands",
+  "reason": "The fallback strings and the live rung are passed into the same `value` slot of the same entry object and rendered by one span with one class.",
+  "evidence": "spine-shelved-blocks.tsx:62-66 (`?? (failed ? 'Money unread' : settled ? 'Nothing moving yet' : 'Reading…')`); spine-running-index.tsx:106-113",
+  "revised_claim": ""
+ },
+ {
+  "id": "F109",
+  "verdict": "stands",
+  "reason": "Confirmed, and the site is identifiable: when the stage model resolves to null but a fidelity is known, the stage line renders a bare `<p role=\"status\">{FIDELITY_WORD[fidelity]}</p>` — one word, no object. The cited mount lines are the loading/error shapes, not this one.",
+  "evidence": "workflow/section-stage-line.tsx:100-103 (`) : fidelity ? (<p role=\"status\" ...>{FIDELITY_WORD[fidelity]}</p>`); section-stage-line.ts:186-190 (subLabel null when no headline)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F110",
+  "verdict": "stands",
+  "reason": "RedLetterZone imports no fold hook and renders no fold control; its only escape is rows.length === 0. Nothing states that as policy the way shadow-gate.test.ts states the elevation budget.",
+  "evidence": "red-letter-zone.tsx:82-99 (no useRegionFold, no Fold action); shadow-gate.test.ts:80-136 (the contrasting mechanical rule)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F111",
+  "verdict": "stands",
+  "reason": "The index marks exactly one row aria-current and nothing else; there is no visited, passed or read state anywhere in the entry shape.",
+  "evidence": "spine-running-index.tsx:26-31 (entry shape `{key,label,value}`), :86; doc-spine.tsx:64-120 (marks carry only settled/active/future/unrecorded)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F112",
+  "verdict": "stands",
+  "reason": "One IntersectionObserver callback sets pinned from isIntersecting; there is no direction test, dwell timer or second threshold anywhere in the component.",
+  "evidence": "job-ticket.tsx:219-226; job-ticket.tsx:234-244",
+  "revised_claim": ""
+ },
+ {
+  "id": "F113",
+  "verdict": "stands",
+  "reason": "Nothing in the ticket suppresses layout-shift reporting; the ticket itself is sticky so its own box does not move, which is consistent with the probe finding the displacement of the content below it unattributed.",
+  "evidence": "job-ticket.tsx:362 (`sticky top-0`); probe/03-interactive-probe.md §8",
+  "revised_claim": ""
+ },
+ {
+  "id": "F114",
+  "verdict": "stands",
+  "reason": "defaultFolded is the literal `true`, so a first visit with no stored choice opens the document with the schedule frame folded.",
+  "evidence": "schedule-rule-region.tsx:75-79 (`defaultFolded: true`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F115",
+  "verdict": "misread",
+  "reason": "Each verb carries a printed criterion: the registry gives capture-lead the subLabel 'begin a Brief' and open-project 'no proposal needed', plus a help blurb each — and the seat quotes both subLabels in its own observation.",
+  "evidence": "registry.tsx:262-270 (label 'Capture a lead', subLabel 'begin a Brief', blurb), :274-284 (label 'Open a project', subLabel 'no proposal needed', blurb)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F116",
+  "verdict": "stands",
+  "reason": "The foot-of-the-paper branch hands the reading line to the last attached region unconditionally, so at s3 the index marks Money while the frame shows the closing furniture below it.",
+  "evidence": "use-document-running-index.ts:78-87 (`if (atFoot) { setActiveKey(present[present.length - 1]); return; }`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F117",
+  "verdict": "narrows",
+  "reason": "The wash is not hover-only: `.has-wash:focus-within .row-wash` opens it to the same 150% circle, from the centre and without a sweep, so a tap that focuses a control inside the row still opens it. What touch loses is the pointer-origin sweep.",
+  "evidence": "globals.css:338-343 (`.has-wash:hover .row-wash, .has-wash:focus-within .row-wash`), :345-349 (the focus-only centre override); row-wash.tsx:29-34",
+  "revised_claim": "On a touch surface the row wash loses its pointer-origin sweep (markInkPoint runs only on pointerenter/pointermove); it still opens from the centre via :focus-within when a control in the row takes focus."
+ },
+ {
+  "id": "F118",
+  "verdict": "narrows",
+  "reason": "The needs block genuinely has none, but the sibling it replaces does: DocumentGuide renders an sr-only aria-live region, and the stage line's loading shape is a role=status with aria-live=polite. So the gap is specific to RedLetterZone and the schedule region.",
+  "evidence": "red-letter-zone.tsx:85-99 (no live region); document-guide.tsx:123 (`<span className=\"sr-only\" aria-live=\"polite\" aria-atomic=\"true\">`); section-loading-line.tsx:26",
+  "revised_claim": "The late-arriving RedLetterZone and schedule content carry no live region, unlike the DocumentGuide branch they displace, which announces itself."
+ },
+ {
+  "id": "F119",
+  "verdict": "stands",
+  "reason": "The ternary is exactly the four conditions named, and neither branch renders a marker that a substitution happened.",
+  "evidence": "page.tsx:1838-1847",
+  "revised_claim": ""
+ },
+ {
+  "id": "F120",
+  "verdict": "stands",
+  "reason": "Both global rules and the money region's inline style are scoped to [data-index-region] roots; no ticket row, fold control or FF&E line control declares scroll-margin-top of its own.",
+  "evidence": "globals.css:1033-1038; money-region.tsx:48, :231, :252",
+  "revised_claim": ""
+ },
+ {
+  "id": "F121",
+  "verdict": "stands",
+  "reason": "The chip is a py-[0.32rem] box around an 11px line with no min-height and no leading class, so its computed height sits below the 24px target floor.",
+  "evidence": "mobile-margin-chips.tsx:98 (static chip), :114 (pressable chip) — `py-[0.32rem] pl-2 pr-2.5 text-[11px]`, no min-h",
+  "revised_claim": ""
+ },
+ {
+  "id": "F122",
+  "verdict": "misread",
+  "reason": "The code already answers the question: an unanswered PO IS the seam's piece-stuck exception, carrying the PO's own phrase and its sent date, fed from row.unacked_po_count on the page. It is simply zero on this seed.",
+  "evidence": "ticket-derivation.ts:504-514 (`? { rank: 'piece-stuck', phrase: po.phrase, standingSince: po.sentAt }`); page.tsx:1706-1713 (unansweredPo from `row.unacked_po_count`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F123",
+  "verdict": "stands",
+  "reason": "No rung ladder exists on the receiving side — the receiving surface reasons in PO statuses and inspection sets, not in a rung sequence.",
+  "evidence": "orders-book-receiving.tsx:318 (`.filter((po) => po.status === 'delivered' && !inspectedPoIds.has(po.id))`); no `rung`/`ladder` match in that file",
+  "revised_claim": ""
+ },
+ {
+  "id": "F124",
+  "verdict": "misread",
+  "reason": "The ripple preview is wired: the derivation has four live consumers, including the confirm strip that stands between a date move and its commit and the ghost layer that draws the downstream shift. It is unexercised on a zero-phase seed, not absent.",
+  "evidence": "schedule/schedule-confirm-strip.tsx, schedule/rule-ghost-layer.tsx, schedule/drafting-strip.tsx and commercial/schedule-impact-block.tsx all consume schedule-ripple-derivation / the ripple context",
+  "revised_claim": ""
+ },
+ {
+  "id": "F125",
+  "verdict": "stands",
+  "reason": "No captured shot covers it; the send-wall behaviour is inferred from source only.",
+  "evidence": "research/01-shot-ledger.md (38 shots, none of a proposal send-wall state line)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F126",
+  "verdict": "stands",
+  "reason": "The Put down link is the first child of a sticky rail and takes no scroll, section or region input, so it is genuinely invariant across all four states.",
+  "evidence": "doc-spine.tsx:46-55; doc-spine.tsx:44 (`sticky top-0`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F127",
+  "verdict": "stands",
+  "reason": "The red-letter zone is the only tinted, terracotta-bordered block in the header stack; every sibling is rules and type on paper.",
+  "evidence": "red-letter-zone.tsx:85-88 (`border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.08)]`); document-guide.tsx:75 (`border-y border-[var(--color-pearl)]`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F128",
+  "verdict": "stands",
+  "reason": "Every hover in the shell is paired: the spine's link and jump buttons pair hover with focus-visible, and the wash rule names :hover and :focus-within in one selector.",
+  "evidence": "doc-spine.tsx:52 (`group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100`), :111; globals.css:338-343; margin-rail.tsx:234-236, :278-281",
+  "revised_claim": ""
+ },
+ {
+  "id": "F129",
+  "verdict": "stands",
+  "reason": "The Phases button renders unconditionally in the vitals line, while PhasesFold returns null with no phases — so on a phase-less project the toggle opens onto nothing.",
+  "evidence": "letterhead-vitals.tsx:444-452 (the button, no gate), :454 (`{phasesOpen && <PhasesFold .../>}`), :283 (`if (!phases || phases.length === 0) return null`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F130",
+  "verdict": "stands",
+  "reason": "The rail's last child is the ≥1440 timer/presence block; below it the aside's pb-24 and h-screen leave stock with nothing on it at every state.",
+  "evidence": "doc-spine.tsx:145-154 (last child); doc-spine.tsx:44 (`min-[1180px]:h-screen min-[1180px]:pb-24`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F131",
+  "verdict": "stands",
+  "reason": "seamAtRest is a media match on (max-width: 1179px) with a false default, so at 390 the resting derivation is folded and the pin transition never has anything to do.",
+  "evidence": "job-ticket.tsx:202 (`useMediaMatch(SEAM_AT_REST_QUERY, false)`), :244; shots/m390-rich-s0.png",
+  "revised_claim": ""
+ },
+ {
+  "id": "F132",
+  "verdict": "stands",
+  "reason": "ResponsiveMarginRail is a sibling that follows </main> in the source, and at ≥1440 CSS grid places it visually in column three while DOM order — and therefore Tab order — leaves it last.",
+  "evidence": "page.tsx:2305 (`</main>`), :2308-2334 (ResponsiveMarginRail); margin-rail.tsx:258 (`min-[1440px]:col-start-3`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F133",
+  "verdict": "narrows",
+  "reason": "The component prints two data fields — deriveKindLine(row) and row.title — with no rule that they differ; the duplication is a property of these seed rows, not of the rendering.",
+  "evidence": "margin-item.tsx:52-67 (`<MItemContent kindLine={deriveKindLine(row)} title={row.title} detail={row.detail} .../>`); shots/w1440-rich-s1.png (the two TIME chips)",
+  "revised_claim": "Two of the seven margin chips print a title identical to their own derived kind line, because MarginItem renders both fields unconditionally and nothing suppresses a title that repeats its kind."
+ },
+ {
+  "id": "F134",
+  "verdict": "stands",
+  "reason": "Same mechanism as F129: the toggle is unconditional and the body returns null with zero phases, so the arrow flips and no content appears.",
+  "evidence": "letterhead-vitals.tsx:444-454; letterhead-vitals.tsx:283",
+  "revised_claim": ""
+ },
+ {
+  "id": "F135",
+  "verdict": "stands",
+  "reason": "visible is `isFullRail || openAsSheet`, and openAsSheet requires the reader's own `open`; until then the panel is translate-x-full, pointer-events-none, aria-hidden and inert.",
+  "evidence": "margin-rail.tsx:200-201, :253-262",
+  "revised_claim": ""
+ },
+ {
+  "id": "F136",
+  "verdict": "stands",
+  "reason": "The instruments group is one flat row of up to four acts under the guide zone, and the two client-facing ones render from `Boolean(projectId || clientProfileId)` rather than from a linked household.",
+  "evidence": "letterhead-instruments.tsx:301, :317-341; page.tsx:1863-1872 (mounted directly after the guide/red-letter ternary)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F137",
+  "verdict": "stands",
+  "reason": "The presence line is the last child of the rail and prints session collaboration, with the comment stating it is deliberately unlabelled because the index above already names the paper.",
+  "evidence": "doc-spine.tsx:146-154",
+  "revised_claim": ""
+ },
+ {
+  "id": "F138",
+  "verdict": "stands",
+  "reason": "The letterhead's root is a <header> and it is a descendant of <main data-document-paper>, so it is sectioning-scoped and exposes no banner landmark.",
+  "evidence": "doc-letterhead.tsx:52 (`<header id=\"document-project-status\" tabIndex={-1} ...>`); page.tsx:1787-1791 (the <main> it sits inside)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F139",
+  "verdict": "stands",
+  "reason": "The only close control in the sheet chrome is the backdrop button at tabIndex={-1}; the panel's own first child is the grab handle, and the spine sheet's first control is 'Put down', not a close.",
+  "evidence": "mobile-sheets.tsx:263-269 (`aria-label=\"Dismiss\" tabIndex={-1}`), :283-289 (grab handle); mobile-sheets.tsx:445-455",
+  "revised_claim": ""
+ },
+ {
+  "id": "F140",
+  "verdict": "stands",
+  "reason": "The compact rail's child order is identical to the full rail's for the first three children — leaving, the arc, the moment — before the compact timer doorway.",
+  "evidence": "doc-spine.tsx:46-136, :143 (CompactSpineTimerDoorway); spine-timer.tsx:61 (`min-[1180px]:flex min-[1440px]:hidden`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F141",
+  "verdict": "stands",
+  "reason": "Money is the last of the four paper regions in mount order, so the region that answers the ticket's Money row sits at the bottom of the paper.",
+  "evidence": "document-index.ts:36-57 (PROJECT_PAPER_ORDER: approvals, schedule, ffe, money); money-region.tsx:246-252",
+  "revised_claim": ""
+ },
+ {
+  "id": "F142",
+  "verdict": "stands",
+  "reason": "One word, three derivations: the section label from section-derivation's ORDER, the ticket's `The job · Project` subject, and the same section label again in the mobile sheet's list.",
+  "evidence": "section-derivation.ts:59-77; ticket-derivation.ts:797-802, :811-818; mobile-sheets.tsx:466",
+  "revised_claim": ""
+ },
+ {
+  "id": "F143",
+  "verdict": "stands",
+  "reason": "The colophon prints `hands on the work: {hands}` as one uppercase mono span with no separate label element or role.",
+  "evidence": "doc-colophon.tsx:107-109",
+  "revised_claim": ""
+ },
+ {
+  "id": "F144",
+  "verdict": "stands",
+  "reason": "The registry's own comment states the one-name decision, and the title is the literal 'Boards' while the key stays 'moodboards' as an address.",
+  "evidence": "shelves.ts:60-68 (`title: 'Boards'`, the F62 comment); ticket-derivation.ts:580-594",
+  "revised_claim": ""
+ },
+ {
+  "id": "F145",
+  "verdict": "stands",
+  "reason": "The chip renders that sentence as the letterhead's client line, immediately under the title and above the vitals.",
+  "evidence": "household-chip.tsx:57 ('No client linked — attach one'); doc-letterhead.tsx:57-64 (title, then {client}, then vitals)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F146",
+  "verdict": "stands",
+  "reason": "The summary is composed as `${leadPhrase} · ${authoredPhrase}` and lands in the seam's middle column, which carries `truncate`.",
+  "evidence": "project-approval-document.tsx:556-572; fold-seam.tsx:71-73 (`truncate font-mono text-[11px] ...`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F147",
+  "verdict": "stands",
+  "reason": "The next-up reasoning is computed and rendered in the header stack only; the rail's children are Put down, the marks, the caption, the index, the timer and presence — none of them a needs signal.",
+  "evidence": "page.tsx:1838-1847; doc-spine.tsx:46-154",
+  "revised_claim": ""
+ },
+ {
+  "id": "F148",
+  "verdict": "stands",
+  "reason": "The strata sweep's consumers sit in the worktable and rooms trees; none of the four surfaces the brief names imports it.",
+  "evidence": "globals.css:485-499 (`.strata-sweep`); no strata-sweep usage in doc-letterhead.tsx, job-ticket.tsx, doc-spine.tsx or margin-rail.tsx",
+  "revised_claim": ""
+ },
+ {
+  "id": "F149",
+  "verdict": "stands",
+  "reason": "RowWash has exactly two consumer files and the `has-wash` class appears on the FF&E line and the desk roster row only; the ticket, spine and region heads carry it nowhere.",
+  "evidence": "row-wash.tsx:39-52; ffe-section.tsx:480-484; desk-roster.tsx:23, :83-110",
+  "revised_claim": ""
+ },
+ {
+  "id": "F150",
+  "verdict": "stands",
+  "reason": "The accounts line prints its permission phrase as one more mono fragment in the same run as the figures, with no gating or explanatory element.",
+  "evidence": "commercial/money-region.tsx:246-260 (the head's status run); shots/w1440-rich-s3.png",
+  "revised_claim": ""
+ },
+ {
+  "id": "F151",
+  "verdict": "stands",
+  "reason": "phasesOpen is a plain useState with no storage and no lifting, so any unmount of LetterheadVitals discards it.",
+  "evidence": "letterhead-vitals.tsx:376 (`const [phasesOpen, setPhasesOpen] = useState(false)`), :444-454",
+  "revised_claim": ""
+ },
+ {
+  "id": "F152",
+  "verdict": "stands",
+  "reason": "The list is flex-col below 1440 and flex-row from 1440, so the same seven marks change from a stacked column to a single horizontal run.",
+  "evidence": "doc-spine.tsx:64 (`flex flex-col items-center gap-1 min-[1440px]:flex-row min-[1440px]:flex-nowrap`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F153",
+  "verdict": "stands",
+  "reason": "The line's stamp and price are siblings in one row with no reserved gutter between them, so at 390 they abut.",
+  "evidence": "ffe-section.tsx:480-560 (the line row); shots/m390-rich-s2.png",
+  "revised_claim": ""
+ },
+ {
+  "id": "F154",
+  "verdict": "stands",
+  "reason": "The two branches of one ternary carry different vertical footprints — the guide adds my-5 + border-y + py-4, the red-letter zone adds no outer margin at all — so which one renders shifts every y below it.",
+  "evidence": "red-letter-zone.tsx:85-88; document-guide.tsx:75; page.tsx:1838-1847",
+  "revised_claim": ""
+ },
+ {
+  "id": "F155",
+  "verdict": "stands",
+  "reason": "RegionHead is given name='Pieces'; 'FF&E' appears only inside the status string beneath the heading.",
+  "evidence": "ffe-section.tsx:1291 (`name=\"Pieces\"`), :1084 (the status sentence)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F156",
+  "verdict": "stands",
+  "reason": "Each row and each region composes its own empty phrase locally; there is no shared empty-state vocabulary or helper anywhere in the derivation or the regions.",
+  "evidence": "ticket-derivation.ts:440-741 (per-row phrases); project-approval-document.tsx:556-562; money-region.tsx:225-243",
+  "revised_claim": ""
+ },
+ {
+  "id": "F157",
+  "verdict": "narrows",
+  "reason": "The gate is project linkage, not session state: SpineTimer returns null when there is no held project, and time attaches to projects by construction, so a pre-work document can never show the card.",
+  "evidence": "spine-timer.tsx:97-100 (`// Time attaches to projects (00177 FK) — pre-project documents carry no timer in v1.` / `if (!heldProjectId) return null;`)",
+  "revised_claim": "A pre-work document shows no timer card because SpineTimer returns null without a held project — time attaches to projects, so the absence is a data gate, not an untriggered session."
+ },
+ {
+  "id": "F158",
+  "verdict": "stands",
+  "reason": "The colophon is a plain footer with margin, border and padding; no entrance class, keyframe or motion-safe variant appears on it or its children.",
+  "evidence": "doc-colophon.tsx:101 (`<footer className=\"mt-14 border-t border-[var(--color-pearl)] pb-6 pt-3\">`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F159",
+  "verdict": "stands",
+  "reason": "The empty phrases are composed as statements of absence in the derivation, while the arrow is decided separately by whether a door exists — so an inviting arrow can sit beside a dead-end sentence.",
+  "evidence": "ticket-derivation.ts:543-547, :735-741; job-ticket.tsx:266-269 (hasDoor decides the arrow independently of the phrase)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F160",
+  "verdict": "narrows",
+  "reason": "No code prints 'Walk seed' — MarginItem renders row.detail verbatim from the margin query, so these are seed rows carrying that copy in the database, not debug output the component adds.",
+  "evidence": "margin-item.tsx:52-62 (`<MItemContent ... detail={row.detail} />`); shots/w1440-rich-s1.png",
+  "revised_claim": "Three margin cards carry seed copy ('Walk seed — …') as their detail line, which MarginItem renders verbatim from the row."
+ },
+ {
+  "id": "F161",
+  "verdict": "stands",
+  "reason": "The margin's capture group offers + Decision and + Note only, and neither is demonstrated resolving a client question in any captured state.",
+  "evidence": "margin-rail.tsx:492-513",
+  "revised_claim": ""
+ },
+ {
+  "id": "F162",
+  "verdict": "misread",
+  "reason": "The animation class sits on the shell root that DocumentPage renders, and the whole route unmounts on navigation away — the body is even explicitly keyed on the document id so a different document is a fresh mount by construction. The raise therefore replays on every arrival, not only a cold load.",
+  "evidence": "page.tsx:1764 (`motion-safe:animate-[doc-raise_270ms_ease-out]` on the shell root); page.tsx:1740-1748 (the id-keyed body comment)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F163",
+  "verdict": "stands",
+  "reason": "The chord is bound to a keydown sequence beginning with the bare letter g, with no pointer or touch equivalent registered anywhere.",
+  "evidence": "registry-shortcuts.tsx:45 (`s.shortcut.length === 2 && s.shortcut[0] === 'g'`), :105 (`if (key === 'g') armedAt.current = now`)",
+  "revised_claim": ""
+ },
+ {
+  "id": "F164",
+  "verdict": "narrows",
+  "reason": "The wash tone is not generic — it is a three-way split on the line's own state, with terracotta reserved for a damaged line and golden for a decision due. What has no tone is PO acknowledgement.",
+  "evidence": "ffe-section.tsx:220-229 (`if (kind === 'decision_due') return 'golden'; if (kind === 'damaged') return 'terracotta'; return 'clay';`)",
+  "revised_claim": "The FF&E hover wash already carries damage state (terracotta) and decision-due state (golden), but no tone distinguishes an unacknowledged PO from an ordinary line."
+ }
+]

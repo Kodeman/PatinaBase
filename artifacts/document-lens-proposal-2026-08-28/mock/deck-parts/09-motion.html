@@ -1,0 +1,210 @@
+<section id="motion" class="dk-sec reg-paper" data-index-title="Motion and state">
+  <div class="dk-wrap">
+    <p class="hour"><b>MOTION</b> &middot; eleven mechanics, and their still forms</p>
+
+    <div class="dk-grid dk-grid--even">
+      <div class="dk-prose">
+        <h2 class="dk-h2">Eleven mechanics. Every one has a form a designer sees with motion turned off.</h2>
+        <p class="dk-lede">A reduced-motion cell that reads &ldquo;n/a&rdquo; is a row that was never designed. None of these do.</p>
+        <p class="dk-p">Four of the eleven have no transit to reduce at all &mdash; two commit off screen, one is a render hint that changes no measured height, and one is an arithmetic gate. Four sit beside a reduce block that already ships in <code>app/globals.css</code>. One needs no new rule because its still form is declared inside the no-preference gate rather than outside it. One new block covers the three crossfades. And exactly one row cannot be covered by a CSS media query, which is stated as an amendment rather than dressed as compliance.</p>
+        <p class="dk-p">The ambient budget stays at one: <code>doc-breath</code>, 3s, on the active StrataMark, in the rail, at its shipped site. No second ambient move is named. The reading window is position-linked rather than time-linked, and therefore not ambient.</p>
+        <p class="dk-p">And there are zero hover-only affordances. Every state below is a printed mark or a focus state. The shipped tree has none today; this proposal adds none.</p>
+      </div>
+
+      <div class="dk-prose">
+        <h3 class="dk-h3">The one declared amendment</h3>
+        <p class="dk-p"><b>L-2 is the single row a CSS media query cannot cover.</b> Its rAF handler reads <code>matchMedia('(prefers-reduced-motion: reduce)')</code> in JS and steps the bracket instead of sliding it. <code>hooks/useReducedMotion.ts</code> exists and no file under <code>components/document</code> imports it; the Document&#8217;s policy is nine <code>@media (prefers-reduced-motion: reduce)</code> blocks plus one no-preference gate. This proposal keeps that policy except for this one handler, and calls it an amendment rather than compliance. That sentence is what makes the rest of the table trustworthy.</p>
+        <p class="dk-note">The nine shipped blocks, grepped: <code>globals.css:283</code> &middot; <code>:439</code> &middot; <code>:496</code> &middot; <code>:833</code> &middot; <code>:955</code> &middot; <code>:1013</code> &middot; <code>:1188</code> &middot; <code>:1468</code> &middot; <code>:1519</code>, plus the no-preference gate at <code>:429</code>. <span class="lvl lvl--code">code-read</span></p>
+        <p class="f-chips">
+          <a class="f-chip" href="#found">F30 <span>The reduced-motion hook starts false and has no document consumer</span></a>
+          <a class="f-chip" href="#found">F86 <span>Reduced motion has zero in-app toggle; OS setting only</span></a>
+          <a class="f-chip f-chip--s1" href="#found">F104 <span>Any new ticket transition needs its own reduced-motion sibling</span></a>
+          <a class="f-chip" href="#found">F128 <span>No hover-only affordance found in spine, margin, or ticket</span></a>
+        </p>
+      </div>
+    </div>
+
+    <div class="dk-full">
+      <p class="dk-h4">The lens mechanics table</p>
+      <div class="dk-tablewrap">
+        <table class="dk-table">
+          <caption>All eleven rows of <code>source/proposal.md</code> &sect;3, every column, every value verbatim</caption>
+          <thead>
+            <tr>
+              <th style="width:11%">#</th>
+              <th>Trigger</th>
+              <th>What changes</th>
+              <th>from &rarr; to</th>
+              <th>Duration &amp; easing</th>
+              <th>Reduced-motion equivalent</th>
+              <th>What never moves</th>
+              <th>F-ids</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th class="dk-row-h">L-1 &middot; The sentence turns</th>
+              <td>the reading stop commits, on settle (L-9), never in flight</td>
+              <td>the band&#8217;s line 2 text and its ink kind</td>
+              <td>outgoing span <code>opacity 1 &rarr; 0</code>, incoming <code>0 &rarr; 1</code>; band height <code>56px &rarr; 56px</code>; vertical travel <code>0px</code></td>
+              <td>out 90ms, in 150ms, <code>--ease-editorial</code></td>
+              <td>the new sentence is <b>printed instantly in place</b> &mdash; same words, same terracotta, no crossfade; <code>motion-reduce:transition-none</code> on the two spans, beside the reduce block at <code>globals.css:1188-1195</code></td>
+              <td>the band&#8217;s box in flow, line 1, every word above the reading line, the scroll offset</td>
+              <td><span class="f-chips"><span class="f-chip f-chip--s0">F01</span><span class="f-chip f-chip--s1">F04</span><span class="f-chip f-chip--s1">F11</span><span class="f-chip">F13</span><span class="f-chip">F50</span><span class="f-chip f-chip--s1">F113</span></span></td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">L-2 &middot; The reading window travels</th>
+              <td>scroll, rAF-throttled, written as <code>data-lens-window</code> outside React</td>
+              <td>the reading window &mdash; a <code>--rule-mid</code> bracket in the ladder&#8217;s gutter marking the frame&#8217;s share of the paper&#8217;s <b>data-derived</b> extent</td>
+              <td><code>top 202px &rarr; 512px</code>, <code>height 74px &rarr; 158px</code> at 1440</td>
+              <td>position-linked, 1:1 with scroll; no duration, no easing</td>
+              <td>the rAF handler reads <code>matchMedia('(prefers-reduced-motion: reduce)')</code> and <b>steps</b>: a static bracket around the segment holding the frame&#8217;s midpoint, redrawn on settle only</td>
+              <td>the segment stack, every printed line, the paper</td>
+              <td><span class="f-chips"><span class="f-chip">F22</span><span class="f-chip">F84</span><span class="f-chip">F111</span><span class="f-chip f-chip--s3">F116</span></span></td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">L-3 &middot; A segment changes register</th>
+              <td>its own <code>[data-region-head]</code> entering or leaving the frame</td>
+              <td>that segment prints <b>nothing</b> while its head is in frame; its &le;30-character value returns when the head leaves</td>
+              <td><code>"36 LINES &middot; 1 DAMAGED SEP 26" &rarr; ""</code> and back</td>
+              <td>150ms crossfade, <code>--ease-editorial</code></td>
+              <td>the line is simply absent, then present, at settle &mdash; nothing fades</td>
+              <td>the segment&#8217;s y-position, its drawn height, the track, the window</td>
+              <td><span class="f-chips"><span class="f-chip">F10</span><span class="f-chip f-chip--s0">F29</span><span class="f-chip">F102</span><span class="f-chip f-chip--s0">F108</span></span></td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">L-4 &middot; A region ahead opens</th>
+              <td>its reserved box&#8217;s top comes within <b>240px</b> of the frame&#8217;s bottom edge, after the L-9 settle</td>
+              <td>the body mounts at ratified weight; the reserve is replaced by the real height</td>
+              <td>FF&amp;E on the specimen <code>112px &rarr; 1,840px</code>; Money <code>112px &rarr; 430px</code>; a stop with no standing exception <code>68px &rarr; its own height</code></td>
+              <td><b>0ms &mdash; one commit, entirely below the frame&#8217;s bottom edge</b></td>
+              <td>identical; there is no transit to remove because there was never one on screen</td>
+              <td>every pixel at or above the frame&#8217;s bottom edge, at any offset</td>
+              <td><span class="f-chips"><span class="f-chip f-chip--s0">F01</span><span class="f-chip f-chip--s1">F11</span><span class="f-chip f-chip--s0">F47</span><span class="f-chip f-chip--s2">F53</span><span class="f-chip f-chip--s2">F73</span></span></td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">L-5 &middot; A region behind is never taken back</th>
+              <td>its box&#8217;s bottom passing above the frame&#8217;s top</td>
+              <td>nothing in layout. The root takes <code>data-passed</code>, which switches on <code>content-visibility: auto</code> with <code>contain-intrinsic-size: auto</code> &mdash; render skipped, height preserved to the pixel</td>
+              <td>painted height <code>1,840px &rarr; 1,840px</code>; <code>content-visibility: visible &rarr; auto</code></td>
+              <td>0ms</td>
+              <td>identical &mdash; there is no visual change of any kind to reduce</td>
+              <td><b>everything.</b> This is the row that makes SP-03 true by construction rather than by correction</td>
+              <td><span class="f-chips"><span class="f-chip f-chip--s1">F04</span><span class="f-chip f-chip--s2">F53</span><span class="f-chip f-chip--s1">F87</span><span class="f-chip f-chip--s1">F113</span></span></td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">L-6 &middot; The rail head yields at s0</th>
+              <td>the letterhead&#8217;s own box intersecting the frame</td>
+              <td>the rail head&#8217;s name line and stage phrase stop printing; the seven-mark arc and the <code>--rule-mid</code> stay</td>
+              <td><code>"Vandersteen" / "PROCUREMENT &amp; ORDERS" / "4 OF 6" &rarr; ""</code>; the head&#8217;s box stays 100px</td>
+              <td>150ms crossfade, <code>--ease-editorial</code></td>
+              <td>the two lines are absent at settle, present at settle once the letterhead leaves</td>
+              <td>the head&#8217;s reserved 100px, the arc&#8217;s seven 44px targets, the ladder below it</td>
+              <td><span class="f-chips"><span class="f-chip">F10</span><span class="f-chip">F13</span><span class="f-chip f-chip--s0">F56</span><span class="f-chip f-chip--s0">F96</span></span></td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">L-7 &middot; She folds a region</th>
+              <td>she presses <code>Fold &#8593;</code> on the head, or <code>Unfold &#8595;</code> on the seam</td>
+              <td>body unmounts / mounts; the seam prints; focus is placed</td>
+              <td><code>folded false &rarr; true</code>; the seam&#8217;s rule <code>--rule-strong &rarr; --rule-mid</code> at the call site; the seam gains the printed words <code>CLOSED BY YOU</code></td>
+              <td>300ms <code>--ease-editorial</code>, <code>fold-in</code> + <code>fold-arrow-flip</code> (<code>globals.css:404-437</code>)</td>
+              <td>the seam paints visible on the first frame under <code>animation-fill-mode: both</code> and the arrow prints already-flipped &mdash; <code>.fold-settle</code> and <code>.fold-arrow-settle</code> are declared <b>only inside</b> the no-preference gate at <code>globals.css:429-437</code>, so <code>reduce</code> already receives the still form with no new rule</td>
+              <td><code>--doc-region-gap</code> &mdash; the same folded, quiet or full (SP-01). Focus lands on the <code>FoldSeam</code> button, never <code>&lt;body&gt;</code></td>
+              <td><span class="f-chips"><span class="f-chip f-chip--s2">F08</span><span class="f-chip f-chip--s1">F41</span><span class="f-chip f-chip--s2">F54</span><span class="f-chip f-chip--s2">F59</span><span class="f-chip f-chip--s0">F89</span><span class="f-chip f-chip--s1">F93</span></span></td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">L-8 &middot; The pen goes down</th>
+              <td><code>focusin</code> on an editable control inside a region body</td>
+              <td>that line&#8217;s left rule and its own ground</td>
+              <td>rule <code>--rule-hair 1px @10% &rarr; 1.5px var(--color-clay-ink)</code>; ground <code>transparent &rarr; rgba(196,165,123,0.12)</code></td>
+              <td>150ms <code>--duration-fast</code>, <code>--ease-editorial</code></td>
+              <td>both the clay-ink rule and the flat tint are <b>present and static</b> &mdash; this is the shipped R126 contract, reduce block <code>globals.css:439-458</code>, which swaps <code>.row-wash</code> to <code>var(--wash-still)</code> with <code>transition: none</code></td>
+              <td><b>the siblings.</b> No neighbouring row changes ink, tint, weight or position. Nothing dims. No body mounts while the pen is down</td>
+              <td><span class="f-chips"><span class="f-chip">F117</span><span class="f-chip f-chip--s2">F164</span><span class="f-chip f-chip--s2">F23</span></span></td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">L-9 &middot; The lens settles</th>
+              <td>scroll velocity below 40px per frame for 120ms</td>
+              <td><code>data-lens-settled</code> on the shell root, and one <code>aria-live="polite"</code> announcement on the band&#8217;s visible line 2, at most once per distinct stop</td>
+              <td><code>false &rarr; true</code>; announcement <code>"" &rarr; "Pieces &middot; 36 lines &middot; 4 rooms &middot; 1 damaged"</code></td>
+              <td>none &mdash; an arithmetic gate, not a move</td>
+              <td>identical; the gate is arithmetic and the announcement is text</td>
+              <td>everything &mdash; this row gates L-1, L-2, L-3 and L-4 and moves nothing itself</td>
+              <td><span class="f-chips"><span class="f-chip f-chip--s1">F42</span><span class="f-chip f-chip--s1">F51</span><span class="f-chip f-chip--s2">F105</span><span class="f-chip f-chip--s1">F112</span><span class="f-chip f-chip--s2">F118</span></span></td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">L-10 &middot; The press lands</th>
+              <td>a press on a segment, a room sub-rung, a door, or the band&#8217;s act</td>
+              <td>every region between the current offset and the target &mdash; all of them below the frame &mdash; is forced to full in <b>one commit before the scroll begins</b>; then <code>scrollToRegion</code> runs; focus lands on the region&#8217;s <code>&lt;h2&gt;</code></td>
+              <td>target y computed once, after the commit; the 700ms jump lock holds the window at the target</td>
+              <td><code>scroll-behavior: smooth</code>, 700ms</td>
+              <td>an instant jump &mdash; the branch already ships at <code>use-document-running-index.ts:207</code>, <code>'(prefers-reduced-motion: reduce)'</code>; the landing offset is identical in both registers</td>
+              <td>the target&#8217;s own top, from the moment the offset is computed to the moment the scroll ends. <code>--doc-landing-clear</code> is a declared constant, so <code>scroll-margin-top</code> resolves once and correctly at any fling speed</td>
+              <td><span class="f-chips"><span class="f-chip f-chip--s1">F34</span><span class="f-chip f-chip--s1">F38</span><span class="f-chip f-chip--s2">F45</span><span class="f-chip f-chip--s2">F120</span></span></td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">L-11 &middot; The standing sheet opens</th>
+              <td>a press on <code>+3 MORE</code> on the band&#8217;s line 2</td>
+              <td>a <code>DocSheet</code> mounts over the paper, listing <b>every</b> standing exception with <b>its own act</b></td>
+              <td><code>translateY 8px &rarr; 0</code>, <code>opacity 0 &rarr; 1</code> on <code>.doc-sheet-panel</code></td>
+              <td>200ms <code>--ease-editorial</code> &mdash; the shipped sheet entrance</td>
+              <td><code>animation: none</code> &mdash; the shipped reduce block at <code>globals.css:1519-1523</code>; the sheet paints in place, at full ink, on the first frame</td>
+              <td>the paper beneath, its scroll offset, the band, the rail</td>
+              <td><span class="f-chips"><span class="f-chip f-chip--s2">F23</span><span class="f-chip">F50</span><span class="f-chip">F62</span><span class="f-chip">F63</span><span class="f-chip f-chip--s0">F127</span></span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="dk-note">Every value is quoted from <code>source/proposal.md</code> &sect;3 without rounding. <span class="lvl lvl--code">code-read</span> for every <code>file:line</code> in the reduced-motion column, all under <code>apps/designer-portal/src/</code>.</p>
+    </div>
+
+    <div class="dk-full">
+      <p class="dk-h4">The same eleven rows, drawn</p>
+      <!-- FRAGMENT motion-grammar-1080 | col=1080 -->
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h3 class="dk-h3">Where the hysteresis is, and where there is deliberately none</h3>
+        <p class="dk-p">Two systems get confused with each other, so they are separated here by their numbers.</p>
+        <p class="dk-p"><b>The mount threshold has no pair.</b> A region&#8217;s body mounts when its root&#8217;s top comes within <b>240px</b> of the frame&#8217;s bottom edge &mdash; off screen, always &mdash; and it never unmounts for the life of the document view. There is no release threshold, so there is no hysteresis pair to tune and nothing for a prober to oscillate on. 240px is defended against the specimen rather than against a sentence: one FF&amp;E line is a 48px catalog crop plus <code>py-2</code> plus a rule, 65px, so 240px is more than three lines and a three-line nudge cannot re-cross it. It is the same number at 1440, 1280 and 390, because a line is the same height at every width.</p>
+        <p class="dk-p"><b>The reading-stop resolver is where the asymmetry lives.</b> In the clickable mockup it is two <code>IntersectionObserver</code> bands rooted at the frame, plus a synchronous arithmetic resolver over the same two bands: <code>PROMOTE = [0.08, 0.38]</code>, a narrow band 8% to 38% down the frame, and <code>HOLD = [0.00, 0.88]</code>, a wide one. A region is promoted by entering the narrow band and can only fall once it has left the much wider one &mdash; that gap is the hysteresis. Measured over a 20-step slow scroll at <code>--motion-scale: 4</code>, every region changes <code>data-density</code> at most once per step, and the sequence is monotone.</p>
+        <p class="dk-p">Two more numbers govern tempo. The settle is <b>120ms</b> below <b>40px per frame</b>; it gates every density change and every announcement. The <b>700ms</b> jump lock is the shipped one, and it gains one job: for its 700ms it forces the target stop to be the reading stop. Returning to a stop already announced within <b>2s</b> is silent, so a slow re-read across one boundary does not fire repeatedly.</p>
+        <p class="dk-note">Threshold, settle and jump lock from <code>source/proposal.md</code> &sect;3 and &sect;4; the two observer bands and the 20-step measurement from <code>mock/final/FINAL.md</code> &sect;1(b). <span class="lvl lvl--sim">sim-verified</span></p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">Zero layout shift, by mechanism</p>
+        <p class="dk-p">Six clauses, in the order they close the hole.</p>
+        <ul class="dk-ul">
+          <li><b>a.</b> The band&#8217;s box in flow is 56px before the pin and 56px after, so the pin displaces nothing.</li>
+          <li><b>b.</b> Its height is declared and both lines cannot wrap, so nothing it says can change its size.</li>
+          <li><b>c.</b> A region&#8217;s height changes only while the entire region, and every pixel above it, is below the frame&#8217;s bottom edge.</li>
+          <li><b>d.</b> A region she has passed never changes height again this session.</li>
+          <li><b>e.</b> <code>--doc-seam-height</code> does not exist, so the value four consumers read cannot change mid-scroll. The schedule&#8217;s zero-height glance at <code>schedule-rule.tsx:548</code> is left at <code>h-0</code> and given a constant <code>top</code> &mdash; giving it a reserved height would create the shift it was removing.</li>
+          <li><b>f.</b> The band&#8217;s own content is what the late-arriving red-letter query resolves into, and the band is 56px before that query returns &mdash; so the 0.1189 shift, 92% of the page&#8217;s cumulative layout shift in both motion registers, has nowhere to land.</li>
+        </ul>
+        <p class="dk-p"><b>What that measures as.</b> A <code>PerformanceObserver({type:'layout-shift'})</code> over a 30-step scripted scroll from the top of the paper to its foot on <code>#frame-1440</code> reports <b>CLS = 0 with 0 shift entries</b> in the normal register, and <b>CLS = 0 with 0 shift entries</b> in the reduced register. The paper&#8217;s extent grows from 4381px to 5106px across the same sweep, which is the design: it only ever grows below her.</p>
+        <p class="dk-p">The word <code>scrollBy</code> appears nowhere in the proposal, and there is no scroll correction of any kind.</p>
+        <p class="dk-note">From <code>mock/final/REVIEW-2.md</code> item 8 and R-16. <span class="lvl lvl--sim">sim-verified</span></p>
+        <p class="f-chips">
+          <a class="f-chip f-chip--s2" href="#found">F24 <span>The dominant CLS shift is a silent late data-arrival, not motion</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F79 <span>The needs block moves under me seconds after landing</span></a>
+          <a class="f-chip f-chip--s1" href="#found">F60 <span>R99&#8217;s zero-shift mechanism exists once, not where the header needs it</span></a>
+          <a class="f-chip f-chip--s2" href="#found">F88 <span>Density must not be a React transition</span></a>
+          <a class="f-chip" href="#found">F35 <span>No browserslist; only Playwright declares a browser matrix</span></a>
+          <a class="f-chip f-chip--s2" href="#found">F61 <span>content-visibility containment may kill the R126 hover wash</span></a>
+        </p>
+      </div>
+    </div>
+
+    <div class="dk-full">
+      <p class="dk-h4">The reduced register, at the condensed state</p>
+      <p class="dk-p">A still picture cannot show an absent transition, so this frame is drawn pixel-identical to the animated one by design. That is the claim: with motion reduced, every mark in the lens is present, at full ink, in place. L-1&#8217;s reduced form is the sentence printed instantly in place &mdash; same words, same terracotta, no crossfade.</p>
+      <!-- FRAGMENT reduced-1440 -->
+      <p class="dk-p">There is no in-product motion toggle, and the position is stated rather than left unraised. 2.3.3 is AAA and the stated bar is AA; the OS query is the control, which is what the tree does today. The opening of a region ahead is essential to the mechanic, because both the first-head recovery and the render-cost control depend on it. The dev-bar toggle is a QA instrument, not a product control.</p>
+    </div>
+  </div>
+</section>

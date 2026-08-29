@@ -1,0 +1,3671 @@
+{
+  "rich": {
+    "390": {
+      "s0": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollY": 0,
+        "headerStackPctOfViewport": 1.2489691943127963,
+        "firstRegionHeadY": 1054.13,
+        "headerStack": {
+          "letterhead": {
+            "x": 31.5,
+            "y": 36,
+            "width": 327,
+            "height": 189.31,
+            "top": 36,
+            "bottom": 225.3125,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "ticket": {
+            "rect": {
+              "x": 31.5,
+              "y": 243.31,
+              "width": 327,
+              "height": 64.06,
+              "top": 243.3125,
+              "bottom": 307.375,
+              "left": 31.5,
+              "right": 358.5
+            },
+            "dataUnfolded": null,
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 31.5,
+              "y": 307.38,
+              "width": 327,
+              "height": 192.75,
+              "top": 307.375,
+              "bottom": 500.125,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 31.5,
+              "y": 504.63,
+              "width": 327,
+              "height": 150,
+              "top": 504.625,
+              "bottom": 654.625,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "approvals": {
+            "x": 31.5,
+            "y": 840.63,
+            "width": 327,
+            "height": 55.5,
+            "top": 840.625,
+            "bottom": 896.125,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "scheduleFrame": {
+            "x": 31.5,
+            "y": 896.13,
+            "width": 327,
+            "height": 102.5,
+            "top": 896.125,
+            "bottom": 998.625,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 31.5,
+              "y": 1054.13,
+              "width": 327,
+              "height": 100.55,
+              "top": 1054.125,
+              "bottom": 1154.671875,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "firstRegionHeadY": 1054.13,
+          "headerStackPctOfViewport": 1.2489691943127963,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": ""
+        },
+        "spine": null,
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "dataMarginMode": "sheet",
+          "display": "none",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": null,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 0,
+          "railWidthPctOfViewport": 0,
+          "chromePx": 77,
+          "chromePct": 0.09123222748815166,
+          "headerSummaryPx": 599,
+          "headerSummaryPct": 0.7097156398104265,
+          "activeRegionPx": 0,
+          "activeRegionPct": 0,
+          "otherPx": 168,
+          "otherPct": 0.1990521327014218,
+          "viewportHeight": 844,
+          "viewportWidth": 390
+        },
+        "s0Extra": {
+          "scrollHeight": 5133,
+          "regionHeadMap": {
+            "schedule": 1054.13,
+            "ffe": 2033.67,
+            "money-head": 3103.28
+          }
+        }
+      },
+      "s1": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollY": 226,
+        "headerStackPctOfViewport": 0.981196682464455,
+        "firstRegionHeadY": 828.13,
+        "headerStack": {
+          "letterhead": {
+            "x": 31.5,
+            "y": -190,
+            "width": 327,
+            "height": 189.31,
+            "top": -190,
+            "bottom": -0.6875,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "ticket": {
+            "rect": {
+              "x": 31.5,
+              "y": 17.31,
+              "width": 327,
+              "height": 64.06,
+              "top": 17.3125,
+              "bottom": 81.375,
+              "left": 31.5,
+              "right": 358.5
+            },
+            "dataUnfolded": null,
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 31.5,
+              "y": 81.38,
+              "width": 327,
+              "height": 192.75,
+              "top": 81.375,
+              "bottom": 274.125,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 31.5,
+              "y": 278.63,
+              "width": 327,
+              "height": 150,
+              "top": 278.625,
+              "bottom": 428.625,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "approvals": {
+            "x": 31.5,
+            "y": 614.63,
+            "width": 327,
+            "height": 55.5,
+            "top": 614.625,
+            "bottom": 670.125,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "scheduleFrame": {
+            "x": 31.5,
+            "y": 670.13,
+            "width": 327,
+            "height": 102.5,
+            "top": 670.125,
+            "bottom": 772.625,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 31.5,
+              "y": 828.13,
+              "width": 327,
+              "height": 100.55,
+              "top": 828.125,
+              "bottom": 928.671875,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "firstRegionHeadY": 828.13,
+          "headerStackPctOfViewport": 0.981196682464455,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": ""
+        },
+        "spine": null,
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "dataMarginMode": "sheet",
+          "display": "none",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": null,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 0,
+          "railWidthPctOfViewport": 0,
+          "chromePx": 77,
+          "chromePct": 0.09123222748815166,
+          "headerSummaryPx": 409,
+          "headerSummaryPct": 0.48459715639810425,
+          "activeRegionPx": 0,
+          "activeRegionPct": 0,
+          "otherPx": 358,
+          "otherPct": 0.42417061611374407,
+          "viewportHeight": 844,
+          "viewportWidth": 390
+        }
+      },
+      "s2": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollY": 1970,
+        "headerStackPctOfViewport": -1.085154028436019,
+        "firstRegionHeadY": -915.87,
+        "headerStack": {
+          "letterhead": {
+            "x": 31.5,
+            "y": -1934,
+            "width": 327,
+            "height": 189.31,
+            "top": -1934,
+            "bottom": -1744.6875,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "ticket": {
+            "rect": {
+              "x": 31.5,
+              "y": 0,
+              "width": 327,
+              "height": 64.06,
+              "top": 0,
+              "bottom": 64.0625,
+              "left": 31.5,
+              "right": 358.5
+            },
+            "dataUnfolded": null,
+            "dataPinned": "true",
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 31.5,
+              "y": -1662.62,
+              "width": 327,
+              "height": 192.75,
+              "top": -1662.625,
+              "bottom": -1469.875,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 31.5,
+              "y": -1465.37,
+              "width": 327,
+              "height": 150,
+              "top": -1465.375,
+              "bottom": -1315.375,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "approvals": {
+            "x": 31.5,
+            "y": -1129.37,
+            "width": 327,
+            "height": 55.5,
+            "top": -1129.375,
+            "bottom": -1073.875,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "scheduleFrame": {
+            "x": 31.5,
+            "y": -1073.87,
+            "width": 327,
+            "height": 102.5,
+            "top": -1073.875,
+            "bottom": -971.375,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 31.5,
+              "y": -915.87,
+              "width": 327,
+              "height": 100.55,
+              "top": -915.875,
+              "bottom": -815.328125,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "firstRegionHeadY": -915.87,
+          "headerStackPctOfViewport": -1.085154028436019,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": "64px"
+        },
+        "spine": null,
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "dataMarginMode": "sheet",
+          "display": "none",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": null,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 0,
+          "railWidthPctOfViewport": 0,
+          "chromePx": 142,
+          "chromePct": 0.16824644549763032,
+          "headerSummaryPx": 0,
+          "headerSummaryPct": 0,
+          "activeRegionPx": 702,
+          "activeRegionPct": 0.8317535545023697,
+          "otherPx": 0,
+          "otherPct": 0,
+          "viewportHeight": 844,
+          "viewportWidth": 390
+        },
+        "__seamUsed": 64
+      },
+      "s3": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollY": 4289,
+        "headerStackPctOfViewport": -3.8327843601895735,
+        "firstRegionHeadY": -3234.87,
+        "headerStack": {
+          "letterhead": {
+            "x": 31.5,
+            "y": -4253,
+            "width": 327,
+            "height": 189.31,
+            "top": -4253,
+            "bottom": -4063.6875,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "ticket": {
+            "rect": {
+              "x": 31.5,
+              "y": 0,
+              "width": 327,
+              "height": 64.06,
+              "top": 0,
+              "bottom": 64.0625,
+              "left": 31.5,
+              "right": 358.5
+            },
+            "dataUnfolded": null,
+            "dataPinned": "true",
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 31.5,
+              "y": -3981.62,
+              "width": 327,
+              "height": 192.75,
+              "top": -3981.625,
+              "bottom": -3788.875,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 31.5,
+              "y": -3784.37,
+              "width": 327,
+              "height": 150,
+              "top": -3784.375,
+              "bottom": -3634.375,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "approvals": {
+            "x": 31.5,
+            "y": -3448.37,
+            "width": 327,
+            "height": 55.5,
+            "top": -3448.375,
+            "bottom": -3392.875,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "scheduleFrame": {
+            "x": 31.5,
+            "y": -3392.87,
+            "width": 327,
+            "height": 102.5,
+            "top": -3392.875,
+            "bottom": -3290.375,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 31.5,
+              "y": -3234.87,
+              "width": 327,
+              "height": 100.55,
+              "top": -3234.875,
+              "bottom": -3134.328125,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "firstRegionHeadY": -3234.87,
+          "headerStackPctOfViewport": -3.8327843601895735,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": "64px"
+        },
+        "spine": null,
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "dataMarginMode": "sheet",
+          "display": "none",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": null,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 0,
+          "railWidthPctOfViewport": 0,
+          "chromePx": 142,
+          "chromePct": 0.16824644549763032,
+          "headerSummaryPx": 0,
+          "headerSummaryPct": 0,
+          "activeRegionPx": 221,
+          "activeRegionPct": 0.2618483412322275,
+          "otherPx": 481,
+          "otherPct": 0.5699052132701422,
+          "viewportHeight": 844,
+          "viewportWidth": 390
+        }
+      }
+    },
+    "1280": {
+      "s0": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "scrollY": 0,
+        "headerStackPctOfViewport": 1.117011111111111,
+        "firstRegionHeadY": 1005.31,
+        "headerStack": {
+          "letterhead": {
+            "x": 193,
+            "y": 36,
+            "width": 950,
+            "height": 189.31,
+            "top": 36,
+            "bottom": 225.3125,
+            "left": 193,
+            "right": 1143
+          },
+          "ticket": {
+            "rect": {
+              "x": 193,
+              "y": 243.31,
+              "width": 950,
+              "height": 347.25,
+              "top": 243.3125,
+              "bottom": 590.5625,
+              "left": 193,
+              "right": 1143
+            },
+            "dataUnfolded": "true",
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 193,
+              "y": 590.56,
+              "width": 950,
+              "height": 152.75,
+              "top": 590.5625,
+              "bottom": 743.3125,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 193,
+              "y": 747.81,
+              "width": 950,
+              "height": 44,
+              "top": 747.8125,
+              "bottom": 791.8125,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "approvals": {
+            "x": 193,
+            "y": 791.81,
+            "width": 950,
+            "height": 55.5,
+            "top": 791.8125,
+            "bottom": 847.3125,
+            "left": 193,
+            "right": 1143
+          },
+          "scheduleFrame": {
+            "x": 193,
+            "y": 847.31,
+            "width": 950,
+            "height": 102.5,
+            "top": 847.3125,
+            "bottom": 949.8125,
+            "left": 193,
+            "right": 1143
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 193,
+              "y": 1005.31,
+              "width": 950,
+              "height": 47.55,
+              "top": 1005.3125,
+              "bottom": 1052.859375,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "firstRegionHeadY": 1005.31,
+          "headerStackPctOfViewport": 1.117011111111111,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 8,
+          "seamHeightRaw": ""
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": 0,
+            "width": 56,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 0,
+            "right": 56
+          },
+          "inkPx": 216.34375,
+          "railHeightPx": 900,
+          "inkPct": 0.24038194444444444,
+          "longestEmptyRun": {
+            "px": 295.90625,
+            "from": 604.09375,
+            "to": 900
+          },
+          "interactiveCount": 3,
+          "markerRowRect": {
+            "x": 6.75,
+            "y": 81,
+            "width": 41.5,
+            "height": 373.5,
+            "top": 81,
+            "bottom": 454.5,
+            "left": 6.75,
+            "right": 48.25
+          },
+          "textLabels": [
+            "1h49",
+            "Active",
+            "In",
+            "Project",
+            "Put down",
+            "hand",
+            "←"
+          ]
+        },
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 1280,
+            "y": 0,
+            "width": 360,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1280,
+            "right": 1640
+          },
+          "dataMarginMode": "sheet",
+          "display": "block",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            78.38,
+            78.38,
+            78.38,
+            59.06,
+            59.06,
+            78.38,
+            78.38
+          ],
+          "chipStackPx": 510.02,
+          "chipStackPctOfRail": 0.5666888888888889,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 56,
+          "railWidthPctOfViewport": 0.04375,
+          "chromePx": 60,
+          "chromePct": 0.06666666666666667,
+          "headerSummaryPx": 736,
+          "headerSummaryPct": 0.8177777777777778,
+          "activeRegionPx": 0,
+          "activeRegionPct": 0,
+          "otherPx": 104,
+          "otherPct": 0.11555555555555555,
+          "viewportHeight": 900,
+          "viewportWidth": 1280
+        },
+        "s0Extra": {
+          "scrollHeight": 3886,
+          "regionHeadMap": {
+            "schedule": 1005.31,
+            "ffe": 1665.8,
+            "money-head": 2377.78
+          }
+        }
+      },
+      "s1": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "scrollY": 226,
+        "headerStackPctOfViewport": 0.8658999999999999,
+        "firstRegionHeadY": 779.31,
+        "headerStack": {
+          "letterhead": {
+            "x": 193,
+            "y": -190,
+            "width": 950,
+            "height": 189.31,
+            "top": -190,
+            "bottom": -0.6875,
+            "left": 193,
+            "right": 1143
+          },
+          "ticket": {
+            "rect": {
+              "x": 193,
+              "y": 17.31,
+              "width": 950,
+              "height": 347.25,
+              "top": 17.3125,
+              "bottom": 364.5625,
+              "left": 193,
+              "right": 1143
+            },
+            "dataUnfolded": "true",
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 193,
+              "y": 364.56,
+              "width": 950,
+              "height": 152.75,
+              "top": 364.5625,
+              "bottom": 517.3125,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 193,
+              "y": 521.81,
+              "width": 950,
+              "height": 44,
+              "top": 521.8125,
+              "bottom": 565.8125,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "approvals": {
+            "x": 193,
+            "y": 565.81,
+            "width": 950,
+            "height": 55.5,
+            "top": 565.8125,
+            "bottom": 621.3125,
+            "left": 193,
+            "right": 1143
+          },
+          "scheduleFrame": {
+            "x": 193,
+            "y": 621.31,
+            "width": 950,
+            "height": 102.5,
+            "top": 621.3125,
+            "bottom": 723.8125,
+            "left": 193,
+            "right": 1143
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 193,
+              "y": 779.31,
+              "width": 950,
+              "height": 47.55,
+              "top": 779.3125,
+              "bottom": 826.859375,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "firstRegionHeadY": 779.31,
+          "headerStackPctOfViewport": 0.8658999999999999,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 8,
+          "seamHeightRaw": ""
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": 0,
+            "width": 56,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 0,
+            "right": 56
+          },
+          "inkPx": 216.34375,
+          "railHeightPx": 900,
+          "inkPct": 0.24038194444444444,
+          "longestEmptyRun": {
+            "px": 295.90625,
+            "from": 604.09375,
+            "to": 900
+          },
+          "interactiveCount": 3,
+          "markerRowRect": {
+            "x": 6.75,
+            "y": 81,
+            "width": 41.5,
+            "height": 373.5,
+            "top": 81,
+            "bottom": 454.5,
+            "left": 6.75,
+            "right": 48.25
+          },
+          "textLabels": [
+            "1h49",
+            "Active",
+            "In",
+            "Project",
+            "Put down",
+            "hand",
+            "←"
+          ]
+        },
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 1280,
+            "y": 0,
+            "width": 360,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1280,
+            "right": 1640
+          },
+          "dataMarginMode": "sheet",
+          "display": "block",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            78.38,
+            78.38,
+            78.38,
+            59.06,
+            59.06,
+            78.38,
+            78.38
+          ],
+          "chipStackPx": 510.02,
+          "chipStackPctOfRail": 0.5666888888888889,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 56,
+          "railWidthPctOfViewport": 0.04375,
+          "chromePx": 60,
+          "chromePct": 0.06666666666666667,
+          "headerSummaryPx": 546,
+          "headerSummaryPct": 0.6066666666666667,
+          "activeRegionPx": 94,
+          "activeRegionPct": 0.10444444444444445,
+          "otherPx": 200,
+          "otherPct": 0.2222222222222222,
+          "viewportHeight": 900,
+          "viewportWidth": 1280
+        }
+      },
+      "s2": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "scrollY": 1602,
+        "headerStackPctOfViewport": -0.9776333333333334,
+        "firstRegionHeadY": -879.87,
+        "headerStack": {
+          "letterhead": {
+            "x": 193,
+            "y": -1566,
+            "width": 950,
+            "height": 189.31,
+            "top": -1566,
+            "bottom": -1376.6875,
+            "left": 193,
+            "right": 1143
+          },
+          "ticket": {
+            "rect": {
+              "x": 193,
+              "y": 0,
+              "width": 950,
+              "height": 64.06,
+              "top": 0,
+              "bottom": 64.0625,
+              "left": 193,
+              "right": 1143
+            },
+            "dataUnfolded": null,
+            "dataPinned": "true",
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 193,
+              "y": -1294.62,
+              "width": 950,
+              "height": 152.75,
+              "top": -1294.625,
+              "bottom": -1141.875,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 193,
+              "y": -1137.37,
+              "width": 950,
+              "height": 44,
+              "top": -1137.375,
+              "bottom": -1093.375,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "approvals": {
+            "x": 193,
+            "y": -1093.37,
+            "width": 950,
+            "height": 55.5,
+            "top": -1093.375,
+            "bottom": -1037.875,
+            "left": 193,
+            "right": 1143
+          },
+          "scheduleFrame": {
+            "x": 193,
+            "y": -1037.87,
+            "width": 950,
+            "height": 102.5,
+            "top": -1037.875,
+            "bottom": -935.375,
+            "left": 193,
+            "right": 1143
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 193,
+              "y": -879.87,
+              "width": 950,
+              "height": 47.55,
+              "top": -879.875,
+              "bottom": -832.328125,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "firstRegionHeadY": -879.87,
+          "headerStackPctOfViewport": -0.9776333333333334,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": "64px"
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": 0,
+            "width": 56,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 0,
+            "right": 56
+          },
+          "inkPx": 216.34375,
+          "railHeightPx": 900,
+          "inkPct": 0.24038194444444444,
+          "longestEmptyRun": {
+            "px": 295.90625,
+            "from": 604.09375,
+            "to": 900
+          },
+          "interactiveCount": 3,
+          "markerRowRect": {
+            "x": 6.75,
+            "y": 81,
+            "width": 41.5,
+            "height": 373.5,
+            "top": 81,
+            "bottom": 454.5,
+            "left": 6.75,
+            "right": 48.25
+          },
+          "textLabels": [
+            "1h49",
+            "Active",
+            "In",
+            "Project",
+            "Put down",
+            "hand",
+            "←"
+          ]
+        },
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 1280,
+            "y": 0,
+            "width": 360,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1280,
+            "right": 1640
+          },
+          "dataMarginMode": "sheet",
+          "display": "block",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            78.38,
+            78.38,
+            78.38,
+            59.06,
+            59.06,
+            78.38,
+            78.38
+          ],
+          "chipStackPx": 510.02,
+          "chipStackPctOfRail": 0.5666888888888889,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 56,
+          "railWidthPctOfViewport": 0.04375,
+          "chromePx": 125,
+          "chromePct": 0.1388888888888889,
+          "headerSummaryPx": 0,
+          "headerSummaryPct": 0,
+          "activeRegionPx": 775,
+          "activeRegionPct": 0.8611111111111112,
+          "otherPx": 0,
+          "otherPct": 0,
+          "viewportHeight": 900,
+          "viewportWidth": 1280
+        },
+        "__seamUsed": 64
+      },
+      "s3": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "scrollY": 2703,
+        "headerStackPctOfViewport": -2.2009666666666665,
+        "firstRegionHeadY": -1980.87,
+        "headerStack": {
+          "letterhead": {
+            "x": 193,
+            "y": -2667,
+            "width": 950,
+            "height": 189.31,
+            "top": -2667,
+            "bottom": -2477.6875,
+            "left": 193,
+            "right": 1143
+          },
+          "ticket": {
+            "rect": {
+              "x": 193,
+              "y": 0,
+              "width": 950,
+              "height": 64.06,
+              "top": 0,
+              "bottom": 64.0625,
+              "left": 193,
+              "right": 1143
+            },
+            "dataUnfolded": null,
+            "dataPinned": "true",
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 193,
+              "y": -2395.62,
+              "width": 950,
+              "height": 152.75,
+              "top": -2395.625,
+              "bottom": -2242.875,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 193,
+              "y": -2238.37,
+              "width": 950,
+              "height": 44,
+              "top": -2238.375,
+              "bottom": -2194.375,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "approvals": {
+            "x": 193,
+            "y": -2194.37,
+            "width": 950,
+            "height": 55.5,
+            "top": -2194.375,
+            "bottom": -2138.875,
+            "left": 193,
+            "right": 1143
+          },
+          "scheduleFrame": {
+            "x": 193,
+            "y": -2138.87,
+            "width": 950,
+            "height": 102.5,
+            "top": -2138.875,
+            "bottom": -2036.375,
+            "left": 193,
+            "right": 1143
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 193,
+              "y": -1980.87,
+              "width": 950,
+              "height": 47.55,
+              "top": -1980.875,
+              "bottom": -1933.328125,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "firstRegionHeadY": -1980.87,
+          "headerStackPctOfViewport": -2.2009666666666665,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": "64px"
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": -0.05,
+            "width": 56,
+            "height": 900,
+            "top": -0.046875,
+            "bottom": 899.953125,
+            "left": 0,
+            "right": 56
+          },
+          "inkPx": 216.34375,
+          "railHeightPx": 900,
+          "inkPct": 0.24038194444444444,
+          "longestEmptyRun": {
+            "px": 295.90625,
+            "from": 604.046875,
+            "to": 899.953125
+          },
+          "interactiveCount": 3,
+          "markerRowRect": {
+            "x": 6.75,
+            "y": 80.95,
+            "width": 41.5,
+            "height": 373.5,
+            "top": 80.953125,
+            "bottom": 454.453125,
+            "left": 6.75,
+            "right": 48.25
+          },
+          "textLabels": [
+            "1h49",
+            "Active",
+            "In",
+            "Project",
+            "Put down",
+            "hand",
+            "←"
+          ]
+        },
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 1280,
+            "y": 0,
+            "width": 360,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1280,
+            "right": 1640
+          },
+          "dataMarginMode": "sheet",
+          "display": "block",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            78.38,
+            78.38,
+            78.38,
+            59.06,
+            59.06,
+            78.38,
+            78.38
+          ],
+          "chipStackPx": 510.02,
+          "chipStackPctOfRail": 0.5666888888888889,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 56,
+          "railWidthPctOfViewport": 0.04375,
+          "chromePx": 125,
+          "chromePct": 0.1388888888888889,
+          "headerSummaryPx": 0,
+          "headerSummaryPct": 0,
+          "activeRegionPx": 458,
+          "activeRegionPct": 0.5088888888888888,
+          "otherPx": 317,
+          "otherPct": 0.3522222222222222,
+          "viewportHeight": 900,
+          "viewportWidth": 1280
+        }
+      }
+    },
+    "1440": {
+      "s0": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollY": 0,
+        "headerStackPctOfViewport": 1.117011111111111,
+        "firstRegionHeadY": 1005.31,
+        "headerStack": {
+          "letterhead": {
+            "x": 254,
+            "y": 36,
+            "width": 900,
+            "height": 189.31,
+            "top": 36,
+            "bottom": 225.3125,
+            "left": 254,
+            "right": 1154
+          },
+          "ticket": {
+            "rect": {
+              "x": 254,
+              "y": 243.31,
+              "width": 900,
+              "height": 347.25,
+              "top": 243.3125,
+              "bottom": 590.5625,
+              "left": 254,
+              "right": 1154
+            },
+            "dataUnfolded": "true",
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 254,
+              "y": 590.56,
+              "width": 900,
+              "height": 152.75,
+              "top": 590.5625,
+              "bottom": 743.3125,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 254,
+              "y": 747.81,
+              "width": 900,
+              "height": 44,
+              "top": 747.8125,
+              "bottom": 791.8125,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "approvals": {
+            "x": 254,
+            "y": 791.81,
+            "width": 900,
+            "height": 55.5,
+            "top": 791.8125,
+            "bottom": 847.3125,
+            "left": 254,
+            "right": 1154
+          },
+          "scheduleFrame": {
+            "x": 254,
+            "y": 847.31,
+            "width": 900,
+            "height": 102.5,
+            "top": 847.3125,
+            "bottom": 949.8125,
+            "left": 254,
+            "right": 1154
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 254,
+              "y": 1005.31,
+              "width": 900,
+              "height": 47.55,
+              "top": 1005.3125,
+              "bottom": 1052.859375,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "firstRegionHeadY": 1005.31,
+          "headerStackPctOfViewport": 1.117011111111111,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 8,
+          "seamHeightRaw": ""
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": 0,
+            "width": 200,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 0,
+            "right": 200
+          },
+          "inkPx": 494.25,
+          "railHeightPx": 900,
+          "inkPct": 0.5491666666666667,
+          "longestEmptyRun": {
+            "px": 270,
+            "from": 630,
+            "to": 900
+          },
+          "interactiveCount": 8,
+          "markerRowRect": {
+            "x": 9,
+            "y": 94.5,
+            "width": 181,
+            "height": 49.5,
+            "top": 94.5,
+            "bottom": 144,
+            "left": 9,
+            "right": 190
+          },
+          "textLabels": [
+            "$6,200 owed",
+            "+ Log",
+            "0 in the log",
+            "1h 49m",
+            "3 pieces · 0 rooms",
+            "Active",
+            "Client approvals",
+            "In hand",
+            "Just you · visible to the studio",
+            "Money",
+            "Not scheduled",
+            "On this paper",
+            "Pause",
+            "Pieces",
+            "Project",
+            "Put down",
+            "Schedule",
+            "←"
+          ]
+        },
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 1208,
+            "y": 0,
+            "width": 232,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1208,
+            "right": 1440
+          },
+          "dataMarginMode": "rail",
+          "display": "block",
+          "onCanvas": true,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            95.44,
+            78.38,
+            95.44,
+            59.06,
+            59.06,
+            94.88,
+            94.88
+          ],
+          "chipStackPx": 577.14,
+          "chipStackPctOfRail": 0.6412666666666667,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 200,
+          "railWidthPctOfViewport": 0.1388888888888889,
+          "chromePx": 60,
+          "chromePct": 0.06666666666666667,
+          "headerSummaryPx": 736,
+          "headerSummaryPct": 0.8177777777777778,
+          "activeRegionPx": 0,
+          "activeRegionPct": 0,
+          "otherPx": 104,
+          "otherPct": 0.11555555555555555,
+          "viewportHeight": 900,
+          "viewportWidth": 1440
+        },
+        "s0Extra": {
+          "scrollHeight": 3905,
+          "regionHeadMap": {
+            "schedule": 1005.31,
+            "ffe": 1665.8,
+            "money-head": 2396.53
+          }
+        }
+      },
+      "s1": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollY": 226,
+        "headerStackPctOfViewport": 0.8658999999999999,
+        "firstRegionHeadY": 779.31,
+        "headerStack": {
+          "letterhead": {
+            "x": 254,
+            "y": -190,
+            "width": 900,
+            "height": 189.31,
+            "top": -190,
+            "bottom": -0.6875,
+            "left": 254,
+            "right": 1154
+          },
+          "ticket": {
+            "rect": {
+              "x": 254,
+              "y": 17.31,
+              "width": 900,
+              "height": 347.25,
+              "top": 17.3125,
+              "bottom": 364.5625,
+              "left": 254,
+              "right": 1154
+            },
+            "dataUnfolded": "true",
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 254,
+              "y": 364.56,
+              "width": 900,
+              "height": 152.75,
+              "top": 364.5625,
+              "bottom": 517.3125,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 254,
+              "y": 521.81,
+              "width": 900,
+              "height": 44,
+              "top": 521.8125,
+              "bottom": 565.8125,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "approvals": {
+            "x": 254,
+            "y": 565.81,
+            "width": 900,
+            "height": 55.5,
+            "top": 565.8125,
+            "bottom": 621.3125,
+            "left": 254,
+            "right": 1154
+          },
+          "scheduleFrame": {
+            "x": 254,
+            "y": 621.31,
+            "width": 900,
+            "height": 102.5,
+            "top": 621.3125,
+            "bottom": 723.8125,
+            "left": 254,
+            "right": 1154
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 254,
+              "y": 779.31,
+              "width": 900,
+              "height": 47.55,
+              "top": 779.3125,
+              "bottom": 826.859375,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "firstRegionHeadY": 779.31,
+          "headerStackPctOfViewport": 0.8658999999999999,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 8,
+          "seamHeightRaw": ""
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": 0,
+            "width": 200,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 0,
+            "right": 200
+          },
+          "inkPx": 494.25,
+          "railHeightPx": 900,
+          "inkPct": 0.5491666666666667,
+          "longestEmptyRun": {
+            "px": 270,
+            "from": 630,
+            "to": 900
+          },
+          "interactiveCount": 8,
+          "markerRowRect": {
+            "x": 9,
+            "y": 94.5,
+            "width": 181,
+            "height": 49.5,
+            "top": 94.5,
+            "bottom": 144,
+            "left": 9,
+            "right": 190
+          },
+          "textLabels": [
+            "$6,200 owed",
+            "+ Log",
+            "0 in the log",
+            "1h 49m",
+            "3 pieces · 0 rooms",
+            "Active",
+            "Client approvals",
+            "In hand",
+            "Just you · visible to the studio",
+            "Money",
+            "Not scheduled",
+            "On this paper",
+            "Pause",
+            "Pieces",
+            "Project",
+            "Put down",
+            "Schedule",
+            "←"
+          ]
+        },
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 1208,
+            "y": 0,
+            "width": 232,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1208,
+            "right": 1440
+          },
+          "dataMarginMode": "rail",
+          "display": "block",
+          "onCanvas": true,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            95.44,
+            78.38,
+            95.44,
+            59.06,
+            59.06,
+            94.88,
+            94.88
+          ],
+          "chipStackPx": 577.14,
+          "chipStackPctOfRail": 0.6412666666666667,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 200,
+          "railWidthPctOfViewport": 0.1388888888888889,
+          "chromePx": 60,
+          "chromePct": 0.06666666666666667,
+          "headerSummaryPx": 546,
+          "headerSummaryPct": 0.6066666666666667,
+          "activeRegionPx": 94,
+          "activeRegionPct": 0.10444444444444445,
+          "otherPx": 200,
+          "otherPct": 0.2222222222222222,
+          "viewportHeight": 900,
+          "viewportWidth": 1440
+        }
+      },
+      "s2": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollY": 1602,
+        "headerStackPctOfViewport": -0.9776333333333334,
+        "firstRegionHeadY": -879.87,
+        "headerStack": {
+          "letterhead": {
+            "x": 254,
+            "y": -1566,
+            "width": 900,
+            "height": 189.31,
+            "top": -1566,
+            "bottom": -1376.6875,
+            "left": 254,
+            "right": 1154
+          },
+          "ticket": {
+            "rect": {
+              "x": 254,
+              "y": 0,
+              "width": 900,
+              "height": 64.06,
+              "top": 0,
+              "bottom": 64.0625,
+              "left": 254,
+              "right": 1154
+            },
+            "dataUnfolded": null,
+            "dataPinned": "true",
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 254,
+              "y": -1294.62,
+              "width": 900,
+              "height": 152.75,
+              "top": -1294.625,
+              "bottom": -1141.875,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 254,
+              "y": -1137.37,
+              "width": 900,
+              "height": 44,
+              "top": -1137.375,
+              "bottom": -1093.375,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "approvals": {
+            "x": 254,
+            "y": -1093.37,
+            "width": 900,
+            "height": 55.5,
+            "top": -1093.375,
+            "bottom": -1037.875,
+            "left": 254,
+            "right": 1154
+          },
+          "scheduleFrame": {
+            "x": 254,
+            "y": -1037.87,
+            "width": 900,
+            "height": 102.5,
+            "top": -1037.875,
+            "bottom": -935.375,
+            "left": 254,
+            "right": 1154
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 254,
+              "y": -879.87,
+              "width": 900,
+              "height": 47.55,
+              "top": -879.875,
+              "bottom": -832.328125,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "firstRegionHeadY": -879.87,
+          "headerStackPctOfViewport": -0.9776333333333334,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": "64px"
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": 0,
+            "width": 200,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 0,
+            "right": 200
+          },
+          "inkPx": 494.25,
+          "railHeightPx": 900,
+          "inkPct": 0.5491666666666667,
+          "longestEmptyRun": {
+            "px": 270,
+            "from": 630,
+            "to": 900
+          },
+          "interactiveCount": 8,
+          "markerRowRect": {
+            "x": 9,
+            "y": 94.5,
+            "width": 181,
+            "height": 49.5,
+            "top": 94.5,
+            "bottom": 144,
+            "left": 9,
+            "right": 190
+          },
+          "textLabels": [
+            "$6,200 owed",
+            "+ Log",
+            "0 in the log",
+            "1h 49m",
+            "3 pieces · 0 rooms",
+            "Active",
+            "Client approvals",
+            "In hand",
+            "Just you · visible to the studio",
+            "Money",
+            "Not scheduled",
+            "On this paper",
+            "Pause",
+            "Pieces",
+            "Project",
+            "Put down",
+            "Schedule",
+            "←"
+          ]
+        },
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 1208,
+            "y": 0,
+            "width": 232,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1208,
+            "right": 1440
+          },
+          "dataMarginMode": "rail",
+          "display": "block",
+          "onCanvas": true,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            95.44,
+            78.38,
+            95.44,
+            59.06,
+            59.06,
+            94.88,
+            94.88
+          ],
+          "chipStackPx": 577.14,
+          "chipStackPctOfRail": 0.6412666666666667,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 200,
+          "railWidthPctOfViewport": 0.1388888888888889,
+          "chromePx": 125,
+          "chromePct": 0.1388888888888889,
+          "headerSummaryPx": 0,
+          "headerSummaryPct": 0,
+          "activeRegionPx": 775,
+          "activeRegionPct": 0.8611111111111112,
+          "otherPx": 0,
+          "otherPct": 0,
+          "viewportHeight": 900,
+          "viewportWidth": 1440
+        },
+        "__seamUsed": 64
+      },
+      "s3": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollY": 2722,
+        "headerStackPctOfViewport": -2.222077777777778,
+        "firstRegionHeadY": -1999.87,
+        "headerStack": {
+          "letterhead": {
+            "x": 254,
+            "y": -2686,
+            "width": 900,
+            "height": 189.31,
+            "top": -2686,
+            "bottom": -2496.6875,
+            "left": 254,
+            "right": 1154
+          },
+          "ticket": {
+            "rect": {
+              "x": 254,
+              "y": 0,
+              "width": 900,
+              "height": 64.06,
+              "top": 0,
+              "bottom": 64.0625,
+              "left": 254,
+              "right": 1154
+            },
+            "dataUnfolded": null,
+            "dataPinned": "true",
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "needs-attention",
+            "rect": {
+              "x": 254,
+              "y": -2414.62,
+              "width": 900,
+              "height": 152.75,
+              "top": -2414.625,
+              "bottom": -2261.875,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 254,
+              "y": -2257.37,
+              "width": 900,
+              "height": 44,
+              "top": -2257.375,
+              "bottom": -2213.375,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "approvals": {
+            "x": 254,
+            "y": -2213.37,
+            "width": 900,
+            "height": 55.5,
+            "top": -2213.375,
+            "bottom": -2157.875,
+            "left": 254,
+            "right": 1154
+          },
+          "scheduleFrame": {
+            "x": 254,
+            "y": -2157.87,
+            "width": 900,
+            "height": 102.5,
+            "top": -2157.875,
+            "bottom": -2055.375,
+            "left": 254,
+            "right": 1154
+          },
+          "firstRegionHead": {
+            "key": "schedule",
+            "rect": {
+              "x": 254,
+              "y": -1999.87,
+              "width": 900,
+              "height": 47.55,
+              "top": -1999.875,
+              "bottom": -1952.328125,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "firstRegionHeadY": -1999.87,
+          "headerStackPctOfViewport": -2.222077777777778,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": "64px"
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": -0.3,
+            "width": 200,
+            "height": 900,
+            "top": -0.296875,
+            "bottom": 899.703125,
+            "left": 0,
+            "right": 200
+          },
+          "inkPx": 494.25,
+          "railHeightPx": 900,
+          "inkPct": 0.5491666666666667,
+          "longestEmptyRun": {
+            "px": 270,
+            "from": 629.703125,
+            "to": 899.703125
+          },
+          "interactiveCount": 8,
+          "markerRowRect": {
+            "x": 9,
+            "y": 94.2,
+            "width": 181,
+            "height": 49.5,
+            "top": 94.203125,
+            "bottom": 143.703125,
+            "left": 9,
+            "right": 190
+          },
+          "textLabels": [
+            "$6,200 owed",
+            "+ Log",
+            "0 in the log",
+            "1h 49m",
+            "3 pieces · 0 rooms",
+            "Active",
+            "Client approvals",
+            "In hand",
+            "Just you · visible to the studio",
+            "Money",
+            "Not scheduled",
+            "On this paper",
+            "Pause",
+            "Pieces",
+            "Project",
+            "Put down",
+            "Schedule",
+            "←"
+          ]
+        },
+        "gaps": [
+          {
+            "from": "header-stack-end",
+            "to": "schedule",
+            "px": 55.5
+          },
+          {
+            "from": "schedule",
+            "to": "ffe",
+            "px": 28.5
+          },
+          {
+            "from": "ffe",
+            "to": "money-head",
+            "px": 6
+          }
+        ],
+        "distinctGaps": [
+          6,
+          29,
+          56
+        ],
+        "margin": {
+          "panelRect": {
+            "x": 1208,
+            "y": -0.3,
+            "width": 232,
+            "height": 900,
+            "top": -0.296875,
+            "bottom": 899.703125,
+            "left": 1208,
+            "right": 1440
+          },
+          "dataMarginMode": "rail",
+          "display": "block",
+          "onCanvas": true,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 7,
+          "chipHeights": [
+            95.44,
+            78.38,
+            95.44,
+            59.06,
+            59.06,
+            94.88,
+            94.88
+          ],
+          "chipStackPx": 577.14,
+          "chipStackPctOfRail": 0.6412666666666667,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 200,
+          "railWidthPctOfViewport": 0.1388888888888889,
+          "chromePx": 125,
+          "chromePct": 0.1388888888888889,
+          "headerSummaryPx": 0,
+          "headerSummaryPct": 0,
+          "activeRegionPx": 458,
+          "activeRegionPct": 0.5088888888888888,
+          "otherPx": 317,
+          "otherPct": 0.3522222222222222,
+          "viewportHeight": 900,
+          "viewportWidth": 1440
+        }
+      }
+    }
+  },
+  "prework": {
+    "390": {
+      "s0": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollY": 0,
+        "headerStackPctOfViewport": null,
+        "firstRegionHeadY": null,
+        "headerStack": {
+          "letterhead": {
+            "x": 31.5,
+            "y": 36,
+            "width": 327,
+            "height": 273.69,
+            "top": 36,
+            "bottom": 309.6875,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "ticket": {
+            "rect": {
+              "x": 31.5,
+              "y": 327.69,
+              "width": 327,
+              "height": 64.06,
+              "top": 327.6875,
+              "bottom": 391.75,
+              "left": 31.5,
+              "right": 358.5
+            },
+            "dataUnfolded": null,
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "document-guide",
+            "rect": {
+              "x": 31.5,
+              "y": 414.25,
+              "width": 327,
+              "height": 173,
+              "top": 414.25,
+              "bottom": 587.25,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 31.5,
+              "y": 609.75,
+              "width": 327,
+              "height": 44,
+              "top": 609.75,
+              "bottom": 653.75,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "approvals": null,
+          "scheduleFrame": null,
+          "firstRegionHead": null,
+          "firstRegionHeadY": null,
+          "headerStackPctOfViewport": null,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": ""
+        },
+        "spine": null,
+        "gaps": [],
+        "distinctGaps": [],
+        "margin": {
+          "panelRect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "dataMarginMode": "sheet",
+          "display": "none",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 0,
+          "chipHeights": [],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": null,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 0,
+          "railWidthPctOfViewport": 0,
+          "chromePx": 77,
+          "chromePct": 0.09123222748815166,
+          "headerSummaryPx": 558,
+          "headerSummaryPct": 0.6611374407582938,
+          "activeRegionPx": 113,
+          "activeRegionPct": 0.1338862559241706,
+          "otherPx": 96,
+          "otherPct": 0.11374407582938388,
+          "viewportHeight": 844,
+          "viewportWidth": 390
+        },
+        "s0Extra": {
+          "scrollHeight": 2142,
+          "regionHeadMap": {}
+        }
+      },
+      "s1": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollY": 311,
+        "headerStackPctOfViewport": null,
+        "firstRegionHeadY": null,
+        "headerStack": {
+          "letterhead": {
+            "x": 31.5,
+            "y": -275,
+            "width": 327,
+            "height": 273.69,
+            "top": -275,
+            "bottom": -1.3125,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "ticket": {
+            "rect": {
+              "x": 31.5,
+              "y": 16.69,
+              "width": 327,
+              "height": 64.06,
+              "top": 16.6875,
+              "bottom": 80.75,
+              "left": 31.5,
+              "right": 358.5
+            },
+            "dataUnfolded": null,
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "document-guide",
+            "rect": {
+              "x": 31.5,
+              "y": 103.25,
+              "width": 327,
+              "height": 173,
+              "top": 103.25,
+              "bottom": 276.25,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 31.5,
+              "y": 298.75,
+              "width": 327,
+              "height": 44,
+              "top": 298.75,
+              "bottom": 342.75,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "approvals": null,
+          "scheduleFrame": null,
+          "firstRegionHead": null,
+          "firstRegionHeadY": null,
+          "headerStackPctOfViewport": null,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": ""
+        },
+        "spine": null,
+        "gaps": [],
+        "distinctGaps": [],
+        "margin": {
+          "panelRect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "dataMarginMode": "sheet",
+          "display": "none",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 0,
+          "chipHeights": [],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": null,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 0,
+          "railWidthPctOfViewport": 0,
+          "chromePx": 77,
+          "chromePct": 0.09123222748815166,
+          "headerSummaryPx": 284,
+          "headerSummaryPct": 0.33649289099526064,
+          "activeRegionPx": 424,
+          "activeRegionPct": 0.5023696682464455,
+          "otherPx": 59,
+          "otherPct": 0.06990521327014218,
+          "viewportHeight": 844,
+          "viewportWidth": 390
+        }
+      },
+      "s3": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollY": 1298,
+        "headerStackPctOfViewport": null,
+        "firstRegionHeadY": null,
+        "headerStack": {
+          "letterhead": {
+            "x": 31.5,
+            "y": -1262,
+            "width": 327,
+            "height": 273.69,
+            "top": -1262,
+            "bottom": -988.3125,
+            "left": 31.5,
+            "right": 358.5
+          },
+          "ticket": {
+            "rect": {
+              "x": 31.5,
+              "y": 0,
+              "width": 327,
+              "height": 64.06,
+              "top": 0,
+              "bottom": 64.0625,
+              "left": 31.5,
+              "right": 358.5
+            },
+            "dataUnfolded": null,
+            "dataPinned": "true",
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "document-guide",
+            "rect": {
+              "x": 31.5,
+              "y": -883.75,
+              "width": 327,
+              "height": 173,
+              "top": -883.75,
+              "bottom": -710.75,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 31.5,
+              "y": -688.25,
+              "width": 327,
+              "height": 44,
+              "top": -688.25,
+              "bottom": -644.25,
+              "left": 31.5,
+              "right": 358.5
+            }
+          },
+          "approvals": null,
+          "scheduleFrame": null,
+          "firstRegionHead": null,
+          "firstRegionHeadY": null,
+          "headerStackPctOfViewport": null,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": "64px"
+        },
+        "spine": null,
+        "gaps": [],
+        "distinctGaps": [],
+        "margin": {
+          "panelRect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "dataMarginMode": "sheet",
+          "display": "none",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 0,
+          "chipHeights": [],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": null,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 0,
+          "railWidthPctOfViewport": 0,
+          "chromePx": 142,
+          "chromePct": 0.16824644549763032,
+          "headerSummaryPx": 0,
+          "headerSummaryPct": 0,
+          "activeRegionPx": 546,
+          "activeRegionPct": 0.6469194312796208,
+          "otherPx": 156,
+          "otherPct": 0.1848341232227488,
+          "viewportHeight": 844,
+          "viewportWidth": 390
+        }
+      }
+    },
+    "1280": {
+      "s0": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "scrollY": 0,
+        "headerStackPctOfViewport": null,
+        "firstRegionHeadY": null,
+        "headerStack": {
+          "letterhead": {
+            "x": 193,
+            "y": 36,
+            "width": 950,
+            "height": 187.31,
+            "top": 36,
+            "bottom": 223.3125,
+            "left": 193,
+            "right": 1143
+          },
+          "ticket": {
+            "rect": {
+              "x": 193,
+              "y": 241.31,
+              "width": 950,
+              "height": 347.25,
+              "top": 241.3125,
+              "bottom": 588.5625,
+              "left": 193,
+              "right": 1143
+            },
+            "dataUnfolded": "true",
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "document-guide",
+            "rect": {
+              "x": 193,
+              "y": 611.06,
+              "width": 950,
+              "height": 137,
+              "top": 611.0625,
+              "bottom": 748.0625,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 193,
+              "y": 770.56,
+              "width": 950,
+              "height": 44,
+              "top": 770.5625,
+              "bottom": 814.5625,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "approvals": null,
+          "scheduleFrame": null,
+          "firstRegionHead": null,
+          "firstRegionHeadY": null,
+          "headerStackPctOfViewport": null,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 8,
+          "seamHeightRaw": ""
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": 0,
+            "width": 56,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 0,
+            "right": 56
+          },
+          "inkPx": 186,
+          "railHeightPx": 900,
+          "inkPct": 0.20666666666666667,
+          "longestEmptyRun": {
+            "px": 339.75,
+            "from": 560.25,
+            "to": 900
+          },
+          "interactiveCount": 5,
+          "markerRowRect": {
+            "x": 6.75,
+            "y": 81,
+            "width": 41.5,
+            "height": 373.5,
+            "top": 81,
+            "bottom": 454.5,
+            "left": 6.75,
+            "right": 48.25
+          },
+          "textLabels": [
+            "Awaiting signature",
+            "Proposal",
+            "Put down",
+            "←"
+          ]
+        },
+        "gaps": [],
+        "distinctGaps": [],
+        "margin": {
+          "panelRect": {
+            "x": 1280,
+            "y": 0,
+            "width": 360,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1280,
+            "right": 1640
+          },
+          "dataMarginMode": "sheet",
+          "display": "block",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 0,
+          "chipHeights": [],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": 0,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 56,
+          "railWidthPctOfViewport": 0.04375,
+          "chromePx": 60,
+          "chromePct": 0.06666666666666667,
+          "headerSummaryPx": 719,
+          "headerSummaryPct": 0.7988888888888889,
+          "activeRegionPx": 25,
+          "activeRegionPct": 0.027777777777777776,
+          "otherPx": 96,
+          "otherPct": 0.10666666666666667,
+          "viewportHeight": 900,
+          "viewportWidth": 1280
+        },
+        "s0Extra": {
+          "scrollHeight": 2179,
+          "regionHeadMap": {}
+        }
+      },
+      "s1": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "scrollY": 224,
+        "headerStackPctOfViewport": null,
+        "firstRegionHeadY": null,
+        "headerStack": {
+          "letterhead": {
+            "x": 193,
+            "y": -188,
+            "width": 950,
+            "height": 187.31,
+            "top": -188,
+            "bottom": -0.6875,
+            "left": 193,
+            "right": 1143
+          },
+          "ticket": {
+            "rect": {
+              "x": 193,
+              "y": 17.31,
+              "width": 950,
+              "height": 347.25,
+              "top": 17.3125,
+              "bottom": 364.5625,
+              "left": 193,
+              "right": 1143
+            },
+            "dataUnfolded": "true",
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "document-guide",
+            "rect": {
+              "x": 193,
+              "y": 387.06,
+              "width": 950,
+              "height": 137,
+              "top": 387.0625,
+              "bottom": 524.0625,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 193,
+              "y": 546.56,
+              "width": 950,
+              "height": 44,
+              "top": 546.5625,
+              "bottom": 590.5625,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "approvals": null,
+          "scheduleFrame": null,
+          "firstRegionHead": null,
+          "firstRegionHeadY": null,
+          "headerStackPctOfViewport": null,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 8,
+          "seamHeightRaw": ""
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": 0,
+            "width": 56,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 0,
+            "right": 56
+          },
+          "inkPx": 186,
+          "railHeightPx": 900,
+          "inkPct": 0.20666666666666667,
+          "longestEmptyRun": {
+            "px": 339.75,
+            "from": 560.25,
+            "to": 900
+          },
+          "interactiveCount": 5,
+          "markerRowRect": {
+            "x": 6.75,
+            "y": 81,
+            "width": 41.5,
+            "height": 373.5,
+            "top": 81,
+            "bottom": 454.5,
+            "left": 6.75,
+            "right": 48.25
+          },
+          "textLabels": [
+            "Awaiting signature",
+            "Proposal",
+            "Put down",
+            "←"
+          ]
+        },
+        "gaps": [],
+        "distinctGaps": [],
+        "margin": {
+          "panelRect": {
+            "x": 1280,
+            "y": 0,
+            "width": 360,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1280,
+            "right": 1640
+          },
+          "dataMarginMode": "sheet",
+          "display": "block",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 0,
+          "chipHeights": [],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": 0,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 56,
+          "railWidthPctOfViewport": 0.04375,
+          "chromePx": 60,
+          "chromePct": 0.06666666666666667,
+          "headerSummaryPx": 531,
+          "headerSummaryPct": 0.59,
+          "activeRegionPx": 249,
+          "activeRegionPct": 0.27666666666666667,
+          "otherPx": 60,
+          "otherPct": 0.06666666666666667,
+          "viewportHeight": 900,
+          "viewportWidth": 1280
+        }
+      },
+      "s3": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "scrollY": 996,
+        "headerStackPctOfViewport": null,
+        "firstRegionHeadY": null,
+        "headerStack": {
+          "letterhead": {
+            "x": 193,
+            "y": -960,
+            "width": 950,
+            "height": 187.31,
+            "top": -960,
+            "bottom": -772.6875,
+            "left": 193,
+            "right": 1143
+          },
+          "ticket": {
+            "rect": {
+              "x": 193,
+              "y": 0,
+              "width": 950,
+              "height": 64.06,
+              "top": 0,
+              "bottom": 64.0625,
+              "left": 193,
+              "right": 1143
+            },
+            "dataUnfolded": null,
+            "dataPinned": "true",
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "document-guide",
+            "rect": {
+              "x": 193,
+              "y": -668.12,
+              "width": 950,
+              "height": 137,
+              "top": -668.125,
+              "bottom": -531.125,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 193,
+              "y": -508.62,
+              "width": 950,
+              "height": 44,
+              "top": -508.625,
+              "bottom": -464.625,
+              "left": 193,
+              "right": 1143
+            }
+          },
+          "approvals": null,
+          "scheduleFrame": null,
+          "firstRegionHead": null,
+          "firstRegionHeadY": null,
+          "headerStackPctOfViewport": null,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": "64px"
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": -0.5,
+            "width": 56,
+            "height": 900,
+            "top": -0.5,
+            "bottom": 899.5,
+            "left": 0,
+            "right": 56
+          },
+          "inkPx": 186,
+          "railHeightPx": 900,
+          "inkPct": 0.20666666666666667,
+          "longestEmptyRun": {
+            "px": 339.75,
+            "from": 559.75,
+            "to": 899.5
+          },
+          "interactiveCount": 5,
+          "markerRowRect": {
+            "x": 6.75,
+            "y": 80.5,
+            "width": 41.5,
+            "height": 373.5,
+            "top": 80.5,
+            "bottom": 454,
+            "left": 6.75,
+            "right": 48.25
+          },
+          "textLabels": [
+            "Awaiting signature",
+            "Proposal",
+            "Put down",
+            "←"
+          ]
+        },
+        "gaps": [],
+        "distinctGaps": [],
+        "margin": {
+          "panelRect": {
+            "x": 1280,
+            "y": 0,
+            "width": 360,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1280,
+            "right": 1640
+          },
+          "dataMarginMode": "sheet",
+          "display": "block",
+          "onCanvas": false,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 0,
+          "chipHeights": [],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": 0,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 56,
+          "railWidthPctOfViewport": 0.04375,
+          "chromePx": 125,
+          "chromePct": 0.1388888888888889,
+          "headerSummaryPx": 0,
+          "headerSummaryPct": 0,
+          "activeRegionPx": 601,
+          "activeRegionPct": 0.6677777777777778,
+          "otherPx": 174,
+          "otherPct": 0.19333333333333333,
+          "viewportHeight": 900,
+          "viewportWidth": 1280
+        }
+      }
+    },
+    "1440": {
+      "s0": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollY": 0,
+        "headerStackPctOfViewport": null,
+        "firstRegionHeadY": null,
+        "headerStack": {
+          "letterhead": {
+            "x": 254,
+            "y": 36,
+            "width": 900,
+            "height": 187.31,
+            "top": 36,
+            "bottom": 223.3125,
+            "left": 254,
+            "right": 1154
+          },
+          "ticket": {
+            "rect": {
+              "x": 254,
+              "y": 241.31,
+              "width": 900,
+              "height": 347.25,
+              "top": 241.3125,
+              "bottom": 588.5625,
+              "left": 254,
+              "right": 1154
+            },
+            "dataUnfolded": "true",
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "document-guide",
+            "rect": {
+              "x": 254,
+              "y": 611.06,
+              "width": 900,
+              "height": 137,
+              "top": 611.0625,
+              "bottom": 748.0625,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 254,
+              "y": 770.56,
+              "width": 900,
+              "height": 44,
+              "top": 770.5625,
+              "bottom": 814.5625,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "approvals": null,
+          "scheduleFrame": null,
+          "firstRegionHead": null,
+          "firstRegionHeadY": null,
+          "headerStackPctOfViewport": null,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 8,
+          "seamHeightRaw": ""
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": 0,
+            "width": 200,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 0,
+            "right": 200
+          },
+          "inkPx": 125.25,
+          "railHeightPx": 900,
+          "inkPct": 0.13916666666666666,
+          "longestEmptyRun": {
+            "px": 657,
+            "from": 243,
+            "to": 900
+          },
+          "interactiveCount": 5,
+          "markerRowRect": {
+            "x": 9,
+            "y": 94.5,
+            "width": 181,
+            "height": 49.5,
+            "top": 94.5,
+            "bottom": 144,
+            "left": 9,
+            "right": 190
+          },
+          "textLabels": [
+            "Awaiting signature",
+            "Just you · visible to the studio",
+            "Proposal",
+            "Put down",
+            "←"
+          ]
+        },
+        "gaps": [],
+        "distinctGaps": [],
+        "margin": {
+          "panelRect": {
+            "x": 1208,
+            "y": 0,
+            "width": 232,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1208,
+            "right": 1440
+          },
+          "dataMarginMode": "rail",
+          "display": "block",
+          "onCanvas": true,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 0,
+          "chipHeights": [],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": 0,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 200,
+          "railWidthPctOfViewport": 0.1388888888888889,
+          "chromePx": 60,
+          "chromePct": 0.06666666666666667,
+          "headerSummaryPx": 719,
+          "headerSummaryPct": 0.7988888888888889,
+          "activeRegionPx": 25,
+          "activeRegionPct": 0.027777777777777776,
+          "otherPx": 96,
+          "otherPct": 0.10666666666666667,
+          "viewportHeight": 900,
+          "viewportWidth": 1440
+        },
+        "s0Extra": {
+          "scrollHeight": 2179,
+          "regionHeadMap": {}
+        }
+      },
+      "s1": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollY": 224,
+        "headerStackPctOfViewport": null,
+        "firstRegionHeadY": null,
+        "headerStack": {
+          "letterhead": {
+            "x": 254,
+            "y": -188,
+            "width": 900,
+            "height": 187.31,
+            "top": -188,
+            "bottom": -0.6875,
+            "left": 254,
+            "right": 1154
+          },
+          "ticket": {
+            "rect": {
+              "x": 254,
+              "y": 17.31,
+              "width": 900,
+              "height": 347.25,
+              "top": 17.3125,
+              "bottom": 364.5625,
+              "left": 254,
+              "right": 1154
+            },
+            "dataUnfolded": "true",
+            "dataPinned": null,
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "document-guide",
+            "rect": {
+              "x": 254,
+              "y": 387.06,
+              "width": 900,
+              "height": 137,
+              "top": 387.0625,
+              "bottom": 524.0625,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 254,
+              "y": 546.56,
+              "width": 900,
+              "height": 44,
+              "top": 546.5625,
+              "bottom": 590.5625,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "approvals": null,
+          "scheduleFrame": null,
+          "firstRegionHead": null,
+          "firstRegionHeadY": null,
+          "headerStackPctOfViewport": null,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 8,
+          "seamHeightRaw": ""
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": 0,
+            "width": 200,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 0,
+            "right": 200
+          },
+          "inkPx": 125.25,
+          "railHeightPx": 900,
+          "inkPct": 0.13916666666666666,
+          "longestEmptyRun": {
+            "px": 657,
+            "from": 243,
+            "to": 900
+          },
+          "interactiveCount": 5,
+          "markerRowRect": {
+            "x": 9,
+            "y": 94.5,
+            "width": 181,
+            "height": 49.5,
+            "top": 94.5,
+            "bottom": 144,
+            "left": 9,
+            "right": 190
+          },
+          "textLabels": [
+            "Awaiting signature",
+            "Just you · visible to the studio",
+            "Proposal",
+            "Put down",
+            "←"
+          ]
+        },
+        "gaps": [],
+        "distinctGaps": [],
+        "margin": {
+          "panelRect": {
+            "x": 1208,
+            "y": 0,
+            "width": 232,
+            "height": 900,
+            "top": 0,
+            "bottom": 900,
+            "left": 1208,
+            "right": 1440
+          },
+          "dataMarginMode": "rail",
+          "display": "block",
+          "onCanvas": true,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 0,
+          "chipHeights": [],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": 0,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 200,
+          "railWidthPctOfViewport": 0.1388888888888889,
+          "chromePx": 60,
+          "chromePct": 0.06666666666666667,
+          "headerSummaryPx": 531,
+          "headerSummaryPct": 0.59,
+          "activeRegionPx": 249,
+          "activeRegionPct": 0.27666666666666667,
+          "otherPx": 60,
+          "otherPct": 0.06666666666666667,
+          "viewportHeight": 900,
+          "viewportWidth": 1440
+        }
+      },
+      "s3": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollY": 996,
+        "headerStackPctOfViewport": null,
+        "firstRegionHeadY": null,
+        "headerStack": {
+          "letterhead": {
+            "x": 254,
+            "y": -960,
+            "width": 900,
+            "height": 187.31,
+            "top": -960,
+            "bottom": -772.6875,
+            "left": 254,
+            "right": 1154
+          },
+          "ticket": {
+            "rect": {
+              "x": 254,
+              "y": 0,
+              "width": 900,
+              "height": 64.06,
+              "top": 0,
+              "bottom": 64.0625,
+              "left": 254,
+              "right": 1154
+            },
+            "dataUnfolded": null,
+            "dataPinned": "true",
+            "position": "sticky"
+          },
+          "guideOrAttn": {
+            "kind": "document-guide",
+            "rect": {
+              "x": 254,
+              "y": -668.12,
+              "width": 900,
+              "height": 137,
+              "top": -668.125,
+              "bottom": -531.125,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "instruments": {
+            "selector": "[aria-label=\"Document letterhead actions\"]",
+            "rect": {
+              "x": 254,
+              "y": -508.62,
+              "width": 900,
+              "height": 44,
+              "top": -508.625,
+              "bottom": -464.625,
+              "left": 254,
+              "right": 1154
+            }
+          },
+          "approvals": null,
+          "scheduleFrame": null,
+          "firstRegionHead": null,
+          "firstRegionHeadY": null,
+          "headerStackPctOfViewport": null,
+          "ticketRowSelector": "[data-job-ticket] [data-ticket-row]",
+          "ticketRowCount": 0,
+          "seamHeightRaw": "64px"
+        },
+        "spine": {
+          "present": true,
+          "spineRect": {
+            "x": 0,
+            "y": -0.5,
+            "width": 200,
+            "height": 900,
+            "top": -0.5,
+            "bottom": 899.5,
+            "left": 0,
+            "right": 200
+          },
+          "inkPx": 125.25,
+          "railHeightPx": 900,
+          "inkPct": 0.13916666666666666,
+          "longestEmptyRun": {
+            "px": 657,
+            "from": 242.5,
+            "to": 899.5
+          },
+          "interactiveCount": 5,
+          "markerRowRect": {
+            "x": 9,
+            "y": 94,
+            "width": 181,
+            "height": 49.5,
+            "top": 94,
+            "bottom": 143.5,
+            "left": 9,
+            "right": 190
+          },
+          "textLabels": [
+            "Awaiting signature",
+            "Just you · visible to the studio",
+            "Proposal",
+            "Put down",
+            "←"
+          ]
+        },
+        "gaps": [],
+        "distinctGaps": [],
+        "margin": {
+          "panelRect": {
+            "x": 1208,
+            "y": -0.5,
+            "width": 232,
+            "height": 900,
+            "top": -0.5,
+            "bottom": 899.5,
+            "left": 1208,
+            "right": 1440
+          },
+          "dataMarginMode": "rail",
+          "display": "block",
+          "onCanvas": true,
+          "chipSelector": "[data-margin-panel] .doc-elevated",
+          "chipCount": 0,
+          "chipHeights": [],
+          "chipStackPx": 0,
+          "chipStackPctOfRail": 0,
+          "noteComposerPresent": false
+        },
+        "frameBudget": {
+          "railWidthPx": 200,
+          "railWidthPctOfViewport": 0.1388888888888889,
+          "chromePx": 125,
+          "chromePct": 0.1388888888888889,
+          "headerSummaryPx": 0,
+          "headerSummaryPct": 0,
+          "activeRegionPx": 601,
+          "activeRegionPct": 0.6677777777777778,
+          "otherPx": 174,
+          "otherPct": 0.19333333333333333,
+          "viewportHeight": 900,
+          "viewportWidth": 1440
+        }
+      }
+    }
+  },
+  "meta": {
+    "timestamp": "2026-08-29T03:08:25.856Z",
+    "base": "http://localhost:3000",
+    "ids": {
+      "rich": "de922823-d1b9-491a-8ad5-99e8e4f013c5",
+      "prework": "b0000000-0000-0000-0000-000000000002"
+    },
+    "names": {
+      "rich": "Chen Residence",
+      "prework": "Aspen Loft — Living Room Refresh"
+    },
+    "viewports": [
+      {
+        "key": "1440",
+        "width": 1440,
+        "height": 900,
+        "isMobile": false
+      },
+      {
+        "key": "1280",
+        "width": 1280,
+        "height": 900,
+        "isMobile": false
+      },
+      {
+        "key": "390",
+        "width": 390,
+        "height": 844,
+        "isMobile": true
+      }
+    ],
+    "scrollStates": {
+      "s0": "scrollY 0",
+      "s1": "scrollTo(0, rect(#document-project-status).bottom + scrollY + 1) — letterhead scrolled past",
+      "s2": "[data-region-head=\"ffe\"] scrolled to top, then scrollBy(0, -seam) where seam = --doc-seam-height on [data-document-shell]",
+      "s3": "scrollTo(0, document.documentElement.scrollHeight) — foot"
+    },
+    "selectors": {
+      "letterhead": "#document-project-status",
+      "jobTicket": "[data-job-ticket]",
+      "ticketRows": "[data-job-ticket] [data-ticket-row]",
+      "guideOrAttn": "[aria-label=\"Needs attention\"] OR section[aria-labelledby=\"document-next-up\"]",
+      "instruments": "[aria-label=\"Document letterhead actions\"]",
+      "approvals": "[data-index-region=\"approvals\"]",
+      "scheduleFrame": "section[aria-label=\"Schedule frame\"]",
+      "regionHead": "[data-region-head]",
+      "spine": "[data-document-spine]",
+      "spineMarkerRow": "[data-document-spine] > ul",
+      "marginPanel": "[data-margin-panel]",
+      "marginChip": "[data-margin-panel] [data-margin-item] (falls back to [data-margin-panel] .doc-elevated — no [data-margin-item] exists in source)",
+      "studioDrawer": "[aria-label=\"Studio drawer\"]",
+      "mobileBar": "[aria-label=\"Document bar\"]",
+      "activeSection": "[data-active-section]",
+      "seamVar": "--doc-seam-height (read on [data-document-shell], inherits from :root where job-ticket.tsx publishes it)"
+    },
+    "skippedMeasurements": [
+      "prework/1440/s2: no [data-region-head=\"ffe\"] on this doc/section — skipped",
+      "prework/1280/s2: no [data-region-head=\"ffe\"] on this doc/section — skipped",
+      "prework/390/s2: no [data-region-head=\"ffe\"] on this doc/section — skipped"
+    ]
+  }
+}

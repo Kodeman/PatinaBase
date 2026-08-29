@@ -1,0 +1,196 @@
+<section id="spine" class="dk-sec reg-paper" data-index-title="The document spine">
+  <div class="dk-wrap">
+    <p class="hour"><b>SPINE</b> &middot; the running index</p>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h2 class="dk-h2">The rail is not cluttered because it holds too much. It is cluttered because it holds four tenses at once.</h2>
+        <p class="dk-lede">Six things live in the left edge today. Two of them are about this minute, not about this paper.</p>
+        <p class="dk-p">At 1440 the rail is a 200px column, 900px tall. Measured at rest on the rich project spread it carries <b>54.9%</b> ink, a longest empty run of <b>270px</b>, 8 interactive children and <b>18 distinct text labels</b>. On a pre-work spread the same column carries <b>13.9%</b> ink and a <b>657px</b> empty run, because the marker row is the only thing on it.</p>
+        <p class="dk-p">The diagnosis is not density. The top ~145px mixes leaving, the arc, the moment, and right-now &mdash; four tenses in one block. Below that, a running index reprints the headings the paper is already showing, and beneath that a session timer prints the largest number in the column.</p>
+        <p class="dk-note">Ink, empty runs and label counts from <code>research/12-layout-measurements.md</code> and its JSON sibling (<code>rich.1440.s0.spine</code>). <span class="lvl lvl--sim">sim-verified</span> <span class="lvl lvl--code">code-read</span> for <code>components/document/doc-spine.tsx:44</code>, <code>:47-55</code>, <code>:64</code>, <code>:122-136</code>, <code>:141</code>, <code>:143</code>, <code>:145-155</code>.</p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">The second-look test</p>
+        <blockquote>
+          <p class="dk-lede">Something earns the left edge only if it is true across the whole document at once, or true outside this document.</p>
+        </blockquote>
+        <p class="dk-note">The 2026-08-14 ruling, applied here tenant by tenant rather than as a slogan.</p>
+
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>Today&#8217;s six tenants, put to the test</caption>
+            <thead><tr><th>Tenant</th><th>True across the whole document at once?</th><th>True outside it?</th><th>Verdict</th></tr></thead>
+            <tbody>
+              <tr><th class="dk-row-h"><code>Put down</code></th><td>&mdash;</td><td>yes</td><td><b>Stays</b>, at the edge &mdash; the one control that costs the same at every state.</td></tr>
+              <tr><th class="dk-row-h">The seven-mark arc</th><td>yes &mdash; the job&#8217;s arc, at every offset</td><td>yes &mdash; its siblings are other spreads</td><td><b>Stays</b>, and becomes part of the head.</td></tr>
+              <tr><th class="dk-row-h">The active label pair</th><td>yes</td><td>no</td><td><b>Absorbed</b> into the head&#8217;s stage phrase.</td></tr>
+              <tr><th class="dk-row-h">The running index</th><td>yes</td><td>no</td><td><b>Becomes the ladder.</b></td></tr>
+              <tr><th class="dk-row-h">The timer</th><td>no &mdash; this minute</td><td>no</td><td><b>Evicted</b> to the drawer, which already prints <code>IN HAND TODAY</code>.</td></tr>
+              <tr><th class="dk-row-h">The presence line</th><td>no &mdash; other people, this session</td><td>no</td><td><b>Evicted</b> to the drawer&#8217;s account line.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="f-chips">
+          <a class="f-chip" href="#found">F126 <span>&lsquo;PUT DOWN&rsquo; costs the same at every state</span></a>
+          <a class="f-chip" href="#found">F102 <span>Active label pair duplicates the on-page region heading</span></a>
+          <a class="f-chip" href="#found">F82 <span>Two In-hand clocks on screen showing different times</span></a>
+          <a class="f-chip" href="#found">F137 <span>Presence line is session metadata, not a navigation fact</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F96 <span>Top ~145px of rail mixes leaving, the arc, the moment, and right-now</span></a>
+        </p>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-full">
+      <p class="dk-h4">The rail, before and after</p>
+      <p class="dk-p">Two drawings of the same 200px column, cropped to its top 360px. Both are proposals on paper: the left is the current rail redrawn from the kit to match the captured shot, the right is the rail this document argues for. The photograph of the live rail is in the dark band below.</p>
+      <div class="dk-two">
+        <div>
+          <p class="dk-col-head">Today</p>
+          <!-- FRAGMENT spine-before-360 | col=360 -->
+        </div>
+        <div>
+          <p class="dk-col-head">Proposed</p>
+          <!-- FRAGMENT spine-after-360 | col=360 -->
+        </div>
+      </div>
+    </div>
+
+    <div class="dk-band reg-dark">
+      <p class="dk-h4">What the rail actually looks like now</p>
+      <div class="ev-grid">
+        <figure class="ev-fig">
+          <div class="ev-fig__shot">
+            <img data-shot="w1440-spine-full.png" alt="The left document spine at 1440, Client approvals active">
+          </div>
+          <figcaption class="ev-fig__cap">
+            <b>w1440-spine-full &middot; 1440px, rich spread</b>
+            The 200px column at rest. Ink 54.9% of 900px; longest empty run 270px, at the foot of the rail; 18 distinct text labels.
+            <span class="ev-fig__meta">
+              <span class="lvl lvl--sim">sim-verified</span>
+              <a class="f-chip f-chip--s3" href="#found">F130 <span>270px of rail stock carries nothing at the foot of the rail</span></a>
+            </span>
+          </figcaption>
+        </figure>
+        <figure class="ev-fig">
+          <div class="ev-fig__shot">
+            <img data-shot="w1280-spine-glyph-rail.png" alt="The collapsed glyph-only spine rail at 1280">
+          </div>
+          <figcaption class="ev-fig__cap">
+            <b>w1280-spine-glyph-rail &middot; 1280px</b>
+            At 1180&ndash;1439 the column is 56px and prints six unlabeled bars. The stage word breaks mid-syllable; <code>PUT</code> and <code>DOWN</code> break across two lines.
+            <span class="ev-fig__meta">
+              <span class="lvl lvl--sim">sim-verified</span>
+              <a class="f-chip" href="#found">F15 <span>At 1280 the spine is six unlabeled bars, no words at all</span></a>
+              <a class="f-chip" href="#found">F07 <span>Stage word breaks mid-syllable in the glyph rail</span></a>
+            </span>
+          </figcaption>
+        </figure>
+        <figure class="ev-fig">
+          <div class="ev-fig__shot">
+            <img data-shot="w1440-prework-s0.png" alt="Top of a pre-work proposal document at 1440">
+          </div>
+          <figcaption class="ev-fig__cap">
+            <b>w1440-prework-s0 &middot; the pre-work spread</b>
+            The Aspen Loft proposal. The rail carries 13.9% ink and a 657px empty run because this spread renders no <code>[data-region-head]</code> and no <code>[data-index-region]</code> elements of any kind &mdash; the running index has nothing to index.
+            <span class="ev-fig__meta">
+              <span class="lvl lvl--sim">sim-verified</span>
+              <a class="f-chip" href="#found">F12 <span>On a proposal the rail is almost entirely empty</span></a>
+              <a class="f-chip f-chip--s0" href="#found">F16 <span>Pre-work spreads have no region DOM to index at all</span></a>
+              <a class="f-chip f-chip--s0" href="#found">F94 <span>A proposal-stage document exposes zero region landmarks at all</span></a>
+            </span>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="dk-grid dk-grid--flip">
+      <div class="dk-prose">
+        <h3 class="dk-h3">What the rail shows instead: position, extent, exception, distance.</h3>
+        <p class="dk-p"><b>Position</b> is the reading window &mdash; a <code>--rule-mid</code> bracket in the ladder&#8217;s gutter marking the frame&#8217;s share of the paper&#8217;s extent, travelling 1:1 with scroll. <b>Extent</b> is the drawn segment, above a 36px floor. <b>Exception</b> is the segment&#8217;s value line, in words: <code>36 LINES &middot; 1 DAMAGED SEP 26</code>. <b>Distance</b> is what the whole track carries &mdash; six stops in fixed height, so a stop&#8217;s position on the track says how far ahead of her it is.</p>
+        <p class="dk-p">Extents are derived from the counts <code>lib/document/ticket-derivation.ts:780-793</code> already produces &mdash; FF&amp;E from line count &times; row height plus room count &times; head height, Money from its rung count, approvals from its record count. The ladder never measures a rendered body. A <code>ResizeObserver</code> on region roots would be measuring the thing the lens has just turned into a 112px reserve; the instrument would be erasing its own subject.</p>
+        <p class="dk-p">And one segment is silent at a time. A segment prints nothing at all while its own <code>[data-region-head]</code> is in frame, because the paper is saying it there, at 24px Playfair, with its count line and its printed exceptions beneath. The moment the head scrolls off, the segment un-yields.</p>
+        <p class="dk-note"><span class="lvl lvl--code">code-read</span> <code>src/lib/document/ticket-derivation.ts:780-793</code>, <code>src/components/document/region/region-head.tsx:135</code>, <code>:136-140</code>, <code>src/components/document/spine-running-index.tsx:97-114</code>.</p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">The ladder&#8217;s value lines, on the Vandersteen specimen</p>
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>One string per stop, at every width &mdash; 30 characters is the cap at both desktop tiers</caption>
+            <thead><tr><th>Stop</th><th>Value</th><th>chars</th><th>Leader act, in the region&#8217;s own quiet head</th></tr></thead>
+            <tbody>
+              <tr><th class="dk-row-h">Client approvals</th><td><code>2 AWAITING &middot; 1 OVERDUE 6D</code></td><td class="dk-num">25</td><td><code>SEND A REMINDER</code></td></tr>
+              <tr><th class="dk-row-h">Schedule</th><td><code>INSTALL SEP 15 &middot; 3 WEEKS</code></td><td class="dk-num">24</td><td><code>MOVE THE DATE</code></td></tr>
+              <tr><th class="dk-row-h">Pieces</th><td><code>36 LINES &middot; 1 DAMAGED SEP 26</code></td><td class="dk-num">27</td><td><code>SPEC THE 3 UNSPECIFIED</code></td></tr>
+              <tr><th class="dk-row-h">Money</th><td><code>$17,500 OUT &middot; $12,300 UNDRAWN</code></td><td class="dk-num">29</td><td><code>DRAW AN INVOICE</code></td></tr>
+              <tr><th class="dk-row-h">Closing the book</th><td><code>0 OF 6 CLOSED OUT</code></td><td class="dk-num">17</td><td><code>START THE CLOSE</code></td></tr>
+              <tr><th class="dk-row-h">The record</th><td><code>12 COMPLETE</code></td><td class="dk-num">11</td><td><code>OPEN THE RECORD</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="dk-note">Thirty characters is the cap at both desktop tiers because at 1440&#8217;s 168px inner measure that is two lines of about 23, and at 1280&#8217;s 112px two lines of about 15 &mdash; 31px either way, inside a 36px floor. Values from <code>source/proposal.md</code> &sect;4; specimen data from <code>source/specimen.md</code>.</p>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-full">
+      <p class="dk-h4">The numbers</p>
+      <div class="dk-tablewrap">
+        <table class="dk-table dk-table--compare">
+          <caption>Rail utilisation, today and targeted &mdash; the ink figure and the figure that checks it</caption>
+          <thead><tr><th>Measure</th><th>Today</th><th>Proposed</th></tr></thead>
+          <tbody>
+            <tr><th class="dk-row-h">Rail ink, 1440, rich spread</th><td class="dk-num">54.9</td><td class="dk-num">82.0</td></tr>
+            <tr><th class="dk-row-h">Rail ink, 1440, pre-work spread</th><td class="dk-num">13.9</td><td class="dk-num">82.0</td></tr>
+            <tr><th class="dk-row-h">Rail ink, 1280&times;800</th><td class="dk-num">24.0</td><td class="dk-num">80.0</td></tr>
+            <tr><th class="dk-row-h">Longest empty run, 1440 rich</th><td class="dk-num">270</td><td class="dk-num">96</td></tr>
+            <tr><th class="dk-row-h">Longest empty run, 1440 pre-work</th><td class="dk-num">657</td><td class="dk-num">96</td></tr>
+            <tr><th class="dk-row-h">Longest empty run, 1280&times;800</th><td class="dk-num">296</td><td class="dk-num">102</td></tr>
+            <tr><th class="dk-row-h">Distinct text labels, 1440 at rest</th><td class="dk-num">18</td><td class="dk-num">13</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="dk-note">Percentages are ink over rail height; runs and label counts in px and count. Today&#8217;s column is <code>research/12-layout-measurements.md</code>; the proposed column is computed in <code>source/proposal.md</code> &sect;4 from the rail budget table (<code>Put down</code> 44 + head 100 + rule 2 + track 443 + hair 1 + doors 148 = 738 of 900). The 96px longest run <b>is the <code>pb-24</code> padding</b>, and <code>research/measure-layout.mjs:284-289</code> runs its cursor to <code>spineRect.bottom</code> &mdash; so the claim is true of the instrument that will check it. <span class="lvl lvl--code">code-read</span></p>
+
+      <p class="dk-p"><b>Two numbers ship, not one, and the second is the honest one.</b> The ink metric counts an element as ink over its whole rect if it has own text, a background <i>or a border</i> (<code>research/measure-layout.mjs:245-253</code>). The ladder&#8217;s segments are <code>--rule-hair</code>-bordered, so the track reads as continuous ink whatever it paints. So the probe also prints <b>distinct text labels in the rail at 1440 at rest: today 18, after 13</b> &mdash; <code>Put down</code>, six segment lines, <code>FILED WITH THIS JOB</code> and its four door names, with the head&#8217;s three lines yielded while the letterhead is in frame. The rail gets fuller in claimed rows and quieter in words, and both numbers are reported.</p>
+
+      <p class="dk-p"><b>Where the mockup disagrees with the target, on the record.</b> The clickable mockup measures the ladder at <b>40.8%</b> merged ink at rest &mdash; 343px in 18 runs over an 840px rail &mdash; and <b>92.2%</b> first-to-last-ink span. Against a &ge;70% threshold, the strict reading misses by 29.2 points. The mockup&#8217;s ladder is <code>flex: 1 1 auto</code> rather than the proposal&#8217;s declared 443px track, and the gap is reported rather than closed. The label count is the instrument that survives that disagreement: an ink metric that counts a bordered track as continuous ink can be gamed, and a count of printed words cannot.</p>
+      <p class="dk-note">From <code>mock/final/REVIEW-2.md</code> item 16, SC4. <span class="lvl lvl--sim">sim-verified</span></p>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-grid dk-grid--even">
+      <div class="dk-prose">
+        <h3 class="dk-h3">The pre-work spreads, where the running index prints nothing today</h3>
+        <p class="dk-p">On the Aspen Loft proposal the rail carries a marker row and nothing else. That is not a styling failure. The spread renders zero <code>[data-region-head]</code> and zero <code>[data-index-region]</code> elements, confirmed by direct DOM query during shot capture &mdash; there is no region DOM for an index to attach to.</p>
+        <p class="dk-p">The ladder answers it with one mechanism rather than a special case: <b>the track&#8217;s height is fixed and the segments divide it</b>, so a thinner spread gets bigger segments, not a shorter rail. Four stops means a floor of 4 &times; 36 = 144px and 299px distributed, plus the same four doors. Same geometry, the same 82.0% ink, the same 96px longest run &mdash; against today&#8217;s 13.9% and 657px.</p>
+        <p class="dk-p">The regions themselves still have to exist. Wave 5 gives the four pre-work spreads real region wrappers and real heads so the ladder has something to index, and it is priced at <code>weeks</code>, not smuggled into a smaller wave.</p>
+        <p class="f-chips">
+          <a class="f-chip" href="#found">F12 <span>On a proposal the rail is almost entirely empty</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F16 <span>Pre-work spreads have no region DOM to index at all</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F20 <span>A proposal prints eight rows of nothing above its answer</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F157 <span>Pre-work rail shows no timer card at all, unlike the rich doc</span></a>
+        </p>
+      </div>
+
+      <div class="dk-prose">
+        <h3 class="dk-h3">At 1180&ndash;1439 the rail prints words, and the paper loses nothing</h3>
+        <p class="dk-p">The rail widens from 56px to 136px and prints every label as a word. The engineering seat priced widening at <code>weeks</code> because it moves the paper&#8217;s x-origin. At this tier the arithmetic says it does not: <code>page.tsx:1764</code> gives <code>min-[1180px]:grid-cols-[56px_minmax(0,1fr)]</code> and <code>&lt;main&gt;</code> is <code>max-w-[1040px] justify-self-center</code>. At the tier&#8217;s floor, <b>1180 &minus; 136 = 1044 &ge; 1040</b>, so the paper is already at its cap and the measure is unchanged at every width from 1180 to 1439. 140px is the exact break-even; 136 leaves 4px of slack.</p>
+        <p class="dk-p">Inside <code>px-3</code> that is a 112px measure: <code>Put down</code> prints its word at about 62px, the head prints <code>Vandersteen</code> and wraps <code>PROCUREMENT</code> / <code>&amp; ORDERS</code> / <code>4 OF 6</code> at spaces and never mid-word, every segment prints the same one register and the same value wrapped to two lines, and every door prints its word. No glyph is invented.</p>
+        <p class="dk-note"><span class="lvl lvl--code">code-read</span> <code>src/app/(document)/doc/[id]/page.tsx:1764</code>, <code>:1791</code>; <code>src/components/document/doc-spine.tsx:44</code>, <code>:52</code>. The 136px figure and the 1044 arithmetic are <code>source/proposal.md</code> &sect;4.</p>
+        <p class="f-chips">
+          <a class="f-chip" href="#found">F15 <span>At 1280 the spine is six unlabeled bars, no words at all</span></a>
+          <a class="f-chip" href="#found">F21 <span>Every region&#8217;s spine scent disappears between 1280 and 1440</span></a>
+          <a class="f-chip" href="#found">F07 <span>Stage word breaks mid-syllable in the glyph rail</span></a>
+          <a class="f-chip f-chip--s1" href="#found">F09 <span>Boards, drawings, spec and people vanish below the top</span></a>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,107 @@
+<section class="mock-frame patina-mock" data-screen="today-s1-1440" data-width="1300">
+<div style="width:1300px;height:980px" class="frag-today-s1">
+<style>
+.frag-today-s1{overflow:hidden;position:relative;background:var(--doc-paper,#FCFAF6);box-sizing:border-box;font-family:var(--font-body);display:flex;}
+.frag-today-s1 .t-rail{width:200px;flex:none;background:var(--rail-stock,#E8E3DB);box-sizing:border-box;padding:24px 16px;}
+.frag-today-s1 .t-putdown{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-meta);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-primary);margin-bottom:20px;}
+.frag-today-s1 .t-marks{display:flex;gap:6px;margin-bottom:18px;}
+.frag-today-s1 .t-marks i{display:block;width:18px;height:2px;border-radius:1px;background:var(--color-clay);}
+.frag-today-s1 .t-marks i:nth-child(5),.frag-today-s1 .t-marks i:nth-child(6),.frag-today-s1 .t-marks i:nth-child(7){background:var(--color-pearl);}
+.frag-today-s1 .t-proj{font-size:13px;font-weight:600;color:var(--text-primary);display:block;}
+.frag-today-s1 .t-active{font-family:var(--font-meta);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--color-clay-ink);display:block;margin-top:1px;margin-bottom:22px;}
+.frag-today-s1 .t-label{font-family:var(--font-meta);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:12px;}
+.frag-today-s1 .t-row{padding:7px 0 7px 12px;margin-bottom:1px;}
+.frag-today-s1 .t-row.is-current{border-left:2px solid var(--color-clay);margin-left:-12px;padding-left:12px;background:rgba(196,165,123,.10);}
+.frag-today-s1 .t-row .t-name{display:block;font-size:13px;color:var(--text-primary);line-height:1.2;}
+.frag-today-s1 .t-row.is-current .t-name{font-weight:600;}
+.frag-today-s1 .t-row .t-value{display:block;margin-top:2px;font-family:var(--font-meta);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);}
+.frag-today-s1 .t-inhand{margin-top:14px;background:var(--doc-paper);border:1px solid rgba(44,41,38,.10);border-radius:3px;padding:12px;}
+.frag-today-s1 .t-inhand-dot{font-family:var(--font-meta);font-size:9px;letter-spacing:.08em;color:var(--text-muted);}
+.frag-today-s1 .t-inhand-min{font-family:var(--font-display);font-size:22px;color:var(--text-primary);margin:4px 0;}
+.frag-today-s1 .t-inhand-act{font-family:var(--font-meta);font-size:9px;letter-spacing:.06em;color:var(--color-clay-ink);}
+.frag-today-s1 .t-visible{font-family:var(--font-meta);font-size:9px;letter-spacing:.06em;color:var(--text-muted);margin-top:14px;line-height:1.5;}
+.frag-today-s1 .t-paper{flex:1 1 auto;min-width:0;box-sizing:border-box;padding:36px 40px 0;overflow:hidden;}
+.frag-today-s1 .t-ticket-head{display:flex;justify-content:space-between;font-family:var(--font-meta);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid var(--text-primary);padding-bottom:10px;}
+.frag-today-s1 .t-ticket-head span:last-child{color:var(--color-clay-ink);}
+.frag-today-s1 .t-row2{display:grid;grid-template-columns:110px 1fr 20px;align-items:baseline;padding:9px 0;border-bottom:1px solid rgba(44,41,38,.08);}
+.frag-today-s1 .t-row2 .t-lbl{font-family:var(--font-meta);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--color-clay-ink);}
+.frag-today-s1 .t-row2 .t-val{font-size:14px;color:var(--text-primary);}
+.frag-today-s1 .t-row2 .t-val b{font-weight:600;}
+.frag-today-s1 .t-row2 .t-arrow{color:var(--color-clay);text-align:right;}
+.frag-today-s1 .t-attn{margin-top:12px;border-left:2px solid var(--color-terracotta,#D4A090);background:rgba(212,160,144,.08);border-radius:3px;padding:10px 14px;}
+.frag-today-s1 .t-attn-label{font-family:var(--font-meta);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#C4836F;margin-bottom:6px;}
+.frag-today-s1 .t-attn-row{display:grid;grid-template-columns:1fr auto;gap:12px;padding:4px 0;font-size:13px;color:var(--text-primary);}
+.frag-today-s1 .t-attn-row span:last-child{font-family:var(--font-meta);font-size:11px;letter-spacing:.05em;color:var(--color-clay-ink);text-transform:uppercase;}
+.frag-today-s1 .t-instruments{display:flex;gap:22px;font-family:var(--font-meta);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);padding:14px 0;border-bottom:1px solid rgba(44,41,38,.10);margin-top:2px;}
+.frag-today-s1 .t-instruments span:first-child{color:var(--text-primary);text-decoration:underline;text-underline-offset:3px;}
+.frag-today-s1 .t-seam{display:flex;justify-content:space-between;align-items:baseline;padding:12px 0;border-bottom:1px solid rgba(44,41,38,.08);}
+.frag-today-s1 .t-seam .t-seam-name{font-family:var(--font-display);font-style:italic;font-size:14px;color:var(--text-primary);}
+.frag-today-s1 .t-seam .t-seam-unfold{font-family:var(--font-meta);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--color-clay-ink);}
+.frag-today-s1 .t-noattn{font-size:13px;color:var(--text-muted);padding:14px 0;}
+.frag-today-s1 .t-band{font-family:var(--font-meta);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);padding-top:6px;}
+.frag-today-s1 .t-region-head{display:flex;justify-content:space-between;align-items:baseline;padding-top:12px;}
+.frag-today-s1 .t-region-head h2{font-family:var(--font-display);font-size:22px;font-weight:500;color:var(--text-primary);margin:0;}
+.frag-today-s1 .t-region-head .t-rh-fold{font-family:var(--font-meta);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--color-clay-ink);}
+.frag-today-s1 .t-region-sub{font-size:12.5px;color:var(--text-muted);margin-top:2px;}
+.frag-today-s1 .t-margin{width:232px;flex:none;background:var(--rail-stock,#E8E3DB);box-sizing:border-box;padding:24px 16px;font-family:var(--font-display);font-style:italic;}
+.frag-today-s1 .t-margin-quote{font-size:13px;line-height:1.5;color:var(--text-primary);margin:0 0 12px;}
+.frag-today-s1 .t-margin-meta{font-family:var(--font-meta);font-style:normal;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);margin-bottom:22px;line-height:1.6;}
+.frag-today-s1 .t-margin-label{font-family:var(--font-meta);font-style:normal;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-primary);font-weight:600;margin-bottom:12px;}
+.frag-today-s1 .t-mcard{background:var(--doc-paper);border-radius:3px;padding:10px;margin-bottom:8px;font-style:normal;}
+.frag-today-s1 .t-mcard .t-mc-eyebrow{font-family:var(--font-meta);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--color-clay-ink);margin-bottom:3px;}
+.frag-today-s1 .t-mcard .t-mc-line{font-size:12px;color:var(--text-primary);line-height:1.3;}
+</style>
+<aside class="t-rail">
+  <span class="t-putdown">&larr; PUT DOWN</span>
+  <div class="t-marks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <span class="t-proj">Project</span>
+  <span class="t-active">ACTIVE</span>
+  <p class="t-label">ON THIS PAPER</p>
+  <div class="t-row is-current"><span class="t-name">Client approvals</span><span class="t-value">0 IN THE LOG</span></div>
+  <div class="t-row"><span class="t-name">Schedule</span><span class="t-value">NOT SCHEDULED</span></div>
+  <div class="t-row"><span class="t-name">Pieces</span><span class="t-value">3 PIECES &middot; 0 ROOMS</span></div>
+  <div class="t-row"><span class="t-name">Money</span><span class="t-value">$6,200 OWED</span></div>
+  <div class="t-inhand">
+    <span class="t-inhand-dot">&#9679; IN HAND</span>
+    <div class="t-inhand-min">18 min</div>
+    <span class="t-inhand-act">PAUSE &nbsp; + LOG</span>
+  </div>
+  <p class="t-visible">JUST YOU &middot; VISIBLE TO THE STUDIO</p>
+</aside>
+<div class="t-paper">
+  <div class="t-ticket-head"><span>THE JOB &middot; PROJECT</span><span>FOLD &uarr;</span></div>
+  <div class="t-row2"><span class="t-lbl">ROOMS</span><span class="t-val">No rooms yet</span><span class="t-arrow">&rarr;</span></div>
+  <div class="t-row2"><span class="t-lbl">PIECES</span><span class="t-val">3 unspecified</span><span class="t-arrow">&rarr;</span></div>
+  <div class="t-row2"><span class="t-lbl">DRAWINGS</span><span class="t-val">Nothing filed</span><span class="t-arrow">&rarr;</span></div>
+  <div class="t-row2"><span class="t-lbl">SPEC</span><span class="t-val">0 of 3 specified &middot; by room</span><span class="t-arrow">&rarr;</span></div>
+  <div class="t-row2"><span class="t-lbl">BOARDS</span><span class="t-val">No boards yet &middot; start one</span><span class="t-arrow">&rarr;</span></div>
+  <div class="t-row2"><span class="t-lbl">MONEY</span><span class="t-val"><b>$6,200 owed you, 15 days</b> &middot; $16,330 deposit not drawn</span><span class="t-arrow">&rarr;</span></div>
+  <div class="t-row2"><span class="t-lbl">DATES</span><span class="t-val">No install date yet</span><span class="t-arrow">&rarr;</span></div>
+  <div class="t-row2"><span class="t-lbl">PEOPLE</span><span class="t-val">Nobody on it yet</span><span class="t-arrow">&rarr;</span></div>
+  <div class="t-attn">
+    <div class="t-attn-label">NEEDS ATTENTION &middot; IN ONE PLACE</div>
+    <div class="t-attn-row"><span>Invoice INV-2026-W02 &middot; $3,800 overdue &mdash; oldest due Aug 14 &mdash; send a reminder</span><span>SEND REMINDER</span></div>
+    <div class="t-attn-row"><span>Name the phases for this project</span><span>OPEN THE SCHEDULE</span></div>
+  </div>
+  <div class="t-instruments"><span>MESSAGE THE CLIENT</span><span>PREVIEW AS THE CLIENT</span><span>SHARING &middot; MILESTONES</span><span>CALL SHEET &middot; 0</span></div>
+  <div class="t-seam"><span class="t-seam-name">Client approvals</span><span>NO DECISION LEAD &middot; NO APPROVALS AUTHORED</span><span class="t-seam-unfold">UNFOLD &darr;</span></div>
+  <div class="t-seam"><span class="t-seam-name">Schedule dates</span><span></span><span class="t-seam-unfold">UNFOLD &darr;</span></div>
+  <p class="t-noattn">No active phase handoffs need attention.</p>
+  <p class="t-band">BAND</p>
+  <div class="t-region-head"><h2>Schedule</h2><span class="t-rh-fold">FOLD &uarr;</span></div>
+  <p class="t-region-sub">0 phases &middot; nothing active &middot; next milestone &mdash;</p>
+</div>
+<aside class="t-margin">
+  <p class="t-margin-quote">&mdash; The margin on the right is where decisions and money gather. Esc puts the document down &mdash; and the hours log themselves while it's in your hand.</p>
+  <p class="t-margin-meta">APPEARS ONCE &middot; RECEDES ON USE</p>
+  <p class="t-margin-label">IN THE MARGIN &middot; + NOTE</p>
+  <div class="t-mcard"><div class="t-mc-eyebrow">MONEY &middot; DRAFT</div><div class="t-mc-line">Draft invoice</div></div>
+  <div class="t-mcard"><div class="t-mc-eyebrow">MONEY &middot; SENT</div><div class="t-mc-line">INV-2026-W01</div></div>
+  <div class="t-mcard"><div class="t-mc-eyebrow">MONEY &middot; SENT</div><div class="t-mc-line">INV-2026-W02, 15 days overdue</div></div>
+  <div class="t-mcard"><div class="t-mc-eyebrow">TIME &middot; AUG 29</div><div class="t-mc-line">Time &middot; Aug 29</div></div>
+  <div class="t-mcard"><div class="t-mc-eyebrow">TIME &middot; AUG 27</div><div class="t-mc-line">Time &middot; Aug 27</div></div>
+  <div class="t-mcard"><div class="t-mc-eyebrow">MONEY &middot; VENDOR PAYMENT DUE</div><div class="t-mc-line">Vendor payment &mdash; balance</div></div>
+</aside>
+</div>
+<figcaption>Today's ticket seam &mdash; scrolled past the letterhead: the eight-row job ticket is still fully open here (the letterhead is gone but the ticket has not yet pinned to its two-line collapsed form), then needs-attention, the instruments row, two folded seams and the Schedule head arriving. Drawn from <code>mock/kit.css</code> primitives to match <code>shots/w1440-rich-s1.png</code> exactly as captured &mdash; note: the dedicated two-line pinned seam (<code>shots/w1440-ticket-seam.png</code>, "THE JOB &middot; PROJECT" + one summary line) only appears at a deeper scroll than <code>rich-s1</code> reaches; this fragment shows what <code>rich-s1.png</code> actually contains rather than inventing the seam the fragment's own name implies.</figcaption>
+</section>

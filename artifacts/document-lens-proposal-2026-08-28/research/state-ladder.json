@@ -1,0 +1,40 @@
+{
+  "captured_at": "2026-08-29T02:59:47Z",
+  "designer_id": "a0000000-0000-0000-0000-000000000004",
+  "account": "designer@patina.dev",
+  "rungs": {
+    "rich": {
+      "doc_id": "de922823-d1b9-491a-8ad5-99e8e4f013c5",
+      "name": "Chen Residence",
+      "stage": "project",
+      "ffe_lines": 3,
+      "rooms": 0,
+      "note": "The brief's fixed specimen, Aspen Loft Refresh (b0000000-0000-0000-0000-0000000000d1), has 0 project_ffe_items — below the <10-line floor the brief sets for staying with the fixed specimen. Per the brief's own fallback rule, switched to the richest alternate. Chen Residence and Olsen Lake House were tied at 3 FF&E lines each (0 project_rooms rows for both); chose Chen Residence, matching this program's own reaudit-walk seed script (scripts/the-document-reaudit-walk-seed.sql), which is documented to make red-letter/money non-empty specifically on Chen Residence, and matching the prior Life-directions program's precedent for the same tie."
+    },
+    "prework": {
+      "doc_id": "b0000000-0000-0000-0000-000000000002",
+      "name": "Aspen Loft — Living Room Refresh",
+      "stage": "proposal",
+      "kind": "proposal",
+      "note": "proposal_status='sent' — the only sent (undecided) proposal for this designer. Preferred over the two 'brief'-stage leads and the 'discovery'/'direction' rows per the brief's stated preference order (proposal, then brief). A second proposal-stage row exists (b0000000-0000-0000-0000-000000000001, 'Sample accepted proposal', status='accepted') but 'sent' better represents pre-work (client has not yet acted) than 'accepted'."
+    },
+    "alternate_rich": {
+      "doc_id": "18b5eefb-c6ac-4110-97e9-27ee1ff47ae2",
+      "name": "Olsen Lake House",
+      "stage": "project",
+      "ffe_lines": 3,
+      "rooms": 0,
+      "note": "Tied with Chen Residence at 3 FF&E lines; not chosen (see rich.note)."
+    }
+  },
+  "dev_server": {
+    "pid": 64461,
+    "url": "http://localhost:3000",
+    "log": "research/dev-boot.log",
+    "services": {
+      "media_3014_pid": 64658,
+      "orders_3015_pid": 64603,
+      "projects_3016_pid": 64633
+    }
+  }
+}

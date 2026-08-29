@@ -1,0 +1,201 @@
+<section id="header" class="dk-sec reg-paper" data-index-title="The letterhead/header">
+  <div class="dk-wrap">
+    <p class="hour"><b>HEADER</b> &middot; the letterhead and the lens line</p>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h2 class="dk-h2">The header holds the right information. It also holds a whole frame of it.</h2>
+        <p class="dk-lede">At 1440 at rest, the stack above the first region head measures <b>1005.31px</b> in a 900px frame &mdash; <b>111.7%</b>.</p>
+        <p class="dk-p">Nothing in that stack is wrong. The letterhead names the household, the ticket derives eight true rows, the needs-attention block is the one colour-coded signal on the first screen and a junior&#8217;s eye correctly snaps to it. The defect is arithmetic: they are all printed at once, above everything, and then most of them leave.</p>
+        <p class="dk-p">One full letterhead-scroll later, header and summary content still claims <b>60.7%</b> of the frame and the active region gets <b>10.4%</b>. Scroll a little further and the ticket pins and folds in a single frame &mdash; a 283.19px swap that never registers as a layout shift because it happens inside a sticky box.</p>
+        <p class="dk-p">So the answer is not to compress the header. It is to let the letterhead be the top of a piece of paper &mdash; arrival, once, then gone &mdash; and put one 56px line under it that carries what needs her, with its act, at every offset.</p>
+        <p class="dk-note">Stack measurements from <code>research/12-layout-measurements.json</code>, <code>rich.1440.s0.headerStack</code> and the s1 frame budget. <span class="lvl lvl--sim">sim-verified</span></p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">The stack today, in mount order</p>
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>1440 &times; 900, rich project spread, scroll 0</caption>
+            <thead><tr><th>Organ</th><th>From</th><th>To</th><th>px</th></tr></thead>
+            <tbody>
+              <tr><th class="dk-row-h">Letterhead</th><td class="dk-num">36</td><td class="dk-num">225.31</td><td class="dk-num">189.31</td></tr>
+              <tr><th class="dk-row-h">Job ticket, eight rows</th><td class="dk-num">243.31</td><td class="dk-num">590.56</td><td class="dk-num">347.25</td></tr>
+              <tr><th class="dk-row-h">Needs-attention block</th><td class="dk-num">590.56</td><td class="dk-num">743.31</td><td class="dk-num">152.75</td></tr>
+              <tr><th class="dk-row-h">Instruments row</th><td class="dk-num">747.81</td><td class="dk-num">791.81</td><td class="dk-num">44</td></tr>
+              <tr><th class="dk-row-h">Approvals, folded to a seam</th><td class="dk-num">791.81</td><td class="dk-num">847.31</td><td class="dk-num">55.5</td></tr>
+              <tr><th class="dk-row-h">Schedule frame</th><td class="dk-num">847.31</td><td class="dk-num">949.81</td><td class="dk-num">102.5</td></tr>
+              <tr><th class="dk-row-h">First <code>[data-region-head]</code> (<code>schedule</code>)</th><td class="dk-num">1005.31</td><td>&mdash;</td><td>111.7% of frame</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="dk-note">A <code>FoldSeam</code> prints no <code>[data-region-head]</code>, which is why the first head measured is <code>schedule</code> at 1005.31 and not <code>approvals</code> at 791.81. <span class="lvl lvl--code">code-read</span> <code>src/components/document/region/use-region-fold.ts:104-119</code>.</p>
+        <p class="f-chips">
+          <a class="f-chip f-chip--s0" href="#found">F01 <span>First region head lands a full frame below the fold</span></a>
+          <a class="f-chip f-chip--s1" href="#found">F11 <span>One screen scrolled and nothing has condensed yet</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F47 <span>Top band asks her to hold twenty things at once</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F89 <span>I cannot tell a shipped fold from one I chose</span></a>
+        </p>
+      </div>
+    </div>
+
+    <div class="dk-full">
+      <p class="dk-h4">The paper column, before and after</p>
+      <p class="dk-p">Both drawings are the paper column at its native width, cropped to its top 720px at rest. Above, the header stack as it is. Below, the letterhead, the lens line, and the client-approvals head already in view.</p>
+      <p class="dk-col-head">Today</p>
+      <!-- FRAGMENT header-before-720 -->
+      <p class="dk-col-head">Proposed</p>
+      <!-- FRAGMENT header-after-720 -->
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-grid dk-grid--flip">
+      <div class="dk-prose">
+        <h3 class="dk-h3">A letterhead, and one line.</h3>
+        <p class="dk-p">The letterhead keeps its arrival mark, its 40px Playfair title and its household chip. It sheds the empty vitals fields and <code>PHASES &#9656;</code>, which opens and reveals nothing; the in-hand room row moves to the rail&#8217;s doors, where the release is reachable at every offset rather than at the top alone; and <code>pb-5</code> becomes <code>pb-4</code> above a <code>doc-rule-mid</code>. It costs <b>148px</b> against today&#8217;s 189.31, it happens once, and it leaves.</p>
+        <p class="dk-p">Then the lens line: 56px, declared, at every width and every offset, <code>sticky top-0 z-[4]</code>, carrying <code>#doc-ticket-sentinel</code> immediately above it &mdash; the only sticky element on the paper. Its lower edge is a <code>--rule-mid</code> 1.5px inside its own box, never a shadow, because the shadow budget is spent. Its background is <code>--doc-paper #FCFAF6</code>, fully opaque, so nothing scrolls through it and the composite contrast is the declared contrast.</p>
+        <p class="dk-p"><b>SC1 = 298px</b> at 1440 at rest on the measured seed spread &mdash; 33.1% of the frame, against 1005.31 and 111.7%. Recovery <b>707.31px</b>. On the Vandersteen specimen the vitals row carries real values and prints 21px, so SC1 = <b>319px</b>, 35.4%. Both are stated: the specimen is the world the design must survive and the seed is the world the JSON measured.</p>
+        <p class="dk-p">The number is better than either parent proposal&#8217;s because their moves are additive rather than alternative. One removed the ticket, the instruments and the letterhead&#8217;s surplus and then reserved 136px on the paper for a needs band. The other kept the letterhead whole and replaced the needs block with a 56px band. Taking both, the 152.75px needs block becomes 56px of band that is <i>also</i> the seam, and no reserved block stands on the paper at all.</p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">The stack after, band by band</p>
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>1440 at rest &mdash; every row a declared value, not a measured one</caption>
+            <thead><tr><th>Band</th><th>What changes</th><th>px</th></tr></thead>
+            <tbody>
+              <tr><th class="dk-row-h"><code>&lt;main&gt;</code> <code>pt-8</code></th><td>unchanged (<code>page.tsx:1791</code>)</td><td class="dk-num">32</td></tr>
+              <tr><th class="dk-row-h">Letterhead <code>pt-3.5</code></th><td>unchanged (<code>doc-letterhead.tsx:52</code>)</td><td class="dk-num">14</td></tr>
+              <tr><th class="dk-row-h"><code>lg</code> StrataMark row</th><td>unchanged &mdash; the arrival mark stays (<code>:53-55</code>)</td><td class="dk-num">44</td></tr>
+              <tr><th class="dk-row-h"><code>&lt;h1&gt;</code> 40px / 1.08</th><td>unchanged (<code>:57</code>/<code>:59</code>)</td><td class="dk-num">43</td></tr>
+              <tr><th class="dk-row-h">HouseholdChip</th><td>unchanged (<code>:63</code>)</td><td class="dk-num">29</td></tr>
+              <tr><th class="dk-row-h">Vitals row</th><td>empty fields suppressed; <code>PHASES &#9656;</code> deleted</td><td class="dk-num">0</td></tr>
+              <tr><th class="dk-row-h">In-hand room row</th><td>moves to the rail&#8217;s doors (<code>:69-78</code>)</td><td class="dk-num">-54</td></tr>
+              <tr><th class="dk-row-h">Letterhead <code>pb-5</code> &rarr; <code>pb-4</code> + <code>doc-rule-mid</code></th><td>&minus;4</td><td class="dk-num">18</td></tr>
+              <tr><th class="dk-row-h"><b>Letterhead subtotal</b></th><td>today 189.31</td><td class="dk-num">148</td></tr>
+              <tr><th class="dk-row-h"><code>--doc-region-gap</code></th><td>new token</td><td class="dk-num">24</td></tr>
+              <tr><th class="dk-row-h"><b>The lens line</b></th><td>in flow at rest, pinned below it &mdash; declared</td><td class="dk-num">56</td></tr>
+              <tr><th class="dk-row-h"><code>--doc-region-gap</code></th><td>&mdash;</td><td class="dk-num">24</td></tr>
+              <tr><th class="dk-row-h">Approvals <code>RegionRule</code> 6 + head padding 8</th><td><code>project-approval-document.tsx:588</code>, <code>:590</code></td><td class="dk-num">14</td></tr>
+              <tr><th class="dk-row-h"><b>First <code>[data-region-head]</code></b></th><td>seed spread; 319 on the specimen</td><td class="dk-num">298</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="dk-note">Every row cites a <code>file:line</code> opened in <code>apps/designer-portal/</code>. The vitals row prints 0px on the seed and 21px on the specimen. <span class="lvl lvl--code">code-read</span></p>
+
+        <p class="dk-h4">Where the 56 comes from</p>
+        <p class="dk-p"><code>h-14</code>, border-box: 8.8 padding + line 1 at 11px &times; 1.4 = 15.4 + 2 + line 2 at 15px &times; 1.3 = 19.5 + 8.8 padding + <code>--rule-mid</code> 1.5 = <b>56.0</b>. Both lines are single lines by construction &mdash; <code>white-space: nowrap; overflow: hidden; text-overflow: ellipsis</code> &mdash; so no string it can be handed changes its box.</p>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-full">
+      <p class="dk-h4">The same offset, twice</p>
+      <p class="dk-p">Both are drawings of the paper at the seam &mdash; scrolled past the letterhead. Above, today: the eight-row ticket is still fully open, then needs-attention, the instruments row, two folded seams, and the Schedule head arriving. Below, the lens: the line pinned closed at 56px, and the rail&#8217;s ladder distributing.</p>
+      <!-- FRAGMENT today-s1-1440 -->
+      <!-- FRAGMENT lens-s1-1440 -->
+      <p class="dk-note">The upper drawing reproduces what <code>shots/w1440-rich-s1.png</code> actually contains, not the two-line pinned seam its name implies &mdash; the pinned form only appears at a deeper scroll than that capture reaches. <span class="lvl lvl--sim">sim-verified</span></p>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-grid dk-grid--even">
+      <div class="dk-prose">
+        <h3 class="dk-h3">What the line prints at its shortest</h3>
+        <p class="dk-p">At rest, with the letterhead 60px above it, line 1 prints <b><code>$17,500 OUT</code> and nothing else</b>. The letterhead is already printing the household at 40px Playfair, the stage as the arc, and the date in its vitals, so each of those yields. Money has no yield partner &mdash; the letterhead prints no money &mdash; so money keeps its printing.</p>
+        <p class="dk-p">Line 2, in every state, prints the worst standing exception with its act, and <code>&middot; +3 MORE</code> when it withheld any, in <code>--color-terracotta-ink #9C5340</code> at 5.41:1 on paper. When nothing stands it prints the guide sentence, <code>Name the phases for this project</code> with <code>OPEN THE SCHEDULE</code>, in charcoal. So the shortest the line ever prints is eleven characters of money and one sentence with a verb on it.</p>
+        <p class="dk-p">Below the sentinel, line 1 fills out: <code>VANDERSTEEN RESIDENCE &middot; PROCUREMENT &amp; ORDERS 4 OF 6</code>, with <code>INSTALL SEP 15 &middot; $17,500 OUT</code> right-flush &mdash; 50 characters left, 28 right, about 555px of 11px mono in a 944px measure. While <code>Money</code> is the reading stop the right-flush figure drops, because the money region&#8217;s own head is printing it. And in every state, <b>never the current stop&#8217;s name</b>: the paper&#8217;s own <code>&lt;h2&gt;</code> and the rail&#8217;s window both carry that word already.</p>
+        <p class="dk-p">At 390 the measure is 390 &minus; 56 = 334px, so line 1 carries the two facts the letterhead does not print &mdash; <code>$17,500 OUT &middot; INSTALL SEP 15</code>, 28 characters, about 200px &mdash; and the household goes to the mobile bar&#8217;s left zone, which prints it at every offset for free. The band is 56px there too.</p>
+        <p class="f-chips">
+          <a class="f-chip" href="#found">F13 <span>Below the fold the paper stops naming the job</span></a>
+          <a class="f-chip" href="#found">F10 <span>Five money statements, four numbers, one screen</span></a>
+          <a class="f-chip" href="#found">F50 <span>Seam drops a third standing exception with no trace</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F127 <span>The tan &lsquo;needs attention&rsquo; box is nearly the only colour-coded signal</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F56 <span>A return visit lands me below the job&#8217;s own name</span></a>
+        </p>
+      </div>
+
+      <div class="dk-prose">
+        <h3 class="dk-h3">Truncation is the height contract</h3>
+        <p class="dk-p">Line 2 at 15px in a 944px measure holds about 110 characters; the specimen&#8217;s worst standing exception is 96 before its act. When it overruns, the <b>act&#8217;s words truncate first</b> (<code>SEND A REMINDER</code> &rarr; <code>REMIND</code>), then the subject&#8217;s qualifiers, and <b>never</b> the number, the day-count, or the room.</p>
+        <p class="dk-p">Because the line cannot wrap, that order is the whole of the height contract. It also retires the alternative that was on the table: a pre-ship gate reading <i>if that cannot bring it inside one line at 1280, the band does not ship</i>. A gate is a decision; a truncation order is a mechanism, and a mechanism is what a prober can check on a live string.</p>
+        <p class="dk-p"><code>+3 MORE</code> is a scored act, not a count. It opens a <code>DocSheet</code> listing <b>every</b> standing exception with its own act &mdash; which is strictly more than today, where <code>deriveTicketSeam</code>&#8217;s <code>.slice(0, 2)</code> at <code>ticket-derivation.ts:855</code> drops the third whole and leaves no trace of it.</p>
+        <p class="dk-note"><span class="lvl lvl--code">code-read</span> <code>src/lib/document/ticket-derivation.ts:855</code>. Character counts are <code>source/proposal.md</code> &sect;4 against <code>source/specimen.md</code>. <span class="lvl lvl--inf">inferred</span> for the 944px measure, from <code>page.tsx:1791</code>&#8217;s <code>max-w-[1040px]</code> with <code>px-12</code> at a 1008px paper column.</p>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-full">
+      <p class="dk-h4">The variable that has to go, and every consumer of it</p>
+      <p class="dk-p"><code>--doc-seam-height</code> is published by a <code>useLayoutEffect</code> at <code>job-ticket.tsx:248-259</code>: it measures <code>getBoundingClientRect().height</code> while the ticket is pinned and collapsed, sets the property on <code>document.documentElement</code>, and removes it otherwise. Four things read it. The proposal does not reduce it to zero writers &mdash; it <b>deletes the name from the tree</b>, and replaces it with two declared constants: <code>--doc-band-height: 56px</code> and <code>--doc-landing-clear: calc(var(--doc-band-height) + 1rem)</code> = 72px. A name that no longer exists cannot acquire a second writer.</p>
+
+      <div class="dk-tablewrap">
+        <table class="dk-table dk-table--compare">
+          <caption>Every reader of <code>--doc-seam-height</code> in <code>apps/designer-portal</code>, by grep</caption>
+          <thead><tr><th><code>file:line</code></th><th>What it does today</th><th>What it does after</th></tr></thead>
+          <tbody>
+            <tr>
+              <th class="dk-row-h"><code>components/document/job-ticket.tsx:60</code></th>
+              <td>The producer &mdash; <code>const SEAM_HEIGHT_VAR = '--doc-seam-height'</code>, published from <code>:248-259</code>.</td>
+              <td>Deleted with the component, along with its sentinel at <code>:347</code>, its <code>IntersectionObserver</code> at <code>:218-228</code> and its <code>setFold(null)</code> pin effect at <code>:235-242</code>.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h"><code>app/globals.css:1026</code></th>
+              <td>The schedule glance&#8217;s <code>top</code>, so its own <code>sticky top-0</code> strip stands under the pinned seam instead of painting over it.</td>
+              <td><code>top: var(--doc-band-height)</code>. It stands exactly under the band&#8217;s lower rule and can never re-resolve, because 56 is a constant. <code>schedule-rule.tsx:548</code>&#8217;s <code>h-0</code> is left alone.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h"><code>app/globals.css:1034</code></th>
+              <td><code>[data-index-region] { scroll-margin-top: var(--doc-seam-height, 0px) }</code> &mdash; every region root the ticket&#8217;s rows and the running index land on.</td>
+              <td><code>scroll-margin-top: var(--doc-landing-clear)</code> &mdash; 72px, so the band&#8217;s rule, the region gap and the double rule are not three weights inside 35px of the frame top.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h"><code>app/globals.css:1037</code></th>
+              <td>The FF&amp;E landing floor, <code>max(var(--doc-seam-height, 0px), 4rem)</code>.</td>
+              <td><code>var(--doc-landing-clear)</code>. The <code>max(&hellip;, 4rem)</code> arm is deleted because 72 &gt; 64 &mdash; FF&amp;E keeps more air than today, not less.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h"><code>components/document/commercial/money-region.tsx:48</code></th>
+              <td><code>const SEAM_CLEARANCE = { scrollMarginTop: 'var(--doc-seam-height, 0px)' }</code>, applied at <code>:231</code> and <code>:252</code>.</td>
+              <td><code>scrollMarginTop: 'var(--doc-landing-clear)'</code>.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h"><code>components/document/__tests__/job-ticket.test.tsx:519</code></th>
+              <td>Asserts the property is <code>''</code> while unpinned &mdash; the seam-var lifecycle other pinned elements key off.</td>
+              <td>Goes with the component. <code>page.test.tsx:1361-1382</code>&#8217;s <code>sentinel.nextElementSibling === band</code> survives as a selector rename, and is worth keeping: it is the one assertion stopping a future edit from putting a block between the sentinel and the band.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h"><b>New</b> &mdash; <code>app/globals.css</code></th>
+              <td>No rule exists. Only region roots clear the pinned seam; their child controls do not.</td>
+              <td><code>[data-document-paper] :is(a,button,input,select,textarea,[tabindex]) { scroll-margin-top: var(--doc-landing-clear) }</code>, plus <code>scroll-padding-bottom: 60px</code> on the scrolling root so the colophon&#8217;s last act does not land behind the drawer&#8217;s <code>h-[60px]</code>.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h"><code>var(&hellip;, 0px)</code> fallback arms</th>
+              <td>All four carry one.</td>
+              <td>Gone with the variable. Nothing is registered with <code>@property</code> and none is needed &mdash; a declared constant has no fallback case.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="dk-note">Consumer list from <code>research/10-code-anatomy.md:524-534</code> (its own <code>grep -rn "doc-seam-height" src e2e</code>) and <code>source/proposal.md</code> &sect;9(b). <span class="lvl lvl--code">code-read</span></p>
+
+      <p class="dk-p"><b>What that buys, measurably.</b> The band&#8217;s box in flow is 56px before the pin and 56px after, so the pin displaces nothing. Its height is declared and neither line can wrap, so nothing it says can change its size. And the band is 56px <i>before</i> the late-arriving red-letter query resolves and 56px after &mdash; so the <b>0.1189</b> shift at 3.3&ndash;3.6s, which is 92% of the page&#8217;s cumulative layout shift in both motion registers, has nowhere to land.</p>
+      <p class="f-chips">
+        <a class="f-chip f-chip--s1" href="#found">F04 <span>Ticket pin/fold is a single-frame cut with no hysteresis band</span></a>
+        <a class="f-chip f-chip--s1" href="#found">F34 <span>Continuous seam height breaks every region landing</span></a>
+        <a class="f-chip f-chip--s1" href="#found">F44 <span>Seam height is content-dependent, not a constant</span></a>
+        <a class="f-chip f-chip--s1" href="#found">F37 <span>Registering the seam var kills four var() fallbacks</span></a>
+        <a class="f-chip f-chip--s2" href="#found">F24 <span>The dominant CLS shift is a silent late data-arrival, not motion</span></a>
+        <a class="f-chip f-chip--s0" href="#found">F79 <span>The needs block moves under me seconds after landing</span></a>
+        <a class="f-chip f-chip--s1" href="#found">F87 <span>Schedule glance drifts continuously under a moving seam</span></a>
+        <a class="f-chip f-chip--s2" href="#found">F120 <span>Only region roots clear the pinned seam, not their child controls</span></a>
+        <a class="f-chip f-chip--s1" href="#found">F68 <span>A condensing seam gets zero shadow budget</span></a>
+        <a class="f-chip f-chip--s1" href="#found">F42 <span>Ticket collapse is a silent 283px jump for SR users</span></a>
+      </p>
+    </div>
+  </div>
+</section>

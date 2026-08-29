@@ -1,0 +1,19 @@
+# 62 — Deck revision log · The Smart Lens
+
+## Round 0 — W5a build (run `wf_c0e26a25-790`)
+- Build: exit 0 · PARTS 17 · FRAGMENTS 13 · SHOTS 13 · box-shadow 0 beyond the sanctioned `.doc-elevated` token · non-ASCII 0 · 3.23 MB.
+- QA: externalRequests 0 · pageErrors 0 · consoleErrors 0 · overflow 0 (page) · fontsLoaded · indexRows 15 · contrastFails 0 · boxShadowSweep 0 · **mocksFit FALSE** (3 mocks at 1440, 9 at 390, 2 past viewport).
+- Fact-check (`60-deck-factcheck.md`): 230 rows · 2 UNSOURCED (colophon byte counts 440716 / 602794) · 0 brand hits.
+- Visual QA (`61-deck-visualqa.md`): 80 PNGs read · **2 Blocking** — (1) `header`: a fixed 726–730px block forces page-wide horizontal overflow at every width; (2) `mobile` 390-light: the M390-RICH-S1 photograph renders solid black in light theme only · 2 Should · 2 Note.
+
+## Round 1 — W5b fixes (run `wf_96bc81b6-dd9`)
+Assigned: `07-header.html` (opus) fluid block / overflow · `10-mobile.html` (sonnet) black photograph in light theme · `99-script.html` (sonnet, may touch `00-head.html` .dk-mock rules and fragment outer wrappers) mocksFit · `15-colophon.html` (haiku) measured sizes (deck ≈3.4 MB, mockup 603 KB). Result (run wf_96bc81b6-dd9): gate pass — header overflow fixed (the .dk-two bare-1fr track, min-width:auto); fitMocks() now zeroes viewports before measuring and subtracts the 2px border → mocksFit TRUE; colophon sizes sourced (≈3.4 MB / 603 KB); 10-mobile black photograph NOT fixed (no in-file cause; carried to round 2 as a 00-head sizing issue). Build 3.23 MB, QA clean.
+
+## Round 2 — W5b fixes (orchestrator's own read of the round-1 renders)
+Assigned: `00-head.html` (sonnet) — `.ev-fig__shot img{width:100%}` upscales narrow clips (200×900 spine clip, 390 shots) into enormous tall figures in `spine`/`mobile`; cap at natural width / max-height 720px; re-check the 390-light photograph · `12-build.html` (opus) — one `.dk-table--compare3` collapses to a ~20px column at 1440. Result (run wf_4c145077-bd7): gate pass — `.ev-fig__shot img` capped at natural width / max-height 720px (the black 390 figure was a compositing artefact of a 7,700px-tall section; gone); 12-build's thin column was a bare `.dk-grid--even` wrapper → `.dk-two`. Fresh full visual QA (`61-deck-visualqa-r2.md`, 60 PNGs): 7 Blocking filed — 4 are the deliberate dark register of `today`/`found` (dismissed by the orchestrator: those sections are `reg-dark` by design, as in the Life Review deck); 3 are real: `.ev-fig__shot` boxes keep a fixed height so each screenshot floats in a black band (today ×2 views, spine third figure). 4 Should, 4 Note.
+
+## Round 3 — W5b fix
+Assigned: `00-head.html` (sonnet) — `.ev-fig__shot` hugs its image (no fixed height/aspect; grid items top-aligned); Playwright check box.height − img.height ≤ 24px. Result (run wf_b0f364a5-cb2): build + QA clean, but the orchestrator's read of today-1440-light / spine-1440-dark shows the figures still centred in tall black boxes — the fixer changed align-items only and skipped the measurement; the inflating rule is a height/aspect-ratio, not grid stretch.
+
+## Round 4 — direct fix outside the W5b script
+Assigned: one Sonnet seat with build rights — measure every `.ev-fig__shot` (box.height − img.height) at 1440/390 with Playwright, find and fix the inflating rule in `00-head.html`, rebuild, re-run qa-run, confirm on the PNGs. Result: fixed — `.ev-fig__shot img{width:auto;height:auto;max-width:100%;max-height:720px;object-fit:contain}` in `mock/deck-parts/00-head.html` (line 540); the old `width:100%` rule that upscaled narrow clips into tall black-banded boxes is gone. Measured box−img = 24px at both 1440 and 390 (the `.ev-fig__shot` padding, not slack). Rebuild clean (3.23 MB, PARTS 17, box-shadow 1 sanctioned, non-ascii 0); `qa-run.cjs` clean at all four viewport/theme combinations with `mocksFit` TRUE (`fitOverflow 0, pastVP 0` across all 13 mocks). Deck published as the Artifact linked in RESUME.md.

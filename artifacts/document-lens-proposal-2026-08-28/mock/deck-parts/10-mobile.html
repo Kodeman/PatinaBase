@@ -1,0 +1,90 @@
+<section id="mobile" class="dk-sec reg-paper" data-index-title="Mobile">
+  <div class="dk-wrap">
+    <p class="hour"><b>MOBILE</b></p>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h2 class="dk-h2">Below 1440 the rail runs out of room to say things in words.</h2>
+        <p class="dk-lede">At 1280 the running index survives as a 56px glyph column. At 390 it is not on the canvas at all &mdash; it is a sheet, opened from the bar.</p>
+        <p class="dk-p">At 1280 the six-segment ladder still reports every register, but the column is 56px wide, so it prints glyphs, not the words a 1440 spread shows. `doc-spine.tsx`'s own comment calls the fixed 200px column's remaining measure &ldquo;room to spare&rdquo; for the seven-mark arc &mdash; true for the arc, not for a stage name. A 20-character stage name at 11px mono has nowhere to land, so it wraps, and the wrap lands mid-word.</p>
+        <p class="f-chips">
+          <a class="f-chip f-chip--s2" href="#found">F07 <span>Stage word breaks mid-syllable in the glyph rail</span></a>
+          <a class="f-chip f-chip--s2" href="#found">F03 <span>Studio drawer labels overprint at 1280</span></a>
+        </p>
+        <p class="dk-p">The margin follows the same shape: closed by default at 1280, a sheet rather than a rail, with no presence line printed while it waits.</p>
+      </div>
+      <div class="dk-stage">
+        <div class="dk-band reg-dark">
+          <p class="dk-h4">1280, today</p>
+          <div class="ev-grid">
+            <figure class="ev-fig">
+              <div class="ev-fig__shot">
+                <img data-shot="w1280-spine-glyph-rail.png" alt="The collapsed glyph-only spine rail at 1280, a stage name wrapped mid-word">
+              </div>
+              <figcaption class="ev-fig__cap">
+                <b>w1280-spine-glyph-rail &middot; the rail at rest, 1280px</b>
+                Seven unlabelled rule glyphs, then a stage name broken mid-word across two lines.
+                <span class="ev-fig__meta">
+                  <span class="lvl lvl--sim">sim-verified</span>
+                </span>
+              </figcaption>
+            </figure>
+            <figure class="ev-fig">
+              <div class="ev-fig__shot">
+                <img data-shot="w1280-margin-sheet-open.png" alt="The margin sheet opened as an overlay panel at 1280">
+              </div>
+              <figcaption class="ev-fig__cap">
+                <b>w1280-margin-sheet-open &middot; the margin, tab pressed, 1280px</b>
+                The margin at this width is not a rail at rest &mdash; it is a sheet, and it carries no name until it opens.
+                <span class="ev-fig__meta">
+                  <span class="lvl lvl--sim">sim-verified</span>
+                </span>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h2 class="dk-h3">At 390, one column, and the ladder moves into the sheet she already opens.</h2>
+        <p class="dk-p">The lens band keeps its 56px at 390, unchanged &mdash; the same two lines, carrying the two facts the letterhead does not print, with the household moved into the mobile bar's own left-hand slot so it prints at every offset for free. What changes is the rail: there is none on canvas. The Sections sheet becomes the ladder itself &mdash; the same six stops, the same names, the same values &mdash; plus <code>FILED WITH THIS JOB</code>'s four doors and <code>Put down</code> at the top.</p>
+        <p class="dk-p">Today, that sheet lists only the seven stage names. <code>Client approvals</code>, <code>Schedule</code>, <code>Pieces</code> and <code>Money</code> appear nowhere in it &mdash; reaching Pieces means scrolling roughly 1,050px of an 844px frame. The proposed sheet answers that directly: every one of those four regions, plus <code>Plan room</code>, <code>Spec book</code>, <code>Mood boards</code> and <code>Call sheet</code>, is one tap from the bar, at the same names and values a 1440 designer reads on the rail.</p>
+        <p class="f-chips">
+          <a class="f-chip f-chip--s2" href="#found">F14 <span>At 390 there is no way to jump to a region</span></a>
+          <a class="f-chip f-chip--s2" href="#found">F32 <span>The 390px mobile sheet is more legible than the 1280px "compact" rail</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F97 <span>Boards/Money/People ticket doors need one extra tap at 390</span></a>
+        </p>
+        <p class="dk-p">Every row in the sheet is 44px &mdash; well over the 24px target floor. Today's mobile margin chips, by contrast, are built from ~5px of padding around an unstyled 11px line, with no explicit leading &mdash; an estimated 21&ndash;26px, sitting on the floor rather than clear of it.</p>
+        <p class="f-chips">
+          <span class="f-chip f-chip--s2">F121 <span>Mobile margin chips likely sit under the 24px target floor</span></span>
+        </p>
+      </div>
+      <div class="dk-stage">
+        <!-- FRAGMENT lens-390 | col=390 -->
+        <div class="dk-band reg-dark">
+          <p class="dk-h4">390, today</p>
+          <div class="ev-grid">
+            <figure class="ev-fig">
+              <div class="ev-fig__shot">
+                <img data-shot="m390-rich-s1.png" alt="The document at 390, scrolled past the letterhead">
+              </div>
+              <figcaption class="ev-fig__cap">
+                <b>m390-rich-s1 &middot; past the letterhead, 390px</b>
+                No ladder on canvas at this width today; the only route to a region is the Sections sheet, and the sheet does not yet name Client approvals, Schedule, Pieces or Money.
+                <span class="ev-fig__meta">
+                  <span class="lvl lvl--sim">sim-verified</span>
+                </span>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="dk-note">The fragment on paper is the CSS-built proposal, drawn to its own 390&times;844 native size, never rescaled by hand. The photograph beside it is the live app today, in the dark band where evidence belongs.</p>
+  </div>
+</section>

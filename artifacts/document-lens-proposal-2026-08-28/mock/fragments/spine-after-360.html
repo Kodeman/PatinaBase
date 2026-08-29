@@ -1,0 +1,86 @@
+<section class="mock-frame patina-mock" data-screen="spine-after-360" data-width="200">
+<div style="width:200px;height:360px" class="frag-spine-after-360">
+<style>
+.frag-spine-after-360{overflow:hidden;position:relative;background:var(--doc-paper,#FCFAF6);}
+.frag-spine-after-360{--rule-hair: 1px solid rgba(44, 41, 38, .10);
+--rule-mid: 1.5px solid #2C2926;
+--text-faint: #65594E;
+--rail-stock: #E8E3DB;
+--fill-ordered-tint: #EFE6DA;
+--fill-decision-tint: #F5E7B9;
+--fill-damaged-tint: #F3E5DF;
+--tab-project: #6D4E24;
+--lens-reserve: 225px;
+}
+.lens-reading-window { position: absolute; inset-inline-start: 0px; border-inline-start: var(--rule-mid, 1.5px solid #2C2926); block-size: var(--lens-reading-window-h, 74px); inset-block-start: var(--lens-reading-window-y, 202px); }
+.lens-segment-value { opacity: 1; transition: opacity calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1)); }
+.lens-segment-value[data-region-head-in-frame="true"] { opacity: 0; }
+.lens-rail-head-line { opacity: 1; transition: opacity calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1)); }
+.lens-rail-head-line[data-letterhead-in-frame="true"] { opacity: 0; }
+.lens-nav-segment { color: var(--text-muted, #65594E); }
+.lens-nav-segment[data-reading-index="true"] { color: var(--text-primary, #2C2926); }
+.lens-nav-room-rung { block-size: 0px; overflow: hidden; transition: block-size calc(150ms * var(--motion-scale, 1)) var(--ease-editorial, cubic-bezier(0.22, 1, 0.36, 1)); }
+*, ::before, ::after { box-sizing: border-box; }
+h1, h2, h3, h4, p, ul, ol, li, figure, dl, dd, dt { margin: 0px; padding: 0px; }
+button { font: inherit; color: inherit; background: none; border: 0px; padding: 0px; margin: 0px; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--color-clay-ink); outline-offset: 2px; }
+.spine, .margin { position: sticky; top: 0px; align-self: start; background: var(--rail-stock); overflow: hidden auto; min-width: 0px; }
+.spine { display: flex; flex-direction: column; }
+#frame-1440 .spine, #frame-1440 .margin { height: 840px; }
+.spine { border-right: 1px solid rgba(44, 41, 38, 0.14); padding: 24px 16px; }
+.act { position: relative; isolation: isolate; display: inline-block; padding: 4px 2px 9px; font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-body); transition: transform calc(240ms * var(--motion-scale, 1)) var(--ease-editorial),
+              color calc(150ms * var(--motion-scale, 1)) var(--ease-editorial); }
+.act .da-pool { position: absolute; inset: 2px -5px 5px; z-index: 0; border-radius: 2px; pointer-events: none; background: var(--text-primary); clip-path: circle(0px at var(--ink-x, 50%) var(--ink-y, 50%)); transition: clip-path calc(260ms * var(--motion-scale, 1)) var(--ease-editorial); }
+.act .da-label { position: relative; z-index: 1; display: inline-block; }
+.act .da-label::before { content: ""; position: absolute; left: 0px; right: 0px; bottom: -4px; height: 1px; background: rgba(44, 41, 38, 0.28); transform-origin: left center; transition: height calc(150ms * var(--motion-scale, 1)) var(--ease-editorial),
+              background-color calc(150ms * var(--motion-scale, 1)) linear; }
+.act.is-quiet { color: var(--text-faint); }
+.act.is-quiet .da-label::before { transform: scaleX(0); background: var(--text-faint); transition: transform calc(300ms * var(--motion-scale, 1)) var(--ease-editorial); }
+.act:hover .da-pool { clip-path: circle(3.5px at var(--ink-x, 50%) var(--ink-y, 50%)); transition-duration: calc(180ms * var(--motion-scale, 1)); }
+.act:hover .da-label::before { background: var(--color-clay-ink); }
+.act.is-quiet:hover { color: var(--text-primary); }
+.act.is-quiet:hover .da-label::before, .act.is-quiet:focus-visible .da-label::before { transform: scaleX(1); }
+.act:active { transform: translateY(1px); color: var(--doc-paper); transition-duration: calc(70ms * var(--motion-scale, 1)), calc(120ms * var(--motion-scale, 1)); transition-delay: 0s, calc(60ms * var(--motion-scale, 1)); }
+.act:active .da-pool { clip-path: circle(140% at var(--ink-x, 50%) var(--ink-y, 50%)); transition-duration: calc(200ms * var(--motion-scale, 1)); transition-timing-function: cubic-bezier(0.3, 0.7, 0.2, 1); }
+.strata-mark { display: inline-flex; flex-direction: column; gap: 2.5px; flex: 0 0 auto; }
+.strata-mark i { display: block; height: 2px; border-radius: 999px; background: var(--color-pearl); }
+.strata-mark.size-xs { width: 22px; }
+.strata-mark i:nth-child(1) { width: 100%; }
+.strata-mark i:nth-child(2) { width: 80%; }
+.strata-mark i:nth-child(3) { width: 60%; opacity: 0.55; }
+.strata-mark.state-settled i { background: var(--color-sage); }
+.strata-mark.state-active i { background: var(--color-clay); }
+.strata-mark.state-future i { background: var(--color-pearl); }
+.spine-put-down { margin-bottom: 12px; display: block; min-height: 44px; flex: 0 0 auto; }
+.rail-head { height: 100px; flex: 0 0 auto; }
+.rail-rule-mid, .rail-rule-hair, .doors-head, .door { flex: 0 0 auto; }
+.rail-head-btn { display: block; width: 100%; }
+.rail-name { display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); line-height: 1.4; height: 18px; }
+.rail-arc { display: flex; align-items: center; gap: 3px; height: 44px; }
+.rail-stage { display: block; font-family: var(--font-meta); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); line-height: 16px; }
+.rail-count { display: block; font-family: var(--font-meta); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-primary); line-height: 16px; }
+.rail-rule-mid { height: 0px; border-top: var(--rule-mid); margin: 8px 0px; }
+.rail-rule-hair { height: 0px; border-top: var(--rule-hair); margin: 10px 0px; }
+.ladder { position: relative; padding-left: 10px; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0px; }
+.ladder .lens-reading-window { position: absolute; inset-inline-start: 0px; inset-block-start: 0px; border-inline-start: var(--rule-mid); block-size: var(--lens-reading-window-h, 74px); transform: translateY(var(--lens-reading-window-y, 0px)); }
+.seg-slot { overflow: hidden; border-bottom: var(--rule-hair); }
+.seg-slot:last-child { border-bottom: 0px; }
+.seg { display: block; width: 100%; padding: 6px 0px 6px 6px; }
+.seg-value { display: block; font-family: var(--font-meta); font-size: 11px; line-height: 1.4; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); transition: opacity calc(150ms * var(--motion-scale, 1)) var(--ease-editorial); }
+.lens-nav-segment[data-reading-index="true"] .seg-value { color: var(--text-primary); }
+.seg-value[data-region-head-in-frame="true"] { opacity: 0; }
+.seg { position: relative; }
+.seg-name { position: absolute; left: 6px; right: 0px; top: 6px; font-family: var(--font-meta); font-size: 11px; line-height: 1.4; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); opacity: 0; transition: opacity calc(150ms * var(--motion-scale, 1)) var(--ease-editorial); }
+.seg-name[data-region-head-in-frame="true"] { opacity: 1; }
+.rail-name[data-letterhead-in-frame="true"], .rail-count[data-letterhead-in-frame="true"] { color: var(--text-muted); }
+.rungs { padding-left: 12px; }
+.rung { display: block; width: 100%; min-height: 28px; padding: 4px 0px; }
+.rung-name { font-family: var(--font-meta); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.doors-head { font-family: var(--font-meta); font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); height: 20px; }
+.door { width: 100%; height: 32px; display: flex; align-items: center; }
+.door-name { font-size: 13px; color: var(--text-primary); }
+</style>
+<aside class="spine" id="rail-1440" data-reading-index="approvals" aria-label="This paper"><button type="button" class="act is-quiet spine-put-down" data-put-down="1"><span class="da-pool" aria-hidden="true"></span><span class="da-label">← PUT DOWN</span></button><div class="rail-head"><button type="button" class="rail-head-btn" data-top="1440"><span class="rail-name" data-letterhead-in-frame="true">Vandersteen</span><span class="rail-arc" aria-hidden="true"><span class="strata-mark size-xs state-settled" aria-hidden="true"><i></i><i></i><i></i></span><span class="strata-mark size-xs state-settled" aria-hidden="true"><i></i><i></i><i></i></span><span class="strata-mark size-xs state-settled" aria-hidden="true"><i></i><i></i><i></i></span><span class="strata-mark size-xs state-active" data-breath="1" aria-hidden="true"><i></i><i></i><i></i></span><span class="strata-mark size-xs state-future" aria-hidden="true"><i></i><i></i><i></i></span><span class="strata-mark size-xs state-future" aria-hidden="true"><i></i><i></i><i></i></span><span class="strata-mark size-xs state-future" aria-hidden="true"><i></i><i></i><i></i></span></span><span class="rail-stage lens-rail-head-line" data-letterhead-in-frame="true">PROCUREMENT &amp; ORDERS</span><span class="rail-count" data-letterhead-in-frame="true">4 OF 6</span></button></div><div class="rail-rule-mid" aria-hidden="true"></div><div class="ladder" style="flex-basis:443px"><span class="lens-reading-window" data-window="1" aria-hidden="true" style="--lens-reading-window-y: 0px; --lens-reading-window-h: 67px;"></span><div class="seg-slot" style="flex:59 59 auto;min-height:24px"><button type="button" class="seg lens-nav-segment" data-seg="approvals" data-reading-index="true" aria-label="Client approvals — 2 AWAITING and 1 OVERDUE 6D"><span class="seg-value lens-segment-value" data-region-head-in-frame="true">2 AWAITING · 1 OVERDUE 6D</span><span class="seg-name" data-region-head-in-frame="true">CLIENT APPROVALS</span></button></div><div class="seg-slot" style="flex:54 54 auto;min-height:24px"><button type="button" class="seg lens-nav-segment" data-seg="schedule" data-reading-index="false" aria-label="Schedule — INSTALL SEP 15 and 3 WEEKS"><span class="seg-value lens-segment-value" data-region-head-in-frame="false">INSTALL SEP 15 · 3 WEEKS</span><span class="seg-name" data-region-head-in-frame="false">SCHEDULE</span></button></div><div class="seg-slot" style="flex:177 177 auto;min-height:143px"><button type="button" class="seg lens-nav-segment" data-seg="ffe" data-reading-index="false" aria-label="Pieces — 36 LINES and 1 DAMAGED AUG 26"><span class="seg-value lens-segment-value" data-region-head-in-frame="false">36 LINES · 1 DAMAGED AUG 26</span><span class="seg-name" data-region-head-in-frame="false">PIECES</span></button><div class="rungs" data-rungs="1"><button type="button" class="rung lens-nav-room-rung" data-room-visible="false" data-room="living" aria-pressed="false"><span class="rung-name">Living room</span></button><button type="button" class="rung lens-nav-room-rung" data-room-visible="false" data-room="dining" aria-pressed="false"><span class="rung-name">Dining room</span></button><button type="button" class="rung lens-nav-room-rung" data-room-visible="false" data-room="primary" aria-pressed="false"><span class="rung-name">Primary bedroom</span></button><button type="button" class="rung lens-nav-room-rung" data-room-visible="false" data-room="mudroom" aria-pressed="false"><span class="rung-name">Mudroom</span></button></div></div><div class="seg-slot" style="flex:50 50 auto;min-height:24px"><button type="button" class="seg lens-nav-segment" data-seg="money" data-reading-index="false" aria-label="Money — $17,500 OUT and $12,300 UNDRAWN"><span class="seg-value lens-segment-value" data-region-head-in-frame="false">$17,500 OUT · $12,300 UNDRAWN</span><span class="seg-name" data-region-head-in-frame="false">MONEY</span></button></div><div class="seg-slot" style="flex:52 52 auto;min-height:24px"><button type="button" class="seg lens-nav-segment" data-seg="care" data-reading-index="false" aria-label="Closing the book — 0 OF 6 CLOSED OUT"><span class="seg-value lens-segment-value" data-region-head-in-frame="false">0 OF 6 CLOSED OUT</span><span class="seg-name" data-region-head-in-frame="false">CLOSING THE BOOK</span></button></div><div class="seg-slot" style="flex:51 51 auto;min-height:24px"><button type="button" class="seg lens-nav-segment" data-seg="record" data-reading-index="false" aria-label="The record — 12 COMPLETE"><span class="seg-value lens-segment-value" data-region-head-in-frame="false">12 COMPLETE</span><span class="seg-name" data-region-head-in-frame="false">THE RECORD</span></button></div></div><div class="rail-rule-hair" aria-hidden="true"></div><p class="doors-head">FILED WITH THIS JOB</p><button type="button" class="door"><span class="door-name">Plan room</span></button><button type="button" class="door"><span class="door-name">Spec book</span></button><button type="button" class="door"><span class="door-name">Mood boards</span></button><button type="button" class="door"><span class="door-name">Call sheet</span></button></aside>
+</div>
+<figcaption>The rail as the proposal makes it &mdash; 200px, put-down, the seven-mark head, the running ladder. Top 360px of the live rail at rest.</figcaption>
+</section>

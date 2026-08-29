@@ -1,0 +1,203 @@
+<section id="body" class="dk-sec reg-paper" data-index-title="The document body">
+  <div class="dk-wrap">
+    <p class="hour"><b>BODY</b> &middot; sections, spacing and the margin</p>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h2 class="dk-h2">The sections are crammed into each other because there are three answers to one question.</h2>
+        <p class="dk-lede">Measured button-to-button at every width and every scroll state, the gaps between region heads are <b>{6, 29, 56}</b> px.</p>
+        <p class="dk-p">Three spacings, on a list that reads as one uniform stack of seams. Header-stack-end to <code>Schedule</code> is 56px; <code>Schedule</code> to <code>Pieces</code> is 29px; <code>Pieces</code> to <code>money-head</code> is 6px. They are scroll-invariant and width-invariant, so this is not a responsive artefact &mdash; it is three call sites each deciding for itself.</p>
+        <p class="dk-p">The sharpest case is in the tree. Approvals open is <code>mt-6 &hellip; py-6</code> at <code>project-approval-document.tsx:588</code>; approvals folded is a bare <code>&lt;div data-index-region="approvals"&gt;</code> with no wrapper at all at <code>:565</code>. So folding a region silently changes the gap around it as well as its height.</p>
+        <p class="dk-p"><b>One token replaces all three.</b> <code>--doc-region-gap: 24px</code>, owned by the region wrapper rather than the call site, identical whether the region is full, quiet or folded. That last clause is the load-bearing one: it is what makes a fold a change in density and not a change in the paper&#8217;s geometry.</p>
+        <p class="dk-note">Gap measurements from <code>research/12-layout-measurements.md</code>, <code>distinctGaps</code>, at 1440 and 1280, s0 through s3. <span class="lvl lvl--sim">sim-verified</span> <span class="lvl lvl--code">code-read</span> for <code>src/components/document/approvals/project-approval-document.tsx:565</code>, <code>:588</code>.</p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">Who adopts the token</p>
+        <ul class="dk-ul">
+          <li>The band&#8217;s lower seam</li>
+          <li>Approvals &mdash; <code>approvals/project-approval-document.tsx:565</code>, <code>:588</code></li>
+          <li>The schedule frame &mdash; <code>schedule/schedule-rule-region.tsx:181</code>, <code>:199</code></li>
+          <li>The schedule ledger &mdash; <code>schedule/schedule-spine.tsx:1055-1060</code></li>
+          <li>FF&amp;E &mdash; <code>ffe-section.tsx:1207-1210</code>, <code>:1290</code></li>
+          <li>Money &mdash; <code>commercial/money-region.tsx:227-231</code>, <code>:248-252</code></li>
+          <li>The care band &mdash; <code>care-band.tsx:215</code>, <code>:235</code>, <code>:249</code>, <code>:303</code></li>
+          <li>The direction/proposal head &mdash; <code>page.tsx:2006</code></li>
+          <li>The Record &mdash; <code>previous-work.tsx:37</code></li>
+        </ul>
+
+        <p class="dk-h4">Two exceptions, both structural</p>
+        <p class="dk-p">The <b>colophon</b> keeps <code>mt-14</code> (<code>doc-colophon.tsx:102</code>) because it ends the paper rather than seaming two regions. The <b>FF&amp;E room heads</b> take half the token, <b>12px</b>, so a room reads as inside Pieces rather than beside it. That is one site: <code>RoomHeading</code>&#8217;s own wrapper at <code>ffe-section.tsx:618-620</code>, which carries <code>className="mt-4 scroll-mt-16"</code> &mdash; 16px &mdash; today.</p>
+        <p class="dk-note">Both earlier citations for the room head were wrong and are corrected here: <code>ffe-section.tsx:1213</code> is the install-branch <code>&lt;h2&gt;</code> wrapper and <code>:1302</code> is the <code>RegionHead</code> wrapper. One number, one line, and a ruler on a PNG can check it. <span class="lvl lvl--code">code-read</span></p>
+        <p class="f-chips">
+          <a class="f-chip f-chip--s2" href="#found">F73 <span>Region seams sit at three different gaps</span></a>
+          <a class="f-chip f-chip--s1" href="#found">F107 <span>&lsquo;Folded&rsquo; means one thing for Money, another for Schedule</span></a>
+        </p>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-full">
+      <p class="dk-h4">The lens at the middle of the paper</p>
+      <p class="dk-p">FF&amp;E at <code>full</code>, its neighbours yielded to their condensed line. Exactly one region carries the whole ledger; every other stop on the paper still holds its place, its head, its count and its one act.</p>
+      <!-- FRAGMENT lens-s2-1440 -->
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h3 class="dk-h3">Folded by choice, condensed by position &mdash; told apart in a still</h3>
+        <p class="dk-p">Today four fold verbs print on one screen and none of them says why. A region folded by a derived default and a region folded by her look and read identically, and a designer returning to a document she folded three weeks ago &mdash; the key <code>patina:doc-fold:{docId}:{region}</code> outlives the session &mdash; reads the seam as <i>there is nothing here</i>.</p>
+        <p class="dk-p">The proposal separates the two by giving each its own rule weight, its own typography and its own printed cause. A <b>quiet</b> region keeps its <code>--rule-strong</code> double rule and its 24px Playfair head, and prints a count line and one act. A <b>folded</b> region drops to a single <code>--rule-mid</code>, prints its name in italic with a mono summary, offers <code>UNFOLD &#8595;</code>, and prints <b><code>CLOSED BY YOU</code></b>. An <b>empty</b> region keeps the strong rule and the Playfair head and prints <code>Nothing yet</code> with no count at all.</p>
+        <p class="dk-p">Which makes the discipline a single sentence: <b>a region with a number is quiet, a region with no number is empty</b> &mdash; and a designer reads the difference off a PNG, without hover, without having performed the transition.</p>
+        <p class="dk-p">The mark that makes the distinction honest is upstream of the drawing. The latched derived default stops producing folds and becomes the region&#8217;s initial <b>density</b> instead, after which a <code>FoldSeam</code> can only ever mean <i>you folded this</i>. That has a visible consequence on the first screen of every project document, and it is named rather than shipped quietly: <code>Client approvals</code> and <code>Schedule dates</code> are both folded by a derived default today, and they open on arrival.</p>
+        <p class="dk-note">Cause printed in words, never on a coloured tick: clay measures 1.82:1 on rail stock, which <code>contrast.test.ts:319-325</code> asserts is below AA, and the offender scan at <code>:334-338</code> would not catch it because it greps only for <code>text-[var(${pigment})]</code>. <span class="lvl lvl--code">code-read</span></p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">The four readings</p>
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>What a still screenshot shows, per reading</caption>
+            <thead><tr><th>Reading</th><th>Rule above</th><th>Head</th><th>Line</th><th>Verb</th><th>Cause, printed</th></tr></thead>
+            <tbody>
+              <tr><th class="dk-row-h">full</th><td><code>--rule-strong</code> double</td><td>24px Playfair</td><td>the region&#8217;s own body</td><td><code>FOLD &#8593;</code> in the ledger</td><td>&mdash;</td></tr>
+              <tr><th class="dk-row-h">quiet (by position)</th><td><code>--rule-strong</code> double</td><td>24px Playfair, unchanged</td><td>the count line + the leader, full ink</td><td>none</td><td>&mdash;</td></tr>
+              <tr><th class="dk-row-h">folded (by her)</th><td><code>--rule-mid</code> single</td><td>italic name, mono summary</td><td>the fold summary</td><td><code>UNFOLD &#8595;</code></td><td><b><code>CLOSED BY YOU</code></b></td></tr>
+              <tr><th class="dk-row-h">empty</th><td><code>--rule-strong</code> double</td><td>24px Playfair</td><td><code>Nothing yet</code> &mdash; no count</td><td>none</td><td>&mdash;</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="dk-note">The <code>--rule-mid</code> step on a folded region happens at three call sites, named because they are not inside <code>RegionRule</code>: <code>commercial/money-region.tsx:233</code>, <code>schedule/schedule-rule-region.tsx:182</code>, <code>approvals/project-approval-document.tsx:566</code>. <code>region/region-rule.tsx</code> already takes <code>weight="mid"</code> at <code>:17-22</code> and is not edited, so <code>region-rule.test.tsx:59-74</code> stays green. <span class="lvl lvl--code">code-read</span></p>
+        <p class="f-chips">
+          <a class="f-chip f-chip--s2" href="#found">F54 <span>A folded region never shows whether she or the system closed it</span></a>
+          <a class="f-chip f-chip--s2" href="#found">F59 <span>Scroll-pinned seam and a chosen fold look and read identically</span></a>
+          <a class="f-chip f-chip--s1" href="#found">F93 <span>Four fold verbs on one screen, none says why</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F89 <span>I cannot tell a shipped fold from one I chose</span></a>
+          <a class="f-chip f-chip--s2" href="#found">F64 <span>A late-arriving fold default can close a region she is reading</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F156 <span>Each of the 7 fold regions invents its own empty vocabulary</span></a>
+        </p>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-grid dk-grid--flip">
+      <div class="dk-prose">
+        <h3 class="dk-h3">The line every region must be able to say</h3>
+        <p class="dk-p">A quiet region is the head at 24px Playfair with <code>--rule-strong</code>, one count line of <b>at most forty characters</b> at full ink, and the region&#8217;s one inked leader act &mdash; with the space to the region&#8217;s reserved height left as bare paper.</p>
+        <p class="dk-p">Three things follow, and each is a refusal. Acts do print at reduced density: the one inked leader is required unconditionally by <code>region-head.test.tsx:128-157</code>, so it is not new. Exceptions never go quiet &mdash; unless the band&#8217;s line 2 is currently naming that exact exception, in which case the region withholds it and prints it again the moment the band moves on. And a number never softens: the muted ramp&#8217;s lightest step has about one small step of headroom before 4.5:1 fails, and this proposal does not spend it. <b>Quieter means fewer words, never fainter ones.</b></p>
+        <p class="dk-p">Two printed forms for zero, replacing five: <code>Nothing yet</code> &mdash; the region exists and is empty; <code>Not known yet</code> &mdash; the value is not knowable on this spread. Never a dash. A fallback already prints identically to a live value in the rail today, and a dash is the same mistake in one character.</p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">The count lines, on the specimen</p>
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>In the paper&#8217;s sentence case, at full ink &mdash; forty characters is the ceiling</caption>
+            <thead><tr><th>Region</th><th>Count line</th><th>chars</th></tr></thead>
+            <tbody>
+              <tr><th class="dk-row-h">Client approvals</th><td><code>2 awaiting the client &middot; 1 overdue 6d</code></td><td class="dk-num">36</td></tr>
+              <tr><th class="dk-row-h">Schedule</th><td><code>Install Tue Sep 15 &middot; 3 weeks out</code></td><td class="dk-num">32</td></tr>
+              <tr><th class="dk-row-h">Pieces</th><td><code>36 lines &middot; 4 rooms &middot; 1 damaged</code></td><td class="dk-num">30</td></tr>
+              <tr><th class="dk-row-h">Money</th><td><code>$17,500 out &middot; $12,300 not drawn</code></td><td class="dk-num">31</td></tr>
+              <tr><th class="dk-row-h">Closing the book</th><td><code>0 of 6 closed out</code></td><td class="dk-num">17</td></tr>
+              <tr><th class="dk-row-h">The record</th><td><code>12 complete</code></td><td class="dk-num">11</td></tr>
+              <tr><th class="dk-row-h">The proposal</th><td><code>Sent Aug 19 &middot; not opened</code></td><td class="dk-num">24</td></tr>
+              <tr><th class="dk-row-h">Scope &amp; engagement</th><td><code>Core &middot; stage 03</code></td><td class="dk-num">15</td></tr>
+              <tr><th class="dk-row-h">Design vision</th><td><code>Not written yet</code></td><td class="dk-num">15</td></tr>
+              <tr><th class="dk-row-h">The investment</th><td><code>$184,500 &middot; 20% margin</code></td><td class="dk-num">21</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="dk-note">The last four are the pre-work spread. Every string is <code>source/proposal.md</code> &sect;4 against <code>source/specimen.md</code>; none is longer than 36 characters, so the ceiling holds with four to spare on the worst line.</p>
+        <p class="f-chips">
+          <a class="f-chip f-chip--s0" href="#found">F108 <span>An empty region&#8217;s index line looks identical to a live one</span></a>
+          <a class="f-chip" href="#found">F74 <span>Muted ramp&#8217;s lightest step has narrow headroom before 4.5:1 fails</span></a>
+          <a class="f-chip f-chip--s2" href="#found">F76 <span>No contrast gate covers reduced ink on paper</span></a>
+        </p>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-full">
+      <p class="dk-h4">Three columns, where three columns earn it</p>
+      <div class="dk-tablewrap">
+        <table class="dk-table dk-table--compare3">
+          <caption>The body&#8217;s four changes, with what each one costs</caption>
+          <thead><tr><th>Axis</th><th>Today</th><th>Proposed</th><th>What it costs</th></tr></thead>
+          <tbody>
+            <tr>
+              <th class="dk-row-h">Region seam</th>
+              <td>Three gaps &mdash; 6, 29 and 56px &mdash; each decided at its own call site. Approvals folded has no wrapper at all, so folding changes the spacing around a region as well as its height.</td>
+              <td>One <code>--doc-region-gap: 24px</code>, owned by the region wrapper, identical full, quiet or folded.</td>
+              <td>Nine call sites edited, and two structural exceptions kept and named: the colophon&#8217;s <code>mt-14</code>, and the FF&amp;E room head at half the token.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">Density</th>
+              <td>Fold, or not. A latched derived default folds <code>Client approvals</code> and <code>Schedule dates</code> before she has read either.</td>
+              <td>Two densities, <code>full</code> and <code>quiet</code>. The latched default becomes the region&#8217;s initial density, not its initial fold.</td>
+              <td>A visible change to the first screen of every project document: those two regions now open on arrival. Named, and credited to the wave that makes it.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">Fold cause</th>
+              <td>Four fold verbs on one screen, none saying why; a returning designer reads a seam as an empty region.</td>
+              <td><code>CLOSED BY YOU</code> in words beside a <code>--rule-mid</code> seam; the strong double rule reserved for a region that is merely quiet.</td>
+              <td>The rule step lands at three call sites outside <code>RegionRule</code>, so they are named individually rather than patched inside the shared component.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">Margin</th>
+              <td>232px sticky column at &ge;1440, a 360px sheet at 1180&ndash;1439, and the same seven chips in the same order at top, seam, mid and foot.</td>
+              <td>The first-touch note capped at two lines for good; two printed groups, <code>BESIDE PIECES &middot; 3</code> then <code>THE WHOLE JOB &middot; 4</code>; every item printing its own anchor line.</td>
+              <td>About 40px given back to the two counted headings. Net about <b>+160px of vertical and 0px of width</b>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="dk-rule"></div>
+
+    <div class="dk-grid dk-grid--even">
+      <div class="dk-prose">
+        <h3 class="dk-h3">What the 232px margin gets</h3>
+        <p class="dk-p">The ask says the margin seems cramped for the space it needs. The measurements support the vertical half of that and not the width half, and both halves get an answer rather than one getting a silence.</p>
+        <p class="dk-p">Vertical: nine wrapped lines of first-touch prose, about <b>230px</b>, stand above <code>IN THE MARGIN</code> and the first chip &mdash; <b>25.6%</b> of a 900px column, permanently, on every visit. Width: <code>200 + 1040 + 232 = 1472 &gt; 1440</code>, so 40px taken from the rail buys the margin 40px at exactly 1440 and nothing above it, and costs the rail its whole value line. So the answer is about <b>270px of vertical returned and 0px of width</b>, and the ledger is printed rather than asserted.</p>
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>The margin&#8217;s vertical ledger, at 1440</caption>
+            <thead><tr><th>Change</th><th>px</th></tr></thead>
+            <tbody>
+              <tr><th class="dk-row-h">First-touch note capped at two lines &mdash; <code>margin-note.tsx:9-11</code> already states the once-per-person contract</th><td class="dk-num">160</td></tr>
+              <tr><th class="dk-row-h">The duplicate <code>IN THE MARGIN</code> heading deleted &mdash; <code>margin-rail.tsx:264</code></th><td class="dk-num">40</td></tr>
+              <tr><th class="dk-row-h">Two counted group headings added</th><td class="dk-num">-40</td></tr>
+              <tr><th class="dk-row-h"><b>Net</b>, and 0px of width</th><td class="dk-num">160</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="dk-note">Approximate figures, as the proposal states them: the note&#8217;s exact height depends on its own copy. Chips start at about y 120 instead of about y 350. <span class="lvl lvl--inf">inferred</span> from <code>research/12-layout-measurements.md</code>&#8217;s margin measurements and the two deleted blocks&#8217; own line counts.</p>
+      </div>
+
+      <div class="dk-prose">
+        <h3 class="dk-h3">The margin lifts; it does not filter</h3>
+        <p class="dk-p">Two printed groups &mdash; <code>BESIDE PIECES &middot; 3</code> for items anchored to the region currently at <code>full</code>, then <code>THE WHOLE JOB &middot; 4</code>. Nothing leaves. Items rise and fall between two named groups, which is the room lens&#8217;s own ruling applied to the margin.</p>
+        <p class="dk-p">A group heading is only legible when a group has members, so each item also prints <b>its own anchor line</b> in 11px mono on the card &mdash; <code>BESIDE PIECES</code>, or <code>ABOUT THE WHOLE JOB</code> where it has none. That reading survives a still screenshot and an empty anchor set, which is the real case: all seven margin cards on the specimen are <code>MONEY &middot;</code> and <code>TIME &middot;</code> kinds and none is anchored to Pieces. Empty is printed too: <code>NOTHING BESIDE PIECES YET</code>.</p>
+        <p class="dk-p">At 1180&ndash;1439 the closed tab prints its count and its worst kind, <code>MARGIN &middot; 7 &middot; 1 OVERDUE</code> &mdash; a printed count in a label, not a badge on the drawer. And one rule governs the whole organ: <b>when the band&#8217;s line 2 or a ladder segment is naming a fact, an item anchored to that same fact prints its kind and its subject, never the figure.</b> The band owns money at rest, the Money segment owns it once the band&#8217;s right-flush slot has dropped it, and the margin never prints a third copy.</p>
+        <p class="f-chips">
+          <a class="f-chip" href="#found">F17 <span>The margin never changes as I move down the paper</span></a>
+          <a class="f-chip" href="#found">F28 <span>Nine lines of prose sit above every margin item</span></a>
+          <a class="f-chip" href="#found">F18 <span>At 1280 the margin covers the work and names itself twice</span></a>
+          <a class="f-chip" href="#found">F19 <span>Closed margin tab hides seven items behind no number</span></a>
+          <a class="f-chip" href="#found">F66 <span>Margin rail carries only Money and Time cards, never Orders/PO</span></a>
+          <a class="f-chip" href="#found">F133 <span>Margin chips print the same string twice</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F160 <span>Margin cards print raw seed/debug copy</span></a>
+          <a class="f-chip" href="#found">F10 <span>Five money statements, four numbers, one screen</span></a>
+        </p>
+        <p class="dk-note"><span class="lvl lvl--code">code-read</span> <code>src/components/document/margin-rail.tsx:221-232</code>, <code>:258</code>, <code>:264</code>, <code>:462-468</code>, <code>:486-492</code>, <code>:635</code>; <code>margin-item.tsx</code>; <code>margin-note.tsx:9-11</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>

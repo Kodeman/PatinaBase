@@ -1,0 +1,562 @@
+{
+  "item1_ticket": {
+    "initialTicketHeightAtScroll0": 347.25,
+    "pinScrollY": 280,
+    "foldScrollY": 280,
+    "jumps": [
+      {
+        "atScrollY": 280,
+        "deltaDocY": -283.1875
+      }
+    ],
+    "animationSamples": [
+      {
+        "t": 0,
+        "h": 64.0625
+      },
+      {
+        "t": 17,
+        "h": 64.0625
+      },
+      {
+        "t": 34,
+        "h": 64.0625
+      },
+      {
+        "t": 51,
+        "h": 64.0625
+      },
+      {
+        "t": 68,
+        "h": 64.0625
+      },
+      {
+        "t": 86,
+        "h": 64.0625
+      },
+      {
+        "t": 102,
+        "h": 64.0625
+      },
+      {
+        "t": 121,
+        "h": 64.0625
+      },
+      {
+        "t": 138,
+        "h": 64.0625
+      },
+      {
+        "t": 155,
+        "h": 64.0625
+      },
+      {
+        "t": 172,
+        "h": 64.0625
+      },
+      {
+        "t": 189,
+        "h": 64.0625
+      },
+      {
+        "t": 207,
+        "h": 64.0625
+      },
+      {
+        "t": 225,
+        "h": 64.0625
+      },
+      {
+        "t": 269,
+        "h": 64.0625
+      },
+      {
+        "t": 287,
+        "h": 64.0625
+      },
+      {
+        "t": 304,
+        "h": 64.0625
+      },
+      {
+        "t": 322,
+        "h": 64.0625
+      },
+      {
+        "t": 339,
+        "h": 64.0625
+      },
+      {
+        "t": 357,
+        "h": 64.0625
+      },
+      {
+        "t": 374,
+        "h": 64.0625
+      },
+      {
+        "t": 391,
+        "h": 64.0625
+      },
+      {
+        "t": 407,
+        "h": 64.0625
+      }
+    ],
+    "stepsSampled": 77,
+    "lastStep": {
+      "scrollY": 2722,
+      "pinned": true,
+      "unfolded": false,
+      "ticketTop": 0,
+      "ticketHeight": 64.0625,
+      "seamHeight": "64px",
+      "firstRegionHeadKey": "schedule",
+      "firstRegionHeadY": -1999.875,
+      "currentButtons": [
+        {
+          "current": "false",
+          "label": "Client approvals"
+        },
+        {
+          "current": "false",
+          "label": "Schedule"
+        },
+        {
+          "current": "false",
+          "label": "Pieces"
+        },
+        {
+          "current": "true",
+          "label": "Money"
+        }
+      ]
+    }
+  },
+  "item2_scrollspy": {
+    "transitions": [
+      {
+        "scrollY": 400,
+        "from": "Client approvals",
+        "to": "Schedule",
+        "regionHeadY": 322.125
+      },
+      {
+        "scrollY": 1200,
+        "from": "Schedule",
+        "to": "Pieces",
+        "regionHeadY": -477.875
+      },
+      {
+        "scrollY": 1960,
+        "from": "Pieces",
+        "to": "Money",
+        "regionHeadY": -1237.875
+      }
+    ],
+    "totalSteps": 77
+  },
+  "item8_cls_normal": {
+    "total": 0.12856336379424044,
+    "top3": [
+      {
+        "value": 0.11894864359621485,
+        "hadRecentInput": false,
+        "startTime": 3600.5999999940395,
+        "sources": [
+          "DIV.scroll-mt-24.focus-visible:outline.focus-visible:outline-2.focus-visible:outline-offset-2.focus-visible:outline-[var(--color-clay)] \"Workflow stageBandSchedule0 phases · not\"",
+          "SECTION.rounded-[3px].border-l-2.border-[var(--color-terracotta)].bg-[rgba(212,160,144,0.08)].px-3.5.py-2.5 \"Needs attention · in one placeInvoice IN\"",
+          "SECTION.mb-4 \"Schedule datesunfold ↓No active phase ha\""
+        ]
+      },
+      {
+        "value": 0.007744911937164181,
+        "hadRecentInput": false,
+        "startTime": 2244.89999999851,
+        "sources": [
+          "SECTION.mb-4 \"Schedule datesunfold ↓No active phase ha\""
+        ]
+      },
+      {
+        "value": 0.0010025553385416667,
+        "hadRecentInput": false,
+        "startTime": 1434,
+        "sources": [
+          "BUTTON.relative.inline-flex.min-h-11.items-center.gap-1.5.rounded-[3px].px-2.5.py-2.text-[var(--text-body)].transition-colors.hover:bg-[var(--bg-hover)].focus-visible:outline.focus-visible:outline-2.focus-visible:outline-offset-[-2px].focus-visible:outline-[var(--color-clay)] \"The Post\"",
+          "SPAN.inline-flex.min-h-11.items-center.gap-1.5.whitespace-nowrap.px-2.py-1.5 \"Hands free\"",
+          "BUTTON.ml-1.flex.shrink-0.items-center.gap-2.rounded-[5px].border.border-transparent.py-[0.3rem].pl-1.pr-2.transition-colors.hover:border-[rgba(196,165,123,0.45)].focus-visible:outline.focus-visible:outline-2.focus-visible:outline-offset-2.focus-visible:outline-[var(--color-clay)] \"DEdesigner@patina.dev\""
+        ]
+      }
+    ],
+    "entryCount": 20
+  },
+  "item1_unfold_click": {
+    "unfoldClicked": true,
+    "beforeUnfold": {
+      "seamHeight": "64px",
+      "firstRegionHeadY": 442.125
+    },
+    "afterUnfold": {
+      "seamHeight": "",
+      "firstRegionHeadY": 725.3125,
+      "unfolded": "true",
+      "pinned": "true"
+    }
+  },
+  "item2_jump_clicks": {
+    "entryCount": 4,
+    "jumpResults": [
+      {
+        "index": 0,
+        "label": "Client approvals",
+        "immediateCurrents": [
+          "true",
+          "false",
+          "false",
+          "false"
+        ],
+        "settledCurrents": [
+          "true",
+          "false",
+          "false",
+          "false"
+        ]
+      },
+      {
+        "index": 1,
+        "label": "Schedule",
+        "immediateCurrents": [
+          "false",
+          "true",
+          "false",
+          "false"
+        ],
+        "settledCurrents": [
+          "false",
+          "true",
+          "false",
+          "false"
+        ]
+      },
+      {
+        "index": 2,
+        "label": "Pieces",
+        "immediateCurrents": [
+          "false",
+          "false",
+          "true",
+          "false"
+        ],
+        "settledCurrents": [
+          "false",
+          "false",
+          "true",
+          "false"
+        ]
+      },
+      {
+        "index": 3,
+        "label": "Money",
+        "immediateCurrents": [
+          "false",
+          "false",
+          "false",
+          "true"
+        ],
+        "settledCurrents": [
+          "false",
+          "false",
+          "false",
+          "true"
+        ]
+      }
+    ]
+  },
+  "item3_region_fold": {
+    "attempted": true,
+    "preExistingSeams": [
+      "project-approvals-title",
+      "schedule-rule-title",
+      "care-band-heading"
+    ],
+    "hasBodyControl": true,
+    "beforeFocus": {
+      "tag": "BUTTON",
+      "name": "Sync from the schedule"
+    },
+    "bodyUnmounted": true,
+    "afterFocus": {
+      "tag": "BODY",
+      "name": "(self.__next_s=self.__next_s||[]).push([0,{\"children\":\"globa"
+    },
+    "seam": {
+      "height": 49.5,
+      "text": "Moneyno budget yet · $0 authorizedunfold ↓"
+    },
+    "seamStyle": {
+      "fontStyle": "normal",
+      "fontSize": "18px",
+      "color": "oklch(0.376 0.0225 64.3434)"
+    },
+    "emptyStateStyle": null,
+    "focusAfterUnfold": {
+      "tag": "H2",
+      "id": "money-region-heading",
+      "name": "Money"
+    }
+  },
+  "item4_esc_cmdk": {
+    "escAtRest": {
+      "urlBefore": "http://localhost:3000/doc/de922823-d1b9-491a-8ad5-99e8e4f013c5",
+      "urlAfterEscAtRest": "http://localhost:3000/desk",
+      "navigatedAway": true
+    },
+    "cmdK": {
+      "opened": true,
+      "dialogRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1440,
+        "height": 900
+      },
+      "dialogMaxHeight": "468px",
+      "groupsTextSample": [
+        "Accounts",
+        "LEDGER",
+        "G A",
+        "Ask about “money”",
+        "ASK & PLACE"
+      ],
+      "dialogGoneAfterEsc": true,
+      "preCmdKFocused": "BODY",
+      "focusAfterCmdKClose": "BODY",
+      "focusReturnedToPrior": true
+    }
+  },
+  "item5_hover_wash_normal": {
+    "normalMotionSamples": [
+      {
+        "t": 0,
+        "clipPath": "circle(0% at 50% 50%)",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 17,
+        "clipPath": "circle(20.0611% at calc(43.313% + 0.668704px) calc(43.313% + 5.18246px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 34,
+        "clipPath": "circle(56.3837% at calc(31.2054% + 1.87946px) calc(31.2054% + 14.5658px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 50,
+        "clipPath": "circle(86.6313% at calc(21.1229% + 2.88771px) calc(21.1229% + 22.3797px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 67,
+        "clipPath": "circle(108.197% at calc(13.9343% + 3.60657px) calc(13.9343% + 27.9509px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 84,
+        "clipPath": "circle(122.623% at calc(9.12562% + 4.08744px) calc(9.12562% + 31.6776px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 100,
+        "clipPath": "circle(131.675% at calc(6.10843% + 4.38916px) calc(6.10843% + 34.016px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 118,
+        "clipPath": "circle(138.867% at calc(3.71088% + 4.62891px) calc(3.71088% + 35.8741px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 135,
+        "clipPath": "circle(143.065% at calc(2.31171% + 4.76883px) calc(2.31171% + 36.9584px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 152,
+        "clipPath": "circle(146.007% at calc(1.33115% + 4.86688px) calc(1.33115% + 37.7184px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 170,
+        "clipPath": "circle(147.603% at calc(0.798912% + 4.92011px) calc(0.798912% + 38.1308px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 186,
+        "clipPath": "circle(148.772% at calc(0.40931% + 4.95907px) calc(0.40931% + 38.4328px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 203,
+        "clipPath": "circle(149.443% at calc(0.185585% + 4.98144px) calc(0.185585% + 38.6062px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 220,
+        "clipPath": "circle(149.78% at calc(0.0733222% + 4.99267px) calc(0.0733222% + 38.6932px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 236,
+        "clipPath": "circle(149.931% at calc(0.0228409% + 4.99772px) calc(0.0228409% + 38.7323px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 254,
+        "clipPath": "circle(149.99% at calc(0.00317363% + 4.99968px) calc(0.00317363% + 38.7475px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 271,
+        "clipPath": "circle(150% at calc(2.79041e-06% + 5px) calc(2.79041e-06% + 38.75px))",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 288,
+        "clipPath": "circle(150% at 5px 38.75px)",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 305,
+        "clipPath": "circle(150% at 5px 38.75px)",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 324,
+        "clipPath": "circle(150% at 5px 38.75px)",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 342,
+        "clipPath": "circle(150% at 5px 38.75px)",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 359,
+        "clipPath": "circle(150% at 5px 38.75px)",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 376,
+        "clipPath": "circle(150% at 5px 38.75px)",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 392,
+        "clipPath": "circle(150% at 5px 38.75px)",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      },
+      {
+        "t": 409,
+        "clipPath": "circle(150% at 5px 38.75px)",
+        "bg": "rgba(196, 165, 123, 0.16)"
+      }
+    ],
+    "resolvedBg": "rgba(196, 165, 123, 0.16)"
+  },
+  "item9_timer_t0": {
+    "presenceText": "Just you · visible to the studio",
+    "timerText": "under a min",
+    "timerPresent": true
+  },
+  "item9_timer_t65": {
+    "presenceText": "Just you · visible to the studio",
+    "timerText": "1 min",
+    "timerPresent": true
+  },
+  "item8_cls_reduced": {
+    "total": 0.13184320066684885,
+    "top3": [
+      {
+        "value": 0.11894864359621485,
+        "hadRecentInput": false,
+        "startTime": 3303.7999999970198,
+        "sources": [
+          "DIV.scroll-mt-24.focus-visible:outline.focus-visible:outline-2.focus-visible:outline-offset-2.focus-visible:outline-[var(--color-clay)] \"Workflow stageBandSchedule0 phases · not\"",
+          "SECTION.rounded-[3px].border-l-2.border-[var(--color-terracotta)].bg-[rgba(212,160,144,0.08)].px-3.5.py-2.5 \"Needs attention · in one placeInvoice IN\"",
+          "SECTION.mb-4 \"Schedule datesunfold ↓No active phase ha\""
+        ]
+      },
+      {
+        "value": 0.008077972788869599,
+        "hadRecentInput": false,
+        "startTime": 1990.6999999955297,
+        "sources": [
+          "SECTION.mb-4 \"Schedule datesPhase datesunfold ↓No acti\""
+        ]
+      },
+      {
+        "value": 0.0034635759602194786,
+        "hadRecentInput": false,
+        "startTime": 1961.5999999940395,
+        "sources": [
+          "SECTION.rounded-[3px].border-l-2.border-[var(--color-terracotta)].bg-[rgba(212,160,144,0.08)].px-3.5.py-2.5 \"Needs attention · in one placeInvoice IN\"",
+          "SECTION.mt-6.min-w-0.border-y.border-[var(--border-subtle)].py-6 \"Exact artifact · named authorityClient a\"",
+          "DIV.flex.flex-wrap.items-center.gap-x-3.gap-y-2.mt-1 \"Message the clientPreview as the clientS\""
+        ]
+      }
+    ],
+    "entryCount": 8
+  },
+  "item5_hover_wash_reduced": {
+    "immediateStyle": {
+      "clipPath": "circle(0px at 450px 38.75px)",
+      "bg": "rgba(196, 165, 123, 0.12)",
+      "transition": "none"
+    }
+  },
+  "item6_margin_1280": {
+    "triggerVisible": true,
+    "rect": {
+      "x": 920,
+      "y": 0,
+      "width": 360,
+      "height": 900
+    },
+    "mode": "sheet",
+    "firstHeadBefore": 1005.3125,
+    "firstHeadAfter": 1005.3125,
+    "reflowed": false,
+    "panelHiddenAfterEsc": true,
+    "preEscFocused": "BUTTON",
+    "focusReturnedToTrigger": true
+  },
+  "item7_mobile_390": {
+    "hasSectionsBtn": true,
+    "sheetVisible": true,
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 844
+    },
+    "rowCount": 12,
+    "bodyOverflowBefore": "hidden auto",
+    "bodyOverflowDuring": "hidden",
+    "scrollLocked": true,
+    "sheetGone": true,
+    "bodyOverflowAfter": "hidden auto",
+    "barRectBefore": {
+      "x": 0,
+      "y": 767.109375,
+      "width": 390,
+      "height": 76.890625
+    },
+    "barRectAfter": {
+      "x": 0,
+      "y": 767.109375,
+      "width": 390,
+      "height": 76.890625
+    },
+    "bottomInset": "max(\n    64px,\n    calc(52px + 0px)\n  )"
+  }
+}
