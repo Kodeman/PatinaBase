@@ -19,7 +19,7 @@ Run this once to set the Chrome window to exactly 1280×800 at screen origin (Re
 osascript -e 'tell app "Google Chrome" to set bounds of window 1 to {0, 0, 1280, 800}'
 ```
 
-Verify the window is pinned to top-left and shows no scroll. If AppleScript doesn't work on your version of Chrome, fall back to interactive pick: `screencapture -i ~/Desktop/frame-test.png` (select the panel), note the size, and adjust as needed.
+Verify the window is pinned to top-left and shows no scroll. If AppleScript doesn't work on your version of Chrome or Chrome isn't running, fall back to interactive pick: `screencapture -i ~/Desktop/frame-test.png` (select the Chrome window), note the size, and adjust as needed. This is safer — use it if osascript times out.
 
 ## Capture (repeat for each frame)
 
@@ -39,11 +39,11 @@ mv ~/Desktop/frame-N.png /path/to/worktree/docs/design/capture-launch/screenshot
 
 | # | Vendor URL | Panel state (how to reach it) | What must be visible | Caption | Gate |
 |---|---|---|---|---|---|
-| 1 | https://www.roomandboard.com/products/stevens-sofas | Open the extension on the URL; let extraction finish | Name, Price, Brand (if extracted), and verified/guessed badges visible | Reads the page you're on. | None |
+| 1 | https://www.roomandboard.com/products/stevens-sofas | Open the extension on the URL; let extraction finish | Record fields (Name, Price, Brand, SKU / model #, Dimensions, Materials, Finish, Description) with verified/guessed badges visible | Reads the page you're on. | None |
 | 2 | https://www.dwr.com/products/eames-lounge-chair-and-ottoman-walnut | Open the extension; scroll down to see Brand row showing "Herman Miller" and Dimensions row below it | Brand row displaying "Herman Miller", Dimensions row visible, both with verified badges | Manufacturer, not just retailer. | **CL-R12**: Brand must read as "Herman Miller" (not "Design Within Reach"). Check `extraction-report.json` DWR fixture before shooting. |
-| 3 | https://www.hermanmiller.com/products/seating/lounge-seating/eames-lounge-chair-and-ottoman/ | Open the extension; select a project from destination dropdown; select a room; then select an empty FF&E line in that room | Room and FF&E line chosen, primary button visible and ready to click | Saves straight into the room. | **CL-R10**: Primary button must say "Save & fill" or "Save & create line" — no "slot" or bare decision noun. Quote the exact label from `CommitBar.tsx` line 154–157. |
+| 3 | https://www.hermanmiller.com/products/seating/lounge-seating/eames-lounge-chair-and-ottoman/ | Open the extension; select destination "An open spot in a room" from dropdown; select a project and room; then select an empty FF&E line | Destination option and FF&E line chosen, primary button visible | Saves straight into the room. | **CL-R10**: Primary button must say "Save into this room" or "Add to this room" (from `CommitBar.tsx` line 154–156). Quote the exact label visible in the actual destination flow. |
 | 4 | https://www.1stdibs.com/furniture/lighting/chandelier/ (pick any multi-image listing) | Open the extension; tap the hero image to open the C3 image-selection sheet | Image carousel visible with multiple thumbnails and selection controls | Pick the image that's right. | None |
-| 5 | Any of the above URLs | Complete a save to library (frame 1–4 can be re-used) and wait for the terminal screen; then note the "Recent" list showing the saved item | "Saved to your library" confirmation text and at least one entry in the Recent list below | Saved. Ready for your eye. | None |
+| 5 | Any of the above URLs | Complete a save to library (frame 1–4 can be re-used) and wait for the terminal screen; then note the "Recent" list showing the saved item | "Saved to your library" heading and at least one entry in the Recent list below | Saved. Ready for your eye. | None |
 
 ## After shooting
 
