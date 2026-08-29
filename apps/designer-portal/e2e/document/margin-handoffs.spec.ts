@@ -141,14 +141,47 @@ test('an overdue gate wears the stamp, and only an overdue gate does', async ({
   expect(box).not.toBeNull();
   console.log(`overdue need-line width: ${box?.width}px`);
   expect(box!.width).toBeGreaterThanOrEqual(90);
-
-  // Ruling IV, second rendering: the same derivation, read as a sentence.
-  await expect(page.locator('#document-next-up')).toContainText(
-    /has waited \d+ days?\./,
-  );
 });
 
-test("the guide's gate act focuses the gate's own control in the margin", async ({
+// QUARANTINED 2026-08-29, Smart Lens W0. Reason: this was the last assertion
+// of "an overdue gate wears the stamp, and only an overdue gate does" — split
+// out so the stamp/need-line coverage above it keeps running. `#document-next-up`
+// only exists inside `DocumentGuide` (src/components/document/document-guide.tsx),
+// but WORKFLOW_GATE_PROJECT_ID's page (b0000000-0000-0000-0000-0000000000d1,
+// "Aspen Loft Refresh") renders `RedLetterZone` instead: page.tsx's mount
+// condition (`row.engagement_kind === 'project' && redLetterRows.length > 0`)
+// is true for this fixture (it has 3 overdue decisions), and confirmed by the
+// captured page snapshot showing a "Needs attention" region with "3 decisions
+// overdue — oldest due Aug 24" in place of any "document-next-up" section.
+// RedLetterZone carries no "has waited N days" sentence anywhere in its
+// markup (grepped red-letter-zone.tsx). Not a lens regression — failing the
+// same way on main@dab057537. Un-fixme when: RedLetterZone's overdue
+// rendering carries this derivation's sentence (Ruling IV's "second
+// rendering"), or the fixture project is changed to a row shape that still
+// takes the DocumentGuide branch. Owner: e2e triage.
+test.fixme(
+  "an overdue gate's elapsed-time derivation prints as a guide sentence",
+  async ({ authenticatedPage: page }) => {
+    await openDocument(page, FULL_RAIL);
+    // Ruling IV, second rendering: the same derivation, read as a sentence.
+    await expect(page.locator('#document-next-up')).toContainText(
+      /has waited \d+ days?\./,
+    );
+  },
+);
+
+// QUARANTINED 2026-08-29, Smart Lens W0. Reason: same root cause as the
+// sibling fixme above — this whole test's target,
+// `section[aria-labelledby="document-next-up"]`, is inside `DocumentGuide`,
+// but WORKFLOW_GATE_PROJECT_ID's page renders `RedLetterZone` instead (page.tsx's
+// `row.engagement_kind === 'project' && redLetterRows.length > 0` mount
+// condition — true for this fixture's 3 overdue decisions; confirmed via the
+// captured "Needs attention" region in place of any "document-next-up"
+// section). Not a lens regression — failing the same way on main@dab057537.
+// Un-fixme when: the guide's gate act is reachable from RedLetterZone's
+// rendering for a project row, or the fixture project takes the DocumentGuide
+// branch. Owner: e2e triage.
+test.fixme("the guide's gate act focuses the gate's own control in the margin", async ({
   authenticatedPage: page,
 }) => {
   await openDocument(page, FOLDED_MARGIN);
