@@ -184,20 +184,29 @@ instead of an update.
 
 ## Analytics check (PostHog)
 
-`captureAnalytics()` (`apps/extension/src/state/effects.ts:119-126`) fires
-`extensionEvents.productCapture(...)` (`src/lib/analytics.ts:94-108`) on every
+Depends on lane **W3-E10** (branch `capture-launch/w3-e10`, `859ffb0cd`),
+merging into `capture-launch/integration` next — confirm it has landed before
+running this check.
+
+`captureAnalytics()` (`apps/extension/src/state/effects.ts`) fires
+`extensionEvents.productCapture(...)` (`src/lib/analytics.ts`) on every
 successful save (`product.captured`), `distinct_id` = your `<uid>` (the
-extension calls `ph.identify(userId, ...)` — `analytics.ts:41-49`).
+extension calls `ph.identify(userId, ...)` — `analytics.ts`). As of CL
+W3-E10, this event carries `domain` (the source page's hostname, `www.`
+stripped — `sourceDomain()` in `effects.ts`) and `destination` (the
+commit-target kind the save actually landed on — the `CaptureDestination`
+union: `library | project_inbox | fill_slot | create_line | inbox | decision
+| update`) alongside `captureTimeMs` (elapsed ms from opening the panel to
+this save, threaded from `controller.captureStartedAt`).
 
 ```sql
 select timestamp,
        properties.source,
-       properties.hasImages,
-       properties.hasPrice,
-       properties.confidence,
-       properties.captureMethod,
+       properties.domain,
        properties.destination,
-       properties.captureTimeMs
+       properties.captureTimeMs,
+       properties.confidence,
+       properties.captureMethod
 from events
 where event = 'product.captured'
   and distinct_id = '<uid>'
@@ -205,25 +214,47 @@ order by timestamp desc
 limit 10
 ```
 
-Run in PostHog's SQL/HogQL insight editor. Expect **4 rows** (steps 1–4 each
-call `captureAnalytics`; step 5, `updateExisting`, also calls it — so 5 rows
-total, one per write-path step run above).
+Run in PostHog's SQL/HogQL insight editor. Expect **5 rows**, one per
+write-path step above, each with `properties.domain = 'roomandboard.com'`
+(no `www.`) and `properties.captureTimeMs` a positive number in the
+low-thousands (ms). `properties.destination` must match the step that
+produced it — this is the check that actually proves each of the five write
+paths landed where it was supposed to, not just that *a* product row
+appeared:
 
-**⚠ Known gap, not a walk failure**: `properties.destination` and
-`properties.captureTimeMs` will come back **NULL** on every row. The event's
-TypeScript signature declares both (`analytics.ts:100-101`), but the actual
-call site — `captureAnalytics()` in `effects.ts` — only ever passes
-`hasImages`, `hasPrice`, `confidence`, and `captureMethod`
-(`effects.ts:119-126`); nothing in `state/effects.ts` currently threads a
-`domain`, `destination`, or elapsed-time value into this call. `domain` isn't
-even in the `productCapture` property type — only `open`/`cancelled` accept
-it (`analytics.ts:86-91`). So this check can only confirm the event fires
-with `source`/`confidence`/`captureMethod` populated; it cannot yet confirm
-per-destination or capture-latency analytics, despite the type surface
-suggesting it should. Worth a follow-up ticket to wire `destination` and
-`captureTimeMs` through from `CommitBar.tsx`'s `run()` (which already knows
-`kind` and could time itself) into `captureAnalytics()` — out of scope for
-this docs-only lane.
+| Step | Write path | Expected `destination` |
+|---|---|---|
+| 1 | Save to library | `library` |
+| 2 | Save to project room (`fill_slot`) | `fill_slot` |
+| 3 | Send to inbox | `inbox` |
+| 4 | Send as client decision | `decision` |
+| 5 | Update existing | `update` |
+
+### Extraction telemetry
+
+Each of the five panel opens on the Stevens Sofa page should also emit a
+matched `extraction_started` → `extraction_completed` pair (`mode: 'product'`
+— `use-capture-controller.ts` calls `extensionEvents.extractionStart('product')`
+/ `extractionComplete('product', fieldCount, confidence)` around the
+extraction call; `extractionError('product', ...)` fires instead only if the
+page fails to extract, which a clean SSR page like Room & Board shouldn't):
+
+```sql
+select timestamp, event, properties.mode, properties.field_count, properties.confidence, properties.error_type
+from events
+where event in ('extraction_started', 'extraction_completed', 'extraction_failed')
+  and distinct_id = '<uid>'
+order by timestamp desc
+limit 20
+```
+
+Expect **5 `extraction_started` rows** (`mode = 'product'`) each paired with
+an adjacent-in-time **`extraction_completed`** row (`mode = 'product'`,
+`field_count` populated, `confidence` one of `high`/`medium`/`low`) — no
+`extraction_failed` rows for this walk. If any pair is missing its
+`extraction_completed` half, that panel open never actually extracted a
+draft and one of the five write-path steps above didn't run against real
+extracted data.
 
 ## After the walk
 
