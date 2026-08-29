@@ -123,10 +123,6 @@ jest.mock('../proposal-preview', () => ({ ProposalPreview: () => null }));
 // cosmetic, but it keeps the file honest about what's real vs stubbed).
 import { CommandBar } from '../command-bar';
 import { LetterheadInstruments } from '../letterhead-instruments';
-import { JobTicket } from '../job-ticket';
-import { deriveTicket, type TicketInput } from '@/lib/document/ticket-derivation';
-import type { MoneyLadder, MoneyRung } from '@/lib/document/money-ladder';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 function rosterRow(over: Partial<ProjectRosterRow> = {}): ProjectRosterRow {
   return {
@@ -475,86 +471,8 @@ describe('letterhead-instruments — the Call Sheet instrument', () => {
 
 
 // ============================================================================
-// 5. The ticket's `People` row — the fourth doorway (B1/B2)
-//    The row is a doorway to the SAME roster sheet the three above open, so it
-//    answers to the same flag. The page resolves it through `useFeatureFlag`
-//    and threads it into the derivation, exactly as this harness does.
+// 5. The ticket's `People` row — the fourth doorway (B1/B2) — RETIRED (W3)
+//    The job ticket is deleted with the lens band (R127); the People row and
+//    the fourth doorway went with it. The three doorways above are the whole
+//    set, and the flag split they answer to is asserted on each of them.
 // ============================================================================
-
-describe('the ticket — the People row', () => {
-  const rung = (word: string): MoneyRung => ({ cents: null, note: '', word });
-  const ticketInput = (callSheetEnabled: boolean): TicketInput => ({
-    section: 'project',
-    phase: null,
-    // A project document — the only shape on which the flag's on/off split is
-    // the thing the People row is telling you about.
-    project: true,
-    rooms: { settled: true, list: [] },
-    pieces: { settled: true, lines: [] },
-    drawings: { settled: true, sheetCount: 0 },
-    boards: { settled: true, count: 0 },
-    money: {
-      settled: true,
-      failed: false,
-      ladder: {
-        budget: rung('budget'),
-        plan: rung('plan'),
-        authorized: rung('authorized'),
-        moved: rung('moved'),
-        owed: rung('owed'),
-        notDrawn: rung('not drawn'),
-      } as MoneyLadder,
-      owedDays: null,
-      undrawnKind: null,
-      owedSince: null,
-    },
-    dates: { settled: true, schedule: null },
-    people: { settled: true, callSheetEnabled, rosterCount: 3 },
-  });
-
-  function TicketHarness({ onOpen }: { onOpen?: jest.Mock }) {
-    // Mirrors page.tsx: the flag is read once and threaded into the ticket.
-    const gate = useFeatureFlag('call-sheet');
-    const rows = deriveTicket(ticketInput(gate.value));
-    return (
-      <JobTicket
-        rows={rows}
-        seam={{ identity: 'The job · Project', exceptions: 'Nothing overdue' }}
-        head={{ subject: 'The job · Project', phase: null }}
-        onOpenLeaf={jest.fn()}
-        routes={{}}
-        onUnfoldRegion={jest.fn()}
-        onOpenCallSheet={onOpen ?? jest.fn()}
-      />
-    );
-  }
-
-  it('offers the row as a door with the flag on', () => {
-    mockCallSheetFlag = true;
-    render(<TicketHarness />);
-
-    expect(screen.getByRole('button', { name: /People/ })).toBeInTheDocument();
-    expect(screen.getByText('3 on the roster')).toBeInTheDocument();
-  });
-
-  it('names the absence — not an empty roster — when the flag is off', () => {
-    mockCallSheetFlag = false;
-    render(<TicketHarness />);
-
-    // The row still prints: a row that vanishes at zero cannot be told from a
-    // row that failed to load. What it loses is the door.
-    expect(screen.queryByRole('button', { name: /People/ })).toBeNull();
-    expect(
-      screen.getByText("the call sheet isn't turned on for this studio"),
-    ).toBeInTheDocument();
-  });
-
-  it('reaches the roster sheet — never a leaf — when pressed', () => {
-    mockCallSheetFlag = true;
-    const onOpen = jest.fn();
-    render(<TicketHarness onOpen={onOpen} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /People/ }));
-    expect(onOpen).toHaveBeenCalled();
-  });
-});
