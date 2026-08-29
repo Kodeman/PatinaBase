@@ -97,13 +97,21 @@ describe('the Money seam, on the Delivery table', () => {
 
   it('unfolds in place to exactly the region that stands on the paper today', () => {
     const { container } = render(<MoneyRegion projectId="project-1" tableSeam />);
-    const section = container.querySelector('[data-index-region="money"]')!;
+    const section = container.querySelector<HTMLElement>(
+      '[data-index-region="money"]',
+    )!;
+
+    // R127 — the landing clearance is a declared constant, not a height the
+    // seam publishes at runtime, and it is the same length in both postures:
+    // whichever one the index jumps to lands the money clear of the band.
+    expect(section.style.scrollMarginTop).toBe('var(--doc-landing-clear)');
 
     fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
 
     // Same section element, now carrying the whole region: head, six rungs,
     // and the detail surfaces the rungs summarise.
     expect(container.querySelector('[data-index-region="money"]')).toBe(section);
+    expect(section.style.scrollMarginTop).toBe('var(--doc-landing-clear)');
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.getByText('$17,600 remaining · $62,400 authorized')).toBeVisible();
     expect(screen.getByText('Budget · $80,000 approved')).toBeVisible();

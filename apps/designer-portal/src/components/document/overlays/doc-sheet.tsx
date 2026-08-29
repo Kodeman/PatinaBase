@@ -207,6 +207,7 @@ export function DocSheet({
   helpKey,
   headOwnedByChild = false,
   fallbackFocusRef,
+  kind,
 }: {
   open: boolean;
   onClose: () => void;
@@ -233,6 +234,9 @@ export function DocSheet({
    *  sheet is open (e.g. a disclosure row), focus restores here instead of
    *  silently dropping to `<body>`. */
   fallbackFocusRef?: React.RefObject<HTMLElement | null>;
+  /** OD-6 — which sheet this is, published beside `data-doc-sheet-origin` so a
+   *  walk can name the panel it is standing in. */
+  kind?: string;
 }) {
   const restoreRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -362,6 +366,7 @@ export function DocSheet({
         aria-labelledby={titleId}
         tabIndex={-1}
         data-doc-sheet-panel
+        data-doc-sheet-kind={kind}
         data-doc-sheet-scroll-region
         // R126: the sheet settles UP as it opens. The `!` is load-bearing —
         // `.doc-sheet-panel` in globals.css declares `animation: doc-fade` and
