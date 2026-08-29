@@ -123,15 +123,31 @@ describe('useRegionFold', () => {
     expect(state()).toBe('open');
   });
 
-  // Unchanged mechanic, read out in the new vocabulary: on a stop key the
-  // latched default no longer lands on `folded`, it lands on `density`.
+  // R127/D-B15 — W3-L3 read this latch on a STOP key's `density`, because that
+  // was where a derived default landed then. It lands nowhere on a stop now, so
+  // the same mechanic is read where it still lives: a non-stop key's fold.
+  // Was `density()` 'full' → 'quiet'; is `state()` 'open' → 'folded'.
   it('latches a settling default only while no choice exists', () => {
+    const { rerender } = render(
+      <Probe docId="doc-1" region="schedule-rule" defaultFolded={null} />,
+    );
+    expect(state()).toBe('open');
+    rerender(
+      <Probe docId="doc-1" region="schedule-rule" defaultFolded={true} />,
+    );
+    expect(state()).toBe('folded');
+  });
+
+  it('gives a stop the same quiet either side of its default settling', () => {
     const { rerender } = render(
       <Probe docId="doc-1" region="schedule" defaultFolded={null} />,
     );
-    expect(density()).toBe('full');
+    expect(density()).toBe('quiet');
     rerender(<Probe docId="doc-1" region="schedule" defaultFolded={true} />);
     expect(density()).toBe('quiet');
+    rerender(<Probe docId="doc-1" region="schedule" defaultFolded={false} />);
+    expect(density()).toBe('quiet');
+    expect(state()).toBe('open');
   });
 
   it('lets forceOpen override both the choice and the default', () => {
@@ -196,21 +212,26 @@ describe('useRegionFold', () => {
     expect(window.localStorage.getItem(KEY)).toBe('1');
   });
 
-  // Same mechanic as before, now observed on `density` (the stop key's landing
-  // place for a derived default) rather than on `folded`.
+  // R127/D-B15 — same release, read on the key that still latches a default.
+  // Was `density()` 'quiet' → 'full' → 'quiet' on a stop; is `state()`
+  // 'folded' → 'open' → 'folded' on the drafting strip.
   it('releases the latched default when the document changes', () => {
     const { rerender } = render(
-      <Probe docId="doc-1" region="schedule" defaultFolded={true} />,
+      <Probe docId="doc-1" region="schedule-rule" defaultFolded={true} />,
     );
-    expect(density()).toBe('quiet');
+    expect(state()).toBe('folded');
 
     // The next document's own default has not settled yet — the previous
     // document's answer must not stand in for it.
-    rerender(<Probe docId="doc-2" region="schedule" defaultFolded={null} />);
-    expect(density()).toBe('full');
+    rerender(
+      <Probe docId="doc-2" region="schedule-rule" defaultFolded={null} />,
+    );
+    expect(state()).toBe('open');
 
-    rerender(<Probe docId="doc-2" region="schedule" defaultFolded={true} />);
-    expect(density()).toBe('quiet');
+    rerender(
+      <Probe docId="doc-2" region="schedule-rule" defaultFolded={true} />,
+    );
+    expect(state()).toBe('folded');
   });
 
   it('degrades gracefully when storage throws', () => {
@@ -355,6 +376,45 @@ describe('useRegionFold', () => {
       );
       expect(state()).toBe('open');
       expect(density()).toBe('full');
+    });
+
+    it('leaves an open derived default quiet until the lens reaches it (D-B15)', () => {
+      // The derived default said OPEN — and a stop that printed itself full
+      // 2,000px below the frame is the render cost the lens exists to remove.
+      // The default answers a fold question only; density waits for the lens.
+      const { rerender } = render(
+        <Probe docId="doc-1" region="ffe" defaultFolded={false} />,
+      );
+      expect(state()).toBe('open');
+      expect(density()).toBe('quiet');
+      expect(cause()).toBe('—');
+
+      rerender(
+        <Probe
+          docId="doc-1"
+          region="ffe"
+          defaultFolded={false}
+          positionDensity="full"
+        />,
+      );
+      expect(density()).toBe('full');
+      expect(window.localStorage.getItem('patina:doc-fold:doc-1:ffe')).toBeNull();
+    });
+
+    it('still yields to a choice she made, on an open derived default', () => {
+      window.localStorage.setItem('patina:doc-fold:doc-1:ffe', '0');
+      render(
+        <Probe
+          docId="doc-1"
+          region="ffe"
+          defaultFolded={false}
+          positionDensity={null}
+        />,
+      );
+      // She opened it herself: the lens's silence cannot quiet it.
+      expect(state()).toBe('open');
+      expect(density()).toBe('full');
+      expect(cause()).toBe('—');
     });
 
     it('says nothing at all on a key with no root to observe', () => {
