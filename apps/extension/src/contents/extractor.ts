@@ -9,7 +9,7 @@ import type { ExtractedProductData, ExtractedVendorData, PageModeSignals } from 
 
 // Plasmo content script configuration
 export const config: PlasmoCSConfig = {
-  matches: ['https://*/*', 'http://*/*'],
+  matches: ['https://*/*'],
   run_at: 'document_idle',
 };
 
