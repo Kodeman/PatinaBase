@@ -1,13 +1,13 @@
-import { middleware } from '../middleware';
-import { createMiddlewareClient } from '@patina/supabase/client';
-import { NextResponse } from 'next/server';
+import { middleware } from "../middleware";
+import { createMiddlewareClient } from "@patina/supabase/client";
+import { NextResponse } from "next/server";
 
-jest.mock('@patina/supabase/client', () => ({
+jest.mock("@patina/supabase/client", () => ({
   createMiddlewareClient: jest.fn(),
   createAdminClient: jest.fn(),
 }));
 
-jest.mock('next/server', () => ({
+jest.mock("next/server", () => ({
   NextResponse: {
     next: jest.fn(() => ({
       cookies: { getAll: () => [] },
@@ -19,18 +19,18 @@ jest.mock('next/server', () => ({
   },
 }));
 
-function request(pathname: string, query = '') {
+function request(pathname: string, query = "") {
   return {
     nextUrl: {
-      origin: 'http://localhost:3000',
+      origin: "http://localhost:3000",
       pathname,
-      search: query ? `?${query}` : '',
+      search: query ? `?${query}` : "",
       searchParams: new URLSearchParams(query),
     },
   } as never;
 }
 
-describe('Designer auth middleware', () => {
+describe("Designer auth middleware", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (NextResponse.next as jest.Mock).mockReturnValue({
@@ -43,17 +43,17 @@ describe('Designer auth middleware', () => {
     (createMiddlewareClient as jest.Mock).mockReturnValue({
       auth: {
         getUser: jest.fn().mockResolvedValue({
-          data: { user: { id: 'designer-1' } },
+          data: { user: { id: "designer-1" } },
         }),
       },
     });
   });
 
   it.each([
-    ['/auth/callback', 'type=recovery&callbackUrl=%2Fauth%2Freset-password'],
-    ['/auth/reset-password', 'callbackUrl=%2Fdesk'],
+    ["/auth/callback", "type=recovery&callbackUrl=%2Fauth%2Freset-password"],
+    ["/auth/reset-password", "callbackUrl=%2Fdesk"],
   ])(
-    'allows an authenticated recovery session through %s',
+    "allows an authenticated recovery session through %s",
     async (pathname, query) => {
       const response = await middleware(request(pathname, query));
 
@@ -62,17 +62,17 @@ describe('Designer auth middleware', () => {
     },
   );
 
-  it('keeps the callback exemption limited to password recovery', async () => {
-    await middleware(request('/auth/callback', 'callbackUrl=%2Fdesk'));
+  it("keeps the callback exemption limited to password recovery", async () => {
+    await middleware(request("/auth/callback", "callbackUrl=%2Fdesk"));
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
-      new URL('http://localhost:3000/desk'),
+      new URL("http://localhost:3000/desk"),
     );
   });
 
-  describe('legal pages (/privacy, /terms)', () => {
-    it.each(['/privacy', '/terms'])(
-      'passes a signed-out visitor through %s without a signin redirect',
+  describe("legal pages (/privacy, /terms)", () => {
+    it.each(["/privacy", "/terms"])(
+      "passes a signed-out visitor through %s without a signin redirect",
       async (pathname) => {
         (createMiddlewareClient as jest.Mock).mockReturnValue({
           auth: {
@@ -87,8 +87,8 @@ describe('Designer auth middleware', () => {
       },
     );
 
-    it.each(['/privacy', '/terms'])(
-      'does not bounce a signed-in designer away from %s',
+    it.each(["/privacy", "/terms"])(
+      "does not bounce a signed-in designer away from %s",
       async (pathname) => {
         const response = await middleware(request(pathname));
 

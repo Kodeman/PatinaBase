@@ -1,15 +1,18 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { createAdminClient, createMiddlewareClient } from '@patina/supabase/client';
-import type { Database } from '@patina/supabase';
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import {
+  createAdminClient,
+  createMiddlewareClient,
+} from "@patina/supabase/client";
+import type { Database } from "@patina/supabase";
 
-type RoleDomain = Database['public']['Enums']['role_domain'];
+type RoleDomain = Database["public"]["Enums"]["role_domain"];
 
 // Domains permitted on the designer portal shell. `designer` covers studio
 // roles (independent_designer, studio_owner, studio_admin, studio_designer);
 // `admin` covers staff (super_admin, support_agent, ml_operator, quality_control)
 // who need cross-portal access for ops/support.
-const DESIGNER_PORTAL_DOMAINS: readonly RoleDomain[] = ['designer', 'admin'];
+const DESIGNER_PORTAL_DOMAINS: readonly RoleDomain[] = ["designer", "admin"];
 
 // Returns true when the user has at least one role whose domain permits the
 // designer portal. Fails open on missing service-role key or transient errors
@@ -22,10 +25,10 @@ async function userHasDesignerPortalRole(userId: string): Promise<boolean> {
   try {
     const adminClient = createAdminClient(serviceRoleKey);
     const { data } = await adminClient
-      .from('user_roles')
-      .select('roles!inner(domain)')
-      .eq('user_id', userId)
-      .in('roles.domain', DESIGNER_PORTAL_DOMAINS);
+      .from("user_roles")
+      .select("roles!inner(domain)")
+      .eq("user_id", userId)
+      .in("roles.domain", DESIGNER_PORTAL_DOMAINS);
     return (data ?? []).length > 0;
   } catch {
     return true;
@@ -37,13 +40,17 @@ export async function middleware(req: NextRequest) {
 
   // Create Supabase client for middleware (refreshes session via cookies)
   const supabase = createMiddlewareClient(req, res);
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const isAuthPage = req.nextUrl.pathname.startsWith('/auth') || req.nextUrl.pathname.startsWith('/login');
+  const isAuthPage =
+    req.nextUrl.pathname.startsWith("/auth") ||
+    req.nextUrl.pathname.startsWith("/login");
   // The landing page is the ONLY page an authenticated designer gets bounced
   // off (into /desk). Kept separate from `isPublicPage` below, which is the
   // wider "reachable while signed out" set.
-  const isLandingPage = req.nextUrl.pathname === '/';
+  const isLandingPage = req.nextUrl.pathname === "/";
   // R91 (via the R21 dissolve): /preferences and /preferences/unsubscribe are
   // REAL pages that must answer while signed OUT — the emailed unsubscribe link
   // carries a one-time token and the page's own apply flow validates it. A
@@ -52,17 +59,17 @@ export async function middleware(req: NextRequest) {
   // own notification preferences), so they are public-not-landing: no /desk
   // bounce, and no designer-role gate.
   const isPreferencesPage =
-    req.nextUrl.pathname === '/preferences' ||
-    req.nextUrl.pathname === '/preferences/unsubscribe';
+    req.nextUrl.pathname === "/preferences" ||
+    req.nextUrl.pathname === "/preferences/unsubscribe";
   // CL-R4: /privacy and /terms are static legal pages, linked from the
   // signed-out signup form and required (live, no auth wall) for the Chrome
   // Web Store listing. Same public-not-landing treatment as /preferences:
   // reachable signed out, and not bounced away from when signed in.
   const isLegalPage =
-    req.nextUrl.pathname === '/privacy' || req.nextUrl.pathname === '/terms';
+    req.nextUrl.pathname === "/privacy" || req.nextUrl.pathname === "/terms";
   const isPublicPage = isLandingPage || isPreferencesPage || isLegalPage;
-  const isApiRoute = req.nextUrl.pathname.startsWith('/api');
-  const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
+  const isApiRoute = req.nextUrl.pathname.startsWith("/api");
+  const isUnauthorizedPage = req.nextUrl.pathname === "/unauthorized";
   const isAuthenticated = !!user;
   // /auth/accept-invite must stay reachable for ANY authenticated user,
   // including one with no designer/admin role (e.g. a freshly-invited
@@ -71,14 +78,16 @@ export async function middleware(req: NextRequest) {
   // validation. Without this exemption the authenticated-user branches below
   // treat it like any other /auth page and bounce the user to /desk or
   // /unauthorized before the RPC ever runs.
-  const isAcceptInvitePage = req.nextUrl.pathname.startsWith('/auth/accept-invite');
+  const isAcceptInvitePage = req.nextUrl.pathname.startsWith(
+    "/auth/accept-invite",
+  );
   // Recovery links establish a short-lived Supabase session before rendering
   // the reset form. Do not bounce that session to /desk before the password
   // can be updated.
   const isPasswordRecoveryPage =
-    req.nextUrl.pathname.startsWith('/auth/reset-password') ||
-    (req.nextUrl.pathname === '/auth/callback' &&
-      req.nextUrl.searchParams.get('type') === 'recovery');
+    req.nextUrl.pathname.startsWith("/auth/reset-password") ||
+    (req.nextUrl.pathname === "/auth/callback" &&
+      req.nextUrl.searchParams.get("type") === "recovery");
 
   const baseUrl = req.nextUrl.origin;
 
@@ -100,7 +109,7 @@ export async function middleware(req: NextRequest) {
         domain: cookie.domain,
         path: cookie.path,
         secure: cookie.secure,
-        sameSite: cookie.sameSite as 'lax' | 'strict' | 'none' | undefined,
+        sameSite: cookie.sameSite as "lax" | "strict" | "none" | undefined,
         httpOnly: cookie.httpOnly,
         expires: cookie.expires,
         maxAge: cookie.maxAge,
@@ -117,8 +126,8 @@ export async function middleware(req: NextRequest) {
   // ?token= doorway queries without ever leaving the portal.
   const safeCallbackUrl = (raw: string | null): URL | null => {
     if (!raw) return null;
-    const value = raw.replace(/\\/g, '/');
-    if (!value.startsWith('/') || value.startsWith('//')) return null;
+    const value = raw.replace(/\\/g, "/");
+    if (!value.startsWith("/") || value.startsWith("//")) return null;
     try {
       const url = new URL(value, baseUrl);
       if (url.origin !== new URL(baseUrl).origin) return null;
@@ -133,17 +142,22 @@ export async function middleware(req: NextRequest) {
   // with no designer/admin role would be redirected to `/`, then bounced back
   // to `/unauthorized` from a deeper protected route — the round trip causes
   // the QR signin page to re-render mid-flight and looks like a reload loop.
-  if (isAuthenticated && isAuthPage && !isAcceptInvitePage && !isPasswordRecoveryPage) {
+  if (
+    isAuthenticated &&
+    isAuthPage &&
+    !isAcceptInvitePage &&
+    !isPasswordRecoveryPage
+  ) {
     if (!(await userHasDesignerPortalRole(user!.id))) {
-      return redirectWithCookies(new URL('/unauthorized', baseUrl));
+      return redirectWithCookies(new URL("/unauthorized", baseUrl));
     }
     const callbackUrl = safeCallbackUrl(
-      req.nextUrl.searchParams.get('callbackUrl'),
+      req.nextUrl.searchParams.get("callbackUrl"),
     );
     if (callbackUrl) {
       return redirectWithCookies(callbackUrl);
     }
-    return redirectWithCookies(new URL('/desk', baseUrl));
+    return redirectWithCookies(new URL("/desk", baseUrl));
   }
 
   // Authenticated user on the public landing page: send them into the app.
@@ -151,9 +165,9 @@ export async function middleware(req: NextRequest) {
   // doesn't bounce `/` -> `/desk` -> `/unauthorized` (one redirect, not two).
   if (isAuthenticated && isLandingPage) {
     if (!(await userHasDesignerPortalRole(user!.id))) {
-      return redirectWithCookies(new URL('/unauthorized', baseUrl));
+      return redirectWithCookies(new URL("/unauthorized", baseUrl));
     }
-    return redirectWithCookies(new URL('/desk', baseUrl));
+    return redirectWithCookies(new URL("/desk", baseUrl));
   }
 
   // Redirect unauthenticated users to login. The callbackUrl carries the SEARCH
@@ -162,9 +176,9 @@ export async function middleware(req: NextRequest) {
   // redirect table lands cold links there, so dropping the query would turn a
   // signed-out click on an emailed invoice link into a plain Desk.
   if (!isAuthenticated && !isAuthPage && !isPublicPage) {
-    const loginUrl = new URL('/auth/signin', baseUrl);
+    const loginUrl = new URL("/auth/signin", baseUrl);
     loginUrl.searchParams.set(
-      'callbackUrl',
+      "callbackUrl",
       `${req.nextUrl.pathname}${req.nextUrl.search}`,
     );
     return redirectWithCookies(loginUrl);
@@ -176,7 +190,7 @@ export async function middleware(req: NextRequest) {
   // could otherwise land on the designer shell.
   if (isAuthenticated && !isAuthPage && !isPublicPage && !isUnauthorizedPage) {
     if (!(await userHasDesignerPortalRole(user!.id))) {
-      return redirectWithCookies(new URL('/unauthorized', baseUrl));
+      return redirectWithCookies(new URL("/unauthorized", baseUrl));
     }
   }
 
@@ -185,6 +199,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|auth/error|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|auth/error|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
