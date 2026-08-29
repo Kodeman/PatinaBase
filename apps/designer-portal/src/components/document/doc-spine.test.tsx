@@ -24,22 +24,23 @@ describe('DocSpine at the narrow tier (1180–1439) — F02', () => {
     expect(screen.getByText('Put down')).toHaveClass('min-[1180px]:inline');
   });
 
-  it('keeps the spine’s one remaining block hidden below 1440 (C8 untouched)', () => {
-    // The rail here is A3's form and B1 does not touch it: the label, the word
-    // `Put down`, and no blocks — the map is the ticket on the paper now.
-    render(
-      <DocSpine
-        sections={sections}
-       
-        onJump={jest.fn()}
-        shelved={<div data-testid="shelved-blocks">shelved</div>}
-      />,
+  it('mounts the ladder at BOTH desktop tiers — the block is no longer gated at 1440 (OD-15.3)', () => {
+    // The shelved slot used to hide below 1440 because the paper needed its
+    // measure more than the rail needed furniture. A 136px rail that prints
+    // words does not have that trade to make: the ladder mounts once, and the
+    // two tiers differ by class inside it (OD-14), not by whether it is there.
+    const { container } = render(
+      <DocSpine sections={sections} onJump={jest.fn()} />,
     );
-    const shelved = screen.getByTestId('shelved-blocks');
-    expect(shelved.parentElement).toHaveClass(
-      'hidden',
-      'min-[1440px]:block',
-    );
+    const ladder = screen.getByRole('navigation', { name: 'This paper' });
+    expect(ladder).toBeInTheDocument();
+    for (
+      let node = ladder.parentElement;
+      node && node !== container;
+      node = node.parentElement
+    ) {
+      expect(node.className).not.toContain('min-[1440px]:block');
+    }
   });
 });
 
@@ -76,7 +77,10 @@ describe('DocSpine · the rail head (R127 W1)', () => {
     expect(within(phrase as HTMLElement).getByText('Active')).toBeInTheDocument();
 
     // The height is reserved, not measured, at both desktop tiers.
-    expect(head).toHaveClass('min-h-[116px]', 'min-[1440px]:min-h-[100px]');
+    // Measured, not arithmetic: this portal's root is 18px, so `min-h-6`
+    // computes to 27 and `min-h-11` to 49.5, and the wrapped arc costs more
+    // than §10's estimate (W1 e2e: 126 at 1280, 117 at 1440).
+    expect(head).toHaveClass('min-h-[126px]', 'min-[1440px]:min-h-[117px]');
   });
 
   it('carries no timer and no presence line — both left the rail (OD-16)', () => {
