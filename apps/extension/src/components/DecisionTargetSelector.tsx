@@ -208,8 +208,8 @@ export function DecisionTargetSelector({
     <div className="space-y-2">
       {/* Client (required) */}
       <label className="block">
-        <span className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
-          Client <span className="text-terracotta">*</span>
+        <span className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">
+          Client <span className="text-rust">*</span>
         </span>
         <select
           value={designerClientId ?? ''}
@@ -219,7 +219,7 @@ export function DecisionTargetSelector({
             const match = clients.find((c) => c.id === next) ?? null;
             onDesignerClientChange(next, match?.clientId ?? null);
           }}
-          className="w-full px-3 py-2 text-[0.85rem] rounded-[3px] border border-pearl bg-surface text-charcoal outline-none focus:border-clay focus:ring-1 focus:ring-clay disabled:opacity-50"
+          className="w-full px-3 py-2 text-[0.85rem] rounded-[3px] border border-line bg-paper-3 text-ink outline-none focus:border-verdigris focus:ring-1 focus:ring-verdigris disabled:opacity-50"
         >
           <option value="">
             {loadingClients
@@ -238,14 +238,14 @@ export function DecisionTargetSelector({
 
       {/* Project (optional) */}
       <label className="block">
-        <span className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
-          Project <span className="text-aged-oak">(optional)</span>
+        <span className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">
+          Project <span className="text-ink-soft">(optional)</span>
         </span>
         <select
           value={projectId ?? ''}
           disabled={disabled || !designerClientId || loadingProjects}
           onChange={(e) => onProjectChange(e.target.value || null)}
-          className="w-full px-3 py-2 text-[0.85rem] rounded-[3px] border border-pearl bg-surface text-charcoal outline-none focus:border-clay focus:ring-1 focus:ring-clay disabled:opacity-50"
+          className="w-full px-3 py-2 text-[0.85rem] rounded-[3px] border border-line bg-paper-3 text-ink outline-none focus:border-verdigris focus:ring-1 focus:ring-verdigris disabled:opacity-50"
         >
           <option value="">
             {!designerClientId
@@ -266,14 +266,14 @@ export function DecisionTargetSelector({
 
       {/* Room (optional) */}
       <label className="block">
-        <span className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
-          Room <span className="text-aged-oak">(optional)</span>
+        <span className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">
+          Room <span className="text-ink-soft">(optional)</span>
         </span>
         <select
           value={roomId ?? ''}
           disabled={disabled || !projectId || loadingRooms}
           onChange={(e) => onRoomChange(e.target.value || null)}
-          className="w-full px-3 py-2 text-[0.85rem] rounded-[3px] border border-pearl bg-surface text-charcoal outline-none focus:border-clay focus:ring-1 focus:ring-clay disabled:opacity-50"
+          className="w-full px-3 py-2 text-[0.85rem] rounded-[3px] border border-line bg-paper-3 text-ink outline-none focus:border-verdigris focus:ring-1 focus:ring-verdigris disabled:opacity-50"
         >
           <option value="">
             {!projectId

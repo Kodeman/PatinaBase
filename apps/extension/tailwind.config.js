@@ -20,18 +20,6 @@ module.exports = {
         "brass-2": "#C7A052",
         rust: "#9A5A3E", // error / missing / friction
         "rust-2": "#B97A56",
-        // ── Legacy keys — kept aliased so unmigrated components compile ──
-        "off-white": "#FAF7F2",
-        pearl: "#E5E2DD",
-        clay: "#C4A57B",
-        "aged-oak": "#8B7355",
-        mocha: "#5C4A3C",
-        charcoal: "#2C2926",
-        sage: "#A8B5A0",
-        "dusty-blue": "#8B9CAD",
-        terracotta: "#D4A090",
-        "golden-hour": "#E8C547",
-        surface: "#FFFFFF",
       },
       fontFamily: {
         display: ["Fraunces", "Georgia", "serif"],
