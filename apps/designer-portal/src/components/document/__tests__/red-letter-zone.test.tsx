@@ -10,7 +10,11 @@ import type { ReactElement } from 'react';
 import type { NeedKind } from '@/lib/document/desk-derivation';
 import { MobileBar } from '../mobile/mobile-bar';
 import { MobileShellProvider } from '../mobile/mobile-shell';
-import { RedLetterZone, type RedLetterRow } from '../red-letter-zone';
+import {
+  deriveRedLetterModel,
+  RedLetterZone,
+  type RedLetterRow,
+} from '../red-letter-zone';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/doc/proj-1',
@@ -184,7 +188,12 @@ describe('RedLetterZone', () => {
     }
   });
 
-  it('F07 — registers the FIRST row as the phone\u2019s one primary act', () => {
+  // W3 rewrite of the two F07 cases (OD-11 / DL-05): the zone no longer
+  // publishes the phone's primary act — the band's line 2 is the one printing
+  // of it at every width — so what was "the FIRST row is elected" is now "the
+  // bar is left to its lifecycle registrants", and the first row's act reaches
+  // the band through `deriveRedLetterModel` instead.
+  it('OD-11 — publishes no primary act on the bar, at any row count', () => {
     rtlRender(
       <MobileShellProvider>
         <RedLetterZone rows={rows} />
@@ -193,29 +202,25 @@ describe('RedLetterZone', () => {
     );
 
     const bar = within(screen.getByTestId('mobile-bar'));
-    const primary = bar.getByRole('button', { name: 'Resolve decisions' });
-    expect(primary).toHaveAttribute(
-      'data-action-key',
-      'red-letter-overdue_decision-0',
-    );
+    expect(
+      bar.queryByRole('button', { name: 'Resolve decisions' }),
+    ).not.toBeInTheDocument();
     expect(
       bar.queryByRole('button', { name: 'Send a reminder' }),
     ).not.toBeInTheDocument();
-
-    fireEvent.click(primary);
-    expect(onAct).toHaveBeenCalledTimes(1);
+    expect(bar.getByText('Hands free')).toBeInTheDocument();
   });
 
-  it('F07 — publishes nothing when the first need names no act', () => {
-    rtlRender(
-      <MobileShellProvider>
-        <RedLetterZone rows={[rows[2]]} />
-        <MobileBar />
-      </MobileShellProvider>,
-    );
+  it('C-6 — hands the band its rows and the one they elect', () => {
+    const withAct = deriveRedLetterModel(rows);
+    expect(withAct.rows).toBe(rows);
+    expect(withAct.primary).toBe(rows[0]);
+    withAct.primary!.onAct();
+    expect(onAct).toHaveBeenCalledTimes(1);
 
-    const bar = within(screen.getByTestId('mobile-bar'));
-    expect(bar.getByText('Hands free')).toBeInTheDocument();
+    // The first row naming no act elects nothing, exactly as F07 required.
+    expect(deriveRedLetterModel([rows[2]]).primary).toBeNull();
+    expect(deriveRedLetterModel([]).primary).toBeNull();
   });
 
   it('weights an urgent need heavier, and only by weight', () => {

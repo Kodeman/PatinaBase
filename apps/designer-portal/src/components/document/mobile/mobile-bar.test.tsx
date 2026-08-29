@@ -260,25 +260,29 @@ describe('the elected act at 390', () => {
     mockCallSheetOn = true;
   });
 
+  // OD-11 / DL-05 — the guide and the red letter no longer register here: the
+  // band's line 2 is the one printing of those acts at every width. The slot
+  // itself is a studio-wide contract and stays, held by the lifecycle
+  // registrants (priority 10), which is the act this case now elects.
   it('prints in full — the label wraps, it never truncates', () => {
     mountBar({
       action: {
-        actionKey: 'pick-the-fabric',
+        actionKey: 'mark-proposal-signed',
         surfaceKey: 'open-document',
-        regionKey: 'red-letter',
-        label: 'Pick the fabric for the Okonkwo sofa',
+        regionKey: 'proposal-watch-actions',
+        label: 'Mark the Okonkwo agreement signed',
         target: { kind: 'press', onPress: jest.fn() },
       },
     });
 
     const act = screen.getByRole('button', {
-      name: 'Pick the fabric for the Okonkwo sofa',
+      name: 'Mark the Okonkwo agreement signed',
     });
     expect(act.className).toContain('[&_.da-label]:whitespace-normal');
     expect(act.className).not.toContain('truncate');
     expect(act.className).not.toContain('max-w-[9rem]');
     expect(act.querySelector('.da-label')?.textContent).toBe(
-      'Pick the fabric for the Okonkwo sofa',
+      'Mark the Okonkwo agreement signed',
     );
   });
 });

@@ -173,7 +173,12 @@ describe('unified mobile edge owner', () => {
     expect(guideActivate).not.toHaveBeenCalled();
   });
 
-  it('uses the latest guide input count when a stable mobile action is selected', () => {
+  // W3 rewrite (OD-11 / DL-05): the guide no longer registers the bar's act —
+  // the band's line 2 is the one printing of it — so the selection this case
+  // measures is now made on the guide's own act, and what it still proves is
+  // unchanged: `guideSelected` carries the LATEST input count, not the one
+  // captured at first render.
+  it('uses the latest guide input count when its act is selected', () => {
     const baseModel = {
       state: 'needs_input' as const,
       stage: 'discovery' as const,
@@ -204,7 +209,12 @@ describe('unified mobile edge owner', () => {
       </MobileShellProvider>,
     );
 
-    fireEvent.click(within(screen.getByTestId('mobile-bar')).getByRole('button', { name: 'Continue Discovery' }));
+    expect(
+      within(screen.getByTestId('mobile-bar')).queryByRole('button', {
+        name: 'Continue Discovery',
+      }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue Discovery' }));
     expect(mockGuideSelected).toHaveBeenLastCalledWith(expect.objectContaining({ input_count: 1 }));
   });
 
