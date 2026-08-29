@@ -19,7 +19,7 @@
 | Manufacturer Portal onboarding → catalog product creation | Planned — scaffold only |
 | Studio→Catalog auto-link on nomination "live" | Partial — trigger + RPC exist, unreachable end-to-end without Manufacturer Portal |
 | Chrome extension product capture | Shipped |
-| Chrome extension vendor-only capture, trade pricing, offline queue | Shipped |
+| Chrome extension vendor-only capture, trade pricing, offline queue | Removed in extension 0.3.0 (capture-launch, 2026-08-29): offline queue had no producer, OCR had no bundled assets, trade pricing had no account-linking path |
 | In-portal manual add / CSV import | Shipped (CSV import unverified on prod) |
 | iOS Field Capture app | Partial — validation-build only, backend migrations shipped, app not merged/not on prod |
 | Aesthete-vector-driven catalog match/sort | Planned — column re-typed, scoring not live |
@@ -84,7 +84,7 @@ This is paired with the **capture pipeline** that feeds the bottom of the funnel
 
 ### Capture surfaces
 
-- **Chrome extension** (`apps/extension`, Plasmo) — fully re-architected into a reducer/effects state machine (`src/state/`), `panel/`, `screens/`, `overlays/`. Extraction modules (`src/lib/extraction/`): `vendor`, `retailer`, `manufacturer`, `price`, `images`, `dimensions`, `materials`, `metadata`, `color-finish`; `ocr.ts`, `mode-detection.ts` (product vs vendor page). `lib/payloads.ts::buildProductInsertPayload` writes `layer:'personal'`, `owner_user_id`, `retailer_id`, `vendor_id`. Also: vendor-only capture (`VendorCaptureForm`/`VendorInlineForm`/`VendorSelector`), trade pricing (`use-trade-account`, `lib/trade-pricing.ts`), portal-cookie session adoption (`lib/portal-cookie.ts`), QR auth, offline queue (`background.ts`), duplicate detection (`lib/product-similarity.ts`), and "send as decision/FFE/proposal" targeting.
+- **Chrome extension** (`apps/extension`, Plasmo) — fully re-architected into a reducer/effects state machine (`src/state/`), `panel/`, `screens/`, `overlays/`. Extraction modules (`src/lib/extraction/`): `vendor`, `retailer`, `manufacturer`, `price`, `images`, `dimensions`, `materials`, `metadata`, `color-finish`; `ocr.ts`, `mode-detection.ts` (product vs vendor page). `lib/payloads.ts::buildProductInsertPayload` writes `layer:'personal'`, `owner_user_id`, `retailer_id`, `vendor_id`. Also: vendor-only capture (`VendorCaptureForm`/`VendorInlineForm`/`VendorSelector`), portal-cookie session adoption (`lib/portal-cookie.ts`), QR auth, duplicate detection (`lib/product-similarity.ts`), and "send as decision/FFE/proposal" targeting.
 - **In-portal web capture**: `captureProduct` mutation is the single write path; the document Library's `capture-sheet.tsx` exposes URL-paste + named manual entry. `catalog/new` (manual add) and `catalog/import` (3-step CSV wizard) live under the classic catalog subtree.
 - **iOS Field Capture**: a separate native app (branch `capture/foundation`) writing through the `field_captures` inbox + commit RPCs (migrations 00232–00235); rows land as `capture_source='field_capture'` personal products.
 
@@ -203,7 +203,6 @@ This is paired with the **capture pipeline** that feeds the bottom of the funnel
 
 - Extract → Record/Snapshot screens, Vendor screen (vendor-only capture), commit bar.
 - Overlays for account/project-create/decision/image-select/recent-captures/settings.
-- Trade-pricing region.
 
 ### iOS
 
@@ -224,9 +223,9 @@ This is paired with the **capture pipeline** that feeds the bottom of the funnel
 - ⚠ Catalog authority: PRD specs a `patina_admin` JWT claim; code gates catalog INSERT/UPDATE on `user_has_role(auth.uid(),'super_admin')` (function from 00021).
 - ⚠ Payment terms: PRD specs a `vendor_payment_terms` table + `payment_terms_id` FK; code reuses the `purchase_order_payment_pattern` enum as `products.payment_terms` (00152).
 - ⚠ Vector dimension: handoff §4.1 specs `aesthete_vector vector(1536)`; 00152 created it at 1536 but 00239 re-typed the (empty) column to vector(768) — the handoff dimension is stale.
-- ⚠ Package namespace: handoff says components live in `@strata/products` and extension is `@strata/extension`; actual is `@patina/catalog-ui` (+ portal-local `components/products/*`) and `@patina/*` throughout. Extension CLAUDE.md still says `@strata/extension` and points at `docs/specs/product-capture.md` (moved to `docs/specs/_active/`).
+- ⚠ Package namespace: handoff says components live in `@strata/products` and extension is `@strata/extension`; actual is `@patina/catalog-ui` (+ portal-local `components/products/*`) and `@patina/*` throughout. ✓ Extension CLAUDE.md fixed 2026-08-29: `@strata/extension` references removed, spec path points to `docs/specs/_active/product-capture.md`.
 - ⚠ `product-capture.md` lists `00011_add_retailer_id.sql` under "Files to Create" as future work; that migration already shipped long ago at 00011, and the vendor/retailer/mode-detection/trade-pricing/inline-vendor features it specs are largely built. Spec header still reads Status: Active / Completed: —.
-- ⚠ Extension `progress.md` is stale: it lists `ProductCaptureForm.tsx` (no longer exists) and marks vendor inline creation / duplicate detection / offline queue as "Pending" — all now built; the extension was re-architected into a reducer/panel/screens state machine.
+- ⚠ Extension `progress.md` is stale: it lists `ProductCaptureForm.tsx` (no longer exists) and marks vendor inline creation / duplicate detection / offline queue as "Pending" — vendor inline creation + duplicate detection are built, offline queue removed in 0.3.0 (capture-launch, 2026-08-29); the extension was re-architected into a reducer/panel/screens state machine.
 - ⚠ Two divergent product-detail surfaces coexist: classic library cards open the old `/portal/catalog/[id]` detail, while the Piece (R40, view+edit) is only reachable in document mode at `/library/[id]`. They do not share a route.
 - ⚠ QA `REPORT.md` (2026-06-04) still describes the three-layer Library as pilot-gated on prod with `/portal/catalog` as the live experience; that gate was removed 2026-06-09 and `/portal/catalog` now redirects into `/portal/library/personal`.
 - ⚠ Mobile capture: PRD `<MobileCapture>` is a mobile *web* photo/voice flow; what shipped is a separate **native iOS** Field Capture app (00232–00235). No mobile-web camera-capture component exists in the portals; the document CaptureSheet only does URL-paste + manual entry.
