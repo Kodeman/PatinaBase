@@ -6,11 +6,14 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type FormEvent,
 } from 'react';
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { useRegionFold } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
+import { requestRegionUnfold } from '@/lib/document/document-index';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
 import {
@@ -53,6 +56,13 @@ import {
 import { SectionLoadingLine } from '../section-loading-line';
 
 const APPROVALS_BODY_ID = 'project-approvals-body';
+
+/** OD-12 — the reserve a quiet region holds. This head prints no standing
+ *  exceptions (`RegionHead` takes no `exceptions` here), so it is the short
+ *  one at every density. */
+const QUIET_RESERVE = {
+  '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+} as CSSProperties;
 
 export interface ProjectApprovalPhase {
   id: string;
@@ -531,10 +541,14 @@ export function ProjectApprovalDocument({
     ? (approvals.length === 0 && !decisionLeadId) ||
       (approvals.length > 0 && approvals.every(isSealed))
     : null;
+  // R127 L-4 — the lens's reading of this stop; null while it has nothing to
+  // say, which is what leaves the region quiet until she is nearly here.
+  const positionDensity = useLensDensityStore('approvals');
   const fold = useRegionFold({
     docId: projectId,
     region: 'approvals',
     defaultFolded,
+    positionDensity,
   });
   const unfoldFocusRef = useRef(false);
   const foldSetFolded = fold.setFolded;
@@ -545,6 +559,25 @@ export function ProjectApprovalDocument({
     [foldSetFolded],
   );
   useRegionUnfoldRequest('approvals', openApprovalsRegion);
+
+  // R127 OD-12/OD-13 — the quiet form: the head unchanged, one count line, one
+  // leader, one state line. A count the region does not hold prints nothing.
+  const quiet = fold.density === 'quiet';
+  const overdueCount = approvals.filter(
+    (review) => !isSealed(review) && review.isOverdue,
+  ).length;
+  const countLine = [
+    overdueCount > 0 ? `${overdueCount} OVERDUE` : null,
+    openCount > 0 ? `${openCount} OPEN` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  // The same wire a ladder rung's press sends: `openApprovalsRegion` answers
+  // it, and the explicit voice it sets takes the stop out of the lens's reach.
+  const openApprovalsFromQuiet = useCallback(
+    () => requestRegionUnfold('approvals'),
+    [],
+  );
 
   useEffect(() => {
     if (!fold.folded && unfoldFocusRef.current) {
@@ -562,7 +595,12 @@ export function ProjectApprovalDocument({
         ? 'no approvals authored'
         : `${approvals.length} approval${approvals.length === 1 ? '' : 's'} authored`;
     return (
-      <div data-index-region="approvals" className="mt-[var(--doc-region-gap)]">
+      <div
+        data-index-region="approvals"
+        data-density={fold.density}
+        style={QUIET_RESERVE}
+        className="mt-[var(--doc-region-gap)]"
+      >
         <RegionRule weight="mid" />
         <FoldSeam
           headingId="project-approvals-title"
@@ -584,7 +622,9 @@ export function ProjectApprovalDocument({
     <section
       aria-labelledby="project-approvals-title"
       data-index-region="approvals"
+      data-density={fold.density}
       data-project-approval-document
+      style={QUIET_RESERVE}
       className="mt-[var(--doc-region-gap)] min-w-0 border-y border-[var(--border-subtle)]"
     >
       <RegionRule />
@@ -599,6 +639,28 @@ export function ProjectApprovalDocument({
         bodyId={APPROVALS_BODY_ID}
         onFold={() => fold.setFolded(true)}
       />
+      {quiet ? (
+        <div id={APPROVALS_BODY_ID}>
+          {countLine && (
+            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+              {countLine}
+            </p>
+          )}
+          <DocumentActionRow
+            surfaceKey="open-document"
+            regionKey="approvals-quiet"
+          >
+            <DocumentAction
+              actionKey="open-approvals-region"
+              variant="inked"
+              onClick={openApprovalsFromQuiet}
+            >
+              See the approvals &rarr;
+            </DocumentAction>
+          </DocumentActionRow>
+          <p className="sr-only">Quiet — opens as you read</p>
+        </div>
+      ) : (
       <div id={APPROVALS_BODY_ID}>
       <p className="mt-2 max-w-[66ch] text-[14px] leading-relaxed text-[var(--text-muted)]">
         Bind each request to one issued plan, client-ready specification, or
@@ -1362,6 +1424,7 @@ export function ProjectApprovalDocument({
         </ol>
       </div>
       </div>
+      )}
     </section>
   );
 }

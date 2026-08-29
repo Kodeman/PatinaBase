@@ -22,6 +22,18 @@ let candidates: ProjectApprovalArtifactCandidate[] = [];
 let approvalsLoading = false;
 let approvalsFetching = false;
 
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+let mockLensDensity: 'full' | null = 'full';
+jest.mock('@/hooks/use-lens-density', () => ({
+  useLensDensityStore: () => mockLensDensity,
+}));
+beforeEach(() => {
+  mockLensDensity = 'full';
+});
+
 jest.mock('@patina/supabase', () => ({
   useProjectApprovals: () => ({
     data: approvals,
