@@ -14,10 +14,17 @@
  * longer exists cannot acquire a second writer.
  *
  * `#doc-ticket-sentinel` is rendered here as the band's IMMEDIATE previous
- * sibling: it leaves the viewport exactly when the band would begin to stick.
+ * sibling and observed here (§4, C-5): it leaves the viewport exactly when the
+ * band begins to stick, which is the one bit of input the pin needs. The
+ * letterhead's own frame answers a different question (the rail head's L-6
+ * yield) with a different geometry, and is not a substitute for this one.
  */
 
 import { useEffect, useRef, useState } from 'react';
+import {
+  LENS_ANNOUNCE_DEDUPE_MS,
+  LENS_TURN_OUT_MS,
+} from '@/lib/document/lens-constants';
 import type {
   LensBandModel,
   LensBandLine2,
@@ -26,14 +33,8 @@ import type {
 import { DocumentAction } from './document-action';
 import { StandingSheet } from './standing-sheet';
 
-/** OD-3 — one distinct stop announces at most once in this window. */
-const LENS_ANNOUNCE_DEDUPE_MS = 2000;
-
-/** L-1 — the outgoing sentence fades in 90ms; the incoming one in 150ms. */
-const LENS_TURN_OUT_MS = 90;
-
-/** Both lines, at every width. The ellipsis is the last resort, after the
- *  derivation's truncation order has been walked. */
+/** Both lines, at every width — the backstop only, after the derivation has
+ *  chosen the form that fits (D-B24). */
 const LINE_CLIP = 'overflow-hidden text-ellipsis whitespace-nowrap';
 
 const sameWords = (a: LensBandLine2, b: LensBandLine2) =>
@@ -42,33 +43,70 @@ const sameWords = (a: LensBandLine2, b: LensBandLine2) =>
   a.standingCount === b.standingCount &&
   a.kind === b.kind;
 
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 export function LensBand({
   model,
-  open = true,
   readingStop = null,
   docId,
   onToTop,
+  onPinChange,
+  onActed,
+  onStandingOpened,
 }: {
   model: LensBandModel;
-  /** The letterhead is in frame — the band sits in flow at s0 and line 1
-   *  yields everything the letterhead already prints. L2/W4 drive it. */
-  open?: boolean;
   readingStop?: LensReadingStop | null;
   docId: string;
   /** H4 — the one reversing act, on the household. */
   onToTop?: () => void;
+  /** D-B19 — the page carries the pin up to the shell's `data-lens-state`. */
+  onPinChange?: (pinned: boolean) => void;
+  /** D-B22 — telemetry fires from the page; the band never captures. */
+  onActed?: () => void;
+  onStandingOpened?: () => void;
 }) {
   const { line1 } = model;
   const [printed, setPrinted] = useState<LensBandLine2>(model.line2);
   const [turning, setTurning] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // The sentinel is in frame until it is scrolled past: the band is in flow at
+  // s0, so it opens by default and on any engine without the observer.
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[entries.length - 1];
+        if (entry) setOpen(entry.isIntersecting);
+      },
+      { threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    onPinChange?.(!open);
+  }, [onPinChange, open]);
 
   useEffect(() => {
     if (model.line2 === printed) return;
     // Same words, new handler identities: adopt without turning the line.
     if (sameWords(model.line2, printed)) {
       setPrinted(model.line2);
+      return;
+    }
+    // L-1 reduced-motion form: the new sentence is printed instantly in place.
+    // A 90ms hold at opacity 0 is a blank line, not a shorter crossfade.
+    if (prefersReducedMotion()) {
+      setPrinted(model.line2);
+      setTurning(false);
       return;
     }
     setTurning(true);
@@ -106,12 +144,16 @@ export function LensBand({
   return (
     <>
       {/* The pin's one bit of input, in flow directly above the sticky band. */}
-      <div id="doc-ticket-sentinel" data-doc-ticket-sentinel aria-hidden />
+      <div
+        ref={sentinelRef}
+        id="doc-ticket-sentinel"
+        data-doc-ticket-sentinel
+        aria-hidden
+      />
       <section
         aria-label="The job"
         data-lens-band=""
         data-lens-open={open ? 'true' : 'false'}
-        data-lens-state={open ? 'rest' : 'reading'}
         className="doc-rule-mid sticky top-0 z-[4] box-border flex h-[var(--doc-band-height,56px)] flex-col justify-center gap-[2px] bg-[var(--doc-paper)]"
       >
         <p
@@ -145,12 +187,17 @@ export function LensBand({
           </span>
         </p>
 
+        {/* The clip lives on the SENTENCE, never on this flex line: the act's
+            44px control is inset by -12px into the 19.5px line, so an
+            `overflow: hidden` here would cut 12px off its box for painting and
+            for hit-testing — and at 390 line 2 is that act's only printing. */}
         <p
           data-lens-line="2"
           data-lens-line2-kind={printed.kind}
+          data-lens-line2-form={printed.form}
           aria-live="polite"
           aria-atomic="true"
-          className={`flex items-center gap-2 text-[15px] leading-[1.3] ${LINE_CLIP} ${
+          className={`flex items-center gap-2 whitespace-nowrap text-[15px] leading-[1.3] ${
             standing
               ? 'text-[var(--color-terracotta-ink)]'
               : 'text-[var(--text-primary)]'
@@ -175,7 +222,10 @@ export function LensBand({
               // The 44px target the Scored Ink owns must not grow the declared
               // 56px box, so the control is inset into the 19.5px line.
               className="my-[-12px] shrink-0"
-              onClick={printed.act.onAct}
+              onClick={() => {
+                onActed?.();
+                printed.act?.onAct();
+              }}
             >
               {printed.act.label}
             </DocumentAction>
@@ -186,7 +236,10 @@ export function LensBand({
               id={moreId}
               type="button"
               data-lens-more
-              onClick={() => setSheetOpen(true)}
+              onClick={() => {
+                onStandingOpened?.();
+                setSheetOpen(true);
+              }}
               className="shrink-0 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)] underline underline-offset-[3px]"
             >
               +{withheld} MORE
@@ -204,6 +257,7 @@ export function LensBand({
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         items={model.standing}
+        inputs={model.inputs}
         triggerRef={moreRef}
       />
     </>

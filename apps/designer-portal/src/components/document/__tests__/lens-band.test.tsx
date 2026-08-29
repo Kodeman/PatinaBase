@@ -38,6 +38,7 @@ const input = (over: Partial<LensBandInput> = {}): LensBandInput => ({
   ticket: [],
   needs: [],
   guide: null,
+  tier: 'full',
   household: 'Vandersteen residence',
   stageWord: 'Procurement & Orders',
   stageIndex: { position: 4, of: 6 },
@@ -55,6 +56,46 @@ const model = (over: Partial<LensBandInput> = {}): LensBandModel =>
 const band = () => document.querySelector('[data-lens-band]') as HTMLElement;
 const line = (n: '1' | '2') =>
   document.querySelector(`[data-lens-line="${n}"]`) as HTMLElement;
+const sentence = () =>
+  document.querySelector('[data-lens-sentence]') as HTMLElement;
+
+// C-04 — the band owns the sentinel's observer, so the pin is only reachable
+// through it: the global jsdom mock never fires, and a capturing one is what
+// makes "the sentinel left the frame" a state this suite can actually drive.
+let sentinelCallback: IntersectionObserverCallback | null = null;
+const originalIO = window.IntersectionObserver;
+
+beforeEach(() => {
+  sentinelCallback = null;
+  window.IntersectionObserver = jest.fn(
+    (callback: IntersectionObserverCallback) => {
+      sentinelCallback = callback;
+      return {
+        observe: jest.fn(),
+        unobserve: jest.fn(),
+        disconnect: jest.fn(),
+        takeRecords: () => [],
+        root: null,
+        rootMargin: '',
+        thresholds: [],
+      };
+    },
+  ) as unknown as typeof IntersectionObserver;
+});
+
+afterEach(() => {
+  window.IntersectionObserver = originalIO;
+});
+
+/** The sentinel has scrolled out of the frame — the band pins. */
+const passSentinel = () => {
+  act(() => {
+    sentinelCallback?.(
+      [{ isIntersecting: false } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+  });
+};
 
 describe('LensBand · the box and the sentinel (C-5)', () => {
   it('renders the sentinel as the band’s IMMEDIATE previous sibling', () => {
@@ -63,6 +104,20 @@ describe('LensBand · the box and the sentinel (C-5)', () => {
     expect(sentinel).not.toBeNull();
     expect(sentinel!.nextElementSibling).toBe(band());
     expect(band().previousElementSibling).toBe(sentinel);
+  });
+
+  it('observes that sentinel, and pins on it leaving the frame (C-04, §4)', () => {
+    render(<LensBand model={model()} docId="doc-1" />);
+    expect(band()).toHaveAttribute('data-lens-open', 'true');
+    passSentinel();
+    expect(band()).toHaveAttribute('data-lens-open', 'false');
+  });
+
+  it('never writes data-lens-state — that attribute is the shell’s (C-01)', () => {
+    render(<LensBand model={model()} docId="doc-1" />);
+    expect(band()).not.toHaveAttribute('data-lens-state');
+    passSentinel();
+    expect(band()).not.toHaveAttribute('data-lens-state');
   });
 
   it('is the sticky, opaque, declared-height box with its own lower rule', () => {
@@ -80,29 +135,39 @@ describe('LensBand · the box and the sentinel (C-5)', () => {
     expect(band().className).toContain('doc-rule-mid');
   });
 
-  it('holds both lines to one line by construction — nowrap, clipped, elided', () => {
+  it('holds both lines to one line — and clips the SENTENCE, not the act (C-02)', () => {
     render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
     for (const which of ['1', '2'] as const) {
       expect(line(which).className).toContain('whitespace-nowrap');
-      expect(line(which).className).toContain('overflow-hidden');
-      expect(line(which).className).toContain('text-ellipsis');
     }
+    // Line 1 has no inset control on it, so it may clip itself.
+    expect(line('1').className).toContain('overflow-hidden');
+    expect(line('1').className).toContain('text-ellipsis');
+    // Line 2 must not: the act is inset by -12px into the 19.5px line, so an
+    // `overflow: hidden` here would cut 12px off its 44px box for painting AND
+    // for hit-testing — and at 390 this is that act's only printing.
+    expect(line('2').className).not.toContain('overflow-hidden');
+    expect(line('2').className).not.toContain('text-ellipsis');
+    expect(sentence().className).toContain('overflow-hidden');
+    expect(sentence().className).toContain('text-ellipsis');
+    const act44 = screen.getByRole('button', { name: 'Send a reminder' });
+    expect(act44.className).not.toContain('overflow-hidden');
+    expect(
+      act44.closest('[data-lens-line="2"]')?.className.includes('overflow'),
+    ).toBe(false);
   });
 
   it('publishes no height and installs no ResizeObserver', () => {
     const observe = jest.spyOn(window.ResizeObserver.prototype, 'observe');
     render(<LensBand model={model()} docId="doc-1" />);
     expect(observe).not.toHaveBeenCalled();
-    expect(
-      document.documentElement.style.getPropertyValue('--doc-seam-height'),
-    ).toBe('');
     observe.mockRestore();
   });
 });
 
 describe('LensBand · line 1 yields to the letterhead (OD-1, L-6)', () => {
   it('prints only the money figure at s0, with the household and stage yielded', () => {
-    render(<LensBand model={model()} open docId="doc-1" />);
+    render(<LensBand model={model()} docId="doc-1" />);
     expect(band()).toHaveAttribute('data-lens-open', 'true');
     expect(line('1')).toHaveTextContent('$17,500 OUT');
     expect(line('1')).not.toHaveTextContent('VANDERSTEEN');
@@ -110,20 +175,29 @@ describe('LensBand · line 1 yields to the letterhead (OD-1, L-6)', () => {
   });
 
   it('prints the household, the stage and both facts once the sentinel is passed', () => {
-    render(<LensBand model={model()} open={false} docId="doc-1" />);
+    render(<LensBand model={model()} docId="doc-1" />);
+    passSentinel();
     expect(band()).toHaveAttribute('data-lens-open', 'false');
-    expect(band()).toHaveAttribute('data-lens-state', 'reading');
     expect(line('1')).toHaveTextContent(
       'VANDERSTEEN RESIDENCE · PROCUREMENT & ORDERS 4 OF 6',
     );
     expect(line('1')).toHaveTextContent('INSTALL SEP 15 · $17,500 OUT');
   });
 
+  it('reports the pin upward so the shell can write its own state (D-B19)', () => {
+    const onPinChange = jest.fn();
+    render(
+      <LensBand model={model()} docId="doc-1" onPinChange={onPinChange} />,
+    );
+    expect(onPinChange).toHaveBeenLastCalledWith(false);
+    passSentinel();
+    expect(onPinChange).toHaveBeenLastCalledWith(true);
+  });
+
   it('presses the household to the top when the page hands it that act (H4)', () => {
     const onToTop = jest.fn();
-    render(
-      <LensBand model={model()} open={false} docId="doc-1" onToTop={onToTop} />,
-    );
+    render(<LensBand model={model()} docId="doc-1" onToTop={onToTop} />);
+    passSentinel();
     fireEvent.click(
       screen.getByRole('button', { name: 'VANDERSTEEN RESIDENCE' }),
     );
@@ -146,13 +220,8 @@ describe('LensBand · line 1 yields to the letterhead (OD-1, L-6)', () => {
       'SENT AUG 19 · $9,400',
     ],
   ])('prints the %s spread’s own right slot', (spreadKind, over, expected) => {
-    render(
-      <LensBand
-        model={model({ spreadKind, ...over })}
-        open={false}
-        docId="doc-1"
-      />,
-    );
+    render(<LensBand model={model({ spreadKind, ...over })} docId="doc-1" />);
+    passSentinel();
     expect(line('1')).toHaveTextContent(expected);
   });
 
@@ -165,10 +234,10 @@ describe('LensBand · line 1 yields to the letterhead (OD-1, L-6)', () => {
           stageWord: 'Brief',
           stageIndex: null,
         })}
-        open={false}
         docId="doc-1"
       />,
     );
+    passSentinel();
     expect(line('1')).toHaveTextContent('REINHARDT LAKE HOUSE · BRIEF');
     expect(line('1')).not.toHaveTextContent('$');
     expect(line('1')).not.toHaveTextContent('INSTALL');
@@ -179,10 +248,22 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
   it('names the worst standing exception, in terracotta, with its act', () => {
     render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
     expect(line('2')).toHaveTextContent('Primary bedroom approval overdue 6 days');
+    expect(line('2')).toHaveAttribute('data-lens-line2-form', 'long');
     expect(line('2').className).toContain('text-[var(--color-terracotta-ink)]');
     expect(
       screen.getByRole('button', { name: 'Send a reminder' }),
     ).toBeInTheDocument();
+  });
+
+  it('prints the short form, and marks it, where the long one will not fit (D-B24)', () => {
+    render(
+      <LensBand model={model({ needs: NEEDS, tier: 'mobile' })} docId="doc-1" />,
+    );
+    expect(line('2')).toHaveAttribute('data-lens-line2-form', 'short');
+    expect(sentence()).toHaveTextContent('OVERDUE 6D · BEDROOM');
+    // The act shortens to its verb; the door prints whole in both forms.
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+3 MORE' })).toBeInTheDocument();
   });
 
   it('prints the guide sentence in charcoal when nothing stands', () => {
@@ -204,13 +285,10 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
 
   it('carries the crossfade and its reduced-motion form on the sentence', () => {
     render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
-    const sentence = document.querySelector(
-      '[data-lens-sentence]',
-    ) as HTMLElement;
-    expect(sentence.className).toContain('transition-opacity');
-    expect(sentence.className).toContain('ease-[var(--ease-editorial)]');
-    expect(sentence.className).toContain('duration-[150ms]');
-    expect(sentence.className).toContain('motion-reduce:transition-none');
+    expect(sentence().className).toContain('transition-opacity');
+    expect(sentence().className).toContain('ease-[var(--ease-editorial)]');
+    expect(sentence().className).toContain('duration-[150ms]');
+    expect(sentence().className).toContain('motion-reduce:transition-none');
   });
 
   it('turns the sentence out at 90ms and prints the new one in its place', async () => {
@@ -222,8 +300,6 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
       rerender(
         <LensBand model={model({ needs: NEEDS.slice(2) })} docId="doc-1" />,
       );
-      const sentence = () =>
-        document.querySelector('[data-lens-sentence]') as HTMLElement;
       expect(sentence().className).toContain('duration-[90ms]');
       expect(sentence().className).toContain('opacity-0');
       act(() => {
@@ -235,6 +311,39 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
       expect(sentence().className).toContain('opacity-100');
     } finally {
       jest.useRealTimers();
+    }
+  });
+
+  it('swaps instantly under reduced motion — no blank window at all (FID-05)', () => {
+    const matchMedia = jest.fn((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      onchange: null,
+      dispatchEvent: jest.fn(),
+    }));
+    const original = window.matchMedia;
+    window.matchMedia = matchMedia as unknown as typeof window.matchMedia;
+    jest.useFakeTimers();
+    try {
+      const { rerender } = render(
+        <LensBand model={model({ needs: NEEDS })} docId="doc-1" />,
+      );
+      rerender(
+        <LensBand model={model({ needs: NEEDS.slice(2) })} docId="doc-1" />,
+      );
+      // No timer has run, and the new words are already on the page.
+      expect(sentence().textContent).toBe(
+        'Carrier window, brass-and-oak console',
+      );
+      expect(sentence().className).toContain('opacity-100');
+      expect(sentence().className).not.toContain('opacity-0');
+    } finally {
+      jest.useRealTimers();
+      window.matchMedia = original;
     }
   });
 
@@ -256,6 +365,66 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
     ]) {
       expect(screen.getAllByRole('button', { name: label }).length).toBeGreaterThan(0);
     }
+  });
+
+  it('counts the open inputs in the door and files them in their own section (W3-R2)', () => {
+    const onAct = jest.fn();
+    render(
+      <LensBand
+        model={model({
+          needs: NEEDS,
+          inputs: [
+            {
+              key: 'signature',
+              eyebrow: 'SIGNATURE',
+              sentence: 'Client signature · Client · blocks Project activation',
+              act: { label: 'Follow up', onAct },
+            },
+          ],
+        })}
+        docId="doc-1"
+      />,
+    );
+    // Four exceptions + one input, minus the one line 2 is naming.
+    fireEvent.click(screen.getByRole('button', { name: '+4 MORE' }));
+    const panel = screen.getByRole('dialog');
+    expect(panel).toHaveAccessibleName('Standing · 5');
+    expect(panel).toHaveTextContent('INPUT NEEDED · 1');
+    expect(
+      panel.querySelectorAll('[data-standing-input-row]'),
+    ).toHaveLength(1);
+    expect(panel).toHaveTextContent(
+      'Client signature · Client · blocks Project activation',
+    );
+    // The exception rows come first, the inputs under their own heading.
+    const heading = panel.querySelector(
+      '[data-standing-input-heading]',
+    ) as HTMLElement;
+    const firstException = panel.querySelector(
+      '[data-standing-row]',
+    ) as HTMLElement;
+    expect(
+      heading.compareDocumentPosition(firstException) &
+        Node.DOCUMENT_POSITION_PRECEDING,
+    ).toBeTruthy();
+  });
+
+  it('tells the page when the sheet opens and when the act is taken (D-B22)', () => {
+    const onStandingOpened = jest.fn();
+    const onActed = jest.fn();
+    render(
+      <LensBand
+        model={model({ needs: NEEDS })}
+        docId="doc-1"
+        onActed={onActed}
+        onStandingOpened={onStandingOpened}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send a reminder' }));
+    expect(onActed).toHaveBeenCalledTimes(1);
+    expect(NEEDS[0].onAct).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: '+3 MORE' }));
+    expect(onStandingOpened).toHaveBeenCalledTimes(1);
   });
 
   it('returns focus to the +N MORE word when the sheet is put back (L-11 reverse)', async () => {

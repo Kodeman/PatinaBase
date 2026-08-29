@@ -695,11 +695,11 @@ function BandPaper({ section }: { section: 'project' | 'install' | 'care' }) {
         }
         onReleaseRoom={toggleRoom}
       />
-      {/* `open={false}` is the pinned band (s1+), where line 1 prints. At s0 it
-          yields to the letterhead 60px above; that case is asserted below. */}
+      {/* The band pins itself off its own sentinel (C-04): `passSentinel()`
+          is s1+, where line 1 prints. At s0 it yields to the letterhead 60px
+          above; that case is asserted below, with the observer left silent. */}
       <LensBand
         model={bandModelFor(section)}
-        open={false}
         readingStop={READING_STOP}
         docId="doc-1"
       />
@@ -718,12 +718,47 @@ function renderBandPaper(section: 'project' | 'install' | 'care') {
 const bandLine = (n: '1' | '2') =>
   document.querySelector<HTMLElement>(`[data-lens-line="${n}"]`);
 
+// C-04 — the band owns the sentinel's observer, so the pin is only reachable
+// through it; the global jsdom mock never fires.
+let sentinelCallback: IntersectionObserverCallback | null = null;
+function installSentinelObserver() {
+  sentinelCallback = null;
+  window.IntersectionObserver = jest.fn(
+    (callback: IntersectionObserverCallback) => {
+      sentinelCallback = callback;
+      return {
+        observe: jest.fn(),
+        unobserve: jest.fn(),
+        disconnect: jest.fn(),
+        takeRecords: () => [],
+        root: null,
+        rootMargin: '',
+        thresholds: [],
+      };
+    },
+  ) as unknown as typeof IntersectionObserver;
+}
+/** The sentinel has scrolled out of the frame — the band pins (s1+). */
+function passSentinel() {
+  act(() => {
+    sentinelCallback?.(
+      [{ isIntersecting: false } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+  });
+}
+
 const roomChip = (id: string) =>
   document.querySelector<HTMLButtonElement>(`[data-room-chip="${id}"]`);
 
 describe('the band, mounted by the document', () => {
+  const originalIO = window.IntersectionObserver;
   beforeEach(() => {
     installWidthMatchMedia(1440);
+    installSentinelObserver();
+  });
+  afterEach(() => {
+    window.IntersectionObserver = originalIO;
   });
 
   it.each([
@@ -738,6 +773,7 @@ describe('the band, mounted by the document', () => {
       // on all three project-kind spreads, mounted by the document rather than
       // the section — is now the band's TWO LINES, and it is held here.
       renderBandPaper(section);
+      passSentinel();
 
       const band = document.querySelector('[data-lens-band]');
       expect(band).not.toBeNull();
@@ -778,7 +814,6 @@ describe('the band, mounted by the document', () => {
       <RoomLensProvider>
         <LensBand
           model={bandModelFor('project')}
-          open
           readingStop={READING_STOP}
           docId="doc-1"
         />

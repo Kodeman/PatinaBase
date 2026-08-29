@@ -239,8 +239,22 @@ export function DocSpine({
               >
                 {stagePhrase.top}
               </span>
+              {/* RF-02 — the count stays printed through the yield, but it
+                  goes muted while the letterhead's arc is stating the same
+                  position, and comes back to the primary ink when it leaves.
+                  The parent `<p>` is unconditionally muted, so the colour has
+                  to be stated here. */}
               {stagePhrase.bottom && (
-                <span className="block break-words">{stagePhrase.bottom}</span>
+                <span
+                  data-spine-stage-count
+                  className={`block break-words transition-colors duration-200 motion-reduce:transition-none ${
+                    letterheadInFrame
+                      ? 'text-[var(--text-muted)]'
+                      : 'text-[var(--text-primary)]'
+                  }`}
+                >
+                  {stagePhrase.bottom}
+                </span>
               )}
             </p>
           )}
