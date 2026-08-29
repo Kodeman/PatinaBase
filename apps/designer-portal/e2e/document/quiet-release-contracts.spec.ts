@@ -191,9 +191,9 @@ test.describe("Quiet Work release browser contracts", () => {
           await expect(
             drawer.getByText(/In hand today|Hands free/),
           ).toBeVisible();
-          await expect(
-            page.locator("[data-spine-timer-regime]"),
-          ).toHaveCount(0);
+          await expect(page.locator("[data-spine-timer-regime]")).toHaveCount(
+            0,
+          );
         });
       }
 
@@ -202,9 +202,7 @@ test.describe("Quiet Work release browser contracts", () => {
         await expect(drawer).toBeHidden();
         await expect(mobileBar).toBeVisible();
         await expect(mobileBar.getByText(/In hand|Today/)).toBeVisible();
-        await expect(
-          page.locator("[data-spine-timer-regime]"),
-        ).toHaveCount(0);
+        await expect(page.locator("[data-spine-timer-regime]")).toHaveCount(0);
       });
     });
   });
