@@ -13,12 +13,16 @@
  * one date grammar the rest of the Document now speaks (DECISIONS.md I133).
  * Money and everything below the line keep blur-save untouched.
  *
- * Wave 1 (D-6): the vitals row prints only what is real. A date with no value,
- * an unrecorded budget band and a zero contract total print nothing at all —
- * no `Start —`, no `Set a budget band`, no fallback string in the live-figure
- * register — and with none of them recorded the row itself does not render.
- * The `Phases ▸` fold went with them (the proposal wins; per-phase hour
- * estimates are not a letterhead fact).
+ * Wave 1 (D-6, amended by D-B7): the vitals row prints only what is real —
+ * no `Start —`, no `Band $ – $`, no fallback string in the live-figure
+ * register, and a zero contract total prints nothing. But an unset vital is
+ * still SETTABLE from the paper: it prints as one scored-ink act (`Set dates`
+ * / `Set start` / `Set target`, `Set a budget band`) that opens the very
+ * editor the recorded field uses. The act is the door D-6's suppression would
+ * otherwise have bricked up — clearing a date with × cannot strand the
+ * designer, and focus lands on the act that replaced the field rather than
+ * dropping to <body>. The `Phases ▸` fold went with the placeholders (the
+ * proposal wins; per-phase hour estimates are not a letterhead fact).
  *
  * Zero shadows (D4); failures read inline at the field (R83). Renders only on
  * project documents (the page passes projectId).
@@ -104,24 +108,41 @@ function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | nul
  *  not applied to `value`) rather than dropped: a close that ISN'T a fresh
  *  commit (Esc, outside click) flushes it so the display never gets stuck
  *  showing what the popover opened with. `commit`/`clear` both discard any
- *  pending echo — the locally authored value wins over a now-stale one. */
+ *  pending echo — the locally authored value wins over a now-stale one.
+ *
+ *  D-B7: with no value the field prints `emptyAct` — a scored-ink act opening
+ *  the same popover — rather than a dash, and `emptyAct: null` prints nothing
+ *  at all (the sibling's `Set dates` is already the door for both dates). One
+ *  `triggerRef` serves whichever of the two buttons is mounted, so clearing a
+ *  value hands focus straight to the act that replaces it. */
 function VitalDate({
   projectId,
   column,
   serverValue,
   label,
+  emptyAct,
 }: {
   projectId: string;
   column: 'start_date' | 'target_end_date';
   serverValue: string | null;
   label: string;
+  emptyAct: string | null;
 }) {
   const [value, setValue] = useState(serverValue ?? '');
   const [open, setOpen] = useState(false);
   const lastServer = useRef(serverValue ?? '');
   const pendingEcho = useRef<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // × clears the field and swaps the trigger for the act; focus follows the
+  // swap so the press never drops the designer onto <body>.
+  const restoreFocus = useRef(false);
   const { save, state, errorMsg } = useVitalSave(projectId);
+
+  useEffect(() => {
+    if (!restoreFocus.current) return;
+    restoreFocus.current = false;
+    triggerRef.current?.focus();
+  }, [value]);
 
   useEffect(() => {
     const incoming = serverValue ?? '';
@@ -154,9 +175,46 @@ function VitalDate({
 
   const clear = () => {
     pendingEcho.current = null;
+    restoreFocus.current = true;
     setValue('');
     if ((serverValue ?? '') !== '') void save({ [column]: null });
   };
+
+  const folio = open && (
+    <FolioPopover onClose={() => setOpen(false)} aria-label={`${label} date`} returnFocusRef={triggerRef}>
+      <FolioCalendar
+        value={value ? { kind: 'day', date: value } : null}
+        today={todayYmd()}
+        modes={['day']}
+        readoutLabels={{ day: label.toUpperCase(), span: label.toUpperCase() }}
+        onCommit={commit}
+      />
+    </FolioPopover>
+  );
+
+  if (!value) {
+    if (!emptyAct) return null;
+    return (
+      <span className="relative inline-flex items-baseline gap-1">
+        {/* Never disabled while a save is in flight: this act only opens the
+            popover, and the × that clears a field hands focus straight to it
+            — a disabled button cannot take focus, which would drop her on
+            <body>, the very one-way door D-B7 closes. */}
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          className="group inline-flex items-baseline text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        >
+          <span className="da-score-hover font-mono text-[11px] uppercase tracking-[0.06em] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+            {emptyAct}
+          </span>
+        </button>
+        <SaveDot state={state} errorMsg={errorMsg} />
+        {folio}
+      </span>
+    );
+  }
 
   return (
     <span className="relative inline-flex items-baseline gap-1">
@@ -171,31 +229,19 @@ function VitalDate({
         disabled={state === 'saving'}
         className="border-b border-transparent bg-transparent font-mono text-[11px] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
       >
-        {value ? fmtDay(value) : '—'}
+        {fmtDay(value)}
       </button>
-      {value && (
-        <button
-          type="button"
-          aria-label={`Clear ${label.toLowerCase()}`}
-          onClick={clear}
-          disabled={state === 'saving'}
-          className="font-mono text-[11px] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)] disabled:opacity-50"
-        >
-          ×
-        </button>
-      )}
+      <button
+        type="button"
+        aria-label={`Clear ${label.toLowerCase()}`}
+        onClick={clear}
+        disabled={state === 'saving'}
+        className="font-mono text-[11px] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)] disabled:opacity-50"
+      >
+        ×
+      </button>
       <SaveDot state={state} errorMsg={errorMsg} />
-      {open && (
-        <FolioPopover onClose={() => setOpen(false)} aria-label={`${label} date`} returnFocusRef={triggerRef}>
-          <FolioCalendar
-            value={value ? { kind: 'day', date: value } : null}
-            today={todayYmd()}
-            modes={['day']}
-            readoutLabels={{ day: label.toUpperCase(), span: label.toUpperCase() }}
-            onCommit={commit}
-          />
-        </FolioPopover>
-      )}
+      {folio}
     </span>
   );
 }
@@ -207,12 +253,14 @@ function VitalMoney({
   serverCents,
   ariaLabel,
   placeholder,
+  inputRef,
 }: {
   projectId: string;
   column: 'budget_min' | 'budget_max';
   serverCents: number | null;
   ariaLabel: string;
   placeholder: string;
+  inputRef?: React.Ref<HTMLInputElement>;
 }) {
   const serverDollars = centsToDollarString(serverCents);
   const [value, setValue] = useState(serverDollars);
@@ -236,6 +284,7 @@ function VitalMoney({
   return (
     <span className="inline-flex items-baseline">
       <input
+        ref={inputRef}
         type="text"
         inputMode="decimal"
         aria-label={ariaLabel}
@@ -262,6 +311,67 @@ function VitalMoney({
   );
 }
 
+/** The budget band — two blur-save dollar fields behind one act. With no
+ *  bound recorded the band prints `Set a budget band` (D-B7) rather than an
+ *  empty `Band $ – $`; pressing it reveals the same two editors a recorded
+ *  band uses and puts the caret in the first of them. */
+function VitalBand({
+  projectId,
+  minCents,
+  maxCents,
+}: {
+  projectId: string;
+  minCents: number | null;
+  maxCents: number | null;
+}) {
+  const bandSet = minCents != null || maxCents != null;
+  const [revealed, setRevealed] = useState(false);
+  const minRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (revealed) minRef.current?.focus();
+  }, [revealed]);
+
+  if (!bandSet && !revealed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setRevealed(true)}
+        className="group inline-flex items-baseline text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      >
+        <span className="da-score-hover font-mono text-[11px] uppercase tracking-[0.06em] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+          Set a budget band
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-baseline gap-0.5">
+      <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        Band
+      </span>
+      <span className="font-mono text-[11px] text-[var(--text-primary)]">$</span>
+      <VitalMoney
+        projectId={projectId}
+        column="budget_min"
+        serverCents={minCents}
+        ariaLabel="Budget band minimum (dollars)"
+        placeholder="from"
+        inputRef={minRef}
+      />
+      <span className="font-mono text-[11px] text-[var(--text-primary)]">–</span>
+      <VitalMoney
+        projectId={projectId}
+        column="budget_max"
+        serverCents={maxCents}
+        ariaLabel="Budget band maximum (dollars)"
+        placeholder="to"
+      />
+    </span>
+  );
+}
+
 /** The contract total as a stated figure: a sub-dollar amount keeps its cents
  *  rather than rounding down into a bare "$0", and a credit keeps its sign.
  *  Only an exact zero is the absence of a recorded amount. */
@@ -284,13 +394,12 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
   const startDate: string | null = project.start_date ?? null;
   const targetDate: string | null = project.target_end_date ?? null;
   const total: number | null = project.total_amount_cents ?? null;
-  // A recorded band is one with a bound; a contract total of zero is the
-  // absence of a recorded amount rather than a project worth nothing.
-  const bandSet = project.budget_min != null || project.budget_max != null;
+  // A contract total of zero is the absence of a recorded amount rather than
+  // a project worth nothing.
   const totalSet = total != null && total !== 0;
-
-  // Nothing real to print is nothing printed — no empty row, no reserved box.
-  if (!phaseWord && !startDate && !targetDate && !bandSet && !totalSet) return null;
+  // D-B7: with neither date recorded the two fields share ONE act — `Set
+  // dates` — so an empty letterhead never prints two doors to the same idea.
+  const noDates = !startDate && !targetDate;
 
   return (
     <div className="mt-1">
@@ -300,45 +409,25 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           <p> (the browser silently closes it, a hydration hazard). */}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-primary)]">
         {phaseWord && <span>{phaseWord}</span>}
-        {startDate && (
-          <VitalDate
-            projectId={projectId}
-            column="start_date"
-            serverValue={startDate}
-            label="Start"
-          />
-        )}
-        {targetDate && (
-          <VitalDate
-            projectId={projectId}
-            column="target_end_date"
-            serverValue={targetDate}
-            label="Target"
-          />
-        )}
-        {bandSet && (
-          <span className="inline-flex items-baseline gap-0.5">
-            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-              Band
-            </span>
-            <span className="font-mono text-[11px] text-[var(--text-primary)]">$</span>
-            <VitalMoney
-              projectId={projectId}
-              column="budget_min"
-              serverCents={project.budget_min ?? null}
-              ariaLabel="Budget band minimum (dollars)"
-              placeholder="from"
-            />
-            <span className="font-mono text-[11px] text-[var(--text-primary)]">–</span>
-            <VitalMoney
-              projectId={projectId}
-              column="budget_max"
-              serverCents={project.budget_max ?? null}
-              ariaLabel="Budget band maximum (dollars)"
-              placeholder="to"
-            />
-          </span>
-        )}
+        <VitalDate
+          projectId={projectId}
+          column="start_date"
+          serverValue={startDate}
+          label="Start"
+          emptyAct={noDates ? 'Set dates' : 'Set start'}
+        />
+        <VitalDate
+          projectId={projectId}
+          column="target_end_date"
+          serverValue={targetDate}
+          label="Target"
+          emptyAct={noDates ? null : 'Set target'}
+        />
+        <VitalBand
+          projectId={projectId}
+          minCents={project.budget_min ?? null}
+          maxCents={project.budget_max ?? null}
+        />
         {totalSet && (
           <span className="font-mono text-[11px]">{contractTotal(total)}</span>
         )}

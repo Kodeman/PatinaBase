@@ -175,9 +175,14 @@ test.describe("Quiet Work release browser contracts", () => {
       // OD-16 (Wave 1): `spine-timer.tsx` — `SpineTimer` and
       // `CompactSpineTimerDoorway` — is deleted outright. There is no longer
       // a document-scoped timer doorway on the rail at any width; the
-      // studio-wide drawer (>=1180) and the mobile bar's own fallback slot
-      // (<1180) are the only printings of "time in hand" left, and neither
-      // ever carries `[data-spine-timer-regime]`.
+      // studio-wide drawer (>=1180) and the mobile bar's More sheet (<1180)
+      // are the only printings of "time in hand" left, and neither ever
+      // carries `[data-spine-timer-regime]`.
+      //
+      // "Sole" is a COUNT, not a presence: asserting the drawer prints one of
+      // two strings proves only that the drawer exists. Every step below
+      // counts the doorways on the whole page — a second document-scoped
+      // clock that simply omitted the regime attribute has to fail here.
       await page.goto(`/doc/${SEEDED_PROJECT_ID}`, {
         waitUntil: "domcontentloaded",
       });
@@ -185,37 +190,57 @@ test.describe("Quiet Work release browser contracts", () => {
 
       const drawer = page.getByRole("navigation", { name: "Studio drawer" });
       const mobileBar = page.getByTestId("mobile-bar");
+      const drawerDoorway = page.locator("[data-drawer-timer-doorway]");
+      const spineRegime = page.locator("[data-spine-timer-regime]");
+      // Every control that NAMES the clock, wherever it lives. Playwright's
+      // role engine reads the accessibility tree, so a CSS-hidden doorway is
+      // already excluded — what this counts is what she can reach.
+      const TIMER_NAME = /time controls|in hand/i;
+      const timerNamed = page.getByRole("button", { name: TIMER_NAME });
 
       for (const width of [1440, 1280]) {
         await test.step(`${width}px: the drawer is the sole timer doorway`, async () => {
           await page.setViewportSize({ width, height: 900 });
           await expect(mobileBar).toBeHidden();
           await expect(drawer).toBeVisible();
+          // The drawer prints the clock (and so the doorway) once the held
+          // document has a minute on it — `inHandToday > 0`. On a freshly
+          // reset database the seeded designer starts at zero, so this waits
+          // out the first tick rather than reading a hands-free drawer as a
+          // missing doorway.
+          await expect(drawerDoorway).toHaveCount(1, { timeout: 70_000 });
+          await expect(drawerDoorway).toBeVisible();
+          await expect(spineRegime).toHaveCount(0);
+          // One reachable clock door on the page, and it is the drawer's own
+          // — so nothing outside the drawer opens the timer at this width.
+          await expect(timerNamed).toHaveCount(1);
           await expect(
-            drawer.getByText(/In hand today|Hands free/),
-          ).toBeVisible();
-          await expect(page.locator("[data-spine-timer-regime]")).toHaveCount(
-            0,
-          );
+            drawer.getByRole("button", { name: TIMER_NAME }),
+          ).toHaveCount(1);
         });
       }
 
       await test.step("390px: the mobile bar's More is the sole timer doorway", async () => {
         await page.setViewportSize({ width: 390, height: 844 });
         await expect(drawer).toBeHidden();
+        await expect(drawerDoorway).toBeHidden();
         await expect(mobileBar).toBeVisible();
-        await expect(page.locator("[data-spine-timer-regime]")).toHaveCount(0);
+        await expect(spineRegime).toHaveCount(0);
+        // Nothing on the closed bar names the clock: the centre slot holds
+        // the elected LIFECYCLE act on this document, so the `In hand`/`Today`
+        // block — the slot's fallback when nothing is registered (OD-11) —
+        // does not print here.
+        await expect(timerNamed).toHaveCount(0);
 
-        // The bar's centre slot holds the elected LIFECYCLE act on this
-        // document, so the `In hand`/`Today` block — the slot's fallback when
-        // nothing is registered (OD-11) — does not print here. At 390 the
-        // timer's doorway is the More menu's `Time in hand` row, and it opens
-        // the same sheet the studio drawer's clock opens from 1180 up.
+        // At 390 the timer's doorway is the More menu's `Time in hand` row,
+        // and it opens the same sheet the drawer's clock opens from 1180 up.
         await mobileBar
           .getByRole("button", { name: "More studio actions" })
           .click();
         const timerRow = page.getByRole("button", { name: /Time in hand/ });
-        await expect(timerRow).toBeVisible();
+        await expect(timerRow).toHaveCount(1);
+        // Opening More adds exactly ONE clock door and no more.
+        await expect(timerNamed).toHaveCount(1);
         await timerRow.click();
         await expect(
           page.getByRole("dialog", { name: "Time in hand" }),
