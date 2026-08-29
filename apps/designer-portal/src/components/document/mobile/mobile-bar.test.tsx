@@ -447,7 +447,8 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     openSections();
     const panel = sectionsPanel();
     expect(within(panel).getByText('Filed with this job')).toBeInTheDocument();
-    ['Plan room', 'Spec book', 'Mood boards', 'Call sheet'].forEach((label) => {
+    // D-B8/F62 — one name for one thing: the sheet's third door says `Boards`.
+    ['Plan room', 'Spec book', 'Boards', 'Call sheet'].forEach((label) => {
       expect(
         within(panel).getByRole('button', { name: label }),
       ).toHaveClass('min-h-11');
@@ -457,7 +458,7 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     expect(mockRouterPush).toHaveBeenCalledWith('/doc/proj-1/plans');
   });
 
-  it('routes Spec book and Mood boards at this project', () => {
+  it('routes Spec book and Boards at this project', () => {
     const first = mountBarAndSheets();
     openSections();
     fireEvent.click(
@@ -470,7 +471,7 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     mountBarAndSheets();
     openSections();
     fireEvent.click(
-      within(sectionsPanel()).getByRole('button', { name: 'Mood boards' }),
+      within(sectionsPanel()).getByRole('button', { name: 'Boards' }),
     );
     expect(mockRouterPush).toHaveBeenCalledWith('/doc/proj-1/boards');
   });

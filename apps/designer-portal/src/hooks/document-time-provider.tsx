@@ -66,11 +66,18 @@ export interface HeldDocument {
   projectId: string;
   projectName: string;
   phaseKey: string | null;
+  /** F-3 route 1 — the engagement the presence channel is keyed on. The studio
+   *  drawer prints `You and Marit` beside the account, and it mounts in
+   *  `(document)/layout.tsx` above any engagement; the held document is the one
+   *  thing that already travels from the page to studio chrome. */
+  engagementId?: string | null;
 }
 
 interface DocumentTimeValue {
   /** The held document's live timer state (null off-document). */
   heldProjectId: string | null;
+  /** The held document's engagement — the presence channel's key (F-3). */
+  heldEngagementId: string | null;
   running: boolean;
   paused: boolean;
   elapsedSeconds: number;
@@ -457,6 +464,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
   const value = useMemo<DocumentTimeValue>(
     () => ({
       heldProjectId: held?.projectId ?? null,
+      heldEngagementId: held?.engagementId ?? null,
       running: Boolean(heldTimer),
       paused: pausedFor !== null && pausedFor === held?.projectId,
       elapsedSeconds,

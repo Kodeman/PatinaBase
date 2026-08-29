@@ -96,12 +96,14 @@ jest.mock('@/components/document/commercial/money-region', () => ({
 }));
 
 /* Everything else the page mounts is another suite's subject. */
-jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
+// W2 (C-2): the project spread's Care band IS the running index's `care`
+// root; the install spread's second mount is not (one root per stop).
+jest.mock('@/components/document/care-band', () => ({
+  CareBand: ({ indexRoot }: { indexRoot?: boolean }) =>
+    indexRoot ? <div data-index-region="care" /> : null,
+}));
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: () => null,
-}));
 jest.mock('@/components/document/shelves/document-shelves', () => ({
   DocumentShelves: () => null,
 }));
@@ -109,8 +111,14 @@ jest.mock('@/components/document/roster/call-sheet-mount', () => ({ CallSheetMou
 jest.mock('@/components/document/doc-spine', () => ({ DocSpine: () => null }));
 jest.mock('@/components/document/doc-letterhead', () => ({ DocLetterhead: () => null }));
 jest.mock('@/components/document/doc-colophon', () => ({ DocColophon: () => null }));
+// W2 (C-2): the record root is emitted unconditionally now, empty body and
+// all, so the index has a foot to observe on a project with nothing settled.
 jest.mock('@/components/document/previous-work', () => ({
-  PreviousWork: () => <div data-the-record />,
+  PreviousWork: () => (
+    <section data-index-region="record">
+      <div data-the-record />
+    </section>
+  ),
 }));
 jest.mock('@/components/document/brief-section', () => ({ BriefSection: () => null }));
 jest.mock('@/components/document/brief-recap', () => ({ BriefRecap: () => null }));
@@ -309,7 +317,10 @@ describe('the canonical paper order', () => {
     const { container } = render(<DocumentPage params={params} />);
 
     const nodes = Array.from(container.querySelectorAll('main *'));
-    const lastRegion = container.querySelector('[data-index-region="money"]')!;
+    // W2 — `record` is the last indexed region now: `PreviousWork` emits its
+    // root unconditionally and the Care band carries `care`, so the paper's
+    // own foot is what the Record must follow.
+    const lastRegion = container.querySelector('[data-index-region="record"]')!;
     const record = container.querySelector('[data-the-record]');
 
     // The Record mounts at all on a project document, and does so after the

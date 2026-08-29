@@ -319,14 +319,17 @@ function Sheet({
 }
 
 export function MobileSheets({
-  ladderValues = {},
+  ladderValues: ladderValuesProp,
 }: {
-  /** W2-L1's per-stop derivation, threaded in by integration; a stop with no
-   *  value yet prints its name alone. */
+  /** W2-L1's per-stop derivation. This sheet mounts in
+   *  `(document)/layout.tsx`, above the page that derives them, so in product
+   *  the values ride `MobileActiveDoc`; the prop is the direct route tests
+   *  take. */
   ladderValues?: Partial<Record<DocumentIndexKey, string>>;
 } = {}) {
   const { sheet, activeDoc, closeSheet, openMarginItem, openSpine } =
     useMobileShell();
+  const ladderValues = ladderValuesProp ?? activeDoc?.ladderValues ?? {};
   const router = useRouter();
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const projectId = activeDoc?.projectId ?? null;
@@ -575,7 +578,7 @@ export function MobileSheets({
                   }}
                   className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
                 >
-                  Mood boards
+                  Boards
                 </button>
               </li>
               {callSheetOn && (
@@ -596,6 +599,38 @@ export function MobileSheets({
                   </button>
                 </li>
               )}
+            </ul>
+          </>
+        )}
+
+        {/* DL-04 — the fifth door, on the proposal spread that carries a
+            client's copy. The leaf is the page's state, so the sheet asks for
+            it by the same wire the call sheet uses rather than holding a
+            second copy of it. */}
+        {activeDoc?.clientCopy && (
+          <>
+            {!projectId && (
+              <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+                Filed with this job
+              </p>
+            )}
+            <ul className={projectId ? '' : 'mt-1'}>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    window.dispatchEvent(
+                      new CustomEvent('document:open-leaf', {
+                        detail: { leaf: 'clientcopy' },
+                      }),
+                    );
+                  }}
+                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  The client’s copy
+                </button>
+              </li>
             </ul>
           </>
         )}

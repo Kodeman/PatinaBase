@@ -21,7 +21,6 @@
 import Link from 'next/link';
 import { StrataMark } from './strata-mark';
 import { LensLadder } from './spine/lens-ladder';
-import { useDocumentRunningIndex } from '@/hooks/use-document-running-index';
 import { fillStateAtSection } from '@/lib/document/fill-state';
 import type { DocumentIndexKey } from '@/lib/document/document-index';
 import type {
@@ -41,13 +40,27 @@ export interface DocSpineProps {
    *  track then says so in words (OD-2). */
   segments?: readonly LadderSegment[];
   doors?: readonly LadderDoor[];
-  /** The project whose region headings the ladder lands focus on
-   *  (`regionHeadingId`). */
+  /** The project whose region headings a jump lands focus on
+   *  (`regionHeadingId`). The landing itself is the page's — it owns the one
+   *  running-index call — so this is declared for the rail's callers and read
+   *  by nothing here. */
   projectId?: string | null;
   /** The stop whose own region head is in frame — its value yields, its name
    *  stays (RF-02). W3 wires the observer; until then nothing is in frame. */
   headInFrame?: DocumentIndexKey | null;
+  /** C-4 · the reading stop and the jump that reaches it. ONE
+   *  `useDocumentRunningIndex` call stands on this document and it stands on
+   *  the page (W1 lifted it there for the margin rail and the mobile bar);
+   *  the rail is handed the answer rather than opening a second observer over
+   *  the same roots (D-B6, retired here). */
+  activeKey?: DocumentIndexKey | null;
+  onJumpRegion?: (key: DocumentIndexKey) => void;
   onToggleRoom?: (roomId: string) => void;
+  /** The PHASE this job stands in, and where it stands — `PROCUREMENT &
+   *  ORDERS` over `4 OF 6` (reconciliation §7). The section label is a
+   *  different vocabulary and prints only where no phase has been placed. */
+  stageWord?: string | null;
+  stageIndex?: string | null;
   /** Who this document is for — the same name the letterhead's HouseholdChip
    *  prints (`row.client_name`). Absent on documents that carry no household. */
   household?: string;
@@ -62,21 +75,23 @@ export function DocSpine({
   onJump,
   segments = [],
   doors = [],
-  projectId = null,
   headInFrame = null,
+  activeKey = null,
+  onJumpRegion,
   onToggleRoom,
+  stageWord = null,
+  stageIndex = null,
   household,
   roomInHand = null,
   onReleaseRoom,
 }: DocSpineProps) {
   const activeSection = sections.find((s) => s.state === 'active');
-  // The reading line moved here with the block that used to own it
-  // (`spine-shelved-blocks.tsx`, deleted in OD-16). The ladder is the one
-  // thing that draws it, so the hook lives with the rail that prints it.
-  const { activeKey, jump } = useDocumentRunningIndex(
-    segments.map((segment) => segment.key),
-    projectId ?? '',
-  );
+  const stagePhrase =
+    stageWord != null
+      ? { top: stageWord, bottom: stageIndex }
+      : activeSection
+        ? { top: activeSection.label, bottom: activeSection.sub }
+        : null;
   return (
     <aside
       aria-label="Document spine"
@@ -186,7 +201,7 @@ export function DocSpine({
             })}
           </ul>
 
-          {activeSection && (
+          {stagePhrase && (
             <p
               data-spine-stage-phrase
               className="mt-2 font-mono text-[11px] uppercase leading-tight tracking-[0.05em] text-[var(--text-muted)]"
@@ -195,8 +210,10 @@ export function DocSpine({
                 its tail before `4 OF 6` gives up a character. At 1180–1439
                 the 112px measure wraps it at spaces rather than clipping it
                 against the rail's own overflow-x-hidden. */}
-              <span className="block break-words">{activeSection.label}</span>
-              <span className="block break-words">{activeSection.sub}</span>
+              <span className="block break-words">{stagePhrase.top}</span>
+              {stagePhrase.bottom && (
+                <span className="block break-words">{stagePhrase.bottom}</span>
+              )}
             </p>
           )}
 
@@ -227,7 +244,7 @@ export function DocSpine({
           doors={doors}
           activeKey={activeKey}
           headInFrame={headInFrame}
-          onJump={jump}
+          onJump={onJumpRegion ?? (() => {})}
           onToggleRoom={onToggleRoom}
         />
       </div>

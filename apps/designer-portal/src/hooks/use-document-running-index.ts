@@ -36,6 +36,17 @@ const READING_BAND = '-20% 0px -62% 0px';
 const JUMP_LOCK_MS = 700;
 const PAPER_ROOT_SELECTOR = '[data-document-paper]';
 
+/**
+ * Every root lookup is scoped to the PAPER. W2 gave the rail's ladder a
+ * `data-index-region` button per stop (C-4), and the rail is the grid's first
+ * column — so an unscoped `document.querySelector` returns the rail's own row
+ * instead of the region it names, and the index would observe itself.
+ */
+function regionRoot(key: DocumentIndexKey): Element | null {
+  const paper = document.querySelector(PAPER_ROOT_SELECTOR);
+  return (paper ?? document).querySelector(regionAnchorSelector(key));
+}
+
 export interface DocumentRunningIndex {
   activeKey: DocumentIndexKey | null;
   jump: (key: DocumentIndexKey) => void;
@@ -92,7 +103,7 @@ export function useDocumentRunningIndex(
       const anchor = window.innerHeight * 0.25;
       let best = present[0];
       for (const key of present) {
-        const el = document.querySelector(regionAnchorSelector(key));
+        const el = regionRoot(key);
         if (el && el.getBoundingClientRect().top <= anchor) best = key;
       }
       setActiveKey(best);
@@ -119,7 +130,7 @@ export function useDocumentRunningIndex(
 
     const attach = () => {
       for (const key of ordered) {
-        const el = document.querySelector(regionAnchorSelector(key));
+        const el = regionRoot(key);
         const previous = observing.get(key);
         if (previous && previous !== el) observer.unobserve(previous);
         if (!el) {
@@ -236,7 +247,7 @@ export function scrollToRegion(
   ).matches;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      const root = document.querySelector(regionAnchorSelector(key));
+      const root = regionRoot(key);
       root?.scrollIntoView({
         block: 'start',
         behavior: reduceMotion ? 'auto' : 'smooth',

@@ -47,6 +47,14 @@ export interface MobileActiveDoc {
    * treated as null when absent.
    */
   readingIndex?: DocumentIndexKey | null;
+  /** W2 · the ladder's per-stop values for the open spread. The sections sheet
+   *  mounts in `(document)/layout.tsx`, above the page that derives them, so
+   *  they ride the published document rather than a prop the layout has no way
+   *  to fill. */
+  ladderValues?: Partial<Record<DocumentIndexKey, string>>;
+  /** DL-04 · this spread carries a client's copy, so the sections sheet prints
+   *  the fifth door under `Filed with this job`. */
+  clientCopy?: boolean;
 }
 
 type Sheet =
@@ -304,9 +312,20 @@ export function useMobileActiveDoc(doc: MobileActiveDoc | null) {
     doc?.sections.map((s) => `${s.key}:${s.state}`).join('|') ?? '',
     doc?.rooms?.map((r) => r.id).join('|') ?? '',
   ].join('//');
+  // W2 — the reading stop and the ladder's values change while the engagement
+  // and its sections stand still, and they are what the bar's `AT <STOP>` line
+  // and the sections sheet print. Without them in the signature the published
+  // document is the one from the first paint for the life of the document.
+  const stateSig = [
+    doc?.readingIndex ?? '',
+    Object.entries(doc?.ladderValues ?? {})
+      .map(([stop, value]) => `${stop}=${value ?? ''}`)
+      .join('|'),
+    doc?.clientCopy ? 'copy' : '',
+  ].join('//');
   useEffect(() => {
     setActiveDoc(doc);
     return () => setActiveDoc(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, sectionsSig, setActiveDoc]);
+  }, [key, sectionsSig, stateSig, setActiveDoc]);
 }

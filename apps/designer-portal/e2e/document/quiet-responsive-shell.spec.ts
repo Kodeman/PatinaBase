@@ -161,8 +161,11 @@ test.describe('Quiet Work responsive document shell', () => {
 
     const spine = page.locator('[data-document-spine]');
     await expect(spine).toBeVisible();
-    // The running index survives as the spine's ONE block, under its own name.
-    await expect(spine.getByText(/On this paper/i)).toBeVisible({ timeout: 20_000 });
+    // W2 — the running index became the LADDER, and the ladder is the rail's
+    // one block under its own accessible name.
+    await expect(
+      spine.locator('nav[aria-label="This paper"]'),
+    ).toBeVisible({ timeout: 20_000 });
     // The two blocks B1 deleted are gone from the rail — headings first,
     // because those are what a reader would still see if either survived.
     await expect(spine.getByText(/^\s*Rooms\s*$/i)).toHaveCount(0);
@@ -296,8 +299,10 @@ test.describe('Quiet Work responsive document shell', () => {
       )
       .toBeGreaterThan(0);
 
-    const runningIndex = page.getByRole('group', { name: 'On this paper' });
-    await runningIndex.getByRole('button', { name: /^Money/i }).click();
+    // W2 — the running index became the LADDER: a `nav` named `This paper`,
+    // one button per stop.
+    const ladder = page.getByRole('navigation', { name: 'This paper' });
+    await ladder.getByRole('button', { name: /^Money/i }).click();
 
     // The Money region ROOT (`[data-index-region="money"]`) is what
     // `globals.css`'s `scroll-margin-top: var(--doc-seam-height, 0px)`
@@ -309,7 +314,11 @@ test.describe('Quiet Work responsive document shell', () => {
     await expect
       .poll(
         async () => {
-          const box = await page.locator('[data-index-region="money"]').boundingBox();
+          // Scoped to the paper: the ladder's own row carries the same
+          // attribute (C-4), and the landing contract is the region root's.
+          const box = await page
+            .locator('[data-document-paper] [data-index-region="money"]')
+            .boundingBox();
           if (!box) return Number.POSITIVE_INFINITY;
           const seamHeight = await page
             .locator('[data-document-shell]')

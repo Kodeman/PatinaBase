@@ -256,7 +256,8 @@ describe('the doors', () => {
     expect(doorRows().map((door) => door.textContent)).toEqual([
       'Plan room',
       'Spec book',
-      'Mood boards',
+      // D-B8/F62 — one name for one thing; the key stays `moodboards`.
+      'Boards',
       'Call sheet',
     ]);
   });

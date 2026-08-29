@@ -298,7 +298,8 @@ describe('deriveLadderDoors', () => {
     expect(doors.map((door) => door.label)).toEqual([
       'Plan room',
       'Spec book',
-      'Mood boards',
+      // D-B8/F62 — one name for one thing; the key stays `moodboards`.
+      'Boards',
       'Call sheet',
     ]);
   });
