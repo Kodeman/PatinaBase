@@ -44,7 +44,7 @@ function resolvedName(draft: DraftSlice): string {
 /** A products insert row at the requested status (library=published, inbox=draft). */
 export function productRow(draft: DraftSlice, userId: string, status: ProductStatus) {
   return {
-    ...buildProductInsertPayload(draftToProductPayload(draft, userId)),
+    ...buildProductInsertPayload({ ...draftToProductPayload(draft, userId), note: draft.note }),
     status,
   };
 }
@@ -368,6 +368,7 @@ export async function updateExisting(
       dimensions: full.dimensions,
       vendor_id: full.vendor_id,
       retailer_id: full.retailer_id,
+      usage_notes: full.usage_notes,
       updated_at: new Date().toISOString(),
     })
     .eq('id', existingId);

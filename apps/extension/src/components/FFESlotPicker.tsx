@@ -61,7 +61,7 @@ export function FFESlotPicker({
 }: FFESlotPickerProps) {
   const assigningExisting = !!productId;
   const [routeKind, setRouteKind] = useState<RouteKind>(
-    assigningExisting ? 'fill_slot' : 'library'
+    initialContext?.routeKind ?? (assigningExisting ? 'fill_slot' : 'library')
   );
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     initialContext?.projectId ?? null
@@ -168,8 +168,8 @@ export function FFESlotPicker({
 
   useEffect(publish, [routeKind, selectedProjectId, selectedRoomId, selectedSlotId, category]);
 
-  const remember = (projectId: string | null, roomId: string | null) => {
-    void saveSpecBookPlacementContext({ projectId, roomId });
+  const remember = (projectId: string | null, roomId: string | null, kind: RouteKind) => {
+    void saveSpecBookPlacementContext({ projectId, roomId, routeKind: kind });
   };
 
   const handleAssign = async () => {
@@ -213,13 +213,17 @@ export function FFESlotPicker({
         <select
           aria-label="Capture destination"
           value={routeKind}
-          onChange={(event) => setRouteKind(event.target.value as RouteKind)}
+          onChange={(event) => {
+            const kind = event.target.value as RouteKind;
+            setRouteKind(kind);
+            remember(selectedProjectId, selectedRoomId, kind);
+          }}
           className="min-h-11 w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris focus-visible:ring-2 focus-visible:ring-verdigris"
         >
-          <option value="library">Library only</option>
+          <option value="library">Library</option>
           <option value="project_inbox">Project inbox</option>
-          <option value="fill_slot">Fill existing slot</option>
-          <option value="create_line">Create new FF&amp;E line</option>
+          <option value="fill_slot">An open spot in a room</option>
+          <option value="create_line">A new item in a room</option>
         </select>
       )}
 
@@ -232,7 +236,7 @@ export function FFESlotPicker({
             setSelectedProjectId(projectId);
             setSelectedRoomId(null);
             setSelectedSlotId(null);
-            remember(projectId, null);
+            remember(projectId, null, routeKind);
           }}
           disabled={assigning}
           className="min-h-11 w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris focus-visible:ring-2 focus-visible:ring-verdigris"
@@ -254,7 +258,7 @@ export function FFESlotPicker({
             const roomId = event.target.value || null;
             setSelectedRoomId(roomId);
             setSelectedSlotId(null);
-            remember(selectedProjectId, roomId);
+            remember(selectedProjectId, roomId, routeKind);
           }}
           disabled={assigning || loadingRooms}
           className="min-h-11 w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris focus-visible:ring-2 focus-visible:ring-verdigris disabled:opacity-50"
@@ -270,7 +274,7 @@ export function FFESlotPicker({
 
       {routeKind === 'fill_slot' && selectedRoomId && (
         <select
-          aria-label="Existing FF&E slot"
+          aria-label="Open spot"
           value={selectedSlotId ?? ''}
           onChange={(event) => setSelectedSlotId(event.target.value || null)}
           disabled={assigning || loadingSlots}

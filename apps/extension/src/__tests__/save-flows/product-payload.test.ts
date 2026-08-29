@@ -16,6 +16,8 @@ const PRODUCTS_COLUMNS = new Set([
   'layer', 'owner_user_id',
   // 00232 field-capture origin (now also written by the extension, P2-8)
   'capture_source', 'capture_provenance',
+  // capture note (CL-R1 / c)
+  'usage_notes',
 ]);
 
 function makeExtractedData(overrides: Partial<ExtractedProductData> = {}): ExtractedProductData {
@@ -221,6 +223,49 @@ describe('buildProductInsertPayload', () => {
 
       expect(payload.finish).toBe('Matte');
       expect(payload.available_colors).toEqual(['Walnut', 'Ebony']);
+    });
+  });
+
+  describe('usage_notes (CL-R1 / c)', () => {
+    it('trims and carries the capture note into usage_notes', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+        note: '  Check the client likes the walnut finish  ',
+      });
+      expect(payload.usage_notes).toBe('Check the client likes the walnut finish');
+    });
+
+    it('defaults usage_notes to null when no note is provided', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+      });
+      expect(payload.usage_notes).toBeNull();
+    });
+
+    it('treats a whitespace-only note as null', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+        note: '   ',
+      });
+      expect(payload.usage_notes).toBeNull();
     });
   });
 });

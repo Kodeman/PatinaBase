@@ -25,7 +25,22 @@ export type SpecBookPlacementRoute =
 export interface SpecBookPlacementContext {
   projectId: string | null;
   roomId: string | null;
+  /**
+   * Sticky destination (CL-R1 / D5) — the last-chosen route kind, remembered
+   * alongside project/room so a designer filling a room doesn't re-pick the
+   * destination on every capture. Optional so contexts saved before this
+   * field existed still load; a missing value falls back to the picker's
+   * pre-existing default.
+   */
+  routeKind?: SpecBookPlacementRoute['kind'];
 }
+
+const ROUTE_KINDS: ReadonlySet<SpecBookPlacementRoute['kind']> = new Set([
+  'library',
+  'project_inbox',
+  'fill_slot',
+  'create_line',
+]);
 
 export interface PlacementSource {
   sourceUrl: string;
@@ -136,7 +151,10 @@ function isContext(value: unknown): value is SpecBookPlacementContext {
   const candidate = value as Record<string, unknown>;
   return (
     (candidate.projectId === null || typeof candidate.projectId === 'string') &&
-    (candidate.roomId === null || typeof candidate.roomId === 'string')
+    (candidate.roomId === null || typeof candidate.roomId === 'string') &&
+    (candidate.routeKind === undefined ||
+      (typeof candidate.routeKind === 'string' &&
+        ROUTE_KINDS.has(candidate.routeKind as SpecBookPlacementRoute['kind'])))
   );
 }
 

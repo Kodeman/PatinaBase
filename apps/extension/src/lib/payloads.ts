@@ -20,10 +20,12 @@ export interface BuildProductPayloadInput {
   vendorId: string | null;
   retailerId: string | null;
   userId: string;
+  /** The capture note (CL-R1 / c) — optional so existing callers are unaffected. */
+  note?: string | null;
 }
 
 export function buildProductInsertPayload(input: BuildProductPayloadInput) {
-  const { productName, extractedData, price, images, vendorId, retailerId, userId } = input;
+  const { productName, extractedData, price, images, vendorId, retailerId, userId, note } = input;
   const capturedAt = new Date().toISOString();
 
   return {
@@ -79,6 +81,7 @@ export function buildProductInsertPayload(input: BuildProductPayloadInput) {
     // even when the trigger is later removed.
     layer: 'personal' as const,
     owner_user_id: userId,
+    usage_notes: note?.trim() || null,
   };
 }
 
