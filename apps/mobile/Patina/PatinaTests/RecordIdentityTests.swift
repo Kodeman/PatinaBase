@@ -106,6 +106,12 @@ struct RecordIdentityTests {
             "Patina/Features/Home/ViewModels/DailyRoomViewModel.swift"
         )
         #expect(source.contains("RecordIdentity.admits(session: AuthService.shared.currentUserId)"))
-        #expect(source.contains("sessionUserId: AuthService.shared.currentUserId"))
+        // The rebuild itself moved to `RecordForeground` in W6, so that the
+        // app root can run one on a foreground from anywhere; the session it
+        // is attributed to has to move with it.
+        let rebuild = try SourcePin.read(
+            "Patina/Features/Home/ViewModels/RecordForeground.swift"
+        )
+        #expect(rebuild.contains("sessionUserId: AuthService.shared.currentUserId"))
     }
 }

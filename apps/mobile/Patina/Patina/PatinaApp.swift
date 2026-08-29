@@ -151,6 +151,16 @@ struct PatinaApp: App {
                     switch newPhase {
                     case .active:
                         PostHogService.shared.capture("app_open")
+                        // The record's foreground rebuild belongs HERE, at the
+                        // root: Today's own `scenePhase` hook fires only while
+                        // Today is mounted, so a foreground from Studio, Spaces
+                        // or Pieces rebuilt nothing — and the widget's timeline
+                        // reload rides the snapshot save
+                        // (`waves/w6/integration.md` §6.2). Today still asks for
+                        // its own rebuild; the two coalesce into one.
+                        Task { @MainActor in
+                            await RecordForeground.onForeground()
+                        }
                         // Retry any persistent-queue scan uploads that were
                         // stranded while the app was suspended / offline.
                         Task { @MainActor in
