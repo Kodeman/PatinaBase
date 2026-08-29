@@ -222,10 +222,10 @@ test.describe('Quiet Work responsive document shell', () => {
     await expect(spine).toBeVisible();
     await expect
       .poll(async () => (await spine.boundingBox())?.width ?? 0)
-      .toBeGreaterThanOrEqual(55);
+      .toBeGreaterThanOrEqual(135);
     await expect
       .poll(async () => (await spine.boundingBox())?.width ?? 1000)
-      .toBeLessThanOrEqual(57);
+      .toBeLessThanOrEqual(137);
 
     const trigger = page.locator('[data-margin-trigger]');
     await expect(trigger).toBeVisible();

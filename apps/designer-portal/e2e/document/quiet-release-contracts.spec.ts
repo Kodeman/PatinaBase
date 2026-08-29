@@ -112,9 +112,9 @@ test.describe("Quiet Work release browser contracts", () => {
         await expect(margin).toHaveAttribute("data-margin-mode", "sheet");
         await expect(margin).toHaveAttribute("aria-hidden", "true");
         await expectHorizontalBounds(shell, 0, width);
-        await expectHorizontalBounds(spine, 0, 56);
-        await expectHorizontalBounds(paper, 56, width);
-        await expectHorizontalBounds(marginTrigger, 56, width);
+        await expectHorizontalBounds(spine, 0, 136);
+        await expectHorizontalBounds(paper, 136, width);
+        await expectHorizontalBounds(marginTrigger, 136, width);
         await expectNoHorizontalOverflow(page);
       });
     }
@@ -166,136 +166,46 @@ test.describe("Quiet Work release browser contracts", () => {
       "the held-project timer writes one shared seeded-designer row",
     );
 
-    test("keeps one focused timer doorway at 1280px", async ({
+    test("the drawer / mobile bar is the sole timer doorway at every width", async ({
       authenticatedPage: page,
     }) => {
-      await page.setViewportSize({ width: 1280, height: 900 });
+      // OD-16 (Wave 1): `spine-timer.tsx` — `SpineTimer` and
+      // `CompactSpineTimerDoorway` — is deleted outright. There is no longer
+      // a document-scoped timer doorway on the rail at any width; the
+      // studio-wide drawer (>=1180) and the mobile bar's own fallback slot
+      // (<1180) are the only printings of "time in hand" left, and neither
+      // ever carries `[data-spine-timer-regime]`.
       await page.goto(`/doc/${SEEDED_PROJECT_ID}`, {
         waitUntil: "domcontentloaded",
       });
       await expect(page.locator("[data-document-shell]")).toBeVisible();
-      await expect(page.getByTestId("mobile-bar")).toBeHidden();
-      await expect(
-        page.locator("[data-mobile-edge-owner]:visible"),
-      ).toHaveCount(0);
 
-      const originalBodyOverflow = await page.evaluate(
-        () => document.body.style.overflow,
-      );
-      const timerDoorway = page.locator("[data-compact-spine-timer-doorway]");
-      await expect(timerDoorway).toBeVisible();
-      await expect(timerDoorway).toHaveAttribute(
-        "data-spine-timer-regime",
-        "compact-only-1180-1439",
-      );
-      await timerDoorway.click();
+      const drawer = page.getByRole("navigation", { name: "Studio drawer" });
+      const mobileBar = page.getByTestId("mobile-bar");
 
-      const timerDialog = page.getByRole("dialog", { name: "Time in hand" });
-      await expect(timerDialog).toBeVisible();
-      await expect(timerDialog).toHaveAttribute("id", "mobile-timer-sheet");
-      await expect(
-        timerDialog.locator("[data-mobile-sheet-panel]"),
-      ).toBeFocused();
-      await expect(page.getByTestId("mobile-bar")).toBeHidden();
-      await expect(
-        page.locator("[data-mobile-edge-owner]:visible"),
-      ).toHaveCount(0);
-
-      await page.keyboard.press("Escape");
-      await expect(timerDialog).toBeHidden();
-      await expect(timerDoorway).toBeFocused();
-      await expect(timerDoorway).toHaveAttribute("aria-expanded", "false");
-      await expect
-        .poll(() => page.evaluate(() => document.body.style.overflow))
-        .toBe(originalBodyOverflow);
-
-      await test.step("1439→1440 closes the compact timer without hidden focus", async () => {
-        await page.setViewportSize({ width: 1439, height: 900 });
-        await expect(timerDoorway).toBeVisible();
-        await timerDoorway.click();
-        await expect(timerDialog).toBeVisible();
-        await expect
-          .poll(() => page.evaluate(() => document.body.style.overflow))
-          .toBe("hidden");
-
-        await page.setViewportSize({ width: 1440, height: 900 });
-        await expect(timerDialog).toHaveCount(0);
-        await expect(page.locator("[data-full-spine-timer]")).toBeVisible();
-        await expect(
-          page.locator(
-            '[data-full-spine-timer] [data-action-key="open-manual-time-entry"]',
-          ),
-        ).toBeFocused();
-        await expect(timerDoorway).toBeHidden();
-        await expect(timerDoorway).not.toBeFocused();
-        await expect
-          .poll(() => page.evaluate(() => document.body.style.overflow))
-          .toBe(originalBodyOverflow);
-
-        await page.setViewportSize({ width: 1439, height: 900 });
-        await expect(timerDialog).toHaveCount(0);
-      });
-
-      await test.step("the timer remains open when 1180 gives way to the mobile edge", async () => {
-        await page.setViewportSize({ width: 1280, height: 900 });
-        await timerDoorway.click();
-        await expect(timerDialog).toBeVisible();
-
-        await page.setViewportSize({ width: 1179, height: 900 });
-        await expect(timerDialog).toBeVisible();
-        await expect(timerDoorway).toBeHidden();
-        await expect
-          .poll(() => page.evaluate(() => document.body.style.overflow))
-          .toBe("hidden");
-
-        await page.keyboard.press("Escape");
-        await expect(timerDialog).toHaveCount(0);
-        await expect(timerDoorway).not.toBeFocused();
-        await expect(
-          page.getByRole("button", { name: "More studio actions" }),
-        ).toBeFocused();
-        await expect
-          .poll(() => page.evaluate(() => document.body.style.overflow))
-          .toBe(originalBodyOverflow);
-      });
-
-      await test.step("1179→1180 returns a mobile-opened timer to the compact doorway", async () => {
-        const mobileMore = page.getByRole("button", {
-          name: "More studio actions",
+      for (const width of [1440, 1280]) {
+        await test.step(`${width}px: the drawer is the sole timer doorway`, async () => {
+          await page.setViewportSize({ width, height: 900 });
+          await expect(mobileBar).toBeHidden();
+          await expect(drawer).toBeVisible();
+          await expect(
+            drawer.getByText(/In hand today|Hands free/),
+          ).toBeVisible();
+          await expect(
+            page.locator("[data-spine-timer-regime]"),
+          ).toHaveCount(0);
         });
-        await expect(mobileMore).toBeVisible();
-        await mobileMore.click();
-        await page
-          .getByRole("group", { name: "More studio actions" })
-          .getByRole("button", { name: /^Time in hand/ })
-          .click();
-        await expect(timerDialog).toBeVisible();
-        await expect
-          .poll(() => page.evaluate(() => document.body.style.overflow))
-          .toBe("hidden");
+      }
 
-        await page.setViewportSize({ width: 1180, height: 900 });
-        await expect(timerDialog).toBeVisible();
-        await expect(mobileMore).toBeHidden();
-        await expect(timerDoorway).toBeVisible();
-
-        await page.keyboard.press("Escape");
-        await expect(timerDialog).toHaveCount(0);
-        await expect(timerDoorway).toBeFocused();
-        await expect
-          .poll(() => page.evaluate(() => document.body.style.overflow))
-          .toBe(originalBodyOverflow);
-
-        await page.setViewportSize({ width: 1179, height: 900 });
-        await expect(timerDialog).toHaveCount(0);
+      await test.step("390px: the mobile bar is the sole timer doorway", async () => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expect(drawer).toBeHidden();
+        await expect(mobileBar).toBeVisible();
+        await expect(mobileBar.getByText(/In hand|Today/)).toBeVisible();
+        await expect(
+          page.locator("[data-spine-timer-regime]"),
+        ).toHaveCount(0);
       });
-
-      // Put the seeded project back so a later spec does not inherit its
-      // one-running-timer row.
-      await page.goto("/desk", { waitUntil: "domcontentloaded" });
-      await expect(
-        page.locator('[data-tour-anchor="desk-folio"]'),
-      ).toBeVisible();
     });
   });
 
