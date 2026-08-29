@@ -114,9 +114,9 @@ function dimensionFieldsPresent(data: ExtractedProductData): string[] {
   return DIMENSION_FIELDS.filter((key) => dims[key] !== undefined && dims[key] !== null);
 }
 
-/** Detect sku/mpn/productID keys anywhere in the page's raw JSON-LD text,
- * even though extractProductData doesn't read them yet — this is purely a
- * "is the data there for later" probe for the deck. */
+/** Detect sku/mpn/productID keys anywhere in the page's raw JSON-LD text. A raw
+ * text probe, independent of extraction's own precedence — the `sku` column
+ * next to it records what extractProductData actually resolved. */
 function skuLikeKeysInJsonLd(doc: Document): string[] {
   const found = new Set<string>();
   const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
@@ -180,6 +180,8 @@ interface FixtureReportEntry {
   name: string | null;
   price: { value: number; currency: string } | null;
   currency: string | null;
+  /** CL-R1: the SKU extraction resolved, null when the page publishes none. */
+  sku: string | null;
   dimensionFieldsPresent: string[];
   materialsCount: number;
   colorsCount: number;
@@ -212,6 +214,7 @@ describe('extraction fixtures (persona harvest)', () => {
           name: null,
           price: null,
           currency: null,
+          sku: null,
           dimensionFieldsPresent: [],
           materialsCount: 0,
           colorsCount: 0,
@@ -271,6 +274,7 @@ describe('extraction fixtures (persona harvest)', () => {
           name: data.productName,
           price: data.price ? { value: data.price.value, currency: data.price.currency } : null,
           currency: data.currency ?? null,
+          sku: data.sku ?? null,
           dimensionFieldsPresent: dimensionFieldsPresent(data),
           materialsCount: data.materials?.length ?? 0,
           colorsCount: data.colors?.length ?? 0,
@@ -307,6 +311,7 @@ describe('extraction fixtures (persona harvest)', () => {
           name: null,
           price: null,
           currency: null,
+          sku: null,
           dimensionFieldsPresent: [],
           materialsCount: 0,
           colorsCount: 0,
@@ -348,8 +353,12 @@ afterAll(() => {
   const ordered = FIXTURES.map((f) => byFile.get(f.file)).filter((r): r is FixtureReportEntry => !!r);
   const output = {
     generatedAt: new Date().toISOString(),
-    lane: 'capture-launch/w2-d9',
+    lane: 'capture-launch/w2-d6',
     notes: [
+      'CL-R1 re-run. sku is what extractProductData now resolves: JSON-LD ' +
+        'Product/ProductGroup (sku → mpn → productID, taking the URL-matched hasVariant when ' +
+        'one addresses the page), then meta[product:retailer_item_id], then [itemprop="sku"]. ' +
+        'It is editable in the panel and lands on products.sku.',
       'CL-R12/13/14 re-run. manufacturer is now the brand the page names (null when it ' +
         'names none) rather than the domain; retailer stays domain-derived. currency is ' +
         'the USD-preferred JSON-LD offer currency, defaulting to USD. pinterest/instagram ' +
@@ -371,8 +380,10 @@ afterAll(() => {
         'saving. The other 11 fixtures were fetched with curl and retain their full <script> ' +
         'content (including any inline/external stylesheet links) unmodified — see ' +
         'fixtures/README.md methodology note.',
-      'sku/mpn/productID presence is a raw JSON-LD text probe, independent of extraction — ' +
-        'extractProductData does not read those keys yet; ExtractedProductData has no sku field.',
+      'skuLikeKeysInJsonLd stays a raw JSON-LD text probe and can disagree with the resolved ' +
+        'sku in both directions: dwr and knoll publish no such JSON-LD key but do carry ' +
+        '[itemprop="sku"], while a page can name a key inside markup extraction declines to ' +
+        'read (an unselected ProductGroup variant, say).',
     ],
     fixtures: ordered,
   };

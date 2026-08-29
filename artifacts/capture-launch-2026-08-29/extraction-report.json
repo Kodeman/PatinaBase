@@ -1,12 +1,13 @@
 {
-  "generatedAt": "2026-08-29T17:06:30.749Z",
-  "lane": "capture-launch/w2-d9",
+  "generatedAt": "2026-08-29T19:16:18.554Z",
+  "lane": "capture-launch/w2-d6",
   "notes": [
+    "CL-R1 re-run. sku is what extractProductData now resolves: JSON-LD Product/ProductGroup (sku → mpn → productID, taking the URL-matched hasVariant when one addresses the page), then meta[product:retailer_item_id], then [itemprop=\"sku\"]. It is editable in the panel and lands on products.sku.",
     "CL-R12/13/14 re-run. manufacturer is now the brand the page names (null when it names none) rather than the domain; retailer stays domain-derived. currency is the USD-preferred JSON-LD offer currency, defaulting to USD. pinterest/instagram are refused by isKnownBadDomain() before extraction runs, so their rows carry blocked:true and the refusal message instead of field values.",
     "Ran extractProductData() against each fixture inside jsdom (new JSDOM(html, { url })). jsdom has no layout engine: getBoundingClientRect() always returns zeros, so the position-based component of image scoring (src/lib/extraction/images.ts) never contributes here the way it would in a real browser tab — image counts and JSON-LD- derived scores are representative, but the highest-scored image may differ from what the live extension would pick.",
     "jsdom does not implement innerText at all (price.ts uses document.body.innerText as a fallback price scan) — this suite polyfills it as an alias for textContent so extraction can run without throwing. That polyfill is not layout-aware: hidden/off- screen price text a real browser would exclude from innerText can be picked up here.",
     "window.getComputedStyle() background-image lookups (images.ts) will not see rules from external stylesheets on the 4 Chrome-rendered fixtures (rh, hermanmiller, westelm, cb2) — harvesting those stripped <link rel=\"stylesheet\"> and non-JSON-LD <script> tags before saving. The other 11 fixtures were fetched with curl and retain their full <script> content (including any inline/external stylesheet links) unmodified — see fixtures/README.md methodology note.",
-    "sku/mpn/productID presence is a raw JSON-LD text probe, independent of extraction — extractProductData does not read those keys yet; ExtractedProductData has no sku field."
+    "skuLikeKeysInJsonLd stays a raw JSON-LD text probe and can disagree with the resolved sku in both directions: dwr and knoll publish no such JSON-LD key but do carry [itemprop=\"sku\"], while a page can name a key inside markup extraction declines to read (an unselected ProductGroup variant, say)."
   ],
   "fixtures": [
     {
@@ -20,6 +21,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": "26982",
       "dimensionFieldsPresent": [
         "width",
         "height",
@@ -54,6 +56,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": "100077567",
       "dimensionFieldsPresent": [
         "width",
         "height",
@@ -81,6 +84,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": null,
       "dimensionFieldsPresent": [],
       "materialsCount": 2,
       "colorsCount": 0,
@@ -104,6 +108,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": null,
       "dimensionFieldsPresent": [],
       "materialsCount": 1,
       "colorsCount": 0,
@@ -124,6 +129,7 @@
       "name": "Eames Lounge Chair and Ottoman",
       "price": null,
       "currency": "USD",
+      "sku": null,
       "dimensionFieldsPresent": [],
       "materialsCount": 0,
       "colorsCount": 0,
@@ -144,6 +150,7 @@
       "name": "Gesture Ergonomic Office & Desk Chair | Steelcase",
       "price": null,
       "currency": "USD",
+      "sku": null,
       "dimensionFieldsPresent": [],
       "materialsCount": 0,
       "colorsCount": 0,
@@ -167,6 +174,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": "JN5110",
       "dimensionFieldsPresent": [],
       "materialsCount": 1,
       "colorsCount": 0,
@@ -193,6 +201,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": "100360310",
       "dimensionFieldsPresent": [
         "width",
         "height",
@@ -220,6 +229,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": null,
       "dimensionFieldsPresent": [],
       "materialsCount": 3,
       "colorsCount": 0,
@@ -243,6 +253,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": null,
       "dimensionFieldsPresent": [
         "width",
         "height",
@@ -270,6 +281,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": "harris-sofa-96-h4614",
       "dimensionFieldsPresent": [],
       "materialsCount": 5,
       "colorsCount": 0,
@@ -296,6 +308,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": "450191",
       "dimensionFieldsPresent": [
         "width",
         "height",
@@ -325,6 +338,7 @@
         "currency": "USD"
       },
       "currency": "USD",
+      "sku": null,
       "dimensionFieldsPresent": [],
       "materialsCount": 1,
       "colorsCount": 2,
@@ -347,6 +361,7 @@
       "name": null,
       "price": null,
       "currency": null,
+      "sku": null,
       "dimensionFieldsPresent": [],
       "materialsCount": 0,
       "colorsCount": 0,
@@ -369,6 +384,7 @@
       "name": null,
       "price": null,
       "currency": null,
+      "sku": null,
       "dimensionFieldsPresent": [],
       "materialsCount": 0,
       "colorsCount": 0,

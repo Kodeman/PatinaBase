@@ -237,6 +237,8 @@ export interface ExtractedProductData {
   images: ExtractedImage[];
   /** The brand the page names — null when the page names none (CL-R12). */
   manufacturer: string | null;
+  /** Vendor SKU / model number the page publishes (CL-R1); editable in the panel. */
+  sku?: string;
   /** ISO code the capture is denominated in (CL-R13); defaults to 'USD'. */
   currency?: string;
   url: string;

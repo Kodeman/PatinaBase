@@ -272,6 +272,8 @@ export interface ExtendedExtractedProductData {
     alt: string;
   }[];
   manufacturer: string | null;
+  /** ISO code the capture is denominated in (CL-R13); defaults to 'USD'. */
+  currency?: string;
   url: string;
   extractedAt: string;
   confidence: 'high' | 'medium' | 'low';
