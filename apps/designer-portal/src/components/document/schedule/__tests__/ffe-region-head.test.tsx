@@ -208,8 +208,24 @@ describe('FF&E project-mode region head', () => {
     ).toHaveAttribute('data-action-variant', 'secondary');
   });
 
-  it('renders the fold seam by default when the schedule has settled empty', () => {
+  it('arrives OPEN when the schedule has settled empty — the default quiets a stop, it never folds it', () => {
+    // R127 OD-10 (W3-L5). This case read "renders the fold seam by default
+    // when the schedule has settled empty". `ffe` is a STOP key, so a derived
+    // default is DENSITY now, not a fold: an empty schedule arrives open and
+    // quiet, with its head and its count line on the paper rather than a seam.
     mockItems = [];
+    renderProject();
+
+    expect(document.querySelector('[data-fold-seam]')).toBeNull();
+    expect(document.querySelector('[data-region-head]')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
+  });
+
+  it('renders the fold seam with its summary when she folded it herself', () => {
+    // The seam's own claim — its summary line — kept whole under the one cause
+    // a stop can still have (OD-10).
+    mockItems = [];
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
     renderProject();
     expect(
       screen.getByText('1 group · no lines yet', { exact: false }),
@@ -232,6 +248,8 @@ describe('FF&E project-mode region head', () => {
 
   it('opens from the seam back to the full head, round-trip', () => {
     mockItems = [];
+    // The fold she made herself is the only seam a stop can wear (OD-10).
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
     renderProject();
     fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
     expect(

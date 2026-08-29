@@ -264,9 +264,32 @@ describe("ScheduleSpine region head", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the seam by default when every phase is closed", () => {
+  it("arrives OPEN when every phase is closed — a derived default quiets a stop, it never folds it", () => {
+    // R127 OD-10 (W3-L5). This case read "renders the seam by default when
+    // every phase is closed". `schedule` is a STOP key — it owns a
+    // `[data-index-region]` root — so its derived default no longer produces a
+    // fold: it produces DENSITY. The region arrives open and quiet, with its
+    // head on the paper; only the designer can shut a stop, and the case that
+    // proves she still can is directly below.
     useResolvedScheduleMock.mockReturnValue(onePhaseSchedule("completed"));
     phaseStateMock.mockReturnValue("closed");
+
+    renderSpine();
+
+    expect(document.querySelector("[data-fold-seam]")).toBeNull();
+    expect(document.querySelector("[data-region-head]")).not.toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Schedule" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the seam when she folded it herself, with an unmounted body", () => {
+    // The seam's own claims, kept whole — only their CAUSE changed. A stop can
+    // still stand folded; it can only ever stand folded because she said so
+    // (OD-10), and a remembered choice from before R127 still reads the same.
+    useResolvedScheduleMock.mockReturnValue(onePhaseSchedule("completed"));
+    phaseStateMock.mockReturnValue("closed");
+    window.localStorage.setItem("patina:doc-fold:project-1:schedule", "1");
 
     renderSpine();
 
@@ -285,6 +308,8 @@ describe("ScheduleSpine region head", () => {
   it("unfolds the seam back to the head and body on click", () => {
     useResolvedScheduleMock.mockReturnValue(onePhaseSchedule("completed"));
     phaseStateMock.mockReturnValue("closed");
+    // The fold she made herself is the only seam a stop can wear (OD-10).
+    window.localStorage.setItem("patina:doc-fold:project-1:schedule", "1");
 
     renderSpine();
 
@@ -339,6 +364,9 @@ describe("ScheduleSpine region head", () => {
         cb(0);
         return 0;
       });
+
+    // Folded by her, which after OD-10 is the only way a stop is folded at all.
+    window.localStorage.setItem("patina:doc-fold:project-1:schedule", "1");
 
     renderSpine();
     expect(document.querySelector("[data-fold-seam]")).not.toBeNull();

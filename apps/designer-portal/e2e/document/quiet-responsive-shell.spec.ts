@@ -1,5 +1,6 @@
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 import { adminDb } from '../helpers/supabase-admin';
+import { scrollTo, settle } from '../helpers/lens';
 
 const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
 /**
@@ -23,8 +24,8 @@ async function openDocument(page: AuthenticatedPage, width: number) {
   await expect(page.locator('[data-document-shell]')).toBeVisible();
 }
 
-/** A project-kind spread — the only documents that print the ticket, and the
- *  only ones whose spine ever carried the two blocks B1 subtracted. A FIXED
+/** A project-kind spread — the only documents whose spine ever carried the two
+ *  blocks B1 subtracted, and the ones the band's line 1 has facts for. A FIXED
  *  seed UUID, not one of the DB-generated project ids: those change on every
  *  `supabase:reset` and a spec pinned to one rots silently. */
 const PROJECT_ID = 'b0000000-0000-0000-0000-0000000000d4';
@@ -151,9 +152,10 @@ test.describe('Quiet Work responsive document shell', () => {
       .toBe(true);
   });
 
-  // ── B1 — the spine's subtraction, and the ticket that replaced it. This is
-  // the canary for the wave: the rooms and the shelves left the rail and
-  // became the ticket's rows on the paper, at every width. ──
+  // ── B1 — the spine's subtraction, and what replaced it. This is the canary
+  // for the wave: the rooms and the shelves left the rail for the paper at
+  // every width, first as the ticket's rows and now (R127 Wave 3) as the
+  // band's two lines above the paper and the ladder's stops inside the rail. ──
   test('1440px leaves the spine one block and puts the map on the paper', async ({
     authenticatedPage: page,
   }) => {
@@ -173,29 +175,59 @@ test.describe('Quiet Work responsive document shell', () => {
     // ...and the old heading the index carried before it was renamed.
     await expect(spine.getByText(/In this document/i)).toHaveCount(0);
 
-    const ticket = page.locator('[data-job-ticket]');
-    await expect(ticket).toBeVisible();
-    await expect(ticket.locator('[data-ticket-row]')).toHaveCount(8);
+    // R127 Wave 3 (W3-L5): the ticket's eight rows are gone and the BAND took
+    // the position — two lines, one declared height, no rows. The claim this
+    // keeps is the wave's own: the map is on the PAPER, not in the rail.
+    const band = page.locator('[data-lens-band]');
+    await expect(band).toBeVisible();
+    await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);
+    await expect(band.locator('[data-lens-line="2"]')).toHaveCount(1);
+    await expect(page.locator('[data-ticket-row]')).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
   });
 
-  test('the ticket carries the map at 1280 and 390, where the spine never did', async ({
+  test('the band carries the map at 1280 and 390, where the spine never did', async ({
     authenticatedPage: page,
   }) => {
     await openProject(page, 1280);
-    const ticket = page.locator('[data-job-ticket]');
-    await expect(ticket).toBeVisible();
-    await expect(ticket.locator('[data-ticket-row]')).toHaveCount(8);
+    const band = page.locator('[data-lens-band]');
+    await expect(band).toBeVisible();
+    await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);
+    await expect(band.locator('[data-lens-line="2"]')).toHaveCount(1);
     await expectNoHorizontalOverflow(page);
 
-    // 390 — the ticket opens at rest AS the seam, and unfolds to the eight
-    // rows on the reader's ask.
+    // 390 — the band NEVER unfolds. The ticket rested as a seam here and gave
+    // its eight rows back on an ask; the band has no fold, no seam and no ask
+    // at any width (§4), so its two lines and its declared 56px are what the
+    // reader gets. The document's index at this width is D13's sections sheet,
+    // reached from the mobile bar — the one door, and it still opens.
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(ticket).toBeVisible();
-    await expect(ticket).not.toHaveAttribute('data-unfolded', 'true');
-    await ticket.getByRole('button', { name: /Unfold/i }).click();
-    await expect(ticket).toHaveAttribute('data-unfolded', 'true');
-    await expect(ticket.locator('[data-ticket-row]')).toHaveCount(8);
+    await settle(page);
+    await expect(band).toBeVisible();
+    await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);
+    await expect(band.locator('[data-lens-line="2"]')).toHaveCount(1);
+    await expect(
+      band.getByRole('button', { name: /Unfold/i }),
+    ).toHaveCount(0);
+    await expect(band).not.toHaveAttribute('data-unfolded', 'true');
+    await expect
+      .poll(async () => (await band.boundingBox())?.height ?? 0)
+      .toBe(56);
+
+    // Scrolled, the band is still 56px and still un-unfoldable.
+    await scrollTo(page, 800);
+    await expect
+      .poll(async () => (await band.boundingBox())?.height ?? 0)
+      .toBe(56);
+
+    const sectionsDoor = page
+      .getByRole('navigation', { name: 'Document bar' })
+      .getByRole('button', { name: /^Open sections/ });
+    await expect(sectionsDoor).toBeVisible();
+    await sectionsDoor.click();
+    await expect(
+      page.getByRole('dialog', { name: /Sections of this document/i }),
+    ).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
@@ -262,55 +294,67 @@ test.describe('Quiet Work responsive document shell', () => {
     await expectNoHorizontalOverflow(page);
   });
 
-  // ── OD-4/OD-12 landing clearance — W0-L1 tripwire ──
-  // The ticket's PINNED seam publishes `--doc-seam-height`
-  // (job-ticket.tsx), and every `[data-index-region]` root reads it back as
-  // its own `scroll-margin-top` (globals.css), so a running-index jump lands
-  // clear of the pinned ticket rather than under it. This is TODAY's
-  // clearance. OD-12/the W3 ladder rewrite retargets this to a fixed
-  // `--doc-landing-clear` (72px) instead of the ticket's own measured
-  // height — when that lands, this assertion's right-hand side becomes the
-  // fixed token instead of the seam-height custom property.
-  test('at 1440, a running-index jump to Money lands clear of the pinned ticket seam', async ({
+  // ── OD-12 / C-7 landing clearance — W0-L1's tripwire, retargeted (W3-L5) ──
+  // The ticket's PINNED seam used to MEASURE itself and publish
+  // `--doc-seam-height`, and every `[data-index-region]` root read that back as
+  // its own `scroll-margin-top`. R127 deletes the measurement: the band's
+  // height is DECLARED (`--doc-band-height: 56px`) and the landing clearance is
+  // declared with it (`--doc-landing-clear: calc(band + 1rem)`), so a jump
+  // lands at a constant rather than at whatever the seam happened to measure.
+  // Nothing publishes `--doc-seam-height` any more, and this case asserts that
+  // too: a stale publisher would put the old number back into the same rule.
+  test('at 1440, a running-index jump to Money lands clear of the band, at the declared 72px', async ({
     authenticatedPage: page,
   }) => {
     // PROJECT_ID (b0000000-…-d4, the seeded project-kind spread already used
-    // above by openProject/the ticket tests in this file) is what actually
+    // above by openProject/the band tests in this file) is what actually
     // prints the Money region: b0000000-…-d1 was checked and mounts only
     // Client approvals + Pieces, its active_section is not the project
     // spread — jumping to "Money" would time out finding the button.
     await openProject(page, 1440);
 
-    const ticket = page.locator('[data-job-ticket]');
-    await expect(ticket).toBeVisible();
+    const band = page.locator('[data-lens-band]');
+    await expect(band).toBeVisible();
 
-    // Scroll the letterhead and the ticket's own sentinel out of view so the
-    // ticket pins and folds, publishing --doc-seam-height.
-    await page.evaluate(() => window.scrollTo(0, 2000));
-    await expect(ticket).toHaveAttribute('data-pinned', 'true');
-    await expect
-      .poll(() =>
-        page
-          .locator('[data-document-shell]')
-          .evaluate(
-            (el) =>
-              parseFloat(getComputedStyle(el).getPropertyValue('--doc-seam-height')) || 0,
-          ),
-      )
-      .toBeGreaterThan(0);
+    // The seam that measured itself is gone, and so is the property it wrote.
+    expect(
+      await page
+        .locator('[data-document-shell]')
+        .evaluate((el) =>
+          getComputedStyle(el).getPropertyValue('--doc-seam-height').trim(),
+        ),
+    ).toBe('');
 
-    // W2 — the running index became the LADDER: a `nav` named `This paper`,
+    // 56 + 1rem. The design declares 72; this portal's root is 18px rather
+    // than 16 (W1's measurement note), so the computed constant is 74 — inside
+    // the 4px the landing contract allows, and named here rather than rounded
+    // away.
+    const landingClear = await page
+      .locator('[data-document-shell]')
+      .evaluate(
+        (el) =>
+          parseFloat(
+            getComputedStyle(el).getPropertyValue('--doc-landing-clear'),
+          ) || 0,
+      );
+    expect(Math.abs(landingClear - 72)).toBeLessThanOrEqual(4);
+
+    // Scroll the letterhead and the band's sentinel out of view, so the band
+    // is pinned and the landing has something to clear.
+    await scrollTo(page, 2000);
+    await expect(band).toHaveAttribute('data-lens-open', 'false');
+
+    // W2 — the running index is the LADDER: a `nav` named `This paper`,
     // one button per stop.
     const ladder = page.getByRole('navigation', { name: 'This paper' });
     await ladder.getByRole('button', { name: /^Money/i }).click();
 
     // The Money region ROOT (`[data-index-region="money"]`) is what
-    // `globals.css`'s `scroll-margin-top: var(--doc-seam-height, 0px)`
-    // targets, and it lands within a sub-pixel of the seam height (verified
-    // against the live DOM). `RegionHead`'s own `regionKey` for Money is
-    // "money-head" (an inner element, past RegionRule's own ~6px) — the
-    // region root, not that inner head, is the paper's actual landing
-    // target and the one that carries this clearance contract.
+    // `globals.css`'s `scroll-margin-top: var(--doc-landing-clear)` targets.
+    // `RegionHead`'s own `regionKey` for Money is "money-head" (an inner
+    // element, past RegionRule's own ~6px) — the region root, not that inner
+    // head, is the paper's actual landing target and the one that carries this
+    // clearance contract.
     await expect
       .poll(
         async () => {
@@ -320,13 +364,7 @@ test.describe('Quiet Work responsive document shell', () => {
             .locator('[data-document-paper] [data-index-region="money"]')
             .boundingBox();
           if (!box) return Number.POSITIVE_INFINITY;
-          const seamHeight = await page
-            .locator('[data-document-shell]')
-            .evaluate(
-              (el) =>
-                parseFloat(getComputedStyle(el).getPropertyValue('--doc-seam-height')) || 0,
-            );
-          return Math.abs(box.y - seamHeight);
+          return Math.abs(box.y - 72);
         },
         { timeout: 15_000 },
       )
