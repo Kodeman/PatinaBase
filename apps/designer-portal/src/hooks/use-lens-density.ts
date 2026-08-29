@@ -21,7 +21,8 @@
  * — `data-density` and `data-passed` on the root, `data-lens-settled` on the
  * shell. React re-renders nothing on a scroll; the only React work is the one
  * region whose body subscribes through `useLensDensityStore` and moves from
- * `quiet` to `full`. No `startTransition` anywhere.
+ * `quiet` to `full`. Nothing here schedules a transition — the word itself is a
+ * tripwire the wave greps for, so it is not written even in a comment.
  *
  * `data-passed` is written once its root's bottom passes above the frame's top
  * and is NEVER removed — it is what `content-visibility: auto` keys on, and a
@@ -31,7 +32,12 @@
  *
  * Attachment is a `MutationObserver` on `[data-document-paper]`, not the
  * running index's retry window: regions arrive as their own queries settle, and
- * a subscription cannot miss one the way a lapsing retry can.
+ * a subscription cannot miss one the way a lapsing retry can. Discovery is also
+ * where a root that is ALREADY at or above the lookahead line is answered — a
+ * deep landing, a restored scroll — because a bottom-only rootMargin never
+ * fires for one. The first pass runs from a `useLayoutEffect`, so the markup
+ * hydration paints has the in-frame regions full and there is no quiet→full
+ * flash on the first screen.
  *
  * The store is module-level rather than a context because the hook is called
  * once, at the page's root, while the bodies that listen are several levels
@@ -40,12 +46,13 @@
 
 import {
   useCallback,
-  useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useSyncExternalStore,
 } from 'react';
 import type { RefObject } from 'react';
+import { flushSync } from 'react-dom';
 import {
   LENS_LOOKAHEAD_PX,
   LENS_SETTLE_MS,
@@ -131,6 +138,9 @@ export interface LensDensityApi {
   settled: () => Promise<true>;
   subscribe: (region: string, onChange: () => void) => () => void;
   getDensity: (region: string) => RegionDensity | null;
+  /** D-B19: while frozen, crossings keep buffering and nothing commits. The
+   *  settle, `data-passed` and a press all carry on. */
+  freeze: (frozen: boolean) => void;
 }
 
 export interface UseLensDensityOptions {
@@ -145,8 +155,9 @@ export function useLensDensity(
 ): LensDensityApi {
   const forceRef = useRef<(key: DocumentIndexKey) => void>(() => {});
   const settledRef = useRef<() => Promise<true>>(() => Promise.resolve(true));
+  const freezeRef = useRef<(frozen: boolean) => void>(() => {});
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === 'undefined') return;
 
     const observed = new Map<HTMLElement, string>();
@@ -169,6 +180,7 @@ export function useLensDensity(
     let lastY = window.scrollY;
     let waiting: Array<() => void> = [];
     let stopped = false;
+    let frozen = false;
 
     const resolvePaper = (): HTMLElement | null => {
       const held = paperRef?.current ?? null;
@@ -209,12 +221,17 @@ export function useLensDensity(
     };
 
     const commitPending = (): void => {
-      if (pending.size === 0) return;
+      if (frozen || pending.size === 0) return;
       for (const root of ordered) if (pending.has(root)) promote(root);
       // A root that left the paper between crossing and settling is no longer
       // in `ordered`; it has nothing left to be written to.
       pending.clear();
     };
+
+    /** The L-4 line: the root's top is at or above 240px below the frame. */
+    const withinLookahead = (root: HTMLElement): boolean =>
+      root.getBoundingClientRect().top <=
+      window.innerHeight + LENS_LOOKAHEAD_PX;
 
     const markPassed = (): void => {
       for (const root of ordered) {
@@ -311,9 +328,15 @@ export function useLensDensity(
         const key = root.getAttribute('data-index-region') ?? '';
         observed.set(root, key);
         if (committed.has(root)) continue;
-        // A region React re-created under a key the lens has already promoted
-        // arrives full; the reader passed it once and never takes it back.
-        if (!enabled || promotedKeys.has(key)) {
+        // Three roots arrive already owed a body (D-B16): one React re-created
+        // under a key the lens promoted before, one discovered at or above the
+        // lookahead line — a deep landing, a restored scroll, a query that
+        // settled after the reader passed its slot — and, with the lens off,
+        // all of them. A bottom-only rootMargin never fires for anything above
+        // the frame, so discovery is the only place they can be answered; the
+        // reserve and the body arrive in the same commit, so no pixel she has
+        // already read moves.
+        if (!enabled || promotedKeys.has(key) || withinLookahead(root)) {
           promote(root);
           continue;
         }
@@ -355,10 +378,19 @@ export function useLensDensity(
     discover();
 
     forceRef.current = (key: DocumentIndexKey) => {
-      for (const root of ordered) {
-        promote(root);
-        if (observed.get(root) === key) break;
-      }
+      // D-B18: the press reads the target's y two frames later. `flushSync`
+      // makes the bodies this commit mounts have heights before the handler
+      // returns, so the y it reads is the y it lands on. The rAF path never
+      // flushes — this is the press path alone.
+      flushSync(() => {
+        for (const root of ordered) {
+          promote(root);
+          if (observed.get(root) === key) break;
+        }
+      });
+    };
+    freezeRef.current = (next: boolean) => {
+      frozen = next;
     };
     settledRef.current = () =>
       settled
@@ -378,6 +410,7 @@ export function useLensDensity(
       releaseWaiting();
       if (window.__lensSettled) delete window.__lensSettled;
       forceRef.current = () => {};
+      freezeRef.current = () => {};
       settledRef.current = () => Promise.resolve(true as const);
       clearStore();
     };
@@ -389,6 +422,7 @@ export function useLensDensity(
       settled: () => settledRef.current(),
       subscribe: subscribeDensity,
       getDensity: densityFor,
+      freeze: (frozen) => freezeRef.current(frozen),
     }),
     [],
   );

@@ -76,14 +76,18 @@ function mountPaper(keys: readonly string[] = REGION_KEYS) {
   shell.setAttribute('data-document-shell', '');
   const paper = document.createElement('main');
   paper.setAttribute('data-document-paper', '');
-  for (const key of keys) {
+  keys.forEach((key, index) => {
     const region = document.createElement('section');
     region.setAttribute('data-index-region', key);
     // What React renders from the fold hook's own default; the lens only ever
     // overwrites it with `full`.
     region.setAttribute('data-density', 'quiet');
+    // jsdom lays nothing out, and an unstubbed rect reads top 0 — inside the
+    // lookahead, where discovery would promote every root on sight. Start them
+    // all well below the line and let each test bring up the one it means.
+    topAt(region, 2000 + index * 600);
     paper.appendChild(region);
-  }
+  });
   shell.appendChild(paper);
   document.body.appendChild(shell);
   return { shell, paper };
@@ -114,16 +118,20 @@ function scrollTo(y: number) {
   window.dispatchEvent(new Event('scroll'));
 }
 
-function bottomAt(root: HTMLElement, bottom: number) {
+function topAt(root: HTMLElement, top: number, height = 500) {
   root.getBoundingClientRect = () =>
     ({
-      top: bottom - 100,
-      bottom,
+      top,
+      bottom: top + height,
       left: 0,
       right: 0,
       width: 0,
-      height: 100,
+      height,
     }) as DOMRect;
+}
+
+function bottomAt(root: HTMLElement, bottom: number) {
+  topAt(root, bottom - 100, 100);
 }
 
 describe('useLensDensity', () => {
@@ -238,6 +246,9 @@ describe('useLensDensity', () => {
     const late = document.createElement('section');
     late.setAttribute('data-index-region', 'care');
     late.setAttribute('data-density', 'quiet');
+    // Below the lookahead line, so discovery hands it to the observer rather
+    // than promoting it on sight.
+    topAt(late, 3000);
     // The mutation record lands on a microtask; the re-discovery it queues is
     // one frame behind it.
     await act(async () => {
@@ -379,6 +390,106 @@ describe('useLensDensity', () => {
     await flush();
     expect(io.observed.has(late)).toBe(false);
     expect(late).not.toHaveAttribute('data-density');
+  });
+
+  it('promotes what is already in frame before paint, with no observer record at all', async () => {
+    mountPaper();
+    // The first screen: approvals in the frame, schedule just under the
+    // lookahead line, the rest far below it.
+    topAt(regionRoot('approvals'), 40);
+    topAt(regionRoot('schedule'), window.innerHeight + 200);
+
+    const { getByTestId } = render(<Probe watch="approvals" />);
+
+    // No flush, no entry fired: the layout effect has already corrected the
+    // SSR-quiet markup, so hydration paints these full.
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'full');
+    expect(regionRoot('schedule')).toHaveAttribute('data-density', 'full');
+    expect(regionRoot('ffe')).toHaveAttribute('data-density', 'quiet');
+    expect(getByTestId('spoken')).toHaveTextContent('full');
+
+    // Promoted at discovery is promoted without ever being watched.
+    expect(observer().observed.has(regionRoot('approvals'))).toBe(false);
+    expect(observer().observed.has(regionRoot('ffe'))).toBe(true);
+  });
+
+  it('answers a root discovered above the frame — nothing below will ever cross for it', async () => {
+    const { paper } = mountPaper(['ffe']);
+    render(<Probe watch="care" />);
+    await flush();
+
+    // A deep landing: the region's query settles after the reader is already
+    // past its slot, so a bottom-only rootMargin will never fire for it.
+    const late = document.createElement('section');
+    late.setAttribute('data-index-region', 'care');
+    late.setAttribute('data-density', 'quiet');
+    topAt(late, -800);
+    await act(async () => {
+      paper.appendChild(late);
+    });
+    await flush();
+
+    expect(late).toHaveAttribute('data-density', 'full');
+    expect(observer().observed.has(late)).toBe(false);
+    expect(api.getDensity('care')).toBe('full');
+  });
+
+  it('buffers every crossing while frozen and lands them in one commit at the settle after', async () => {
+    mountPaper();
+    render(<Probe />);
+    await flush();
+
+    const ffe = regionRoot('ffe');
+    const writes: string[] = [];
+    const write = ffe.setAttribute.bind(ffe);
+    ffe.setAttribute = (name: string, value: string) => {
+      if (name === 'data-density') writes.push(value);
+      write(name, value);
+    };
+
+    act(() => {
+      api.freeze(true);
+    });
+
+    await act(async () => {
+      observer().fire([ffe]);
+      jest.advanceTimersByTime(32);
+    });
+    expect(ffe).toHaveAttribute('data-density', 'quiet');
+
+    // Unfreezing commits nothing by itself; the next settle does.
+    act(() => {
+      api.freeze(false);
+    });
+    await flush();
+    expect(ffe).toHaveAttribute('data-density', 'quiet');
+
+    await act(async () => {
+      scrollTo(1000);
+      jest.advanceTimersByTime(32);
+    });
+    await act(async () => {
+      scrollTo(1010);
+      jest.advanceTimersByTime(32);
+    });
+    await flush(160);
+
+    expect(ffe).toHaveAttribute('data-density', 'full');
+    expect(writes).toEqual(['full']);
+  });
+
+  it('leaves the press with heights, not promises — the store is current before the handler returns', async () => {
+    mountPaper();
+    const { getByTestId } = render(<Probe watch="ffe" />);
+    await flush();
+
+    let spokenDuring = '';
+    act(() => {
+      api.forceFullThrough('ffe');
+      spokenDuring = getByTestId('spoken').textContent ?? '';
+    });
+
+    expect(spokenDuring).toBe('full');
   });
 
   it('hands each key its own reading', async () => {
