@@ -554,7 +554,7 @@
     <div class="legend">
       <span><i class="swatch sw-ok"></i> right</span>
       <span><i class="swatch sw-part"></i> partial or dirty</span>
-      <span><i class="swatch sw-bad"></i> wrong, missing, or crashed</span>
+      <span><i class="swatch sw-bad"></i> wrong, missing, or threw</span>
     </div>
 
     <div class="scroll">
@@ -718,8 +718,8 @@
           </tr>
           <tr>
             <th scope="row" class="site">pinterest.com<span>pin 378724649918852625</span></th>
-            <td class="bad">crash</td>
-            <td class="bad">crash</td>
+            <td class="bad">throws (jsdom)</td>
+            <td class="bad">no result</td>
             <td class="bad num">0/10</td>
             <td class="bad num">0</td>
             <td class="bad num">0</td>
@@ -748,17 +748,18 @@
     <div class="defects">
 
       <article class="defect">
-        <img src="fixtures/pinterest.com.pin-378724649918852625.png" alt="The Pinterest pin page that crashes extraction">
-        <h3>Pinterest takes the whole extractor down</h3>
-        <p>Not a bad result — no result. The run throws <code>unknown pseudo-class selector ':3&gt;*'</code> and returns nothing at all: no name, no retailer, no fallback. A class name on the page contains a colon, and it reaches an unguarded selector.</p>
-        <p class="cite">src/lib/extraction/images.ts:110 · :114 — <code>img.closest('[class*="product"]…')</code></p>
+        <img src="fixtures/pinterest.com.pin-378724649918852625.png" alt="The Pinterest pin page whose class names throw in the jsdom selector engine">
+        <h3>Pinterest breaks extraction in the audit — probably not in Chrome</h3>
+        <p>The run throws <code>DOMException SyntaxError: unknown pseudo-class selector ':3&gt;*'</code> and returns nothing: no name, no retailer, no fallback. But the throw comes from <strong>jsdom's nwsapi selector engine</strong> parsing a Pinterest class name, inside a constant, pseudo-class-free selector that native Chrome <code>Element.closest()</code> cannot throw on. Treat it as unlikely to reproduce live — Kody's walk settles it.</p>
+        <p>What is actionable regardless: <code>images.ts:110</code> and <code>:114</code> are the <strong>only unguarded <code>.closest()</code> calls in <code>extraction/</code></strong>. Every other module in that directory wraps its selector loop. One page should never be able to abort the whole pass.</p>
+        <p class="cite">src/lib/extraction/images.ts:110 · :114 — <code>img.closest('[class*="carousel"], [class*="slider"], [class*="swipe"]')</code></p>
       </article>
 
       <article class="defect">
         <img src="fixtures/dwr.com.eames-lounge-chair-and-ottoman.png" alt="The DWR Eames lounge chair page, which names Herman Miller as the brand">
         <h3>DWR says the manufacturer is DWR</h3>
         <p>The page says Herman Miller — as a text label directly above the title. The extractor reports manufacturer and retailer as the same string, derived from the domain. Manufacturer ≠ retailer is load-bearing for every tear sheet, and it is wrong on <strong>DWR, RH, West Elm, Chairish and 1stDibs</strong> — five of the fifteen.</p>
-        <p class="cite">extraction-report.json — manufacturer == retailer on all 14 non-crashing fixtures</p>
+        <p class="cite">extraction-report.json — manufacturer == retailer on all 14 fixtures that returned a result</p>
       </article>
 
       <article class="defect">
@@ -826,8 +827,8 @@
           </tr>
           <tr>
             <th scope="row" class="site">brand</th>
-            <td class="ok">Design Within Reach</td><td class="bad">never rendered</td>
-            <td class="ok">1stDibs</td><td class="bad">never rendered</td>
+            <td class="ok">Design Within Reach</td><td class="bad">not on extraction</td>
+            <td class="ok">1stDibs</td><td class="bad">not on extraction</td>
           </tr>
           <tr>
             <th scope="row" class="site">dimensions</th>
@@ -865,9 +866,10 @@
         <p class="cite">src/panel/regions/RecordRegion.tsx:95 · :109 · :135</p>
       </article>
       <article class="defect">
-        <h3>Brand can never render on a fresh capture</h3>
-        <p>There <em>is</em> a Brand row — but it renders only when a vendor <em>object</em> is attached, and <code>draftFromExtraction</code> sets both manufacturer and retailer vendors to <code>null</code> with status <code>missing</code>. So the extractor's "Design Within Reach" is discarded on the way into the draft, and the row silently never appears.</p>
-        <p class="cite">RecordRegion.tsx:125-128 (gated on <code>vendorName</code>) · state/draft.ts:118-119, :167-168</p>
+        <h3>Brand never renders straight out of extraction</h3>
+        <p>There <em>is</em> a Brand row, but it renders only when a vendor <em>object</em> is attached, and <code>draftFromExtraction</code> sets both manufacturer and retailer vendors to <code>null</code>. The extractor's "Design Within Reach" string is dropped on the way into the draft.</p>
+        <p>It can still arrive later: after <code>EXTRACTION_SUCCESS</code>, an async Supabase vendor match dispatches <code>VENDOR_SET</code>, and the row appears if that lookup finds a match. So the row fills in on vendors already in the database — and <strong>never appears at all for an unknown retailer or maker</strong>, which is exactly Dana's indie-Shopify and vintage-listing case.</p>
+        <p class="cite">RecordRegion.tsx:125-128 (gated on <code>vendorName</code>) · state/draft.ts:118-119, :167-168 · hooks/use-capture-controller.ts:263 → state/reducer.ts:304</p>
       </article>
     </div>
   </section>
@@ -971,7 +973,7 @@
       <li>
         <div>
           <p class="said">"verified, priced, and routed to the right project"<span class="sev sev-med">puffery</span></p>
-          <p class="rule">Nothing is verified. Extraction is best-effort scraping against pages that fight it — this lane found a wrong currency, a wrong price tier, five wrong manufacturers and a hard crash. Numbers and claims in Patina copy have to be true; drop "verified".</p>
+          <p class="rule">Nothing is verified. Extraction is best-effort scraping against pages that fight it — this lane found a wrong currency, a wrong price tier, five wrong manufacturers and a page that returned nothing at all. Numbers and claims in Patina copy have to be true; drop "verified".</p>
           <p class="cite">src/tabs/onboarding.tsx:106 — step 0 pitch</p>
         </div>
       </li>
@@ -984,7 +986,7 @@
       <h2>What only a signed-in pass can settle</h2>
     </div>
     <div class="walk">
-      <p>Everything above came from jsdom and React Testing Library — no Chrome, no login, no built extension. <code>artifacts/capture-launch-2026-08-29/walk-sheet.md</code> is the twenty-minute pass that closes the gap: build, load unpacked, sign in at app.patina.cloud <em>first</em> so the panel adopts the portal session, then ten URLs across Leah's set and Marcus's repeats, one row each. Four things are worth watching for specifically. <strong>Does the destination dropdown really reset to "Library only"</strong> between Marcus's two Herman Miller captures — that single answer decides whether thirty saves a day is survivable. <strong>Does the Pinterest pin crash the live panel or merely degrade</strong> — jsdom crashed hard, a real browser may not. <strong>Is the confidence badge honest</strong> on RH's member price and on the Instagram post, or does it sell certainty it hasn't got. And <strong>which tear-sheet fields are simply absent</strong> — SKU, dimensions, materials, lead time, trade price, vendor — when you look at the panel as a working designer rather than as a diff. Note the surprises; those are the rulings nobody wrote down yet.</p>
+      <p>Everything above came from jsdom and React Testing Library — no Chrome, no login, no built extension. <code>artifacts/capture-launch-2026-08-29/walk-sheet.md</code> is the twenty-minute pass that closes the gap: build, load unpacked, sign in at app.patina.cloud <em>first</em> so the panel adopts the portal session, then ten URLs across Leah's set and Marcus's repeats, one row each. Four things are worth watching for specifically. <strong>Does the destination dropdown really reset to "Library only"</strong> between Marcus's two Herman Miller captures — that single answer decides whether thirty saves a day is survivable. <strong>Does the Pinterest pin break the live panel or merely degrade</strong> — the audit's throw came from jsdom's selector engine on a selector Chrome cannot throw on, so the expectation is that it degrades; confirm which. <strong>Is the confidence badge honest</strong> on RH's member price and on the Instagram post, or does it sell certainty it hasn't got. And <strong>which tear-sheet fields are simply absent</strong> — SKU, dimensions, materials, lead time, trade price, vendor — when you look at the panel as a working designer rather than as a diff. Note the surprises; those are the rulings nobody wrote down yet.</p>
     </div>
   </section>
 
@@ -1120,11 +1122,11 @@
       <article class="ruling">
         <div class="id">CL-R11<small>new</small></div>
         <div>
-          <p class="q">Fix the Pinterest crash in W1?</p>
+          <p class="q">Guard the unwrapped <code>.closest()</code> calls in W1?</p>
           <div class="rows">
-            <div class="row"><span class="k">Default</span><span class="v"><strong>Yes.</strong> Wrap the <code>closest()</code> calls in <code>images.ts</code> and give the whole extraction pass a guard — <strong>one page must never be able to kill extraction</strong>. A malformed class name should cost an image score, not the entire result.</span></div>
-            <div class="row alt"><span class="k">Alternative</span><span class="v">Leave it and rely on the "couldn't read this page" screen catching the throw.</span></div>
-            <div class="row cons"><span class="k">If deferred</span><span class="v">Any site whose class names contain a colon — a whole family of utility-CSS builds — takes the panel down, and the failure looks like Patina's bug on every one of them.</span></div>
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Yes — as defense-in-depth, not as a crash fix.</strong> <code>images.ts:110</code> and <code>:114</code> are the only two unguarded <code>.closest()</code> calls in <code>extraction/</code>; every other module in that directory already wraps its selector loop. Wrap them so <strong>no single page can abort the whole pass</strong>. A bad selector should cost an image score, not the result.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Leave them and rely on the "couldn't read this page" screen catching whatever throws.</span></div>
+            <div class="row cons"><span class="k">Scope honestly</span><span class="v">The Pinterest failure is <strong>jsdom's nwsapi engine</strong>, not Chrome — the selector involved is constant and pseudo-class-free, which native <code>Element.closest()</code> cannot throw on. The crash is unlikely to reproduce live (Kody's walk confirms). The two unguarded calls are still worth wrapping on their own merits, and it is a two-line change.</span></div>
           </div>
         </div>
       </article>
@@ -1160,7 +1162,7 @@
           <div class="rows">
             <div class="row"><span class="k">Default</span><span class="v"><strong>Yes — route known-bad domains (Pinterest, Instagram) straight to a "we couldn't read this page" outcome</strong> with the snapshot fallback and "by hand" offered beside it. The placeholder R4 screen is being cut in W1, so this outcome has to be built on the terminal screen that survives, not on the one going away.</span></div>
             <div class="row alt"><span class="k">Alternative</span><span class="v">Let the extractor try and return whatever it finds.</span></div>
-            <div class="row cons"><span class="k">If deferred</span><span class="v">Instagram saves a $1.00 product called "Instagram" at medium confidence, and Pinterest crashes. Half of Priya's captures start on exactly these two domains.</span></div>
+            <div class="row cons"><span class="k">If deferred</span><span class="v">Instagram saves a $1.00 product called "Instagram" at medium confidence, and Pinterest returns nothing usable. Half of Priya's captures start on exactly these two domains.</span></div>
           </div>
         </div>
       </article>
@@ -1195,8 +1197,8 @@
 
   <footer class="notes">
     <p class="lbl">How this was measured</p>
-    <p><strong>The extraction numbers come from jsdom, not a browser.</strong> jsdom has no layout engine, so <code>getBoundingClientRect()</code> returns zeros and the position-based half of image scoring never contributes — image counts and JSON-LD-derived values are representative, but the highest-scored image may differ from what the live extension picks. jsdom also has no <code>innerText</code>; the harness aliases it to <code>textContent</code> so the price fallback can run, which means hidden or off-screen price text a real browser would exclude can be picked up here. External stylesheets are stripped during fixture harvest, so <code>getComputedStyle()</code> background-image lookups see nothing. Treat every figure above as a strong signal and Kody's walk as the confirmation.</p>
-    <p>Fixtures were harvested live on 29 August 2026 — full-header <code>curl</code> where it worked, a Chrome render-and-download for the four pages behind a WAF or client-rendered. Six page screenshots were captured, not fifteen. Sources: <code>extraction-report.json</code>, <code>field-visibility.json</code>, <code>copy-inventory.md</code>, <code>click-paths.md</code>, <code>walk-sheet.md</code>, and <code>apps/extension/src/__tests__/fixtures/README.md</code>.</p>
+    <p><strong>The extraction numbers come from jsdom, not a browser.</strong> jsdom has no layout engine, so <code>getBoundingClientRect()</code> returns zeros and the position-based half of image scoring never contributes — image counts and JSON-LD-derived values are representative, but the highest-scored image may differ from what the live extension picks. jsdom also has no <code>innerText</code>; the harness aliases it to <code>textContent</code> so the price fallback can run, which means hidden or off-screen price text a real browser would exclude can be picked up here. And one throw in the corpus — Pinterest — is jsdom's selector engine, not a defect Chrome would reproduce. Treat every figure above as a strong signal and Kody's walk as the confirmation.</p>
+    <p>Fixtures were harvested live on 29 August 2026 — full-header <code>curl</code> for eleven pages, a Chrome render-and-download for the four behind a WAF or client-rendered. <strong>Only those four had scripts and stylesheets stripped</strong> (JSON-LD kept), so <code>getComputedStyle()</code> background-image lookups see nothing on them; the eleven curl fixtures are raw. Six page screenshots were captured, not fifteen. Sources: <code>extraction-report.json</code>, <code>field-visibility.json</code>, <code>copy-inventory.md</code>, <code>click-paths.md</code>, <code>walk-sheet.md</code>, and <code>apps/extension/src/__tests__/fixtures/README.md</code>.</p>
   </footer>
 
 </div>

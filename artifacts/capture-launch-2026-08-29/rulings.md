@@ -4,6 +4,14 @@ Sixteen calls, each with a recommended default. Tick the box to take the
 default; strike it and write the alternative to overrule. Evidence for every
 one is in `persona-findings.html` (open it beside this file).
 
+Two scope notes the deck carries too: the extraction figures come from a jsdom
+harness, not Chrome — and of the 15 fixtures only the 4 Chrome-rendered ones had
+scripts and stylesheets stripped, the 11 `curl` fixtures are raw. Brand does not
+render straight out of extraction (`draft.ts:118-119` nulls both vendors); it
+appears only after the async Supabase vendor match resolves
+(`use-capture-controller.ts:263` → `VENDOR_SET`, `reducer.ts:304`), so on an
+unknown retailer or maker it never appears at all.
+
 ## How to run the walk
 
 1. `pnpm --filter @patina/extension build` → `apps/extension/build/chrome-mv3-prod`.
@@ -11,7 +19,7 @@ one is in `persona-findings.html` (open it beside this file).
 3. Sign in at **app.patina.cloud first**, in a normal tab — the panel adopts that portal session; the QR/email flow is the fallback, not the daily path.
 4. Open one project + room for Leah's six URLs, and a room with several **empty** FF&E lines for Marcus's four.
 5. Fill one row per URL in `walk-sheet.md`: time-to-save (toolbar click → terminal screen), clicks, fields fixed, fields missing for the tear sheet, retailer/manufacturer correct, badge honesty, one surprise.
-6. The four answers that decide rulings: does the destination dropdown reset to "Library only" between Marcus's repeats (CL-R1) · does Pinterest crash the live panel or just degrade (CL-R11/R14) · is the confidence badge honest on RH and Instagram (CL-R15) · which tear-sheet fields are simply absent (CL-R1/R12).
+6. The four answers that decide rulings: does the destination dropdown reset to "Library only" between Marcus's repeats (CL-R1) · does Pinterest break the live panel or just degrade — the audit's throw was jsdom's selector engine, so degrading is the expectation (CL-R11/R14) · is the confidence badge honest on RH and Instagram (CL-R15) · which tear-sheet fields are simply absent (CL-R1/R12).
 
 ## From the program plan
 
@@ -28,7 +36,7 @@ one is in `persona-findings.html` (open it beside this file).
 
 ## Forced by this lane's data
 
-- [ ] **CL-R11** — Fix the Pinterest crash in W1 — default: **yes — wrap the `closest()` calls in `images.ts` and guard the whole pass; one page must never kill extraction**
+- [ ] **CL-R11** — Guard the two unwrapped `.closest()` calls (`images.ts:110/114`) in W1 — default: **yes, as defense-in-depth**. Scope honestly: the Pinterest throw (`SyntaxError: unknown pseudo-class selector ':3>*'`) comes from jsdom's nwsapi engine on a constant, pseudo-class-free selector that native Chrome `Element.closest()` cannot throw on — it breaks extraction **in the jsdom audit** and is unlikely to reproduce in Chrome. Those two are still the only unguarded `.closest()` calls in `extraction/` (every other module wraps its selector loop), so one page can never abort the pass.
 - [ ] **CL-R12** — Manufacturer ≠ retailer on known retailer domains (DWR, RH, West Elm, CB2, Wayfair, Chairish, 1stDibs) — default: **fix in W2 in the extraction lane; take the brand from the page, keep the domain as retailer only**
 - [ ] **CL-R13** — Currency detection (1stDibs came back CHF) — default: **fix — USD-first for US retailer domains, overridden only by explicit currency meta; show the detected currency instead of the hard-coded `$`**
 - [ ] **CL-R14** — Known-bad domains (Pinterest, Instagram) — default: **yes — route them to a "we couldn't read this page" outcome with the snapshot fallback and "by hand" beside it; the placeholder R4 screen is being cut in W1, so build this on the terminal screen that survives**
