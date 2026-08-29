@@ -16,28 +16,37 @@
  * in src/__tests__/setup.ts. FFESlotPicker and useReferenceData are NOT
  * mocked away — the whole point here is to count what they really render.
  */
-import { describe, it, expect, afterEach, afterAll, vi } from 'vitest';
-import { render, screen, cleanup, waitFor, within } from '@testing-library/react';
-import { JSDOM, VirtualConsole } from 'jsdom';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import path from 'path';
-import type { ExtractedProductData } from '@patina/shared';
+import { describe, it, expect, afterEach, afterAll, vi } from "vitest";
+import {
+  render,
+  screen,
+  cleanup,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { JSDOM, VirtualConsole } from "jsdom";
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import path from "path";
+import type { ExtractedProductData } from "@patina/shared";
 
-vi.mock('../../lib/supabase', async () => {
-  const { createMockSupabase } = await import('../mocks/supabase');
+vi.mock("../../lib/supabase", async () => {
+  const { createMockSupabase } = await import("../mocks/supabase");
   const { supabase } = createMockSupabase();
-  return { supabase, PORTAL_URL: 'https://app.patina.cloud' };
+  return { supabase, PORTAL_URL: "https://app.patina.cloud" };
 });
 
-import { RecordScreen } from '../../screens/RecordScreen';
-import { CaptureProvider } from '../../state/CaptureProvider';
-import { draftFromExtraction } from '../../state/draft';
-import { initialCaptureState } from '../../state/reducer';
-import { extractProductData } from '../../lib/extraction';
+import { RecordScreen } from "../../screens/RecordScreen";
+import { CaptureProvider } from "../../state/CaptureProvider";
+import { draftFromExtraction } from "../../state/draft";
+import { initialCaptureState } from "../../state/reducer";
+import { extractProductData } from "../../lib/extraction";
 
-const FIXTURES_DIR = path.join(__dirname, '../fixtures');
-const REPORT_DIR = path.join(__dirname, '../../../../../artifacts/capture-launch-2026-08-29');
-const REPORT_PATH = path.join(REPORT_DIR, 'field-visibility.json');
+const FIXTURES_DIR = path.join(__dirname, "../fixtures");
+const REPORT_DIR = path.join(
+  __dirname,
+  "../../../../../artifacts/capture-launch-2026-08-29",
+);
+const REPORT_PATH = path.join(REPORT_DIR, "field-visibility.json");
 
 interface FixtureCase {
   file: string;
@@ -46,23 +55,26 @@ interface FixtureCase {
 
 const CASES: FixtureCase[] = [
   {
-    file: 'dwr.com.eames-lounge-chair-and-ottoman.html',
-    url: 'https://www.dwr.com/living-lounge-chairs/eames-lounge-chair-and-ottoman/5667.html?lang=en_US',
+    file: "dwr.com.eames-lounge-chair-and-ottoman.html",
+    url: "https://www.dwr.com/living-lounge-chairs/eames-lounge-chair-and-ottoman/5667.html?lang=en_US",
   },
   {
-    file: '1stdibs.com.rare-1964-eames-lounge-chair.html',
-    url: 'https://www.1stdibs.com/furniture/seating/lounge-chairs/rare-1964-rosewood-herman-miller-eames-lounge-chair-ottoman-w-original-receipt/id-f_48117292/',
+    file: "1stdibs.com.rare-1964-eames-lounge-chair.html",
+    url: "https://www.1stdibs.com/furniture/seating/lounge-chairs/rare-1964-rosewood-herman-miller-eames-lounge-chair-ottoman-w-original-receipt/id-f_48117292/",
   },
 ];
 
 /** Extract with the same jsdom-swap approach as extraction/fixtures.test.ts. */
-async function extractFromFixture(file: string, url: string): Promise<ExtractedProductData> {
-  const html = readFileSync(path.join(FIXTURES_DIR, file), 'utf-8');
+async function extractFromFixture(
+  file: string,
+  url: string,
+): Promise<ExtractedProductData> {
+  const html = readFileSync(path.join(FIXTURES_DIR, file), "utf-8");
   const dom = new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
-  Object.defineProperty(dom.window.HTMLElement.prototype, 'innerText', {
+  Object.defineProperty(dom.window.HTMLElement.prototype, "innerText", {
     configurable: true,
     get() {
-      return (this as HTMLElement).textContent ?? '';
+      return (this as HTMLElement).textContent ?? "";
     },
   });
   const originalDocument = globalThis.document;
@@ -131,36 +143,48 @@ const report: FieldVisibilityEntry[] = [];
 
 afterEach(cleanup);
 
-describe('field visibility on the C2 record screen', () => {
+describe("field visibility on the C2 record screen", () => {
   for (const { file, url } of CASES) {
     it(`shows which extracted fields are visible for ${file}`, async () => {
       const data = await extractFromFixture(file, url);
       const draft = draftFromExtraction(data);
 
       const state = initialCaptureState();
-      state.nav.screen = 'C2';
-      state.session = { status: 'signed-in', user: { id: 'user-1' } as never, workspaceId: null };
+      state.nav.screen = "C2";
+      state.session = {
+        status: "signed-in",
+        user: { id: "user-1" } as never,
+        workspaceId: null,
+      };
       state.draft = draft;
 
       const { container } = render(
         <CaptureProvider initial={state}>
           <RecordScreen />
-        </CaptureProvider>
+        </CaptureProvider>,
       );
 
       // Wait for the async spec-book-placement context load (chrome.storage)
       // to resolve so FFESlotPicker replaces the loading skeleton.
       await waitFor(() =>
-        expect(screen.getByRole('combobox', { name: 'Capture destination' })).toBeTruthy()
+        expect(
+          screen.getByRole("combobox", { name: "Capture destination" }),
+        ).toBeTruthy(),
       );
 
-      const inputs = Array.from(container.querySelectorAll('input'));
-      const textareas = Array.from(container.querySelectorAll('textarea'));
+      const inputs = Array.from(container.querySelectorAll("input"));
+      const textareas = Array.from(container.querySelectorAll("textarea"));
 
-      const nameInput = inputs.find((i) => i.value === (data.productName ?? ''));
-      const priceValue = data.price ? (data.price.value / 100).toFixed(2) : '';
-      const priceInput = inputs.find((i) => i.value === priceValue && priceValue !== '');
-      const descriptionTextarea = textareas.find((t) => t.value === (data.description ?? ''));
+      const nameInput = inputs.find(
+        (i) => i.value === (data.productName ?? ""),
+      );
+      const priceValue = data.price ? (data.price.value / 100).toFixed(2) : "";
+      const priceInput = inputs.find(
+        (i) => i.value === priceValue && priceValue !== "",
+      );
+      const descriptionTextarea = textareas.find(
+        (t) => t.value === (data.description ?? ""),
+      );
 
       // draftFromExtraction always seeds manufacturer/retailer vendor slots
       // as { vendor: null } regardless of data.manufacturer (draft.ts) — so
@@ -173,38 +197,39 @@ describe('field visibility on the C2 record screen', () => {
       // mentions the retailer/brand by name, e.g. DWR's own description
       // reads "...at Design Within Reach.", which would false-positive a
       // plain substring check against data.manufacturer).
-      const brandVisible = !!screen.queryByText('Brand');
+      const brandVisible = !!screen.queryByText("Brand");
 
       // CL-R1 (capture-launch/w2-d4): RecordRegion now renders Dimensions,
       // Materials, and Finish rows between Price and Description. Each row
       // always renders its Label + FieldBadge (rowPresent); when the field
       // has a value the row shows its editable inputs (valueVisible),
       // otherwise a "+ Add …" button stands in for the (hidden) inputs.
-      const dimensionsRowPresent = !!screen.queryByText('Dimensions');
-      const materialsRowPresent = !!screen.queryByText('Materials');
-      const finishRowPresent = !!screen.queryByText('Finish');
+      const dimensionsRowPresent = !!screen.queryByText("Dimensions");
+      const materialsRowPresent = !!screen.queryByText("Materials");
+      const finishRowPresent = !!screen.queryByText("Finish");
 
       // Populated-value checks: a real Width input mounted (dimensions), at
       // least one material chip's remove button (materials — generic
       // aria-label prefix rather than matching a specific material's name,
       // which risks a false positive against unrelated description copy),
       // and the Finish input carrying focusable content.
-      const dimensionsValueVisible = !!screen.queryByLabelText('Width');
+      const dimensionsValueVisible = !!screen.queryByLabelText("Width");
       const materialsValueVisible =
         container.querySelectorAll('button[aria-label^="Remove "]').length > 0;
-      const finishValueVisible = !!screen.queryByLabelText('Finish');
+      const finishValueVisible = !!screen.queryByLabelText("Finish");
 
       const dimensionFieldCount = data.dimensions
         ? Object.entries(data.dimensions).filter(
-            ([k, v]) => k !== 'unit' && k !== 'raw' && v !== null && v !== undefined
+            ([k, v]) =>
+              k !== "unit" && k !== "raw" && v !== null && v !== undefined,
           ).length
         : 0;
 
-      const routeSection = screen.getByText('Route to').closest('section');
+      const routeSection = screen.getByText("Route to").closest("section");
       const routeRegion = routeSection
         ? {
-            selectCount: within(routeSection).getAllByRole('combobox').length,
-            inputCount: routeSection.querySelectorAll('input').length,
+            selectCount: within(routeSection).getAllByRole("combobox").length,
+            inputCount: routeSection.querySelectorAll("input").length,
           }
         : { selectCount: 0, inputCount: 0 };
 
@@ -224,9 +249,9 @@ describe('field visibility on the C2 record screen', () => {
         },
         visibleInDom: {
           rowPresent: {
-            name: !!screen.queryByText('Name'),
-            price: !!screen.queryByText('Price'),
-            description: !!screen.queryByText('Description'),
+            name: !!screen.queryByText("Name"),
+            price: !!screen.queryByText("Price"),
+            description: !!screen.queryByText("Description"),
             brand: brandVisible,
             dimensions: dimensionsRowPresent,
             materials: materialsRowPresent,
@@ -254,7 +279,7 @@ describe('field visibility on the C2 record screen', () => {
             materials: materialsValueVisible,
             colors: false,
             finish: finishValueVisible,
-            images: container.querySelectorAll('img[src]').length > 0,
+            images: container.querySelectorAll("img[src]").length > 0,
           },
         },
         visibleFields: {
@@ -266,7 +291,7 @@ describe('field visibility on the C2 record screen', () => {
           materials: materialsValueVisible,
           colors: false,
           finish: finishValueVisible,
-          images: container.querySelectorAll('img[src]').length > 0,
+          images: container.querySelectorAll("img[src]").length > 0,
         },
         routeRegion,
       };
@@ -275,45 +300,45 @@ describe('field visibility on the C2 record screen', () => {
       // Survey only — no correctness assertions. Confirms the screen mounted
       // and the route region was reachable, which is what makes the counts
       // above meaningful.
-      expect(container.querySelector('input')).toBeTruthy();
+      expect(container.querySelector("input")).toBeTruthy();
       expect(routeSection).toBeTruthy();
-    });
+    }, 15000);
   }
 });
 
 // Gated: `pnpm test` must never dirty tracked files. Regenerate the report
 // with `CAPTURE_REPORT=1 pnpm --filter @patina/extension test -- field-visibility`.
 afterAll(() => {
-  if (process.env.CAPTURE_REPORT !== '1') return;
+  if (process.env.CAPTURE_REPORT !== "1") return;
   mkdirSync(REPORT_DIR, { recursive: true });
   writeFileSync(
     REPORT_PATH,
     JSON.stringify(
       {
         generatedAt: new Date().toISOString(),
-        lane: 'capture-launch/w2-d4',
+        lane: "capture-launch/w2-d4",
         notes: [
-          'RecordScreen (RecordRegion + InsightRegion + RouteCommitRegion) mounted ' +
-            'directly under <CaptureProvider initial={...}> in state C2 — the same seam ' +
-            'src/__tests__/state/CaptureProvider.test.tsx and ' +
-            'src/__tests__/spec-books/route-commit-ga.test.tsx use — rather than through ' +
-            'PanelShell, which pulls in useCaptureController()/useSettingsSync() side effects ' +
-            'not needed for this survey.',
-          'FFESlotPicker and useReferenceData were left real (not mocked away) so the route ' +
-            'region select/input counts reflect actual render output; supabase is mocked via ' +
-            'src/__tests__/mocks/supabase.ts so those queries resolve to empty projects/styles ' +
-            'without a network call.',
-          'CL-R1 fix pass (2026-08-29): visibleInDom now splits rowPresent (the Label + ' +
-            'FieldBadge is in the DOM, regardless of value) from valueVisible (a populated ' +
-            'input/chip is in the DOM) for dimensions/materials/finish, since those rows can be ' +
+          "RecordScreen (RecordRegion + InsightRegion + RouteCommitRegion) mounted " +
+            "directly under <CaptureProvider initial={...}> in state C2 — the same seam " +
+            "src/__tests__/state/CaptureProvider.test.tsx and " +
+            "src/__tests__/spec-books/route-commit-ga.test.tsx use — rather than through " +
+            "PanelShell, which pulls in useCaptureController()/useSettingsSync() side effects " +
+            "not needed for this survey.",
+          "FFESlotPicker and useReferenceData were left real (not mocked away) so the route " +
+            "region select/input counts reflect actual render output; supabase is mocked via " +
+            "src/__tests__/mocks/supabase.ts so those queries resolve to empty projects/styles " +
+            "without a network call.",
+          "CL-R1 fix pass (2026-08-29): visibleInDom now splits rowPresent (the Label + " +
+            "FieldBadge is in the DOM, regardless of value) from valueVisible (a populated " +
+            "input/chip is in the DOM) for dimensions/materials/finish, since those rows can be " +
             'present-but-empty (a "+ Add …" button standing in for the hidden inputs). ' +
-            'visibleFields is kept as a flat alias of valueVisible so this stays comparable to ' +
+            "visibleFields is kept as a flat alias of valueVisible so this stays comparable to " +
             'the W0 baseline report, whose single visibleInDom flag meant "value visible".',
         ],
         cases: report,
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 });
