@@ -10078,3 +10078,31 @@ https://claude.ai/code/artifact/bf781dba-3938-464d-849d-5787bbd79cd7. Implementa
 lanes → `document-life/integration` → main.
 
 *Entries add: R126 · last id = R126*
+
+### R126-deploy · The Life Review live on app.patina.cloud — 2026-08-28
+
+`build/deploy-life.sh` shipped R126's ruled direction — "A, with a little of B's colour" — to
+production. Kody ran it from the repo root on `main`, at the docs commit **`808df5127`** (merge
+**`605e83ca5`**, PR #38). Live now: Direction A's skeleton — type scale, three rule weights, the
+section head, the cream desk ground, untinted paper, the spine/margin rail, margin chips as lifted
+paper — with exactly three grafts from B (filled status stamps at ~1.18:1, the six saturated stage
+tabs as small plates on roster heads, 48px catalog-linked FF&E thumbnails); the new hover wash (a
+roster/FF&E line's own pigment opening under the pointer via the portal's ink-pool mechanic,
+landing at ~1.12:1 over its ground, a flat tint under reduced motion); the roster settling once per
+load; and the one `--elevation-sheet` token at its three sites (the D4 amendment, not canon). THE
+STUDIO block on the desk was left untouched, per Kody's own ruling. Result **PASS**.
+
+Before → after: **`afe63619-002d-4ea2-90b6-244c41a86c81`** (created 2026-08-26T21:45:57.109Z, the
+prior live version, bottom row of `build/deploy-life-before.txt`) → **`9c0c2cdd-2041-4848-a193-93d9e8fb0b71`**
+(created 2026-08-29T01:46:42.945Z, per `build/deploy-life-after.txt`).
+
+Probes, verbatim from the run: `GET /desk` → `307`; 3 served CSS chunks; `--elevation-sheet` found;
+`--doc-rail-stock` found; `folio-face` absent; `GET /api/version` → `200`.
+
+Rollback: redeploy prior Worker version `afe63619-002d-4ea2-90b6-244c41a86c81`, i.e. the prior
+`main` commit before this merge, `4b35e0a94`.
+
+Signed-in walk of `app.patina.cloud` — the desk and a document — owed to Kody. Full detail in
+`artifacts/document-life-directions-2026-08-28/RESUME.md`.
+
+*Entries add: R126-deploy · last id = R126*

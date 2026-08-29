@@ -260,15 +260,24 @@ walk was clean (no new console errors, no overflow at 1440/390, reduced-motion s
 gates (ai-quality-gate, policy-quality) passed. One advisory CI job failed on a `@patina/api-routes`
 dist build error unrelated to this branch's changes — non-blocking, not a merge gate.
 
-**Deploy** (not yet run): Kody runs
+**Deploy — DEPLOYED 2026-08-28**: Kody ran
 `bash artifacts/document-life-directions-2026-08-28/build/deploy-life.sh` from the repo root on
-`main` — agents are hook-blocked from `infra/`/wrangler/deploy scripts, and the protected-workflow
-path can't pass while `integration.yml` is red at "Start and rebuild local Supabase" (unrelated,
-pre-existing CI infra issue, not this branch). Rollback target: Worker
-**`afe63619-002d-4ea2-90b6-244c41a86c81`** (prior main commit before this merge, `4b35e0a94`).
+`main`, at the docs commit **`808df5127`** (merge `605e83ca5`, PR #38). Result **PASS**. New live
+Worker version **`9c0c2cdd-2041-4848-a193-93d9e8fb0b71`** (created 2026-08-29T01:46:42.945Z, per
+`build/deploy-life-after.txt`). Previous live version — the rollback target —
+**`afe63619-002d-4ea2-90b6-244c41a86c81`** (created 2026-08-26T21:45:57.109Z, bottom row of
+`build/deploy-life-before.txt`).
+
+Probes, verbatim from the run: `GET /desk` → `307`; 3 served CSS chunks; `--elevation-sheet`
+found; `--doc-rail-stock` found; `folio-face` absent; `GET /api/version` → `200`.
+
+Rollback: redeploy prior Worker version `afe63619-002d-4ea2-90b6-244c41a86c81`, i.e. the prior
+`main` commit before this merge, `4b35e0a94`.
+
+Recorded as ledger entry **R126-deploy** (`docs/design/the-document/DECISIONS.md`).
 
 **OWED**:
-- The deploy itself, plus a prod probe record once it runs.
+- Kody's signed-in walk of `app.patina.cloud` — the desk and a document — now that the deploy is live.
 - Reduced-motion sweep — 39 app-wide offenders, unchanged across two walks; ruling needed on
   whether these are pre-existing scope or should be fixed now.
 - `--color-aged-oak` on paper measuring 3.51:1 (not the presented 4.30:1) at roughly 40 sites —
