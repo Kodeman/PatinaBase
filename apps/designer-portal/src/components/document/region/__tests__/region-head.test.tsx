@@ -199,4 +199,14 @@ describe('RegionHead', () => {
     expect(spy.mock.calls.some((call) => /neither a ledger entry/.test(String(call[0])))).toBe(true);
     spy.mockRestore();
   });
+
+  // W3-L4 — `allowNoActs` silences the guard for a head that is neither
+  // foldable nor ledgered by construction (a ratified state), while leaving
+  // the guard on everywhere else.
+  it('silences the empty-head guard when allowNoActs is set', () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    renderHead({ actions: [], allowNoActs: true });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
 });

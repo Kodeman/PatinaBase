@@ -50,7 +50,7 @@ export function PreviousWork({
   return (
     <section
       data-index-region="record"
-      className="mb-5 mt-4"
+      className="mt-[var(--doc-region-gap)]"
       aria-label="The record"
     >
       <RegionHead
@@ -67,6 +67,10 @@ export function PreviousWork({
         // `bodyId`, so naming an id that is not on the page both defeats the
         // guard and points `aria-controls` at nothing.
         bodyId={hasHistory ? contentId : undefined}
+        // A zero-count record has no ledger entry and no foldable body by
+        // construction — a ratified state (W2, "the record root is now
+        // ALWAYS emitted"), not a head someone forgot to finish.
+        allowNoActs={!hasHistory}
         actions={
           hasHistory
             ? [

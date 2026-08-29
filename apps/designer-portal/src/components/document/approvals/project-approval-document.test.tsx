@@ -1121,3 +1121,30 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 });
+
+describe('ProjectApprovalDocument region gap (W3-L4)', () => {
+  it('carries the region-gap token on its root, open and folded, and no other mt-*/mb-*', () => {
+    const { container } = renderDocument();
+
+    const open = container.querySelector('[data-index-region="approvals"]');
+    expect(open).not.toBeNull();
+    expect(open).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      open!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(open!.className).not.toMatch(/\bmb-/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fold ↑' }));
+
+    const folded = container.querySelector('[data-index-region="approvals"]');
+    expect(folded).not.toBeNull();
+    expect(folded).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      folded!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(folded!.className).not.toMatch(/\bmb-/);
+    // The folded rule steps to `mid` — `strong` is reserved for an open region.
+    const rule = folded!.querySelector('[data-rule-weight]');
+    expect(rule).toHaveAttribute('data-rule-weight', 'mid');
+  });
+});
