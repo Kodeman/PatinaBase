@@ -21,9 +21,13 @@ Save the piece in front of you — name, price, images, dimensions — from the 
 
 ## Detailed description
 
-Plain text, ≤16,000 characters. Opens on the seed line already live in the
-portal's install prompt (`apps/designer-portal/src/components/document/rooms/library/capture-extension-prompt.tsx:81`),
-closes on the tagline. No "AI," "curated," "luxury," "elevated," or "bespoke."
+Plain text, ≤16,000 characters. Opens on a line adapted from the seed copy
+live in the portal's install prompt
+(`apps/designer-portal/src/components/document/rooms/library/capture-extension-prompt.tsx:81`,
+which reads "...and saves it here, ready for your eye" — adapted below to
+name the library explicitly since the store listing has no portal context
+around it), closes on the tagline. No "AI," "curated," "luxury," "elevated,"
+or "bespoke."
 Midwest examples only. Does not claim the extraction pipeline verifies,
 prices, or routes anything — it tells you what it read and what it guessed,
 and leaves the routing to you.
@@ -44,11 +48,11 @@ WHAT IT DOES
 WHAT IT NEEDS
 
 - A Patina account, signed in once at app.patina.cloud. Capture saves under your account, into your workspace.
-- Permission to read the page you're on, but only the moment you ask it to capture — never before, never after, never on tabs you haven't opened.
+- Permission to read pages you visit. The extension loads quietly on each page but stays inert — it reads nothing about the page and sends us nothing until you choose to capture it.
 
 WHAT IT DOESN'T DO
 
-- It doesn't read, track, or run in the background on pages you haven't chosen to capture.
+- It's inert on every page until you capture: it reads and sends product fields only on the page you choose, only when you start a capture — never in the background, never on a tab you haven't acted on.
 - It doesn't verify prices, availability, or lead times against the vendor — it reads what's on the page and tells you plainly when a field is a guess rather than a fact.
 - It doesn't post, message, or share anything outside your own Patina workspace.
 - It doesn't run any code beyond what ships in the extension package — no remote scripts, no server-side rendering of your data.
@@ -57,6 +61,13 @@ Built for the trade: a fast, honest way to bring the pieces you find on the open
 
 Where Time Adds Value.
 ```
+
+**Verify before submission:** the "Tells manufacturer from retailer" bullet
+above assumes CL-R12 (W2-D9 extraction lane) has landed — brand read from
+the page, domain kept as retailer-only. Check the DWR fixture in
+`extraction-report.json` reports brand `Herman Miller` / retailer `Design
+Within Reach`. If CL-R12 hasn't landed by submission, replace that bullet
+with: "Keeps the retailer you found it on attached to the piece."
 
 ## Category, language, URLs
 
@@ -137,9 +148,10 @@ Tick:
   than account email, and re-verify `analytics.ts` before submission that the
   drop has actually landed.)
 - **Website content** — the product page's visible fields (name, price,
-  images, dimensions, materials) that the designer captures, and only that
-  page, and only on the designer's action (`src/contents/extractor.ts`,
-  invoked from `src/hooks/use-capture-controller.ts`).
+  images, dimensions, materials) that the designer captures, plus any note
+  they type alongside the capture, and only that page, and only on the
+  designer's action (`src/contents/extractor.ts`, invoked from
+  `src/hooks/use-capture-controller.ts`).
 - **User activity** — anonymized product-analytics events (capture opened,
   product captured, extraction outcome) via PostHog, `src/lib/analytics.ts`.
   No autocapture, no session recording (`disable_session_recording: true`,
@@ -158,11 +170,6 @@ Leave unticked, with reasoning:
 - **Web history** — the extension does not log or transmit the designer's
   browsing history; it reads only the single active tab, only on capture
   (`activeTab`, not `tabs`, and no `history` permission in the manifest).
-- **User-generated content** — the designer's own notes/edits inside the
-  panel stay inside the capture payload sent to their own Patina workspace;
-  nothing is published, shared, or exposed to other users through the
-  extension itself, so this box stays unticked (the "website content" box
-  above already covers the captured product data).
 
 ### Certifications (tick all three)
 
@@ -221,9 +228,18 @@ design look before the 128×128 export is cut, not just a mechanical resize.
 1. `roomandboard.com` — capture panel open, verified field badges visible.
 2. `dwr.com` (Eames chair) — Brand shows "Herman Miller" while the page/URL
    is Design Within Reach, with the dimensions row visible — demonstrates
-   manufacturer ≠ retailer (CL-R12).
-3. `hermanmiller.com` — the route flow: project → room → slot, "Save & fill
-   slot" as the primary action.
+   manufacturer ≠ retailer (CL-R12). **Verify before shooting/submitting:**
+   CL-R12 (W2-D9 extraction lane) has landed — the DWR fixture must report
+   brand `Herman Miller` / retailer `Design Within Reach` in
+   `extraction-report.json`. If it hasn't landed, shoot this frame with the
+   fallback claim instead: "Keeps the retailer you found it on attached to
+   the piece."
+3. `hermanmiller.com` — the route flow: project → room → placement, "Save &
+   fill" as the primary action. **Verify before shooting:** the primary
+   button copy must be the post-CL-R10 wording (no "slot"/"line"/bare
+   "decision" — W2-D7 retires those from primary buttons in `CommitBar.tsx`
+   / `DecisionSheet.tsx`) before this frame is shot, or the screenshot will
+   show internal nouns a reviewer or a designer shouldn't see.
 4. `1stdibs.com` — the image-selection sheet mid-capture.
 5. Saved state — the panel's terminal/confirmation screen plus the "Recent"
    list showing the capture landed.

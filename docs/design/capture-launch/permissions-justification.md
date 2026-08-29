@@ -71,6 +71,14 @@ mid-session — `chrome.alarms.create('refresh-token', { periodInMinutes: 30
 wake the extension to read pages or send any capture-related network
 request on its own.
 
+Verify before submission: `grep -c sync-queue apps/extension/src/background.ts`
+= 0 (W1-E4). A second alarm, `sync-queue`, exists on `main` today for the
+offline queue's periodic sync; that queue is cut in W1-E4
+(`3574b382a` on `capture-launch/w1-e4`, merging now), and this paragraph
+describes the post-cut single-alarm state. If the grep is nonzero at
+submission time, this justification is out of date and needs a second
+paragraph for `sync-queue`.
+
 ## cookies
 
 We use `cookies`, scoped in practice to `app.patina.cloud`, to read the
@@ -85,15 +93,14 @@ read.
 
 ## Host permission: `https://*/*`
 
-We request `https://*/*` because the extraction content script
-(`src/contents/extractor.ts:11-14`, `matches: ['https://*/*', 'http://*/*']`)
-must run on whatever vendor page a designer sources from — furniture and
-home-goods vendors span thousands of independent domains (national
-retailers, individual manufacturers, small workshops) — a fixed host list
-would fail exactly the long-tail maker sites this tool exists to help
-designers capture from. The content script reads a page's fields only when
-the designer triggers a capture on that tab (see `activeTab` above);
-installing the extension grants no standing background access to any site.
+We request `https://*/*` because the content script (`extractor.ts:11-14`)
+must run on whatever vendor page a designer sources from — thousands of
+domains, from national retailers to a maker's own shop — so a fixed host
+list would miss the long-tail sites this tool exists to help designers
+capture from. The script loads on every page and sends one ready ping with
+the tab's URL to our background worker (`extractor.ts:161`), but is
+otherwise inert: it reads and sends product fields only on a capture the
+designer starts (see `activeTab`).
 
 Note: the manifest currently also declares `http://*/*` alongside
 `https://*/*`. That is being dropped in W2 (`W2-E8`, manifest cleanup) —
