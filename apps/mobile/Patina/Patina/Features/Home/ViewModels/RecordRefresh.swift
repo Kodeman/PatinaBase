@@ -11,7 +11,8 @@
 //     while five fetches land (`RecordSnapshotStore`).
 //  2. Build against the visit that is still on disk.
 //  3. Save the new record, and attribute it to the account it was built for.
-//  4. Only THEN stamp the visit (`LastSeenStore.markSeen`).
+//  4. Only THEN stamp the visit (`LastSeenStore.markSeen`) — and only if this
+//     rebuild put the record in front of somebody (`stampVisit`).
 //
 //  Step 4 last is the whole point: stamping before the build makes every row's
 //  `isNew` false on the very open that should have shown the ticks
@@ -49,6 +50,11 @@ enum RecordRefresh {
     ///   - sessionUserId: who is signed in. A snapshot stamped for anyone else
     ///     is removed before it can be read, and so is the visit it was new
     ///     against.
+    ///   - stampVisit: whether this rebuild counts as the person having SEEN
+    ///     the record. False for the app root's foreground pass, which paints
+    ///     nothing: moving "when you last saw the Record" forward on an open
+    ///     that showed nothing takes the `isNew` ticks off rows nobody's eyes
+    ///     reached (C5). The caller that does put the record on screen stamps.
     @discardableResult
     static func run(
         snapshots: RecordSnapshotStore = .shared,
@@ -56,6 +62,7 @@ enum RecordRefresh {
         owner: RecordOwnerStamp = .shared,
         sessionUserId: String?,
         now: Date = Date(),
+        stampVisit: Bool = true,
         build: (_ previous: HouseRecord?, _ lastSeenAt: Date?) -> HouseRecord,
         paint: (HouseRecord) -> Void
     ) -> Outcome {
@@ -96,8 +103,10 @@ enum RecordRefresh {
             steps.append(.attributed)
         }
 
-        lastSeen.markSeen(now: now)
-        steps.append(.stamped)
+        if stampVisit {
+            lastSeen.markSeen(now: now)
+            steps.append(.stamped)
+        }
 
         return Outcome(record: record, steps: steps)
     }

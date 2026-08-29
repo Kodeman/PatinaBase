@@ -121,6 +121,41 @@ struct RecordRefreshOrderTests {
         #expect(owner.ownerId == "client-a")
     }
 
+    // MARK: - A rebuild nobody saw is not a visit
+
+    /// The app root rebuilds on every foreground, including ones that open on
+    /// Studio or Spaces and never reach Today. Stamping the visit there moves
+    /// "when you last saw the Record" forward on an open that showed nothing,
+    /// and the ticks for everything that landed before it come off unseen.
+    @Test("a rebuild that paints nothing does not claim the visit")
+    func aPassThatShowsNothingDoesNotStampTheVisit() {
+        let (snapshots, lastSeen, owner) = stores()
+        let visit = Date(timeIntervalSince1970: 1_755_500_000)
+        lastSeen.markSeen(now: visit)
+        snapshots.save(record(lastSeenAt: visit, moved: [row(id: "snapshot")]))
+        owner.stamp("client-a")
+
+        let outcome = RecordRefresh.run(
+            snapshots: snapshots, lastSeen: lastSeen, owner: owner,
+            sessionUserId: "client-a",
+            now: Date(timeIntervalSince1970: 1_756_100_000),
+            stampVisit: false,
+            build: { _, lastSeenAt in
+                #expect(lastSeenAt == visit)
+                return record(lastSeenAt: lastSeenAt, moved: [row(id: "fresh")])
+            },
+            paint: { _ in }
+        )
+
+        // Everything else still happened — the snapshot is fresh, so the
+        // widget's timeline reload and the next cold-launch paint both get the
+        // rows that moved. Only the claim about being seen is withheld.
+        #expect(outcome.steps == [.paintedSnapshot, .built, .saved, .attributed])
+        #expect(!outcome.steps.contains(.stamped))
+        #expect(lastSeen.lastSeenAt == visit)
+        #expect(snapshots.load()?.moved.first?.id == "fresh")
+    }
+
     // MARK: - B-1: the record must not outlive the account
 
     @Test("another account's record is discarded before it can be painted or built against")

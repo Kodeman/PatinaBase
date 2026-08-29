@@ -109,6 +109,23 @@ final class OrdersService {
         isLoading = false
     }
 
+    /// Drop the previous account's orders.
+    ///
+    /// `terms` goes with them even though `get_direct_order_terms()` returns
+    /// the same house paragraph for everybody: it is fetched under the
+    /// previous session's JWT, and a value nobody re-reads is a value nobody
+    /// notices going wrong. `hasLoaded` back to false is what makes
+    /// `refreshIfNeeded()` fetch again on the next order surface.
+    func resetForSessionChange() {
+        inFlight?.cancel()
+        inFlight = nil
+        orders = []
+        terms = nil
+        isLoading = false
+        hasLoaded = false
+        lastRefreshFailed = false
+    }
+
     /// One order by its routing token — `"fulfillment:<uuid>"` /
     /// `"direct:<uuid>"`.
     ///
