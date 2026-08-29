@@ -153,8 +153,11 @@ import {
 import { LensBand } from '@/components/document/lens-band';
 import {
   deriveLensBand,
+  type LensBandModel,
+  type LensInputItem,
   type LensReadingStop,
 } from '@/lib/document/lens-band-derivation';
+import type { LensTier } from '@/lib/document/lens-constants';
 import { useLensFrame } from '@/hooks/use-lens-frame';
 import {
   deriveTicket,
@@ -339,6 +342,35 @@ function vitalsFor(
  * identity test would have the report re-render the mount that made it, and
  * that render report again, without end.
  */
+/** One array identity for "this spread raises nothing", so the band's memo is
+ *  not busted by a fresh `[]` on every render. */
+const NO_BAND_NEEDS: readonly RedLetterRow[] = [];
+
+/**
+ * D-B24 — which measure line 2 has to fit. The three tiers are the shell's own
+ * (`full` from 1440, `narrow` from 1180, `mobile` below it). The server has no
+ * viewport, so it renders the widest form and the effect corrects on the first
+ * client frame — the same shape `shelf-panel.tsx` uses for its tier.
+ */
+function useLensTier(): LensTier {
+  const [tier, setTier] = useState<LensTier>('full');
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const full = window.matchMedia('(min-width: 1440px)');
+    const desktop = window.matchMedia('(min-width: 1180px)');
+    const read = () =>
+      setTier(full.matches ? 'full' : desktop.matches ? 'narrow' : 'mobile');
+    read();
+    full.addEventListener('change', read);
+    desktop.addEventListener('change', read);
+    return () => {
+      full.removeEventListener('change', read);
+      desktop.removeEventListener('change', read);
+    };
+  }, []);
+  return tier;
+}
+
 function sameTicketRows(
   previous: readonly TicketRow[] | null,
   next: readonly TicketRow[],
@@ -1719,6 +1751,156 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     isError,
   });
 
+  // W3 · THE BAND'S MODEL, derived above the early returns so it can be
+  // memoised (C-03). The derivation runs when a FACT changes, not on every
+  // render one of the twenty reads beneath it causes: a new `line2` object
+  // inside the 90ms turn restarts the latch and holds the sentence blank.
+  //
+  // The deps below are values, not the objects that carry them, because the
+  // arrays and models above are rebuilt on every render from the same reads.
+  const lensTier = useLensTier();
+  const bandTable = worktableOn ? tablePin.composition : null;
+  const bandSpread = bandTable ? bandTable.section : (row?.active_section ?? null);
+  // The band's stage word where no phase is placed — the same fallback the
+  // rail head takes (`doc-spine.tsx`).
+  const bandStageWord =
+    ticketPhase?.name ?? sections.find((s) => s.state === 'active')?.label ?? '';
+  const bandSegment = activeKey
+    ? (ladderSegments.find((segment) => segment.key === activeKey) ?? null)
+    : null;
+  const bandStopKey = bandSegment?.key ?? null;
+  const bandStopLabel = bandSegment?.name ?? null;
+  const bandStopCount = bandSegment?.countLine ?? null;
+  // R107/R108 — only the committed and record registers carry a day the band
+  // may state, the same test `scheduleRegister` applies on the rail.
+  const bandInstall =
+    scheduleFacts?.install?.date &&
+    (scheduleFacts.install.fidelity === 'committed' ||
+      scheduleFacts.install.fidelity === 'record')
+      ? fmtDay(scheduleFacts.install.date).toUpperCase()
+      : null;
+  const bandMoney = ticketRows?.find((r) => r.key === 'money')?.emphasis ?? null;
+  const bandSent = liveProposal?.sent_at
+    ? fmtDay(liveProposal.sent_at).toUpperCase()
+    : null;
+  // The standing set is the red letter's own rows under the same gate the
+  // guide-or-zone ternary used to apply: a composed Desk answer for THIS
+  // engagement, and not a failed read (whose retry rides the guide's act).
+  // With nothing standing, line 2 prints the guide's sentence instead (C-6).
+  const bandNeeds =
+    row?.engagement_kind === 'project' &&
+    enrichedOperationalNeeds &&
+    !deskGuidanceFailed
+      ? redLetterRows
+      : NO_BAND_NEEDS;
+  const guideHeadline = guideModel?.headline ?? null;
+  const guideActLabel = guideModel?.action?.label ?? null;
+  // W3-R2 — the guide's open inputs, the sheet's own second section. Their
+  // facts are rebuilt every render from the same reads; this string is what
+  // actually changes.
+  const inputSignature = guideInputs
+    .map((fact) => `${fact.label}|${fact.owner}|${fact.blocks}`)
+    .join(';');
+  const bandHousehold = row?.client_name ?? '';
+  const bandStageIndex = ticketPhase
+    ? `${ticketPhase.position}/${ticketPhase.of}`
+    : null;
+
+  const bandStop = useMemo<LensReadingStop | null>(
+    () =>
+      bandStopKey && bandStopLabel != null && bandStopCount != null
+        ? { key: bandStopKey, label: bandStopLabel, countLine: bandStopCount }
+        : null,
+    [bandStopKey, bandStopLabel, bandStopCount],
+  );
+
+  const bandModel = useMemo<LensBandModel | null>(() => {
+    if (!bandSpread) return null;
+    const guideAct = guideActLabel
+      ? { label: guideActLabel, onAct: activateGuide }
+      : null;
+    const inputs: LensInputItem[] = guideInputs.map((fact, index) => ({
+      key: `${index}:${fact.label}`,
+      // The input's own kind word — `Client signature` stands under SIGNATURE.
+      eyebrow: (fact.label.split(/\s+/).pop() ?? fact.label).toUpperCase(),
+      sentence: `${fact.label} · ${fact.owner} · blocks ${fact.blocks}`,
+      act: guideAct,
+    }));
+    return deriveLensBand({
+      spreadKind: bandSpread,
+      ticket: ticketRows ?? [],
+      needs: bandNeeds,
+      inputs,
+      guide: guideHeadline ? { text: guideHeadline, act: guideAct } : null,
+      tier: lensTier,
+      household: bandHousehold,
+      stageWord: bandStageWord,
+      stageIndex: ticketPhase
+        ? { position: ticketPhase.position, of: ticketPhase.of }
+        : null,
+      installDate: bandInstall,
+      moneyFigure: bandMoney,
+      // The proposal's own investment total is the Wave-5 `investment` stop; no
+      // read on this page states it today, so the proposal spread's right slot
+      // prints its sent date alone rather than an FF&E budget wearing its name.
+      proposalInvestment: null,
+      sentDate: bandSent,
+      readingStop: bandStop,
+    });
+    // `guideInputs` and `ticketPhase` are re-created every render; the values
+    // that decide the model are `inputSignature` and `bandStageIndex`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    bandSpread,
+    ticketRows,
+    bandNeeds,
+    inputSignature,
+    guideHeadline,
+    guideActLabel,
+    activateGuide,
+    lensTier,
+    bandHousehold,
+    bandStageWord,
+    bandStageIndex,
+    bandInstall,
+    bandMoney,
+    bandSent,
+    bandStop,
+  ]);
+
+  // D-B22 — the lens line's telemetry fires from the page, which owns the
+  // model; the band captures nothing. Once per distinct model shape, the same
+  // shape `guideShown` used before it retired.
+  const lensLineProps = bandModel
+    ? {
+        stage: bandSpread ?? '',
+        state: bandModel.line2.kind,
+        action_key: bandModel.line2.act?.label ?? null,
+        standing_count: bandModel.line2.standingCount,
+        tier: lensTier,
+      }
+    : null;
+  const lensLinePropsRef = useRef(lensLineProps);
+  lensLinePropsRef.current = lensLineProps;
+  const lensLineKind = bandModel?.line2.kind ?? null;
+  const lensLineActKey = bandModel?.line2.act?.label ?? null;
+  const lensStandingCount = bandModel?.line2.standingCount ?? null;
+  useEffect(() => {
+    const props = lensLinePropsRef.current;
+    if (!props) return;
+    documentEvents.lensLineShown(props);
+  }, [id, lensLineKind, lensLineActKey, lensStandingCount]);
+  const onLensActed = useCallback(() => {
+    const props = lensLinePropsRef.current;
+    if (props) documentEvents.lensLineActed(props);
+  }, []);
+  const onLensStandingOpened = useCallback(() => {
+    const props = lensLinePropsRef.current;
+    if (!props) return;
+    const { action_key: _actionKey, ...rest } = props;
+    documentEvents.lensStandingSheetOpened(rest);
+  }, []);
+
   // SSR always starts with an empty engagement cache, while client navigation
   // can arrive with a warm React Query cache. Hold the first client paint to
   // the server's loading tree so those two render contracts cannot diverge.
@@ -1931,61 +2113,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     />
   );
 
-  // THE BAND — the one line the paper keeps (C-5, OD-1). It stands where the
-  // ticket stood and it is the document's, not the spread's: sticky under the
-  // letterhead on all seven spreads, including the four the worktable
-  // composes, so `TableFrame` no longer re-mounts anything at the table's head.
-  //
-  // The standing set is the red letter's own rows under the same gate the
-  // guide-or-zone ternary used to apply: a composed Desk answer for THIS
-  // engagement, and not a failed read (whose retry rides the guide's act).
-  // With nothing standing, line 2 prints the guide's sentence instead (C-6).
-  const bandNeeds =
-    row.engagement_kind === 'project' &&
-    enrichedOperationalNeeds &&
-    !deskGuidanceFailed
-      ? redLetterRows
-      : [];
-  const bandSegment = activeKey
-    ? (ladderSegments.find((segment) => segment.key === activeKey) ?? null)
-    : null;
-  const bandStop: LensReadingStop | null = bandSegment
-    ? {
-        key: bandSegment.key,
-        label: bandSegment.name,
-        countLine: bandSegment.countLine,
-      }
-    : null;
-  // R107/R108 — only the committed and record registers carry a day the band
-  // may state, the same test `scheduleRegister` applies on the rail.
-  const bandInstall =
-    scheduleFacts?.install?.date &&
-    (scheduleFacts.install.fidelity === 'committed' ||
-      scheduleFacts.install.fidelity === 'record')
-      ? fmtDay(scheduleFacts.install.date).toUpperCase()
-      : null;
-  const bandModel = deriveLensBand({
-    spreadKind: spreadSection,
-    ticket: ticketRows ?? [],
-    needs: bandNeeds,
-    guide: guideModel ? deriveGuideModel(guideModel, activateGuide) : null,
-    household: row.client_name,
-    stageWord: ticketPhase?.name ?? activeSectionLabel,
-    stageIndex: ticketPhase
-      ? { position: ticketPhase.position, of: ticketPhase.of }
-      : null,
-    installDate: bandInstall,
-    moneyFigure: ticketRows?.find((r) => r.key === 'money')?.emphasis ?? null,
-    // The proposal's own investment total is the Wave-5 `investment` stop; no
-    // read on this page states it today, so the proposal spread's right slot
-    // prints its sent date alone rather than an FF&E budget wearing its name.
-    proposalInvestment: null,
-    sentDate: liveProposal?.sent_at
-      ? fmtDay(liveProposal.sent_at).toUpperCase()
-      : null,
-    readingStop: bandStop,
-  });
-
   // The letterhead instruments, mounted ONCE and handed to the letterhead's
   // ledger column: at ≥1180 they print beside the title block, below it they
   // fall under the vitals (the same `grid-cols-1` collapse `region-head.tsx`
@@ -2125,13 +2252,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             worst standing exception (or the stage's guide sentence) at every
             width. It carries `#doc-ticket-sentinel` as its own immediate
             previous sibling. */}
-        <LensBand
-          model={bandModel}
-          open={letterheadInFrame}
-          readingStop={bandStop}
-          docId={id}
-          onToTop={toTop}
-        />
+        {bandModel && (
+          <LensBand
+            model={bandModel}
+            readingStop={bandStop}
+            docId={id}
+            onToTop={toTop}
+            onActed={onLensActed}
+            onStandingOpened={onLensStandingOpened}
+          />
+        )}
 
         {row.engagement_kind === 'project' && row.project_id && (
           <FolioLetterhead projectId={row.project_id} />

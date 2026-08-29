@@ -3,7 +3,6 @@
 import { DocumentAction } from './document-action';
 import type { DocumentGuideModel } from '@/lib/document/document-guide';
 import type { LensGuideLine } from '@/lib/document/lens-band-derivation';
-import { documentEvents } from '@/lib/analytics/document-events';
 import React, { useEffect, useRef } from 'react';
 
 /**
@@ -28,7 +27,6 @@ export function deriveGuideModel(
 
 export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel; onActivate: () => void }) {
   const href = model.action?.destination.kind === 'href' ? model.action.destination.href : null;
-  const inputCount = model.topInput ? model.remainingInputCount + 1 : 0;
 
   // Guidance enriches in place: a locally derived anchor action can become a
   // link (or the reverse) once the Desk composition lands. React renders those
@@ -59,23 +57,9 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
     actionRef.current?.focus();
     focusedIdentityRef.current = actionIdentity;
   }, [actionIdentity]);
-  const recordSelection = () => {
-    if (!model.action) return;
-    documentEvents.guideSelected({
-      stage: model.stage,
-      state: model.state,
-      action_key: model.action.key,
-      input_count: inputCount,
-    });
-  };
-  useEffect(() => {
-    documentEvents.guideShown({
-      stage: model.stage,
-      state: model.state,
-      action_key: model.action?.key ?? null,
-      input_count: inputCount,
-    });
-  }, [inputCount, model.action?.key, model.stage, model.state]);
+  // D-B22 — the guide's telemetry is re-homed on the lens line and fires from
+  // `page.tsx`, which owns the band's model. This component no longer mounts
+  // in product, so an event fired here would be an event fired nowhere.
 
   return (
     <section aria-labelledby="document-next-up" className="my-5 border-y border-[var(--color-pearl)] py-4">
@@ -97,9 +81,9 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
         {model.action && (
           <div className="hidden min-[1180px]:block">
             {href ? (
-              <DocumentAction ref={actionRef} onFocus={holdFocus} onBlur={releaseFocus} actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" href={href} onClick={recordSelection}>{model.action.label}</DocumentAction>
+              <DocumentAction ref={actionRef} onFocus={holdFocus} onBlur={releaseFocus} actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" href={href} >{model.action.label}</DocumentAction>
             ) : (
-              <DocumentAction ref={actionRef} onFocus={holdFocus} onBlur={releaseFocus} actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" onClick={() => { recordSelection(); onActivate(); }}>{model.action.label}</DocumentAction>
+              <DocumentAction ref={actionRef} onFocus={holdFocus} onBlur={releaseFocus} actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" onClick={onActivate}>{model.action.label}</DocumentAction>
             )}
           </div>
         )}
