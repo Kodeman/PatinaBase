@@ -75,12 +75,23 @@ enum DesignerRelationshipResolver {
     /// false` for a client who has a designer, and would draw Buy in W5 for
     /// exactly the clients R3 pre-empts. (W4 removed the other half of that
     /// hazard: a match no longer ages out of promotion at 14 days.)
+    ///
+    /// `record` and the three row lists are how the project is chosen when
+    /// there is more than one; see `activeProject(in:record:…)`. They default
+    /// to nothing, so a caller that has no record still gets the old answer.
     static func resolve(
         lead: DesignRequestStatus?,
         projects: [RemoteProject],
-        roster: [RosterDesigner]
+        roster: [RosterDesigner],
+        record: HouseRecord? = nil,
+        decisions: [RemoteClientDecision] = [],
+        proposals: [RemoteProposal] = [],
+        invoices: [RemoteInvoice] = []
     ) -> DesignerRelationship {
-        if let active = activeProject(in: projects),
+        if let active = activeProject(
+            in: projects, record: record,
+            decisions: decisions, proposals: proposals, invoices: invoices
+           ),
            let designerId = active.designer_id.flatMap(UUID.init(uuidString:)),
            let projectId = UUID(uuidString: active.id) {
             // `RemoteProject` carries `studio_id` but no studio name — the
@@ -106,10 +117,44 @@ enum DesignerRelationshipResolver {
         return .none
     }
 
-    private static func activeProject(in projects: [RemoteProject]) -> RemoteProject? {
-        projects.first {
+    /// **The same pick the seat makes** — the project carrying the most urgent
+    /// NEEDS YOU row, else the most recently updated active one
+    /// (`ProjectsAPIClient.listProjects` orders `updated_at.desc`).
+    ///
+    /// `client@patina.dev` has three simultaneously-active projects with the
+    /// same designer. Until now this was `projects.first { … }` with no
+    /// tie-break, so `Ask Leah to source this` opened a thread on `Birch
+    /// Hollow` while every NEEDS YOU row on her Today was `Aspen Loft Refresh`
+    /// — the seat above the record and the thread below it named two different
+    /// jobs (`waves/w5/walk.md` §"Carried forward" 2; W2's walk found the same
+    /// split in the seat and W4 fixed it there).
+    ///
+    /// The urgency rule is applied **inside** the designer-bearing set rather
+    /// than over all active projects, which is the one place this deliberately
+    /// differs from `DesignerSeat.activeProject`. The seat may name no project
+    /// and fall back to the lead; this resolver may not, because `.none` is
+    /// what draws Buy — a client whose urgent project carries no `designer_id`
+    /// must still resolve `.project` on the one that does, or R3's pre-emption
+    /// silently comes off. Where the urgent project IS designer-bearing — the
+    /// case the walk found and every real one — the two agree exactly.
+    ///
+    /// The rule itself is `DesignerSeat.urgentProjectId`, called rather than
+    /// copied: two spellings of "which project is the house waiting on" is how
+    /// the seat and the thread came apart in the first place.
+    static func activeProject(
+        in projects: [RemoteProject],
+        record: HouseRecord? = nil,
+        decisions: [RemoteClientDecision] = [],
+        proposals: [RemoteProposal] = [],
+        invoices: [RemoteInvoice] = []
+    ) -> RemoteProject? {
+        let candidates = projects.filter {
             !StudioQueueBuilder.projectIsArchived($0) && $0.designer_id != nil
         }
+        let urgentId = DesignerSeat.urgentProjectId(
+            record: record, decisions: decisions, proposals: proposals, invoices: invoices
+        )
+        return urgentId.flatMap { id in candidates.first { $0.id == id } } ?? candidates.first
     }
 
     private static func mostRecent(in roster: [RosterDesigner]) -> RosterDesigner? {
