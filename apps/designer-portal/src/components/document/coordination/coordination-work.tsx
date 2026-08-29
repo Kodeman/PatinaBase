@@ -161,7 +161,7 @@ export function CoordinationWork({
                         ? `"${t.title}" is blocked`
                         : `Mark "${t.title}" done`
                   }
-                  className={`relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[11px] font-bold leading-none ${
+                  className={`relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[8px] font-bold leading-none ${
                     isBlockedTick ? 'cursor-not-allowed' : ''
                   }`}
                   style={{

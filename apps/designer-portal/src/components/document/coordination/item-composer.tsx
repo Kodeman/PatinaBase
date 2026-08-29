@@ -918,7 +918,7 @@ function BlockTick({ on }: { on: boolean }) {
   return (
     <span
       aria-hidden
-      className="relative inline-flex h-[13px] w-[13px] flex-shrink-0 items-center justify-center rounded-[3px] border-[1.5px] text-[11px] font-bold leading-none text-white"
+      className="relative inline-flex h-[13px] w-[13px] flex-shrink-0 items-center justify-center rounded-[3px] border-[1.5px] text-[8px] font-bold leading-none text-white"
       style={{
         borderColor: on ? 'var(--color-clay)' : 'var(--doc-ink-border)',
         background: on ? 'var(--color-clay)' : 'transparent',

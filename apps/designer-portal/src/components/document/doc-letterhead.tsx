@@ -74,7 +74,7 @@ export function DocLetterhead({
             data-release-room
             onClick={onReleaseRoom}
             aria-label={`Put down ${inHandRoomName}`}
-            className="doc-room-lifted mt-2.5 flex min-h-11 w-full items-baseline justify-between gap-3 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 text-left font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="doc-room-lifted mt-2.5 flex min-h-11 w-full items-baseline justify-between gap-3 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 text-left font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             <span>In hand · {inHandRoomName}</span>
             <span aria-hidden className="shrink-0 text-[var(--color-aged-oak)]">
@@ -84,7 +84,7 @@ export function DocLetterhead({
         ) : (
           <p
             data-in-hand-room
-            className="doc-room-lifted mt-2.5 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
+            className="doc-room-lifted mt-2.5 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
           >
             In hand · {inHandRoomName}
           </p>

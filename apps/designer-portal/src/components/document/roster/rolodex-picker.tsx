@@ -469,7 +469,7 @@ export function RolodexPicker({
           >
             <span
               aria-hidden
-              className="relative top-[3px] inline-flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-[2px] border-[1.5px] text-[11px] font-bold leading-none"
+              className="relative top-[3px] inline-flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-[2px] border-[1.5px] text-[8px] font-bold leading-none"
               style={{
                 borderColor: stamp ? 'var(--color-sage)' : 'var(--doc-ink-border)',
                 background: stamp ? 'rgba(168,181,160,0.15)' : 'transparent',
