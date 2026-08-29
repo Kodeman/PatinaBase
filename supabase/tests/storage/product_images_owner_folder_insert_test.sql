@@ -110,6 +110,7 @@ DECLARE
   v_a  uuid := '48800000-0000-4000-8000-000000000001';
   v_own_path   text := '48800000-0000-4000-8000-000000000001/probe.jpg';
   v_other_path text := '48800000-0000-4000-8000-000000000002/probe.jpg';
+  v_no_folder_path text := 'probe-no-folder.jpg';
   v_probe text;
 BEGIN
   PERFORM pg_temp.assume(v_a, 'authenticated');
@@ -125,6 +126,17 @@ BEGIN
   RESET ROLE;
   ASSERT v_probe = 'err:42501',
     format('user A must be denied (42501) writing under another user''s folder; got %L', v_probe);
+
+  -- A key with no folder segment: storage.foldername() splits on '/' and
+  -- drops the last segment, so a value with no slash yields '{}'; '{}'[1] is
+  -- NULL, and NULL = auth.uid()::text is NULL — not true, so WITH CHECK
+  -- rejects it just like any other mismatched prefix.
+  PERFORM pg_temp.assume(v_a, 'authenticated');
+  SET LOCAL ROLE authenticated;
+  v_probe := pg_temp.probe_insert(v_no_folder_path);
+  RESET ROLE;
+  ASSERT v_probe = 'err:42501',
+    format('user A must be denied (42501) writing a key with no folder segment; got %L', v_probe);
 
   RAISE NOTICE 'product-images owner-folder INSERT assertions passed';
 END $$;

@@ -14,9 +14,18 @@
 --     path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
 --   apps/extension/src/lib/snapshot.ts:40
 --     path = `${userId}/snapshots/${crypto.randomUUID()}.jpg`
+--   apps/designer-portal/src/components/portal/decision-option-builder.tsx:336
+--     uploadToBucket('product-images', 'decisions', file) →
+--     apps/designer-portal/src/hooks/use-image-upload.ts:99
+--     filePath = `${user.id}/${cleanPrefix}/${crypto.randomUUID()}.${ext}`
 --
 -- `vendors` is deliberately left untouched — it has no creator column to key
 -- an owner-folder check on (Kody's ruling).
+--
+-- Column reference is qualified (storage.objects.name, not bare name) per
+-- 00430's rule: an unqualified reference inside/near another relation's scope
+-- can silently resolve to the wrong column with no warning. 00485 applies the
+-- same qualification to its own foldername() call for the same reason.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 DROP POLICY IF EXISTS "Authenticated users can upload product images" ON storage.objects;
@@ -26,5 +35,5 @@ CREATE POLICY "Authenticated users can upload product images"
   TO authenticated
   WITH CHECK (
     bucket_id = 'product-images'
-    AND (storage.foldername(name))[1] = auth.uid()::text
+    AND (storage.foldername(storage.objects.name))[1] = auth.uid()::text
   );
