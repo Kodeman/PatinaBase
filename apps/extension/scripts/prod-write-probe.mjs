@@ -24,7 +24,11 @@
  *                         nullable, so this is never required; when absent the
  *                         inbox step is called with proposal_id = null)
  *   PROBE_CLIENT_ID      (optional — required, with PROBE_ALLOW_DECISION=1, to
- *                         run step 9 (a designer_clients.id, not a user id))
+ *                         run step 9 (a designer_clients.id, not a user id).
+ *                         Its client_id column must be non-null/registered —
+ *                         otherwise create_client_decision raises 23514
+ *                         "pending decisions require a registered client
+ *                         recipient", 00415:583-586)
  *   PROBE_ALLOW_DECISION (optional — set to "1" to opt into step 9, which
  *                         creates a PENDING client decision that may notify
  *                         the client and leaves rows behind. Skipped by
@@ -44,7 +48,7 @@ const PLAN = [
   "step 2  insert_product              — products insert (extension shape: capture_source=web_extension, layer=personal, owner_user_id/captured_by=uid, status=published — saveToLibrary/saveAsDecision via productRow(draft,uid,'published'), effects.ts:218/299) + select-back with per-field assertions",
   "step 3  insert_vendor               — vendors insert (name=PROBE-VENDOR-<ts>)",
   "step 4  insert_product_style        — product_styles insert for the step-2 product (style_id = first row of styles); a styles LOOKUP failure is reported as its own styles-lookup error, distinct from an insert failure",
-  "step 5  insert_vendor_certifications — one vendor_certifications row for the step-3 vendor (payloads.ts:117-125 buildVendorCertifications / effects.ts:402-405 saveVendor) — vendor_certifications writes are admin-only (migration 00058), so this is EXPECTED to fail for a plain designer account",
+  "step 5  insert_vendor_certifications — one vendor_certifications row for the step-3 vendor (payloads.ts:117-125 buildVendorCertifications / effects.ts:402-405 saveVendor) — vendor_certifications writes are admin-only (migration 00058:114-129), so a plain designer account gets exactly 42501, reported as expected-denied (does not fail the run); any other code is a real error",
   "step 6  place_in_project            — rpc place_product_in_project_v2 (destination=project_inbox); requires PROBE_PROJECT_ID, else skipped",
   "step 7  commit_proposal_capture     — rpc commit_proposal_capture; proposal_id is nullable, uses PROBE_PROPOSAL_ID if set else null",
   "step 8  update_existing             — products.update on the step-2 product (name=PROBE-UPDATED-<ts>) then product_styles delete+reinsert (mirrors updateExisting, effects.ts:354-390) — proves the UPDATE/DELETE RLS policies (00003:27+)",
@@ -322,9 +326,11 @@ if (!userId) {
 //     (payloads.ts:117-125), called by saveVendor (effects.ts:392-410) when
 //     vendorData.certifications is non-empty. NOTE: vendor_certifications
 //     writes are ADMIN-ONLY ("Admins can manage vendor certifications",
-//     migration 00058, super_admin/quality_control) — this step is EXPECTED
-//     to fail with RLS denial for a plain designer account; that failure is
-//     the correct, informative result, not a bug in the probe.
+//     migration 00058:114-129, super_admin/quality_control) — a plain
+//     designer account is EXPECTED to get exactly 42501 here. That single
+//     code is reported as `expected-denied`, not an error (a healthy run
+//     still exits 0); any OTHER code at this step is a real regression and
+//     still fails the run.
 if (!userId) {
   logSkipped(5, "insert_vendor_certifications", "no session");
 } else if (!created.vendorId) {
@@ -339,7 +345,13 @@ if (!userId) {
     created.vendorCertCreated = true;
     logOk(5, "insert_vendor_certifications", `(vendor ${created.vendorId})`);
   } catch (err) {
-    logError(5, "insert_vendor_certifications", err);
+    if (err?.code === "42501") {
+      console.log(
+        "step 5 insert_vendor_certifications: expected-denied 42501 (admin-only RLS, 00058:114-129)",
+      );
+    } else {
+      logError(5, "insert_vendor_certifications", err);
+    }
   }
 }
 
