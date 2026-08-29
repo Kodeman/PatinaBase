@@ -185,13 +185,14 @@ describe('quiet responsive document shell', () => {
     const spine = screen.getByRole('complementary', { name: 'Document spine' });
     expect(spine).toHaveAttribute(
       'data-spine-regime',
-      'sheet-below-1180-compact-to-1439-full-from-1440',
+      'sheet-below-1180-narrow-to-1439-full-from-1440',
     );
     expect(spine).toHaveClass(
       'min-[1180px]:block',
       'min-[1180px]:box-border',
       'min-[1180px]:overflow-x-hidden',
       'min-[1180px]:w-full',
+      'min-[1180px]:px-3',
       'min-[1440px]:w-auto',
     );
 
@@ -210,15 +211,13 @@ describe('quiet responsive document shell', () => {
       screen.queryByRole('button', { name: /Direction/ }),
     ).not.toBeInTheDocument();
 
-    expect(screen.getByTestId('spine-timer').parentElement).toHaveClass(
-      'hidden',
-      'min-[1440px]:block',
-    );
-    expect(screen.getByTestId('compact-spine-timer')).toHaveClass(
-      'hidden',
-      'min-[1180px]:flex',
-      'min-[1440px]:hidden',
-    );
+    expect(screen.queryByTestId('spine-timer')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('compact-spine-timer'),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-spine-timer-regime]'),
+    ).not.toBeInTheDocument();
   });
 
   it('opens the laptop margin as a labelled, keyboard-contained sheet', async () => {
