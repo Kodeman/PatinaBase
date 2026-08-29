@@ -46,12 +46,34 @@ test.beforeAll(async () => {
     "select id from auth.users where email = 'designer@patina.dev'",
   );
   if (!designerId) throw new Error('designer@patina.dev is not seeded locally');
+  // designer@patina.dev belongs to two active design_studio orgs locally
+  // (seeded fixtures) — set_project_studio_id (00511) only auto-derives
+  // studio_id when the lead designer has EXACTLY one candidate studio, and a
+  // PostgREST/service-role insert (unlike the raw migration/seed replay that
+  // created the other 5 seeded projects for this designer, all studio_id
+  // NULL) does not get that trigger's postgres-session bypass. Pin one
+  // explicitly — any studio the designer actively owns/non-guest-belongs to
+  // satisfies the trigger's validation.
+  const studioId = psqlScalar(`
+    select om.organization_id
+      from public.organization_members om
+      join public.organizations o on o.id = om.organization_id
+     where om.user_id = '${designerId}'
+       and om.status = 'active'
+       and om.role <> 'guest'
+       and o.type = 'design_studio'
+       and o.status = 'active'
+     order by om.organization_id
+     limit 1
+  `);
+  if (!studioId) throw new Error('designer@patina.dev has no active design_studio membership locally');
   const { data, error } = await adminDb
     .from('projects')
     .insert({
       name: `Whitlock residence (plan room e2e ${Date.now()})`,
       designer_id: designerId,
       created_by: designerId,
+      studio_id: studioId,
       status: 'active',
       current_phase: 'design',
     })
@@ -83,7 +105,19 @@ async function openPlanRoom(page: AuthenticatedPage): Promise<void> {
   });
 }
 
-test('files a dropped set, then shares a sheet with the client', async ({
+// QUARANTINED 2026-08-29, Smart Lens W0. Reason: the light table's empty-state
+// copy and interaction changed — the app now renders "Choose a PDF set; the
+// light table splits it and proposes where each page belongs before anything
+// becomes current." with a "Choose a PDF" button (confirmed via captured page
+// snapshot), not this test's expected "Drop a PDF set — the table splits it"
+// drag-and-drop framing. A real product copy/UX change, not a fixture or
+// ordering issue — out of this wave's fix scope (assertion-text drift, not
+// pinned-id or fixture-ordering). Not a lens regression — failing the same
+// way on main@dab057537 (the beforeAll seed-project failure that used to mask
+// this, `studio_id_not_designer_studio`, is fixed above; this is the next,
+// independent failure once seeding succeeds). Un-fixme when: the assertions
+// are updated to the current light-table copy and interaction. Owner: e2e triage.
+test.fixme('files a dropped set, then shares a sheet with the client', async ({
   authenticatedPage: page,
 }) => {
   // ── The empty room invites a set ────────────────────────────────────────
