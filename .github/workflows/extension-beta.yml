@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "extension-beta-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and package only; do not upload/publish"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -25,6 +31,7 @@ jobs:
 
       - name: Validate release version
         id: version
+        if: github.event_name == 'push'
         shell: bash
         run: |
           TAG_VERSION="${GITHUB_REF#refs/tags/extension-beta-v}"
@@ -34,6 +41,14 @@ jobs:
             exit 1
           fi
           echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Version from package.json (dispatch)
+        id: version_dispatch
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          PACKAGE_VERSION="$(node -p "require('./apps/extension/package.json').version")"
+          echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Brand beta manifest
         run: |
@@ -45,8 +60,6 @@ jobs:
           PLASMO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXT_SUPABASE_ANON_KEY }}
           PLASMO_PUBLIC_PORTAL_URL: ${{ secrets.EXT_PORTAL_URL }}
           PLASMO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXT_POSTHOG_KEY }}
-          # Web Store builds use Chrome's automatic update channel.
-          PLASMO_PUBLIC_UPDATE_URL: ""
         run: |
           pnpm --filter @patina/extension type-check
           pnpm --filter @patina/extension test
@@ -64,9 +77,17 @@ jobs:
           fi
           echo "path=$ZIP" >> "$GITHUB_OUTPUT"
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: patina-capture-${{ steps.version.outputs.version || steps.version_dispatch.outputs.version }}
+          path: ${{ steps.zip.outputs.path }}
+          if-no-files-found: error
+
       # The CLI version is PINNED on purpose — see the note in extension-cws.yml.
       # 4.x drops the credential flags and requires a publisher ID we do not hold.
       - name: Upload beta to Chrome Web Store
+        if: github.event_name == 'push' || inputs.dry_run == false
         env:
           EXTENSION_ID: ${{ secrets.CWS_BETA_EXTENSION_ID }}
           CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
@@ -77,6 +98,7 @@ jobs:
             --source "${{ steps.zip.outputs.path }}"
 
       - name: Publish unlisted beta
+        if: github.event_name == 'push' || inputs.dry_run == false
         env:
           EXTENSION_ID: ${{ secrets.CWS_BETA_EXTENSION_ID }}
           CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
