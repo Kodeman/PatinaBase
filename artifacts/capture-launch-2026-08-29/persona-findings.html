@@ -991,8 +991,8 @@
   <section id="rulings">
     <div class="sec-head">
       <p class="eyebrow">Rulings</p>
-      <h2>Fifteen calls, with a default on each</h2>
-      <p>CL-R1 through CL-R10 come from the program plan. CL-R11 through CL-R15 are forced by the data above and did not exist before this morning. The checkbox version is in <code>rulings.md</code>.</p>
+      <h2>Sixteen calls, with a default on each</h2>
+      <p>CL-R1 through CL-R10 come from the program plan. CL-R11 through CL-R16 are forced by the data above and did not exist before this morning. The checkbox version is in <code>rulings.md</code>.</p>
     </div>
 
     <div class="rulings">
@@ -1173,6 +1173,19 @@
             <div class="row"><span class="k">Default</span><span class="v"><strong>Hide the raw score.</strong> Keep the per-field verdigris/rust badges, which point at something a designer can act on, and drop "{high|medium|low} confidence" from the region and the sheet.</span></div>
             <div class="row alt"><span class="k">Alternative</span><span class="v">Keep the badge and explain what it measures.</span></div>
             <div class="row cons"><span class="k">If kept</span><span class="v">It is measurably dishonest — "high" on RH's $3,000-wrong price, "medium" on an Instagram post — and it puts the extractor's self-assessment where the outcome belongs.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R16<small>new</small></div>
+        <div>
+          <p class="q">Vendor capture writes certifications no designer is allowed to write.</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Remove the certification chips and the <code>vendor_certifications</code> insert from vendor capture in W1's cut lane.</strong> Certifications stay an admin and catalog concern, where the policy already puts them.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">A migration opening the INSERT policy to <code>authenticated</code> with a creator check.</span></div>
+            <div class="row cons"><span class="k">Today</span><span class="v">Migration 00058 restricts every write on <code>vendor_certifications</code> to <code>super_admin</code> and <code>quality_control</code>, so a real designer's insert comes back <code>42501</code> — confirmed by the W0-E2 write-path probe on a seeded designer. The vendor row is inserted first and lands; the certification insert that follows is awaited but its <code>error</code> is never checked, so nothing surfaces. A designer who ticks certifications is told the vendor saved, and the certifications are simply gone.</span></div>
+            <div class="row cons"><span class="k">Evidence</span><span class="v" style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;">supabase/migrations/00058_tighten_rls_policies.sql:119-126 · apps/extension/src/state/effects.ts:393-410</span></div>
           </div>
         </div>
       </article>

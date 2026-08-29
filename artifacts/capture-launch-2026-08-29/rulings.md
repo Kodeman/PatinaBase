@@ -1,6 +1,6 @@
 # Rulings owed — capture-launch W0-D1
 
-Fifteen calls, each with a recommended default. Tick the box to take the
+Sixteen calls, each with a recommended default. Tick the box to take the
 default; strike it and write the alternative to overrule. Evidence for every
 one is in `persona-findings.html` (open it beside this file).
 
@@ -33,6 +33,7 @@ one is in `persona-findings.html` (open it beside this file).
 - [ ] **CL-R13** — Currency detection (1stDibs came back CHF) — default: **fix — USD-first for US retailer domains, overridden only by explicit currency meta; show the detected currency instead of the hard-coded `$`**
 - [ ] **CL-R14** — Known-bad domains (Pinterest, Instagram) — default: **yes — route them to a "we couldn't read this page" outcome with the snapshot fallback and "by hand" beside it; the placeholder R4 screen is being cut in W1, so build this on the terminal screen that survives**
 - [ ] **CL-R15** — The confidence badge — default: **hide the raw score; keep the per-field verdigris/rust badges only**
+- [ ] **CL-R16** — Vendor capture inserts `vendor_certifications`, which 00058 restricts to `super_admin`/`quality_control` (42501 for every designer; the vendor row lands first and the certification error is never checked, so the chips are silently dropped) — default: **remove the certification chips and the insert from vendor capture in W1's cut lane**; alternative: a migration opening the policy to `authenticated` with a creator check
 
 ---
 
