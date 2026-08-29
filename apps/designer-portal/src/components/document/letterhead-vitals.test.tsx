@@ -8,15 +8,9 @@ let mockMutateAsync: jest.Mock;
 
 jest.mock('@patina/supabase', () => ({
   useProjectV2: () => ({ data: mockProject }),
-  useProjectPhases: () => ({ data: [] }),
-}));
-
-jest.mock('@/hooks/use-time-tracking', () => ({
-  useUpdatePhaseEstimates: () => ({ mutate: jest.fn() }),
 }));
 
 jest.mock('@/hooks/use-project-lifecycle', () => ({
-  usePhaseActualMinutes: () => ({ data: {} }),
   useSaveProjectVitals: () => ({ mutateAsync: mockMutateAsync }),
 }));
 
@@ -66,16 +60,58 @@ const baseProject = {
   total_amount_cents: null,
 };
 
-describe('LetterheadVitals band-honest empty rendering', () => {
-  it('offers a ghost affordance instead of an empty band when no bound is recorded', () => {
+describe('LetterheadVitals prints only what is real (D-6)', () => {
+  it('prints no date, no band and no total when none is recorded', () => {
     mockProject = { ...baseProject };
     const { container } = render(<LetterheadVitals projectId="project-1" />);
 
-    expect(screen.getByRole('button', { name: 'Set a budget band' })).toBeVisible();
-    expect(screen.queryByText('Band')).not.toBeInTheDocument();
+    // No placeholders in the live-figure register.
+    expect(
+      screen.queryByRole('button', { name: 'Set a budget band' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Target')).not.toBeInTheDocument();
+    expect(container).not.toHaveTextContent('—');
     expect(container).not.toHaveTextContent('$');
+    expect(screen.queryByText('Band')).not.toBeInTheDocument();
     expect(
       screen.queryByLabelText('Budget band minimum (dollars)'),
+    ).not.toBeInTheDocument();
+
+    // The phase word is the one fact this project carries, so the row stays.
+    expect(screen.getByText('Design Development')).toBeVisible();
+  });
+
+  it('renders nothing at all when the project carries none of the vitals', () => {
+    mockProject = { ...baseProject, current_phase: null };
+    const { container } = render(<LetterheadVitals projectId="project-1" />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('prints a date only once it has one — never `NO DATE YET`', () => {
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
+    const { container } = render(<LetterheadVitals projectId="project-1" />);
+
+    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
+    expect(screen.queryByLabelText('Target')).not.toBeInTheDocument();
+    expect(container).not.toHaveTextContent(/NO DATE YET/i);
+    expect(container).not.toHaveTextContent(/NOT KNOWN YET/i);
+  });
+
+  it('carries no Phases toggle and no per-phase hours table', () => {
+    mockProject = {
+      ...baseProject,
+      start_date: '2026-01-15',
+      budget_min: 5_000_00,
+      total_amount_cents: 7_500_00,
+    };
+    const { container } = render(<LetterheadVitals projectId="project-1" />);
+
+    expect(screen.queryByText(/Phases/)).not.toBeInTheDocument();
+    expect(container.querySelector('table')).toBeNull();
+    expect(
+      screen.queryByRole('button', { expanded: false }),
     ).not.toBeInTheDocument();
   });
 
@@ -100,16 +136,6 @@ describe('LetterheadVitals band-honest empty rendering', () => {
     expect(screen.getByText('−$7,500')).toBeVisible();
   });
 
-  it('keeps the blur-save inputs one click away from the ghost affordance', () => {
-    mockProject = { ...baseProject };
-    render(<LetterheadVitals projectId="project-1" />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Set a budget band' }));
-
-    expect(screen.getByLabelText('Budget band minimum (dollars)')).toHaveFocus();
-    expect(screen.getByLabelText('Budget band maximum (dollars)')).toBeVisible();
-  });
-
   it('renders the band and the total normally once either is recorded', () => {
     mockProject = {
       ...baseProject,
@@ -119,7 +145,6 @@ describe('LetterheadVitals band-honest empty rendering', () => {
     };
     render(<LetterheadVitals projectId="project-1" />);
 
-    expect(screen.queryByRole('button', { name: 'Set a budget band' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Budget band minimum (dollars)')).toHaveValue('5000');
     expect(screen.getByText('$7,500')).toBeVisible();
   });
@@ -127,7 +152,7 @@ describe('LetterheadVitals band-honest empty rendering', () => {
 
 describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
   it('SET on the Folio saves the picked date — never a blur commit', async () => {
-    mockProject = { ...baseProject, start_date: null };
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
     render(<LetterheadVitals projectId="project-1" />);
 
     fireEvent.click(screen.getByLabelText('Start'));
@@ -138,10 +163,11 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     );
   });
 
-  it('the clear affordance saves null and only appears once a value exists', () => {
-    mockProject = { ...baseProject };
+  it('the clear affordance belongs to the field that has a value', () => {
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
     render(<LetterheadVitals projectId="project-1" />);
-    expect(screen.queryByLabelText('Clear start')).not.toBeInTheDocument();
+
+    expect(screen.getByLabelText('Clear start')).toBeVisible();
     expect(screen.queryByLabelText('Clear target')).not.toBeInTheDocument();
   });
 
@@ -158,21 +184,21 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
   });
 
   it('a server echo while the popover is open does not clobber the trigger', () => {
-    mockProject = { ...baseProject, start_date: null };
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
     const { rerender } = render(<LetterheadVitals projectId="project-1" />);
 
     fireEvent.click(screen.getByLabelText('Start'));
-    expect(screen.getByLabelText('Start')).toHaveTextContent('—');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
 
     // A refetch lands a different value while the popover is still up.
     mockProject = { ...baseProject, start_date: '2026-02-01' };
     rerender(<LetterheadVitals projectId="project-1" />);
 
-    expect(screen.getByLabelText('Start')).toHaveTextContent('—');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
   });
 
   it('flushes a pending echo once the popover closes without a pick', () => {
-    mockProject = { ...baseProject, start_date: null };
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
     const { rerender } = render(<LetterheadVitals projectId="project-1" />);
 
     fireEvent.click(screen.getByLabelText('Start'));
@@ -180,7 +206,7 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     // An echo lands while the popover is up — must not clobber it live.
     mockProject = { ...baseProject, start_date: '2026-05-01' };
     rerender(<LetterheadVitals projectId="project-1" />);
-    expect(screen.getByLabelText('Start')).toHaveTextContent('—');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
 
     // Dismiss (Esc/outside-click stand-in) WITHOUT picking a date.
     fireEvent.click(screen.getByText('close-popover'));

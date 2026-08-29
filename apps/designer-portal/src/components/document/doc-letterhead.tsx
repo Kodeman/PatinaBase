@@ -6,9 +6,11 @@
  *
  * R80 (Track 7): on PROJECT documents (projectId set) the letterhead stops
  * being pure presentation — the title and the vitals (start · target · budget
- * band) become blur-save fields per the R40/R70 self-save law, and a quiet
- * "Phases" fold carries per-phase hour estimates beside logged actuals.
+ * band) become blur-save fields per the R40/R70 self-save law.
  * Pre-project documents keep the static string vitals unchanged.
+ *
+ * Wave 1 (D-6): the in-hand room row left for the rail's head, and the vitals
+ * print only fields that carry a value.
  */
 
 import type { ReactNode } from 'react';
@@ -24,8 +26,6 @@ export function DocLetterhead({
   client,
   projectId = null,
   needsSetup = null,
-  inHandRoomName = null,
-  onReleaseRoom = null,
 }: {
   title: string;
   vitals: string;
@@ -40,12 +40,10 @@ export function DocLetterhead({
   /** W1: the open setup needs, each with its own remedy. Empty, null and
    *  undefined all render nothing — the chip never announces a zero. */
   needsSetup?: NeedsSetupEntry[] | null;
-  /** The room lens: the room currently taken in hand, named on the paper's own
-   *  letterhead so the lift below it is never unexplained. */
+  /** The room in hand and its release are the RAIL's from Wave 1 (C-1): the
+   *  rail head prints `IN HAND · <ROOM>` and carries `Put down`. Both props stay
+   *  on the signature — and unread — until W1-L4 rewires page.tsx onto DocSpine. */
   inHandRoomName?: string | null;
-  /** F25 — the belt to the ticket's chip. A hold taken at 1440 now travels to
-   *  390 (B2), so the sentence that names it puts it down too. Without a
-   *  handler the line stays the plain statement it has always been. */
   onReleaseRoom?: (() => void) | null;
 }) {
   return (
@@ -66,29 +64,6 @@ export function DocLetterhead({
       ) : (
         vitals && <p className="mt-1 text-[11px] text-[var(--text-muted)]">{vitals}</p>
       )}
-      {inHandRoomName &&
-        (onReleaseRoom ? (
-          <button
-            type="button"
-            data-in-hand-room
-            data-release-room
-            onClick={onReleaseRoom}
-            aria-label={`Put down ${inHandRoomName}`}
-            className="doc-room-lifted mt-2.5 flex min-h-11 w-full items-baseline justify-between gap-3 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 text-left font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-          >
-            <span>In hand · {inHandRoomName}</span>
-            <span aria-hidden className="shrink-0 text-[var(--color-aged-oak)]">
-              Put down
-            </span>
-          </button>
-        ) : (
-          <p
-            data-in-hand-room
-            className="doc-room-lifted mt-2.5 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
-          >
-            In hand · {inHandRoomName}
-          </p>
-        ))}
       <NeedsSetupChip count={needsSetup?.length ?? 0} entries={needsSetup ?? []} />
     </header>
   );

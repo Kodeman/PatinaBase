@@ -8,6 +8,9 @@
  */
 
 import {
+  createContext,
+  useCallback,
+  useContext,
   useEffect,
   useId,
   useMemo,
@@ -41,8 +44,16 @@ import {
   type MarginItemRow,
 } from '@/lib/document/margin-derivation';
 import { todayYmd } from '@/lib/document/format';
+import {
+  PROJECT_PAPER_ORDER,
+  type DocumentIndexKey,
+} from '@/lib/document/document-index';
 import { DateTextInput } from './date-text-input';
-import { MarginItem } from './margin-item';
+import {
+  MarginItem,
+  marginAnchorRegion,
+  marginRegionName,
+} from './margin-item';
 import { MarginHandoffs, useHandoffGates } from './margin-handoff-item';
 import { MarginItemBody } from './margin-bodies';
 import { MarginNote } from './margin-note';
@@ -76,6 +87,45 @@ export function openMarginRail(): void {
   window.dispatchEvent(new CustomEvent(OPEN_MARGIN_EVENT));
 }
 
+/**
+ * What the 1180–1439 tab prints beside its own word. `MarginRail` knows the
+ * counts and `ResponsiveMarginRail` owns the tab, and page.tsx composes them as
+ * parent and child — so the counts travel down a context rather than through a
+ * prop the page would have to thread.
+ */
+export interface MarginTabSummary {
+  /** Raised (unsettled) items — the number the tab and the groups agree on. */
+  count: number;
+  /** The worst standing kind, already printed (`1 OVERDUE`), or null. */
+  worst: string | null;
+}
+
+const MarginSummaryContext = createContext<
+  ((summary: MarginTabSummary) => void) | null
+>(null);
+
+/** The worst standing kind in the margin, ranked as R12 ranks the float:
+ *  an overdue decision, then a field text awaiting a read, then anything due. */
+export function worstMarginKind(rows: readonly MarginItemRow[]): string | null {
+  const count = (state: string) => rows.filter((row) => row.state === state).length;
+  const overdue = count('overdue');
+  if (overdue > 0) return `${overdue} OVERDUE`;
+  const review = count('needs_review');
+  if (review > 0) return `${review} NEEDS REVIEW`;
+  const due = count('due');
+  if (due > 0) return `${due} DUE`;
+  return null;
+}
+
+/** The tab's own line — `MARGIN · 7 · 1 OVERDUE` once the button's `uppercase`
+ *  has had it. A zero is never announced: with nothing raised the tab is the
+ *  bare word it has always been. */
+export function marginTabLabel(summary: MarginTabSummary): string {
+  if (summary.count === 0) return 'Margin';
+  const worst = summary.worst ? ` · ${summary.worst}` : '';
+  return `Margin · ${summary.count}${worst}`;
+}
+
 const COMPACT_MARGIN_QUERY = '(min-width: 1180px)';
 const FULL_MARGIN_QUERY = '(min-width: 1440px)';
 const FOCUSABLE_MARGIN_CONTROLS = [
@@ -104,6 +154,15 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
   const panelRef = useRef<HTMLElement>(null);
   const titleId = useId();
   const [isTopModal, setIsTopModal] = useState(true);
+  const [summary, setSummary] = useState<MarginTabSummary>({
+    count: 0,
+    worst: null,
+  });
+  const publishSummary = useCallback((next: MarginTabSummary) => {
+    setSummary((prev) =>
+      prev.count === next.count && prev.worst === next.worst ? prev : next,
+    );
+  }, []);
 
   useEffect(() => {
     const compactMedia = window.matchMedia(COMPACT_MARGIN_QUERY);
@@ -228,7 +287,7 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
         className="group fixed right-0 top-28 z-[30] hidden min-h-11 min-w-11 items-center gap-2 rounded-l-[4px] border border-r-0 border-[var(--color-pearl)] bg-[rgba(250,247,242,0.96)] px-3 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1180px]:inline-flex min-[1440px]:hidden"
       >
         <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
-          Margin
+          {marginTabLabel(summary)}
         </span>
         <span aria-hidden>←</span>
       </button>
@@ -282,9 +341,11 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
           </button>
         </div>
         <div className="px-4 pb-24 pt-4 min-[1440px]:pt-6">
-          <DocSheetOriginProvider origin="margin">
-            {children}
-          </DocSheetOriginProvider>
+          <MarginSummaryContext.Provider value={publishSummary}>
+            <DocSheetOriginProvider origin="margin">
+              {children}
+            </DocSheetOriginProvider>
+          </MarginSummaryContext.Provider>
         </div>
       </aside>
     </>
@@ -300,6 +361,7 @@ export function MarginRail({
   pendingNoteAnchor = null,
   onNoteAnchorConsumed = () => {},
   approvalSurfaceMounted = false,
+  currentStop = null,
   now,
 }: {
   projectId: string | null;
@@ -318,6 +380,10 @@ export function MarginRail({
   /** R14: a line unfold asked for a note — open the composer pre-anchored. */
   pendingNoteAnchor?: string | null;
   onNoteAnchorConsumed?: () => void;
+  /** The reading stop currently in frame. It changes which group's count reads
+   *  charcoal — never which group a card sits in, and never the group order:
+   *  re-sorting the margin under the reader is the CLS the lens forbids. */
+  currentStop?: DocumentIndexKey | null;
 }) {
   const { data: items, isLoading } = useMarginItems(projectId, proposalId);
   const handoffGates = useHandoffGates({ projectId, clientName, now });
@@ -354,6 +420,45 @@ export function MarginRail({
     );
     return partitionMargin(visibleItems, new Date(), { lineRank });
   }, [visibleItems, ffeItems]);
+
+  // RF-03: one group per anchor that has members, in the paper's own region
+  // order with the whole job last. The order is stable by construction, so a
+  // card never moves between groups (or up the rail) as the reading stop moves.
+  const anchorGroups = useMemo(() => {
+    const byKey = new Map<DocumentIndexKey | null, MarginItemRow[]>();
+    for (const row of raised) {
+      const key = marginAnchorRegion(row);
+      const bucket = byKey.get(key);
+      if (bucket) bucket.push(row);
+      else byKey.set(key, [row]);
+    }
+    const ordered: Array<{
+      key: DocumentIndexKey | null;
+      heading: string;
+      rows: MarginItemRow[];
+    }> = [];
+    for (const region of PROJECT_PAPER_ORDER) {
+      const rows = byKey.get(region.key);
+      if (rows?.length) {
+        ordered.push({
+          key: region.key,
+          heading: `BESIDE ${marginRegionName(region.key)}`,
+          rows,
+        });
+      }
+    }
+    const wholeJob = byKey.get(null);
+    if (wholeJob?.length) {
+      ordered.push({ key: null, heading: 'THE WHOLE JOB', rows: wholeJob });
+    }
+    return ordered;
+  }, [raised]);
+
+  const publishSummary = useContext(MarginSummaryContext);
+  const worst = useMemo(() => worstMarginKind(raised), [raised]);
+  useEffect(() => {
+    publishSummary?.({ count: raised.length, worst });
+  }, [publishSummary, raised.length, worst]);
 
   // ── R55: the decision composer, opened from the margin "+ New" ──
   // designer_clients.id resolution (the band's pattern) — the composer INSERT
@@ -486,7 +591,10 @@ export function MarginRail({
         </MarginNote>
       ))}
       <div className="mb-3 flex items-baseline justify-between">
-        <p className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
+        {/* The sheet header above already prints this word between 1180 and
+            1439, so the column heading is the ≥1440 printing only — the two
+            are complementary and can never both be on screen. */}
+        <p className="hidden font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] min-[1440px]:block">
           In the margin
         </p>
         <DocumentActionGroup
@@ -632,7 +740,29 @@ export function MarginRail({
           </p>
         )}
 
-      {raised.map(renderItem)}
+      {anchorGroups.map((group) => {
+        const current = group.key !== null && group.key === currentStop;
+        return (
+          <div key={group.key ?? 'whole-job'} data-margin-group={group.key ?? 'whole-job'}>
+            <p
+              data-beside-current={current ? '' : undefined}
+              className="mb-1.5 mt-3 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]"
+            >
+              {group.heading}{' '}
+              <span
+                className={
+                  current
+                    ? 'text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)]'
+                }
+              >
+                · {group.rows.length}
+              </span>
+            </p>
+            {group.rows.map(renderItem)}
+          </div>
+        );
+      })}
 
       {/* R12: resolved items fold away — the fold label is the only number
           anywhere in the margin. */}

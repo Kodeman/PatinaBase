@@ -100,3 +100,30 @@ describe('markMarginNoteSeen', () => {
     expect(window.localStorage.getItem(storageKey('k-mark'))).not.toBeNull();
   });
 });
+
+describe('MarginNote — the two-line cap (RF-03)', () => {
+  const LONG =
+    'The margin on the right is where decisions and money gather. Esc puts the document down — and the hours log themselves while it is in your hand.';
+
+  it('clamps the body to two lines and keeps the full text in the title', () => {
+    render(<MarginNote noteKey="k-clamp">{LONG}</MarginNote>);
+
+    const body = screen.getByTitle(LONG);
+    expect(body).toHaveClass('line-clamp-2');
+    expect(body).toHaveTextContent(LONG);
+    // The mono footnote is its own block below the clamp, never inside it.
+    expect(body).not.toHaveTextContent('Appears once');
+  });
+
+  it('claims no title when the body is not plain text', () => {
+    render(
+      <MarginNote noteKey="k-clamp-node">
+        <strong>Marked-up body</strong>
+      </MarginNote>,
+    );
+
+    const body = screen.getByText('Marked-up body').parentElement!;
+    expect(body).toHaveClass('line-clamp-2');
+    expect(body).not.toHaveAttribute('title');
+  });
+});
