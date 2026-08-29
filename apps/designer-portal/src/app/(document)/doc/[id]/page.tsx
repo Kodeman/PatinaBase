@@ -89,7 +89,10 @@ import { RoomFilesSection } from '@/components/room-file/room-files-section';
 import { InstallWindowCeremony } from '@/components/document/schedule/install-window-ceremony';
 import { BriefSection } from '@/components/document/brief-section';
 import { BriefRecap } from '@/components/document/brief-recap';
-import { CareBand } from '@/components/document/care-band';
+import {
+  CareBand,
+  type CloseoutState,
+} from '@/components/document/care-band';
 import { CareSection } from '@/components/document/quiet-sections';
 import { DiscoverySection } from '@/components/document/discovery/discovery-section';
 import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
@@ -176,6 +179,7 @@ import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
 import {
   deriveLineStamp,
+  OPEN_DAMAGE_CLAIM_STATES,
   type LineStampInput,
 } from '@/lib/document/stamp-derivation';
 import { deriveTableComposition } from '@/lib/document/table-derivation';
@@ -234,6 +238,10 @@ interface TicketFFERow extends LineStampInput {
   project_room_id?: string | null;
   product_id?: string | null;
   removed_at?: string | null;
+  /** `damage_claims!ffe_item_id(id, state, created_at)` — the embed
+   *  `use-project-v2.ts:192` already selects. `LineStampInput` reads only the
+   *  state; the rail's Pieces value reads the date beside it. */
+  item_claims?: { state: string; created_at?: string | null }[] | null;
 }
 
 /**
@@ -414,6 +422,7 @@ function JobTicketMount({
   onUnfoldRegion,
   onRows,
   onInput,
+  onDamagedOn,
   clientCopy,
 }: {
   projectId: string;
@@ -448,6 +457,11 @@ function JobTicketMount({
    *  rows travel back up. */
   onRows: (rows: readonly TicketRow[]) => void;
   onInput: (input: TicketInput) => void;
+  /** W2 design review, item 11 — the carrier window on the damaged line. The
+   *  FF&E read below already embeds `damage_claims(id, state, created_at)` for
+   *  `deriveLineStamp`, so the date the rail's Pieces value adds costs no
+   *  query of its own; it is reported up rather than re-read. */
+  onDamagedOn: (isoDate: string | null) => void;
   /** The proposal's own copy — the ninth row, and only on the Finalize table. */
   clientCopy: TicketClientCopy | null;
 }) {
@@ -476,6 +490,23 @@ function JobTicketMount({
         })),
     [ffeQuery.data],
   );
+
+  // The oldest OPEN claim standing on any line — the same claim
+  // `deriveLineStamp` reads to stamp the line `damaged`, so the rail's date
+  // and the paper's stamp can never name different damage.
+  const damagedOn = useMemo(() => {
+    const dates = (ffeQuery.data ?? [])
+      .filter((item) => item.removed_at == null)
+      .flatMap((item) => item.item_claims ?? [])
+      .filter((claim) => OPEN_DAMAGE_CLAIM_STATES.has(claim.state))
+      .map((claim) => claim.created_at)
+      .filter((date): date is string => Boolean(date))
+      .sort();
+    return dates[0] ?? null;
+  }, [ffeQuery.data]);
+  useEffect(() => {
+    onDamagedOn(damagedOn);
+  }, [damagedOn, onDamagedOn]);
 
   const leadingOpenInvoice = useMemo(
     () => computeArAging(invoicesQuery.data ?? []).openInvoices[0] ?? null,
@@ -1001,7 +1032,24 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // reader of the eight closeout queries AND of the checklist's own state. The
   // band publishes its answer here rather than the page paying for that read
   // twice and getting a second answer.
-  const [closureReady, setClosureReady] = useState(false);
+  // W2 fix (D-B9) — the pair, not only the gate: the ladder's care stop prints
+  // `N OF M CLOSED OUT` off the same report. Held by value so the band may
+  // publish on every render without moving the page.
+  const [closeout, setCloseout] = useState<CloseoutState>({
+    ready: false,
+    closed: 0,
+    total: 0,
+  });
+  const closureReady = closeout.ready;
+  const acceptCloseout = useCallback((next: CloseoutState) => {
+    setCloseout((previous) =>
+      previous.ready === next.ready &&
+      previous.closed === next.closed &&
+      previous.total === next.total
+        ? previous
+        : next,
+    );
+  }, []);
   // FIX 2 — the event's optional { mode } detail (default 'sheet'), read off
   // whichever dispatch opened it and forwarded straight through to CallSheet.
   const [callSheetMode, setCallSheetMode] = useState<CallSheetOpenMode>('sheet');
@@ -1411,6 +1459,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // map on the same paper does not show. Null on a document with no ticket,
   // and null until the mount's first report.
   const [ticketRows, setTicketRows] = useState<readonly TicketRow[] | null>(null);
+  // W2 design review, item 11 — reported by the ticket mount, which is where
+  // the FF&E read (and its `damage_claims` embed) already stands.
+  const [damagedOn, setDamagedOn] = useState<string | null>(null);
+  const acceptDamagedOn = useCallback((isoDate: string | null) => {
+    setDamagedOn((previous) => (previous === isoDate ? previous : isoDate));
+  }, []);
   const acceptTicketRows = useCallback((rows: readonly TicketRow[]) => {
     setTicketRows((previous) =>
       sameTicketRows(previous, rows) ? previous : rows,
@@ -1502,10 +1556,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     row?.engagement_kind === 'project' && row.project_id
       ? paperRegionsForSection(row.active_section)
       : [];
-  const { activeKey, jump: jumpToRegion } = useDocumentRunningIndex(
+  const {
+    activeKey,
+    jump: jumpToRegion,
+    mountedKeys,
+  } = useDocumentRunningIndex(
     runningIndexRegions.map((region) => region.key),
     row?.project_id ?? '',
   );
+
+  // Call Sheet (Wave 3) — rules of hooks: called unconditionally above the
+  // early returns below, alongside the page's other hooks. The roster fetch is
+  // gated on the flag so a cohort without it doesn't pay for a query neither
+  // the kickoff band nor the instrument will render from.
+  const callSheetGate = useFeatureFlag('call-sheet');
 
   // W2 · THE LADDER — one segment per stop the spread puts on the paper, and
   // the doors filed beneath them. Derived once, here, and printed twice: by
@@ -1530,9 +1594,24 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       .map((approval) => approval.dueAt)
       .filter((due): due is string => Boolean(due))
       .sort()[0] ?? null;
+  // C-04 — a stop is a press target only where its root is actually on the
+  // paper. `mounted` is false ONLY where the index can answer for the key and
+  // says there is no root: a key the index was never given (a pinned spread
+  // declaring a region the live section does not index) is unknown, not
+  // absent, and stays pressable.
+  const indexedKeys = new Set(runningIndexRegions.map((region) => region.key));
+  const declaredLadderKeys =
+    ticketInput?.paperRegions ??
+    (ticketInput
+      ? paperRegionsForSection(ticketInput.section).map((region) => region.key)
+      : []);
+  const ladderMountedKeys = declaredLadderKeys.filter(
+    (key) => !indexedKeys.has(key) || mountedKeys.includes(key),
+  );
   const ladderSegments = ticketInput
     ? deriveLadderSegments({
         ticket: ticketInput,
+        mountedKeys: ladderMountedKeys,
         approvals: {
           settled: !approvalsQuery.isLoading,
           awaiting: unsettledApprovals.length - overdueApprovals.length,
@@ -1549,20 +1628,24 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             : null,
           records: approvalRecords.length,
         },
-        // The closeout checklist's numerator is `CareBand`'s own: it is
-        // composed from eight reads and the band's local ticks, and the band
-        // reports only whether the book CAN be closed. Nothing on this page
-        // can state `N of M` without repeating those reads, so the stop takes
-        // its fallback (D-B9) rather than printing a number it does not have.
-        care: { settled: true, closed: 0, total: 0 },
+        // The closeout checklist's numerator is `CareBand`'s own — composed
+        // from eight reads and the band's local ticks. D-B9 is closed by the
+        // band reporting the pair rather than the gate alone; until it has
+        // reported, `total` is 0 and the stop takes its fallback.
+        care: {
+          settled: true,
+          closed: closeout.closed,
+          total: closeout.total,
+        },
         record: {
           settled: true,
           complete: sections.filter((section) => section.state === 'settled')
             .length,
         },
-        // The carrier window on the damaged line is not on the ticket's input:
-        // a `TicketLine` carries a stamp and a room, never a date (D-B9).
-        damagedOn: null,
+        // The carrier window on the damaged line: the oldest open damage
+        // claim, reported up by the ticket mount from the embed its FF&E read
+        // already carries (D-B9, closed).
+        damagedOn,
         heldRoomId,
       })
     : [];
@@ -1570,6 +1653,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     ? deriveLadderDoors({
         ticket: ticketInput,
         held: Boolean(heldRoomId),
+        // F-13/C-09 — one rule, both tiers: the sections sheet gates its Call
+        // sheet row on this flag, and with it off nothing mounts the overlay
+        // the door opens.
+        callSheetEnabled: callSheetGate.value,
         routes: {
           planroom: shelfRouteFor('planroom', id),
           specbook: shelfRouteFor('specbook', id),
@@ -1628,12 +1715,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     rememberDocumentInHand(heldEngagementId, { title: heldTitle, subtitle: heldSubtitle });
   }, [heldEngagementId, heldTitle, heldSubtitle]);
-
-  // Call Sheet (Wave 3) — rules of hooks: called unconditionally above the
-  // early returns below, alongside the page's other hooks. The roster fetch is
-  // gated on the flag so a cohort without it doesn't pay for a query neither
-  // the kickoff band nor the instrument will render from.
-  const callSheetGate = useFeatureFlag('call-sheet');
 
   // W2 — which table the paper composes as, and the pin that holds it still.
   // Memoized on the two facts it reads so the pin's snapshot is taken once per
@@ -1899,6 +1980,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         onUnfoldRegion={unfoldRegion}
         onRows={acceptTicketRows}
         onInput={acceptTicketInput}
+        onDamagedOn={acceptDamagedOn}
         clientCopy={clientCopy}
       />
     ) : (
@@ -2323,7 +2405,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     see two. */}
                   <CareBand
                     projectId={row.project_id}
-                    onCloseoutReady={setClosureReady}
+                    onCloseoutReady={acceptCloseout}
                     indexRoot
                   />
                 </>
@@ -2349,7 +2431,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 <InstallWindowCeremony projectId={row.project_id} />
                 {/* R80: at install the band opens unfolded — closing out IS the
                     work of this stage. */}
-                <CareBand projectId={row.project_id} onCloseoutReady={setClosureReady} />
+                <CareBand projectId={row.project_id} onCloseoutReady={acceptCloseout} />
               </>
             )}
             {spreadSection === 'care' && (

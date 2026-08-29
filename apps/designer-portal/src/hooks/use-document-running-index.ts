@@ -50,6 +50,13 @@ function regionRoot(key: DocumentIndexKey): Element | null {
 export interface DocumentRunningIndex {
   activeKey: DocumentIndexKey | null;
   jump: (key: DocumentIndexKey) => void;
+  /**
+   * The keys whose `[data-index-region]` root is on the paper right now, in
+   * paper order. A stop with no root is nowhere to jump to — no scroll, no
+   * heading to land focus on — so the rail prints it rather than offering it
+   * as a press (C-04).
+   */
+  mountedKeys: readonly DocumentIndexKey[];
 }
 
 export function useDocumentRunningIndex(
@@ -57,6 +64,9 @@ export function useDocumentRunningIndex(
   projectId: string,
 ): DocumentRunningIndex {
   const [activeKey, setActiveKey] = useState<DocumentIndexKey | null>(null);
+  const [mountedKeys, setMountedKeys] = useState<readonly DocumentIndexKey[]>(
+    [],
+  );
   const lockRef = useRef<DocumentIndexKey | null>(null);
   const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keyList = keys.join('|');
@@ -128,24 +138,6 @@ export function useDocumentRunningIndex(
     // the line would go on marking a region the spread has since unmounted.
     const observing = new Map<DocumentIndexKey, Element>();
 
-    const attach = () => {
-      for (const key of ordered) {
-        const el = regionRoot(key);
-        const previous = observing.get(key);
-        if (previous && previous !== el) observer.unobserve(previous);
-        if (!el) {
-          observing.delete(key);
-          attached.delete(key);
-          continue;
-        }
-        observer.observe(el);
-        observing.set(key, el);
-        attached.add(key);
-      }
-      resolve();
-    };
-    attach();
-
     // One rAF of debounce: a spread mounting several regions in one commit
     // produces one batch of records, and re-attaching per record would query
     // the whole list once per root.
@@ -159,18 +151,65 @@ export function useDocumentRunningIndex(
       });
     };
 
-    const paper = document.querySelector(PAPER_ROOT_SELECTOR);
     const mutations =
       typeof MutationObserver === 'undefined'
         ? null
         : new MutationObserver(queueAttach);
-    // The paper is the subtree the roots live in; before it exists (the first
-    // paint of a still-loading document) watch the body, so the paper's own
-    // arrival is the mutation that attaches the roots inside it.
-    mutations?.observe(paper ?? document.body, {
-      childList: true,
-      subtree: true,
-    });
+
+    // The paper is the subtree the roots live in. Before it exists (the first
+    // paint of a still-loading document) the body is watched INSTEAD, so the
+    // paper's own arrival is the mutation that attaches the roots inside it —
+    // and the watch then moves onto the paper. A body watch that outlives the
+    // paper's arrival wakes on every childList mutation in the application (a
+    // sheet, a toast, a portal, any re-render) and pays a forced layout per
+    // frame for churn that cannot contain a region root.
+    let mutationTarget: Node | null = null;
+    const watchForRoots = () => {
+      const target = document.querySelector(PAPER_ROOT_SELECTOR) ?? document.body;
+      if (target === mutationTarget) return;
+      mutations?.disconnect();
+      mutationTarget = target;
+      mutations?.observe(target, { childList: true, subtree: true });
+    };
+
+    const attach = () => {
+      for (const key of ordered) {
+        const el = regionRoot(key);
+        const previous = observing.get(key);
+        if (previous && previous !== el) {
+          observer.unobserve(previous);
+          // `seen` is the last intersection each key REPORTED. A root that
+          // has left carries a stale answer, and `resolve()`'s crossing
+          // branch would hand the line to a region far off-screen the moment
+          // a replacement root is observed but has not yet been delivered.
+          seen.delete(key);
+        }
+        if (!el) {
+          observing.delete(key);
+          attached.delete(key);
+          seen.delete(key);
+          continue;
+        }
+        observer.observe(el);
+        observing.set(key, el);
+        attached.add(key);
+      }
+      watchForRoots();
+      // Published by identity, not by value: `attached` is rebuilt on every
+      // mutation batch and a fresh array each time would re-render the whole
+      // document for a subtree that changed nothing about the roots.
+      const present = ordered.filter((key) => attached.has(key));
+      setMountedKeys((previous) =>
+        previous.length === present.length &&
+        previous.every((key, i) => key === present[i])
+          ? previous
+          : present,
+      );
+      resolve();
+    };
+
+    watchForRoots();
+    attach();
 
     let ticking = false;
     const onScroll = () => {
@@ -229,7 +268,7 @@ export function useDocumentRunningIndex(
     [projectId],
   );
 
-  return { activeKey, jump };
+  return { activeKey, jump, mountedKeys };
 }
 
 /**

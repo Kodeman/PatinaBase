@@ -92,7 +92,14 @@ export interface LineStamp {
   dueDate: string | null;
 }
 
-const OPEN_CLAIM_STATES = new Set(['drafted', 'vendor_notified']);
+/** A damage claim still standing on a line. Exported because the rail's Pieces
+ *  value dates the same claim this stamps the line for (W2 design review, item
+ *  11), and two lists would let the date and the stamp name different damage. */
+export const OPEN_DAMAGE_CLAIM_STATES: ReadonlySet<string> = new Set([
+  'drafted',
+  'vendor_notified',
+]);
+const OPEN_CLAIM_STATES = OPEN_DAMAGE_CLAIM_STATES;
 
 export function deriveLineStamp(
   item: LineStampInput,

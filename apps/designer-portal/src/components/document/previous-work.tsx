@@ -48,15 +48,25 @@ export function PreviousWork({
   const hasHistory = count > 0;
 
   return (
-    <section data-index-region="record" className="mb-5 mt-4" aria-label="The record">
+    <section
+      data-index-region="record"
+      className="mb-5 mt-4"
+      aria-label="The record"
+    >
       <RegionHead
         headingId={RECORD_HEADING_ID}
         // F90 — canon names it The Record (I137); the screen now says so.
         name="The record"
-        status={hasHistory ? `${count} complete` : 'Nothing settled yet'}
+        // Reconciliation §"Quiet regions": `N complete`, and `Nothing yet` for
+        // the empty read — the ratified string, not a paraphrase of it.
+        status={hasHistory ? `${count} complete` : 'Nothing yet'}
         surfaceKey="project"
         regionKey="record"
-        bodyId={contentId}
+        // Only when a body actually renders. `RegionHead`'s dev guard ("a head
+        // with no acts is a caption, not a head") is suppressed by a truthy
+        // `bodyId`, so naming an id that is not on the page both defeats the
+        // guard and points `aria-controls` at nothing.
+        bodyId={hasHistory ? contentId : undefined}
         actions={
           hasHistory
             ? [
@@ -65,6 +75,7 @@ export function PreviousWork({
                   label: open ? 'Fold ↑' : 'Open the record',
                   onClick: () => setOpen(!open),
                   'aria-expanded': open,
+                  'aria-controls': contentId,
                 },
               ]
             : []

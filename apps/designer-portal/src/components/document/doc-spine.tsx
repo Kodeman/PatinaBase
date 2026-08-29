@@ -99,7 +99,7 @@ export function DocSpine({
       data-spine-regime="sheet-below-1180-narrow-to-1439-full-from-1440"
       // D13: below 1180px the unified bar's section handle replaces the rail
       // (the spine doubles as a bottom sheet, D3-3).
-      className="sticky top-0 z-[2] hidden border-r border-[var(--color-pearl)] bg-[var(--doc-rail-stock)] min-[1180px]:box-border min-[1180px]:block min-[1180px]:h-screen min-[1180px]:w-full min-[1180px]:overflow-x-hidden min-[1180px]:overflow-y-auto min-[1180px]:px-3 min-[1180px]:pb-6 min-[1180px]:pt-4 min-[1440px]:w-auto min-[1440px]:px-4 min-[1440px]:pt-6"
+      className="sticky top-0 z-[2] hidden border-r border-[var(--color-pearl)] bg-[var(--doc-rail-stock)] min-[1180px]:box-border min-[1180px]:block min-[1180px]:h-screen min-[1180px]:w-full min-[1180px]:overflow-x-hidden min-[1180px]:overflow-y-auto min-[1180px]:px-3 min-[1180px]:pb-[var(--doc-shell-floating-bottom)] min-[1180px]:pt-4 min-[1440px]:w-auto min-[1440px]:px-4 min-[1440px]:pt-6"
     >
       {/* One flex column inside the rail's own padding box, so the ladder can
           take the height between the head and the doors (RF-05). The aside
@@ -109,7 +109,7 @@ export function DocSpine({
         <Link
           href="/desk"
           aria-label="Put down document"
-          className="group mb-3 inline-flex min-h-11 w-full min-w-11 shrink-0 items-center justify-center rounded-[3px] font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1440px]:mb-4 min-[1440px]:justify-start min-[1440px]:gap-1 min-[1440px]:px-1.5"
+          className="group mb-3 inline-flex min-h-11 w-full min-w-11 shrink-0 items-center justify-center gap-1 rounded-[3px] font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1440px]:mb-4 min-[1440px]:justify-start min-[1440px]:px-1.5"
         >
           <span aria-hidden>←</span>
           <span className="da-score-hover hidden group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 min-[1180px]:inline">
@@ -136,9 +136,14 @@ export function DocSpine({
             progression is the point, so nothing may hide behind a scroll and
             no mark is dropped for a count.
 
-            ≥1440: one row. The 200px column leaves ~168px inside its px-4;
-            seven `xs` marks (22px) in 24px cells plus a reclaimed slice of
-            that padding (-mx-2) fit with room to spare.
+            ≥1440: one row. The 200px column leaves 164px inside its px-4
+            (1rem = 18px at this portal's root) and the reclaimed padding
+            (-mx-2.5 = 11.25px a side) makes it 186.5. Seven cells at 24px
+            plus six 2.25px gaps measure 181.5 — inside it. The cells are
+            written as `24px` rather than `w-6` because `w-6` computes to 27
+            here, and 7 × 27 + 13.5 = 202.5 overran the rail: the seventh mark
+            was clipped against the aside's own `overflow-x-hidden` (W2 design
+            review, item 10).
 
             1180–1439 (design lead §10, ruling (d)): 112px of measure inside
             px-3 cannot hold 154px of row, so the arc WRAPS — same seven `xs`
@@ -152,7 +157,7 @@ export function DocSpine({
             measured heights (W1 e2e: 126 / 117), not the arithmetic's 116 /
             100, because `min-h-6` computes to 27px here and `min-h-11` to
             49.5 at this portal's 18px root. */}
-          <ul className="-mx-2 flex flex-row flex-wrap items-center gap-1 min-[1440px]:flex-nowrap min-[1440px]:gap-0.5">
+          <ul className="-mx-2 flex flex-row flex-wrap items-center gap-1 min-[1440px]:-mx-2.5 min-[1440px]:flex-nowrap min-[1440px]:gap-0.5">
             {sections.map((s) => {
               const mark = (
                 <StrataMark
@@ -175,13 +180,13 @@ export function DocSpine({
               // 44px at 1440 where the single row has the space, 24px at
               // 1180–1439 where two rows must fit inside a 116px head.
               return (
-                <li key={s.key} className="w-6 shrink-0">
+                <li key={s.key} className="w-6 shrink-0 min-[1440px]:w-[24px]">
                   {s.state === 'future' ||
                   s.state === 'unrecorded' ||
                   !onJump ? (
                     <div
                       aria-label={`${s.label}: ${s.sub}`}
-                      className="flex min-h-6 w-6 items-center justify-center min-[1440px]:min-h-11"
+                      className="flex min-h-6 w-full items-center justify-center min-[1440px]:min-h-11"
                     >
                       {mark}
                     </div>
@@ -191,7 +196,7 @@ export function DocSpine({
                       onClick={() => onJump(s.key)}
                       title={`Jump to ${s.label}`}
                       aria-label={`Jump to ${s.label}: ${s.sub}`}
-                      className="flex min-h-6 w-6 items-center justify-center rounded-[4px] transition-colors hover:bg-[rgba(196,165,123,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none min-[1440px]:min-h-11"
+                      className="flex min-h-6 w-full items-center justify-center rounded-[4px] transition-colors hover:bg-[rgba(196,165,123,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none min-[1440px]:min-h-11"
                     >
                       {mark}
                     </button>
