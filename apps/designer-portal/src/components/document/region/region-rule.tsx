@@ -7,10 +7,16 @@
  * charcoal rule (`mid`); only a rule that OPENS A MOVEMENT takes the double
  * rule (`strong`, the old `.doc-region-rule` recipe). The mockup draws exactly
  * one of the latter, on the Pieces head.
+ *
+ * `strong` is the DEFAULT, and stays it. The mockup draws none of the eleven
+ * other call sites (mood boards, care, schedule, money, the approval
+ * document), so a `mid` default would have demoted all eleven — a 6px double
+ * rule to a 1.5px single line — by omission rather than by ruling. `mid` is
+ * opt-in, at a site someone has actually looked at.
  */
 export function RegionRule({
   className,
-  weight = 'mid',
+  weight = 'strong',
 }: {
   className?: string;
   weight?: 'mid' | 'strong';
