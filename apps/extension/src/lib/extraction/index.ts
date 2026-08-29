@@ -11,14 +11,15 @@ import type {
   ExtractedProductVendors,
   VendorDetectionResult,
 } from '@patina/shared';
-import { extractPriceFromDOM } from './price';
+import { extractPriceFromDOM, extractPriceWithSource } from './price';
+import type { PriceSource } from './price';
 import { extractDimensionsFromDOM } from './dimensions';
 import { extractMaterialsFromDOM } from './materials';
 import { extractColorFinishFromDOM } from './color-finish';
 import { extractImagesFromDOM } from './images';
-import { extractProductName, extractDescription, extractManufacturer, extractBrand } from './metadata';
-import { extractRetailer, isKnownRetailer, RETAILER_MAP } from './retailer';
-import { extractManufacturerFromPage } from './manufacturer';
+import { extractProductName, extractDescription } from './metadata';
+import { extractRetailer } from './retailer';
+import { extractManufacturerFromPage, extractPageBrand } from './manufacturer';
 import { extractVendorData } from './vendor';
 
 /**
@@ -161,14 +162,20 @@ export function detectPageMode(): PageMode {
 /**
  * Calculate confidence score based on extraction results
  */
-function calculateConfidence(data: Partial<ExtractedProductData>): ExtractionConfidence {
+function calculateConfidence(
+  data: Partial<ExtractedProductData>,
+  priceSource: PriceSource | null = null
+): ExtractionConfidence {
   let score = 0;
 
   // Product name is essential
   if (data.productName) score += 25;
 
-  // Price is important
-  if (data.price) score += 25;
+  // Price is important — but a body-text regex hit is the weakest evidence we
+  // have (it reads promo copy and financing lines), so it earns less and can
+  // never on its own carry a page to 'high'.
+  const priceFromBodyTextOnly = priceSource === 'body-text';
+  if (data.price) score += priceFromBodyTextOnly ? 10 : 25;
 
   // Images are critical
   if (data.images && data.images.length > 0) score += 20;
@@ -190,7 +197,7 @@ function calculateConfidence(data: Partial<ExtractedProductData>): ExtractionCon
   if (data.manufacturer) score += 5;
 
   // Determine confidence level
-  if (score >= 70) return 'high';
+  if (score >= 70) return priceFromBodyTextOnly ? 'medium' : 'high';
   if (score >= 40) return 'medium';
   return 'low';
 }
@@ -239,6 +246,21 @@ function extractProductVendors(url: string): ExtractedProductVendors {
 }
 
 /**
+ * CL-R13: the ISO code the captured price is denominated in. The extracted
+ * price carries its own currency when one was published; otherwise fall back
+ * to the page's declared price currency, then to USD (the storefronts this
+ * extension targets are US-facing and price in $).
+ */
+function resolveCurrency(price: ExtractedProductData['price']): string {
+  if (price?.currency) return price.currency;
+  const declared = document
+    .querySelector('meta[property="product:price:currency"]')
+    ?.getAttribute('content')
+    ?.trim();
+  return declared ? declared.toUpperCase() : 'USD';
+}
+
+/**
  * Extract all product data from current page
  */
 export async function extractProductData(url: string): Promise<ExtractedProductData> {
@@ -246,19 +268,21 @@ export async function extractProductData(url: string): Promise<ExtractedProductD
   console.log('[Patina] Starting full extraction for:', url);
 
   // Run all extractions
-  const [productName, description, price, dimensions, materials, colorFinish, images, brand] = await Promise.all([
+  const [productName, description, pricing, dimensions, materials, colorFinish, images, brand] = await Promise.all([
     Promise.resolve(extractProductName()),
     Promise.resolve(extractDescription()),
-    Promise.resolve(extractPriceFromDOM()),
+    Promise.resolve(extractPriceWithSource()),
     Promise.resolve(extractDimensionsFromDOM()),
     Promise.resolve(extractMaterialsFromDOM()),
     Promise.resolve(extractColorFinishFromDOM()),
     Promise.resolve(extractImagesFromDOM(url)),
-    Promise.resolve(extractBrand()),
+    Promise.resolve(extractPageBrand()),
   ]);
 
-  // Get manufacturer (from URL or brand)
-  const manufacturer = extractManufacturer(url) || brand;
+  const price = pricing?.price ?? null;
+
+  // CL-R12: the maker the page names, never the domain we happen to be on.
+  const manufacturer = brand?.name ?? null;
 
   // Get primary finish if available
   const primaryFinish = colorFinish.finishes.length > 0 ? colorFinish.finishes[0] : null;
@@ -275,13 +299,14 @@ export async function extractProductData(url: string): Promise<ExtractedProductD
     availableFinishes: colorFinish.availableFinishes.length > 0 ? colorFinish.availableFinishes : null,
     images,
     manufacturer,
+    currency: resolveCurrency(price),
     url,
     extractedAt: new Date().toISOString(),
     confidence: 'low', // Will be calculated
   };
 
   // Calculate confidence
-  data.confidence = calculateConfidence(data);
+  data.confidence = calculateConfidence(data, pricing?.source ?? null);
 
   const elapsed = Math.round(performance.now() - startTime);
   console.log(`[Patina] Extraction complete in ${elapsed}ms:`, {
@@ -323,19 +348,22 @@ export async function extractExtendedProductData(url: string): Promise<ExtendedE
  * Quick extraction for preview (faster, less thorough)
  */
 export function extractQuickPreview(url: string): Partial<ExtractedProductData> {
+  const price = extractPriceFromDOM();
   return {
     productName: extractProductName(),
     description: extractDescription(),
-    price: extractPriceFromDOM(),
+    price,
     images: extractImagesFromDOM(url).slice(0, 5),
-    manufacturer: extractManufacturer(url),
+    manufacturer: extractPageBrand()?.name ?? null,
+    currency: resolveCurrency(price),
     url,
     extractedAt: new Date().toISOString(),
   };
 }
 
 // Re-export individual extractors for direct use
-export { extractPriceFromDOM } from './price';
+export { extractPriceFromDOM, extractPriceWithSource } from './price';
+export type { PriceSource, PriceWithSource } from './price';
 export { extractDimensionsFromDOM } from './dimensions';
 export { extractMaterialsFromDOM, getMaterialCategory } from './materials';
 export { extractColorFinishFromDOM } from './color-finish';
@@ -344,5 +372,5 @@ export { extractProductName, extractDescription, extractManufacturer, extractBra
 
 // Export new vendor extractors
 export { extractRetailer, isKnownRetailer, RETAILER_MAP } from './retailer';
-export { extractManufacturerFromPage, isDirectBrandSite } from './manufacturer';
+export { extractManufacturerFromPage, extractPageBrand, isDirectBrandSite } from './manufacturer';
 export { extractVendorData } from './vendor';

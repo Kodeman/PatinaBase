@@ -2,64 +2,13 @@
  * Metadata extraction (product name, manufacturer) from web pages
  */
 
-// Known furniture retailers and their display names
-const RETAILER_MAP: Record<string, string> = {
-  'restorationhardware.com': 'Restoration Hardware',
-  'rh.com': 'Restoration Hardware',
-  'cb2.com': 'CB2',
-  'crateandbarrel.com': 'Crate & Barrel',
-  'westelm.com': 'West Elm',
-  'potterybarn.com': 'Pottery Barn',
-  'potterybarnkids.com': 'Pottery Barn Kids',
-  'arhaus.com': 'Arhaus',
-  'roomandboard.com': 'Room & Board',
-  'article.com': 'Article',
-  'wayfair.com': 'Wayfair',
-  'allmodern.com': 'AllModern',
-  'jossandmain.com': 'Joss & Main',
-  'birchlane.com': 'Birch Lane',
-  'ethanallen.com': 'Ethan Allen',
-  'bassettfurniture.com': 'Bassett',
-  'haverty.com': "Haverty's",
-  'ikea.com': 'IKEA',
-  'target.com': 'Target',
-  'amazon.com': 'Amazon',
-  'overstock.com': 'Overstock',
-  'homedepot.com': 'The Home Depot',
-  'lowes.com': "Lowe's",
-  'williams-sonoma.com': 'Williams Sonoma',
-  'serenaandlily.com': 'Serena & Lily',
-  'ballarddesigns.com': 'Ballard Designs',
-  'anthropologie.com': 'Anthropologie',
-  'urbanoutfitters.com': 'Urban Outfitters',
-  'zgallerie.com': 'Z Gallerie',
-  'lumens.com': 'Lumens',
-  'ylighting.com': 'YLighting',
-  'design-within-reach.com': 'Design Within Reach',
-  'dwr.com': 'Design Within Reach',
-  'hermanmiller.com': 'Herman Miller',
-  'knoll.com': 'Knoll',
-  'vitra.com': 'Vitra',
-  'hay.dk': 'HAY',
-  'muuto.com': 'Muuto',
-  'fritzhansen.com': 'Fritz Hansen',
-  'kartell.com': 'Kartell',
-  'flos.com': 'Flos',
-  'artek.fi': 'Artek',
-  'cassina.com': 'Cassina',
-  'bfremodern.com': 'B&B Italia',
-  'poliform.com': 'Poliform',
-  'minotti.com': 'Minotti',
-  'flexform.it': 'Flexform',
-  'ligne-roset.com': 'Ligne Roset',
-  'natuzzi.com': 'Natuzzi',
-  'burkedecor.com': 'Burke Decor',
-  '1stdibs.com': '1stDibs',
-  'chairish.com': 'Chairish',
-};
+import { RETAILER_MAP } from './retailer';
 
 /**
- * Extract manufacturer/retailer from URL
+ * Extract the site operator's display name from a URL.
+ *
+ * CL-R12: this is a *retailer* name, not a brand — extraction/index.ts no
+ * longer uses it for ExtractedProductData.manufacturer.
  */
 export function extractManufacturer(url: string): string | null {
   try {

@@ -235,7 +235,10 @@ export interface ExtractedProductData {
   availableColors: string[] | null;
   availableFinishes: string[] | null;
   images: ExtractedImage[];
+  /** The brand the page names — null when the page names none (CL-R12). */
   manufacturer: string | null;
+  /** ISO code the capture is denominated in (CL-R13); defaults to 'USD'. */
+  currency?: string;
   url: string;
   extractedAt: string;
   confidence: ExtractionConfidence;

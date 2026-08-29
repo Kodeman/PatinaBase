@@ -15,6 +15,7 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import path from 'path';
 import { extractProductData, extractRetailer } from '../../lib/extraction';
+import { isKnownBadDomain, KNOWN_BAD_DOMAIN_MESSAGE } from '../../lib/mode-detection';
 import type { ExtractedProductData } from '@patina/shared';
 
 const FIXTURES_DIR = path.join(__dirname, '../fixtures');
@@ -172,10 +173,13 @@ interface FixtureReportEntry {
   file: string;
   url: string;
   knownBad: boolean;
+  /** CL-R14: capture refused this page before running extraction. */
+  blocked?: boolean;
   ok: boolean;
   error?: string;
   name: string | null;
   price: { value: number; currency: string } | null;
+  currency: string | null;
   dimensionFieldsPresent: string[];
   materialsCount: number;
   colorsCount: number;
@@ -194,6 +198,37 @@ const report: FixtureReportEntry[] = [];
 describe('extraction fixtures (persona harvest)', () => {
   for (const fixture of FIXTURES) {
     it(`extracts from ${fixture.file} without throwing`, async () => {
+      // CL-R14: the panel refuses known-bad domains before it ever asks for an
+      // extraction, so the audit records that outcome rather than whatever
+      // fields a social page happens to leak.
+      if (isKnownBadDomain(fixture.url)) {
+        const blockedEntry: FixtureReportEntry = {
+          file: fixture.file,
+          url: fixture.url,
+          knownBad: !!fixture.knownBad,
+          blocked: true,
+          ok: true,
+          error: KNOWN_BAD_DOMAIN_MESSAGE,
+          name: null,
+          price: null,
+          currency: null,
+          dimensionFieldsPresent: [],
+          materialsCount: 0,
+          colorsCount: 0,
+          finish: null,
+          imagesCount: 0,
+          manufacturer: null,
+          retailer: extractRetailer(fixture.url).name,
+          confidence: null,
+          jsonLdBlocks: 0,
+          jsonLdProductTyped: 0,
+          skuLikeKeysInJsonLd: [],
+        };
+        report.push(blockedEntry);
+        expect(blockedEntry.confidence).toBeNull();
+        return;
+      }
+
       const html = readFileSync(path.join(FIXTURES_DIR, fixture.file), 'utf-8');
       // A silent virtual console: fixtures carry modern CSS (:has(), nesting,
       // container queries) that jsdom's bundled CSS parser rejects — harmless
@@ -235,6 +270,7 @@ describe('extraction fixtures (persona harvest)', () => {
           ok: true,
           name: data.productName,
           price: data.price ? { value: data.price.value, currency: data.price.currency } : null,
+          currency: data.currency ?? null,
           dimensionFieldsPresent: dimensionFieldsPresent(data),
           materialsCount: data.materials?.length ?? 0,
           colorsCount: data.colors?.length ?? 0,
@@ -270,6 +306,7 @@ describe('extraction fixtures (persona harvest)', () => {
           error: error instanceof Error ? error.message : String(error),
           name: null,
           price: null,
+          currency: null,
           dimensionFieldsPresent: [],
           materialsCount: 0,
           colorsCount: 0,
@@ -311,8 +348,13 @@ afterAll(() => {
   const ordered = FIXTURES.map((f) => byFile.get(f.file)).filter((r): r is FixtureReportEntry => !!r);
   const output = {
     generatedAt: new Date().toISOString(),
-    lane: 'capture-launch/w0-d1',
+    lane: 'capture-launch/w2-d9',
     notes: [
+      'CL-R12/13/14 re-run. manufacturer is now the brand the page names (null when it ' +
+        'names none) rather than the domain; retailer stays domain-derived. currency is ' +
+        'the USD-preferred JSON-LD offer currency, defaulting to USD. pinterest/instagram ' +
+        'are refused by isKnownBadDomain() before extraction runs, so their rows carry ' +
+        'blocked:true and the refusal message instead of field values.',
       'Ran extractProductData() against each fixture inside jsdom (new JSDOM(html, { url })). ' +
         'jsdom has no layout engine: getBoundingClientRect() always returns zeros, so the ' +
         'position-based component of image scoring (src/lib/extraction/images.ts) never ' +

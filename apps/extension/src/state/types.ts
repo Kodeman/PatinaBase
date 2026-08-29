@@ -84,6 +84,8 @@ export interface DraftSlice {
   /** R2 snapshot public URL, once uploaded. */
   snapshotUrl: string | null;
   confidence: 'high' | 'medium' | 'low';
+  /** ISO code the price field is denominated in (CL-R13). */
+  currency: string;
   fields: {
     name: DraftField<string>;
     price: DraftField<string>;

@@ -40,10 +40,19 @@ const SKIP_PRICE_CLASSES = [
   'crossed-out', 'old-price', 'msrp', 'retail-price',
 ];
 
+// Body-text scanning is the weakest source, so it demands a well-formed money
+// token: a dollar sign, then 1-3 digits, then only comma-grouped thousands and
+// an optional 2-decimal cents part. The looser PRICE_PATTERNS entry matches
+// regex backreferences like the `$1$2s` token Instagram ships in its script
+// payloads.
+const STRICT_DOLLAR_PATTERN = /\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)(?![\d,])/;
+
 // Selectors commonly used for prices (sale/current prices first for priority)
 const PRICE_SELECTORS = [
   '[data-price]',
   '[itemprop="price"]',
+  '[data-test-id*="price" i]',
+  '[data-testid*="price" i]',
   '.sale-price',
   '.final-price',
   '.current-price',
@@ -98,32 +107,61 @@ function extractPriceFromString(text: string): ExtractedPrice | null {
 }
 
 /**
- * Extract price from DOM elements
+ * Where a price came from. Body-text scanning is a last-resort regex over the
+ * whole page and is treated as weaker evidence by confidence scoring.
  */
-export function extractPriceFromDOM(): ExtractedPrice | null {
-  // Check meta tags first (Shopify and many platforms emit these)
+export type PriceSource = 'meta-tag' | 'json-ld' | 'dom-attribute' | 'dom-text' | 'body-text';
+
+export interface PriceWithSource {
+  price: ExtractedPrice;
+  source: PriceSource;
+}
+
+function extractFromMetaTag(): ExtractedPrice | null {
   const metaPrice = document.querySelector('meta[property="product:price:amount"]')?.getAttribute('content');
   const metaCurrency = document.querySelector('meta[property="product:price:currency"]')?.getAttribute('content');
-  if (metaPrice) {
-    const value = parseFloat(metaPrice);
-    if (!isNaN(value) && value > 0) {
-      console.log(`[Patina] Price from meta tag: ${value} ${metaCurrency || 'USD'}`);
-      return {
-        value: Math.round(value * 100),
-        currency: metaCurrency || 'USD',
-        raw: metaPrice,
-      };
+  if (!metaPrice) return null;
+  const value = parseFloat(metaPrice);
+  if (isNaN(value) || value <= 0) return null;
+  return {
+    value: Math.round(value * 100),
+    currency: metaCurrency || 'USD',
+    raw: metaPrice,
+  };
+}
+
+function extractFromJsonLd(): ExtractedPrice | null {
+  const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+  for (const script of jsonLdScripts) {
+    try {
+      const data = JSON.parse(script.textContent || '');
+      const price = findPriceInJsonLd(data);
+      if (price) return price;
+    } catch {
+      // Invalid JSON, continue
     }
   }
+  return null;
+}
 
-  // Try specific selectors first
+/** True when an element's class or test-id marks it as a was/compare price. */
+function isStruckThroughPrice(el: Element): boolean {
+  const markers = [
+    el.className || '',
+    el.getAttribute('data-test-id') || '',
+    el.getAttribute('data-testid') || '',
+  ]
+    .join(' ')
+    .toLowerCase();
+  return SKIP_PRICE_CLASSES.some((cls) => markers.includes(cls));
+}
+
+function extractFromPriceSelectors(): PriceWithSource | null {
   for (const selector of PRICE_SELECTORS) {
     try {
       const elements = document.querySelectorAll(selector);
       for (const el of elements) {
-        // Skip elements that look like original/was prices
-        const className = (el.className || '').toLowerCase();
-        if (SKIP_PRICE_CLASSES.some(cls => className.includes(cls))) continue;
+        if (isStruckThroughPrice(el)) continue;
 
         // Check data attributes first
         const dataPrice = el.getAttribute('data-price') ||
@@ -133,9 +171,8 @@ export function extractPriceFromDOM(): ExtractedPrice | null {
           const value = parseFloat(dataPrice);
           if (!isNaN(value) && value > 0) {
             return {
-              value: Math.round(value * 100),
-              currency: 'USD',
-              raw: dataPrice,
+              price: { value: Math.round(value * 100), currency: 'USD', raw: dataPrice },
+              source: 'dom-attribute',
             };
           }
         }
@@ -149,9 +186,8 @@ export function extractPriceFromDOM(): ExtractedPrice | null {
             const lowValue = parseFloat(rangeMatch[1].replace(/,/g, ''));
             if (!isNaN(lowValue) && lowValue > 0) {
               return {
-                value: Math.round(lowValue * 100),
-                currency: 'USD',
-                raw: rangeMatch[0],
+                price: { value: Math.round(lowValue * 100), currency: 'USD', raw: rangeMatch[0] },
+                source: 'dom-text',
               };
             }
           }
@@ -162,37 +198,56 @@ export function extractPriceFromDOM(): ExtractedPrice | null {
             const fromValue = parseFloat(fromMatch[1].replace(/,/g, ''));
             if (!isNaN(fromValue) && fromValue > 0) {
               return {
-                value: Math.round(fromValue * 100),
-                currency: 'USD',
-                raw: fromMatch[0],
+                price: { value: Math.round(fromValue * 100), currency: 'USD', raw: fromMatch[0] },
+                source: 'dom-text',
               };
             }
           }
 
           const price = extractPriceFromString(text);
-          if (price) return price;
+          if (price) return { price, source: 'dom-text' };
         }
       }
     } catch {
       // Selector might be invalid, continue
     }
   }
+  return null;
+}
 
-  // Try structured data (JSON-LD)
-  const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
-  for (const script of jsonLdScripts) {
-    try {
-      const data = JSON.parse(script.textContent || '');
-      const price = findPriceInJsonLd(data);
-      if (price) return price;
-    } catch {
-      // Invalid JSON, continue
-    }
+/**
+ * Body text with <script>/<style>/<noscript>/<template> content removed.
+ *
+ * A real browser's innerText already excludes those; the jsdom polyfill used
+ * by the fixture suite aliases innerText to textContent, which does not — and
+ * script payloads carry money-shaped tokens (Instagram ships a `$1$2s` regex
+ * backreference). Walking text nodes keeps both environments honest.
+ */
+function visibleBodyText(): string {
+  const body = document.body;
+  if (!body) return '';
+
+  const skipped = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!parent || skipped.has(parent.tagName)) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  const lines: string[] = [];
+  let node = walker.nextNode();
+  while (node && lines.length < 400) {
+    const text = node.nodeValue?.trim();
+    if (text) lines.push(text);
+    node = walker.nextNode();
   }
+  return lines.join('\n');
+}
 
-  // Fallback: scan visible text for price patterns
-  const bodyText = document.body.innerText;
-  const lines = bodyText.split('\n').slice(0, 100); // Limit to first 100 lines
+function extractFromBodyText(): ExtractedPrice | null {
+  const lines = visibleBodyText().split('\n');
   for (const line of lines) {
     // Try range prices in body text
     const rangeMatch = line.match(RANGE_PRICE_PATTERN);
@@ -203,13 +258,75 @@ export function extractPriceFromDOM(): ExtractedPrice | null {
       }
     }
 
-    const price = extractPriceFromString(line);
-    if (price && price.value >= 100 && price.value <= 10000000) { // $1 - $100,000
-      return price;
+    const match = line.match(STRICT_DOLLAR_PATTERN);
+    if (!match) continue;
+    const value = parseFloat(match[1].replace(/,/g, ''));
+    if (isNaN(value)) continue;
+    const cents = Math.round(value * 100);
+    if (cents >= 100 && cents <= 10000000) { // $1 - $100,000
+      return { value: cents, currency: 'USD', raw: match[0] };
     }
   }
 
   return null;
+}
+
+/**
+ * Extract a price along with the source that produced it.
+ *
+ * CL-R13 precedence: published/structured prices (meta tag, JSON-LD) beat any
+ * regex over rendered markup, so a nav promo like Wayfair's "Style it for
+ * under $100" can no longer outrank the product's own price.
+ */
+export function extractPriceWithSource(): PriceWithSource | null {
+  const metaPrice = extractFromMetaTag();
+  if (metaPrice) return { price: metaPrice, source: 'meta-tag' };
+
+  const jsonLdPrice = extractFromJsonLd();
+  if (jsonLdPrice) return { price: jsonLdPrice, source: 'json-ld' };
+
+  const selectorPrice = extractFromPriceSelectors();
+  if (selectorPrice) return selectorPrice;
+
+  const bodyPrice = extractFromBodyText();
+  if (bodyPrice) return { price: bodyPrice, source: 'body-text' };
+
+  return null;
+}
+
+/**
+ * Extract price from DOM elements
+ */
+export function extractPriceFromDOM(): ExtractedPrice | null {
+  return extractPriceWithSource()?.price ?? null;
+}
+
+/**
+ * Pick the offer to price against.
+ *
+ * CL-R13: 1stDibs publishes one Offer per supported currency (CHF first, USD
+ * seventh) — take the USD offer when there is one, then any offer that names
+ * its currency, and only then the first priced offer.
+ */
+function pickOfferPrice(offers: unknown[]): ExtractedPrice | null {
+  const priced: Array<{ currency: string; price: ExtractedPrice }> = [];
+
+  for (const entry of offers) {
+    if (!entry || typeof entry !== 'object') continue;
+    const offer = entry as Record<string, unknown>;
+    const price = extractOfferPrice(offer);
+    if (!price) continue;
+    const currency = typeof offer.priceCurrency === 'string' ? offer.priceCurrency.toUpperCase() : '';
+    priced.push({ currency, price });
+  }
+
+  if (priced.length === 0) return null;
+
+  const usd = priced.find((entry) => entry.currency === 'USD');
+  if (usd) return usd.price;
+
+  const explicit = priced.find((entry) => entry.currency.length > 0);
+  return (explicit ?? priced[0]).price;
 }
 
 /**
@@ -224,10 +341,8 @@ function findPriceInJsonLd(data: unknown): ExtractedPrice | null {
   if (obj['@type'] === 'Product' || obj['@type'] === 'Offer') {
     const offers = obj.offers || obj;
     if (Array.isArray(offers)) {
-      for (const offer of offers) {
-        const price = extractOfferPrice(offer as Record<string, unknown>);
-        if (price) return price;
-      }
+      const price = pickOfferPrice(offers);
+      if (price) return price;
     } else if (typeof offers === 'object') {
       const price = extractOfferPrice(offers as Record<string, unknown>);
       if (price) return price;

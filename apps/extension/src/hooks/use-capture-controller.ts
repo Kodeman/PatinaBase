@@ -12,7 +12,7 @@ import type {
   VendorSummaryForCapture,
 } from '@patina/shared';
 import { supabase } from '../lib/supabase';
-import { detectModeFromUrl } from '../lib/mode-detection';
+import { detectModeFromUrl, isKnownBadDomain, KNOWN_BAD_DOMAIN_MESSAGE } from '../lib/mode-detection';
 import { bestProductMatch } from '../lib/product-similarity';
 import { textToFields } from '../lib/text-to-fields';
 
@@ -351,6 +351,11 @@ export function useCaptureController(): CaptureController {
     (url: string) => {
       const nonce = ++nonceRef.current;
       exactMatchedRef.current = false;
+      // CL-R14: refuse known-bad domains before any extraction request.
+      if (isKnownBadDomain(url)) {
+        dispatch({ type: 'EXTRACTION_ERROR', error: KNOWN_BAD_DOMAIN_MESSAGE });
+        return;
+      }
       dispatch({ type: 'EXTRACTION_START', url, entry: 'toolbar' });
       extensionEvents.extractionStart('product');
       checkDuplicate(url);
