@@ -36,6 +36,18 @@ public final class SettingsService {
 
     private init() {}
 
+    /// Drop the previous account's preferences.
+    ///
+    /// Both toggles are server-backed rows keyed on `user_id`, so leaving them
+    /// standing shows one person's notification choice to the next and — worse
+    /// — a write from the new account's Settings screen would save a value it
+    /// never chose. Back to the same defaults a never-loaded service holds.
+    func resetForSessionChange() {
+        notificationsEnabled = true
+        hapticsEnabled = true
+        isLoaded = false
+    }
+
     // MARK: - DTOs
 
     public struct UserSettingsRow: Codable, Sendable {

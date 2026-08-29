@@ -240,6 +240,33 @@ final class BadgeCountService {
         }
     }
 
+    /// Drop the previous account's rows and counts, and cancel the refresh
+    /// that was going to land on top of them.
+    ///
+    /// `hasLoaded` and `projectsLoaded` go back to false rather than staying
+    /// true over empty arrays: `projectsLoaded` is what W5's R3 reads to tell
+    /// "this client has no designer" from "the projects answer has not
+    /// arrived", and a cleared service that claims to have loaded would draw
+    /// Buy for a client who has one.
+    func resetForSessionChange() {
+        pendingRefresh?.cancel()
+        pendingRefresh = nil
+        pendingDecisionCount = 0
+        unreadMessageCount = 0
+        proposalsAwaitingSignatureCount = 0
+        payableInvoiceCount = 0
+        projectCount = 0
+        pendingDecisions = []
+        pendingProposals = []
+        payableInvoices = []
+        threadSummaries = []
+        projects = []
+        roster = []
+        hasLoaded = false
+        projectsLoaded = false
+        lastRefreshFailed = false
+    }
+
     /// Debounced refresh for bursty triggers (push receipt can deliver a
     /// banner and a tap back-to-back). Coalesces calls within the window.
     func refreshSoon(after delay: Duration = .seconds(1)) {

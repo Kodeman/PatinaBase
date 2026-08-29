@@ -477,6 +477,22 @@ public final class DesignRequestStatusService {
         }
     }
 
+    /// Drop the previous account's requests — and with them `liveLead`, which
+    /// is the value W5's pre-emption and the thread opener both read.
+    ///
+    /// The local receipts `hydrateFromLocal()` paints from are the previous
+    /// account's too, so `hasLoaded` going back to false must not be read as
+    /// permission to repaint them: `LocalStoreReset` wipes
+    /// `SubmittedDesignRequest` on the same boundary, and this reset is called
+    /// beside it.
+    public func resetForSessionChange() {
+        pendingRefresh?.cancel()
+        pendingRefresh = nil
+        requests = []
+        hasLoaded = false
+        sessionDismissedLeadIds = []
+    }
+
     /// Debounced refresh for bursty triggers (a push can deliver a banner and
     /// a tap back-to-back). Coalesces calls within the window.
     public func refreshSoon(after delay: Duration = .seconds(1)) {

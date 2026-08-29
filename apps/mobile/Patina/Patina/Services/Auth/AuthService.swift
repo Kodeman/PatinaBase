@@ -68,6 +68,12 @@ public final class AuthService {
     /// all but the last continuation, leaking the others' tasks forever.
     private var authReadyContinuations: [CheckedContinuation<Void, Never>] = []
 
+    /// The account the in-memory singletons currently hold data for. Compared
+    /// against every auth-state event so a token refresh — which yields the
+    /// same user several times a session — costs nothing, and a real change of
+    /// account costs exactly one reset.
+    private var settledUserId: String?
+
     // MARK: - Initialization
 
     private init() {
@@ -79,7 +85,20 @@ public final class AuthService {
     private func startAuthStateListener() {
         authStateTask = Task { @MainActor in
             for await (event, session) in supabase.auth.authStateChanges {
+                let incomingUserId = session?.user.id.uuidString
+                let accountChanged = Self.isAccountChange(
+                    previous: self.settledUserId, incoming: incomingUserId
+                )
                 self.session = session
+
+                // Before anything below fetches for the new account: the
+                // hydration a few lines down, and `settleLocalStore`'s room
+                // reconcile, both read singletons that are still holding the
+                // previous account's rows until this runs.
+                if accountChanged {
+                    self.settledUserId = incomingUserId
+                    SessionScope.reset()
+                }
 
                 if let user = session?.user {
                     Self.settleLocalStore(for: user.id.uuidString)
@@ -147,8 +166,24 @@ public final class AuthService {
                 default:
                     break
                 }
+
+                // And after: the two services nothing else will ask for.
+                if accountChanged, incomingUserId != nil {
+                    SessionScope.refresh()
+                }
             }
         }
+    }
+
+    /// Whether this auth-state event is a different account from the one the
+    /// in-memory singletons hold. Pure, so the seam is a testable fact rather
+    /// than something only a live GoTrue stream can exercise.
+    ///
+    /// A sign-out (`user → nil`) counts: it is the first half of the switch the
+    /// W5 walk failed on, and leaving one account's rows standing on the auth
+    /// wall is how they were still there when the next account arrived.
+    static func isAccountChange(previous: String?, incoming: String?) -> Bool {
+        previous != incoming
     }
 
     /// Wait for auth state to be determined. Safe to call from multiple
