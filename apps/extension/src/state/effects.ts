@@ -11,7 +11,6 @@ import { supabase } from '../lib/supabase';
 import {
   buildProductInsertPayload,
   buildVendorInsertPayload,
-  buildVendorCertifications,
   buildCommitProposalCaptureArgs,
   buildDecisionInsertPayload,
   buildDecisionOptionInsertPayload,
@@ -236,18 +235,15 @@ export async function saveToLibrary(
  * "Send to inbox" — a single idempotent commit_proposal_capture RPC call
  * (Phase 3 / C-A2, migration 00516) replacing the old 3-insert sequence
  * (products -> product_styles -> proposal_captures). client_capture_id is
- * minted fresh here since this is a direct save with no offline-queue retry
- * path (a failure throws to the caller; the queue-drain path in
- * background.ts is the one that persists and reuses an id across retries).
+ * minted fresh here since this is a direct save with no retry path — a
+ * failure throws to the caller.
  *
  * NOT behind the `capture-producer-idempotency` PostHog flag that gates the
  * designer-portal's AddFromUrl path: the extension has no established
  * feature-flag runtime for this — background.ts's MV3 service-worker
  * context has no `window`/`localStorage`, which posthog-js (this app's only
- * PostHog client) requires, so background.ts's queue-drain literally cannot
- * evaluate a flag. To keep both extension producers on one behavior, this
- * direct-save path also ships new-path-only rather than gating just one of
- * the two. Approved as part of the C-A2 fix-up (see commit).
+ * PostHog client) requires. This direct save is now the extension's only
+ * capture producer and ships new-path-only.
  */
 export async function saveToInbox(
   draft: DraftSlice,
@@ -389,20 +385,15 @@ export async function updateExisting(
   return { productId: existingId, placementOutcome };
 }
 
-/** Vendor-mode save — vendors + vendor_certifications. */
+/** Vendor-mode save — vendors. */
 export async function saveVendor(vendorData: VendorCaptureInput, _user: User): Promise<void> {
-  const { data: vendor, error } = await supabase
+  const { error } = await supabase
     .from('vendors')
     .insert(buildVendorInsertPayload(vendorData))
     .select('id')
     .single();
   if (error) throw error;
 
-  if (vendor && vendorData.certifications && vendorData.certifications.length > 0) {
-    await supabase
-      .from('vendor_certifications')
-      .insert(buildVendorCertifications(vendor.id, vendorData.certifications));
-  }
   extensionEvents.vendorCapture({
     hasLogo: !!vendorData.logoUrl,
     hasContactInfo: !!(vendorData.contactEmail || vendorData.contactPhone),

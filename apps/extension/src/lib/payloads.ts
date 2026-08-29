@@ -112,18 +112,6 @@ export function buildVendorInsertPayload(vendorData: VendorCaptureInput) {
   };
 }
 
-// ─── Vendor Certifications ─────────────────────────────────────────────────
-
-export function buildVendorCertifications(
-  vendorId: string,
-  certifications: string[]
-) {
-  return certifications.map(cert => ({
-    vendor_id: vendorId,
-    certification_type: cert,
-  }));
-}
-
 // ─── Product Styles ────────────────────────────────────────────────────────
 
 export function buildProductStyleInserts(

@@ -8,13 +8,11 @@ import type {
   ExtractedVendorData,
   VendorCaptureInput,
   ExtractedVendorStory,
-  VendorCertification,
   OwnershipType,
   MarketPosition,
   ProductionModel,
 } from '@patina/shared/types';
 import { OWNERSHIP_OPTIONS } from '@patina/shared/types';
-import { CertificationChips } from './CertificationChips';
 
 interface VendorCaptureFormProps {
   extractedVendorData: ExtractedVendorData | null;
@@ -170,7 +168,6 @@ export function VendorCaptureForm({
   const [craftsmanship, setCraftsmanship] = useState('');
 
   // Credentials
-  const [certifications, setCertifications] = useState<VendorCertification[]>([]);
   const [ownershipType, setOwnershipType] = useState<OwnershipType | ''>('');
   const [madeIn, setMadeIn] = useState('');
 
@@ -199,7 +196,6 @@ export function VendorCaptureForm({
       setPhilosophy(extractedVendorData.story?.philosophy || '');
       setHistory(extractedVendorData.story?.history || '');
       setCraftsmanship(extractedVendorData.story?.craftsmanship || '');
-      setCertifications(extractedVendorData.certifications || []);
       setOwnershipType(extractedVendorData.ownershipType || '');
       setMadeIn(extractedVendorData.madeIn || '');
     } else {
@@ -221,7 +217,7 @@ export function VendorCaptureForm({
   ).length;
 
   // Count credentials
-  const credentialsCount = certifications.length + (ownershipType ? 1 : 0) + (madeIn ? 1 : 0);
+  const credentialsCount = (ownershipType ? 1 : 0) + (madeIn ? 1 : 0);
 
   // Count contact fields
   const contactCount = [contactEmail, contactPhone, instagram, pinterest, facebook].filter(
@@ -256,7 +252,6 @@ export function VendorCaptureForm({
       headquartersCity: headquartersCity.trim() || undefined,
       headquartersState: headquartersState.trim() || undefined,
       story,
-      certifications: certifications.length > 0 ? certifications : undefined,
       ownershipType: ownershipType || undefined,
       madeIn: madeIn.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -553,16 +548,6 @@ export function VendorCaptureForm({
         defaultOpen={credentialsCount > 0}
         badge={credentialsCount > 0 ? `${credentialsCount}` : undefined}
       >
-        {/* Certifications */}
-        <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-2">Certifications</label>
-          <CertificationChips
-            selected={certifications}
-            onChange={setCertifications}
-            detected={extractedVendorData?.certifications || []}
-          />
-        </div>
-
         {/* Ownership */}
         <div>
           <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-2">Ownership</label>

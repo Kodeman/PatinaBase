@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  buildVendorInsertPayload,
-  buildVendorCertifications,
-} from '../../lib/payloads';
+import { buildVendorInsertPayload } from '../../lib/payloads';
 import type { VendorCaptureInput } from '@patina/shared';
 
 // Columns that exist on the `vendors` table (union of initial schema + 00009 + 00034)
@@ -22,7 +19,7 @@ const VENDORS_COLUMNS = new Set([
 // Columns that should NEVER be sent (known past bugs)
 const FORBIDDEN_COLUMNS = [
   'ownership_type',   // wrong name — the column is `ownership`
-  'certifications',   // separate junction table `vendor_certifications`
+  'certifications',   // vendor certifications removed from the capture path (CL-R16)
 ];
 
 describe('buildVendorInsertPayload', () => {
@@ -106,34 +103,5 @@ describe('buildVendorInsertPayload', () => {
       pinterest: null,
       facebook: null,
     });
-  });
-});
-
-describe('buildVendorCertifications', () => {
-  it('returns rows for the vendor_certifications junction table', () => {
-    const rows = buildVendorCertifications('vendor-123', ['fsc', 'greenguard']);
-
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toEqual({ vendor_id: 'vendor-123', certification_type: 'fsc' });
-    expect(rows[1]).toEqual({ vendor_id: 'vendor-123', certification_type: 'greenguard' });
-  });
-
-  it('each row only has vendor_id and certification_type (junction columns)', () => {
-    const JUNCTION_COLUMNS = new Set([
-      'id', 'vendor_id', 'certification_type', 'certification_level',
-      'is_verified', 'verification_url', 'expiration_date',
-      'created_at', 'updated_at',
-    ]);
-
-    const rows = buildVendorCertifications('v1', ['b-corp']);
-    for (const row of rows) {
-      for (const key of Object.keys(row)) {
-        expect(JUNCTION_COLUMNS.has(key), `"${key}" is not on vendor_certifications`).toBe(true);
-      }
-    }
-  });
-
-  it('returns empty array when no certifications given', () => {
-    expect(buildVendorCertifications('v1', [])).toEqual([]);
   });
 });
