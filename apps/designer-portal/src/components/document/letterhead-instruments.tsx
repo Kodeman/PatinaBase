@@ -15,7 +15,7 @@
  *     shows (full / milestone / curated) is set where the mirror is opened.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -59,6 +59,25 @@ const TIERS = [
     desc: 'You publish specific updates; the reveal comes at completion.',
   },
 ] as const;
+
+/** The width at which the ledger stands in the letterhead's own bounded track
+ *  and can afford the sharing act's tier word (W3-R4). */
+const WIDE_TIER = '(min-width: 1180px)';
+
+/** Assumed true, so the server render and the first client render agree and an
+ *  effect corrects it — the same shape as shelf-panel's `useFullTier`. */
+function useWideTier(): boolean {
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    const query = window.matchMedia?.(WIDE_TIER);
+    if (!query) return;
+    const sync = () => setWide(query.matches);
+    sync();
+    query.addEventListener?.('change', sync);
+    return () => query.removeEventListener?.('change', sync);
+  }, []);
+  return wide;
+}
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -320,22 +339,28 @@ export function LetterheadInstruments({
         className="mt-1"
         aria-label="Document letterhead actions"
       >
+        {/* W3-R4: the family word is dropped from the PRINT at every width —
+            the household chip says it 20px above, and repeating it cost the
+            ledger ~200px it was taking out of the title's measure. The
+            accessible name keeps the whole sentence. */}
         {canSendNote && (
           <DocumentAction
             actionKey="message-family"
             variant="primary"
+            aria-label={`Message ${family}`}
             onClick={() => setComposing((v) => !v)}
           >
-            Message {family}
+            Message
           </DocumentAction>
         )}
         {canMirror && (
           <DocumentAction
             actionKey="preview-as-client"
             variant="secondary"
+            aria-label={`Preview as ${family}`}
             onClick={() => setMirrorOpen(true)}
           >
-            Preview as {family}
+            Preview
           </DocumentAction>
         )}
         {scan && (
@@ -473,6 +498,7 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
   const save = useSaveProjectVitals(projectId);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const wide = useWideTier();
 
   const current = (project?.client_visibility_tier ??
     'milestone') as (typeof TIERS)[number]['value'];
@@ -500,13 +526,18 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
 
   return (
     <span className="relative">
+      {/* W3-R4: this ONE act is both "sharing" and its tier — there is no
+          separate MILESTONES instrument to fold. Below 1180 it prints the bare
+          word so the row stays one line; the tier is one press away inside the
+          panel, and the accessible name states it at every width. */}
       <DocumentAction
         actionKey="sharing-settings"
         variant="tertiary"
         aria-expanded={open}
+        aria-label={`Sharing · ${currentLabel}`}
         onClick={() => setOpen((v) => !v)}
       >
-        Sharing · {currentLabel}
+        {wide ? `Sharing · ${currentLabel}` : 'Sharing'}
       </DocumentAction>
       {open && (
         <span

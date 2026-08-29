@@ -17,6 +17,13 @@
  * collapses to one column and the ledger falls under the vitals, where the row
  * mounted before. One mount either way — the instruments register the mobile
  * bar's primary act, and two of them would register it twice.
+ *
+ * W3-R4 (D-B26 as amended): the ledger's column starved the title's. The title
+ * now takes its OWN row across BOTH tracks — an <input> cannot wrap, only clip,
+ * so the measure it is given is the measure it must have — and the household
+ * chip, the vitals and the ledger share the row beneath it. The ledger's track
+ * is bounded (minmax(18rem,24rem)) rather than `auto`, so its acts can no
+ * longer take the width away from the left.
  */
 
 import type { ReactNode } from 'react';
@@ -51,27 +58,47 @@ export function DocLetterhead({
   instruments?: ReactNode;
 }) {
   return (
-    <header id="document-project-status" tabIndex={-1} className="doc-rule-mid mb-4 pb-4 pt-3.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
+    <header id="document-project-status" tabIndex={-1} className="doc-rule-mid mb-4 pb-[18px] pt-[14px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
       <div className="mb-2.5">
         <StrataMark state="active" size="lg" fill={fill} label={fill ? 'Document progress' : undefined} />
       </div>
-      <div className="grid grid-cols-1 items-start gap-x-6 gap-y-2 min-[1180px]:grid-cols-[1fr_auto]">
-        <div className="min-w-0">
+      <div className="grid grid-cols-1 items-start gap-x-[1.5rem] gap-y-[0.5rem] min-[1180px]:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
+        {/* Row 1 — the title, across BOTH tracks. On a project document the
+            heading IS an <input>, and an input cannot wrap: a starved track
+            does not stack it, it amputates it ("Aspen Lo"). Spanning the grid
+            hands it the whole measure. A title longer than the WHOLE measure
+            still clips — pre-existing; a wrapping title needs a <textarea>,
+            which is not this wave's work. */}
+        <div className="min-w-0 min-[1180px]:col-span-2">
           {projectId ? (
             <LetterheadTitle projectId={projectId} serverTitle={title} />
           ) : (
-            <h1 className="font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)]">
+            /* 32px at phone widths, 40px from `sm` up: 40px of Playfair spends
+               ~46 characters of a 1440 measure but only ~11 of a 390 one. */
+            <h1 className="font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] sm:text-[40px]">
               {title}
             </h1>
           )}
+        </div>
+        {/* Row 2, left — who it is for, and the vitals. */}
+        <div className="min-w-0">
           {client}
           {projectId ? (
             <LetterheadVitals projectId={projectId} />
           ) : (
-            vitals && <p className="mt-1 text-[11px] text-[var(--text-muted)]">{vitals}</p>
+            vitals && (
+              <p
+                data-letterhead-vitals
+                className="mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-[var(--text-muted)]"
+              >
+                {vitals}
+              </p>
+            )
           )}
           <NeedsSetupChip count={needsSetup?.length ?? 0} entries={needsSetup ?? []} />
         </div>
+        {/* Row 2, right — the ledger, MOUNTED at every width (D-B20): below
+            1180 the single column simply stacks it under the vitals. */}
         {instruments && (
           <div className="min-w-0 min-[1180px]:justify-self-end">{instruments}</div>
         )}

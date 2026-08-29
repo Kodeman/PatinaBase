@@ -407,7 +407,14 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           while open (no portal, by the Folio's own house rule — see
           folio-popover.tsx), and a <div> can never legally nest inside a
           <p> (the browser silently closes it, a hydration hazard). */}
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-primary)]">
+      {/* W3-R4: ONE row at the tier the height budget is measured at. The
+          FolioPopover a VitalDate opens is portaled to <body>, so clipping
+          here cannot swallow a calendar. Below 1180 the row may still wrap
+          rather than hide a `Set dates` act behind the ellipsis. */}
+      <div
+        data-letterhead-vitals
+        className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-[var(--text-primary)] min-[1180px]:flex-nowrap"
+      >
         {phaseWord && <span>{phaseWord}</span>}
         <VitalDate
           projectId={projectId}
@@ -468,7 +475,9 @@ export function LetterheadTitle({
   };
 
   return (
-    <h1 className="flex items-baseline gap-2 font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)]">
+    /* 32px at phone widths, 40px from `sm` up (W3-R4): 40px of Playfair spends
+       ~46 characters of a 1440 measure but only ~11 of a 390 one. */
+    <h1 className="flex items-baseline gap-2 font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] sm:text-[40px]">
       <input
         type="text"
         aria-label="Project title"
@@ -486,7 +495,7 @@ export function LetterheadTitle({
           }
         }}
         disabled={state === 'saving'}
-        className="min-w-0 flex-1 border-b border-transparent bg-transparent font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60"
+        className="min-w-0 flex-1 border-b border-transparent bg-transparent font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60 sm:text-[40px]"
       />
       <SaveDot state={state} errorMsg={errorMsg} />
     </h1>
