@@ -569,6 +569,7 @@ export function ProjectApprovalDocument({
           bodyId={APPROVALS_BODY_ID}
           name="Client approvals"
           summary={`${leadPhrase} · ${authoredPhrase}`}
+          cause={fold.cause}
           onUnfold={() => {
             unfoldFocusRef.current = true;
             fold.setFolded(false);

@@ -154,7 +154,7 @@ export function MoneyRegion({
   //     chasing the designer — and the table suppresses the AccountBand's own
   //     home, so a folded seam would state it nowhere at all.
   const tableFolded = allSettled ? accountQuiet : null;
-  const { folded, setFolded } = useRegionFold({
+  const { folded, setFolded, cause } = useRegionFold({
     docId: projectId,
     region: (tableSeam ? 'money-table' : 'money') satisfies RegionFoldKey,
     defaultFolded: tableSeam ? tableFolded : defaultFolded,
@@ -235,6 +235,7 @@ export function MoneyRegion({
           bodyId={BODY_ID}
           name="Money"
           summary={seamSummary}
+          cause={cause}
           onUnfold={() => setFolded(false)}
           surfaceKey="accounts"
           regionKey="money-head"

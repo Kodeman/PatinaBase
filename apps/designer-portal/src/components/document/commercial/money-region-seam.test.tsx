@@ -162,6 +162,27 @@ describe('the Money seam, on the Delivery table', () => {
     ).toBe('0');
   });
 
+  it('prints CLOSED BY YOU on a seam the designer shut, and nothing on a declared one', () => {
+    // L-7 threaded end to end: the region hands `useRegionFold`'s cause to the
+    // seam. `money-table` is a non-stop key, so its DECLARED fold is a derived
+    // default and carries no cause (DL-09) — only the remembered choice does.
+    const { container, unmount } = render(
+      <MoneyRegion projectId="project-1" tableSeam />,
+    );
+    expect(container.querySelector('[data-fold-cause]')).toBeNull();
+    expect(screen.getByRole('button', { name: /unfold/i })).not.toHaveTextContent(
+      'CLOSED BY YOU',
+    );
+    unmount();
+
+    window.localStorage.setItem('patina:doc-fold:project-1:money-table', '1');
+    render(<MoneyRegion projectId="project-1" tableSeam />);
+
+    expect(screen.getByRole('button', { name: /unfold/i })).toHaveTextContent(
+      'CLOSED BY YOU',
+    );
+  });
+
   it('folds by declaration, not by data — a quiet project seams too', () => {
     mockInstruments = { data: [], isLoading: false, error: null };
     mockBudget = { data: { version: null }, isLoading: false, error: null };

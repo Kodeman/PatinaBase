@@ -323,6 +323,7 @@ export function CareBand({
           bodyId={BODY_ID}
           name="Closing the book"
           summary={`${done} of ${items.length} closed out`}
+          cause={fold.cause}
           onUnfold={() => {
             unfoldFocusRef.current = true;
             fold.setFolded(false);

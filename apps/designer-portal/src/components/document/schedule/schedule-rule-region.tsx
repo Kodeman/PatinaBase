@@ -185,6 +185,7 @@ function ScheduleRuleRegionBody({
           bodyId={BODY_ID}
           name="Schedule dates"
           summary={summary}
+          cause={fold.cause}
           onUnfold={handleUnfold}
           surfaceKey="open-document"
           regionKey="schedule-rule"
