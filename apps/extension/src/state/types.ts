@@ -41,6 +41,7 @@ export interface DraftField<T> {
 export type DraftFieldKey =
   | 'name'
   | 'price'
+  | 'sku'
   | 'description'
   | 'materials'
   | 'colors'
@@ -89,6 +90,8 @@ export interface DraftSlice {
   fields: {
     name: DraftField<string>;
     price: DraftField<string>;
+    /** Vendor SKU / model number (CL-R1). */
+    sku: DraftField<string>;
     description: DraftField<string>;
     materials: DraftField<string[]>;
     colors: DraftField<string[]>;

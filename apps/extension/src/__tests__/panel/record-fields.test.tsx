@@ -212,6 +212,64 @@ describe('RecordRegion — dimensions/materials/finish (CL-R1)', () => {
     expect(screen.getByText('More (2)')).toBeTruthy();
   });
 
+  // ── SKU / model # (CL-R1) ─────────────────────────────────────────────────
+
+  it('renders the SKU row with its value and edits it via FIELD_EDIT', () => {
+    const base = emptyDraft('https://example.com/product');
+    const draft: DraftSlice = {
+      ...base,
+      fields: { ...base.fields, sku: { value: 'H4614', status: 'extracted', source: 'extracted' } },
+    };
+    renderWithDraft(draft);
+
+    const skuInput = screen.getByLabelText('SKU / model #') as HTMLInputElement;
+    expect(skuInput.value).toBe('H4614');
+    expect(skuInput.className).toContain('font-mono');
+
+    fireEvent.change(skuInput, { target: { value: 'H4614-B' } });
+    expect((screen.getByLabelText('SKU / model #') as HTMLInputElement).value).toBe('H4614-B');
+  });
+
+  it('offers "+ Add SKU" when missing, and the input stays mounted once cleared', () => {
+    renderWithDraft(emptyDraft('https://example.com/product'));
+
+    expect(screen.queryByLabelText('SKU / model #')).toBeNull();
+    fireEvent.click(screen.getByText('+ Add SKU'));
+
+    const skuInput = screen.getByLabelText('SKU / model #') as HTMLInputElement;
+    fireEvent.change(skuInput, { target: { value: 'X' } });
+    fireEvent.change(screen.getByLabelText('SKU / model #'), { target: { value: '' } });
+
+    expect(screen.getByLabelText('SKU / model #')).toBeTruthy();
+  });
+
+  // ── Currency glyph (CL-R13) ───────────────────────────────────────────────
+
+  it('shows $ and no ISO code for a USD draft', () => {
+    renderWithDraft(emptyDraft('https://example.com/product'));
+
+    expect(screen.getByText('$')).toBeTruthy();
+    expect(screen.getByText('Price')).toBeTruthy();
+    expect(screen.queryByText('USD')).toBeNull();
+  });
+
+  it('shows £ and the ISO code beside the label for a GBP draft', () => {
+    const draft: DraftSlice = { ...emptyDraft('https://example.com/product'), currency: 'GBP' };
+    renderWithDraft(draft);
+
+    expect(screen.getByText('£')).toBeTruthy();
+    expect(screen.queryByText('$')).toBeNull();
+    expect(screen.getByText('GBP')).toBeTruthy();
+  });
+
+  it('falls back to the ISO code as the glyph for a currency with no symbol', () => {
+    const draft: DraftSlice = { ...emptyDraft('https://example.com/product'), currency: 'SEK' };
+    renderWithDraft(draft);
+
+    const glyph = screen.getByPlaceholderText('0.00').previousElementSibling as HTMLElement;
+    expect(glyph.textContent).toBe('SEK ');
+  });
+
   it('duplicate materials (case-insensitive) are ignored on add', () => {
     renderWithDraft(draftWithRecordFields());
 

@@ -17,7 +17,7 @@ import { extractDimensionsFromDOM } from './dimensions';
 import { extractMaterialsFromDOM } from './materials';
 import { extractColorFinishFromDOM } from './color-finish';
 import { extractImagesFromDOM } from './images';
-import { extractProductName, extractDescription } from './metadata';
+import { extractProductName, extractDescription, extractSku } from './metadata';
 import { extractRetailer } from './retailer';
 import { extractManufacturerFromPage, extractPageBrand } from './manufacturer';
 import { extractVendorData } from './vendor';
@@ -268,7 +268,7 @@ export async function extractProductData(url: string): Promise<ExtractedProductD
   console.log('[Patina] Starting full extraction for:', url);
 
   // Run all extractions
-  const [productName, description, pricing, dimensions, materials, colorFinish, images, brand] = await Promise.all([
+  const [productName, description, pricing, dimensions, materials, colorFinish, images, brand, sku] = await Promise.all([
     Promise.resolve(extractProductName()),
     Promise.resolve(extractDescription()),
     Promise.resolve(extractPriceWithSource()),
@@ -277,6 +277,7 @@ export async function extractProductData(url: string): Promise<ExtractedProductD
     Promise.resolve(extractColorFinishFromDOM()),
     Promise.resolve(extractImagesFromDOM(url)),
     Promise.resolve(extractPageBrand()),
+    Promise.resolve(extractSku(document)),
   ]);
 
   const price = pricing?.price ?? null;
@@ -299,6 +300,7 @@ export async function extractProductData(url: string): Promise<ExtractedProductD
     availableFinishes: colorFinish.availableFinishes.length > 0 ? colorFinish.availableFinishes : null,
     images,
     manufacturer,
+    sku: sku ?? undefined,
     currency: resolveCurrency(price),
     url,
     extractedAt: new Date().toISOString(),
@@ -368,7 +370,7 @@ export { extractDimensionsFromDOM } from './dimensions';
 export { extractMaterialsFromDOM, getMaterialCategory } from './materials';
 export { extractColorFinishFromDOM } from './color-finish';
 export { extractImagesFromDOM } from './images';
-export { extractProductName, extractDescription, extractManufacturer, extractBrand } from './metadata';
+export { extractProductName, extractDescription, extractManufacturer, extractBrand, extractSku } from './metadata';
 
 // Export new vendor extractors
 export { extractRetailer, isKnownRetailer, RETAILER_MAP } from './retailer';

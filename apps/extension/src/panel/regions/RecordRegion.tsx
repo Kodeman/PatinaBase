@@ -52,6 +52,18 @@ function DimInput({
   );
 }
 
+const CURRENCY_GLYPHS: Record<string, string> = {
+  USD: '$',
+  CAD: 'CA$',
+  GBP: '£',
+  EUR: '€',
+};
+
+/** The glyph to sit ahead of the price, or the ISO code when we know no glyph. */
+function currencyGlyph(code: string): string {
+  return CURRENCY_GLYPHS[code] ?? `${code} `;
+}
+
 /** Dimension keys minus 'unit', which is edited separately via a <select>. */
 type DimKey = Exclude<keyof EditableDimensions, 'unit'>;
 
@@ -102,21 +114,25 @@ export function RecordRegion() {
   const [materialsOpen, setMaterialsOpen] = useState(false);
   const [materialInput, setMaterialInput] = useState('');
   const [finishOpen, setFinishOpen] = useState(false);
+  const [skuOpen, setSkuOpen] = useState(false);
   const widthInputRef = useRef<HTMLInputElement>(null);
   const materialInputRef = useRef<HTMLInputElement>(null);
   const finishInputRef = useRef<HTMLInputElement>(null);
+  const skuInputRef = useRef<HTMLInputElement>(null);
   if (!draft) return null;
 
   const f = draft.fields;
   const hero = draft.images.selected.map((i) => draft.images.all[i])[0] ?? draft.images.all[0];
   const vendorName = draft.manufacturer.vendor?.name ?? draft.retailer.vendor?.name ?? null;
 
+  const currency = draft.currency.toUpperCase();
   const dims = f.dimensions.value;
   // Sticky once opened — clearing a value (or removing the last chip) must
   // never unmount the input the person is actively editing.
   const showDims = dimsOpen || hasAnyDimValue(dims);
   const showMaterials = materialsOpen || f.materials.value.length > 0;
   const showFinish = finishOpen || !!f.finish.value;
+  const showSku = skuOpen || !!f.sku.value;
   const populatedExtrasCount = EXTRA_DIM_FIELDS.filter((k) => dims[k] !== '').length;
 
   function updateDim(key: DimKey, value: string) {
@@ -188,11 +204,18 @@ export function RecordRegion() {
       {/* Price */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <Label>Price</Label>
+          <div className="flex items-baseline gap-1.5">
+            <Label>Price</Label>
+            {currency !== 'USD' && (
+              <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-soft">
+                {currency}
+              </span>
+            )}
+          </div>
           <FieldBadge status={f.price.status} />
         </div>
         <div className="flex items-center gap-1">
-          <span className="font-mono text-ink-soft">$</span>
+          <span className="font-mono text-ink-soft">{currencyGlyph(currency)}</span>
           <input
             value={f.price.value}
             inputMode="decimal"
@@ -210,6 +233,35 @@ export function RecordRegion() {
           <span className="text-[0.85rem] text-ink-2">{vendorName}</span>
         </div>
       )}
+
+      {/* SKU / model # */}
+      <div className="space-y-1.5 border-t border-line pt-2">
+        <div className="flex items-center justify-between">
+          <Label>SKU / model #</Label>
+          <FieldBadge status={f.sku.status} />
+        </div>
+        {showSku ? (
+          <input
+            ref={skuInputRef}
+            aria-label="SKU / model #"
+            value={f.sku.value}
+            onChange={(e) => {
+              setSkuOpen(true);
+              dispatch({ type: 'FIELD_EDIT', field: 'sku', value: e.target.value });
+            }}
+            placeholder="SKU / model #"
+            className="w-full bg-transparent font-mono text-[0.8rem] text-ink outline-none placeholder:text-ink-soft/50 border-b border-transparent focus:border-line"
+          />
+        ) : (
+          <AddFieldButton
+            label="Add SKU"
+            onClick={() => {
+              setSkuOpen(true);
+              focusSoon(skuInputRef);
+            }}
+          />
+        )}
+      </div>
 
       {/* Dimensions */}
       <div className="space-y-1.5 border-t border-line pt-2">

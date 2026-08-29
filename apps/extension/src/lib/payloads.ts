@@ -16,6 +16,12 @@ export interface BuildProductPayloadInput {
   productName: string;
   extractedData: ExtractedProductData;
   price: string;
+  /**
+   * Vendor SKU / model number (CL-R1) → products.sku. NOT products.vendor_sku,
+   * which 00306 reserves for normalizer-authored catalog rows and constrains
+   * unique per (vendor_id, vendor_sku) within layer='catalog'.
+   */
+  sku?: string | null;
   images: string[];
   vendorId: string | null;
   retailerId: string | null;
@@ -43,7 +49,7 @@ export function withCaptureNote(
 }
 
 export function buildProductInsertPayload(input: BuildProductPayloadInput) {
-  const { productName, extractedData, price, images, vendorId, retailerId, userId, note } = input;
+  const { productName, extractedData, price, sku, images, vendorId, retailerId, userId, note } = input;
   const capturedAt = new Date().toISOString();
 
   return {
@@ -52,6 +58,7 @@ export function buildProductInsertPayload(input: BuildProductPayloadInput) {
     source_url: extractedData.url,
     images: images.slice(0, 10),
     price_retail: price ? Math.round(parseFloat(price) * 100) : null,
+    sku: sku?.trim() || null,
     materials: extractedData.materials || [],
     colors: extractedData.colors?.map(c => c.name) || null,
     finish: extractedData.finish?.name || null,
