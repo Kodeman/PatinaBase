@@ -120,11 +120,106 @@ describe('RecordRegion — dimensions/materials/finish (CL-R1)', () => {
     expect(screen.getByLabelText('Depth')).toBeTruthy();
   });
 
-  it('shows "needs check" badges for missing dimensions/materials/finish', () => {
-    const { container } = renderWithDraft(emptyDraft('https://example.com/product'));
-    const badges = within(container).getAllByText('needs check');
-    // name, price, description, materials, colors, finish, dimensions all start missing
-    // in emptyDraft() — assert at least the three CL-R1 fields are represented.
-    expect(badges.length).toBeGreaterThanOrEqual(3);
+  it('shows "needs check" badges scoped to the three new rows when missing', () => {
+    renderWithDraft(emptyDraft('https://example.com/product'));
+
+    const dimensionsHeader = screen.getByText('Dimensions').closest('div') as HTMLElement;
+    const materialsHeader = screen.getByText('Materials').closest('div') as HTMLElement;
+    const finishHeader = screen.getByText('Finish').closest('div') as HTMLElement;
+
+    expect(within(dimensionsHeader).getByText('needs check')).toBeTruthy();
+    expect(within(materialsHeader).getByText('needs check')).toBeTruthy();
+    expect(within(finishHeader).getByText('needs check')).toBeTruthy();
+  });
+
+  // ── Sticky disclosure regression (fix pass) ───────────────────────────────
+  // Clearing a value (or removing the last chip) must never unmount the input
+  // being actively edited — the row stays open once opened.
+
+  it('clearing the only dimension value keeps the Width input mounted', () => {
+    const base = emptyDraft('https://example.com/product');
+    const draft: DraftSlice = {
+      ...base,
+      fields: {
+        ...base.fields,
+        dimensions: {
+          value: { ...base.fields.dimensions.value, width: '34' },
+          status: 'extracted',
+          source: 'extracted',
+        },
+      },
+    };
+    renderWithDraft(draft);
+
+    const widthInput = screen.getByLabelText('Width') as HTMLInputElement;
+    fireEvent.change(widthInput, { target: { value: '' } });
+
+    expect(screen.getByLabelText('Width')).toBeTruthy();
+    expect((screen.getByLabelText('Width') as HTMLInputElement).value).toBe('');
+  });
+
+  it('removing the last material keeps the "Add a material" input mounted', () => {
+    const base = draftWithRecordFields();
+    const draft: DraftSlice = {
+      ...base,
+      fields: {
+        ...base.fields,
+        materials: { value: ['Oak'], status: 'extracted', source: 'extracted' },
+      },
+    };
+    renderWithDraft(draft);
+
+    fireEvent.click(screen.getByLabelText('Remove Oak'));
+
+    expect(screen.queryByText('Oak')).toBeNull();
+    expect(screen.getByLabelText('Add a material')).toBeTruthy();
+  });
+
+  it('clearing the finish value keeps the Finish input mounted', () => {
+    renderWithDraft(draftWithRecordFields());
+
+    const finishInput = screen.getByLabelText('Finish') as HTMLInputElement;
+    fireEvent.change(finishInput, { target: { value: '' } });
+
+    expect(screen.getByLabelText('Finish')).toBeTruthy();
+    expect((screen.getByLabelText('Finish') as HTMLInputElement).value).toBe('');
+  });
+
+  // ── "More (n)" disclosure ──────────────────────────────────────────────────
+
+  it('auto-expands "More" when the draft already has populated extra dimension fields, and shows a count once collapsed', () => {
+    const base = emptyDraft('https://example.com/product');
+    const draft: DraftSlice = {
+      ...base,
+      fields: {
+        ...base.fields,
+        dimensions: {
+          value: { ...base.fields.dimensions.value, seatHeight: '18', armHeight: '24' },
+          status: 'extracted',
+          source: 'extracted',
+        },
+      },
+    };
+    renderWithDraft(draft);
+
+    // Auto-expanded at mount — no click needed to see the populated extras.
+    expect(screen.getByLabelText('Seat height')).toBeTruthy();
+    expect(screen.getByText('Less')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Less'));
+
+    expect(screen.queryByLabelText('Seat height')).toBeNull();
+    expect(screen.getByText('More (2)')).toBeTruthy();
+  });
+
+  it('duplicate materials (case-insensitive) are ignored on add', () => {
+    renderWithDraft(draftWithRecordFields());
+
+    const input = screen.getByLabelText('Add a material') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'oak' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(screen.getAllByText('Oak')).toHaveLength(1);
+    expect((screen.getByLabelText('Add a material') as HTMLInputElement).value).toBe('');
   });
 });

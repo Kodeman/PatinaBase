@@ -3,7 +3,7 @@
  * verified/edited/missing badges, inline-editable. The hero image opens the C3
  * curation sheet; tapping a field marks it edited.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useDraft, useCaptureDispatch } from '../../state/CaptureProvider';
 import { FieldBadge } from '../FieldBadge';
 import type { EditableDimensions } from '../../state/types';
@@ -32,13 +32,16 @@ function DimInput({
   label,
   value,
   onChange,
+  inputRef,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  inputRef?: React.Ref<HTMLInputElement>;
 }) {
   return (
     <input
+      ref={inputRef}
       aria-label={label}
       value={value}
       inputMode="decimal"
@@ -49,40 +52,59 @@ function DimInput({
   );
 }
 
+/** Dimension keys minus 'unit', which is edited separately via a <select>. */
+type DimKey = Exclude<keyof EditableDimensions, 'unit'>;
+
+const DIM_LABELS: Record<DimKey, string> = {
+  width: 'Width',
+  height: 'Height',
+  depth: 'Depth',
+  seatHeight: 'Seat height',
+  seatDepth: 'Seat depth',
+  seatWidth: 'Seat width',
+  armHeight: 'Arm height',
+  backHeight: 'Back height',
+  legHeight: 'Leg height',
+  clearance: 'Clearance',
+};
+
 /** Fields carried by EditableDimensions beyond width/height/depth/unit — the "More" disclosure. */
-const EXTRA_DIM_FIELDS: Array<{ key: keyof EditableDimensions; label: string }> = [
-  { key: 'seatHeight', label: 'Seat height' },
-  { key: 'seatDepth', label: 'Seat depth' },
-  { key: 'seatWidth', label: 'Seat width' },
-  { key: 'armHeight', label: 'Arm height' },
-  { key: 'backHeight', label: 'Back height' },
-  { key: 'legHeight', label: 'Leg height' },
-  { key: 'clearance', label: 'Clearance' },
+const EXTRA_DIM_FIELDS: DimKey[] = [
+  'seatHeight',
+  'seatDepth',
+  'seatWidth',
+  'armHeight',
+  'backHeight',
+  'legHeight',
+  'clearance',
 ];
 
+const ALL_DIM_KEYS: DimKey[] = ['width', 'height', 'depth', ...EXTRA_DIM_FIELDS];
+
 function hasAnyDimValue(d: EditableDimensions): boolean {
-  return (
-    d.width !== '' ||
-    d.height !== '' ||
-    d.depth !== '' ||
-    d.seatHeight !== '' ||
-    d.seatDepth !== '' ||
-    d.seatWidth !== '' ||
-    d.armHeight !== '' ||
-    d.backHeight !== '' ||
-    d.legHeight !== '' ||
-    d.clearance !== ''
-  );
+  return ALL_DIM_KEYS.some((k) => d[k] !== '');
+}
+
+/** Focus an element on the next frame — used so a freshly-revealed input is
+ * actually mounted before we try to focus it. */
+function focusSoon(ref: React.RefObject<HTMLInputElement | null>) {
+  requestAnimationFrame(() => ref.current?.focus());
 }
 
 export function RecordRegion() {
   const draft = useDraft();
   const dispatch = useCaptureDispatch();
+  const initialDims = draft?.fields.dimensions.value;
   const [dimsOpen, setDimsOpen] = useState(false);
-  const [dimsExpanded, setDimsExpanded] = useState(false);
+  const [dimsExpanded, setDimsExpanded] = useState(() =>
+    initialDims ? EXTRA_DIM_FIELDS.some((k) => initialDims[k] !== '') : false
+  );
   const [materialsOpen, setMaterialsOpen] = useState(false);
   const [materialInput, setMaterialInput] = useState('');
   const [finishOpen, setFinishOpen] = useState(false);
+  const widthInputRef = useRef<HTMLInputElement>(null);
+  const materialInputRef = useRef<HTMLInputElement>(null);
+  const finishInputRef = useRef<HTMLInputElement>(null);
   if (!draft) return null;
 
   const f = draft.fields;
@@ -90,23 +112,35 @@ export function RecordRegion() {
   const vendorName = draft.manufacturer.vendor?.name ?? draft.retailer.vendor?.name ?? null;
 
   const dims = f.dimensions.value;
+  // Sticky once opened — clearing a value (or removing the last chip) must
+  // never unmount the input the person is actively editing.
   const showDims = dimsOpen || hasAnyDimValue(dims);
   const showMaterials = materialsOpen || f.materials.value.length > 0;
   const showFinish = finishOpen || !!f.finish.value;
+  const populatedExtrasCount = EXTRA_DIM_FIELDS.filter((k) => dims[k] !== '').length;
 
-  function updateDim(key: keyof EditableDimensions, value: string) {
-    const next = { ...dims, [key]: value } as EditableDimensions;
-    dispatch({ type: 'FIELD_EDIT', field: 'dimensions', value: next });
+  function updateDim(key: DimKey, value: string) {
+    setDimsOpen(true);
+    dispatch({ type: 'FIELD_EDIT', field: 'dimensions', value: { ...dims, [key]: value } });
+  }
+
+  function updateDimUnit(unit: EditableDimensions['unit']) {
+    setDimsOpen(true);
+    dispatch({ type: 'FIELD_EDIT', field: 'dimensions', value: { ...dims, unit } });
   }
 
   function addMaterial() {
     const value = materialInput.trim();
+    setMaterialsOpen(true);
     if (!value) return;
-    dispatch({ type: 'FIELD_EDIT', field: 'materials', value: [...f.materials.value, value] });
+    const isDuplicate = f.materials.value.some((m) => m.toLowerCase() === value.toLowerCase());
     setMaterialInput('');
+    if (isDuplicate) return;
+    dispatch({ type: 'FIELD_EDIT', field: 'materials', value: [...f.materials.value, value] });
   }
 
   function removeMaterial(index: number) {
+    setMaterialsOpen(true);
     dispatch({
       type: 'FIELD_EDIT',
       field: 'materials',
@@ -186,7 +220,12 @@ export function RecordRegion() {
         {showDims ? (
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5">
-              <DimInput label="Width" value={dims.width} onChange={(v) => updateDim('width', v)} />
+              <DimInput
+                label="Width"
+                value={dims.width}
+                onChange={(v) => updateDim('width', v)}
+                inputRef={widthInputRef}
+              />
               <span className="font-mono text-[0.7rem] text-ink-soft">×</span>
               <DimInput label="Height" value={dims.height} onChange={(v) => updateDim('height', v)} />
               <span className="font-mono text-[0.7rem] text-ink-soft">×</span>
@@ -194,7 +233,7 @@ export function RecordRegion() {
               <select
                 aria-label="Unit"
                 value={dims.unit}
-                onChange={(e) => updateDim('unit', e.target.value)}
+                onChange={(e) => updateDimUnit(e.target.value as EditableDimensions['unit'])}
                 className="shrink-0 bg-transparent font-mono text-[0.7rem] text-ink-soft outline-none border-b border-line/60 focus:border-line"
               >
                 <option value="in">in</option>
@@ -206,15 +245,15 @@ export function RecordRegion() {
               onClick={() => setDimsExpanded((v) => !v)}
               className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-ink-soft underline decoration-line underline-offset-2"
             >
-              {dimsExpanded ? 'Less' : 'More'}
+              {dimsExpanded ? 'Less' : populatedExtrasCount > 0 ? `More (${populatedExtrasCount})` : 'More'}
             </button>
             {dimsExpanded && (
               <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-                {EXTRA_DIM_FIELDS.map(({ key, label }) => (
+                {EXTRA_DIM_FIELDS.map((key) => (
                   <DimInput
                     key={key}
-                    label={label}
-                    value={dims[key] as string}
+                    label={DIM_LABELS[key]}
+                    value={dims[key]}
                     onChange={(v) => updateDim(key, v)}
                   />
                 ))}
@@ -222,7 +261,13 @@ export function RecordRegion() {
             )}
           </div>
         ) : (
-          <AddFieldButton label="Add dimensions" onClick={() => setDimsOpen(true)} />
+          <AddFieldButton
+            label="Add dimensions"
+            onClick={() => {
+              setDimsOpen(true);
+              focusSoon(widthInputRef);
+            }}
+          />
         )}
       </div>
 
@@ -255,6 +300,7 @@ export function RecordRegion() {
               </div>
             )}
             <input
+              ref={materialInputRef}
               aria-label="Add a material"
               value={materialInput}
               onChange={(e) => setMaterialInput(e.target.value)}
@@ -269,7 +315,13 @@ export function RecordRegion() {
             />
           </div>
         ) : (
-          <AddFieldButton label="Add materials" onClick={() => setMaterialsOpen(true)} />
+          <AddFieldButton
+            label="Add materials"
+            onClick={() => {
+              setMaterialsOpen(true);
+              focusSoon(materialInputRef);
+            }}
+          />
         )}
       </div>
 
@@ -281,14 +333,24 @@ export function RecordRegion() {
         </div>
         {showFinish ? (
           <input
+            ref={finishInputRef}
             aria-label="Finish"
             value={f.finish.value}
-            onChange={(e) => dispatch({ type: 'FIELD_EDIT', field: 'finish', value: e.target.value })}
+            onChange={(e) => {
+              setFinishOpen(true);
+              dispatch({ type: 'FIELD_EDIT', field: 'finish', value: e.target.value });
+            }}
             placeholder="Finish"
             className="w-full bg-transparent text-[0.85rem] text-ink outline-none placeholder:text-ink-soft/50 border-b border-transparent focus:border-line"
           />
         ) : (
-          <AddFieldButton label="Add finish" onClick={() => setFinishOpen(true)} />
+          <AddFieldButton
+            label="Add finish"
+            onClick={() => {
+              setFinishOpen(true);
+              focusSoon(finishInputRef);
+            }}
+          />
         )}
       </div>
 
