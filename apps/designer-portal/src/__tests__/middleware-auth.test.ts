@@ -69,4 +69,32 @@ describe('Designer auth middleware', () => {
       new URL('http://localhost:3000/desk'),
     );
   });
+
+  describe('legal pages (/privacy, /terms)', () => {
+    it.each(['/privacy', '/terms'])(
+      'passes a signed-out visitor through %s without a signin redirect',
+      async (pathname) => {
+        (createMiddlewareClient as jest.Mock).mockReturnValue({
+          auth: {
+            getUser: jest.fn().mockResolvedValue({ data: { user: null } }),
+          },
+        });
+
+        const response = await middleware(request(pathname));
+
+        expect(NextResponse.redirect).not.toHaveBeenCalled();
+        expect(response).toBeDefined();
+      },
+    );
+
+    it.each(['/privacy', '/terms'])(
+      'does not bounce a signed-in designer away from %s',
+      async (pathname) => {
+        const response = await middleware(request(pathname));
+
+        expect(NextResponse.redirect).not.toHaveBeenCalled();
+        expect(response).toBeDefined();
+      },
+    );
+  });
 });
