@@ -235,29 +235,23 @@ describe('compact-spine timer doorway', () => {
     };
   });
 
-  it('opens a focus-contained, scroll-locked sheet and restores its doorway on Escape', async () => {
+  // W1-L1 evicts the compact spine timer doorway (`spine-timer.tsx` is
+  // deleted this wave); below 1180 the mobile bar owns the only timer
+  // doorway — `MobileTimerFallbackDoorway` below already stands in for it
+  // elsewhere in this file (see the responsive-handoff tests further down).
+  it('opens a focus-contained, scroll-locked sheet from the mobile bar doorway, restoring focus on Escape, with no spine-timer regime anywhere', async () => {
     render(
       <MobileShellProvider>
-        <CompactSpineTimerDoorway />
+        <MobileTimerFallbackDoorway />
         <SheetState />
         <MobileSheets />
       </MobileShellProvider>,
     );
 
     const doorway = screen.getByRole('button', {
-      name: 'Open time controls, In hand, 1h05 elapsed',
+      name: 'More studio actions',
     });
-    expect(doorway).toHaveAttribute(
-      'data-spine-timer-regime',
-      'compact-only-1180-1439',
-    );
-    expect(doorway).toHaveClass(
-      'hidden',
-      'min-[1180px]:flex',
-      'min-[1440px]:hidden',
-      'min-h-11',
-    );
-    expect(doorway).toHaveTextContent('1h05');
+    expect(document.querySelector('[data-spine-timer-regime]')).toBeNull();
     expect(screen.getByTestId('sheet-state')).toHaveTextContent('closed');
 
     fireEvent.click(doorway);
