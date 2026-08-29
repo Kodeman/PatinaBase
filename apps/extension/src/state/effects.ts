@@ -22,8 +22,13 @@ import {
 import { draftToProductPayload } from './draft';
 import { extensionEvents } from '../lib/analytics';
 import { addRecent, type RecentCapture } from '../lib/recent-captures';
-import type { DraftSlice, RoutingSlice } from './types';
-import { placeProductInProject, type PlacementOutcome, type PlacementV2Request, type SpecBookPlacementRoute } from '../lib/spec-book-placement';
+import type { DraftSlice, RoutingSlice, CommitKind } from './types';
+import {
+  placeProductInProject,
+  type PlacementOutcome,
+  type PlacementV2Request,
+  type SpecBookPlacementRoute,
+} from '../lib/spec-book-placement';
 
 type ProductStatus = 'published' | 'draft';
 
@@ -45,7 +50,10 @@ function resolvedName(draft: DraftSlice): string {
 /** A products insert row at the requested status (library=published, inbox=draft). */
 export function productRow(draft: DraftSlice, userId: string, status: ProductStatus) {
   return {
-    ...buildProductInsertPayload({ ...draftToProductPayload(draft, userId), note: draft.note }),
+    ...buildProductInsertPayload({
+      ...draftToProductPayload(draft, userId),
+      note: draft.note,
+    }),
     status,
   };
 }
@@ -116,13 +124,45 @@ function styleInserts(productId: string, styleIds: string[], userId: string) {
   }));
 }
 
-function captureAnalytics(draft: DraftSlice, method: 'new' | 'update') {
+/** The commit-target kinds `product.captured` reports as `destination` (CL W3-E10). */
+export type CaptureDestination =
+  | 'library'
+  | 'project_inbox'
+  | 'fill_slot'
+  | 'create_line'
+  | 'inbox'
+  | 'decision'
+  | 'update';
+
+function sourceDomain(draft: DraftSlice): string | undefined {
+  try {
+    return new URL(draft.sourceUrl).hostname.replace(/^www\./, '');
+  } catch {
+    return undefined;
+  }
+}
+
+function captureAnalytics(
+  draft: DraftSlice,
+  method: 'new' | 'update',
+  destination: CaptureDestination,
+  captureTimeMs?: number
+) {
   extensionEvents.productCapture({
     hasImages: draft.images.all.length > 0,
     hasPrice: !!draft.fields.price.value,
     confidence: draft.confidence,
     captureMethod: method,
+    domain: sourceDomain(draft),
+    destination,
+    captureTimeMs,
   });
+}
+
+/** `destination` for a save that lands in the library, honoring an active project placement route. */
+function libraryDestination(routing: RoutingSlice): CaptureDestination {
+  const route = routing.specBookPlacement;
+  return route && route.kind !== 'library' ? route.kind : 'library';
 }
 
 function recordRecent(draft: DraftSlice, productId: string, target: RecentCapture['target']) {
@@ -147,14 +187,16 @@ async function runProjectPlacement(
   route: SpecBookPlacementRoute,
   draft: DraftSlice,
   reusedProduct: boolean,
-  duplicateMode: PlacementV2Request['duplicateMode'],
+  duplicateMode: PlacementV2Request['duplicateMode']
 ): Promise<PlacementOutcome> {
   extensionEvents.specBookPlacementAttempted({
     routeKind: route.kind,
     reusedProduct,
   });
   try {
-    const outcome = await placeProductInProject(productId, route, placementSource(draft), { duplicateMode });
+    const outcome = await placeProductInProject(productId, route, placementSource(draft), {
+      duplicateMode,
+    });
     if (!outcome) throw new Error('Project placement returned no outcome');
     extensionEvents.specBookPlacementSucceeded({
       routeKind: route.kind,
@@ -182,7 +224,7 @@ export async function retrySpecBookPlacement(
   productId: string,
   draft: DraftSlice,
   routing: RoutingSlice,
-  duplicateMode: PlacementV2Request['duplicateMode'],
+  duplicateMode: PlacementV2Request['duplicateMode']
 ): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const route = routing.specBookPlacement;
   if (!route || route.kind === 'library') return { productId, placementOutcome: null };
@@ -212,6 +254,7 @@ export async function saveToLibrary(
   routing: RoutingSlice,
   user: User,
   duplicateMode: PlacementV2Request['duplicateMode'],
+  captureTimeMs?: number
 ): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const { data: product, error } = await supabase
     .from('products')
@@ -224,10 +267,17 @@ export async function saveToLibrary(
   if (draft.styleIds.length) {
     await supabase.from('product_styles').insert(styleInserts(product.id, draft.styleIds, user.id));
   }
-  captureAnalytics(draft, 'new');
-  const placementOutcome = routing.specBookPlacement && routing.specBookPlacement.kind !== 'library'
-    ? await runProjectPlacement(product.id, routing.specBookPlacement, draft, false, duplicateMode)
-    : null;
+  captureAnalytics(draft, 'new', libraryDestination(routing), captureTimeMs);
+  const placementOutcome =
+    routing.specBookPlacement && routing.specBookPlacement.kind !== 'library'
+      ? await runProjectPlacement(
+          product.id,
+          routing.specBookPlacement,
+          draft,
+          false,
+          duplicateMode
+        )
+      : null;
   recordRecent(draft, product.id, 'library');
   return { productId: product.id, placementOutcome };
 }
@@ -249,7 +299,8 @@ export async function saveToLibrary(
 export async function saveToInbox(
   draft: DraftSlice,
   routing: RoutingSlice,
-  user: User
+  user: User,
+  captureTimeMs?: number
 ): Promise<string> {
   const clientCaptureId = crypto.randomUUID();
   const product = productRow(draft, user.id, 'draft');
@@ -278,7 +329,7 @@ export async function saveToInbox(
   if (!productId) throw new Error('Failed to create product');
 
   recordRecent(draft, productId, 'inbox');
-  captureAnalytics(draft, 'new');
+  captureAnalytics(draft, 'new', 'inbox', captureTimeMs);
   return productId;
 }
 
@@ -286,7 +337,8 @@ export async function saveToInbox(
 export async function saveAsDecision(
   draft: DraftSlice,
   routing: RoutingSlice,
-  user: User
+  user: User,
+  captureTimeMs?: number
 ): Promise<string> {
   if (!routing.decision.designerClientId) {
     throw new Error('Select a client before sending as a decision.');
@@ -316,7 +368,7 @@ export async function saveAsDecision(
     status: decisionInsert.status,
   };
   const optionInsert = buildDecisionOptionInsertPayload(
-    decisionOptionInput(draft, decisionId, product.id),
+    decisionOptionInput(draft, decisionId, product.id)
   );
   const optionPayload = {
     name: optionInsert.name,
@@ -330,20 +382,17 @@ export async function saveAsDecision(
   };
   // Generated RPC types intentionally lag the in-progress authority migration.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: decision, error: decErr } = await (supabase as any).rpc(
-    'create_client_decision',
-    {
-      p_decision_id: decisionId,
-      p_payload: decisionPayload,
-      p_options: [optionPayload],
-      p_blocked_ffe_item_ids: [],
-      p_blocked_task_ids: [],
-    },
-  );
+  const { data: decision, error: decErr } = await (supabase as any).rpc('create_client_decision', {
+    p_decision_id: decisionId,
+    p_payload: decisionPayload,
+    p_options: [optionPayload],
+    p_blocked_ffe_item_ids: [],
+    p_blocked_task_ids: [],
+  });
   if (decErr) throw decErr;
   if (!decision) throw new Error('Failed to create decision');
   recordRecent(draft, product.id, 'decision');
-  captureAnalytics(draft, 'new');
+  captureAnalytics(draft, 'new', 'decision', captureTimeMs);
   return product.id;
 }
 
@@ -352,7 +401,8 @@ export async function updateExisting(
   existingId: string,
   draft: DraftSlice,
   routing: RoutingSlice,
-  user: User
+  user: User,
+  captureTimeMs?: number
 ): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const full = productRow(draft, user.id, 'published');
   // The capture note lives in capture_provenance.note (CL-R1 / c), not on a
@@ -378,6 +428,7 @@ export async function updateExisting(
       dimensions: full.dimensions,
       vendor_id: full.vendor_id,
       retailer_id: full.retailer_id,
+      sku: full.sku,
       capture_provenance: withCaptureNote(
         existingProduct?.capture_provenance as Record<string, unknown> | null | undefined,
         draft.note
@@ -387,15 +438,16 @@ export async function updateExisting(
     .eq('id', existingId);
   if (error) throw error;
 
-  const placementOutcome = routing.specBookPlacement && routing.specBookPlacement.kind !== 'library'
-    ? await runProjectPlacement(existingId, routing.specBookPlacement, draft, true, 'reuse')
-    : null;
+  const placementOutcome =
+    routing.specBookPlacement && routing.specBookPlacement.kind !== 'library'
+      ? await runProjectPlacement(existingId, routing.specBookPlacement, draft, true, 'reuse')
+      : null;
   if (draft.styleIds.length) {
     await supabase.from('product_styles').delete().eq('product_id', existingId);
     await supabase.from('product_styles').insert(styleInserts(existingId, draft.styleIds, user.id));
   }
   recordRecent(draft, existingId, 'update');
-  captureAnalytics(draft, 'update');
+  captureAnalytics(draft, 'update', 'update', captureTimeMs);
   return { productId: existingId, placementOutcome };
 }
 
@@ -412,4 +464,149 @@ export async function saveVendor(vendorData: VendorCaptureInput, _user: User): P
     hasLogo: !!vendorData.logoUrl,
     hasContactInfo: !!(vendorData.contactEmail || vendorData.contactPhone),
   });
+}
+
+// ─── Commit orchestration (shared by CommitBar and the R5 retry) ─────────────
+
+/** Re-exported for existing importers — canonical definition now lives on io.lastCommitKind's type. */
+export type { CommitKind };
+
+export interface RunCommitContext {
+  draft: DraftSlice;
+  routing: RoutingSlice;
+  user: User;
+  /** Id of the exact-URL duplicate match, when one is showing (dedup.match?.id). */
+  dedupMatchId: string | null;
+  /** io.pendingPlacementProductId — a Product already created, only its project placement failed. */
+  pendingPlacementProductId: string | null;
+  duplicateMode: PlacementV2Request['duplicateMode'];
+  captureTimeMs?: number;
+}
+
+/**
+ * Runs the requested commit kind. Extracted from CommitBar's inline branching
+ * so the R5 error screen's Retry can re-run the exact same commit without
+ * duplicating the branch order (the pending-placement retry always takes
+ * priority over `kind`, matching CommitBar's own precedence).
+ */
+export async function runCommit(
+  kind: CommitKind,
+  ctx: RunCommitContext
+): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
+  const {
+    draft,
+    routing,
+    user,
+    dedupMatchId,
+    pendingPlacementProductId,
+    duplicateMode,
+    captureTimeMs,
+  } = ctx;
+  const hasProjectPlacement =
+    !!routing.specBookPlacement && routing.specBookPlacement.kind !== 'library';
+  if (pendingPlacementProductId && hasProjectPlacement) {
+    return retrySpecBookPlacement(pendingPlacementProductId, draft, routing, duplicateMode);
+  }
+  if (kind === 'reuse') {
+    if (!dedupMatchId) throw new Error('No matched product to reuse.');
+    return reuseProductForSpecBookPlacement(dedupMatchId, draft, routing);
+  }
+  if (kind === 'library') {
+    return saveToLibrary(draft, routing, user, duplicateMode, captureTimeMs);
+  }
+  if (kind === 'update') {
+    if (!dedupMatchId) throw new Error('No matched product to update.');
+    return updateExisting(dedupMatchId, draft, routing, user, captureTimeMs);
+  }
+  const productId = await saveToInbox(draft, routing, user, captureTimeMs);
+  return { productId, placementOutcome: null };
+}
+
+/**
+ * Reconstructs "the same commit target" for a Retry from R5. Prefers
+ * io.lastCommitKind — the kind SAVE_START was actually dispatched with —
+ * since state alone can't tell "declined the merge, saved as new" from
+ * "updated": both leave dedup.match set (CL W3-E10 F2). Falls back to
+ * deriving from routing/dedup only for a state with no lastCommitKind yet
+ * (shouldn't happen from a real SAVE_START, but keeps this total).
+ */
+export function deriveRetryKind(
+  routing: RoutingSlice,
+  hasDedupMatch: boolean,
+  pendingPlacementProductId: string | null,
+  lastCommitKind?: CommitKind | null
+): CommitKind {
+  if (lastCommitKind) return lastCommitKind;
+  const hasProjectPlacement =
+    !!routing.specBookPlacement && routing.specBookPlacement.kind !== 'library';
+  if (pendingPlacementProductId && hasProjectPlacement) return 'reuse';
+  if (routing.commitTarget === 'inbox') return 'inbox';
+  if (hasDedupMatch) return hasProjectPlacement ? 'reuse' : 'update';
+  return 'library';
+}
+
+// ─── Save-error classification (CommitBar's catch + the R5 retry's catch) ────
+
+/** Formats a thrown value into a short human message (PostgREST/Supabase error shapes included). */
+export function formatSaveError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === 'object') {
+    const x = e as {
+      message?: string;
+      details?: string;
+      hint?: string;
+      code?: string;
+    };
+    const m = x.message || x.details || x.hint || JSON.stringify(e);
+    return x.code ? `[${x.code}] ${m}` : m;
+  }
+  return 'Save failed';
+}
+
+export type SaveErrorClass = 'offline' | 'auth' | 'server';
+
+/** The message text off either an Error or a plain thrown object (postgrest-js throws plain objects). */
+function errorMessageText(e: unknown): string | undefined {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === 'object' && typeof (e as Record<string, unknown>).message === 'string') {
+    return (e as Record<string, unknown>).message as string;
+  }
+  return undefined;
+}
+
+/**
+ * Classifies a save-path error into offline / expired-session / everything
+ * else, per the R5 routing rules (CL W3-E10). All three classes render on
+ * R5 — see CommitBar's catch.
+ */
+export function classifySaveError(e: unknown): {
+  errorClass: SaveErrorClass;
+  message: string;
+} {
+  const msgText = errorMessageText(e);
+  const offline =
+    (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+    (typeof msgText === 'string' &&
+      /failed to fetch|networkerror|network request failed|load failed/i.test(msgText));
+  if (offline) {
+    return {
+      errorClass: 'offline',
+      message: "You're offline — your draft is kept. Retry when you're back.",
+    };
+  }
+  const obj = e && typeof e === 'object' ? (e as Record<string, unknown>) : null;
+  const code = obj?.code;
+  const status = obj?.status;
+  const msg = obj?.message;
+  const authExpired =
+    code === 'PGRST301' ||
+    status === 401 ||
+    (typeof msg === 'string' && /jwt/i.test(msg) && /expired/i.test(msg));
+  if (authExpired) {
+    return {
+      errorClass: 'auth',
+      message: 'Your session expired — sign in to finish saving.',
+    };
+  }
+  return { errorClass: 'server', message: formatSaveError(e) };
 }

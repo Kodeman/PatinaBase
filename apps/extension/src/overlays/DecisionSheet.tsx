@@ -3,15 +3,17 @@
  * then creates a single-option decision via the saveAsDecision effect. Owns its
  * own send state; on success it resets for the next capture.
  */
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { useCapture, useCaptureDispatch } from '../state/CaptureProvider';
 import { OverlaySheet } from '../panel/OverlaySheet';
 import { DecisionTargetSelector } from '../components/DecisionTargetSelector';
-import { saveAsDecision } from '../state/effects';
+import { saveAsDecision, classifySaveError } from '../state/effects';
+import { ControllerContext } from '../panel/controller-context';
 
 export function DecisionSheet() {
   const { draft, routing, session } = useCapture();
   const dispatch = useCaptureDispatch();
+  const controller = useContext(ControllerContext);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
@@ -24,11 +26,13 @@ export function DecisionSheet() {
     if (!session.user || !dec.designerClientId) return;
     setSending(true);
     setError('');
+    const captureTimeMs =
+      controller?.captureStartedAt != null ? Date.now() - controller.captureStartedAt : undefined;
     try {
-      await saveAsDecision(draft, routing, session.user);
+      await saveAsDecision(draft, routing, session.user, captureTimeMs);
       setSent(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to send decision');
+      setError(classifySaveError(e).message);
     } finally {
       setSending(false);
     }
@@ -101,9 +105,7 @@ export function DecisionSheet() {
         onProjectChange={(projectId) =>
           dispatch({ type: 'DECISION_TARGET_SET', patch: { projectId } })
         }
-        onRoomChange={(roomId) =>
-          dispatch({ type: 'DECISION_TARGET_SET', patch: { roomId } })
-        }
+        onRoomChange={(roomId) => dispatch({ type: 'DECISION_TARGET_SET', patch: { roomId } })}
         disabled={sending}
       />
     </OverlaySheet>

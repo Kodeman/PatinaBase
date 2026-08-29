@@ -55,6 +55,7 @@ export function initialCaptureState(prefs: Prefs = DEFAULT_PREFS): CaptureState 
       lastSavedProductId: null,
       pendingPlacementProductId: null,
       lastPlacementOutcome: null,
+      lastCommitKind: null,
     },
   };
 }
@@ -402,7 +403,12 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
       return {
         ...state,
         routing: { ...state.routing, commitTarget: action.target },
-        io: { ...state.io, isSaving: true, error: null },
+        io: {
+          ...state.io,
+          isSaving: true,
+          error: null,
+          lastCommitKind: action.lastCommitKind ?? state.io.lastCommitKind,
+        },
       };
 
     case 'SAVE_SUCCESS':
@@ -451,6 +457,7 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
           lastSavedProductId: null,
           pendingPlacementProductId: null,
           lastPlacementOutcome: null,
+          lastCommitKind: null,
         },
       };
 

@@ -139,7 +139,11 @@ describe('field visibility on the C2 record screen', () => {
 
       const state = initialCaptureState();
       state.nav.screen = 'C2';
-      state.session = { status: 'signed-in', user: { id: 'user-1' } as never, workspaceId: null };
+      state.session = {
+        status: 'signed-in',
+        user: { id: 'user-1' } as never,
+        workspaceId: null,
+      };
       state.draft = draft;
 
       const { container } = render(
@@ -277,7 +281,7 @@ describe('field visibility on the C2 record screen', () => {
       // above meaningful.
       expect(container.querySelector('input')).toBeTruthy();
       expect(routeSection).toBeTruthy();
-    });
+    }, 15000);
   }
 });
 

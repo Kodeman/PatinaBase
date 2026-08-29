@@ -36,15 +36,16 @@ export function getPostHog() {
 
 /**
  * Identify the authenticated user for cross-platform identity linking.
- * Uses user.id as distinct_id, never sends full email.
+ * Uses user.id as distinct_id; sends only {platform, role} — no address, no
+ * derived-from-address property of any kind (CL-R8 — the extension has no
+ * per-user consent surface for that).
  */
-export function identifyUser(userId: string, properties?: { emailDomain?: string }): void {
+export function identifyUser(userId: string): void {
   const ph = getPostHog();
   if (!ph) return;
   ph.identify(userId, {
     platform: 'extension',
     role: 'designer',
-    ...(properties?.emailDomain && { email_domain: properties.emailDomain }),
   });
 }
 
@@ -97,7 +98,17 @@ export const extensionEvents = {
     confidence: string;
     captureMethod: string;
     source?: 'chrome_extension' | 'mobile_photo' | 'url_paste' | 'manual';
-    destination?: 'personal' | 'project-room';
+    /** Hostname of the captured page (CL W3-E10). */
+    domain?: string;
+    /** The commit-target kind the save landed on (CL W3-E10). */
+    destination?:
+      | 'library'
+      | 'project_inbox'
+      | 'fill_slot'
+      | 'create_line'
+      | 'inbox'
+      | 'decision'
+      | 'update';
     captureTimeMs?: number;
     vendorIsNew?: boolean;
   }) =>
@@ -124,8 +135,12 @@ export const extensionEvents = {
 
   /** Extraction telemetry — extension-internal, not in PRD §10.1. */
   extractionStart: (mode: string) => track('extraction_started', { mode }),
-  extractionComplete: (mode: string, fieldCount?: number) =>
-    track('extraction_completed', { mode, field_count: fieldCount }),
+  extractionComplete: (mode: string, fieldCount?: number, confidence?: string) =>
+    track('extraction_completed', {
+      mode,
+      field_count: fieldCount,
+      confidence,
+    }),
   extractionError: (mode: string, errorType?: string) =>
     track('extraction_failed', { mode, error_type: errorType }),
 
@@ -142,7 +157,13 @@ export const extensionEvents = {
       route_kind: properties.routeKind,
       reused_product: properties.reusedProduct,
     }),
-  specBookPlacementSucceeded: (properties: { routeKind: string; reusedProduct: boolean; outcome: string; selectionId: string | null; placementId: string | null }) =>
+  specBookPlacementSucceeded: (properties: {
+    routeKind: string;
+    reusedProduct: boolean;
+    outcome: string;
+    selectionId: string | null;
+    placementId: string | null;
+  }) =>
     track('spec_book.capture_routing.succeeded', {
       route_kind: properties.routeKind,
       reused_product: properties.reusedProduct,

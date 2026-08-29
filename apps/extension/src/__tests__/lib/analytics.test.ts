@@ -18,7 +18,7 @@ vi.mock('posthog-js/dist/module.no-external', () => ({
   default: { init: posthog.init },
 }));
 
-import { extensionEvents, getPostHog } from '../../lib/analytics';
+import { extensionEvents, getPostHog, identifyUser } from '../../lib/analytics';
 
 describe('extension analytics', () => {
   beforeEach(() => {
@@ -39,5 +39,44 @@ describe('extension analytics', () => {
     expect(posthog.client.capture).toHaveBeenCalledWith('capture.extension.opened', {
       domain: 'example.com',
     });
+  });
+
+  // CL W3-E10 — product.captured gains domain/destination/captureTimeMs.
+  it('carries domain, destination, and captureTimeMs on product.captured', () => {
+    extensionEvents.productCapture({
+      hasImages: true,
+      hasPrice: true,
+      confidence: 'high',
+      captureMethod: 'new',
+      domain: 'shop.example',
+      destination: 'fill_slot',
+      captureTimeMs: 4200,
+    });
+    expect(posthog.client.capture).toHaveBeenCalledWith('product.captured', {
+      source: 'chrome_extension',
+      hasImages: true,
+      hasPrice: true,
+      confidence: 'high',
+      captureMethod: 'new',
+      domain: 'shop.example',
+      destination: 'fill_slot',
+      captureTimeMs: 4200,
+    });
+  });
+
+  // CL-R8 — identify sends only {platform, role}, dropping the legacy
+  // address-derived property entirely (no address, no property derived
+  // from one).
+  it('identifies with user.id + {platform, role} only', () => {
+    identifyUser('user-1');
+    expect(posthog.client.identify).toHaveBeenCalledWith('user-1', {
+      platform: 'extension',
+      role: 'designer',
+    });
+    const [, properties] = posthog.client.identify.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(Object.keys(properties)).toEqual(['platform', 'role']);
   });
 });
