@@ -82,23 +82,44 @@ public final class AuthService {
 
     // MARK: - Auth State Listener
 
+    /// The one place `session` moves.
+    ///
+    /// Nine call sites install a session on this service, and eight of them run
+    /// BEFORE GoTrue delivers the matching `.signedIn` on `authStateChanges` —
+    /// the password grant, the Apple/Google id-token exchange, OTP verify, the
+    /// QR `setSession`, the `patina://auth/callback` deep link, the refresh and
+    /// `getSession`. With the reset wired only into the listener, each of those
+    /// opened a window where `currentUserId` answered the NEW account on the
+    /// main actor while every `SessionScope` participant still held the
+    /// previous one's rows. Narrower than W5's walk failure — a task hop, and
+    /// RLS still refuses the write — but the same shape. Routing every site
+    /// through here closes it by construction rather than by remembering.
+    ///
+    /// - Returns: whether this was a real change of account.
+    @MainActor
+    @discardableResult
+    private func applySession(_ session: Session?) -> Bool {
+        let incomingUserId = session?.user.id.uuidString
+        let accountChanged = Self.isAccountChange(
+            previous: settledUserId, incoming: incomingUserId
+        )
+        self.session = session
+        if accountChanged {
+            settledUserId = incomingUserId
+            SessionScope.reset()
+        }
+        return accountChanged
+    }
+
     private func startAuthStateListener() {
         authStateTask = Task { @MainActor in
             for await (event, session) in supabase.auth.authStateChanges {
                 let incomingUserId = session?.user.id.uuidString
-                let accountChanged = Self.isAccountChange(
-                    previous: self.settledUserId, incoming: incomingUserId
-                )
-                self.session = session
-
                 // Before anything below fetches for the new account: the
                 // hydration a few lines down, and `settleLocalStore`'s room
                 // reconcile, both read singletons that are still holding the
-                // previous account's rows until this runs.
-                if accountChanged {
-                    self.settledUserId = incomingUserId
-                    SessionScope.reset()
-                }
+                // previous account's rows until the reset inside this runs.
+                let accountChanged = self.applySession(session)
 
                 if let user = session?.user {
                     Self.settleLocalStore(for: user.id.uuidString)
@@ -285,7 +306,7 @@ public final class AuthService {
                 email: email,
                 password: password
             )
-            self.session = session
+            applySession(session)
         } catch {
             // GoTrue returns `email_not_confirmed` when a fresh signup tries
             // to sign in before clicking the verification link. Surface this
@@ -349,7 +370,7 @@ public final class AuthService {
                     nonce: rawNonce
                 )
             )
-            self.session = session
+            applySession(session)
             await captureAppleName(from: credential)
         } catch {
             errorMessage = error.localizedDescription
@@ -419,7 +440,7 @@ public final class AuthService {
                 data: metadata
             )
             if let session = response.session {
-                self.session = session
+                applySession(session)
             } else {
                 // Production has email confirmation on, so GoTrue returns a
                 // user but NO session here. Surface the same case `signIn`
@@ -464,7 +485,7 @@ public final class AuthService {
 
         do {
             try await supabase.auth.signOut()
-            session = nil
+            applySession(nil)
         } catch {
             errorMessage = error.localizedDescription
             throw error
@@ -604,7 +625,7 @@ public final class AuthService {
                         accessToken: accessToken,
                         refreshToken: refreshToken
                     )
-                    self.session = session
+                    applySession(session)
                     return
                 } catch {
                     errorMessage = error.localizedDescription
@@ -616,7 +637,7 @@ public final class AuthService {
         // PKCE / code-exchange flow — let the SDK handle it.
         do {
             let session = try await supabase.auth.session(from: url)
-            self.session = session
+            applySession(session)
         } catch {
             errorMessage = error.localizedDescription
             throw error
@@ -645,10 +666,10 @@ public final class AuthService {
 
         do {
             let newSession = try await supabase.auth.refreshSession()
-            self.session = newSession
+            applySession(newSession)
         } catch {
             // If refresh fails, user needs to re-authenticate
-            session = nil
+            applySession(nil)
             throw error
         }
     }
@@ -658,7 +679,7 @@ public final class AuthService {
     public func getSession() async -> Session? {
         do {
             let session = try await supabase.auth.session
-            self.session = session
+            applySession(session)
             return session
         } catch {
             return nil

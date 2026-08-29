@@ -39,9 +39,9 @@ enum SessionScope {
 
     /// The participants, in no meaningful order — a reset is not a sequence.
     ///
-    /// Six declare the reset in their own file because their state is
-    /// `private(set)` and only the declaring file can write it. The rest are
-    /// conformed below over a clearing method they already had.
+    /// Five declare the reset in their own file because their state is
+    /// `private(set)` and only the declaring file can write it. The other six
+    /// are conformed below over a clearing method they already had.
     static func participants() -> [any SessionScoped] {
         [
             BadgeCountService.shared,
@@ -93,7 +93,7 @@ enum SessionScope {
 
 // MARK: - Conformances
 
-// Six declare `resetForSessionChange()` in their own file, because everything
+// Five declare `resetForSessionChange()` in their own file, because everything
 // they hold is `private(set)` and only the declaring file can write it.
 
 extension BadgeCountService: SessionScoped {}

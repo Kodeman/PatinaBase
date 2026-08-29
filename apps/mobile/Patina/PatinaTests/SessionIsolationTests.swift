@@ -19,6 +19,14 @@ import Foundation
 @MainActor
 struct SessionIsolationTests {
 
+    /// The body of a function, by its declaration line: everything up to the
+    /// first closing brace sitting at a type member's indentation.
+    private static func functionBody(of declaration: String, in source: String) throws -> String {
+        let start = try #require(source.range(of: declaration))
+        let end = try #require(source[start.upperBound...].range(of: "\n    }"))
+        return String(source[start.upperBound..<end.lowerBound])
+    }
+
     // MARK: - The seam
 
     @Test("a token refresh is not an account change; a sign-out and a sign-in are")
@@ -38,13 +46,40 @@ struct SessionIsolationTests {
     @Test("the reset runs before anything fetches for the new account")
     func theResetPrecedesTheFirstFetch() throws {
         let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
-        let reset = try #require(source.range(of: "SessionScope.reset()"))
+        let apply = try #require(source.range(of: "self.applySession(session)"))
         let settle = try #require(source.range(of: "Self.settleLocalStore(for:"))
         let hydrate = try #require(source.range(of: "await ProfileService.shared.fetchProfile"))
         let refresh = try #require(source.range(of: "SessionScope.refresh()"))
-        #expect(reset.lowerBound < settle.lowerBound)
-        #expect(reset.lowerBound < hydrate.lowerBound)
-        #expect(reset.lowerBound < refresh.lowerBound)
+        #expect(apply.lowerBound < settle.lowerBound)
+        #expect(apply.lowerBound < hydrate.lowerBound)
+        #expect(apply.lowerBound < refresh.lowerBound)
+
+        // …and the reset is what `applySession` does, not something a later
+        // line in the listener remembers to do.
+        let body = try Self.functionBody(
+            of: "private func applySession(_ session: Session?) -> Bool {", in: source
+        )
+        #expect(body.contains("SessionScope.reset()"))
+        #expect(body.contains("settledUserId = incomingUserId"))
+    }
+
+    /// The eight sign-in paths that install a session BEFORE GoTrue delivers
+    /// `.signedIn` — password, Apple/Google id-token, sign-up, sign-out, the QR
+    /// `setSession`, the `patina://auth/callback` deep link, the refresh and
+    /// `getSession` — each used to move `session` on their own. In that window
+    /// `currentUserId` answered the new account while every participant still
+    /// held the previous one's rows: the same shape as W5's failure, one task
+    /// hop wide. One writer is what closes it, so the pin is that there is one.
+    @Test("the session moves in exactly one place")
+    func theSessionMovesInOnePlace() throws {
+        let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
+        let writes = source.split(separator: "\n").map(String.init).filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("//"),
+                  !trimmed.hasPrefix("let "), !trimmed.hasPrefix("var ") else { return false }
+            return trimmed.hasPrefix("session = ") || trimmed.hasPrefix("self.session = ")
+        }
+        #expect(writes.count == 1, "session is assigned outside applySession: \(writes)")
     }
 
     // MARK: - The reset reaches everyone
@@ -121,12 +156,18 @@ struct SessionIsolationTests {
                     "proposalsAwaitingSignatureCount", "payableInvoiceCount",
                     "projectCount", "pendingDecisions", "pendingProposals",
                     "payableInvoices", "threadSummaries", "projects", "roster",
-                    "hasLoaded", "projectsLoaded", "lastRefreshFailed", "pendingRefresh"
+                    "hasLoaded", "projectsLoaded", "lastRefreshFailed", "pendingRefresh",
+                    // The refresh in the air is the previous account's; the
+                    // token is what stops its rows landing after the reset.
+                    "inFlightRefresh", "refreshToken"
                 ]
             ),
             (
                 "Patina/Services/DesignServices/DesignRequestStatusService.swift",
-                ["requests", "hasLoaded", "sessionDismissedLeadIds", "pendingRefresh"]
+                [
+                    "requests", "hasLoaded", "sessionDismissedLeadIds", "pendingRefresh",
+                    "inFlightRefresh", "refreshToken"
+                ]
             ),
             (
                 "Patina/Features/Orders/ViewModels/OrdersService.swift",
@@ -153,6 +194,29 @@ struct SessionIsolationTests {
         for field in fields {
             #expect(body.contains(field), "\(path) reset does not clear \(field)")
         }
+    }
+
+    // MARK: - The taste portrait's second home
+
+    /// `StylePreferenceModel` was wiped on an account change and the two
+    /// `UserDefaults.standard` keys behind `StyleProfileStore` were not, so a
+    /// second account on the same phone inherited the first account's saved
+    /// response and its `hasCompletedProfile` — which `CompanionOverlay` reads
+    /// straight into the Companion's context. Both homes, one boundary.
+    @Test("an account change clears both homes of the taste portrait")
+    func theTastePortraitIsClearedOnAnAccountChange() throws {
+        let source = try SourcePin.read("Patina/Core/Persistence/LocalStoreReset.swift")
+        let body = try Self.functionBody(of: "static func wipeUserScopedData() {", in: source)
+        #expect(body.contains("StylePreferenceModel"))
+        #expect(body.contains("StyleProfileStore.shared.reset()"))
+
+        // And `reset()` really is both keys, not just the response.
+        let store = try SourcePin.read(
+            "Patina/Features/RoomScan/Shared/Services/StyleProfileStore.swift"
+        )
+        let reset = try Self.functionBody(of: "public func reset() {", in: store)
+        #expect(reset.contains("removeObject(forKey: key)"))
+        #expect(reset.contains("removeObject(forKey: completedKey)"))
     }
 
     // MARK: - The list is the whole list
@@ -202,9 +266,18 @@ struct SessionIsolationTests {
         for file in [
             "PersistenceController.swift", "RecordSnapshotStore.swift", "LastSeenStore.swift",
             "RecordOwner.swift", "ContextMemoryStore.swift", "ConversationStorageService.swift",
-            "StyleProfileStore.swift", "FirstLaunchDataStore.swift",
+            "FirstLaunchDataStore.swift",
             "firstLaunchTourState.swift", "UserDefaultsBacked.swift"
         ] { out[file] = "on disk, owner-keyed or device-scoped — LocalStoreReset's boundary" }
+
+        // Its two `UserDefaults.standard` keys carry no account, so unlike its
+        // neighbours above it was NOT covered by anything: `wipeUserScopedData`
+        // deleted the `StylePreferenceModel` rows and left the saved response
+        // and `hasCompletedProfile` for the next account to inherit. Now
+        // cleared there, beside the rows — and not on the `SessionScope` seam,
+        // which also fires `nil → A` at every cold launch and would wipe the
+        // account's own portrait on launch.
+        out["StyleProfileStore.swift"] = "on disk — cleared by LocalStoreReset.wipeUserScopedData"
 
         // Scan pipeline. Its rows are SwiftData, wiped by `LocalStoreReset`;
         // the in-memory parts are queue mechanics and file bookkeeping.
@@ -240,12 +313,29 @@ struct SessionIsolationTests {
         return out
     }()
 
+    /// `static let shared ` — with the trailing space — misses
+    /// `static let shared: Foo = Foo()` and `static var shared`, both ordinary
+    /// spellings, so a singleton declared either way would never reach the
+    /// ruling at all. Matched by shape instead. `\b` keeps
+    /// `sharedRoomCaptureConfigLabel` out, which is a string, not a singleton.
+    private static let singletonDeclaration = #"static +(let|var) +shared\b"#
+
     @Test("no singleton in the app escapes the ruling")
     func theListIsTheWholeList() {
         var found: Set<String> = []
         for path in SourcePin.swiftFiles(under: "Patina") {
-            guard let source = try? String(contentsOfFile: path, encoding: .utf8),
-                  source.contains("static let shared ") else { continue }
+            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            // Comment lines are skipped, or a file that merely *writes about*
+            // singletons — this rule's own header among them — is ruled on as
+            // if it declared one.
+            let declares = source.split(separator: "\n").contains { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") else { return false }
+                return trimmed.range(
+                    of: Self.singletonDeclaration, options: .regularExpression
+                ) != nil
+            }
+            guard declares else { continue }
             found.insert(URL(fileURLWithPath: path).lastPathComponent)
         }
         let ruled = Self.participantFiles.union(Self.excludedFiles.keys)

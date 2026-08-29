@@ -40,6 +40,17 @@ enum LocalStoreReset {
         // The "currently selected room" mirror lives outside SwiftData.
         RoomSelectionStore.shared.clear()
 
+        // The taste portrait has TWO homes: `StylePreferenceModel` above, and
+        // `patina.style_profile_response.v1` / `…_completed.v1` in
+        // `UserDefaults.standard`, which carry no account in the key. Deleting
+        // only the rows left the second account inheriting the first account's
+        // saved response and its `hasCompletedProfile` — which
+        // `CompanionOverlay` reads straight into the Companion's context.
+        // Cleared here rather than on the `SessionScope` seam because that one
+        // also fires on `nil → A` at every cold launch, where wiping a
+        // device-local portrait would destroy the account's own.
+        StyleProfileStore.shared.reset()
+
         // Remove on-disk scan bundles (USDZ / HEIC / meshes) so wiped
         // RoomScanPackage rows don't leave orphaned files for the next account.
         deleteScanBundles()
