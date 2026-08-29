@@ -50,6 +50,12 @@ struct WidgetSnapshotTests {
             return kinds.count
         }
 
+        var isEmpty: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return kinds.isEmpty
+        }
+
         var last: String? {
             lock.lock()
             defer { lock.unlock() }
@@ -120,7 +126,7 @@ struct WidgetSnapshotTests {
         #expect(json["hasMoreNeedsYou"] == nil)
         #expect(json["badge"] == nil)
         #expect(json["count"] == nil)
-        #expect(Set(json.keys) == ["movedRows", "houseLine", "refreshedAt", "flagOn"])
+        #expect(Set(json.keys) == ["movedRows", "houseLine", "sinceDate", "refreshedAt", "flagOn"])
 
         // And no NEEDS YOU row's identifier slipped in through the projection.
         let text = try #require(String(data: data, encoding: .utf8))
@@ -155,6 +161,7 @@ struct WidgetSnapshotTests {
         struct Mirror: Codable {
             let movedRows: [MirrorRow]
             let houseLine: String?
+            let sinceDate: Date?
             let refreshedAt: Date
             let flagOn: Bool
         }
@@ -170,6 +177,7 @@ struct WidgetSnapshotTests {
         #expect(mirror.movedRows[0].title == "message:m1 happened.")
         #expect(mirror.movedRows[0].route == MirrorRoute(kind: "thread", id: "t1"))
         #expect(mirror.houseLine == "Living Room")
+        #expect(mirror.sinceDate == referenceDate.addingTimeInterval(-604_800))
         #expect(mirror.flagOn)
     }
 
@@ -182,6 +190,22 @@ struct WidgetSnapshotTests {
         store.save(record(), now: written)
 
         #expect(try #require(store.loadWidgetSnapshot()).refreshedAt == written)
+    }
+
+    /// M6b rules the eyebrow `SINCE THU` and the empty line `Nothing moved
+    /// since Thursday.` Both day names come from the record's own window, so
+    /// the window's start has to leave the app — without it the widget falls
+    /// back to `What moved` / `Nothing moved.`, honest but not the ruled copy.
+    /// It is the window the app computed, never a day derived from "now".
+    @Test("the widget is given the window it should name, not one it invents")
+    func sinceDateIsTheRecordWindowStart() throws {
+        let store = fallbackStore()
+        let built = record()
+        store.save(built, now: referenceDate.addingTimeInterval(3600))
+
+        let snapshot = try #require(store.loadWidgetSnapshot())
+        #expect(snapshot.sinceDate == built.window.start)
+        #expect(snapshot.sinceDate != snapshot.refreshedAt)
     }
 
     @Test("the flag the widget reads is the one the mirror resolved, not a guess")
@@ -223,17 +247,53 @@ struct WidgetSnapshotTests {
     @Test("a record save carries the last known house line forward")
     func theHouseLineSurvivesARecordSave() throws {
         let store = fallbackStore()
-        store.noteHouseLine("Living Room", now: referenceDate)
+        store.noteHouseLine("Living Room")
         store.save(record(), now: referenceDate)
 
         #expect(try #require(store.loadWidgetSnapshot()).houseLine == "Living Room")
+    }
+
+    /// A house line is a decoration on a record that exists. Written with
+    /// nothing on disk it would mint a snapshot with no rows and no window,
+    /// which the widget reads as "the window held nothing" and draws as
+    /// `Nothing moved since …` — an assertion about a window the app has never
+    /// computed. The honest state there is the widget's no-data placeholder,
+    /// which only a MISSING file produces.
+    @Test("a house line alone never mints a snapshot out of nothing")
+    func aHouseLineAloneWritesNothing() throws {
+        let reloads = ReloadCounter()
+        let store = fallbackStore(reloads: reloads)
+
+        store.noteHouseLine("Living Room")
+
+        #expect(store.loadWidgetSnapshot() == nil, "the widget must see no file, not an empty one")
+        #expect(reloads.isEmpty)
+
+        // It is held, not dropped: the next record save carries it in.
+        store.save(record(), now: referenceDate)
+        #expect(try #require(store.loadWidgetSnapshot()).houseLine == "Living Room")
+    }
+
+    /// Sign-out deletes the record, the widget's file, and the room name the
+    /// Today surface last named — or the next account's first save would write
+    /// the previous account's room back onto the widget.
+    @Test("sign-out forgets the house line as well as the files")
+    func removeForgetsTheHeldHouseLine() throws {
+        let store = fallbackStore()
+        store.noteHouseLine("Living Room")
+        store.save(record(), now: referenceDate)
+
+        store.remove()
+        store.save(record(), now: referenceDate)
+
+        #expect(try #require(store.loadWidgetSnapshot()).houseLine == nil)
     }
 
     @Test("noteHouseLine keeps the rows already written")
     func noteHouseLineKeepsTheRows() throws {
         let store = fallbackStore()
         store.save(record(), now: referenceDate)
-        store.noteHouseLine("Kitchen", now: referenceDate)
+        store.noteHouseLine("Kitchen")
 
         let snapshot = try #require(store.loadWidgetSnapshot())
         #expect(snapshot.houseLine == "Kitchen")
@@ -251,7 +311,7 @@ struct WidgetSnapshotTests {
         #expect(reloads.count == 1)
         #expect(reloads.last == "PatinaHouseWidget")
 
-        store.noteHouseLine("Living Room", now: referenceDate)
+        store.noteHouseLine("Living Room")
         #expect(reloads.count == 2)
     }
 
@@ -259,10 +319,11 @@ struct WidgetSnapshotTests {
     func anUnchangedHouseLineDoesNotReload() throws {
         let reloads = ReloadCounter()
         let store = fallbackStore(reloads: reloads)
-        store.noteHouseLine("Living Room", now: referenceDate)
-        store.noteHouseLine("Living Room", now: referenceDate)
+        store.save(record(), now: referenceDate)
+        store.noteHouseLine("Living Room")
+        store.noteHouseLine("Living Room")
 
-        #expect(reloads.count == 1)
+        #expect(reloads.count == 2, "the save and the first line only")
     }
 
     /// The whole reason the payload carries no owner id: sign-out deletes it.

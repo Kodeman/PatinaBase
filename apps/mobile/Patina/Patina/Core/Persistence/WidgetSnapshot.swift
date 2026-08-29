@@ -87,8 +87,15 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     let movedRows: [WidgetRow]
     /// The house rail's first room, or nil when the house has none yet.
     let houseLine: String?
-    /// When the app last wrote this file. The widget prints its own eyebrow
-    /// from the record's window, and says this when the snapshot is stale.
+    /// The start of the record's MOVED window — the day the widget's eyebrow
+    /// names (`SINCE THU`, M6b) and the day its empty line names (`Nothing
+    /// moved since Thursday.`). It is the window the app actually computed,
+    /// never "now" and never a day the widget invents: without it X1 falls
+    /// back to `What moved` / `Nothing moved.`, which is honest but is not the
+    /// ruled copy.
+    let sinceDate: Date?
+    /// When the app last wrote this file. The widget says this when the
+    /// snapshot is stale.
     let refreshedAt: Date
     /// `house-widget`, as the app last resolved it. False — including a
     /// missing mirror on a first-ever launch — means the widget draws its
@@ -102,13 +109,21 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
             WidgetRow(id: $0.id, title: $0.title, date: $0.date, route: $0.route.flatMap(WidgetRouteToken.init))
         }
         self.houseLine = houseLine
+        self.sinceDate = record.window.start
         self.refreshedAt = refreshedAt
         self.flagOn = flagOn
     }
 
-    init(movedRows: [WidgetRow], houseLine: String?, refreshedAt: Date, flagOn: Bool) {
+    init(
+        movedRows: [WidgetRow],
+        houseLine: String?,
+        sinceDate: Date?,
+        refreshedAt: Date,
+        flagOn: Bool
+    ) {
         self.movedRows = movedRows
         self.houseLine = houseLine
+        self.sinceDate = sinceDate
         self.refreshedAt = refreshedAt
         self.flagOn = flagOn
     }

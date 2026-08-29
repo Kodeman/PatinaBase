@@ -84,7 +84,8 @@ final class FeatureFlags {
     func resolveAtLaunch() {
         resolveAtLaunch(
             arguments: ProcessInfo.processInfo.arguments,
-            provider: PostHogFeatureFlagProvider()
+            provider: PostHogFeatureFlagProvider(),
+            mirror: .appGroup
         )
     }
 
@@ -94,11 +95,15 @@ final class FeatureFlags {
     /// - Parameter mirror: where the resolved set is written for the widget to
     ///   read. The widget process has no PostHog SDK and never runs
     ///   `PatinaApp.init()`, so the App Group suite is the only way it can be
-    ///   told what `house-widget` resolved to.
+    ///   told what `house-widget` resolved to. It has **no default**: the
+    ///   default was `.appGroup`, which made every unit-test resolution write
+    ///   the real shared suite — the value the widget and
+    ///   `RecordSnapshotStore.shared` then read. Naming it at each call site is
+    ///   how a test run stays out of the flag the next walk sees.
     func resolveAtLaunch(
         arguments: [String],
         provider: FeatureFlagProvider,
-        mirror: FeatureFlagMirror = .appGroup
+        mirror: FeatureFlagMirror
     ) {
         guard !isResolved else { return }
         defer { write(to: mirror) }

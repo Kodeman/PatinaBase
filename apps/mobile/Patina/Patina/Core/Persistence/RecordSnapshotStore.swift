@@ -43,6 +43,11 @@ final class RecordSnapshotStore: Sendable {
     /// One writer at a time. `.atomic` already keeps a torn file off disk; the
     /// lock keeps two builds in one open from interleaving read and write.
     private let lock = NSLock()
+    /// The last house line the Today surface named, held for the case where it
+    /// arrives before any record has been built. Guarded by `lock`; cleared by
+    /// `remove()` so a sign-out cannot carry the last account's room name into
+    /// the next one.
+    nonisolated(unsafe) private var notedHouseLine: String?
     /// Injected so a test can count reloads without a widget being installed.
     /// Production hands `WidgetCenter` the one kind X1's widget declares.
     private let reloadWidgets: @Sendable (String) -> Void
@@ -91,58 +96,73 @@ final class RecordSnapshotStore: Sendable {
     ///   record refresh does not know the rail, and a blanked line would read
     ///   on the widget as a house with no rooms.
     func save(_ record: HouseRecord, houseLine: String? = nil, now: Date = Date()) {
-        lock.lock()
-        let encoder = Self.encoder()
-        do {
-            try fileManager.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try encoder.encode(record).write(to: fileURL, options: .atomic)
-        } catch {
-            PatinaLog.sync.error(
-                "[Record] snapshot save failed at \(self.fileURL.path): \(error.localizedDescription)"
+        locked {
+            let encoder = Self.encoder()
+            do {
+                try fileManager.createDirectory(
+                    at: fileURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try encoder.encode(record).write(to: fileURL, options: .atomic)
+            } catch {
+                PatinaLog.sync.error(
+                    "[Record] snapshot save failed at \(self.fileURL.path): \(error.localizedDescription)"
+                )
+            }
+            let line = houseLine ?? notedHouseLine ?? readWidgetSnapshot()?.houseLine
+            notedHouseLine = line
+            writeWidgetSnapshot(
+                WidgetSnapshot(
+                    record: record,
+                    houseLine: line,
+                    refreshedAt: now,
+                    flagOn: flagIsOn()
+                )
             )
         }
-        writeWidgetSnapshot(
-            WidgetSnapshot(
-                record: record,
-                houseLine: houseLine ?? readWidgetSnapshot()?.houseLine,
-                refreshedAt: now,
-                flagOn: flagIsOn()
-            )
-        )
-        lock.unlock()
         reloadWidgets(WidgetSnapshot.widgetKind)
     }
 
     /// The house rail's first room, as the Today surface knows it. Kept in the
     /// widget file itself, so it survives a cold launch without a second store.
-    func noteHouseLine(_ line: String?, now: Date = Date()) {
-        lock.lock()
-        let current = readWidgetSnapshot()
-        guard current?.houseLine != line else {
-            lock.unlock()
-            return
-        }
-        writeWidgetSnapshot(
-            WidgetSnapshot(
-                movedRows: current?.movedRows ?? [],
-                houseLine: line,
-                refreshedAt: current?.refreshedAt ?? now,
-                flagOn: flagIsOn()
+    ///
+    /// A house line is a decoration on a record that exists — never a reason to
+    /// create one. With nothing on disk this remembers the line and writes
+    /// nothing: a snapshot minted here would carry no rows and no window, which
+    /// the widget draws as "Nothing moved since …" — an assertion about a
+    /// window the app has never computed. The next `save` carries the line in.
+    func noteHouseLine(_ line: String?) {
+        let changed = locked { () -> Bool in
+            notedHouseLine = line
+            guard let current = readWidgetSnapshot(), current.houseLine != line else { return false }
+            writeWidgetSnapshot(
+                WidgetSnapshot(
+                    movedRows: current.movedRows,
+                    houseLine: line,
+                    sinceDate: current.sinceDate,
+                    refreshedAt: current.refreshedAt,
+                    flagOn: flagIsOn()
+                )
             )
-        )
-        lock.unlock()
-        reloadWidgets(WidgetSnapshot.widgetKind)
+            return true
+        }
+        if changed { reloadWidgets(WidgetSnapshot.widgetKind) }
     }
 
     /// What the widget would read right now. Product code writes it; this is
     /// here so a test can read the file back through the same coder.
     func loadWidgetSnapshot() -> WidgetSnapshot? {
+        locked { readWidgetSnapshot() }
+    }
+
+    /// Every mutation runs inside this, and every `reloadWidgets` outside it —
+    /// a reload delivered under the lock re-enters through the widget's own
+    /// read, and a manual `unlock()` in a body this size is one future `guard`
+    /// away from deadlocking every record write in the app.
+    private func locked<T>(_ body: () -> T) -> T {
         lock.lock()
         defer { lock.unlock() }
-        return readWidgetSnapshot()
+        return body()
     }
 
     // MARK: - The widget's file (caller holds the lock)
@@ -195,26 +215,29 @@ final class RecordSnapshotStore: Sendable {
     /// `RecordOwner` exists to prevent, in a process that cannot ask who is
     /// signed in. Deletion here is why the widget payload carries no owner id.
     func remove() {
-        lock.lock()
-        try? fileManager.removeItem(at: fileURL)
-        try? fileManager.removeItem(at: widgetFileURL)
-        lock.unlock()
+        locked {
+            try? fileManager.removeItem(at: fileURL)
+            try? fileManager.removeItem(at: widgetFileURL)
+            // The held line is the last account's room name; it is part of what
+            // sign-out deletes, or the next save would write it back.
+            notedHouseLine = nil
+        }
         reloadWidgets(WidgetSnapshot.widgetKind)
     }
 
     /// nil when nothing has been saved, or when what was saved no longer
     /// decodes — a stale shape must not stop the app from launching.
     func load() -> HouseRecord? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-        do {
-            return try Self.decoder().decode(HouseRecord.self, from: data)
-        } catch {
-            PatinaLog.sync.debug(
-                "[Record] snapshot could not be decoded and was ignored: \(error.localizedDescription)"
-            )
-            return nil
+        locked {
+            guard let data = try? Data(contentsOf: fileURL) else { return nil }
+            do {
+                return try Self.decoder().decode(HouseRecord.self, from: data)
+            } catch {
+                PatinaLog.sync.debug(
+                    "[Record] snapshot could not be decoded and was ignored: \(error.localizedDescription)"
+                )
+                return nil
+            }
         }
     }
 }

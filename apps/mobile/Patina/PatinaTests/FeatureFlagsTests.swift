@@ -31,16 +31,29 @@ struct FeatureFlagsTests {
         }
     }
 
+    /// A throwaway suite per call, so a unit run never writes the REAL
+    /// `group.cloud.patina.app` mirror — the one `RecordSnapshotStore.shared`
+    /// and the widget read. `resolveAtLaunch(arguments:provider:mirror:)` has
+    /// no default for `mirror` precisely so the compiler finds every one of
+    /// these.
+    private func freshDefaults() throws -> UserDefaults {
+        let suite = "patina.tests.flags.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
+    }
+
     // MARK: - Precedence
 
     @Test("a DEBUG launch-argument override wins over PostHog")
-    func launchArgumentOverrideWins() {
+    func launchArgumentOverrideWins() throws {
         let flags = FeatureFlags()
         let provider = StubProvider(enabled: ["house-first", "direct-orders", "house-widget"])
 
         flags.resolveAtLaunch(
             arguments: ["Patina", FeatureFlags.launchArgument, "house-first,house-widget"],
-            provider: provider
+            provider: provider,
+            mirror: .testing(try freshDefaults())
         )
 
         #expect(flags.isOn(.houseFirst))
@@ -52,11 +65,12 @@ struct FeatureFlagsTests {
     }
 
     @Test("without an override the PostHog value is used")
-    func postHogValueIsUsedWhenNoOverride() {
+    func postHogValueIsUsedWhenNoOverride() throws {
         let flags = FeatureFlags()
         let provider = StubProvider(enabled: ["direct-orders"])
 
-        flags.resolveAtLaunch(arguments: ["Patina"], provider: provider)
+        flags.resolveAtLaunch(arguments: ["Patina"], provider: provider,
+                              mirror: .testing(try freshDefaults()))
 
         #expect(flags.isOn(.directOrders))
         #expect(!flags.isOn(.houseFirst))
@@ -64,10 +78,11 @@ struct FeatureFlagsTests {
     }
 
     @Test("a source with no cached payload resolves every flag to false")
-    func noCachedPayloadResolvesToFalse() {
+    func noCachedPayloadResolvesToFalse() throws {
         let flags = FeatureFlags()
 
-        flags.resolveAtLaunch(arguments: ["Patina"], provider: StubProvider())
+        flags.resolveAtLaunch(arguments: ["Patina"], provider: StubProvider(),
+                              mirror: .testing(try freshDefaults()))
 
         #expect(flags.isResolved)
         for flag in FeatureFlags.Flag.allCases {
@@ -83,11 +98,12 @@ struct FeatureFlagsTests {
     /// asynchronous here — a detached task, a bounded wait on
     /// `didReceiveFeatureFlags` — leaves `isResolved` false at this line.
     @Test("resolution is complete by the time the launch entry point returns")
-    func resolutionIsCompleteWhenTheCallReturns() {
+    func resolutionIsCompleteWhenTheCallReturns() throws {
         let flags = FeatureFlags()
         let provider = StubProvider(enabled: ["house-first"])
 
-        flags.resolveAtLaunch(arguments: ["Patina"], provider: provider)
+        flags.resolveAtLaunch(arguments: ["Patina"], provider: provider,
+                              mirror: .testing(try freshDefaults()))
 
         #expect(flags.isResolved)
         #expect(flags.isOn(.houseFirst))
@@ -118,16 +134,18 @@ struct FeatureFlagsTests {
     // MARK: - Held for the session
 
     @Test("the resolved value is held even if PostHog changes afterwards")
-    func resolvedValueIsHeldForTheSession() {
+    func resolvedValueIsHeldForTheSession() throws {
         let flags = FeatureFlags()
         let provider = StubProvider(enabled: ["house-first"])
 
-        flags.resolveAtLaunch(arguments: ["Patina"], provider: provider)
+        flags.resolveAtLaunch(arguments: ["Patina"], provider: provider,
+                              mirror: .testing(try freshDefaults()))
         #expect(flags.isOn(.houseFirst))
         let readsAfterFirstResolution = provider.readCount
 
         provider.enabled = []
-        flags.resolveAtLaunch(arguments: ["Patina"], provider: provider)
+        flags.resolveAtLaunch(arguments: ["Patina"], provider: provider,
+                              mirror: .testing(try freshDefaults()))
 
         #expect(flags.isOn(.houseFirst), "a second resolution must not overwrite the held value")
         #expect(provider.readCount == readsAfterFirstResolution, "resolution must happen exactly once")
@@ -136,11 +154,12 @@ struct FeatureFlagsTests {
     // MARK: - UI testing
 
     @Test("--uitesting keeps flags off unless the launch argument names them")
-    func uiTestingKeepsFlagsOffUnlessNamed() {
+    func uiTestingKeepsFlagsOffUnlessNamed() throws {
         let off = FeatureFlags()
         off.resolveAtLaunch(
             arguments: ["Patina", "--uitesting"],
-            provider: StubProvider(enabled: ["house-first", "direct-orders", "house-widget"])
+            provider: StubProvider(enabled: ["house-first", "direct-orders", "house-widget"]),
+            mirror: .testing(try freshDefaults())
         )
         for flag in FeatureFlags.Flag.allCases {
             #expect(!off.isOn(flag), "\(flag.rawValue) was on under --uitesting")
@@ -149,7 +168,8 @@ struct FeatureFlagsTests {
         let named = FeatureFlags()
         named.resolveAtLaunch(
             arguments: ["Patina", "--uitesting", FeatureFlags.launchArgument, "house-first"],
-            provider: StubProvider()
+            provider: StubProvider(),
+            mirror: .testing(try freshDefaults())
         )
         #expect(named.isOn(.houseFirst))
         #expect(!named.isOn(.directOrders))
@@ -167,11 +187,12 @@ struct FeatureFlagsTests {
     }
 
     @Test("an unknown token in the override list is ignored")
-    func unknownOverrideTokenIsIgnored() {
+    func unknownOverrideTokenIsIgnored() throws {
         let flags = FeatureFlags()
         flags.resolveAtLaunch(
             arguments: ["Patina", FeatureFlags.launchArgument, "not-a-flag, house-first "],
-            provider: StubProvider()
+            provider: StubProvider(),
+            mirror: .testing(try freshDefaults())
         )
         #expect(flags.isOn(.houseFirst), "whitespace around a named flag must not defeat it")
         #expect(!flags.isOn(.directOrders))
