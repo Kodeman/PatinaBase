@@ -111,6 +111,19 @@ public final class AuthService {
         return accountChanged
     }
 
+    /// Mark auth state as ready after the first event and fan out to every
+    /// awaiting caller. Its own function so the listener stays under the
+    /// branch budget `cyclomatic_complexity` sets.
+    private func markAuthStateReady() {
+        guard !isAuthStateReady else { return }
+        isAuthStateReady = true
+        let waiting = authReadyContinuations
+        authReadyContinuations.removeAll()
+        for continuation in waiting {
+            continuation.resume()
+        }
+    }
+
     private func startAuthStateListener() {
         authStateTask = Task { @MainActor in
             for await (event, session) in supabase.auth.authStateChanges {
@@ -125,16 +138,7 @@ public final class AuthService {
                     Self.settleLocalStore(for: user.id.uuidString)
                 }
 
-                // Mark auth state as ready after first event and fan out
-                // to every awaiting caller.
-                if !self.isAuthStateReady {
-                    self.isAuthStateReady = true
-                    let waiting = self.authReadyContinuations
-                    self.authReadyContinuations.removeAll()
-                    for continuation in waiting {
-                        continuation.resume()
-                    }
-                }
+                self.markAuthStateReady()
 
                 // Event-agnostic hydration: whenever the stream yields a
                 // session with a user, make sure ProfileService and

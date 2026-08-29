@@ -31,12 +31,12 @@ struct SessionIsolationTests {
 
     @Test("a token refresh is not an account change; a sign-out and a sign-in are")
     func theSeamOnlyFiresOnARealChange() {
-        let a = "AAAA-1111"
-        let b = "BBBB-2222"
-        #expect(AuthService.isAccountChange(previous: nil, incoming: a))
-        #expect(!AuthService.isAccountChange(previous: a, incoming: a))
-        #expect(AuthService.isAccountChange(previous: a, incoming: b))
-        #expect(AuthService.isAccountChange(previous: a, incoming: nil))
+        let accountA = "AAAA-1111"
+        let accountB = "BBBB-2222"
+        #expect(AuthService.isAccountChange(previous: nil, incoming: accountA))
+        #expect(!AuthService.isAccountChange(previous: accountA, incoming: accountA))
+        #expect(AuthService.isAccountChange(previous: accountA, incoming: accountB))
+        #expect(AuthService.isAccountChange(previous: accountA, incoming: nil))
         #expect(!AuthService.isAccountChange(previous: nil, incoming: nil))
     }
 

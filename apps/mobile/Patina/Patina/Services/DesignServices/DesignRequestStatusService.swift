@@ -479,37 +479,6 @@ public final class DesignRequestStatusService {
         await task.value
     }
 
-    private func performRefresh(token: Int) async {
-        guard AuthService.shared.isAuthenticated else {
-            requests = []
-            hasLoaded = false
-            // A dismissal collapses the card for this reader's session. When
-            // the session ends the collapse ends with it — otherwise "session"
-            // quietly means the process, and signing back in returns a card
-            // still hidden.
-            sessionDismissedLeadIds = []
-            return
-        }
-
-        if requests.isEmpty {
-            // Instant paint on cold launch; the server fetch enriches below.
-            hydrateFromLocal()
-        }
-
-        do {
-            let rows = try await fetchLeadRows()
-            let reconciled = await reconcile(rows)
-            // The account changed while the read was in the air — these leads
-            // are the previous account's.
-            guard token == refreshToken else { return }
-            requests = reconciled
-            hasLoaded = true
-        } catch {
-            guard token == refreshToken else { return }
-            if !hasLoaded { hydrateFromLocal() }
-        }
-    }
-
     /// Drop the previous account's requests — and with them `liveLead`, which
     /// is the value W5's pre-emption and the thread opener both read.
     ///
@@ -880,6 +849,45 @@ public final class DesignRequestStatusService {
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return fractional.date(from: string) ?? ISO8601DateFormatter().date(from: string)
+    }
+}
+
+// MARK: - The fetch behind `refresh()`
+
+extension DesignRequestStatusService {
+
+    /// The body of one refresh. `refresh()` owns who runs it and when a second
+    /// ask joins the first; this owns what it does. Out of the class body only
+    /// because `type_body_length` is a gate on this branch.
+    private func performRefresh(token: Int) async {
+        guard AuthService.shared.isAuthenticated else {
+            requests = []
+            hasLoaded = false
+            // A dismissal collapses the card for this reader's session. When
+            // the session ends the collapse ends with it — otherwise "session"
+            // quietly means the process, and signing back in returns a card
+            // still hidden.
+            sessionDismissedLeadIds = []
+            return
+        }
+
+        if requests.isEmpty {
+            // Instant paint on cold launch; the server fetch enriches below.
+            hydrateFromLocal()
+        }
+
+        do {
+            let rows = try await fetchLeadRows()
+            let reconciled = await reconcile(rows)
+            // The account changed while the read was in the air — these leads
+            // are the previous account's.
+            guard token == refreshToken else { return }
+            requests = reconciled
+            hasLoaded = true
+        } catch {
+            guard token == refreshToken else { return }
+            if !hasLoaded { hydrateFromLocal() }
+        }
     }
 }
 
