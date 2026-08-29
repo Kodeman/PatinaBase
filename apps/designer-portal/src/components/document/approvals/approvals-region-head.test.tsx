@@ -142,7 +142,27 @@ describe('Client approvals region head', () => {
     ).toHaveAttribute('data-action-variant', 'inked');
   });
 
-  it('renders a folded seam with the no-lead, no-approvals summary by default', () => {
+  it('arrives OPEN with no lead and no approvals — the default quiets a stop, it never folds it', () => {
+    // R127 OD-10 (W3-L5). This case read "renders a folded seam … by default".
+    // `approvals` is a STOP key, so its derived default is DENSITY now, not a
+    // fold: the region arrives open and quiet, head on the paper. The seam it
+    // used to arrive wearing is what the proposal names as the visible
+    // first-screen consequence of the change (§4), and the seam's own claims
+    // are kept directly below, under the one cause a stop can still have.
+    renderDocument();
+
+    expect(document.querySelector('[data-fold-seam]')).toBeNull();
+    expect(document.querySelector('[data-region-head]')).not.toBeNull();
+    expect(
+      screen.getByRole('heading', { name: 'Client approvals' }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders a folded seam with the no-lead, no-approvals summary when she folded it herself', () => {
+    // The seam's claims, whole: its summary line and its `aria-expanded`. Only
+    // the cause moved — a stop stands folded because she said so (OD-10), and
+    // a choice remembered from before R127 still reads exactly as it did.
+    window.localStorage.setItem('patina:doc-fold:project-1:approvals', '1');
     renderDocument();
 
     expect(
@@ -156,6 +176,7 @@ describe('Client approvals region head', () => {
   });
 
   it('round-trips the seam: unfolding mounts the head and body', () => {
+    window.localStorage.setItem('patina:doc-fold:project-1:approvals', '1');
     renderDocument();
 
     const seam = screen.getByRole('button', { name: /client approvals/i });

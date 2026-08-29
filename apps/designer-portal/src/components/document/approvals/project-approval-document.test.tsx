@@ -140,18 +140,24 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
-/** The Client approvals region defaults folded shut once its data settles
- *  with no open work (no lead + no approvals, or every approval sealed).
- *  Tests that read the record body against exactly that data must unfold
- *  the seam first — the same act a designer would take. */
-const unfoldApprovals = () => {
-  fireEvent.click(screen.getByRole('button', { name: /client approvals/i }));
+/** R127 OD-10 (W3-L5). The Client approvals region USED to default folded shut
+ *  once its data settled with no open work (no lead + no approvals, or every
+ *  approval sealed), so tests that read the record body against exactly that
+ *  data had to unfold the seam first. `approvals` is a STOP key now: a derived
+ *  default quiets it, never folds it, so the body those tests read is already
+ *  on the paper. The act each of them took is replaced by the assertion that
+ *  there is nothing left to take — the region arrives open, head and all. */
+const approvalsArriveOpen = () => {
+  expect(document.querySelector('[data-fold-seam]')).toBeNull();
+  expect(
+    document.querySelector('[data-region-head="approvals-head"]'),
+  ).not.toBeNull();
 };
 
 describe('ProjectApprovalDocument authority and composer', () => {
   it('assigns only the exact project client with first-write CAS', async () => {
     renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
     fireEvent.click(
       screen.getByRole('button', { name: 'Assign project client' }),
     );
@@ -320,7 +326,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       value: scrollIntoView,
     });
     const { rerender } = renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     window.dispatchEvent(
       new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
@@ -606,7 +612,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       },
     ];
     renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     window.dispatchEvent(
       new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
@@ -767,7 +773,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
         ]}
       />,
     );
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     expect(
       screen.queryByRole('button', { name: 'Supersede with new artifact' }),
@@ -891,7 +897,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       },
     ];
     const { container } = renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     expect(
       container.querySelector('[data-gate-state="sealed"]'),
@@ -936,7 +942,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       value: scrollIntoView,
     });
     renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     const link = screen.getByRole('button', {
       name: 'Edition 2 superseded — view',
@@ -1041,7 +1047,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       },
     ];
     renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     expect(
       screen.getByText(`Edition 2 · frozen at publish · proof ${'a'.repeat(8)}`),

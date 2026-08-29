@@ -220,7 +220,11 @@ describe('CareBand fold', () => {
     expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
   });
 
-  it('defaults folded to a quiet seam on a non-install phase with no remembered choice', () => {
+  it('arrives OPEN on a non-install phase with no remembered choice — the default quiets a stop, it never folds it', () => {
+    // R127 OD-10 (W3-L5). This case read "defaults folded to a quiet seam on a
+    // non-install phase with no remembered choice". `care` is a STOP key, so a
+    // derived default is DENSITY now, not a fold: with no remembered choice the
+    // band arrives open and quiet, its head and its leader on the paper.
     useProjectV2.mockReturnValue(
       settled({
         id: 'project-1',
@@ -233,6 +237,31 @@ describe('CareBand fold', () => {
         start_date: null,
       }),
     );
+
+    render(<CareBand projectId="project-1" />);
+
+    expect(document.querySelector('[data-fold-seam]')).toBeNull();
+    expect(document.querySelector('[data-region-head]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+  });
+
+  it('folds to a quiet seam on a non-install phase when she folded it herself, and round-trips', () => {
+    // The seam's claims, kept whole under the one cause a stop can still have:
+    // her own remembered choice (OD-10). The round trip back to the body is
+    // unchanged.
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'active',
+        current_phase: 'design_development',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+    window.localStorage.setItem('patina:doc-fold:project-1:care', '1');
 
     render(<CareBand projectId="project-1" />);
 
@@ -318,6 +347,9 @@ describe('CareBand running index root (W2 C-2)', () => {
         start_date: null,
       }),
     );
+    // After OD-10 a stop reaches the seam branch only through her own fold; the
+    // branch itself, and the root it must still carry, are unchanged.
+    window.localStorage.setItem('patina:doc-fold:project-1:care', '1');
 
     const { container } = render(<CareBand projectId="project-1" indexRoot />);
 

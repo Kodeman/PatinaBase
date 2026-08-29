@@ -180,10 +180,13 @@ describe('the schedule ceremony', () => {
 
     mockItemsError = false;
     renderSection();
-    // A settled, genuinely empty schedule defaults its region to folded (the
-    // seam reads "N rooms · no lines yet"); the guided empty state lives in
-    // the body, so unfold first to reach it.
-    fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
+    // R127 OD-10 (W3-L5). A settled, genuinely empty schedule USED to default
+    // its region to folded (the seam read "N rooms · no lines yet"), so the
+    // guided empty state in the body had to be unfolded to. `ffe` is a STOP
+    // key now — a derived default quiets it, never folds it — so the guided
+    // empty state is already on the paper, with no seam standing in front of
+    // it. The claim is unchanged: a successful empty schedule GUIDES.
+    expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
     expect(screen.getByText('Build the FF&E schedule')).toBeVisible();
   });
 

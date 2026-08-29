@@ -344,25 +344,26 @@ describe('the Delivery table, tooled', () => {
       );
     });
 
-    it('stands the ticket above the table, and the lift still leads it', () => {
-      // B2-L4's acceptance on the PAGE's own composition: the ticket heads the
-      // table, the release lift still leads the table's body, and the money
-      // seam still stands — the Money row is the seam's index, not its
-      // replacement.
+    it('stands the band above the table, and the lift still leads it', () => {
+      // B2-L4's acceptance on the PAGE's own composition, carried onto R127's
+      // band (W3-L5): the band heads the table, the release lift still leads
+      // the table's body, and the money seam still stands — the band's line 1
+      // is the seam's index, not its replacement. Only the selector moved; the
+      // three ordering claims and the one-map claim are unchanged.
       mockReleaseOffered = true;
       const { container } = render(<DocumentPage params={params} />);
 
-      const ticket = container.querySelector('[data-job-ticket]')!;
+      const band = container.querySelector('[data-lens-band]')!;
       const table = container.querySelector('[data-table="delivery"]')!;
       const lift = container.querySelector('[data-release-lift]')!;
       const money = container.querySelector('[data-index-region="money"]')!;
-      expect(ticket).not.toBeNull();
+      expect(band).not.toBeNull();
       const order = (el: Element) =>
         Array.from(container.querySelectorAll('*')).indexOf(el);
-      expect(order(ticket)).toBeLessThan(order(table));
-      expect(order(ticket)).toBeLessThan(order(lift));
+      expect(order(band)).toBeLessThan(order(table));
+      expect(order(band)).toBeLessThan(order(lift));
       expect(order(lift)).toBeLessThan(order(money));
-      expect(container.querySelectorAll('[data-job-ticket]')).toHaveLength(1);
+      expect(container.querySelectorAll('[data-lens-band]')).toHaveLength(1);
     });
 
     it('inks exactly one release leader on the page — never two', () => {
