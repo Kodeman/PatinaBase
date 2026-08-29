@@ -80,6 +80,18 @@ async function extractFromFixture(file: string, url: string): Promise<ExtractedP
   }
 }
 
+interface FieldFlags {
+  name: boolean;
+  price: boolean;
+  description: boolean;
+  brand: boolean;
+  dimensions: boolean;
+  materials: boolean;
+  colors: boolean;
+  finish: boolean;
+  images: boolean;
+}
+
 interface FieldVisibilityEntry {
   file: string;
   url: string;
@@ -95,16 +107,20 @@ interface FieldVisibilityEntry {
     imagesCount: number;
   };
   visibleInDom: {
-    name: boolean;
-    price: boolean;
-    description: boolean;
-    brand: boolean;
-    dimensions: boolean;
-    materials: boolean;
-    colors: boolean;
-    finish: boolean;
-    images: boolean;
+    /** The field's row (Label + FieldBadge) is present in the DOM, whether
+     * or not it currently carries a value — e.g. Dimensions/Materials/Finish
+     * render this unconditionally, showing a "+ Add …" button in place of
+     * the (hidden) inputs when the field is empty. */
+    rowPresent: FieldFlags;
+    /** The field's actual value is visible — a populated input, a chip, or
+     * (for name/price/description/brand/images) the same check the W0
+     * baseline used. False whenever the row shows its "+ Add …" fallback. */
+    valueVisible: FieldFlags;
   };
+  /** == valueVisible — kept as a flat alias so this stays comparable to the
+   * W0 baseline report, whose single `visibleInDom` flag meant "value
+   * visible", not merely "row present". */
+  visibleFields: FieldFlags;
   routeRegion: {
     selectCount: number;
     inputCount: number;
@@ -159,6 +175,25 @@ describe('field visibility on the C2 record screen', () => {
       // plain substring check against data.manufacturer).
       const brandVisible = !!screen.queryByText('Brand');
 
+      // CL-R1 (capture-launch/w2-d4): RecordRegion now renders Dimensions,
+      // Materials, and Finish rows between Price and Description. Each row
+      // always renders its Label + FieldBadge (rowPresent); when the field
+      // has a value the row shows its editable inputs (valueVisible),
+      // otherwise a "+ Add …" button stands in for the (hidden) inputs.
+      const dimensionsRowPresent = !!screen.queryByText('Dimensions');
+      const materialsRowPresent = !!screen.queryByText('Materials');
+      const finishRowPresent = !!screen.queryByText('Finish');
+
+      // Populated-value checks: a real Width input mounted (dimensions), at
+      // least one material chip's remove button (materials — generic
+      // aria-label prefix rather than matching a specific material's name,
+      // which risks a false positive against unrelated description copy),
+      // and the Finish input carrying focusable content.
+      const dimensionsValueVisible = !!screen.queryByLabelText('Width');
+      const materialsValueVisible =
+        container.querySelectorAll('button[aria-label^="Remove "]').length > 0;
+      const finishValueVisible = !!screen.queryByLabelText('Finish');
+
       const dimensionFieldCount = data.dimensions
         ? Object.entries(data.dimensions).filter(
             ([k, v]) => k !== 'unit' && k !== 'raw' && v !== null && v !== undefined
@@ -188,30 +223,49 @@ describe('field visibility on the C2 record screen', () => {
           imagesCount: data.images?.length ?? 0,
         },
         visibleInDom: {
+          rowPresent: {
+            name: !!screen.queryByText('Name'),
+            price: !!screen.queryByText('Price'),
+            description: !!screen.queryByText('Description'),
+            brand: brandVisible,
+            dimensions: dimensionsRowPresent,
+            materials: materialsRowPresent,
+            // Colors remain untouched by CL-R1 (not ruled) — RecordRegion
+            // has no Colors row at all, present or otherwise.
+            colors: false,
+            finish: finishRowPresent,
+            // The hero image slot (button + placeholder-or-<img>) always
+            // renders, populated or not.
+            images: true,
+          },
+          valueVisible: {
+            name: !!nameInput,
+            price: !!priceInput,
+            description: !!descriptionTextarea,
+            brand: brandVisible,
+            // DWR's fixture extracts 0 dimension fields (dimensionFieldCount:
+            // 0 below) — its Dimensions row shows "+ Add dimensions" rather
+            // than populated inputs, so dimensionsValueVisible is false
+            // there even though dimensionsRowPresent is true. 1stDibs
+            // extracts 3. Both fixtures have materials, so
+            // materialsValueVisible is true for both. Neither extracts a
+            // finish, so finishValueVisible is false for both.
+            dimensions: dimensionsValueVisible,
+            materials: materialsValueVisible,
+            colors: false,
+            finish: finishValueVisible,
+            images: container.querySelectorAll('img[src]').length > 0,
+          },
+        },
+        visibleFields: {
           name: !!nameInput,
           price: !!priceInput,
           description: !!descriptionTextarea,
           brand: brandVisible,
-          // Dimensions, materials, colors, and finish have no rendered value
-          // anywhere on C2: RecordRegion renders inputs only for
-          // name/price/description plus a plain-text Brand row; InsightRegion
-          // and RouteCommitRegion don't touch these fields at all. The only
-          // DOM trace of them is
-          // InsightRegion's flagged-field-key summary line ("materials,
-          // colors, finish, dimensions need a look") when the field is
-          // missing — that's the field's *key name* appearing as a flag
-          // label, not its extracted *value*, so it does not count as
-          // "visible" here. Hard-coded false rather than pattern-matched:
-          // a substring scan against bodyText produced false positives in
-          // testing (real vendor description copy incidentally contains
-          // words that also appear as material/color names or the brand
-          // name — e.g. DWR's own description text reads "...at Design
-          // Within Reach.", and 1stDibs' product name contains "Rosewood",
-          // one of its own extracted materials).
-          dimensions: false,
-          materials: false,
+          dimensions: dimensionsValueVisible,
+          materials: materialsValueVisible,
           colors: false,
-          finish: false,
+          finish: finishValueVisible,
           images: container.querySelectorAll('img[src]').length > 0,
         },
         routeRegion,
@@ -237,7 +291,7 @@ afterAll(() => {
     JSON.stringify(
       {
         generatedAt: new Date().toISOString(),
-        lane: 'capture-launch/w0-d1',
+        lane: 'capture-launch/w2-d4',
         notes: [
           'RecordScreen (RecordRegion + InsightRegion + RouteCommitRegion) mounted ' +
             'directly under <CaptureProvider initial={...}> in state C2 — the same seam ' +
@@ -249,6 +303,12 @@ afterAll(() => {
             'region select/input counts reflect actual render output; supabase is mocked via ' +
             'src/__tests__/mocks/supabase.ts so those queries resolve to empty projects/styles ' +
             'without a network call.',
+          'CL-R1 fix pass (2026-08-29): visibleInDom now splits rowPresent (the Label + ' +
+            'FieldBadge is in the DOM, regardless of value) from valueVisible (a populated ' +
+            'input/chip is in the DOM) for dimensions/materials/finish, since those rows can be ' +
+            'present-but-empty (a "+ Add …" button standing in for the hidden inputs). ' +
+            'visibleFields is kept as a flat alias of valueVisible so this stays comparable to ' +
+            'the W0 baseline report, whose single visibleInDom flag meant "value visible".',
         ],
         cases: report,
       },
