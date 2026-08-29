@@ -1,0 +1,1189 @@
+<title>Capture Persona Findings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --paper:      #e7e5db;
+    --paper-2:    #f1efe7;
+    --paper-3:    #dcd9cb;
+    --ink:        #211e18;
+    --ink-2:      #454034;
+    --ink-soft:   #756e5e;
+    --line:       #c9c3b1;
+    --line-soft:  #d9d4c4;
+    --verdigris:  #3c7c6c;
+    --brass:      #a07c38;
+    --rust:       #9a5a3e;
+    --ok-bg:      #d7e3de;
+    --part-bg:    #e8dfc9;
+    --bad-bg:     #ebd8ce;
+    --shadow:     0 1px 0 #d2cebd;
+    --measure:    68ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #191713;
+      --paper-2:    #211f19;
+      --paper-3:    #2a2720;
+      --ink:        #e7e5db;
+      --ink-2:      #c6c0b1;
+      --ink-soft:   #8e8776;
+      --line:       #3a352b;
+      --line-soft:  #302c24;
+      --verdigris:  #74b6a3;
+      --brass:      #cba463;
+      --rust:       #cd876c;
+      --ok-bg:      #21332d;
+      --part-bg:    #332b18;
+      --bad-bg:     #35231a;
+      --shadow:     0 1px 0 #241f19;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #191713;
+    --paper-2:    #211f19;
+    --paper-3:    #2a2720;
+    --ink:        #e7e5db;
+    --ink-2:      #c6c0b1;
+    --ink-soft:   #8e8776;
+    --line:       #3a352b;
+    --line-soft:  #302c24;
+    --verdigris:  #74b6a3;
+    --brass:      #cba463;
+    --rust:       #cd876c;
+    --ok-bg:      #21332d;
+    --part-bg:    #332b18;
+    --bad-bg:     #35231a;
+    --shadow:     0 1px 0 #241f19;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink-2);
+    font-family: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4rem;
+  }
+
+  h1, h2, h3 {
+    font-family: Fraunces, Georgia, "Times New Roman", serif;
+    color: var(--ink);
+    font-weight: 600;
+    text-wrap: balance;
+    line-height: 1.15;
+    margin: 0;
+  }
+
+  h1 { font-size: clamp(2.1rem, 5vw, 3.1rem); letter-spacing: -0.01em; }
+  h2 { font-size: clamp(1.5rem, 3vw, 1.95rem); }
+  h3 { font-size: 1.05rem; font-weight: 600; }
+
+  p { margin: 0; max-width: var(--measure); }
+
+  a { color: var(--verdigris); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--verdigris); outline-offset: 2px; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+
+  code, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+  }
+  code {
+    background: var(--paper-3);
+    border-radius: 2px;
+    padding: 0.08em 0.32em;
+    color: var(--ink);
+  }
+
+  /* ---- masthead ---- */
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 2.25rem;
+  }
+  .masthead .lede { font-size: 1.08rem; max-width: 62ch; }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.5rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  /* ---- section frame ---- */
+  section { display: flex; flex-direction: column; gap: 1.5rem; }
+  .sec-head { display: flex; flex-direction: column; gap: 0.4rem; }
+
+  /* ---- stand: findings list ---- */
+  .stand { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--line-soft); }
+  .stand > li {
+    display: grid;
+    grid-template-columns: 8.5rem 1fr;
+    gap: 0.35rem 1.5rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--line-soft);
+    list-style: none;
+  }
+  .stand .tag {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding-top: 0.28rem;
+  }
+  .stand .tag.is-ok   { color: var(--verdigris); }
+  .stand .tag.is-part { color: var(--brass); }
+  .stand .tag.is-bad  { color: var(--rust); }
+  .stand p { max-width: 70ch; }
+  .stand strong { color: var(--ink); font-weight: 600; }
+  @media (max-width: 560px) {
+    .stand > li { grid-template-columns: 1fr; }
+  }
+
+  /* ---- personas ---- */
+  .panel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1.25rem;
+  }
+  .persona {
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .persona img {
+    width: 100%;
+    height: 118px;
+    object-fit: cover;
+    object-position: top center;
+    display: block;
+    border-bottom: 1px solid var(--line);
+    filter: saturate(0.82);
+  }
+  .persona .body { padding: 1rem 1.05rem 1.15rem; display: flex; flex-direction: column; gap: 0.7rem; }
+  .persona h3 { display: flex; align-items: baseline; gap: 0.5rem; }
+  .persona h3 .who { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.68rem; color: var(--ink-soft); letter-spacing: 0.1em; }
+  .persona dl { margin: 0; display: flex; flex-direction: column; gap: 0.55rem; }
+  .persona dt {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
+  }
+  .persona dd { margin: 0.1rem 0 0; font-size: 0.88rem; line-height: 1.5; }
+  .persona dd.fix { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.72rem; color: var(--ink-soft); line-height: 1.55; }
+
+  /* ---- tables ---- */
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; background: var(--paper-2); }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.83rem;
+    font-variant-numeric: tabular-nums;
+  }
+  thead th {
+    text-align: left;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+    color: var(--ink-soft);
+    padding: 0.7rem 0.7rem;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+    background: var(--paper-3);
+  }
+  tbody td, tbody th {
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+    text-align: left;
+    font-weight: 400;
+  }
+  tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
+  tbody th.site {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.74rem;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  tbody th.site span { display: block; font-family: "Hanken Grotesk", sans-serif; font-size: 0.78rem; color: var(--ink-soft); white-space: normal; max-width: 22ch; }
+  td.num { text-align: right; white-space: nowrap; }
+  .ok   { background: var(--ok-bg);   color: var(--verdigris); }
+  .part { background: var(--part-bg); color: var(--brass); }
+  .bad  { background: var(--bad-bg);  color: var(--rust); }
+  .ok, .part, .bad { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.76rem; }
+  .quiet { color: var(--ink-soft); }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.4rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 0.45rem; }
+  .swatch { width: 0.72rem; height: 0.72rem; border-radius: 2px; display: inline-block; }
+  .sw-ok   { background: var(--verdigris); }
+  .sw-part { background: var(--brass); }
+  .sw-bad  { background: var(--rust); }
+
+  /* ---- defects ---- */
+  .defects { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 1.1rem; }
+  .defect {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--rust);
+    border-radius: 3px;
+    background: var(--paper-2);
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+  .defect.is-part { border-left-color: var(--brass); }
+  .defect h3 { font-size: 0.98rem; }
+  .defect p { font-size: 0.88rem; max-width: none; }
+  .defect .cite {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    word-break: break-word;
+  }
+  .defect img {
+    width: 100%;
+    max-height: 132px;
+    object-fit: cover;
+    object-position: top center;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    display: block;
+  }
+
+  /* ---- copy findings ---- */
+  .copy-list { display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0; counter-reset: cf; border-top: 1px solid var(--line); }
+  .copy-list > li {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 2rem 1fr;
+    gap: 0.3rem 1rem;
+    padding: 1.1rem 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .copy-list > li::before {
+    counter-increment: cf;
+    content: counter(cf);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    padding-top: 0.15rem;
+  }
+  .copy-list .said {
+    font-family: Fraunces, Georgia, serif;
+    color: var(--ink);
+    font-size: 1.02rem;
+    line-height: 1.4;
+  }
+  .copy-list .said em { font-style: italic; }
+  .copy-list .rule { font-size: 0.88rem; max-width: 74ch; }
+  .copy-list .cite { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.7rem; color: var(--ink-soft); }
+  .sev {
+    display: inline-block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 2px;
+    margin-left: 0.5rem;
+    vertical-align: 0.12em;
+  }
+  .sev-high { background: var(--bad-bg); color: var(--rust); }
+  .sev-med  { background: var(--part-bg); color: var(--brass); }
+
+  /* ---- walk ---- */
+  .walk {
+    border-left: 3px solid var(--verdigris);
+    background: var(--paper-2);
+    border-top: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 1.3rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+  .walk p { max-width: 74ch; }
+
+  /* ---- rulings ---- */
+  .rulings { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--line); }
+  .ruling {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr;
+    gap: 0.4rem 1.4rem;
+    padding: 1.25rem 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .ruling .id {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.78rem;
+    color: var(--ink);
+    letter-spacing: 0.04em;
+    padding-top: 0.1rem;
+  }
+  .ruling .id small { display: block; font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin-top: 0.25rem; }
+  .ruling .q { color: var(--ink); font-size: 1rem; max-width: 72ch; }
+  .ruling .rows { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.6rem; }
+  .ruling .row { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.9rem; font-size: 0.88rem; max-width: 76ch; }
+  .ruling .row .k {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    padding-top: 0.22rem;
+  }
+  .ruling .row .v strong { color: var(--ink); font-weight: 600; }
+  .ruling .row.alt .v, .ruling .row.cons .v { color: var(--ink-soft); }
+  @media (max-width: 620px) {
+    .ruling { grid-template-columns: 1fr; }
+    .ruling .row { grid-template-columns: 1fr; gap: 0.1rem; }
+  }
+
+  /* ---- footnotes ---- */
+  .notes {
+    border-top: 1px solid var(--line);
+    padding-top: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+  }
+  .notes p { max-width: 78ch; }
+  .notes .lbl {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Patina Capture · program capture-launch · lane W0-D1</p>
+    <h1>What the panel actually does</h1>
+    <p class="lede">A simulated designer panel run against fifteen real vendor pages, harvested live on 29 August. Every number below comes from running the extension's own extractor and its own React tree — not from reading the code and guessing. Kody rules; the rulings sit at the end.</p>
+    <div class="meta">
+      <span>29 Aug 2026</span>
+      <span>15 fixtures</span>
+      <span>Extension v0.2.1</span>
+      <span>Target v0.3.0, public listing</span>
+    </div>
+  </header>
+
+  <section id="stand">
+    <div class="sec-head">
+      <p class="eyebrow">Where we stand</p>
+      <h2>Five things that are true this morning</h2>
+    </div>
+    <ul class="stand">
+      <li>
+        <span class="tag is-ok">Backend real</span>
+        <p>Every object the extension writes already lives on Strata and works: <code>products</code>, <code>product_styles</code>, <code>vendors</code>, <code>proposal_captures</code>, and the three RPCs behind library / inbox / client-decision saves. <strong>The plumbing is not the problem.</strong></p>
+      </li>
+      <li>
+        <span class="tag is-bad">Never published</span>
+        <p>There is no Patina Capture in the Chrome Web Store. Tag <code>extension-v0.2.0</code> went out on 4 August; <strong>both CI runs failed</strong> — the first on CLI flags, the second with <code>ITEM_NOT_UPDATABLE</code> because a manual dashboard submission was already sitting in draft. Nothing has shipped since.</p>
+      </li>
+      <li>
+        <span class="tag is-bad">40% inert</span>
+        <p>Roughly two fifths of the panel surface can't be reached or doesn't work: six "coming in a later phase" screens with no dispatcher, an offline queue with no producer, an OCR toggle whose assets were never built, a trade-pricing region that's a placeholder, and ~1,300 lines of components nothing imports. <strong>A reviewer clicking around will find some of it.</strong></p>
+      </li>
+      <li>
+        <span class="tag is-part">Read, not shown</span>
+        <p>Dimensions, materials, colours and finish are extracted and persisted — and then never rendered. <code>RecordRegion.tsx</code> edits three fields. Across the fifteen fixtures the extractor recovered <strong>19 dimension values and 55 material strings that no designer can see or correct</strong> before saving.</p>
+      </li>
+      <li>
+        <span class="tag is-bad">Legal 404</span>
+        <p><code>/privacy</code> and <code>/terms</code> are linked from the signup page and both return 404 — the marketing site that owned them lives in another repo. That is a hard Web Store blocker <em>and</em> a live signup bug.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section id="panel">
+    <div class="sec-head">
+      <p class="eyebrow">The panel</p>
+      <h2>Four designers, standing in</h2>
+      <p>No real designers were interviewed for this pass. These are the four working shapes the repo's own specs and session notes describe, each mapped onto a fixture set so the findings below are answerable rather than hypothetical.</p>
+    </div>
+    <div class="panel-grid">
+
+      <article class="persona">
+        <img src="fixtures/roomandboard.com.stevens-sofas.png" alt="Room &amp; Board Stevens Sofas product page, captured 29 August 2026">
+        <div class="body">
+          <h3>Leah <span class="who">P1</span></h3>
+          <dl>
+            <div>
+              <dt>How she sources</dt>
+              <dd>Solo residential, Twin Cities. Big-box and catalogue retail, one project at a time. Every save this week goes to the same project and the same room.</dd>
+            </div>
+            <div>
+              <dt>At save time she needs</dt>
+              <dd>Price right, image right, and the thing landing in the room she's working in without re-picking it thirty times a day.</dd>
+            </div>
+            <div>
+              <dt>Stood in by</dt>
+              <dd class="fix">roomandboard · dwr · rh · wayfair · hedgehouse · pinterest</dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="persona">
+        <img src="fixtures/hermanmiller.com.eames-lounge-chair-and-ottoman.png" alt="Herman Miller Eames Lounge Chair and Ottoman product page, captured 29 August 2026">
+        <div class="body">
+          <h3>Marcus <span class="who">P2</span></h3>
+          <dl>
+            <div>
+              <dt>How he sources</dt>
+              <dd>Hospitality FF&amp;E studio, Grand Rapids. Contract manufacturers, trade-gated pricing, a room with six empty FF&amp;E lines waiting to be filled.</dd>
+            </div>
+            <div>
+              <dt>At save time he needs</dt>
+              <dd>SKU, dimensions and lead time for the tear sheet — and <code>fill_slot</code> to stay selected between captures.</dd>
+            </div>
+            <div>
+              <dt>Stood in by</dt>
+              <dd class="fix">hermanmiller · steelcase · visualcomfort · knoll</dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="persona">
+        <img src="fixtures/pinterest.com.pin-378724649918852625.png" alt="Pinterest pin page behind a login wall, captured 29 August 2026">
+        <div class="body">
+          <h3>Dana <span class="who">P3</span></h3>
+          <dl>
+            <div>
+              <dt>How she sources</dt>
+              <dd>Vintage-forward, Milwaukee. Auction and resale listings, indie makers, boards for inspiration. Library only — no project routing.</dd>
+            </div>
+            <div>
+              <dt>At save time she needs</dt>
+              <dd>Provenance in her own words on every save, the right currency, and the listing's photographs — which is exactly where one-off listings fail.</dd>
+            </div>
+            <div>
+              <dt>Stood in by</dt>
+              <dd class="fix">1stdibs · chairish · hedgehouse · roomandboard · pinterest</dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="persona">
+        <img src="fixtures/instagram.com.p-DcjKbTzEVTf.png" alt="Instagram post page behind a login wall, captured 29 August 2026">
+        <div class="body">
+          <h3>Priya <span class="who">P4</span></h3>
+          <dl>
+            <div>
+              <dt>How she sources</dt>
+              <dd>Principal with a junior, Columbus. Half her captures start on social, get sent to the inbox, and are sorted at the desk later — the same piece twice, often.</dd>
+            </div>
+            <div>
+              <dt>At save time she needs</dt>
+              <dd>An honest answer when a page isn't a product, and a duplicate warning she can trust when the junior saves the same sofa again.</dd>
+            </div>
+            <div>
+              <dt>Stood in by</dt>
+              <dd class="fix">pinterest · instagram · westelm · cb2 (twice)</dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section id="extractor">
+    <div class="sec-head">
+      <p class="eyebrow">What the extractor read</p>
+      <h2>Fifteen pages, one run each</h2>
+      <p><code>extractProductData()</code> against every harvested fixture. Dimension counts are out of the ten fields <code>ProductDimensions</code> defines. Confidence is the extractor's own band, verbatim.</p>
+    </div>
+
+    <div class="legend">
+      <span><i class="swatch sw-ok"></i> right</span>
+      <span><i class="swatch sw-part"></i> partial or dirty</span>
+      <span><i class="swatch sw-bad"></i> wrong, missing, or crashed</span>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Fixture</th>
+            <th scope="col">Name</th>
+            <th scope="col">Price</th>
+            <th scope="col">Dims</th>
+            <th scope="col">Mat.</th>
+            <th scope="col">Img</th>
+            <th scope="col">Manufacturer</th>
+            <th scope="col">Retailer</th>
+            <th scope="col">Conf.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row" class="site">roomandboard.com<span>Stevens Sofas</span></th>
+            <td class="part">✓ + site tail</td>
+            <td class="ok num">$2,899.00</td>
+            <td class="ok num">7/10</td>
+            <td class="ok num">12</td>
+            <td class="ok num">4</td>
+            <td class="ok">Room &amp; Board</td>
+            <td class="ok">Room &amp; Board</td>
+            <td class="ok">high</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">dwr.com<span>Eames Lounge Chair and Ottoman</span></th>
+            <td class="part">✓ + site tail</td>
+            <td class="ok num">$6,525.00</td>
+            <td class="part num">3/10</td>
+            <td class="ok num">7</td>
+            <td class="part num">1</td>
+            <td class="bad">Design Within Reach</td>
+            <td class="ok">Design Within Reach</td>
+            <td class="ok">high</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">rh.com<span>Jennifer Sofa</span></th>
+            <td class="part">✓ + site tail</td>
+            <td class="bad num">$6,995.00</td>
+            <td class="bad num">0/10</td>
+            <td class="part num">2</td>
+            <td class="ok num">5</td>
+            <td class="bad">Restoration Hardware</td>
+            <td class="ok">Restoration Hardware</td>
+            <td class="bad">high</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">wayfair.com<span>Ebern Designs sofa</span></th>
+            <td class="part">✓ + "&amp; Reviews"</td>
+            <td class="bad num">$100.00</td>
+            <td class="bad num">0/10</td>
+            <td class="part num">1</td>
+            <td class="part num">2</td>
+            <td class="ok">Wayfair</td>
+            <td class="ok">Wayfair</td>
+            <td class="bad">high</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">hermanmiller.com<span>Eames Lounge Chair and Ottoman</span></th>
+            <td class="ok">✓ clean</td>
+            <td class="bad">none</td>
+            <td class="bad num">0/10</td>
+            <td class="bad num">0</td>
+            <td class="ok num">20</td>
+            <td class="ok">Herman Miller</td>
+            <td class="ok">Herman Miller</td>
+            <td class="part">medium</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">steelcase.com<span>Gesture chair</span></th>
+            <td class="part">✓ + site tail</td>
+            <td class="bad">none</td>
+            <td class="bad num">0/10</td>
+            <td class="bad num">0</td>
+            <td class="part num">1</td>
+            <td class="ok">Steelcase</td>
+            <td class="ok">Steelcase</td>
+            <td class="part">medium</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">visualcomfort.com<span>Talia Small Chandelier</span></th>
+            <td class="part">✓ + site tail</td>
+            <td class="ok num">$1,699.00</td>
+            <td class="bad num">0/10</td>
+            <td class="part num">1</td>
+            <td class="ok num">20</td>
+            <td class="part">Visualcomfort</td>
+            <td class="part">Visualcomfort</td>
+            <td class="ok">high</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">knoll.com<span>Womb Chair, Standard</span></th>
+            <td class="part">✓ + site tail</td>
+            <td class="ok num">$4,856.25</td>
+            <td class="part num">3/10</td>
+            <td class="ok num">9</td>
+            <td class="ok num">7</td>
+            <td class="ok">Knoll</td>
+            <td class="ok">Knoll</td>
+            <td class="ok">high</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">1stdibs.com<span>Rare 1964 rosewood Eames lounge</span></th>
+            <td class="ok">✓ clean</td>
+            <td class="bad num">7,843.64 CHF</td>
+            <td class="bad num">0/10</td>
+            <td class="part num">3</td>
+            <td class="bad num">0</td>
+            <td class="bad">1stDibs</td>
+            <td class="ok">1stDibs</td>
+            <td class="part">medium</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">chairish.com<span>George Smith leather sofa</span></th>
+            <td class="ok">✓ clean</td>
+            <td class="ok num">$8,800.00</td>
+            <td class="part num">3/10</td>
+            <td class="ok num">7</td>
+            <td class="ok num">12</td>
+            <td class="bad">Chairish</td>
+            <td class="ok">Chairish</td>
+            <td class="ok">high</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">westelm.com<span>Harris Sofa</span></th>
+            <td class="bad">raw HTML entities</td>
+            <td class="ok num">$719.20</td>
+            <td class="bad num">0/10</td>
+            <td class="ok num">5</td>
+            <td class="ok num">20</td>
+            <td class="bad">West Elm</td>
+            <td class="ok">West Elm</td>
+            <td class="ok">high</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">cb2.com<span>Berkeley 78" velvet sofa</span></th>
+            <td class="part">✓ + "+ Reviews"</td>
+            <td class="ok num">$1,954.00</td>
+            <td class="part num">3/10</td>
+            <td class="ok num">4</td>
+            <td class="ok num">20</td>
+            <td class="ok">CB2</td>
+            <td class="ok">CB2</td>
+            <td class="ok">high</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">hedgehousefurniture.com<span>White oak Marie Nightstand</span></th>
+            <td class="part">✓ + SKU + "IN STOCK"</td>
+            <td class="ok num">$1,440.00</td>
+            <td class="bad num">0/10</td>
+            <td class="part num">1</td>
+            <td class="ok num">12</td>
+            <td class="part">Hedgehousefurniture</td>
+            <td class="part">Hedgehousefurniture</td>
+            <td class="ok">high</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">pinterest.com<span>pin 378724649918852625</span></th>
+            <td class="bad">crash</td>
+            <td class="bad">crash</td>
+            <td class="bad num">0/10</td>
+            <td class="bad num">0</td>
+            <td class="bad num">0</td>
+            <td class="bad">—</td>
+            <td class="part">Pinterest</td>
+            <td class="bad">none</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">instagram.com<span>post DcjKbTzEVTf</span></th>
+            <td class="bad">"Instagram"</td>
+            <td class="bad num">$1.00</td>
+            <td class="bad num">0/10</td>
+            <td class="bad num">0</td>
+            <td class="bad num">0</td>
+            <td class="bad">Instagram</td>
+            <td class="part">Instagram</td>
+            <td class="bad">medium</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="quiet" style="font-size:0.85rem;max-width:78ch;">Two counts worth holding on to. <strong>Nine of the fourteen names that came back carry the site's own tail</strong> — "| RH", "&amp; Reviews", "- Modern Living Room Furniture", a SKU and a stock state — so almost every save starts with the designer deleting something. And <strong>five of fifteen pages produced any dimension at all</strong>; the manufacturer's own sites (Herman Miller, Steelcase) produced none.</p>
+
+    <h3 style="margin-top:0.75rem;">The five that matter</h3>
+    <div class="defects">
+
+      <article class="defect">
+        <img src="fixtures/pinterest.com.pin-378724649918852625.png" alt="The Pinterest pin page that crashes extraction">
+        <h3>Pinterest takes the whole extractor down</h3>
+        <p>Not a bad result — no result. The run throws <code>unknown pseudo-class selector ':3&gt;*'</code> and returns nothing at all: no name, no retailer, no fallback. A class name on the page contains a colon, and it reaches an unguarded selector.</p>
+        <p class="cite">src/lib/extraction/images.ts:110 · :114 — <code>img.closest('[class*="product"]…')</code></p>
+      </article>
+
+      <article class="defect">
+        <img src="fixtures/dwr.com.eames-lounge-chair-and-ottoman.png" alt="The DWR Eames lounge chair page, which names Herman Miller as the brand">
+        <h3>DWR says the manufacturer is DWR</h3>
+        <p>The page says Herman Miller — as a text label directly above the title. The extractor reports manufacturer and retailer as the same string, derived from the domain. Manufacturer ≠ retailer is load-bearing for every tear sheet, and it is wrong on <strong>DWR, RH, West Elm, Chairish and 1stDibs</strong> — five of the fifteen.</p>
+        <p class="cite">extraction-report.json — manufacturer == retailer on all 14 non-crashing fixtures</p>
+      </article>
+
+      <article class="defect">
+        <h3>1stDibs prices in Swiss francs</h3>
+        <p>A New York vintage listing came back <code>7,843.64 CHF</code>, with zero dimensions (the seller's dimension table is free-form) and zero images. The panel then renders the price behind a hard-coded <code>$</code> glyph — so Dana sees "$7,843.64" and has no way to know the number isn't dollars.</p>
+        <p class="cite">RecordRegion.tsx:113 — literal "$" · confidence still reported "medium"</p>
+      </article>
+
+      <article class="defect">
+        <img src="fixtures/rh.com.jennifer-sofa.png" alt="The RH Jennifer Sofa page showing member and regular pricing">
+        <h3>RH picks the member price, silently</h3>
+        <p>The page shows "$6,995 MEMBER / $9,995 REGULAR". The extractor takes $6,995 and stamps it <strong>high confidence</strong> — a $3,000 error presented as certainty. Its width options are in feet (8', 9', 10', 11'), which the inch-shaped dimension parser reads as nothing: 0 of 10.</p>
+        <p class="cite">RH also ships an empty <code>&lt;script id="schema" type="application/ld+json"&gt;</code> — a dead placeholder</p>
+      </article>
+
+      <article class="defect">
+        <img src="fixtures/instagram.com.p-DcjKbTzEVTf.png" alt="The Instagram post page behind a login wall">
+        <h3>Instagram is confidently a $1.00 product</h3>
+        <p>A brand's promotional post — no product, no JSON-LD, a login wall over the carousel. The extractor returns name "Instagram", price <strong>$1.00</strong>, manufacturer "Instagram", and calls it <strong>medium</strong> confidence. Priya starts half her captures on social; this is the first thing she'll see.</p>
+        <p class="cite">extraction-report.json — instagram.com, knownBad: true, ok: true</p>
+      </article>
+
+      <article class="defect is-part">
+        <h3>And one more, quietly</h3>
+        <p>Wayfair's sofa came back at <strong>$100.00</strong>, high confidence — no sofa on that listing costs that. West Elm's name arrived as <code>Harris Sofa (56&amp;quot;&amp;ndash;108&amp;quot;)</code> with HTML entities undecoded. Neither is a headline, both would ship.</p>
+        <p class="cite">extraction-report.json — wayfair.com, westelm.com</p>
+      </article>
+
+    </div>
+  </section>
+
+  <section id="visible">
+    <div class="sec-head">
+      <p class="eyebrow">What the designer can see</p>
+      <h2>Extracted, then hidden</h2>
+      <p>The same two fixtures rendered through <code>RecordScreen</code> under a real <code>CaptureProvider</code>, counting what is actually in the DOM against what extraction produced.</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Field</th>
+            <th scope="col">DWR — extracted</th>
+            <th scope="col">DWR — visible</th>
+            <th scope="col">1stDibs — extracted</th>
+            <th scope="col">1stDibs — visible</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row" class="site">name</th>
+            <td class="ok">yes</td><td class="ok">editable</td>
+            <td class="ok">yes</td><td class="ok">editable</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">price</th>
+            <td class="ok">yes</td><td class="ok">editable</td>
+            <td class="ok">yes (CHF)</td><td class="part">editable, shown as $</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">description</th>
+            <td class="ok">yes</td><td class="ok">editable</td>
+            <td class="ok">yes</td><td class="ok">editable</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">brand</th>
+            <td class="ok">Design Within Reach</td><td class="bad">never rendered</td>
+            <td class="ok">1stDibs</td><td class="bad">never rendered</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">dimensions</th>
+            <td class="ok">3 fields</td><td class="bad">never rendered</td>
+            <td class="bad">0 fields</td><td class="bad">never rendered</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">materials</th>
+            <td class="ok">7</td><td class="bad">never rendered</td>
+            <td class="ok">3</td><td class="bad">never rendered</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">colors</th>
+            <td class="bad">0</td><td class="bad">never rendered</td>
+            <td class="bad">0</td><td class="bad">never rendered</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">finish</th>
+            <td class="bad">null</td><td class="bad">never rendered</td>
+            <td class="bad">null</td><td class="bad">never rendered</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">images</th>
+            <td class="part">1</td><td class="ok">shown</td>
+            <td class="bad">0</td><td class="bad">nothing to show</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="defects">
+      <article class="defect">
+        <h3>The record region edits three fields</h3>
+        <p>Name, Price, Description. That is the whole form. Dimensions, materials, colours and finish have no row, no input, no badge — they travel from the extractor to the database without ever passing in front of a human.</p>
+        <p class="cite">src/panel/regions/RecordRegion.tsx:95 · :109 · :135</p>
+      </article>
+      <article class="defect">
+        <h3>Brand can never render on a fresh capture</h3>
+        <p>There <em>is</em> a Brand row — but it renders only when a vendor <em>object</em> is attached, and <code>draftFromExtraction</code> sets both manufacturer and retailer vendors to <code>null</code> with status <code>missing</code>. So the extractor's "Design Within Reach" is discarded on the way into the draft, and the row silently never appears.</p>
+        <p class="cite">RecordRegion.tsx:125-128 (gated on <code>vendorName</code>) · state/draft.ts:118-119, :167-168</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="clicks">
+    <div class="sec-head">
+      <p class="eyebrow">Clicks to save</p>
+      <h2>What each destination costs</h2>
+      <p>Discrete interactions from a populated draft to the terminal screen — one select change, one typed field, one button. "Warm" means <code>chrome.storage.local</code> already holds a project and room from an earlier capture this session.</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Destination</th>
+            <th scope="col">Cold</th>
+            <th scope="col">Warm</th>
+            <th scope="col">What it costs</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row" class="site">Save to library</th>
+            <td class="ok num">1</td><td class="ok num">1</td>
+            <td>The default button. Genuinely one click.</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">Send to inbox</th>
+            <td class="ok num">1</td><td class="ok num">1</td>
+            <td>Only offered while the route is "library" — mutually exclusive with project routing, not a second door to it.</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">Project inbox</th>
+            <td class="part num">3</td><td class="part num">2</td>
+            <td>Destination select → project select → save. Warm still charges the destination select.</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">Fill existing slot</th>
+            <td class="bad num">5</td><td class="part num">3</td>
+            <td>Destination → project → room → slot → save. Marcus's whole day.</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">Create new FF&amp;E line</th>
+            <td class="bad num">5</td><td class="part num">3</td>
+            <td>Same, with a free-text category typed each time.</td>
+          </tr>
+          <tr>
+            <th scope="row" class="site">Send as client decision</th>
+            <td class="part num">3</td><td class="part num">3</td>
+            <td>Opens the sheet, requires a client. Nothing about it is remembered.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="walk">
+      <p class="eyebrow">The finding under the numbers</p>
+      <p><strong>The app remembers where, but not what.</strong> <code>saveSpecBookPlacementContext()</code> persists <code>{ projectId, roomId }</code> and nothing else. The route <em>kind</em> — library, project inbox, fill slot, create line — is never written down. <code>FFESlotPicker</code>'s <code>routeKind</code> always initialises to <code>assigningExisting ? 'fill_slot' : 'library'</code>, and <code>assigningExisting</code> is always false on this surface because <code>RouteCommitRegion</code> never passes a <code>productId</code>. The picker is also a fresh component instance every capture — the draft is nulled on <code>EXTRACTION_START</code>, so the region unmounts and its local state has no survival path by construction.</p>
+      <p><strong>Every capture reopens on "Library only."</strong> Even the one immediately after a <code>fill_slot</code> save into the same room. For Marcus at thirty captures a day that is thirty throwaway dropdown changes, purely because route kind isn't part of what's remembered.</p>
+      <p class="cite mono">src/components/FFESlotPicker.tsx:63-65 · lib/spec-book-placement.ts:143-163 · RouteCommitRegion.tsx:31, :47-50</p>
+    </div>
+  </section>
+
+  <section id="copy">
+    <div class="sec-head">
+      <p class="eyebrow">Words on the screen</p>
+      <h2>Five strings to fix before a reviewer reads them</h2>
+      <p>Every user-facing string in onboarding, auth, the commit bar, the terminals, the regions, the overlays and the context menus was read against the brand voice. The banned lexicon is clean — nothing says curated, luxury, elevated, or leads with AI. These five are the real gaps.</p>
+    </div>
+
+    <ol class="copy-list">
+      <li>
+        <div>
+          <p class="said">"Nothing is read in the background, and nothing leaves your workspace."<span class="sev sev-high">false</span></p>
+          <p class="rule">It leaves. PostHog receives analytics and Supabase receives every save and search. This is the install-time trust promise a privacy-conscious designer will hold Patina to later — and the Web Store reviewer compares this sentence to the data-use disclosure. It needs rewriting, not softening: say plainly that the page is read only when you capture, that saves go to your Patina workspace, and that light usage stats are collected.</p>
+          <p class="cite">src/tabs/onboarding.tsx:140 — step 2, page-access primer</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="said">"Save &amp; fill slot" / "Save &amp; create line"<span class="sev sev-med">jargon</span></p>
+          <p class="rule">"Slot" and "line" are internal FF&amp;E spec-book nouns on the single most load-bearing button in the panel, explained nowhere upstream. A designer who hasn't used the portal's Spec Book has no way to know what either one does.</p>
+          <p class="cite">src/panel/CommitBar.tsx:146-158</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="said">"medium confidence"<span class="sev sev-med">mechanics</span></p>
+          <p class="rule">The extractor's own scoring band, printed raw as though it were a feature. Technology is the silent enabler — this is the algorithm's self-assessment shown to the customer, and section three is exactly why it can't be trusted: "high" on RH's wrong price, "medium" on Instagram's $1.00.</p>
+          <p class="cite">panel/regions/InsightRegion.tsx:43 · overlays/InsightSheet.tsx:29</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="said">"Create a client decision" / a bare "Decision" row<span class="sev sev-med">unexplained</span></p>
+          <p class="rule">"Decision" is a distinct object in Patina's model, and nothing on this screen or before it says what makes it different from an approval or a proposal. The subtitle assumes the reader already knows.</p>
+          <p class="cite">overlays/DecisionSheet.tsx:61 · overlays/RecentCapturesSheet.tsx:17</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="said">"verified, priced, and routed to the right project"<span class="sev sev-med">puffery</span></p>
+          <p class="rule">Nothing is verified. Extraction is best-effort scraping against pages that fight it — this lane found a wrong currency, a wrong price tier, five wrong manufacturers and a hard crash. Numbers and claims in Patina copy have to be true; drop "verified".</p>
+          <p class="cite">src/tabs/onboarding.tsx:106 — step 0 pitch</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section id="walk">
+    <div class="sec-head">
+      <p class="eyebrow">Kody's walk</p>
+      <h2>What only a signed-in pass can settle</h2>
+    </div>
+    <div class="walk">
+      <p>Everything above came from jsdom and React Testing Library — no Chrome, no login, no built extension. <code>artifacts/capture-launch-2026-08-29/walk-sheet.md</code> is the twenty-minute pass that closes the gap: build, load unpacked, sign in at app.patina.cloud <em>first</em> so the panel adopts the portal session, then ten URLs across Leah's set and Marcus's repeats, one row each. Four things are worth watching for specifically. <strong>Does the destination dropdown really reset to "Library only"</strong> between Marcus's two Herman Miller captures — that single answer decides whether thirty saves a day is survivable. <strong>Does the Pinterest pin crash the live panel or merely degrade</strong> — jsdom crashed hard, a real browser may not. <strong>Is the confidence badge honest</strong> on RH's member price and on the Instagram post, or does it sell certainty it hasn't got. And <strong>which tear-sheet fields are simply absent</strong> — SKU, dimensions, materials, lead time, trade price, vendor — when you look at the panel as a working designer rather than as a diff. Note the surprises; those are the rulings nobody wrote down yet.</p>
+    </div>
+  </section>
+
+  <section id="rulings">
+    <div class="sec-head">
+      <p class="eyebrow">Rulings</p>
+      <h2>Fifteen calls, with a default on each</h2>
+      <p>CL-R1 through CL-R10 come from the program plan. CL-R11 through CL-R15 are forced by the data above and did not exist before this morning. The checkbox version is in <code>rulings.md</code>.</p>
+    </div>
+
+    <div class="rulings">
+
+      <article class="ruling">
+        <div class="id">CL-R1<small>plan</small></div>
+        <div>
+          <p class="q">Which workflow holes get closed for v1?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Build D4 (dimensions, materials, finish in the record form), D5 (sticky route kind + notes) and D6 (SKU from JSON-LD) in W2.</strong> Lead-time extraction and inbox targeting wait for v1.1.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Ship v1 read-only on those fields and do all four in v1.1.</span></div>
+            <div class="row cons"><span class="k">If deferred</span><span class="v">The launch version saves data no designer ever sees, and Marcus's tear sheet stays a manual re-type.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R2<small>plan</small></div>
+        <div>
+          <p class="q">Does "Send to inbox" stay untargeted?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Yes — keep it as-is.</strong> It is the designed inbox → board path; targeting UI is v1.1.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Add a project picker to the inbox button now.</span></div>
+            <div class="row cons"><span class="k">If added</span><span class="v">A second routing surface to build, test and explain in the same wave as the first.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R3<small>plan</small></div>
+        <div>
+          <p class="q">Confirm the cut list — the inert 40% comes out in W1?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Cut it.</strong> Offline queue, six placeholder screens, the OCR toggle and tesseract, the trade-pricing region and the seven orphan components, and the <code>@patina/catalog-ui</code> dependency behind the react@19 crash class.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Hide the surfaces behind a flag and keep the code.</span></div>
+            <div class="row cons"><span class="k">If kept</span><span class="v">A Web Store reviewer can reach a toggle that lies, and "no remote code" stops being true.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R4<small>plan</small></div>
+        <div>
+          <p class="q">Where do /privacy and /terms live?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>The designer portal</strong> — new public routes on app.patina.cloud, which also fixes the two live 404s on the signup page.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Wait for the marketing site (separate repo) and point the listing there.</span></div>
+            <div class="row cons"><span class="k">If deferred</span><span class="v">The Web Store submission is blocked on another repo's release cycle, and signup keeps 404ing.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R5<small>plan</small></div>
+        <div>
+          <p class="q">The onboarding privacy claim — rewrite or delete?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Rewrite it truthfully</strong>, naming what actually happens: the page is read only when you capture, saves go to your Patina workspace, light usage stats are collected. Pre-empt Chrome's own "read and change all your data" wording on the same screen.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Delete the sentence and say nothing.</span></div>
+            <div class="row cons"><span class="k">If deleted</span><span class="v">The trust moment is lost at exactly the point Chrome shows its scariest permission string.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R6<small>plan</small></div>
+        <div>
+          <p class="q">Who produces the five store screenshots?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Kody shoots the raw frames</strong> (1280×800 Chrome window, real captures); an agent composes them into the caption template and cuts the 440×280 tile.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Fully synthetic mock frames composed from HTML.</span></div>
+            <div class="row cons"><span class="k">If synthetic</span><span class="v">Faster, but the listing shows a panel state no user will recognise — and automation cannot drive an MV3 side panel anyway.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R7<small>plan</small></div>
+        <div>
+          <p class="q">What is the listing's support URL?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>app.patina.cloud/help</strong> if that page is reachable signed-out; otherwise the contact address on the new privacy page.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">A mailto: address only.</span></div>
+            <div class="row cons"><span class="k">Either way</span><span class="v">The field is required at submission; an unreachable URL is a rejection.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R8<small>plan</small></div>
+        <div>
+          <p class="q">Keep the <code>email_domain</code> telemetry property?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Drop it.</strong> It is the only thing forcing "PII" onto the data-use disclosure for analytics, and no dashboard reads it.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Keep it and disclose PII collection.</span></div>
+            <div class="row cons"><span class="k">If kept</span><span class="v">A longer disclosure and a weaker privacy story, bought for a property nobody queries.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R9<small>plan</small></div>
+        <div>
+          <p class="q">What happens to the pending 0.2.0 submission?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Let it ride.</strong> Read the dashboard immediately before tagging 0.3.0: approved → 0.3.0 is an update; still pending → withdraw it then, not now.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Withdraw today.</span></div>
+            <div class="row cons"><span class="k">If ignored</span><span class="v">The tag push fails <code>ITEM_NOT_UPDATABLE</code> a second time, exactly as it did in August.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R10<small>plan</small></div>
+        <div>
+          <p class="q">Do the internal nouns come out of the primary buttons?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Yes — retire "slot", "line" and bare "decision" from primary copy</strong> in the same wave that touches those surfaces. Say where the piece is going in words a first-time installer knows.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Keep the spec-book vocabulary and teach it in onboarding.</span></div>
+            <div class="row cons"><span class="k">If kept</span><span class="v">The most load-bearing button in the panel is unreadable to anyone who hasn't used the portal first.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R11<small>new</small></div>
+        <div>
+          <p class="q">Fix the Pinterest crash in W1?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Yes.</strong> Wrap the <code>closest()</code> calls in <code>images.ts</code> and give the whole extraction pass a guard — <strong>one page must never be able to kill extraction</strong>. A malformed class name should cost an image score, not the entire result.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Leave it and rely on the "couldn't read this page" screen catching the throw.</span></div>
+            <div class="row cons"><span class="k">If deferred</span><span class="v">Any site whose class names contain a colon — a whole family of utility-CSS builds — takes the panel down, and the failure looks like Patina's bug on every one of them.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R12<small>new</small></div>
+        <div>
+          <p class="q">Manufacturer ≠ retailer on known retailer domains?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Fix it in W2, in the extraction lane.</strong> On known retailer domains (DWR, RH, West Elm, CB2, Wayfair, Chairish, 1stDibs) take the brand from the page — JSON-LD <code>brand</code>, then the on-page brand label — and keep the domain only as the retailer.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Ship v1 with both fields set from the domain and correct it in v1.1.</span></div>
+            <div class="row cons"><span class="k">If deferred</span><span class="v">Five of fifteen fixtures record the wrong maker. Every tear sheet, every reorder and every provenance line downstream inherits it — and the spec calls this pairing load-bearing.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R13<small>new</small></div>
+        <div>
+          <p class="q">Currency detection — the 1stDibs CHF problem?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Fix it.</strong> USD-first for US retailer domains, overridden only by an explicit currency signal (JSON-LD <code>priceCurrency</code>, <code>og:price:currency</code>). And show the detected currency in the panel instead of the hard-coded <code>$</code>.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Always assume USD and let the designer correct it.</span></div>
+            <div class="row cons"><span class="k">If deferred</span><span class="v">A wrong currency is invisible today — the panel prints a dollar sign in front of francs — so it can't be corrected by someone who can't see it.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R14<small>new</small></div>
+        <div>
+          <p class="q">What happens on a page that isn't a product?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Yes — route known-bad domains (Pinterest, Instagram) straight to a "we couldn't read this page" outcome</strong> with the snapshot fallback and "by hand" offered beside it. The placeholder R4 screen is being cut in W1, so this outcome has to be built on the terminal screen that survives, not on the one going away.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Let the extractor try and return whatever it finds.</span></div>
+            <div class="row cons"><span class="k">If deferred</span><span class="v">Instagram saves a $1.00 product called "Instagram" at medium confidence, and Pinterest crashes. Half of Priya's captures start on exactly these two domains.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="ruling">
+        <div class="id">CL-R15<small>new</small></div>
+        <div>
+          <p class="q">Does the confidence badge stay?</p>
+          <div class="rows">
+            <div class="row"><span class="k">Default</span><span class="v"><strong>Hide the raw score.</strong> Keep the per-field verdigris/rust badges, which point at something a designer can act on, and drop "{high|medium|low} confidence" from the region and the sheet.</span></div>
+            <div class="row alt"><span class="k">Alternative</span><span class="v">Keep the badge and explain what it measures.</span></div>
+            <div class="row cons"><span class="k">If kept</span><span class="v">It is measurably dishonest — "high" on RH's $3,000-wrong price, "medium" on an Instagram post — and it puts the extractor's self-assessment where the outcome belongs.</span></div>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <footer class="notes">
+    <p class="lbl">How this was measured</p>
+    <p><strong>The extraction numbers come from jsdom, not a browser.</strong> jsdom has no layout engine, so <code>getBoundingClientRect()</code> returns zeros and the position-based half of image scoring never contributes — image counts and JSON-LD-derived values are representative, but the highest-scored image may differ from what the live extension picks. jsdom also has no <code>innerText</code>; the harness aliases it to <code>textContent</code> so the price fallback can run, which means hidden or off-screen price text a real browser would exclude can be picked up here. External stylesheets are stripped during fixture harvest, so <code>getComputedStyle()</code> background-image lookups see nothing. Treat every figure above as a strong signal and Kody's walk as the confirmation.</p>
+    <p>Fixtures were harvested live on 29 August 2026 — full-header <code>curl</code> where it worked, a Chrome render-and-download for the four pages behind a WAF or client-rendered. Six page screenshots were captured, not fifteen. Sources: <code>extraction-report.json</code>, <code>field-visibility.json</code>, <code>copy-inventory.md</code>, <code>click-paths.md</code>, <code>walk-sheet.md</code>, and <code>apps/extension/src/__tests__/fixtures/README.md</code>.</p>
+  </footer>
+
+</div>
