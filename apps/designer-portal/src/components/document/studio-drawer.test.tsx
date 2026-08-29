@@ -241,6 +241,31 @@ describe('StudioDrawer', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('W1/F-3 — prints nothing about presence while she is alone in the document', () => {
+    render(<StudioDrawer />);
+
+    expect(document.querySelector('[data-drawer-presence]')).toBeNull();
+    expect(screen.queryByText(/^You and/)).not.toBeInTheDocument();
+    // The rail's old line said so out loud; the drawer does not.
+    expect(screen.queryByText(/Just you/)).not.toBeInTheDocument();
+  });
+
+  it('W1/F-3 — names the other person in the account zone, once there is one', () => {
+    render(<StudioDrawer others={['Marit']} />);
+
+    expect(
+      document.querySelector('[data-drawer-presence]'),
+    ).toHaveTextContent('You and Marit');
+  });
+
+  it('W1/F-3 — counts the others past one rather than listing them', () => {
+    render(<StudioDrawer others={['Marit', 'Tomas']} />);
+
+    expect(
+      document.querySelector('[data-drawer-presence]'),
+    ).toHaveTextContent('You and 2 others');
+  });
+
   it('carries the shipped-feedback signal into the single feedback entrance', () => {
     mockUnseenFeedback = [{ id: 'feedback-1' }];
     render(<StudioDrawer />);

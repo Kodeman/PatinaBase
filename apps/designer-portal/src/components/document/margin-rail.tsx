@@ -565,7 +565,7 @@ export function MarginRail({
           (the timer claim is only true with a project in hand); the primitive
           owns once-only + recede. */}
       {projectId && (
-        <MarginNote noteKey="doc-first-touch" className="mb-5">
+        <MarginNote noteKey="doc-first-touch" clamp className="mb-5">
           The margin on the right is where decisions and money gather. Esc puts
           the document down — and the hours log themselves while it&apos;s in
           your hand.

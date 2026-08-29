@@ -214,14 +214,16 @@
   --space-24: 6rem;
 }
 
-/* The Document owns one persistent viewport edge at every width: MobileBar
-   below 1180px and the 60px Studio Drawer above it. Floating actions inherit
-   this contract so they clear the active chrome (and the mobile safe area)
-   without changing their legacy-portal position outside this route group. */
+/* The Document owns one persistent viewport edge at every width: the 72px
+   MobileBar below 1180px (W1/OD-11 raised it from 64px for its third line)
+   and the 60px Studio Drawer above it. Floating actions inherit this contract
+   so they clear the active chrome (and the mobile safe area) without changing
+   their legacy-portal position outside this route group. The below-1180 value
+   is the bar's own floor, so it holds with no safe area to add. */
 .document-route-shell {
   --doc-shell-bottom-inset: max(
-    64px,
-    calc(52px + env(safe-area-inset-bottom))
+    72px,
+    calc(60px + env(safe-area-inset-bottom))
   );
   --doc-shell-floating-bottom: calc(var(--doc-shell-bottom-inset) + 1.5rem);
 }

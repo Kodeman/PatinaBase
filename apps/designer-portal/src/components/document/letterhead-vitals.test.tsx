@@ -60,15 +60,12 @@ const baseProject = {
   total_amount_cents: null,
 };
 
-describe('LetterheadVitals prints only what is real (D-6)', () => {
-  it('prints no date, no band and no total when none is recorded', () => {
+describe('LetterheadVitals prints only what is real (D-6, amended by D-B7)', () => {
+  it('prints no figure and no placeholder when nothing is recorded — only the acts', () => {
     mockProject = { ...baseProject };
     const { container } = render(<LetterheadVitals projectId="project-1" />);
 
     // No placeholders in the live-figure register.
-    expect(
-      screen.queryByRole('button', { name: 'Set a budget band' }),
-    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Target')).not.toBeInTheDocument();
     expect(container).not.toHaveTextContent('—');
@@ -78,15 +75,54 @@ describe('LetterheadVitals prints only what is real (D-6)', () => {
       screen.queryByLabelText('Budget band minimum (dollars)'),
     ).not.toBeInTheDocument();
 
+    // D-B7 — the write path survives the suppression: one act per unset
+    // vital, and the two empty dates share the single `Set dates` door.
+    expect(screen.getByRole('button', { name: 'Set dates' })).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Set start' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Set target' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Set a budget band' }),
+    ).toBeVisible();
+
     // The phase word is the one fact this project carries, so the row stays.
     expect(screen.getByText('Design Development')).toBeVisible();
   });
 
-  it('renders nothing at all when the project carries none of the vitals', () => {
+  it('still offers both acts when the project carries none of the vitals', () => {
     mockProject = { ...baseProject, current_phase: null };
-    const { container } = render(<LetterheadVitals projectId="project-1" />);
+    render(<LetterheadVitals projectId="project-1" />);
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByRole('button', { name: 'Set dates' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Set a budget band' }),
+    ).toBeVisible();
+  });
+
+  it('`Set dates` opens the start editor rather than printing a placeholder', () => {
+    mockProject = { ...baseProject };
+    render(<LetterheadVitals projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set dates' }));
+    expect(screen.getByTestId('folio-popover')).toBeInTheDocument();
+  });
+
+  it('`Set a budget band` reveals the band editors in place', () => {
+    mockProject = { ...baseProject };
+    render(<LetterheadVitals projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set a budget band' }));
+
+    const min = screen.getByLabelText('Budget band minimum (dollars)');
+    expect(min).toBeVisible();
+    expect(min).toHaveFocus();
+    expect(screen.getByLabelText('Budget band maximum (dollars)')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Set a budget band' }),
+    ).not.toBeInTheDocument();
   });
 
   it('prints a date only once it has one — never `NO DATE YET`', () => {
@@ -94,7 +130,12 @@ describe('LetterheadVitals prints only what is real (D-6)', () => {
     const { container } = render(<LetterheadVitals projectId="project-1" />);
 
     expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
+    // The set date prints its value and no act; its unset sibling names itself.
+    expect(
+      screen.queryByRole('button', { name: 'Set start' }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Target')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set target' })).toBeVisible();
     expect(container).not.toHaveTextContent(/NO DATE YET/i);
     expect(container).not.toHaveTextContent(/NOT KNOWN YET/i);
   });
@@ -147,6 +188,9 @@ describe('LetterheadVitals prints only what is real (D-6)', () => {
 
     expect(screen.getByLabelText('Budget band minimum (dollars)')).toHaveValue('5000');
     expect(screen.getByText('$7,500')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Set a budget band' }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -195,6 +239,26 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     rerender(<LetterheadVitals projectId="project-1" />);
 
     expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
+  });
+
+  it('the × hands focus to the act that replaces the field — never to <body>', async () => {
+    mockProject = { ...baseProject, start_date: '2026-01-15', target_end_date: '2026-03-01' };
+    render(<LetterheadVitals projectId="project-1" />);
+
+    fireEvent.click(screen.getByLabelText('Clear start'));
+
+    const act = screen.getByRole('button', { name: 'Set start' });
+    expect(act).toBeVisible();
+    // Enabled even mid-save: a disabled button cannot hold focus.
+    expect(act).toBeEnabled();
+    expect(act).toHaveFocus();
+    expect(document.body).not.toHaveFocus();
+    // The cleared field prints its act, never a dash in the figure register.
+    expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
+
+    await waitFor(() =>
+      expect(mockMutateAsync).toHaveBeenCalledWith({ start_date: null }),
+    );
   });
 
   it('flushes a pending echo once the popover closes without a pick', () => {

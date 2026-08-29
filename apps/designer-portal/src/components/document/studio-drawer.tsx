@@ -130,7 +130,26 @@ function breadcrumbFor(pathname: string | null): string | null {
   return null;
 }
 
-export function StudioDrawer() {
+/** F137 / proposal §4 — the presence line the rail evicted, in words, beside
+ *  the account: `You and Marit`, `You and 2 others`. It prints ONLY when
+ *  someone else is in the document; alone it prints nothing at all, because
+ *  "just you" is the resting state of every session and a line that is almost
+ *  always true is not news. */
+function presenceSentence(others: string[]): string | null {
+  if (others.length === 0) return null;
+  if (others.length === 1) return `You and ${others[0]}`;
+  return `You and ${others.length} others`;
+}
+
+export interface StudioDrawerProps {
+  /** Names of the other people in the held document this session (D6's
+   *  presence channel). Defaults to nobody: the drawer is studio chrome and
+   *  mounts from `app/(document)/layout.tsx`, above any engagement, so the
+   *  document's own page passes this down. */
+  others?: string[];
+}
+
+export function StudioDrawer({ others = [] }: StudioDrawerProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const hydrated = useHydrated();
@@ -152,6 +171,7 @@ export function StudioDrawer() {
   const openDoor = LEDGERS.find((l) => l.key === openLedger) ?? null;
   const open = openLedger === FEEDBACK_SHEET.key ? FEEDBACK_SHEET : openDoor;
   const { inHandToday } = useDocumentTime();
+  const presence = presenceSentence(others);
   const { openTimer } = useMobileShell();
   // The Post's Record merges the inbox + procurement feeds, so the bell's
   // awareness dot must read both unreads or it would lie about the sheet.
@@ -556,6 +576,17 @@ export function StudioDrawer() {
               {THE_POST.label}
             </span>
           </button>
+
+          {presence && (
+            <span
+              data-drawer-presence
+              /* Bounded so the right zone cannot grow into the centre the
+                 way F03's `Find anything` words did at 1280. */
+              className="max-w-[18ch] truncate whitespace-nowrap px-2 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
+            >
+              {presence}
+            </span>
+          )}
 
           <AccountNameplate />
         </div>

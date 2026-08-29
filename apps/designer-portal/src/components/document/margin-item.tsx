@@ -12,7 +12,7 @@
  */
 
 import {
-  PROJECT_PAPER_ORDER,
+  DOCUMENT_INDEX_LABELS,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
 import {
@@ -34,9 +34,7 @@ export function marginAnchorRegion(row: MarginItemRow): DocumentIndexKey | null 
 }
 
 export function marginRegionName(key: DocumentIndexKey): string {
-  return (
-    PROJECT_PAPER_ORDER.find((region) => region.key === key)?.label ?? key
-  ).toUpperCase();
+  return DOCUMENT_INDEX_LABELS[key].toUpperCase();
 }
 
 /** The card's printed anchor line. */
