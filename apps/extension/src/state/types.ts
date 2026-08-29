@@ -26,6 +26,15 @@ export type Destination =
 /** Where a finished capture commits. */
 export type CommitTarget = 'library' | 'inbox' | 'decision';
 
+/**
+ * The distinct save paths CommitBar's footer can trigger — carried on
+ * SAVE_START/io.lastCommitKind (CL W3-E10 F2) so an R5 retry re-runs the
+ * exact button the user pressed instead of re-deriving a guess from
+ * dedup/routing state (which can't distinguish "declined a merge, save new"
+ * from "update").
+ */
+export type CommitKind = 'library' | 'inbox' | 'update' | 'reuse';
+
 // ─── Per-field status (drives Region A verified/edited/missing badges) ───────
 
 export type FieldStatus = 'verified' | 'extracted' | 'edited' | 'missing';
@@ -169,6 +178,8 @@ export interface IoSlice {
   /** Durable Product retained when only the project-placement RPC failed. */
   pendingPlacementProductId: UUID | null;
   lastPlacementOutcome: PlacementOutcome | null;
+  /** The kind SAVE_START was dispatched with — what an R5 retry re-runs (CL W3-E10 F2). */
+  lastCommitKind: CommitKind | null;
 }
 
 export interface CaptureState {
@@ -240,8 +251,13 @@ export type CaptureAction =
   | { type: 'DUPLICATE_CLEARED' }
   | { type: 'MERGE_FIELD_PICK'; field: DraftFieldKey; pick: 'existing' | 'new' }
   // save lifecycle
-  | { type: 'SAVE_START'; target: CommitTarget }
-  | { type: 'SAVE_SUCCESS'; productId: UUID; landed: 'library' | 'inbox'; placementOutcome?: PlacementOutcome | null }
+  | { type: 'SAVE_START'; target: CommitTarget; lastCommitKind?: CommitKind }
+  | {
+      type: 'SAVE_SUCCESS';
+      productId: UUID;
+      landed: 'library' | 'inbox';
+      placementOutcome?: PlacementOutcome | null;
+    }
   | { type: 'SAVE_ERROR'; error: string; preservedProductId?: UUID }
   | { type: 'CAPTURE_NEXT' }
   // prefs

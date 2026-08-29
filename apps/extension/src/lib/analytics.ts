@@ -1,4 +1,4 @@
-import PostHog from "posthog-js/dist/module.no-external";
+import PostHog from 'posthog-js/dist/module.no-external';
 
 let posthogInstance: ReturnType<typeof PostHog.init> | null = null;
 
@@ -14,9 +14,8 @@ export function getPostHog() {
   if (!key) return null;
 
   posthogInstance = PostHog.init(key, {
-    api_host:
-      process.env.PLASMO_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
-    persistence: "localStorage",
+    api_host: process.env.PLASMO_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
+    persistence: 'localStorage',
     capture_pageview: false,
     autocapture: false,
     disable_session_recording: true,
@@ -28,7 +27,7 @@ export function getPostHog() {
   // Super-properties are attached to every event. Read the installed manifest
   // so adoption telemetry describes the binary actually running in Chrome.
   posthogInstance.register({
-    surface: "extension",
+    surface: 'extension',
     app_version: chrome.runtime.getManifest().version,
   });
 
@@ -45,8 +44,8 @@ export function identifyUser(userId: string): void {
   const ph = getPostHog();
   if (!ph) return;
   ph.identify(userId, {
-    platform: "extension",
-    role: "designer",
+    platform: 'extension',
+    role: 'designer',
   });
 }
 
@@ -86,12 +85,11 @@ function track(event: string, properties?: Record<string, unknown>): void {
  */
 export const extensionEvents = {
   /** Sidepanel opened. `domain` is the active tab's host when known. */
-  open: (properties?: { domain?: string }) =>
-    track("capture.extension.opened", properties ?? {}),
+  open: (properties?: { domain?: string }) => track('capture.extension.opened', properties ?? {}),
 
   /** Sidepanel closed without a successful capture. */
   cancelled: (properties?: { domain?: string; openMs?: number }) =>
-    track("capture.extension.cancelled", properties ?? {}),
+    track('capture.extension.cancelled', properties ?? {}),
 
   /** Product successfully saved to Supabase. */
   productCapture: (properties: {
@@ -99,73 +97,63 @@ export const extensionEvents = {
     hasPrice: boolean;
     confidence: string;
     captureMethod: string;
-    source?: "chrome_extension" | "mobile_photo" | "url_paste" | "manual";
+    source?: 'chrome_extension' | 'mobile_photo' | 'url_paste' | 'manual';
     /** Hostname of the captured page (CL W3-E10). */
     domain?: string;
     /** The commit-target kind the save landed on (CL W3-E10). */
     destination?:
-      | "library"
-      | "project_inbox"
-      | "fill_slot"
-      | "create_line"
-      | "inbox"
-      | "decision"
-      | "update";
+      | 'library'
+      | 'project_inbox'
+      | 'fill_slot'
+      | 'create_line'
+      | 'inbox'
+      | 'decision'
+      | 'update';
     captureTimeMs?: number;
     vendorIsNew?: boolean;
   }) =>
-    track("product.captured", {
+    track('product.captured', {
       // Extension is the default source when nothing more specific is supplied.
-      source: "chrome_extension",
+      source: 'chrome_extension',
       ...properties,
     }),
 
   /** Vendor successfully saved. Not in PRD §10.1 — internal-use event. */
   vendorCapture: (properties: { hasLogo: boolean; hasContactInfo: boolean }) =>
-    track("vendor.captured", properties),
+    track('vendor.captured', properties),
 
   /** Mobile capture surfaces — emit from the mobile flow when it lands. */
   mobilePhotoTaken: (properties: { hadNotes: boolean }) =>
-    track("capture.mobile_photo.taken", properties),
+    track('capture.mobile_photo.taken', properties),
 
   /** URL paste capture surface (designer portal). */
-  urlPasteAttempted: (properties: {
-    domain?: string;
-    scrapeSuccess: boolean;
-  }) => track("capture.url_paste.attempted", properties),
+  urlPasteAttempted: (properties: { domain?: string; scrapeSuccess: boolean }) =>
+    track('capture.url_paste.attempted', properties),
 
   /** Manual entry capture surface. */
-  manualCreated: () => track("capture.manual.created", {}),
+  manualCreated: () => track('capture.manual.created', {}),
 
   /** Extraction telemetry — extension-internal, not in PRD §10.1. */
-  extractionStart: (mode: string) => track("extraction_started", { mode }),
-  extractionComplete: (
-    mode: string,
-    fieldCount?: number,
-    confidence?: string,
-  ) =>
-    track("extraction_completed", {
+  extractionStart: (mode: string) => track('extraction_started', { mode }),
+  extractionComplete: (mode: string, fieldCount?: number, confidence?: string) =>
+    track('extraction_completed', {
       mode,
       field_count: fieldCount,
       confidence,
     }),
   extractionError: (mode: string, errorType?: string) =>
-    track("extraction_failed", { mode, error_type: errorType }),
+    track('extraction_failed', { mode, error_type: errorType }),
 
   /** User toggled product/vendor mode. */
   modeSwitch: (from: string, to: string, autoDetected: boolean) =>
-    track("mode_switch", { from, to, auto_detected: autoDetected }),
+    track('mode_switch', { from, to, auto_detected: autoDetected }),
 
   /** Existing product/vendor found during save. */
-  duplicateDetected: (type: "product" | "vendor") =>
-    track("duplicate_detected", { type }),
+  duplicateDetected: (type: 'product' | 'vendor') => track('duplicate_detected', { type }),
 
   /** Spec-book project placement, namespaced for the cross-surface funnel. */
-  specBookPlacementAttempted: (properties: {
-    routeKind: string;
-    reusedProduct: boolean;
-  }) =>
-    track("spec_book.capture_routing.attempted", {
+  specBookPlacementAttempted: (properties: { routeKind: string; reusedProduct: boolean }) =>
+    track('spec_book.capture_routing.attempted', {
       route_kind: properties.routeKind,
       reused_product: properties.reusedProduct,
     }),
@@ -176,7 +164,7 @@ export const extensionEvents = {
     selectionId: string | null;
     placementId: string | null;
   }) =>
-    track("spec_book.capture_routing.succeeded", {
+    track('spec_book.capture_routing.succeeded', {
       route_kind: properties.routeKind,
       reused_product: properties.reusedProduct,
       outcome: properties.outcome,
@@ -188,7 +176,7 @@ export const extensionEvents = {
     reusedProduct: boolean;
     retryable: boolean;
   }) =>
-    track("spec_book.capture_routing.failed", {
+    track('spec_book.capture_routing.failed', {
       route_kind: properties.routeKind,
       reused_product: properties.reusedProduct,
       retryable: properties.retryable,
