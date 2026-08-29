@@ -13,7 +13,7 @@ interface LibraryHit {
 const TARGET_LABEL: Record<RecentCapture['target'], string> = {
   library: 'Library',
   inbox: 'Inbox',
-  decision: 'Decision',
+  decision: 'Client choosing',
   update: 'Updated',
 };
 
