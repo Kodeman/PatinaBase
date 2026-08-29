@@ -164,4 +164,40 @@ describe('the schedule frame region', () => {
     // land — armed against an unmounted strip it would simply have expired.
     expect(screen.getByText('the drafting strip')).toBeInTheDocument();
   });
+
+  it('carries the region-gap token as its own top margin, folded and open, and no other mt-/mb-', () => {
+    const { container, rerender } = render(
+      <ScheduleNavProvider>
+        <ScheduleRuleRegion {...props} />
+      </ScheduleNavProvider>,
+    );
+
+    const folded = container.querySelector('section[aria-label="Schedule frame"]');
+    expect(folded).not.toBeNull();
+    expect(folded).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      folded!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(folded!.className).not.toMatch(/\bmb-/);
+    // The folded rule steps to `mid` — `strong` is reserved for an open region.
+    const foldedRule = folded!.querySelector('[data-rule-weight]');
+    expect(foldedRule).toHaveAttribute('data-rule-weight', 'mid');
+
+    fireEvent.click(screen.getByRole('button', { name: /Schedule/ }));
+    rerender(
+      <ScheduleNavProvider>
+        <ScheduleRuleRegion {...props} />
+      </ScheduleNavProvider>,
+    );
+
+    const open = container.querySelector('section[aria-label="Schedule frame"]');
+    expect(open).not.toBeNull();
+    expect(open).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      open!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(open!.className).not.toMatch(/\bmb-/);
+    const openRule = open!.querySelector('[data-rule-weight]');
+    expect(openRule).toHaveAttribute('data-rule-weight', 'strong');
+  });
 });

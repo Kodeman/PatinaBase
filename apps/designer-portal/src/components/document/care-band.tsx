@@ -252,7 +252,7 @@ export function CareBand({
     return (
       <div
         {...indexRootAttrs}
-        className="mt-8 rounded-[3px] bg-[rgba(168,181,160,0.16)] px-4 py-3.5"
+        className="mt-[var(--doc-region-gap)] rounded-[3px] bg-[rgba(168,181,160,0.16)] px-4 py-3.5"
       >
         <p className="text-[13px] text-[var(--color-charcoal)]">
           <b>The book is closed.</b>{' '}
@@ -281,7 +281,7 @@ export function CareBand({
       <section
         {...indexRootAttrs}
         aria-label="Project closeout ownership"
-        className="mt-8 border-l-2 border-[var(--color-sage)] px-3.5 py-2.5"
+        className="mt-[var(--doc-region-gap)] border-l-2 border-[var(--color-sage)] px-3.5 py-2.5"
       >
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
           Project closeout · owner action
@@ -301,7 +301,7 @@ export function CareBand({
     return (
       <div
         {...indexRootAttrs}
-        className="mt-8 rounded-[3px] bg-[rgba(168,181,160,0.16)] px-4 py-3.5"
+        className="mt-[var(--doc-region-gap)] rounded-[3px] bg-[rgba(168,181,160,0.16)] px-4 py-3.5"
       >
         <p className="text-[13px] text-[var(--color-charcoal)]">
           <b>The book is closed.</b>{' '}
@@ -316,7 +316,7 @@ export function CareBand({
   // The folded quiet line — closure stays reachable without wearing a band.
   if (fold.folded) {
     return (
-      <div {...indexRootAttrs} className="mt-8">
+      <div {...indexRootAttrs} className="mt-[var(--doc-region-gap)]">
         <RegionRule />
         <FoldSeam
           headingId={HEADING_ID}
@@ -372,7 +372,7 @@ export function CareBand({
   return (
     <div
       {...indexRootAttrs}
-      className="mt-8 rounded-[3px] bg-[rgba(229,221,208,0.5)] px-4 py-3.5"
+      className="mt-[var(--doc-region-gap)] rounded-[3px] bg-[rgba(229,221,208,0.5)] px-4 py-3.5"
     >
       <RegionRule />
       {/* The band head — R68.1: mark · mono label · reading · the solid act. */}

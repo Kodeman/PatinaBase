@@ -272,6 +272,12 @@ describe('CareBand running index root (W2 C-2)', () => {
     const root = container.querySelector('[data-index-region="care"]');
     expect(root).not.toBeNull();
     expect(root).toHaveAttribute('id', 'care-region-heading');
+    // W3-L4 — one region-spacing token, owned by the root, in every branch.
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
     expect(
       screen.getByRole('region', { name: 'Project closeout ownership' }),
     ).toBe(root);
@@ -291,6 +297,12 @@ describe('CareBand running index root (W2 C-2)', () => {
     const root = container.querySelector('[data-index-region="care"]');
     expect(root).not.toBeNull();
     expect(root).toHaveAttribute('id', 'care-region-heading');
+    // W3-L4 — one region-spacing token, owned by the root, in every branch.
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
   });
 
   it('marks the folded (quiet seam) branch as the care root when indexRoot is set', () => {
@@ -313,6 +325,12 @@ describe('CareBand running index root (W2 C-2)', () => {
     const root = container.querySelector('[data-index-region="care"]');
     expect(root).not.toBeNull();
     expect(root).toHaveAttribute('id', 'care-region-heading');
+    // W3-L4 — one region-spacing token, owned by the root, in every branch.
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
   });
 
   // C-04 — the `care` stop is declared on every project spread. A completed
@@ -337,6 +355,12 @@ describe('CareBand running index root (W2 C-2)', () => {
     const root = container.querySelector('[data-index-region="care"]');
     expect(root).not.toBeNull();
     expect(root).toHaveAttribute('id', 'care-region-heading');
+    // W3-L4 — one region-spacing token, owned by the root, in every branch.
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
     expect(screen.getByText(/The book is closed\./)).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Close the book' }),
@@ -384,5 +408,11 @@ describe('CareBand running index root (W2 C-2)', () => {
     const root = container.querySelector('[data-index-region="care"]');
     expect(root).not.toBeNull();
     expect(root).toHaveAttribute('id', 'care-region-heading');
+    // W3-L4 — one region-spacing token, owned by the root, in every branch.
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
   });
 });

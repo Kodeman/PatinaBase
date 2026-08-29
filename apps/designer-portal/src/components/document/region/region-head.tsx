@@ -71,6 +71,13 @@ export interface RegionHeadProps {
   /** When present, the head renders the Fold toggle for this body. */
   bodyId?: string;
   onFold?: () => void;
+  /**
+   * Silences the dev-mode guard below for a head that is neither foldable
+   * nor ledgered by construction — a ratified state, not an oversight.
+   * `previous-work.tsx` passes this for the empty record head (count 0, no
+   * act, no body). Default `false`: the guard stays on everywhere else.
+   */
+  allowNoActs?: boolean;
 }
 
 export function RegionHead({
@@ -84,6 +91,7 @@ export function RegionHead({
   actions,
   bodyId,
   onFold,
+  allowNoActs = false,
 }: RegionHeadProps) {
   const showFold = Boolean(bodyId && onFold);
   const printedExceptions = exceptions.slice(0, 2);
@@ -111,12 +119,12 @@ export function RegionHead({
           .join(', ')}); only the leading entry is inked.`,
       );
     }
-    if (actions.length === 0 && !bodyId) {
+    if (actions.length === 0 && !bodyId && !allowNoActs) {
       console.error(
         `RegionHead "${surfaceKey}/${regionKey}" has neither a ledger entry nor a foldable body; a head with no acts is a caption, not a head.`,
       );
     }
-  }, [actions, bodyId, regionKey, surfaceKey]);
+  }, [actions, allowNoActs, bodyId, regionKey, surfaceKey]);
 
   return (
     <div
