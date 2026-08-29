@@ -27,6 +27,9 @@ const mockRetryDocumentResolution = jest.fn();
 // scroll-jump because of this addition.
 let mockRecentDocumentsInHand: Array<{ id: string; title: string; subtitle?: string }> = [];
 const mockHistoryToggled = jest.fn();
+const mockLensLineShown = jest.fn();
+const mockLensLineActed = jest.fn();
+const mockLensStandingSheetOpened = jest.fn();
 const mockDiscoveryFacetOpen = jest.fn();
 let mockDiscoveryFacetExpanded = false;
 /** Rows the real MarginRail composes into real MarginItems. */
@@ -417,8 +420,11 @@ jest.mock('@/lib/analytics/document-events', () => ({
   readRecentDocumentsInHand: () => mockRecentDocumentsInHand,
   documentEvents: {
     historyToggled: (...args: unknown[]) => mockHistoryToggled(...args),
-    guideShown: jest.fn(),
-    guideSelected: jest.fn(),
+    // D-B22 — the lens line's three events, fired from this page.
+    lensLineShown: (...args: unknown[]) => mockLensLineShown(...args),
+    lensLineActed: (...args: unknown[]) => mockLensLineActed(...args),
+    lensStandingSheetOpened: (...args: unknown[]) =>
+      mockLensStandingSheetOpened(...args),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     // The real MarginRail leads with the R94 first-touch margin note.
@@ -1533,33 +1539,44 @@ describe('DocumentPage guide activation', () => {
       expect(screen.queryByText('Confirm the site measure')).not.toBeInTheDocument();
     });
 
-    // W3 — the zone's `<li>` list became the band's line 2 (the worst) plus
-    // the standing sheet behind `+N MORE` (the rest). The ordering assertion
-    // CHANGES here, and deliberately: line 2 is ranked by `rankStanding`'s
-    // four standing tiers (overdue · decision-due · damage · po-silence,
-    // OD-1), not by `rankOperationalNeeds`' four desk ranks, and the two
-    // disagree about a damage claim against a due task. Both needs are still
-    // carried — nothing is withheld — so what this test now pins is that the
-    // band ranks by tier and files the remainder whole.
-    it('leads line 2 by standing tier, and files the rest', () => {
+    // W3-R1 — the zone's `<li>` list became the band's line 2 (the worst) plus
+    // the standing sheet behind `+N MORE` (the rest), and line 2 is ranked by
+    // DEADLINE DISTANCE, not by kind: neither the four standing tiers nor the
+    // desk's four ranks decide it. The fixture below is the case that tells
+    // the three rules apart — a decision three weeks out against a claim
+    // window that shuts tomorrow. The retired tier sort put `decision-due`
+    // (tier 1) above `damage` (tier 2) and would have led with the task.
+    const farDecisionAndNearWindow = [
+      {
+        kind: 'task_due', text: 'Confirm the site measure — due in 21 days',
+        actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+      },
+      {
+        kind: 'damage_claim',
+        text: 'A delivered piece was damaged in transit — window closes in 1 day',
+        actionLabel: null, urgent: true, stamp: { label: 'DAMAGE CLAIM' },
+      },
+    ];
+
+    it('leads line 2 by deadline distance, and files the rest', () => {
       asProjectDocument();
       mockDeskData = {
-        folders: [{ row: { engagement_id: 'project-1' }, need: null, needs: rankThreeThenOne }],
+        folders: [
+          { row: { engagement_id: 'project-1' }, need: null, needs: farDecisionAndNearWindow },
+        ],
         chips: [],
         composed: { 'project-1': true },
       };
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      // `task_due` is `decision-due` (tier 1); `damage_claim` is `damage`
-      // (tier 2). The desk's own rank has them the other way round.
-      expect(bandSentence()).toContain('Confirm the site measure');
-      expect(bandSentence()).not.toContain('A delivered piece was damaged in transit');
+      expect(bandSentence()).toContain('window closes in 1 day');
+      expect(bandSentence()).not.toContain('Confirm the site measure');
 
       fireEvent.click(screen.getByRole('button', { name: '+1 MORE' }));
       const sheet = screen.getByRole('dialog');
       expect(
-        within(sheet).getByText('A delivered piece was damaged in transit'),
+        within(sheet).getByText('Confirm the site measure — due in 21 days'),
       ).toBeInTheDocument();
     });
   });
@@ -1576,6 +1593,75 @@ describe('DocumentPage guide activation', () => {
   // `+N MORE`. The guide's `reason`, its `Input needed · …` line and its
   // `+N more` input count are DELETED with the strip — the band prints the
   // headline and the act, nothing else (proposal §2.2). ──
+  // D-B22 — `guideShown`/`guideSelected` retired with the strip that fired
+  // them (`DocumentGuide` no longer mounts, so those two events fired
+  // NOWHERE). Their cases move here, against the three lens events, because
+  // the page — which owns the band's model — is where the lens line fires.
+  describe('the lens line’s telemetry (D-B22)', () => {
+    it('fires once for the model the page actually printed', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: null,
+          needs: [{
+            kind: 'task_due', text: 'Confirm the site measure',
+            actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+          }],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(mockLensLineShown).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          state: 'standing',
+          action_key: 'Open the task',
+          standing_count: 1,
+          tier: 'full',
+        }),
+      );
+    });
+
+    it('fires on the act and on the door, and never from the band itself', () => {
+      asProjectDocument();
+      const needs = [
+        {
+          kind: 'task_due', text: 'Confirm the site measure',
+          actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+        },
+        {
+          kind: 'damage_claim', text: 'A delivered piece was damaged in transit',
+          actionLabel: null, urgent: true, stamp: { label: 'DAMAGE CLAIM' },
+        },
+      ];
+      mockDeskData = {
+        folders: [{ row: { engagement_id: 'project-1' }, need: null, needs }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      fireEvent.click(screen.getByRole('button', { name: '+1 MORE' }));
+      expect(mockLensStandingSheetOpened).toHaveBeenCalledTimes(1);
+      // The sheet's payload carries no `action_key` — the door opens a list,
+      // not an act.
+      expect(mockLensStandingSheetOpened.mock.calls[0][0]).not.toHaveProperty(
+        'action_key',
+      );
+      expect(mockLensLineActed).not.toHaveBeenCalled();
+    });
+
+    it('is the document’s ONE live region, wherever line 2 came from (OD-7)', () => {
+      asProjectDocument();
+      render(<DocumentPage params={fulfilledParams} />);
+      expect(document.querySelectorAll('[aria-live]')).toHaveLength(1);
+    });
+  });
+
   describe('line 2 — the sentence that changes (L1 → C-6)', () => {
     it('prints the standing exception, not the guide sentence, on a project document', () => {
       asProjectDocument();
@@ -1695,10 +1781,11 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      // The `[data-ticket-row="money"]` read became line 1's right-flush
-      // figure — the same `deriveTicket` money emphasis, in the band's
-      // register (OD-1).
-      expect(bandRightFlush()).toContain('$17,500 OWED YOU');
+      // D-B26 — the money row's own exception is the worst thing standing, so
+      // line 2 names the figure and line 1 YIELDS it rather than printing
+      // $17,500 twice, twenty pixels apart. This paper has no install date, so
+      // line 1's right slot is empty rather than shortened.
+      expect(bandRightFlush()).not.toContain('$17,500');
       // The election is more direct than it was: the guide strip quoted the
       // row (`Money · $17,500 owed you`); the band takes the row's own
       // exception into the standing set and prints it as the worst thing on

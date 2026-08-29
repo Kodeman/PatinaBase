@@ -86,22 +86,15 @@ function precedes(first: Element, second: Element): boolean {
   );
 }
 
+// C-16 — two cases deleted here rather than kept: "prints above the table" and
+// "stands on the paper that has no table too" asserted that THIS FILE's own
+// JSX put its `BAND` stub before `<TableFrame>`, and that its own stub exists.
+// The frame no longer takes a `ticket` node, so neither could fail on any
+// product change. The composition claim they were standing in for is carried
+// by `page.test.tsx`'s "mounts once on the %s spread", which renders the real
+// page with `worktable` on. What survives here is the one claim that still has
+// a subject: the frame could in principle mount a band, and does not.
 describe('the band above the table', () => {
-  it.each([
-    ['intake', INTAKE],
-    ['speccing', SPECCING],
-    ['finalize', FINALIZE],
-    ['delivery', DELIVERY],
-  ])('prints above the table on the %s composition', (_name, composition) => {
-    const { container } = frame({ composition });
-
-    const band = container.querySelector('[data-lens-band]')!;
-    const table = container.querySelector('[data-table]')!;
-    expect(band).not.toBeNull();
-    expect(table).not.toBeNull();
-    expect(precedes(band, table)).toBe(true);
-  });
-
   it.each([
     ['intake', INTAKE],
     ['speccing', SPECCING],
@@ -117,13 +110,10 @@ describe('the band above the table', () => {
     expect(container.querySelectorAll('[data-lens-band]')).toHaveLength(1);
   });
 
-  it('stands on the paper that has no table too', () => {
-    // Replaces "prints no ticket at all when there is no table". That claim is
-    // gone with the ticket's second position: the band is the document's map
-    // and every spread prints it, whether or not a table stands under it.
+  it('mounts no band of its own on a paper with no table either', () => {
     const { container } = frame({ composition: null });
 
-    expect(container.querySelector('[data-lens-band]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-lens-band]')).toHaveLength(1);
     expect(container.querySelector('[data-table]')).toBeNull();
     expect(container.querySelector('[data-spread]')).not.toBeNull();
   });
