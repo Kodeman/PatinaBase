@@ -1,5 +1,5 @@
 /**
- * The running index — the four Project regions that carry a real inline
+ * The running index — the six Project regions that carry a real inline
  * surface, and the DOM ids they already answer to.
  *
  * `sectionAnchorId` names only the seven top-level sections; the regions
@@ -14,7 +14,13 @@
 
 import type { SectionKey } from './desk-derivation';
 
-export type DocumentIndexKey = 'schedule' | 'approvals' | 'ffe' | 'money';
+export type DocumentIndexKey =
+  | 'approvals'
+  | 'schedule'
+  | 'ffe'
+  | 'money'
+  | 'care'
+  | 'record';
 
 export interface ProjectPaperRegion {
   key: DocumentIndexKey;
@@ -26,7 +32,8 @@ export interface ProjectPaperRegion {
  * THE canonical order — the Project section's regions in the order the paper
  * mounts them in `app/(document)/doc/[id]/page.tsx`: the approvals record
  * (mounted under the letterhead), the Rule, the FF&E schedule, the money
- * region. Everything the running index states about order is read from here,
+ * region, the closeout band, the record of previous work. Everything the
+ * running index states about order is read from here,
  * so the index cannot say one order while the DOM prints another (it did:
  * the list declared schedule first while approvals mounted above it).
  *
@@ -54,31 +61,57 @@ export const PROJECT_PAPER_ORDER: readonly ProjectPaperRegion[] = [
     label: 'Money',
     headingId: () => 'money-region-heading',
   },
+  {
+    key: 'care',
+    label: 'Closing the book',
+    headingId: () => 'care-region-heading',
+  },
+  {
+    key: 'record',
+    label: 'The record',
+    headingId: () => 'previous-work-heading',
+  },
 ];
 
 /**
- * The regions a given spread actually puts on the paper (C11). A row whose
- * region the spread never mounts is a scroll-spy target with nothing behind it,
- * so the install and care spreads print neither Money (`MoneyRegion` mounts
- * only under `spreadSection === 'project'`, page.tsx:1448) nor Schedule
- * (`ScheduleSpine` — the only `data-index-region="schedule"` root — mounts only
- * under the same branch, page.tsx:1399). The four stages before the work starts
- * put no Project region on the paper at all.
+ * The regions a given spread actually puts on the paper (C11) — one table, one
+ * row per section, so a spread's order is stated once and read everywhere.
  *
- * Derived by filtering `PROJECT_PAPER_ORDER`, so a subset can never state an
- * order the paper does not print.
+ * A row whose region the spread never mounts is a scroll-spy target with
+ * nothing behind it, so the install and care spreads print neither Money
+ * (`MoneyRegion` mounts only under `spreadSection === 'project'`,
+ * page.tsx:1448) nor Schedule (`ScheduleSpine` — the only
+ * `data-index-region="schedule"` root — mounts only under the same branch,
+ * page.tsx:1399). The four stages before the work starts put no Project region
+ * on the paper at all; Wave 5 gives them their own rows.
+ *
+ * Each row is BUILT from `PROJECT_PAPER_ORDER` rather than written out, so a
+ * subset can never state an order the paper does not print.
  */
-const WORK_SPREAD_REGIONS: readonly ProjectPaperRegion[] =
-  PROJECT_PAPER_ORDER.filter(
-    (region) => region.key !== 'money' && region.key !== 'schedule',
-  );
+function regionsInPaperOrder(
+  keys: readonly DocumentIndexKey[],
+): readonly ProjectPaperRegion[] {
+  const wanted = new Set(keys);
+  return PROJECT_PAPER_ORDER.filter((region) => wanted.has(region.key));
+}
+
+const SECTION_PAPER_REGIONS: Record<
+  SectionKey,
+  readonly ProjectPaperRegion[]
+> = {
+  brief: [],
+  discovery: [],
+  direction: [],
+  proposal: [],
+  project: PROJECT_PAPER_ORDER,
+  install: regionsInPaperOrder(['approvals', 'ffe', 'care', 'record']),
+  care: regionsInPaperOrder(['approvals', 'ffe', 'care', 'record']),
+};
 
 export function paperRegionsForSection(
   section: SectionKey,
 ): readonly ProjectPaperRegion[] {
-  if (section === 'project') return PROJECT_PAPER_ORDER;
-  if (section === 'install' || section === 'care') return WORK_SPREAD_REGIONS;
-  return [];
+  return SECTION_PAPER_REGIONS[section] ?? [];
 }
 
 /** Reading order down the paper — derived, never declared twice. */
