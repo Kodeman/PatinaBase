@@ -65,7 +65,10 @@ import {
   requestRegionUnfold,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
-import { scrollToRegion } from '@/hooks/use-document-running-index';
+import {
+  scrollToRegion,
+  useDocumentRunningIndex,
+} from '@/hooks/use-document-running-index';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
 import {
   deriveProposalWatch,
@@ -1415,6 +1418,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     });
   }, [row, rankedOperationalNeeds, activateDestination]);
 
+  // W1 · the reading stop, lifted. The running index observes the region roots
+  // (`data-index-region`); the margin rail's group counts and the mobile bar's
+  // `AT <STOP>` line both need the answer, so the page owns the call — above
+  // every early return, so the hook order cannot change between renders.
+  // D-B6: `spine-shelved-blocks.tsx` still runs its own observer over the same
+  // roots; that duplication retires with the block in Wave 2.
+  const runningIndexRegions =
+    row?.engagement_kind === 'project' && row.project_id
+      ? paperRegionsForSection(row.active_section)
+      : [];
+  const { activeKey } = useDocumentRunningIndex(
+    runningIndexRegions.map((region) => region.key),
+    row?.project_id ?? '',
+  );
+
   // D13: publish the held document to the mobile shell (bar + spine sheet).
   useMobileActiveDoc(
     row
@@ -1425,6 +1443,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           title: row.title,
           sections,
           rooms: (docRooms ?? []).map((r) => ({ id: r.id, name: r.name })),
+          readingIndex: activeKey,
         }
       : null,
   );
@@ -1775,9 +1794,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
       <DocSpine
         sections={sections}
-        others={others}
         onJump={jumpToSection}
         shelved={shelvedSpine}
+        household={row.client_name}
+        roomInHand={
+          heldRoomId && heldRoomName
+            ? { id: heldRoomId, name: heldRoomName }
+            : null
+        }
+        onReleaseRoom={toggleRoom}
       />
 
       {/* No z-index here: a stacking context on main would trap the fixed
@@ -1817,8 +1842,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             ) : undefined
           }
           needsSetup={needsSetup}
-          inHandRoomName={heldRoomName}
-          onReleaseRoom={heldRoomId ? () => toggleRoom(heldRoomId) : null}
         />
 
         {/* THE TICKET — the document's map, mounted by the DOCUMENT rather
@@ -2321,6 +2344,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             clientUserId={row.client_profile_id}
             now={gateNow}
             approvalSurfaceMounted={row.engagement_kind === 'project'}
+            currentStop={activeKey}
             onHoverLine={setHighlightLineId}
             pendingNoteAnchor={pendingNoteAnchor}
             onNoteAnchorConsumed={() => setPendingNoteAnchor(null)}

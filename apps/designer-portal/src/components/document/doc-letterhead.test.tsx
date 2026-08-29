@@ -14,8 +14,6 @@ describe('the letterhead', () => {
       <DocLetterhead
         title="Vandersteen residence"
         vitals="Procurement"
-        inHandRoomName="Living room"
-        onReleaseRoom={jest.fn()}
       />,
     );
 
@@ -62,8 +60,6 @@ describe('the letterhead', () => {
       <DocLetterhead
         title="Vandersteen residence"
         vitals="Procurement"
-        inHandRoomName="Living room"
-        onReleaseRoom={jest.fn()}
       />,
     );
     document.querySelectorAll('*').forEach((el) => {

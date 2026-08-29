@@ -8,7 +8,7 @@ import {
 } from '@testing-library/react';
 import { MobileShellProvider, useMobileShell } from './mobile-shell';
 import { MobileSheets } from './mobile-sheets';
-import { CompactSpineTimerDoorway } from '../spine-timer';
+import { useDocumentTime } from '@/hooks/document-time-provider';
 
 const mockPause = jest.fn();
 const mockResume = jest.fn();
@@ -184,6 +184,29 @@ function OpenProjectSpine() {
   );
 }
 
+// W1 — `spine-timer.tsx` and its `CompactSpineTimerDoorway` are deleted
+// (OD-16). The studio drawer's `In hand today` clock is the timer's doorway at
+// EVERY width now, so this stub carries that button's shipped shape — its
+// `data-drawer-timer-doorway` hook and its accessible name — and the sheet's
+// focus-return contract is still proved against the selector the product
+// actually publishes. It is guarded on a held project, as the drawer's own
+// `holding && inHandToday > 0` is.
+function DrawerTimerDoorway() {
+  const { openTimer } = useMobileShell();
+  const { heldProjectId } = useDocumentTime();
+  if (!heldProjectId) return null;
+  return (
+    <button
+      type="button"
+      data-drawer-timer-doorway
+      aria-label="Open time controls, in hand 1h05"
+      onClick={openTimer}
+    >
+      In hand today
+    </button>
+  );
+}
+
 function MobileTimerFallbackDoorway() {
   const { openTimer } = useMobileShell();
   return (
@@ -201,16 +224,9 @@ function MobileTimerFallbackDoorway() {
 
 function DesktopFocusFallbacks() {
   return (
-    <>
-      <button type="button" data-studio-books-doorway>
-        Studio books doorway
-      </button>
-      <div data-full-spine-timer>
-        <button type="button" data-action-key="open-manual-time-entry">
-          Full timer log
-        </button>
-      </div>
-    </>
+    <button type="button" data-studio-books-doorway>
+      Studio books doorway
+    </button>
   );
 }
 
@@ -261,9 +277,9 @@ describe('compact-spine timer doorway', () => {
     expect(timerSheet).toHaveAttribute('id', 'mobile-timer-sheet');
     expect(timerSheet).toHaveAttribute(
       'data-mobile-sheet-regime',
-      'through-1439',
+      'every-width',
     );
-    expect(timerSheet).toHaveClass('min-[1440px]:hidden');
+    expect(timerSheet).not.toHaveClass('min-[1440px]:hidden');
     expect(timerSheet).not.toHaveClass('min-[1180px]:hidden');
     expect(document.body.style.overflow).toBe('hidden');
 
@@ -422,11 +438,17 @@ describe('compact-spine timer doorway', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('closes the compact timer at 1440px and does not resurrect it on return', async () => {
+  // W1 rewrite. This case used to assert the reverse — "closes the compact
+  // timer at 1440px and does not resurrect it on return" — because
+  // `spine-timer.tsx` owned Pause and `+ Log` above 1439. That file is deleted
+  // (OD-16) and the sheet is now the ONLY home of those two acts, opened by the
+  // studio drawer's clock at every width. So the assertion inverts: crossing
+  // 1440 must NOT close it, and Escape must still return focus to the doorway.
+  it('keeps the timer open across 1440px — the sheet has no width regime left', async () => {
     setViewportWidth(1439);
     render(
       <MobileShellProvider>
-        <CompactSpineTimerDoorway />
+        <DrawerTimerDoorway />
         <DesktopFocusFallbacks />
         <SheetState />
         <MobileSheets />
@@ -434,12 +456,8 @@ describe('compact-spine timer doorway', () => {
     );
 
     const doorway = screen.getByRole('button', {
-      name: 'Open time controls, In hand, 1h05 elapsed',
+      name: 'Open time controls, in hand 1h05',
     });
-    const fullTimerLog = screen.getByRole('button', {
-      name: 'Full timer log',
-    });
-    fullTimerLog.style.display = 'none';
     doorway.focus();
     fireEvent.click(doorway);
     const timerDialog = screen.getByRole('dialog', { name: 'Time in hand' });
@@ -450,37 +468,42 @@ describe('compact-spine timer doorway', () => {
     );
     expect(document.body.style.overflow).toBe('hidden');
 
-    doorway.style.display = 'none';
-    fullTimerLog.style.display = '';
     act(() => setViewportWidth(1440));
 
+    expect(
+      screen.getByRole('dialog', { name: 'Time in hand' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('sheet-state')).toHaveTextContent('timer');
+    expect(document.body.style.overflow).toBe('hidden');
+
+    // Pause and the manual-log door are reachable at 1440 — the whole reason
+    // the ceiling came off.
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '+ Log manually' }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() =>
       expect(
         screen.queryByRole('dialog', { name: 'Time in hand' }),
       ).not.toBeInTheDocument(),
     );
-    expect(screen.getByTestId('sheet-state')).toHaveTextContent('closed');
     expect(document.body.style.overflow).toBe('');
-    expect(doorway).not.toHaveFocus();
-    await waitFor(() => expect(fullTimerLog).toHaveFocus());
-
-    act(() => setViewportWidth(1439));
-    expect(
-      screen.queryByRole('dialog', { name: 'Time in hand' }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => expect(doorway).toHaveFocus());
   });
 
   it('keeps the timer open when compact chrome gives way to the mobile edge', async () => {
     render(
       <MobileShellProvider>
-        <CompactSpineTimerDoorway />
+        <DrawerTimerDoorway />
         <MobileTimerFallbackDoorway />
         <MobileSheets />
       </MobileShellProvider>,
     );
 
     const compactDoorway = screen.getByRole('button', {
-      name: 'Open time controls, In hand, 1h05 elapsed',
+      name: 'Open time controls, in hand 1h05',
     });
     const mobileMore = screen.getByRole('button', {
       name: 'More studio actions',
@@ -508,14 +531,14 @@ describe('compact-spine timer doorway', () => {
     setViewportWidth(1179);
     render(
       <MobileShellProvider>
-        <CompactSpineTimerDoorway />
+        <DrawerTimerDoorway />
         <MobileTimerFallbackDoorway />
         <MobileSheets />
       </MobileShellProvider>,
     );
 
     const compactDoorway = screen.getByRole('button', {
-      name: 'Open time controls, In hand, 1h05 elapsed',
+      name: 'Open time controls, in hand 1h05',
     });
     const mobileMore = screen.getByRole('button', {
       name: 'More studio actions',
@@ -587,7 +610,7 @@ describe('compact-spine timer doorway', () => {
     mockTimeState = { ...mockTimeState, heldProjectId: null };
     render(
       <MobileShellProvider>
-        <CompactSpineTimerDoorway />
+        <DrawerTimerDoorway />
       </MobileShellProvider>,
     );
 

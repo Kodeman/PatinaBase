@@ -102,12 +102,15 @@ test.describe("Quiet Work release browser contracts", () => {
         await page.setViewportSize({ width, height: 900 });
         await expect(mobileBar).toBeHidden();
         await expect(spine).toBeVisible();
+        // W1 — the rail earns its column: 136px, not the old 56px strip
+        // (L4 flagged this poll as the last place the retired width was
+        // asserted). The pair of polls keeps the 2px tolerance.
         await expect
           .poll(async () => (await spine.boundingBox())?.width ?? 0)
-          .toBeGreaterThanOrEqual(55);
+          .toBeGreaterThanOrEqual(135);
         await expect
           .poll(async () => (await spine.boundingBox())?.width ?? 1000)
-          .toBeLessThanOrEqual(57);
+          .toBeLessThanOrEqual(137);
         await expect(marginTrigger).toBeVisible();
         await expect(margin).toHaveAttribute("data-margin-mode", "sheet");
         await expect(margin).toHaveAttribute("aria-hidden", "true");
@@ -197,12 +200,26 @@ test.describe("Quiet Work release browser contracts", () => {
         });
       }
 
-      await test.step("390px: the mobile bar is the sole timer doorway", async () => {
+      await test.step("390px: the mobile bar's More is the sole timer doorway", async () => {
         await page.setViewportSize({ width: 390, height: 844 });
         await expect(drawer).toBeHidden();
         await expect(mobileBar).toBeVisible();
-        await expect(mobileBar.getByText(/In hand|Today/)).toBeVisible();
         await expect(page.locator("[data-spine-timer-regime]")).toHaveCount(0);
+
+        // The bar's centre slot holds the elected LIFECYCLE act on this
+        // document, so the `In hand`/`Today` block — the slot's fallback when
+        // nothing is registered (OD-11) — does not print here. At 390 the
+        // timer's doorway is the More menu's `Time in hand` row, and it opens
+        // the same sheet the studio drawer's clock opens from 1180 up.
+        await mobileBar
+          .getByRole("button", { name: "More studio actions" })
+          .click();
+        const timerRow = page.getByRole("button", { name: /Time in hand/ });
+        await expect(timerRow).toBeVisible();
+        await timerRow.click();
+        await expect(
+          page.getByRole("dialog", { name: "Time in hand" }),
+        ).toBeVisible();
       });
     });
   });

@@ -22,7 +22,6 @@ import type { SectionKey } from '@/lib/document/desk-derivation';
 
 export interface DocSpineProps {
   sections: SpineSection[];
-  others: string[];
   /** Click a settled/active marker to scroll to (and unfold) that section. */
   onJump?: (key: SectionKey) => void;
   /** The running index — the full spine's one block (≥1440px only; the
@@ -75,7 +74,7 @@ export function DocSpine({
           wave the head prints statically. */}
       <div
         data-spine-head
-        className="doc-rule-mid mb-3 min-h-[84px] pb-3 min-[1440px]:min-h-[100px]"
+        className="doc-rule-mid mb-3 min-h-[116px] pb-3 min-[1440px]:min-h-[100px]"
       >
         {household && (
           <p className="truncate text-[13px] leading-tight text-[var(--text-primary)]">
@@ -83,30 +82,30 @@ export function DocSpine({
           </p>
         )}
 
-        {/* Full tier (≥1440): the seven marks travel in one row rather than
-            seven labelled rows, and all seven must sit AT REST — the
-            progression is the point, so nothing may hide behind a scroll.
-            The fixed 200px spine column leaves ~168px inside its own px-4;
-            `xs` marks (22px) plus a reclaimed slice of that padding (-mx-2)
-            fit seven with room to spare. Per-mark text drops out here; the
-            active phase's line renders once, below the row. */}
-        <ul className="flex flex-col items-center gap-1 min-[1440px]:flex-row min-[1440px]:flex-nowrap min-[1440px]:items-center min-[1440px]:gap-0.5 min-[1440px]:-mx-2">
+        {/* The arc — all seven marks, at rest, at both desktop tiers: the
+            progression is the point, so nothing may hide behind a scroll and
+            no mark is dropped for a count.
+
+            ≥1440: one row. The 200px column leaves ~168px inside its px-4;
+            seven `xs` marks (22px) in 24px cells plus a reclaimed slice of
+            that padding (-mx-2) fit with room to spare.
+
+            1180–1439 (design lead §10, ruling (d)): 112px of measure inside
+            px-3 cannot hold 154px of row, so the arc WRAPS — same seven `xs`
+            marks, four on the first row and three on the second, each cell at
+            the 24px pointer floor rather than 44px. The cell gap is `gap-1`
+            here, not `gap-0.5`: at 4px a fifth cell needs 136px against the
+            128px the reclaimed padding gives, so the break after the fourth
+            is arithmetic rather than luck (at 2px the fifth measures exactly
+            128 and the row is a subpixel coin-toss). The arc costs 48px; the
+            head reserve above is 116px at this tier and 100 at 1440. */}
+        <ul className="-mx-2 flex flex-row flex-wrap items-center gap-1 min-[1440px]:flex-nowrap min-[1440px]:gap-0.5">
           {sections.map((s) => {
             const mark = (
               <StrataMark
                 // R35: each marker carries the engagement's fill as of its
                 // section (the filling staircase); R15: only the active one
                 // breathes — "alive" is literally true here.
-                fill={fillStateAtSection(s.key)}
-                size="sm"
-                breathing={s.state === 'active'}
-                label={
-                  s.state === 'active' ? `${s.label} — ${s.sub}` : undefined
-                }
-              />
-            );
-            const markXs = (
-              <StrataMark
                 fill={fillStateAtSection(s.key)}
                 size="xs"
                 breathing={s.state === 'active'}
@@ -117,19 +116,19 @@ export function DocSpine({
             );
             // Settled + active markers jump to their section; future ones are
             // inert (nothing to reach yet). The jump button gives keyboard reach.
-            // The full-tier cell holds the row's 44px height but only 24px of
-            // width (the xs mark is 22px) — narrower than the usual 44px
-            // target, so it stays at the 24px floor rather than the mark's
-            // own 22px.
+            // The cell is 24px wide at both tiers (the xs mark is 22px) —
+            // narrower than the usual 44px target, so it sits at the 2.5.8
+            // pointer floor rather than the mark's own 22px. Height follows:
+            // 44px at 1440 where the single row has the space, 24px at
+            // 1180–1439 where two rows must fit inside a 116px head.
             return (
-              <li key={s.key} className="w-full shrink-0 min-[1440px]:w-auto">
+              <li key={s.key} className="w-6 shrink-0">
                 {s.state === 'future' || s.state === 'unrecorded' || !onJump ? (
                   <div
                     aria-label={`${s.label}: ${s.sub}`}
-                    className="flex min-h-11 items-center justify-center min-[1440px]:w-6"
+                    className="flex min-h-6 w-6 items-center justify-center min-[1440px]:min-h-11"
                   >
-                    <span className="min-[1440px]:hidden">{mark}</span>
-                    <span className="hidden min-[1440px]:block">{markXs}</span>
+                    {mark}
                   </div>
                 ) : (
                   <button
@@ -137,10 +136,9 @@ export function DocSpine({
                     onClick={() => onJump(s.key)}
                     title={`Jump to ${s.label}`}
                     aria-label={`Jump to ${s.label}: ${s.sub}`}
-                    className="flex min-h-11 w-full min-w-11 items-center justify-center rounded-[4px] transition-colors hover:bg-[rgba(196,165,123,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none min-[1440px]:w-6"
+                    className="flex min-h-6 w-6 items-center justify-center rounded-[4px] transition-colors hover:bg-[rgba(196,165,123,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none min-[1440px]:min-h-11"
                   >
-                    <span className="min-[1440px]:hidden">{mark}</span>
-                    <span className="hidden min-[1440px]:block">{markXs}</span>
+                    {mark}
                   </button>
                 )}
               </li>

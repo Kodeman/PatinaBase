@@ -11,7 +11,7 @@ const sections: SpineSection[] = [
 
 describe('DocSpine unrecorded stages', () => {
   it('names unrecorded history but does not make it a jump target', () => {
-    render(<DocSpine sections={sections} others={[]} onJump={jest.fn()} />);
+    render(<DocSpine sections={sections} onJump={jest.fn()} />);
     expect(screen.getByLabelText('Brief: Not recorded')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Jump to Brief/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Jump to Project/ })).toBeInTheDocument();
@@ -20,7 +20,7 @@ describe('DocSpine unrecorded stages', () => {
 
 describe('DocSpine at the narrow tier (1180–1439) — F02', () => {
   it('prints the active section label and "Put down" from 1180, not only from 1440', () => {
-    render(<DocSpine sections={sections} others={[]} onJump={jest.fn()} />);
+    render(<DocSpine sections={sections} onJump={jest.fn()} />);
     expect(screen.getByText('Put down')).toHaveClass('min-[1180px]:inline');
   });
 
@@ -30,7 +30,7 @@ describe('DocSpine at the narrow tier (1180–1439) — F02', () => {
     render(
       <DocSpine
         sections={sections}
-        others={[]}
+       
         onJump={jest.fn()}
         shelved={<div data-testid="shelved-blocks">shelved</div>}
       />,
@@ -48,7 +48,7 @@ describe('DocSpine · the rail head (R127 W1)', () => {
     const { container } = render(
       <DocSpine
         sections={sections}
-        others={[]}
+       
         onJump={jest.fn()}
         household="Vandersteen"
       />,
@@ -76,14 +76,14 @@ describe('DocSpine · the rail head (R127 W1)', () => {
     expect(within(phrase as HTMLElement).getByText('Active')).toBeInTheDocument();
 
     // The height is reserved, not measured, at both desktop tiers.
-    expect(head).toHaveClass('min-h-[84px]', 'min-[1440px]:min-h-[100px]');
+    expect(head).toHaveClass('min-h-[116px]', 'min-[1440px]:min-h-[100px]');
   });
 
   it('carries no timer and no presence line — both left the rail (OD-16)', () => {
     const { container } = render(
       <DocSpine
         sections={sections}
-        others={['Leah']}
+       
         onJump={jest.fn()}
         household="Vandersteen"
       />,
@@ -101,7 +101,7 @@ describe('DocSpine · the rail head (R127 W1)', () => {
     render(
       <DocSpine
         sections={sections}
-        others={[]}
+       
         onJump={jest.fn()}
         household="Vandersteen"
         roomInHand={{ id: 'r1', name: 'Kitchen' }}
@@ -120,7 +120,7 @@ describe('DocSpine · the rail head (R127 W1)', () => {
 
   it('prints nothing about a room when none is held', () => {
     const { container } = render(
-      <DocSpine sections={sections} others={[]} onJump={jest.fn()} household="Vandersteen" />,
+      <DocSpine sections={sections} onJump={jest.fn()} household="Vandersteen" />,
     );
     expect(container.querySelector('[data-spine-room-in-hand]')).toBeNull();
     expect(
@@ -130,7 +130,7 @@ describe('DocSpine · the rail head (R127 W1)', () => {
 
   it('publishes the one regime vocabulary — the narrow rail prints words (OD-5)', () => {
     const { container } = render(
-      <DocSpine sections={sections} others={[]} onJump={jest.fn()} />,
+      <DocSpine sections={sections} onJump={jest.fn()} />,
     );
     expect(
       container.querySelector('[data-document-spine]'),

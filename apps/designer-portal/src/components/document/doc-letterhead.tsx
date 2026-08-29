@@ -40,11 +40,6 @@ export function DocLetterhead({
   /** W1: the open setup needs, each with its own remedy. Empty, null and
    *  undefined all render nothing — the chip never announces a zero. */
   needsSetup?: NeedsSetupEntry[] | null;
-  /** The room in hand and its release are the RAIL's from Wave 1 (C-1): the
-   *  rail head prints `IN HAND · <ROOM>` and carries `Put down`. Both props stay
-   *  on the signature — and unread — until W1-L4 rewires page.tsx onto DocSpine. */
-  inHandRoomName?: string | null;
-  onReleaseRoom?: (() => void) | null;
 }) {
   return (
     <header id="document-project-status" tabIndex={-1} className="doc-rule-mid mb-4 pb-5 pt-3.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
