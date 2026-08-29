@@ -14,9 +14,13 @@
  * then, only where the shell actually carries the attribute, wait for it to
  * read `true`.
  *
- * There is no `waitForTimeout` in this module, deliberately: a fixed sleep
- * either makes the suite slow or makes it lie, and both were how the earlier
- * document specs went flaky (`e2e-baseline.md` §4).
+ * `settle`/`scrollTo`/`scrollSteps` never use `waitForTimeout`, deliberately:
+ * a fixed sleep either makes the suite slow or makes it lie, and both were
+ * how the earlier document specs went flaky (`e2e-baseline.md` §4). `quiet`
+ * (D-B28, added W4-L4) is the one exception, and it is not a fixed sleep: it
+ * polls a 100ms tick only to re-check "has a NEW Supabase request arrived",
+ * debouncing until a full quiet window has passed with none — the wait
+ * length is decided by the network, not guessed by the test.
  */
 import type { Page } from '@playwright/test';
 
@@ -225,4 +229,90 @@ export async function visibleWordSet(
     }
     return words;
   }, root);
+}
+
+/**
+ * D-B28's network-quiet precondition — required before any "the lens fetches
+ * nothing" claim (`lens-contrast.spec.ts`'s network-request assertion,
+ * `lens-cls.spec.ts`'s CLS instrument).
+ *
+ * The paper's own initial load is a dependent-query TAIL, not a lens fetch:
+ * `useProjectFfeReadiness` fires one `rpc('get_project_ffe_readiness', …)`
+ * per FF&E line, at concurrency 8, only after `useProjectFFEItems` resolves
+ * — 42–84 round-trips on the seeded long paper, all after `openPaper`
+ * returns (D-B28's CDP probe: 0 readiness requests before the scroll, 63 at
+ * steps 17–25, `scrollHeight` still climbing at the same steps). A network
+ * assertion taken before that tail finishes is not measuring the lens.
+ *
+ * `quiet` waits for the browser's own `networkidle` state, then holds for a
+ * further window with ZERO requests to the Supabase origin — the origin is
+ * what the readiness fan-out (and everything else app-driven) actually hits,
+ * where `networkidle` alone can be fooled by an open realtime/keepalive
+ * connection. A 30s cap turns "the load never ends" into a loud failure
+ * rather than a silent hang.
+ */
+const DEFAULT_SUPABASE_ORIGIN = 'http://127.0.0.1:54321';
+
+function supabaseOrigin(): string {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? DEFAULT_SUPABASE_ORIGIN).origin;
+  } catch {
+    return DEFAULT_SUPABASE_ORIGIN;
+  }
+}
+
+export interface QuietResult {
+  /** Every request to the Supabase origin seen while waiting for quiet. */
+  supabaseRequestsSeen: number;
+  /** The `get_project_ffe_readiness` fan-out specifically (D-B28's own
+   *  finding) — logged by callers, never asserted against. */
+  readinessRequestsSeen: number;
+}
+
+export async function quiet(
+  page: Page,
+  opts: { timeoutMs?: number; quietWindowMs?: number } = {},
+): Promise<QuietResult> {
+  const timeoutMs = opts.timeoutMs ?? 30_000;
+  const quietWindowMs = opts.quietWindowMs ?? 1_000;
+  const origin = supabaseOrigin();
+
+  await page.waitForLoadState('networkidle');
+
+  let supabaseRequestsSeen = 0;
+  let readinessRequestsSeen = 0;
+  let lastSupabaseRequestAt = Date.now();
+
+  const onRequest = (req: { url(): string }) => {
+    const url = req.url();
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return;
+    }
+    if (parsed.origin !== origin) return;
+    supabaseRequestsSeen += 1;
+    lastSupabaseRequestAt = Date.now();
+    if (url.includes('get_project_ffe_readiness')) readinessRequestsSeen += 1;
+  };
+
+  page.on('request', onRequest);
+  try {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (Date.now() - lastSupabaseRequestAt >= quietWindowMs) {
+        return { supabaseRequestsSeen, readinessRequestsSeen };
+      }
+      if (Date.now() > deadline) {
+        throw new Error(
+          `the paper never reached network quiet — the initial load has no end ` +
+            `(${supabaseRequestsSeen} Supabase-origin requests seen, ${readinessRequestsSeen} of them readiness fan-out, in ${timeoutMs}ms)`,
+        );
+      }
+      await page.waitForTimeout(100);
+    }
+  } finally {
+    page.off('request', onRequest);
+  }
 }
