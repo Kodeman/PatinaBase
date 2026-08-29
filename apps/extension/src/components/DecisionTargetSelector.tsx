@@ -14,8 +14,7 @@
  * Stays purely presentational about its own state — the parent owns the
  * selected ids. Queries Supabase directly (via the extension's client)
  * because Chrome extensions can't import the React Query hooks from
- * @patina/supabase — the same constraint documented on FFESlotPicker and
- * mirrored by ProposalTargetSelector.
+ * @patina/supabase — the same constraint documented on FFESlotPicker.
  */
 
 import { useEffect, useState } from 'react';

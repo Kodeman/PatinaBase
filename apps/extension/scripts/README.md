@@ -27,16 +27,19 @@ decision).
 
 RLS silently filters deletes to zero rows with no error, so deletes are
 verified via `.select()`. **vendors** and step 5's **vendor_certifications**
-(admin-only, 00058) always `skipped`. Step 9 mints its OWN product, so step
+(legacy — the extension no longer writes this table since 0.3.0/CL-R16;
+kept as RLS regression coverage, expected-denied 42501; also admin-only, 00058) always `skipped`. Step 9 mints its OWN product, so step
 2's always cleans up; the decision's product prints `left (...)` —
 `client_decision_options.product_id` IS `ON DELETE SET NULL` (00172:35), but
 that SET NULL is an UPDATE, blocked by `guard_client_decision_option_authority`
 (00399) outside the canonical workflow while `pending` (verified). `project_ffe_items` is never attempted — only the RPCs delete it.
 
-Step 5's expected 42501 is reported as `expected-denied`, not an `error` —
-a healthy designer run still exits 0. In the real extension, `effects.ts:402-404`
-discards this insert's error, so designers see success while the
-certification is silently dropped (tracked as ruling CL-R16).
+Step 5 insert_vendor_certifications (legacy — the extension no longer writes
+this table since 0.3.0/CL-R16; kept as RLS regression coverage,
+expected-denied 42501) is reported as `expected-denied`, not an `error` — a
+healthy designer run still exits 0. The real extension no longer attempts
+this insert at all (ruling CL-R16, `effects.ts` `saveVendor`); this step is
+kept purely to exercise the vendor_certifications RLS policy directly.
 
 ## Residue on prod
 
