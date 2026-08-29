@@ -13,7 +13,8 @@
  *     unfolded — closing out IS the work of this stage.
  *   · earlier: one quiet mono line ("Close the book…") that unfolds on click,
  *     so a handshake project that never stages install can still settle.
- *   · completed: renders nothing (the Care section owns the settled read).
+ *   · completed: one settled line (the Care section owns the settled read; the
+ *     line exists so the running index's `care` stop has a root to land on).
  *
  * After close: a quiet inline confirmation (R51), then the document re-derives
  * — active section flips to Care and the sections settle. No route change, no
@@ -64,6 +65,13 @@ const CARE_INDEX_HEADING_ID = 'care-region-heading';
 
 type AnyRecord = any;
 
+/** What the band knows about closing out, stated once for every reader. */
+export interface CloseoutState {
+  ready: boolean;
+  closed: number;
+  total: number;
+}
+
 const FIELD_CLS =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-1.5 text-[11.5px] text-[var(--color-charcoal)] placeholder:italic placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)] focus:outline-none';
 const LABEL_CLS =
@@ -91,8 +99,12 @@ export function CareBand({
   /** A3-L7 — the closure gate, published to the page so the guide's care rest
    *  state can be gated on it. This band is the only reader of both halves
    *  (the eight closeout queries and the checklist's own state), so it states
-   *  the answer once rather than the page deriving a second one. */
-  onCloseoutReady?: (ready: boolean) => void;
+   *  the answer once rather than the page deriving a second one.
+   *
+   *  W2 fix (D-B9) — it reports the CHECKLIST too, not only the gate: the
+   *  ladder's care stop prints `N OF M CLOSED OUT`, and nothing else on the
+   *  page can state that pair without repeating the eight reads. */
+  onCloseoutReady?: (state: CloseoutState) => void;
   /**
    * W2 (C-2) — marks this mount as the running index's `care` region root.
    * `CareBand` mounts twice (the Project section here, and again on the
@@ -197,9 +209,10 @@ export function CareBand({
   const ready = closureReady(effectiveItems, operational);
   const done = effectiveItems.filter((i) => i.completed).length;
 
+  const total = effectiveItems.length;
   useEffect(() => {
-    onCloseoutReady?.(ready);
-  }, [onCloseoutReady, ready]);
+    onCloseoutReady?.({ ready, closed: done, total });
+  }, [onCloseoutReady, ready, done, total]);
 
   const fold = useRegionFold({
     docId: projectId,
@@ -216,15 +229,43 @@ export function CareBand({
     }
   }, [fold.folded]);
 
-  // W2 (C-2) — the one attribute pair that makes this mount the running
-  // index's `care` root, applied identically across all four return
-  // branches below (never on `RegionHead` or `FoldSeam`, which only exist
-  // in one branch each and would leave the other branches unmarked).
+  // W2 (C-2) — the attributes that make this mount the running index's `care`
+  // root, applied identically across every return branch below (never on
+  // `RegionHead` or `FoldSeam`, which only exist in one branch each and would
+  // leave the other branches unmarked). `tabIndex` is part of the pair: L-10's
+  // jump focuses `regionHeadingId('care')`, and `.focus()` on an element that
+  // cannot take focus is a silent no-op — the reader lands on the region with
+  // focus still in the rail.
   const indexRootAttrs = indexRoot
-    ? { 'data-index-region': 'care' as const, id: CARE_INDEX_HEADING_ID }
+    ? {
+        'data-index-region': 'care' as const,
+        id: CARE_INDEX_HEADING_ID,
+        tabIndex: -1,
+      }
     : {};
 
-  if (!project || project.status === 'completed') return null;
+  if (!project) return null;
+  // The settled read belongs to the Care section, so the band prints no
+  // checklist here — but a spread that DECLARES the care stop must give it a
+  // root to land on, or the ladder prints a stop with nothing behind it.
+  if (project.status === 'completed') {
+    return (
+      <div
+        {...indexRootAttrs}
+        className="mt-8 rounded-[3px] bg-[rgba(168,181,160,0.16)] px-4 py-3.5"
+      >
+        <p className="text-[13px] text-[var(--color-charcoal)]">
+          <b>The book is closed.</b>{' '}
+          <span className="text-[var(--text-muted)]">
+            Care holds the settled read of this project.
+          </span>
+        </p>
+      </div>
+    );
+  }
+  // Auth has not answered yet: no root, and the ladder says so — `mountedKeys`
+  // reports the stop unmounted and it prints its name over its fallback rather
+  // than a press onto nothing.
   if (authLoading) return null;
 
   const isProjectOwner =

@@ -46,6 +46,10 @@ export interface RegionLedgerEntry {
   loadingLabel?: ReactNode;
   trailing?: ReactNode;
   'aria-expanded'?: boolean;
+  /** The body this act discloses. An `aria-expanded` with nothing named is a
+   *  state with no subject: the reader hears "collapsed" and has no way to
+   *  reach what it controls. */
+  'aria-controls'?: string;
 }
 
 export interface RegionHeadProps {
@@ -163,6 +167,7 @@ export function RegionHead({
               loadingLabel: entry.loadingLabel,
               trailing: entry.trailing,
               'aria-expanded': entry['aria-expanded'],
+              'aria-controls': entry['aria-controls'],
             };
             return entry.href ? (
               <DocumentAction key={entry.key} {...shared} href={entry.href}>

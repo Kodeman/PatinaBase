@@ -493,6 +493,15 @@ export interface LadderDoorsInput {
   ticket: TicketInput;
   /** A room is in hand, so the release gets its second home under the doors. */
   held: boolean;
+  /**
+   * The `call-sheet` flag. The sections sheet gates its own Call sheet row on
+   * it (`mobile-sheets.tsx`), and with the flag off nothing mounts the overlay
+   * the door dispatches into — so the rail must gate the same door the same
+   * way, or the reader at 1180+ presses a door onto nothing. Defaults to
+   * printing it: a caller that does not know about the flag is not asserting
+   * the flag is off.
+   */
+  callSheetEnabled?: boolean;
   /** `shelfRouteFor(key, projectId)` — the page a leaf has of its own below
    *  1440. Absent for a door that opens in place. */
   routes?: Partial<Record<LadderDoorKey, string | null>>;
@@ -537,12 +546,14 @@ export function deriveLadderDoors(input: LadderDoorsInput): LadderDoor[] {
         onOpen: () => input.onOpenLeaf?.(door.key),
       });
     }
-    doors.push({
-      key: 'callsheet',
-      label: 'Call sheet',
-      href: href('callsheet'),
-      onOpen: input.onOpenCallSheet ?? noop,
-    });
+    if (input.callSheetEnabled ?? true) {
+      doors.push({
+        key: 'callsheet',
+        label: 'Call sheet',
+        href: href('callsheet'),
+        onOpen: input.onOpenCallSheet ?? noop,
+      });
+    }
   }
 
   if (input.held) {

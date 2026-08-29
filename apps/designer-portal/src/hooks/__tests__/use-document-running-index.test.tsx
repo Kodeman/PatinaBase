@@ -80,15 +80,39 @@ function Probe({
 }: {
   keys?: readonly DocumentIndexKey[];
 }) {
-  const { activeKey, jump } = useDocumentRunningIndex(keys, 'proj-1');
+  const { activeKey, jump, mountedKeys } = useDocumentRunningIndex(
+    keys,
+    'proj-1',
+  );
   return (
     <div>
       <span data-testid="active">{activeKey ?? 'none'}</span>
+      <span data-testid="mounted">{mountedKeys.join(',') || 'none'}</span>
       <button type="button" onClick={() => jump('money')}>
         jump
       </button>
     </div>
   );
+}
+
+/**
+ * The MutationObserver is the subscription's own half: which SUBTREE it
+ * watches is the fix under test (a body watch that outlives the paper's
+ * arrival wakes on every childList mutation in the application), so the
+ * targets it is handed are recorded.
+ */
+const mutationTargets: Node[] = [];
+let mutationDisconnects = 0;
+const RealMutationObserver = global.MutationObserver;
+class CapturingMutationObserver extends RealMutationObserver {
+  observe(target: Node, options?: MutationObserverInit) {
+    mutationTargets.push(target);
+    super.observe(target, options);
+  }
+  disconnect() {
+    mutationDisconnects += 1;
+    super.disconnect();
+  }
 }
 
 describe('useDocumentRunningIndex', () => {
@@ -106,6 +130,10 @@ describe('useDocumentRunningIndex', () => {
     CapturingIntersectionObserver.instances = [];
     global.IntersectionObserver =
       CapturingIntersectionObserver as unknown as typeof IntersectionObserver;
+    mutationTargets.length = 0;
+    mutationDisconnects = 0;
+    global.MutationObserver =
+      CapturingMutationObserver as unknown as typeof MutationObserver;
 
     // jsdom has no scroller; the jump's rAF work must still be allowed to run.
     Element.prototype.scrollIntoView = jest.fn();
@@ -114,6 +142,7 @@ describe('useDocumentRunningIndex', () => {
   afterEach(() => {
     jest.useRealTimers();
     global.IntersectionObserver = realIntersectionObserver;
+    global.MutationObserver = RealMutationObserver;
   });
 
   function mountRegions(keys: readonly DocumentIndexKey[] = DOCUMENT_INDEX_KEYS) {
@@ -313,6 +342,94 @@ describe('useDocumentRunningIndex', () => {
     // this: unguarded it would hand the line to 'ffe', the last KEY, whose
     // root is nowhere on the page.
     expect(screen.getByTestId('active')).toHaveTextContent('approvals');
+  });
+
+  // C-06 — a fold that swaps the root, a refetch that remounts it, a pinned
+  // spread: the key stays, the ELEMENT changes. The replacement is observed,
+  // and the report the old one left behind is dropped with it — otherwise
+  // `resolve()`'s crossing branch hands the line to a region that has not
+  // reported since it left the page.
+  it('re-observes a root replaced in place, and drops the report the old one left', async () => {
+    tallPaper();
+    mountRegions(['approvals', 'record']);
+    render(<Probe keys={['approvals', 'record']} />);
+
+    act(() => {
+      liveObserver().deliver({ approvals: true });
+    });
+    expect(screen.getByTestId('active')).toHaveTextContent('approvals');
+
+    const old = paper.querySelector(
+      '[data-index-region="approvals"]',
+    ) as HTMLElement;
+    const replacement = document.createElement('section');
+    replacement.setAttribute('data-index-region', 'approvals');
+    paper.replaceChild(replacement, old);
+    await settleAttach();
+
+    // The new element is the observed one; the old is not.
+    expect(Array.from(liveObserver().observed)).toContain(replacement);
+    expect(Array.from(liveObserver().observed)).not.toContain(old);
+    expect(attachedKeys()).toEqual(expect.arrayContaining(['approvals']));
+    // And the stale `approvals: true` no longer holds the line.
+    expect(screen.getByTestId('active')).not.toHaveTextContent('approvals');
+  });
+
+  // The subscription is for the life of the route; nothing may outlive it.
+  it('disconnects both observers when the document goes', () => {
+    mountRegions();
+    const { unmount } = render(<Probe />);
+    const observer = liveObserver();
+    expect(observer.observed.size).toBe(DOCUMENT_INDEX_KEYS.length);
+    const before = mutationDisconnects;
+
+    unmount();
+
+    expect(observer.observed.size).toBe(0);
+    expect(mutationDisconnects).toBeGreaterThan(before);
+  });
+
+  // C-05 — before the paper exists the body is watched INSTEAD, and only until
+  // the paper arrives. A body watch that survives it wakes on every childList
+  // mutation in the application and pays a forced layout per frame for churn
+  // that cannot contain a region root.
+  it('watches the body only until the paper arrives, then re-roots on it', async () => {
+    paper.remove();
+    render(<Probe keys={['approvals']} />);
+
+    expect(mutationTargets).toEqual([document.body]);
+    expect(attachedKeys()).toEqual([]);
+
+    document.body.appendChild(paper);
+    mountRegions(['approvals']);
+    await settleAttach();
+
+    expect(attachedKeys()).toEqual(['approvals']);
+    expect(mutationTargets[mutationTargets.length - 1]).toBe(paper);
+    expect(mutationTargets).not.toContain(document.body.ownerDocument);
+    // The body watch was replaced, not added to.
+    expect(mutationTargets.filter((t) => t === document.body)).toHaveLength(1);
+    expect(mutationDisconnects).toBeGreaterThan(0);
+  });
+
+  // C-04 — the ladder prints a stop as a press target only where its root is
+  // actually on the paper; a press onto nothing scrolls nowhere and lands
+  // focus nowhere.
+  it('reports which roots are on the paper, in paper order', async () => {
+    mountRegions(['record', 'approvals']);
+    render(<Probe keys={['approvals', 'ffe', 'record']} />);
+
+    expect(screen.getByTestId('mounted')).toHaveTextContent('approvals,record');
+
+    mountRegions(['ffe']);
+    await settleAttach();
+    expect(screen.getByTestId('mounted')).toHaveTextContent(
+      'approvals,ffe,record',
+    );
+
+    paper.querySelector('[data-index-region="ffe"]')?.remove();
+    await settleAttach();
+    expect(screen.getByTestId('mounted')).toHaveTextContent('approvals,record');
   });
 
   it('marks nothing at all while no region root has mounted', () => {

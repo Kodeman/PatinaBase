@@ -6,14 +6,19 @@ describe('PreviousWork', () => {
     render(<PreviousWork count={3}><div>Brief recap</div></PreviousWork>);
     const button = screen.getByRole('button', { name: 'Open the record' });
     expect(button).toHaveAttribute('aria-expanded', 'false');
+    // An `aria-expanded` with nothing named is a state with no subject.
+    expect(
+      document.getElementById(button.getAttribute('aria-controls')!),
+    ).toBeInTheDocument();
     expect(screen.getByText('The record')).toBeInTheDocument();
     expect(screen.getByText('3 complete')).toBeInTheDocument();
     expect(screen.queryByText('Brief recap')).not.toBeInTheDocument();
     fireEvent.click(button);
-    expect(screen.getByRole('button', { name: 'Fold ↑' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    const folded = screen.getByRole('button', { name: 'Fold ↑' });
+    expect(folded).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      document.getElementById(folded.getAttribute('aria-controls')!),
+    ).toBeVisible();
     expect(screen.getByText('Brief recap')).toBeInTheDocument();
   });
 
@@ -71,7 +76,9 @@ describe('PreviousWork', () => {
       render(<PreviousWork count={0}>{null}</PreviousWork>);
 
       expect(screen.getByText('The record')).toBeInTheDocument();
-      expect(screen.getByText('Nothing settled yet')).toBeInTheDocument();
+      // Reconciliation §"Quiet regions" ratifies `Nothing yet` for the empty
+      // read; F-07 caught the paraphrase.
+      expect(screen.getByText('Nothing yet')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /open the record/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /fold/i })).not.toBeInTheDocument();
     });

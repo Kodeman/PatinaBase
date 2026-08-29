@@ -7,7 +7,7 @@
  * Playwright's, and is asserted there.
  */
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { LensLadder } from '../lens-ladder';
 import { DocSpine } from '../../doc-spine';
 import {
@@ -15,6 +15,7 @@ import {
   deriveLadderSegments,
   type LadderInput,
 } from '@/lib/document/lens-ladder-derivation';
+import type { DocumentIndexKey } from '@/lib/document/document-index';
 import type { MoneyLadder } from '@/lib/document/money-ladder';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import type { SpineSection } from '@/lib/document/section-derivation';
@@ -215,7 +216,10 @@ describe('the room rungs', () => {
     ]);
     for (const rung of rungs) {
       expect(rung).toHaveAttribute('aria-pressed', 'false');
-      expect(rung).toHaveClass('min-h-11');
+      // D-B11 (amended) — 27px, the arc's cell. At 44px five rooms cost the
+      // track 220px it does not have, and the doors were overprinted.
+      expect(rung).toHaveClass('min-h-[27px]');
+      expect(rung).not.toHaveClass('min-h-11');
     }
     fireEvent.click(rungs[2]);
     expect(onToggleRoom).toHaveBeenCalledWith('r3');
@@ -224,7 +228,42 @@ describe('the room rungs', () => {
   it('keeps them off the narrow measure by class, never by a width read (OD-14)', () => {
     mount({ activeKey: 'ffe' });
     const chip = ladderNav().querySelector('[data-room-chip]') as HTMLElement;
-    expect(chip.parentElement).toHaveClass('hidden', 'min-[1440px]:block');
+    expect(chip).toHaveClass('hidden', 'min-[1440px]:flex');
+  });
+
+  // Override 2, stated: the rungs are the reading window's, or the hold's.
+  it('prints them only while the window touches Pieces or a room is held', () => {
+    const held = ladderFor('project', { heldRoomId: 'r3' });
+    const { rerender } = render(
+      <LensLadder
+        segments={held.segments}
+        doors={held.doors}
+        activeKey="money"
+        onJump={jest.fn()}
+      />,
+    );
+    expect(ladderNav().querySelectorAll('[data-room-chip]')).toHaveLength(4);
+
+    const free = ladderFor('project');
+    rerender(
+      <LensLadder
+        segments={free.segments}
+        doors={free.doors}
+        activeKey="money"
+        onJump={jest.fn()}
+      />,
+    );
+    expect(ladderNav().querySelectorAll('[data-room-chip]')).toHaveLength(0);
+
+    rerender(
+      <LensLadder
+        segments={free.segments}
+        doors={free.doors}
+        activeKey="ffe"
+        onJump={jest.fn()}
+      />,
+    );
+    expect(ladderNav().querySelectorAll('[data-room-chip]')).toHaveLength(4);
   });
 
   it('prints nothing about rooms while the window is elsewhere and none is held', () => {
@@ -311,7 +350,190 @@ describe('the doors', () => {
   });
 });
 
+// The W2 walk found the doors overprinting the tail rungs at 1440 with Pieces
+// open: 331.75px of rows laid out in a 259px track that neither scrolled nor
+// clipped. The track now states what it needs and scrolls itself when the rail
+// is shorter than that; the doors are never asked to give way.
+describe('the track’s own height', () => {
+  it('asks for the sum of the floors it prints, per measure, and scrolls rather than spilling', () => {
+    const { segments } = ladderFor('project');
+    render(
+      <LensLadder
+        segments={segments}
+        doors={[]}
+        activeKey="ffe"
+        onJump={jest.fn()}
+      />,
+    );
+    const track = ladderNav().querySelector(
+      '[data-lens-track]',
+    ) as HTMLElement;
+
+    const full =
+      segments.reduce((sum, segment) => sum + segment.floorPx, 0) + 4 * 27;
+    const narrow = segments.reduce(
+      (sum, segment) => sum + segment.narrowFloorPx,
+      0,
+    );
+    expect(track.style.getPropertyValue('--track-floor-full')).toBe(`${full}px`);
+    expect(track.style.getPropertyValue('--track-floor-narrow')).toBe(
+      `${narrow}px`,
+    );
+    expect(track).toHaveClass('overflow-y-auto');
+    // Render once: the measure chooses the floor, not a width read.
+    expect(track).toHaveClass(
+      '[--track-floor:var(--track-floor-narrow)]',
+      'min-[1440px]:[--track-floor:var(--track-floor-full)]',
+    );
+  });
+
+  // Design review item 9 — the rungs open by taking the remainder from the
+  // other stops, and what the track still cannot hold collapses to one `+N`
+  // line. The alternative, measured at 1440/900 in the W2 walk, was the doors
+  // printed straight over Mudroom.
+  it('collapses the rungs it cannot hold to one +N line', () => {
+    const { segments } = ladderFor('project');
+    // jsdom reports 0 for `offsetHeight`, so every stop row counts as the
+    // 36px floor. Two 27px slots of remainder above them: one rung and the
+    // `+N` line that stands for the rest.
+    const clientHeight = jest
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockReturnValue(segments.length * 36 + 2 * 27);
+    try {
+      render(
+        <LensLadder
+          segments={segments}
+          doors={[]}
+          activeKey="ffe"
+          onJump={jest.fn()}
+        />,
+      );
+
+      expect(ladderNav().querySelectorAll('[data-room-chip]')).toHaveLength(1);
+      const overflow = ladderNav().querySelector(
+        '[data-ladder-rooms-overflow]',
+      ) as HTMLElement;
+      expect(overflow).toHaveAttribute('data-ladder-rooms-overflow', '3');
+      expect(overflow).toHaveTextContent('+3 more');
+      // And the collapsed line is not a row: it cannot take the tabstop.
+      expect(overflow.hasAttribute('data-ladder-row')).toBe(false);
+      expect(
+        Array.from(
+          ladderNav().querySelectorAll<HTMLElement>('[data-ladder-row]'),
+        ).filter((row) => row.tabIndex === 0),
+      ).toHaveLength(1);
+    } finally {
+      clientHeight.mockRestore();
+    }
+  });
+
+  it('does not grow over a spread that has nothing on the paper yet', () => {
+    render(
+      <LensLadder
+        segments={[]}
+        doors={[]}
+        activeKey={null}
+        onJump={jest.fn()}
+      />,
+    );
+    const track = ladderNav().querySelector(
+      '[data-lens-track]',
+    ) as HTMLElement;
+    expect(track.style.flexGrow).toBe('0');
+  });
+
+  it('drops the rungs’ share back out of the ask when they are not printed', () => {
+    const { segments } = ladderFor('project');
+    render(
+      <LensLadder
+        segments={segments}
+        doors={[]}
+        activeKey="money"
+        onJump={jest.fn()}
+      />,
+    );
+    const track = ladderNav().querySelector(
+      '[data-lens-track]',
+    ) as HTMLElement;
+    expect(track.style.getPropertyValue('--track-floor-full')).toBe(
+      `${segments.reduce((sum, segment) => sum + segment.floorPx, 0)}px`,
+    );
+  });
+});
+
+describe('a stop the spread does not mount', () => {
+  const mountedButCare: DocumentIndexKey[] = [
+    'approvals',
+    'schedule',
+    'ffe',
+    'money',
+    'record',
+  ];
+
+  it('prints its name and fallback, and is not a press target (C-04)', () => {
+    const input = model({ mountedKeys: mountedButCare });
+    render(
+      <LensLadder
+        segments={deriveLadderSegments(input)}
+        doors={[]}
+        activeKey={null}
+        onJump={jest.fn()}
+      />,
+    );
+
+    const care = ladderNav().querySelector(
+      '[data-ladder-unmounted="care"]',
+    ) as HTMLElement;
+    expect(care).not.toBeNull();
+    expect(within(care).getByText('Closing the book')).toBeInTheDocument();
+    // No root to scroll to, no heading to land focus on — so no button.
+    expect(
+      screen.queryByRole('button', { name: /closing the book/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      ladderNav().querySelector('button[data-index-region="care"]'),
+    ).toBeNull();
+  });
+
+  it('is out of the roving walk entirely', () => {
+    const input = model({ mountedKeys: mountedButCare });
+    render(
+      <LensLadder
+        segments={deriveLadderSegments(input)}
+        doors={[]}
+        activeKey={null}
+        onJump={jest.fn()}
+      />,
+    );
+
+    const rows = Array.from(
+      ladderNav().querySelectorAll<HTMLElement>('[data-ladder-row]'),
+    );
+    expect(rows.map((row) => row.getAttribute('data-index-region'))).toEqual([
+      'approvals',
+      'schedule',
+      'ffe',
+      'money',
+      'record',
+    ]);
+    expect(rows.filter((row) => row.tabIndex === 0)).toHaveLength(1);
+  });
+});
+
 describe('the ladder’s keyboard', () => {
+  /** jsdom reports no layout at all; a row's visibility is stated here. */
+  function setVisible(el: HTMLElement, visible: boolean) {
+    Object.defineProperty(el, 'offsetParent', {
+      configurable: true,
+      get: () => (visible ? document.body : null),
+    });
+  }
+
+  const rovingRows = () =>
+    Array.from(
+      ladderNav().querySelectorAll<HTMLElement>('[data-ladder-row]'),
+    ).filter((row) => row.tabIndex === 0);
+
   it('is one tabstop the arrows walk (proposal §4)', () => {
     mount({ activeKey: 'ffe' });
     const rows = Array.from(
@@ -335,6 +557,131 @@ describe('the ladder’s keyboard', () => {
         ladderNav().querySelectorAll<HTMLElement>('[data-ladder-row]'),
       ).filter((row) => row.tabIndex === 0),
     ).toHaveLength(1);
+  });
+
+  it('walks to the ends with Home and End', () => {
+    mount({ activeKey: 'money' });
+    const rows = Array.from(
+      ladderNav().querySelectorAll<HTMLElement>('[data-ladder-row]'),
+    );
+
+    rows[2].focus();
+    fireEvent.keyDown(rows[2], { key: 'End' });
+    expect(document.activeElement).toBe(rows[rows.length - 1]);
+    expect(rovingRows()).toEqual([rows[rows.length - 1]]);
+
+    fireEvent.keyDown(rows[rows.length - 1], { key: 'Home' });
+    expect(document.activeElement).toBe(rows[0]);
+    expect(rovingRows()).toEqual([rows[0]]);
+  });
+
+  // C-03 — at 1180–1439 the rungs are `display:none`. `focus()` on one is a
+  // silent no-op, so an arrow walk that counts them moves `tabIndex={0}` onto a
+  // row the reader can neither see nor reach and Tab then skips the whole rail.
+  it('never walks into a rung the narrow measure has hidden', () => {
+    mount({ activeKey: 'ffe' });
+    const rows = Array.from(
+      ladderNav().querySelectorAll<HTMLElement>('[data-ladder-row]'),
+    );
+    const rungs = rows.filter((row) => row.hasAttribute('data-room-chip'));
+    const stops = rows.filter((row) => !row.hasAttribute('data-room-chip'));
+    expect(rungs).toHaveLength(4);
+    for (const row of stops) setVisible(row, true);
+    for (const rung of rungs) setVisible(rung, false);
+
+    stops[0].focus();
+    // Walk further than the whole list, in both directions.
+    for (let i = 0; i < stops.length + rungs.length + 2; i += 1) {
+      fireEvent.keyDown(document.activeElement as HTMLElement, {
+        key: 'ArrowDown',
+      });
+      expect(rungs).not.toContain(document.activeElement);
+    }
+    for (let i = 0; i < stops.length + rungs.length + 2; i += 1) {
+      fireEvent.keyDown(document.activeElement as HTMLElement, {
+        key: 'ArrowUp',
+      });
+      expect(rungs).not.toContain(document.activeElement);
+    }
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'End' });
+    expect(document.activeElement).toBe(stops[stops.length - 1]);
+    expect(rovingRows()).toEqual([stops[stops.length - 1]]);
+  });
+
+  // C-02 — the row count moves under the tabstop: the rungs appear with the
+  // reading window and go with it. A stored position past the end leaves EVERY
+  // row at `tabIndex={-1}` and the rail drops out of Tab order for good.
+  it('keeps exactly one tabstop as the row count changes beneath it', () => {
+    const withRungs = ladderFor('project');
+    const { rerender } = render(
+      <LensLadder
+        segments={withRungs.segments}
+        doors={withRungs.doors}
+        activeKey="ffe"
+        onJump={jest.fn()}
+      />,
+    );
+    const all = Array.from(
+      ladderNav().querySelectorAll<HTMLElement>('[data-ladder-row]'),
+    );
+    expect(all).toHaveLength(10);
+    expect(rovingRows()).toHaveLength(1);
+
+    // Park the tabstop on the LAST rung, then take the rungs away.
+    const lastRung = all.filter((row) =>
+      row.hasAttribute('data-room-chip'),
+    )[3];
+    act(() => lastRung.focus());
+    expect(rovingRows()).toEqual([lastRung]);
+
+    rerender(
+      <LensLadder
+        segments={withRungs.segments}
+        doors={withRungs.doors}
+        activeKey="money"
+        onJump={jest.fn()}
+      />,
+    );
+    const fewer = Array.from(
+      ladderNav().querySelectorAll<HTMLElement>('[data-ladder-row]'),
+    );
+    expect(fewer).toHaveLength(6);
+    expect(rovingRows()).toHaveLength(1);
+
+    // And a shorter spread — four stops, no rungs at all.
+    const install = ladderFor('install');
+    rerender(
+      <LensLadder
+        segments={install.segments}
+        doors={install.doors}
+        activeKey={null}
+        onJump={jest.fn()}
+      />,
+    );
+    expect(
+      ladderNav().querySelectorAll('[data-ladder-row]'),
+    ).toHaveLength(4);
+    expect(rovingRows()).toHaveLength(1);
+
+    // The rungs come back; still exactly one.
+    rerender(
+      <LensLadder
+        segments={withRungs.segments}
+        doors={withRungs.doors}
+        activeKey="ffe"
+        onJump={jest.fn()}
+      />,
+    );
+    expect(rovingRows()).toHaveLength(1);
+  });
+
+  it('gives every row a visible focus ring', () => {
+    mount({ activeKey: 'ffe' });
+    for (const row of Array.from(
+      ladderNav().querySelectorAll<HTMLElement>('[data-ladder-row]'),
+    )) {
+      expect(row).toHaveClass('focus-visible:outline');
+    }
   });
 });
 

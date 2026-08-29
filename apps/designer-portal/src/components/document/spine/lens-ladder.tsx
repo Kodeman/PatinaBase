@@ -30,6 +30,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import type { DocumentIndexKey } from '@/lib/document/document-index';
+import { LADDER_SEGMENT_MIN_PX } from '@/lib/document/lens-constants';
 import type {
   LadderDoor,
   LadderSegment,
@@ -50,6 +51,13 @@ export interface LensLadderProps {
   onToggleRoom?: (roomId: string) => void;
 }
 
+/**
+ * D-B11 (amended) — a room rung is a 27px cell, the same 2.5.8 pointer-floor
+ * the design lead set for the arc. The doors keep their 44px: they are the
+ * rail's own furniture and they never compete with the track for height.
+ */
+const ROOM_RUNG_PX = 27;
+
 const NAME_CLASS = 'block text-[13px] leading-tight';
 const VALUE_CLASS =
   'mt-px block break-words font-mono text-[11px] uppercase leading-tight tracking-[0.07em]';
@@ -65,7 +73,11 @@ export function LensLadder({
   const trackRef = useRef<HTMLDivElement | null>(null);
   const windowRef = useRef<HTMLSpanElement | null>(null);
   const segmentRefs = useRef(new Map<DocumentIndexKey, HTMLButtonElement>());
-  const [roving, setRoving] = useState(0);
+  // The tabstop is held as the ROW'S OWN KEY, never as a position: the row
+  // list changes under it (the rungs appear and go, a stop that has not
+  // mounted is not a row at all), and a stored integer past the end leaves
+  // every row at `tabIndex={-1}` — the whole rail silently out of Tab order.
+  const [roving, setRoving] = useState<string | null>(null);
 
   const heldRoom = segments.some((segment) =>
     segment.rooms?.some((room) => room.held),
@@ -74,6 +86,80 @@ export function LensLadder({
   // in hand, and never at the narrow measure (OD-14), where Pieces carries the
   // room count in its own value instead.
   const printRooms = activeKey === 'ffe' || heldRoom;
+
+  // How many rungs the track can hold out of what is left once every stop has
+  // its floor. Measured, because it is a question about the rail's height and
+  // nothing in the data answers it; `Infinity` until the first layout, so the
+  // server and the first client paint agree. The rest collapse to one `+N`
+  // line rather than overprinting the doors beneath them.
+  const [rungCap, setRungCap] = useState(Number.POSITIVE_INFINITY);
+
+  const roomCount = segments.reduce(
+    (n, segment) => n + (segment.rooms?.length ?? 0),
+    0,
+  );
+  const shownRungs = printRooms ? Math.min(roomCount, rungCap) : 0;
+  const hiddenRungs = printRooms ? roomCount - shownRungs : 0;
+
+  // The rows as they are RENDERED, in DOM order — the same walk the keyboard
+  // takes, computed once so the tabstop can be clamped to it.
+  const rowKeys: string[] = [];
+  for (const segment of segments) {
+    if (segment.mounted) rowKeys.push(`seg:${segment.key}`);
+    if (segment.rooms && printRooms) {
+      for (const room of segment.rooms.slice(0, shownRungs)) {
+        rowKeys.push(`room:${room.id}`);
+      }
+    }
+  }
+  // Exactly one row carries `tabIndex={0}` at all times: the remembered row
+  // while it is still on the rail, the first row the moment it is not.
+  const rovingKey =
+    roving !== null && rowKeys.includes(roving) ? roving : (rowKeys[0] ?? null);
+
+  // What each stop asks for, per measure. The rungs ride inside Pieces' own
+  // ask, so opening them spends the track's remainder — the space the stops
+  // were growing into — rather than pushing the track past its column. A
+  // CLOSED Pieces reserves nothing for them.
+  const rungsPx = shownRungs * ROOM_RUNG_PX + (hiddenRungs > 0 ? ROOM_RUNG_PX : 0);
+  const fullFloorFor = (segment: LadderSegment) =>
+    segment.floorPx + (printRooms && segment.rooms?.length ? rungsPx : 0);
+  const trackFloorPx = segments.reduce(
+    (sum, segment) => sum + fullFloorFor(segment),
+    0,
+  );
+  const narrowTrackFloorPx = segments.reduce(
+    (sum, segment) => sum + segment.narrowFloorPx,
+    0,
+  );
+
+  useIsomorphicLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!track || segments.length === 0 || roomCount === 0) return;
+    // A track with no measured height has not been laid out — the rail is
+    // below 1180 and display:none, or this is jsdom, which reports 0 for
+    // everything. Neither is an answer, and neither may collapse the rungs.
+    if (track.clientHeight <= 0) return;
+    // The rungs are paid for out of the REMAINDER: what the track has left
+    // once every stop has the height its OWN words need. Measured off the stop
+    // rows rather than off `floorPx`, because the floor formula counts the
+    // value line and not the name above it — it under-reserves by about a line
+    // at every stop, and a cap computed from it lets one rung too many in.
+    // A stop row's height does not move with the cap (the flex REMAINDER
+    // distributes into the segment box around it), so this converges in one
+    // pass rather than oscillating.
+    const stops = Array.from(
+      track.querySelectorAll<HTMLElement>('[data-ladder-stop]'),
+    ).reduce(
+      (sum, stop) => sum + Math.max(stop.offsetHeight, LADDER_SEGMENT_MIN_PX),
+      0,
+    );
+    if (stops === 0) return;
+    const slots = Math.max(0, Math.floor((track.clientHeight - stops) / ROOM_RUNG_PX));
+    // One of the slots goes to the `+N` line itself when there is one.
+    const fits = roomCount <= slots ? roomCount : Math.max(0, slots - 1);
+    setRungCap((previous) => (previous === fits ? previous : fits));
+  }, [segments, roomCount, printRooms]);
 
   /** The bracket, measured off the active row and written imperatively: React
    *  owns the rows, the rAF handler owns the bracket, and neither re-renders
@@ -95,16 +181,53 @@ export function LensLadder({
     bracket.setAttribute('data-lens-window', `${top}:${height}`);
   }, [activeKey]);
 
-  useIsomorphicLayoutEffect(place, [place, segments, printRooms]);
+  // A value that yields (RF-02) unmounts the value line and changes the row's
+  // height, so the bracket must re-measure on it as well as on the row list.
+  const valueSignature = segments
+    .map((segment) => `${segment.key}:${segment.value}:${segment.narrowValue}`)
+    .join('|');
+  useIsomorphicLayoutEffect(place, [
+    place,
+    segments,
+    printRooms,
+    headInFrame,
+    valueSignature,
+  ]);
 
   useEffect(() => {
-    window.addEventListener('resize', place);
-    return () => window.removeEventListener('resize', place);
+    // `place` reads `offsetTop`/`offsetHeight` — a forced layout. A drag of the
+    // window edge fires resize per pixel, so the read rides one rAF like the
+    // running index's scroll handler does.
+    let queued = false;
+    const onResize = () => {
+      if (queued) return;
+      queued = true;
+      window.requestAnimationFrame(() => {
+        queued = false;
+        place();
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, [place]);
 
   // Tab reaches the ladder once; the arrows walk it (proposal §4, "tab order,
-  // stated"). The rows are read from the DOM rather than from a second list, so
-  // the rungs the narrow tier hides are simply not there to walk.
+  // stated"). The rows are read from the DOM, and a row the narrow tier hides
+  // is skipped: `focus()` on a `display:none` element is a silent no-op, which
+  // would move the tabstop onto a row the reader can neither see nor reach.
+  const walkableRows = (): HTMLElement[] => {
+    const rows = Array.from(
+      trackRef.current?.querySelectorAll<HTMLElement>('[data-ladder-row]') ??
+        [],
+    );
+    const shown = rows.filter(
+      (row) => row.offsetParent !== null || row.getClientRects().length > 0,
+    );
+    // jsdom reports no layout for anything, so an empty result means the
+    // environment cannot answer the question, not that every row is hidden.
+    return shown.length > 0 ? shown : rows;
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step =
       event.key === 'ArrowDown' || event.key === 'ArrowRight'
@@ -113,10 +236,7 @@ export function LensLadder({
           ? -1
           : 0;
     if (step === 0 && event.key !== 'Home' && event.key !== 'End') return;
-    const rows = Array.from(
-      trackRef.current?.querySelectorAll<HTMLElement>('[data-ladder-row]') ??
-        [],
-    );
+    const rows = walkableRows();
     if (rows.length === 0) return;
     const from = rows.findIndex((row) => row === document.activeElement);
     const next =
@@ -126,14 +246,10 @@ export function LensLadder({
           ? rows.length - 1
           : (Math.max(from, 0) + step + rows.length) % rows.length;
     event.preventDefault();
-    setRoving(next);
-    rows[next]?.focus();
-  };
-
-  let rowIndex = -1;
-  const nextRow = () => {
-    rowIndex += 1;
-    return rowIndex;
+    const target = rows[next];
+    if (!target) return;
+    setRoving(target.getAttribute('data-ladder-row'));
+    target.focus();
   };
 
   return (
@@ -145,8 +261,26 @@ export function LensLadder({
     >
       <div
         ref={trackRef}
+        data-lens-track
         onKeyDown={onKeyDown}
-        className="relative flex min-h-0 flex-1 flex-col pl-3"
+        // The track asks for exactly what its rows need — the sum of the
+        // floors it is about to lay out, plus the rungs it is about to print —
+        // and takes the rest of the column when there is more. When there is
+        // LESS (1440 · Pieces open · five rooms: 331.75px of rows in a 259px
+        // track) it scrolls itself rather than spilling: the head and
+        // `FILED WITH THIS JOB` are always whole, and the doors are never
+        // overprinted by a rung.
+        className="relative flex min-h-0 flex-col overflow-y-auto pl-3 [--track-floor:var(--track-floor-narrow)] [scrollbar-width:thin] min-[1440px]:[--track-floor:var(--track-floor-full)]"
+        style={
+          {
+            '--track-floor-narrow': `${narrowTrackFloorPx}px`,
+            '--track-floor-full': `${trackFloorPx}px`,
+            flexBasis: 'var(--track-floor)',
+            // A pre-work spread's track has one line to print; growing it
+            // opened ~450px of nothing above `FILED WITH THIS JOB`.
+            flexGrow: segments.length > 0 ? 1 : 0,
+          } as CSSProperties
+        }
       >
         <span
           ref={windowRef}
@@ -165,7 +299,64 @@ export function LensLadder({
           segments.map((segment) => {
             const current = segment.key === activeKey;
             const yielded = segment.key === headInFrame;
-            const index = nextRow();
+            const rowKey = `seg:${segment.key}`;
+            // The value line is the same either way; only whether the name
+            // above it is a press target differs.
+            const body = (
+              <>
+                <span
+                  className={`${NAME_CLASS} ${
+                    current
+                      ? 'font-semibold text-[var(--color-charcoal)]'
+                      : 'text-[var(--color-charcoal)]'
+                  }`}
+                >
+                  {segment.name}
+                </span>
+                {/* RF-02 — while the stop's own head is in frame the paper is
+                    saying the figure at 24px Playfair, so the rail yields the
+                    value and keeps the name. */}
+                {!yielded &&
+                  (segment.value === null ? (
+                    <span className={`${VALUE_CLASS} text-[var(--text-muted)]`}>
+                      {segment.fallback ?? 'Nothing yet'}
+                    </span>
+                  ) : segment.value === segment.narrowValue ? (
+                    <span
+                      className={`${VALUE_CLASS} ${
+                        current
+                          ? 'text-[var(--text-primary)]'
+                          : 'text-[var(--text-muted)]'
+                      }`}
+                    >
+                      {segment.value}
+                    </span>
+                  ) : (
+                    // OD-14 — one register, two measures: the narrow value
+                    // splices the room count in and drops the damage date.
+                    <>
+                      <span
+                        className={`${VALUE_CLASS} min-[1440px]:hidden ${
+                          current
+                            ? 'text-[var(--text-primary)]'
+                            : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {segment.narrowValue}
+                      </span>
+                      <span
+                        className={`${VALUE_CLASS} hidden min-[1440px]:block ${
+                          current
+                            ? 'text-[var(--text-primary)]'
+                            : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {segment.value}
+                      </span>
+                    </>
+                  ))}
+              </>
+            );
             return (
               <div
                 key={segment.key}
@@ -178,109 +369,88 @@ export function LensLadder({
                 style={
                   {
                     '--seg-floor-narrow': `${segment.narrowFloorPx}px`,
-                    '--seg-floor-full': `${segment.floorPx}px`,
+                    '--seg-floor-full': `${fullFloorFor(segment)}px`,
                     flexBasis: 'var(--seg-floor)',
                     flexGrow: segment.extent,
+                    // Never below the floor its own words need: a shrunk stop
+                    // does not clip, it overprints the one beneath it.
                     flexShrink: 0,
                   } as CSSProperties
                 }
               >
-                <button
-                  type="button"
-                  data-ladder-row
-                  data-index-region={segment.key}
-                  data-region-head-in-frame={yielded ? 'true' : undefined}
-                  aria-current={current ? 'true' : 'false'}
-                  tabIndex={index === roving ? 0 : -1}
-                  disabled={!segment.mounted}
-                  ref={(el) => {
-                    if (el) segmentRefs.current.set(segment.key, el);
-                    else segmentRefs.current.delete(segment.key);
-                  }}
-                  onFocus={() => setRoving(index)}
-                  onClick={() => onJump(segment.key)}
-                  className="block w-full py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-                >
-                  <span
-                    className={`${NAME_CLASS} ${
-                      current
-                        ? 'font-semibold text-[var(--color-charcoal)]'
-                        : 'text-[var(--color-charcoal)]'
-                    }`}
+                {segment.mounted ? (
+                  <button
+                    type="button"
+                    data-ladder-row={rowKey}
+                    data-ladder-stop={segment.key}
+                    data-index-region={segment.key}
+                    data-region-head-in-frame={yielded ? 'true' : undefined}
+                    aria-current={current ? 'true' : 'false'}
+                    tabIndex={rowKey === rovingKey ? 0 : -1}
+                    ref={(el) => {
+                      if (el) segmentRefs.current.set(segment.key, el);
+                      else segmentRefs.current.delete(segment.key);
+                    }}
+                    onFocus={() => setRoving(rowKey)}
+                    onClick={() => onJump(segment.key)}
+                    className="block w-full py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                   >
-                    {segment.name}
-                  </span>
-                  {/* RF-02 — while the stop's own head is in frame the paper is
-                      saying the figure at 24px Playfair, so the rail yields the
-                      value and keeps the name. */}
-                  {!yielded &&
-                    (segment.value === null ? (
-                      <span
-                        className={`${VALUE_CLASS} text-[var(--text-muted)]`}
-                      >
-                        {segment.fallback ?? 'Nothing yet'}
-                      </span>
-                    ) : segment.value === segment.narrowValue ? (
-                      <span
-                        className={`${VALUE_CLASS} ${
-                          current
-                            ? 'text-[var(--text-primary)]'
-                            : 'text-[var(--text-muted)]'
+                    {body}
+                  </button>
+                ) : (
+                  // A stop the spread declares but does not mount has nowhere
+                  // to send her: no root to scroll to, no heading to land focus
+                  // on. It still PRINTS — the paper's order is the point — but
+                  // as text, out of the roving walk and out of Tab order.
+                  <div
+                    role="text"
+                    data-ladder-unmounted={segment.key}
+                    data-ladder-stop={segment.key}
+                    data-index-region={segment.key}
+                    className="block w-full py-1 text-left"
+                  >
+                    {body}
+                  </div>
+                )}
+
+                {segment.rooms &&
+                  segment.rooms.length > 0 &&
+                  printRooms &&
+                  segment.rooms.slice(0, shownRungs).map((room) => {
+                    const roomRowKey = `room:${room.id}`;
+                    return (
+                      <button
+                        key={room.id}
+                        type="button"
+                        data-ladder-row={roomRowKey}
+                        data-room-chip={room.id}
+                        aria-pressed={room.held}
+                        tabIndex={roomRowKey === rovingKey ? 0 : -1}
+                        onFocus={() => setRoving(roomRowKey)}
+                        onClick={() => onToggleRoom?.(room.id)}
+                        // OD-14 — the rungs belong to the full measure only.
+                        // Hidden by class, never by a width read, and skipped
+                        // by the arrow walk while they are hidden.
+                        className={`hidden min-h-[27px] w-full items-center pl-3 text-left text-[13px] leading-tight text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1440px]:flex ${
+                          room.held
+                            ? 'font-semibold text-[var(--color-clay-ink)]'
+                            : ''
                         }`}
                       >
-                        {segment.value}
-                      </span>
-                    ) : (
-                      // OD-14 — one register, two measures: the narrow value
-                      // splices the room count in and drops the damage date.
-                      <>
-                        <span
-                          className={`${VALUE_CLASS} min-[1440px]:hidden ${
-                            current
-                              ? 'text-[var(--text-primary)]'
-                              : 'text-[var(--text-muted)]'
-                          }`}
-                        >
-                          {segment.narrowValue}
-                        </span>
-                        <span
-                          className={`${VALUE_CLASS} hidden min-[1440px]:block ${
-                            current
-                              ? 'text-[var(--text-primary)]'
-                              : 'text-[var(--text-muted)]'
-                          }`}
-                        >
-                          {segment.value}
-                        </span>
-                      </>
-                    ))}
-                </button>
+                        {room.name}
+                      </button>
+                    );
+                  })}
 
-                {segment.rooms && segment.rooms.length > 0 && printRooms && (
-                  <div className="hidden min-[1440px]:block">
-                    {segment.rooms.map((room) => {
-                      const roomIndex = nextRow();
-                      return (
-                        <button
-                          key={room.id}
-                          type="button"
-                          data-ladder-row
-                          data-room-chip={room.id}
-                          aria-pressed={room.held}
-                          tabIndex={roomIndex === roving ? 0 : -1}
-                          onFocus={() => setRoving(roomIndex)}
-                          onClick={() => onToggleRoom?.(room.id)}
-                          className={`flex min-h-11 w-full items-center pl-3 text-left text-[13px] leading-tight text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
-                            room.held
-                              ? 'font-semibold text-[var(--color-clay-ink)]'
-                              : ''
-                          }`}
-                        >
-                          {room.name}
-                        </button>
-                      );
-                    })}
-                  </div>
+                {segment.rooms && printRooms && hiddenRungs > 0 && (
+                  // The rail never runs out of room silently: the rungs the
+                  // track cannot hold are counted, not overprinted.
+                  <p
+                    data-ladder-rooms-overflow={hiddenRungs}
+                    className="hidden min-h-[27px] items-center pl-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)] min-[1440px]:flex"
+                  >
+                    +{hiddenRungs} more
+                  </p>
                 )}
               </div>
             );

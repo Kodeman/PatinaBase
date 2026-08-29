@@ -337,6 +337,28 @@ describe('deriveLadderDoors', () => {
     ).not.toContain('release-room');
   });
 
+  // F-13/C-09 — the sections sheet gates its own Call sheet row on the
+  // `call-sheet` flag. With the flag off nothing mounts the overlay the door
+  // dispatches into, so a rail that printed it would open a door onto nothing
+  // — on the exact organ R127 built to stop printing doors onto nothing.
+  it('gates the call sheet on the same flag the sections sheet gates it on', () => {
+    expect(
+      deriveLadderDoors({
+        ticket: ticket(),
+        held: false,
+        callSheetEnabled: false,
+      }).map((door) => door.key),
+    ).toEqual(['planroom', 'specbook', 'moodboards']);
+
+    expect(
+      deriveLadderDoors({
+        ticket: ticket(),
+        held: false,
+        callSheetEnabled: true,
+      }).map((door) => door.key),
+    ).toContain('callsheet');
+  });
+
   it('carries the page a leaf has of its own, and opens the rest in place', () => {
     const onOpenLeaf = jest.fn();
     const onOpenCallSheet = jest.fn();

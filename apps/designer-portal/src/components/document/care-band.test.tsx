@@ -115,12 +115,30 @@ describe('CareBand closeout authority', () => {
   // A3-L7 — the care rest state ("Everything is settled." / CLOSE THE BOOK) is
   // gated on this band's own closure answer; without this wire the page can
   // never pass `closureReady` and one of the seven rest states is unreachable.
-  it("publishes its closure answer to the page", () => {
+  // D-B9 — and the CHECKLIST with it: the ladder's care stop prints
+  // `N OF M CLOSED OUT` off this one report, because nothing else on the page
+  // can state the pair without repeating the eight closeout reads.
+  it("publishes its closure answer, and its count, to the page", () => {
     const onCloseoutReady = jest.fn();
 
     render(<CareBand projectId="project-1" onCloseoutReady={onCloseoutReady} />);
 
-    expect(onCloseoutReady).toHaveBeenCalledWith(false);
+    expect(onCloseoutReady).toHaveBeenCalledWith({
+      ready: false,
+      closed: 1,
+      total: 6,
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Final walkthrough completed with client',
+      }),
+    );
+    expect(onCloseoutReady).toHaveBeenLastCalledWith({
+      ready: false,
+      closed: 2,
+      total: 6,
+    });
   });
 
   it('prints the checklist anchor the guide\'s care act names', () => {
@@ -295,6 +313,48 @@ describe('CareBand running index root (W2 C-2)', () => {
     const root = container.querySelector('[data-index-region="care"]');
     expect(root).not.toBeNull();
     expect(root).toHaveAttribute('id', 'care-region-heading');
+  });
+
+  // C-04 — the `care` stop is declared on every project spread. A completed
+  // project used to render nothing at all, so the ladder printed a stop with
+  // no root: no scroll, no heading, a press onto nothing.
+  it('marks the completed branch as the care root when indexRoot is set', () => {
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'completed',
+        current_phase: 'installation',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute('id', 'care-region-heading');
+    expect(screen.getByText(/The book is closed\./)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Close the book' }),
+    ).not.toBeInTheDocument();
+  });
+
+  // C-07 / L-10 — `scrollToRegion` focuses `regionHeadingId('care')`, and
+  // `.focus()` on an element that cannot take focus is a silent no-op: the
+  // reader lands on the region with focus still in the rail.
+  it('gives the care root a focus destination the jump can land on', () => {
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    const root = container.querySelector<HTMLElement>(
+      '[data-index-region="care"]',
+    ) as HTMLElement;
+    expect(root).toHaveAttribute('tabindex', '-1');
+    root.focus();
+    expect(document.activeElement).toBe(root);
   });
 
   it('marks the closed (post-close confirmation) branch as the care root when indexRoot is set', () => {
