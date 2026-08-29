@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-29T16:55:15.353Z",
+  "generatedAt": "2026-08-29T19:34:10.417Z",
   "lane": "capture-launch/w2-d4",
   "notes": [
     "RecordScreen (RecordRegion + InsightRegion + RouteCommitRegion) mounted directly under <CaptureProvider initial={...}> in state C2 — the same seam src/__tests__/state/CaptureProvider.test.tsx and src/__tests__/spec-books/route-commit-ga.test.tsx use — rather than through PanelShell, which pulls in useCaptureController()/useSettingsSync() side effects not needed for this survey.",
@@ -14,7 +14,7 @@
         "name": true,
         "price": true,
         "description": true,
-        "manufacturer": "Design Within Reach",
+        "manufacturer": "Herman Miller",
         "dimensionFieldCount": 3,
         "materialsCount": 7,
         "colorsCount": 0,
@@ -68,7 +68,7 @@
         "name": true,
         "price": true,
         "description": true,
-        "manufacturer": "1stDibs",
+        "manufacturer": null,
         "dimensionFieldCount": 0,
         "materialsCount": 3,
         "colorsCount": 0,
