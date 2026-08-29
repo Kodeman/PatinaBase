@@ -96,6 +96,7 @@ export function draftFromExtraction(data: ExtractedProductData): DraftSlice {
     sourceUrl: data.url,
     snapshotUrl: null,
     confidence: data.confidence,
+    currency: data.currency ?? data.price?.currency ?? 'USD',
     fields: {
       name: field(data.productName ?? '', !!data.productName),
       price: field(
@@ -153,6 +154,7 @@ export function emptyDraft(url: string): DraftSlice {
     sourceUrl: url,
     snapshotUrl: null,
     confidence: 'low',
+    currency: 'USD',
     fields: {
       name: blank(''),
       price: blank(''),

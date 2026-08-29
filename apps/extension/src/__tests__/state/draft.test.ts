@@ -46,6 +46,26 @@ describe('draftFromExtraction', () => {
     expect(draft.fields.price.value).toBe('5499.00');
   });
 
+  it('carries the extraction currency onto the draft (CL-R13)', () => {
+    const draft = draftFromExtraction(
+      makeExtraction({ currency: 'GBP', price: { value: 25000, currency: 'GBP', raw: '£250.00' } })
+    );
+    expect(draft.currency).toBe('GBP');
+  });
+
+  it('falls back to the price currency when the extraction carries none', () => {
+    const extraction = makeExtraction({
+      price: { value: 25000, currency: 'EUR', raw: '€250,00' },
+    });
+    delete (extraction as { currency?: string }).currency;
+    expect(draftFromExtraction(extraction).currency).toBe('EUR');
+  });
+
+  it('defaults the draft currency to USD when nothing declares one', () => {
+    const draft = draftFromExtraction(makeExtraction({ price: null }));
+    expect(draft.currency).toBe('USD');
+  });
+
   it('flags absent fields as missing', () => {
     const draft = draftFromExtraction(
       makeExtraction({ productName: null, price: null } as Partial<ExtractedProductData>)

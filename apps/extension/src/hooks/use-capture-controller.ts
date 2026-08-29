@@ -12,7 +12,7 @@ import type {
   VendorSummaryForCapture,
 } from '@patina/shared';
 import { supabase } from '../lib/supabase';
-import { detectModeFromUrl } from '../lib/mode-detection';
+import { detectModeFromUrl, isKnownBadDomain, KNOWN_BAD_DOMAIN_MESSAGE } from '../lib/mode-detection';
 import { bestProductMatch } from '../lib/product-similarity';
 import { textToFields } from '../lib/text-to-fields';
 
@@ -351,6 +351,11 @@ export function useCaptureController(): CaptureController {
     (url: string) => {
       const nonce = ++nonceRef.current;
       exactMatchedRef.current = false;
+      // CL-R14: refuse known-bad domains before any extraction request.
+      if (isKnownBadDomain(url)) {
+        dispatch({ type: 'EXTRACTION_ERROR', error: KNOWN_BAD_DOMAIN_MESSAGE });
+        return;
+      }
       dispatch({ type: 'EXTRACTION_START', url, entry: 'toolbar' });
       extensionEvents.extractionStart('product');
       checkDuplicate(url);
@@ -391,6 +396,13 @@ export function useCaptureController(): CaptureController {
         dispatch({ type: 'FIELD_EDIT', field: 'price', value: (fields.price.value / 100).toFixed(2) });
       if (fields.materials?.length)
         dispatch({ type: 'FIELD_EDIT', field: 'materials', value: fields.materials });
+      return;
+    }
+
+    // CL-R14: refuse before the mode branch — facebook.com/<page>/about reads
+    // as a vendor URL, and the vendor screen would extract it just as wrongly.
+    if (isKnownBadDomain(currentUrl)) {
+      dispatch({ type: 'EXTRACTION_ERROR', error: KNOWN_BAD_DOMAIN_MESSAGE });
       return;
     }
 

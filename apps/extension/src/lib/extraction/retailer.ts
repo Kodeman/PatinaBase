@@ -4,8 +4,9 @@
 
 import type { VendorMatchConfidence } from '@patina/shared';
 
-// Known furniture retailers and their display names
-// Imported conceptually from metadata.ts but defined here for direct access
+// Known furniture retailers and their display names.
+// Single source of truth — metadata.ts imports this map rather than keeping
+// its own copy (they had drifted).
 export const RETAILER_MAP: Record<string, string> = {
   'restorationhardware.com': 'Restoration Hardware',
   'rh.com': 'Restoration Hardware',
@@ -50,7 +51,7 @@ export const RETAILER_MAP: Record<string, string> = {
   'flos.com': 'Flos',
   'artek.fi': 'Artek',
   'cassina.com': 'Cassina',
-  'bfremodern.com': 'B&B Italia',
+  'bebitalia.com': 'B&B Italia',
   'poliform.com': 'Poliform',
   'minotti.com': 'Minotti',
   'flexform.it': 'Flexform',
