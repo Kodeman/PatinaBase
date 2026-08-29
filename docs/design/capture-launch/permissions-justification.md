@@ -102,7 +102,6 @@ the tab's URL to our background worker (`extractor.ts:161`), but is
 otherwise inert: it reads and sends product fields only on a capture the
 designer starts (see `activeTab`).
 
-Note: the manifest currently also declares `http://*/*` alongside
-`https://*/*`. That is being dropped in W2 (`W2-E8`, manifest cleanup) —
-Patina Capture has no legitimate need to run on unencrypted vendor pages —
-and is independent of the `https://*/*` justification above.
+Note: `http://*/*` was removed from `host_permissions` and the content-script
+`matches` in 0.3.0 (capture-launch W2-E8); the extension requests HTTPS pages
+only.

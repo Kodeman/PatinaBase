@@ -66,6 +66,9 @@ jobs:
           pnpm --filter @patina/extension build
           pnpm --filter @patina/extension package
 
+      - name: Check bundle
+        run: bash apps/extension/scripts/check-bundle.sh
+
       - name: Find packaged extension
         id: zip
         shell: bash
