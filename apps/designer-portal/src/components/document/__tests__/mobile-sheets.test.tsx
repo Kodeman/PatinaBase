@@ -12,6 +12,7 @@
  */
 
 import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MobileSheets } from '../mobile/mobile-sheets';
 import {
   MobileShellProvider,
@@ -20,12 +21,29 @@ import {
   type MobileActiveDoc,
 } from '../mobile/mobile-shell';
 
+/** W5-R4(a) — `MobileSheets` hosts the margin's note composer now. */
+const testQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+});
+function TestProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <QueryClientProvider client={testQueryClient}>
+      <MobileShellProvider>{children}</MobileShellProvider>
+    </QueryClientProvider>
+  );
+}
+
+
 jest.mock('next/navigation', () => ({
   usePathname: () => '/doc/proj-1',
   useRouter: () => ({ push: jest.fn() }),
 }));
 
+jest.mock('@/hooks/use-margin-notes', () => ({
+  useCreateMarginNote: () => ({ mutate: jest.fn(), isPending: false }),
+}));
 jest.mock('@patina/supabase', () => ({
+  useSendDecisionReminder: () => ({ mutate: jest.fn(), isPending: false }),
   useCoordinationItems: () => ({ data: [] }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
   // W5-L3: `useMarginSheet` (mobile-sheets.tsx) reads the FF&E lines to name
@@ -104,11 +122,11 @@ function Opener() {
 
 function mountSheet(doc: MobileActiveDoc) {
   const view = render(
-    <MobileShellProvider>
+    <TestProviders>
       <HoldDocument doc={doc} />
       <Opener />
       <MobileSheets />
-    </MobileShellProvider>,
+    </TestProviders>,
   );
   fireEvent.click(screen.getByRole('button', { name: 'open sections' }));
   return view;

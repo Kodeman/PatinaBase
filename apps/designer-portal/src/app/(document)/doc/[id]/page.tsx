@@ -64,6 +64,7 @@ import {
   paperRegionsForSection,
   requestRegionUnfold,
   type DocumentIndexKey,
+  isPreWorkSection,
 } from '@/lib/document/document-index';
 import {
   scrollToRegion,
@@ -2379,6 +2380,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         // ORDERS` over `4 OF 6` (reconciliation §7 / W1 walk differs #1) —
         // from the same derivation the letterhead's vitals and the ticket's
         // identity line read. With no phase placed it keeps the section label.
+        // W5-R4 (F2) — one line on the four pre-work spreads.
+        preWork={isPreWorkSection(bandSpread)}
         stageWord={ticketPhase ? ticketPhase.name.toUpperCase() : null}
         stageIndex={
           ticketPhase ? `${ticketPhase.position} OF ${ticketPhase.of}` : null

@@ -83,6 +83,11 @@ export function PreworkRegion({
         name={name}
         status={status}
         eyebrow={eyebrow}
+        // W5-C5 — every pre-work eyebrow arrives after a fetch (the
+        // proposal's version, the brief's `Respond by`, discovery's `Ready`),
+        // and on `direction`/`proposal` this head is the FIRST region on the
+        // paper, squarely in the reader's frame.
+        reserveEyebrow
         surfaceKey="prework"
         regionKey={region}
         actions={[]}

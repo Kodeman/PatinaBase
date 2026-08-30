@@ -155,10 +155,19 @@ export function useMarginSheet({
   const handoffNow = useMemo(() => new Date(), []);
   const { gates } = useHandoffGates({ projectId, clientName, now: handoffNow });
 
+  // W5-C11 — overdue DECISIONS only; money is never counted (W5-R1). The
+  // filter is the code's own, not the DB view's: `margin_items`
+  // (`00219_coordination_read_models.sql`) happens to write `'overdue'` only
+  // in the decision branch, and the invoice branch passes `inv.status`
+  // through, whose CHECK (`00178_invoices_v1.sql`) is
+  // `draft|sent|partially_paid|paid|void` — so today a state filter alone
+  // gets the right answer for the wrong reason, and a later migration that
+  // taught invoices the word would silently start counting money.
   const overdueCount = useMemo(
     () =>
-      allItems.filter((row) => row.state === 'overdue').length +
-      gates.filter((gate) => gate.overdue.isOverdue).length,
+      allItems.filter(
+        (row) => row.kind === 'decision' && row.state === 'overdue',
+      ).length + gates.filter((gate) => gate.overdue.isOverdue).length,
     [allItems, gates],
   );
 

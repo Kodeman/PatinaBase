@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MobileBar } from './mobile-bar';
 import { MobileSheets } from './mobile-sheets';
 import {
@@ -9,6 +10,20 @@ import {
   type MobilePrimaryAction,
 } from './mobile-shell';
 
+/** W5-R4(a) — `MobileSheets` now hosts the margin's note composer, so the tree
+ *  needs a query client the way every other act surface does. */
+const testQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+});
+function TestProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <QueryClientProvider client={testQueryClient}>
+      <MobileShellProvider>{children}</MobileShellProvider>
+    </QueryClientProvider>
+  );
+}
+
+
 let mockPathname = '/doc/proj-1';
 let mockCallSheetOn = true;
 const mockRouterPush = jest.fn();
@@ -18,7 +33,12 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockRouterPush }),
 }));
 
+jest.mock('@/hooks/use-margin-notes', () => ({
+  useCreateMarginNote: () => ({ mutate: jest.fn(), isPending: false }),
+}));
 jest.mock('@patina/supabase', () => ({
+  // W5-C2 — the Margin sheet's inline nudge.
+  useSendDecisionReminder: () => ({ mutate: jest.fn(), isPending: false }),
   useUnreadInboxCount: () => ({ data: 0 }),
   useProcurementUnreadCount: () => ({ data: 0 }),
   useUnseenShipped: () => ({ data: [] }),
@@ -113,11 +133,11 @@ function mountBar({
   action?: MobilePrimaryAction | null;
 } = {}) {
   return render(
-    <MobileShellProvider>
+    <TestProviders>
       <HoldDocument doc={doc} />
       <Registration action={action} />
       <MobileBar />
-    </MobileShellProvider>,
+    </TestProviders>,
   );
 }
 
@@ -398,11 +418,11 @@ function mountBarAndSheets({
   ladderValues?: Record<string, string>;
 } = {}) {
   return render(
-    <MobileShellProvider>
+    <TestProviders>
       <HoldDocument doc={doc} />
       <MobileBar />
       <MobileSheets ladderValues={ladderValues} />
-    </MobileShellProvider>,
+    </TestProviders>,
   );
 }
 

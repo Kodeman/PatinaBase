@@ -65,6 +65,21 @@ export interface DocSpineProps {
    *  different vocabulary and prints only where no phase has been placed. */
   stageWord?: string | null;
   stageIndex?: string | null;
+  /**
+   * W5-R4 (F2) — a pre-work spread's rail head prints ONE line: the stage
+   * name, and nothing under it.
+   *
+   * `stageWord` is derived from the ticket's phase, which exists only once a
+   * project has a schedule, so on brief/discovery/direction/proposal it is
+   * always `null` and the head fell through to `activeSection.sub` — a rich
+   * per-key sentence (`Awaiting signature`, `In discovery`, `Respond by
+   * Aug 12`) never meant as a second rail line. The band already takes the
+   * pre-work fallback explicitly (`page.tsx`'s `bandStageWord`) and prints
+   * `<CLIENT> · DISCOVERY`; W5-R2 §3 requires the two to AGREE, which is a
+   * second clause beyond "no ordinal". The project paper keeps its two lines
+   * and its ordinal.
+   */
+  preWork?: boolean;
   /** Who this document is for — the same name the letterhead's HouseholdChip
    *  prints (`row.client_name`). Absent on documents that carry no household. */
   household?: string;
@@ -86,6 +101,7 @@ export function DocSpine({
   onToggleRoom,
   stageWord = null,
   stageIndex = null,
+  preWork = false,
   household,
   roomInHand = null,
   onReleaseRoom,
@@ -95,7 +111,7 @@ export function DocSpine({
     stageWord != null
       ? { top: stageWord, bottom: stageIndex }
       : activeSection
-        ? { top: activeSection.label, bottom: activeSection.sub }
+        ? { top: activeSection.label, bottom: preWork ? null : activeSection.sub }
         : null;
   return (
     <aside

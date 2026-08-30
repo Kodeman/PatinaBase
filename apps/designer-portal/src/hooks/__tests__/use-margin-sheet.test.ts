@@ -152,11 +152,14 @@ describe('useMarginSheet (W5-R1, the whole margin)', () => {
     mockItems = [
       row({ item_id: 'overdue6', anchor_kind: 'letterhead', state: 'overdue' }),
       row({ item_id: 'com', anchor_kind: 'line', anchor_id: 'ffe-2', state: 'overdue' }),
+      // W5-C11 — an invoice in state `'overdue'`, so the assertion has teeth.
+      // The old fixture used `'sent'`, which ANY implementation excludes: it
+      // proved a state filter, never the kind filter W5-R1 asks for.
       row({
         item_id: 'invoice',
         kind: 'invoice',
         anchor_kind: 'letterhead',
-        state: 'sent',
+        state: 'overdue',
         payload: { due_date: '2020-01-01' },
       }),
     ];

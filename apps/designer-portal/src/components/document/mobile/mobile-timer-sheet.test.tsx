@@ -6,9 +6,24 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MobileShellProvider, useMobileShell } from './mobile-shell';
 import { MobileSheets } from './mobile-sheets';
 import { useDocumentTime } from '@/hooks/document-time-provider';
+
+/** W5-R4(a) — `MobileSheets` now hosts the margin's note composer, so the tree
+ *  needs a query client the way every other act surface does. */
+const testQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+});
+function TestProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <QueryClientProvider client={testQueryClient}>
+      <MobileShellProvider>{children}</MobileShellProvider>
+    </QueryClientProvider>
+  );
+}
+
 
 const mockPause = jest.fn();
 const mockResume = jest.fn();
@@ -100,7 +115,12 @@ jest.mock('@/hooks/use-margin-items', () => ({
   useMarginItems: () => mockMarginQuery,
 }));
 
+jest.mock('@/hooks/use-margin-notes', () => ({
+  useCreateMarginNote: () => ({ mutate: jest.fn(), isPending: false }),
+}));
 jest.mock('@patina/supabase', () => ({
+  // W5-C2 — the Margin sheet's inline nudge.
+  useSendDecisionReminder: () => ({ mutate: jest.fn(), isPending: false }),
   useCoordinationItems: () => mockCoordinationQuery,
   // The mobile spine summary counts handoffs alongside margin items (I114).
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
@@ -283,11 +303,11 @@ describe('compact-spine timer doorway', () => {
   // elsewhere in this file (see the responsive-handoff tests further down).
   it('opens a focus-contained, scroll-locked sheet from the mobile bar doorway, restoring focus on Escape, with no spine-timer regime anywhere', async () => {
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <MobileTimerFallbackDoorway />
         <SheetState />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const doorway = screen.getByRole('button', {
@@ -349,10 +369,10 @@ describe('compact-spine timer doorway', () => {
   it('keeps every non-timer sheet below 1180', () => {
     setViewportWidth(390);
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <OpenDrawer />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open drawer' }));
@@ -408,10 +428,10 @@ describe('compact-spine timer doorway', () => {
       mockCoordinationQuery = { data: undefined, ...queryState };
 
       render(
-        <MobileShellProvider>
+        <TestProviders>
           <OpenProjectMargin />
           <MobileSheets />
-        </MobileShellProvider>,
+        </TestProviders>,
       );
 
       fireEvent.click(
@@ -427,12 +447,12 @@ describe('compact-spine timer doorway', () => {
   it('closes a drawer when 1180px ends its regime without restoring hidden focus', async () => {
     setViewportWidth(1179);
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <OpenDrawer />
         <DesktopFocusFallbacks />
         <SheetState />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const opener = screen.getByRole('button', { name: 'Open drawer' });
@@ -473,12 +493,12 @@ describe('compact-spine timer doorway', () => {
   it('keeps the timer open across 1440px — the sheet has no width regime left', async () => {
     setViewportWidth(1439);
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <DrawerTimerDoorway />
         <DesktopFocusFallbacks />
         <SheetState />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const doorway = screen.getByRole('button', {
@@ -521,11 +541,11 @@ describe('compact-spine timer doorway', () => {
 
   it('keeps the timer open when compact chrome gives way to the mobile edge', async () => {
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <DrawerTimerDoorway />
         <MobileTimerFallbackDoorway />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const compactDoorway = screen.getByRole('button', {
@@ -556,11 +576,11 @@ describe('compact-spine timer doorway', () => {
   it('hands a mobile-opened timer to the compact doorway after crossing 1180px', async () => {
     setViewportWidth(1179);
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <DrawerTimerDoorway />
         <MobileTimerFallbackDoorway />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const compactDoorway = screen.getByRole('button', {
@@ -591,11 +611,11 @@ describe('compact-spine timer doorway', () => {
   it('does not steal focus from a replacement modal during responsive cleanup', async () => {
     setViewportWidth(1179);
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <OpenDrawer />
         <DesktopFocusFallbacks />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const opener = screen.getByRole('button', { name: 'Open drawer' });
@@ -635,9 +655,9 @@ describe('compact-spine timer doorway', () => {
   it('publishes no compact timer doorway without a held project', () => {
     mockTimeState = { ...mockTimeState, heldProjectId: null };
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <DrawerTimerDoorway />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     expect(

@@ -64,6 +64,10 @@ export interface RegionHeadProps {
    */
   exceptions?: readonly ReactNode[];
   eyebrow?: ReactNode;
+  /** W5-C5 — this head's eyebrow arrives after a fetch, so its line box is
+   *  held open from the first commit rather than inserted above the name when
+   *  the query lands. */
+  reserveEyebrow?: boolean;
   surfaceKey: string;
   regionKey: string;
   /** Primary-first: entry 0 renders inked. */
@@ -100,6 +104,7 @@ export function RegionHead({
   status,
   exceptions = [],
   eyebrow,
+  reserveEyebrow = false,
   surfaceKey,
   regionKey,
   actions,
@@ -157,8 +162,23 @@ export function RegionHead({
       className="grid grid-cols-1 items-start gap-x-4 gap-y-2 min-[1180px]:grid-cols-[minmax(20rem,1fr)_auto]"
     >
       <div className="min-w-0">
-        {eyebrow && (
-          <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        {/* W5-C5 — a head whose eyebrow ARRIVES (the proposal's version, the
+            brief's `Respond by`, discovery's `Ready`) reserves the line from
+            the first commit. Those three feeds all land after first paint, and
+            a conditional `<p>` appearing above the `<h2>` pushes the name, the
+            status line and every root below it down — H5's forbidden shift, in
+            the head, and the same class D-B39 measured for the loading
+            register. `min-h-[15.4px]` is one line of 11px mono at
+            `leading-[1.4]`, the literal D-B38 uses on band line 1. Heads whose
+            eyebrow is a constant (approvals, money, care) print exactly as
+            before: nothing is reserved for a line that was never going to
+            move. */}
+        {(eyebrow || reserveEyebrow) && (
+          <p
+            className={`font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]${
+              reserveEyebrow ? ' min-h-[15.4px]' : ''
+            }`}
+          >
             {eyebrow}
           </p>
         )}
