@@ -206,6 +206,45 @@ describe('the More menu · In this document (F49)', () => {
   });
 });
 
+describe('the Margin door (D-B30)', () => {
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    mockCallSheetOn = true;
+  });
+
+  it('leads "In this document" with "Margin · N" from activeDoc.marginCount, above Plan room', () => {
+    mountBar({ doc: { ...heldDocument, marginCount: 3 } });
+    const menu = openMore();
+    const group = menu.getByRole('group', { name: 'In this document' });
+    const labels = Array.from(group.querySelectorAll('a, button')).map((row) =>
+      row.textContent?.replace('→', ''),
+    );
+    expect(labels[0]).toBe('Margin · 3');
+    expect(labels.indexOf('Margin · 3')).toBeLessThan(labels.indexOf('Plan room'));
+  });
+
+  it('stands even off a project — margin items are not project-keyed like the four doors', () => {
+    mountBar({
+      doc: { ...heldDocument, projectId: null, marginCount: 1 },
+    });
+    const menu = openMore();
+    expect(menu.getByRole('button', { name: 'Margin · 1' })).toBeInTheDocument();
+    expect(menu.queryByRole('link', { name: 'Plan room' })).toBeNull();
+  });
+
+  it('is absent when marginCount is unknown (null) — never printed as "Margin · null"', () => {
+    mountBar({ doc: { ...heldDocument, marginCount: null } });
+    const menu = openMore();
+    expect(menu.queryByText(/^Margin ·/)).toBeNull();
+  });
+
+  it('is never a fourth bar item — it lives only inside More, not in the visible bar', () => {
+    mountBar({ doc: { ...heldDocument, marginCount: 5 } });
+    const bar = screen.getByTestId('mobile-bar');
+    expect(within(bar).queryByText(/^Margin ·/)).toBeNull();
+  });
+});
+
 describe('the More menu · Find anything ⌘K (F49 blocker)', () => {
   beforeEach(() => {
     mockPathname = '/doc/proj-1';

@@ -55,13 +55,19 @@ export interface MobileActiveDoc {
   /** DL-04 · this spread carries a client's copy, so the sections sheet prints
    *  the fifth door under `Filed with this job`. */
   clientCopy?: boolean;
+  /** D-B30 · the letterhead- and section-anchored margin count (the same set
+   *  `useLetterheadMargin` lists), so the bar's `Margin · N` door and the
+   *  Margin sheet's head can print it without their own subscription.
+   *  Optional so a caller that predates D-B30 still type-checks. */
+  marginCount?: number | null;
 }
 
 type Sheet =
   | { kind: 'spine' }
   | { kind: 'timer' }
   | { kind: 'drawer' }
-  | { kind: 'margin-item'; itemId: string };
+  | { kind: 'margin-item'; itemId: string }
+  | { kind: 'margin' };
 
 export type MobilePrimaryAction = {
   actionKey: string;
@@ -93,6 +99,7 @@ interface MobileShellValue {
   openTimer: () => void;
   openDrawer: () => void;
   openMarginItem: (itemId: string) => void;
+  openMargin: () => void;
   closeSheet: () => void;
   primaryAction: MobilePrimaryAction | null;
   registerPrimaryAction: (
@@ -197,6 +204,7 @@ export function MobileShellProvider({
       openDrawer: () => setSheet({ kind: 'drawer' }),
       openMarginItem: (itemId: string) =>
         setSheet({ kind: 'margin-item', itemId }),
+      openMargin: () => setSheet({ kind: 'margin' }),
       closeSheet: () => setSheet(null),
       primaryAction,
       registerPrimaryAction,
@@ -322,6 +330,7 @@ export function useMobileActiveDoc(doc: MobileActiveDoc | null) {
       .map(([stop, value]) => `${stop}=${value ?? ''}`)
       .join('|'),
     doc?.clientCopy ? 'copy' : '',
+    doc?.marginCount ?? '',
   ].join('//');
   useEffect(() => {
     setActiveDoc(doc);
