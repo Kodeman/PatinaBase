@@ -294,15 +294,13 @@ describe('useLensDensity', () => {
     expect(regionRoot('ffe')).toHaveAttribute('data-density', 'quiet');
     expect(regionRoot('money')).toHaveAttribute('data-density', 'quiet');
 
-    // Slow enough to arm the gate, but not yet 120ms of it.
-    await act(async () => {
-      scrollTo(1010);
-      jest.advanceTimersByTime(32);
-    });
-    await flush(80);
+    // D-B32 — was: a slow frame re-armed the window, so the buffer waited for
+    // 120ms of quiet after ANY frame. The window now runs from the last FAST
+    // frame, so nothing more need arrive for it to land.
+    await flush(40);
     expect(regionRoot('ffe')).toHaveAttribute('data-density', 'quiet');
 
-    await flush(40);
+    await flush(80);
     expect(regionRoot('ffe')).toHaveAttribute('data-density', 'full');
     expect(regionRoot('money')).toHaveAttribute('data-density', 'full');
     expect(shell).toHaveAttribute('data-lens-settled', 'true');
@@ -329,10 +327,7 @@ describe('useLensDensity', () => {
     await flush();
     expect(landed).toBeNull();
 
-    await act(async () => {
-      scrollTo(1005);
-      jest.advanceTimersByTime(32);
-    });
+    // No nudge: the window closes on its own, 120ms after the fast frame.
     await flush(160);
     expect(landed).toBe(true);
   });
@@ -490,6 +485,131 @@ describe('useLensDensity', () => {
     });
 
     expect(spokenDuring).toBe('full');
+  });
+
+  it('settles 120ms after a jump — one scroll event, no nudge to follow it', async () => {
+    const { shell } = mountPaper();
+    render(<Probe />);
+    await flush();
+
+    // `window.scrollTo` fires exactly one event, and its travel is always over
+    // the gate. Nothing else is coming.
+    await act(async () => {
+      scrollTo(400);
+      jest.advanceTimersByTime(32);
+    });
+    expect(shell).toHaveAttribute('data-lens-settled', 'false');
+
+    let landed: unknown = null;
+    void window.__lensSettled!().then((value) => {
+      landed = value;
+    });
+
+    await flush(140);
+    expect(shell).toHaveAttribute('data-lens-settled', 'true');
+    expect(landed).toBe(true);
+  });
+
+  it('never unsettles under a slow drift, and commits into it', async () => {
+    const { shell } = mountPaper();
+    render(<Probe />);
+    await flush();
+
+    const ffe = regionRoot('ffe');
+    let y = 0;
+    for (let frame = 0; frame < 60; frame += 1) {
+      y += 10;
+      await act(async () => {
+        scrollTo(y);
+        jest.advanceTimersByTime(32);
+      });
+      // Every frame is under the gate, so the gate never opens — a drift that
+      // unsettled would hold back the promotions L-4 makes ahead of her.
+      expect(shell).toHaveAttribute('data-lens-settled', 'true');
+
+      if (frame === 29) {
+        await act(async () => {
+          observer().fire([ffe]);
+          jest.advanceTimersByTime(32);
+        });
+        // Mid-drift, with 30 frames still to come: committed already.
+        expect(ffe).toHaveAttribute('data-density', 'full');
+      }
+    }
+  });
+
+  it('settles 120ms after the last fast frame, though slow frames keep arriving', async () => {
+    const { shell } = mountPaper();
+    render(<Probe />);
+    await flush();
+
+    await act(async () => {
+      scrollTo(400);
+      jest.advanceTimersByTime(32);
+    });
+    expect(shell).toHaveAttribute('data-lens-settled', 'false');
+
+    // Three slow frames inside the window: they neither unsettle nor delay.
+    let y = 400;
+    for (let frame = 0; frame < 3; frame += 1) {
+      y += 10;
+      await act(async () => {
+        scrollTo(y);
+        jest.advanceTimersByTime(32);
+      });
+    }
+    expect(shell).toHaveAttribute('data-lens-settled', 'false');
+
+    // One more slow frame carries us past 120ms from the fast one.
+    await act(async () => {
+      scrollTo(y + 10);
+      jest.advanceTimersByTime(32);
+    });
+    expect(shell).toHaveAttribute('data-lens-settled', 'true');
+  });
+
+  it('carries the settled state from the first commit, even when the shell arrives late', async () => {
+    // The hook attaches above the page's early returns: on the first pass the
+    // document is still loading and there is no shell to write to.
+    const paper = document.createElement('main');
+    paper.setAttribute('data-document-paper', '');
+    document.body.appendChild(paper);
+
+    render(<Probe />);
+    await flush();
+    expect(document.querySelector('[data-document-shell]')).toBeNull();
+
+    const shell = document.createElement('div');
+    shell.setAttribute('data-document-shell', '');
+    await act(async () => {
+      paper.appendChild(shell);
+    });
+    await flush();
+
+    expect(shell).toHaveAttribute('data-lens-settled', 'true');
+  });
+
+  it('holds a burst open until 120ms after its last frame', async () => {
+    const { shell } = mountPaper();
+    render(<Probe />);
+    await flush();
+
+    let y = 0;
+    for (let frame = 0; frame < 5; frame += 1) {
+      y += 60;
+      await act(async () => {
+        scrollTo(y);
+        jest.advanceTimersByTime(32);
+      });
+      expect(shell).toHaveAttribute('data-lens-settled', 'false');
+    }
+
+    // 100ms after the last frame: still travelling, as far as the gate knows.
+    await flush(100);
+    expect(shell).toHaveAttribute('data-lens-settled', 'false');
+
+    await flush(40);
+    expect(shell).toHaveAttribute('data-lens-settled', 'true');
   });
 
   it('hands each key its own reading', async () => {

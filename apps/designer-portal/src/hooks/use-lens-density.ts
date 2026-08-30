@@ -177,6 +177,9 @@ export function useLensDensity(
     let scrollQueued = false;
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
     let settled = true;
+    /** When the last frame of 40px or more arrived. The gate measures from it,
+     *  not from the last frame of any speed. */
+    let lastFastAt = 0;
     let lastY = window.scrollY;
     let waiting: Array<() => void> = [];
     let stopped = false;
@@ -255,6 +258,22 @@ export function useLensDensity(
       window.requestAnimationFrame(runFrame);
     };
 
+    /** L-9, as D-B32 restates it: settled iff no frame of
+     *  `LENS_SETTLE_VELOCITY_PX` or more has arrived in the trailing
+     *  `LENS_SETTLE_MS`. The timer fires at the earliest moment that COULD be
+     *  true and re-arms for the remainder when a later fast frame has moved
+     *  the deadline. */
+    const onSettleTimer = (): void => {
+      settleTimer = null;
+      if (stopped) return;
+      const since = Date.now() - lastFastAt;
+      if (since >= LENS_SETTLE_MS) {
+        settle();
+        return;
+      }
+      settleTimer = setTimeout(onSettleTimer, LENS_SETTLE_MS - since);
+    };
+
     const settle = (): void => {
       settleTimer = null;
       if (stopped) return;
@@ -270,14 +289,21 @@ export function useLensDensity(
       const y = window.scrollY;
       const travelled = Math.abs(y - lastY);
       lastY = y;
+      // A FAST frame opens the window and stamps it; the timer is armed on that
+      // same frame, which is what closes the deadlock — a programmatic jump
+      // (`window.scrollTo`, a restored offset, a press under reduced motion) is
+      // exactly ONE frame, always over the gate, and arming only on a later
+      // under-gate frame left it unsettled forever with `commitPending()` and
+      // `__lensSettled()` behind it. A SLOW frame writes nothing while settled:
+      // a continuous trackpad drift is every frame under the gate, and a gate
+      // that waited for it to stop would hold back the very promotions L-4
+      // exists to make ahead of her.
       if (travelled >= LENS_SETTLE_VELOCITY_PX) {
-        if (settleTimer) {
-          clearTimeout(settleTimer);
-          settleTimer = null;
-        }
+        lastFastAt = Date.now();
         if (settled) writeSettled(false);
-      } else if (!settled && settleTimer === null) {
-        settleTimer = setTimeout(settle, LENS_SETTLE_MS);
+      }
+      if (!settled && settleTimer === null) {
+        settleTimer = setTimeout(onSettleTimer, LENS_SETTLE_MS);
       }
       markPassed();
       if (settled) commitPending();
@@ -309,6 +335,14 @@ export function useLensDensity(
         mutation.observe(paper, { childList: true, subtree: true });
         mutationTarget = paper;
       }
+
+      // The hook attaches above the page's early returns, so on the first pass
+      // there is often no shell yet to carry the state. Discovery is where it
+      // arrives, and the DOM table promises the attribute is always there —
+      // `e2e/helpers/lens.ts` keys its first tier on its presence, so an absent
+      // one silently demotes every spec to the `__lensSettled()` tier.
+      const shell = document.querySelector(SHELL_SELECTOR);
+      if (shell && !shell.hasAttribute('data-lens-settled')) writeSettled(settled);
 
       const found = paper
         ? Array.from(paper.querySelectorAll<HTMLElement>(REGION_SELECTOR))

@@ -1728,6 +1728,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           readingIndex: activeKey,
           ladderValues,
           clientCopy: ticketInput?.clientCopy != null,
+          onJumpRegion: jumpToRegion,
         }
       : null,
   );
