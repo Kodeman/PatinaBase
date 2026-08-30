@@ -181,6 +181,7 @@ jest.mock("../add-line-sheet", () => ({
 
 import { ScheduleSpine } from "../schedule-spine";
 import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { regionBoxSignature } from '../../region/region-box-signature';
 
 const onePhaseSchedule = (status: string) => ({
   isLoading: false,
@@ -558,6 +559,10 @@ describe("ScheduleSpine quiet body (W4)", () => {
 
     const { container, rerender } = renderSpine();
     const quietHead = container.querySelector('[data-region-head="schedule"]');
+    // H5 — the root's OUTER box may not depend on its density.
+    const quietBox = regionBoxSignature(
+      container.querySelector('[data-index-region="schedule"]'),
+    );
     const quietHeading = document.getElementById("project-schedule-title");
     expect(quietHead).not.toBeNull();
 
@@ -583,6 +588,14 @@ describe("ScheduleSpine quiet body (W4)", () => {
     expect(
       screen.queryByText("Quiet — opens as you read"),
     ).not.toBeInTheDocument();
+    // The same outer box on the other side of the promotion: same
+    // margins, same border, same reserve, same rules. A stop that grew a
+    // top margin on promotion would move every root below it.
+    expect(
+      regionBoxSignature(
+        container.querySelector('[data-index-region="schedule"]'),
+      ),
+    ).toBe(quietBox);
   });
 
   it("lets her own fold outrank the lens", () => {

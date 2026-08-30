@@ -56,6 +56,53 @@ async function layoutHeight(locator: Locator): Promise<number> {
   return locator.evaluate((el) => el.getBoundingClientRect().height);
 }
 
+/**
+ * The band's box, with everything needed to tell a BROKEN BOX from a SCALED
+ * READ — so a recurrence names its own cause instead of printing a bare
+ * `55.9755 !== 56`.
+ *
+ * The W4-int PROD run recorded 55.9754638671875 for the pre-work paper at 390
+ * in an unsharded 122-test basket. It did not reproduce: 56 exactly in every
+ * one of thirty-odd measured cells — both papers × 390/1280/1440 × scrollY
+ * 0/400/1200, on the production server AND on dev, chromium AND webkit,
+ * standalone AND in that same full basket on that same server — with
+ * `height: 56px`, `box-sizing: border-box`, `transform: none` on the box and on
+ * every ancestor, and `--doc-band-height: 56px` at `:root` and on the band. It
+ * is not line 1 either: removing D-B38's `min-h-[15.4px]` leaves the box at
+ * exactly 56, because the height is DECLARED and the children cannot change it.
+ * And 55.9754638671875 / 56 = 0.999562 — a rendering-scale ratio, not any sum
+ * of margins, borders or line boxes.
+ *
+ * So `offsetHeight` (layout, integer, immune to rendering scale) and the CSS
+ * `height` are captured beside the rect. If they ever disagree the box is fine
+ * and the READ is scaled — D-B35's finding, one level deeper.
+ */
+async function bandBox(locator: Locator): Promise<{
+  rect: number;
+  offset: number;
+  css: string;
+  boxSizing: string;
+  transforms: string;
+}> {
+  return locator.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const transforms: string[] = [];
+    let n: Element | null = el;
+    while (n && transforms.length < 8) {
+      const t = getComputedStyle(n).transform;
+      if (t && t !== 'none') transforms.push(`${n.tagName}:${t}`);
+      n = n.parentElement;
+    }
+    return {
+      rect: el.getBoundingClientRect().height,
+      offset: (el as HTMLElement).offsetHeight,
+      css: cs.height,
+      boxSizing: cs.boxSizing,
+      transforms: transforms.length ? transforms.join(' | ') : 'none',
+    };
+  });
+}
+
 /** SC1 — the first region head at rest, at 1440. */
 const SC1_MAX_Y = 405;
 /** SC2 — the band's bottom edge at scrollY 400. */
@@ -120,9 +167,14 @@ test.describe('the lens band’s declared height', () => {
 
         for (const offset of OFFSETS) {
           await scrollTo(page, offset);
+          const box = await bandBox(band);
           expect(
-            await layoutHeight(band),
-            `${paper.label} · ${size.label} · scrollY ${offset}`,
+            box.rect,
+            `${paper.label} · ${size.label} · scrollY ${offset} — ` +
+              `rect ${box.rect}, offsetHeight ${box.offset}, css ${box.css}, ` +
+              `box-sizing ${box.boxSizing}, transforms ${box.transforms}. ` +
+              'If offsetHeight and css are 56 and only rect is not, the BOX is ' +
+              'right and the READ is scaled (D-B35), not a layout break.',
           ).toBe(BAND_HEIGHT);
         }
       });

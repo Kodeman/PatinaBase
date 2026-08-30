@@ -68,6 +68,7 @@ jest.mock('../account-band', () => ({ AccountBand: () => <div>Account band</div>
 
 import { MoneyRegion } from './money-region';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { regionBoxSignature } from '../region/region-box-signature';
 
 const settledEmpty = {
   authority: { data: null, isLoading: false, error: null },
@@ -632,6 +633,10 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     liveMoney();
     const { rerender } = render(<MoneyRegion projectId="project-1" />);
     const head = document.querySelector('[data-region-head="money-head"]');
+    // H5 — the root's OUTER box may not depend on its density.
+    const quietBox = regionBoxSignature(
+      document.querySelector('[data-index-region="money"]'),
+    );
     const heading = screen.getByRole('heading', { name: 'Money' });
 
     act(() => {
@@ -646,6 +651,14 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     ).toHaveAttribute('data-density', 'full');
     expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
     expect(screen.getByText(/^Owed · /)).toBeInTheDocument();
+    // The same outer box on the other side of the promotion: same
+    // margins, same border, same reserve, same rules. A stop that grew a
+    // top margin on promotion would move every root below it.
+    expect(
+      regionBoxSignature(
+        document.querySelector('[data-index-region="money"]'),
+      ),
+    ).toBe(quietBox);
   });
 
   it('lets the fold she made outrank the lens, whatever the lens says', () => {

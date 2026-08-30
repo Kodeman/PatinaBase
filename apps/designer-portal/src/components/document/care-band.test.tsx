@@ -57,6 +57,7 @@ jest.mock('./document-action', () => ({
 
 import { CareBand } from './care-band';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { regionBoxSignature } from './region/region-box-signature';
 
 const settled = (data: unknown) => ({ data, isError: false });
 
@@ -525,6 +526,10 @@ describe('CareBand quiet body (W4)', () => {
       <CareBand projectId="project-1" indexRoot />,
     );
     const quietHead = container.querySelector('[data-region-head="closure"]');
+    // H5 — the root's OUTER box may not depend on its density.
+    const quietBox = regionBoxSignature(
+      container.querySelector('[data-index-region="care"]'),
+    );
     const quietHeading = document.getElementById('care-band-heading');
     expect(quietHead).not.toBeNull();
     expect(container.querySelector('[data-index-region="care"]')).toHaveAttribute(
@@ -548,6 +553,14 @@ describe('CareBand quiet body (W4)', () => {
     expect(
       screen.queryByText('Quiet — opens as you read'),
     ).not.toBeInTheDocument();
+    // The same outer box on the other side of the promotion: same
+    // margins, same border, same reserve, same rules. A stop that grew a
+    // top margin on promotion would move every root below it.
+    expect(
+      regionBoxSignature(
+        container.querySelector('[data-index-region="care"]'),
+      ),
+    ).toBe(quietBox);
   });
 
   it('lets her own fold outrank the lens — CLOSED BY YOU is the only cause a stop has', () => {

@@ -111,6 +111,7 @@ jest.mock('../../line-unfold', () => ({ LineUnfold: () => null }));
 import { FFESection } from '../../ffe-section';
 import { RoomLensProvider } from '../../room-lens-context';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { regionBoxSignature } from '../../region/region-box-signature';
 
 /** A furnishing the studio still has to release. */
 const line = (over: Record<string, unknown> = {}) => ({
@@ -482,6 +483,10 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
   it('keeps the same head element when the lens promotes it to full', () => {
     const { rerender } = renderProject();
     const head = document.querySelector('[data-region-head="ffe"]');
+    // H5 — the root's OUTER box may not depend on its density.
+    const quietBox = regionBoxSignature(
+      document.querySelector('[data-index-region="ffe"]'),
+    );
     const heading = screen.getByRole('heading', { name: 'Pieces' });
 
     act(() => {
@@ -500,6 +505,14 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
       screen.queryByText(/not yet on the paper/),
     ).not.toBeInTheDocument();
     expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
+    // The same outer box on the other side of the promotion: same
+    // margins, same border, same reserve, same rules. A stop that grew a
+    // top margin on promotion would move every root below it.
+    expect(
+      regionBoxSignature(
+        document.querySelector('[data-index-region="ffe"]'),
+      ),
+    ).toBe(quietBox);
   });
 
   it('lets the fold she made outrank the lens, whatever the lens says', () => {
