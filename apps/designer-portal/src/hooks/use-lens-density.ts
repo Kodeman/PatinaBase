@@ -86,6 +86,17 @@ const PAPER_SELECTOR = '[data-document-paper]';
 const REGION_SELECTOR = '[data-index-region]';
 const SHELL_SELECTOR = '[data-document-shell]';
 const RESOLVED_ATTRIBUTE = 'data-lens-resolved';
+/**
+ * The design lead's own alternative mechanism for defect 1, in the DOM: "defer
+ * the initial commit until the region's loading register is gone". Measured on
+ * the seeded long paper, the fetch signal alone is not enough — the readiness
+ * queries are DEPENDENT (they fire only once the FF&E items resolve), so
+ * `isFetching` returns to 0 in the lull between waves while the paper is still
+ * a 2,163px skeleton, and three stable frames pass inside that lull. A body
+ * that is still printing its loading register is a body whose height is not
+ * its own yet, whatever the query count says.
+ */
+const LOADING_SELECTOR = '[aria-busy="true"], .animate-pulse';
 
 /** Never mounted, never fetching: the count it reports is 0 forever. */
 const STANDBY_CLIENT = new QueryClient();
@@ -321,7 +332,18 @@ export function useLensDensity(
       // D-B46: a crossing during the load is a real crossing — it buffers, and
       // it lands with everything else the moment the paper has a height.
       if (!resolved || frozen || pending.size === 0) return;
-      for (const root of ordered) if (pending.has(root)) promote(root);
+      // Position is the test, always measured at the moment of the write. An
+      // `IntersectionObserver` entry is queued at the end of the frame that
+      // computed it, so an entry can arrive AFTER the paper it was measured
+      // against has gone: on the seeded long paper the skeleton put all six
+      // roots inside the lookahead, and those entries were still landing when
+      // the paper reached 10,636px — promoting `money` at 7,691 and `care` at
+      // 8,794 off a reading of a page that no longer existed. A root that no
+      // longer stands at the line goes back to waiting; it is still observed,
+      // so the observer will say so again when she reaches it.
+      for (const root of ordered) {
+        if (pending.has(root) && withinLookahead(root)) promote(root);
+      }
       // A root that left the paper between crossing and settling is no longer
       // in `ordered`; it has nothing left to be written to.
       pending.clear();
@@ -372,10 +394,28 @@ export function useLensDensity(
         resolveDeadline = null;
       }
       writeResolved();
+      // ONE AT A TIME, re-measured after each, because the paper's geometry is
+      // a function of this pass's own decisions. Measured on the seeded long
+      // paper: at resolution every root stands at its quiet reserve, so all six
+      // are inside the lookahead of a 2,163px paper and a single-measurement
+      // pass promotes all six — `money` at what becomes 7,715 and `care` at
+      // 8,817. Promoting `approvals` alone moves `schedule` to 964 (still at
+      // the line, so it opens too) and that moves `ffe` to 1,910, which is
+      // past it. That cascade is the lead's acceptance map, and it only exists
+      // if each promotion is laid out before the next root is measured —
+      // `flushSync` is what makes the body's real height exist in time to be
+      // measured, the same reason the press path uses it (D-B18).
       for (const root of ordered) {
         if (committed.has(root)) continue;
-        if (withinLookahead(root)) promote(root);
+        if (!withinLookahead(root)) break;
+        flushSync(() => promote(root));
       }
+      // Then the buffer — which `commitPending` re-measures, so what she
+      // crossed while the paper loaded lands, and what merely LOOKED crossed
+      // against the skeleton does not. Measured: on the seeded long paper's
+      // 2,163px skeleton all six roots stand at their quiet reserve inside the
+      // lookahead, so `onIntersect` fired for every one of them; a blind drain
+      // promotes exactly what waiting refused.
       commitPending();
     };
 
@@ -384,11 +424,15 @@ export function useLensDensity(
       if (stopped || resolved || typeof window === 'undefined') return;
       const paper = resolvePaper();
       const height = paper ? paper.scrollHeight : 0;
+      const loading = paper ? paper.querySelector(LOADING_SELECTOR) !== null : true;
       // A paper with no height yet is not a paper that has settled at zero —
       // it is one whose bodies have not arrived. The deadline covers the case
       // where they never do.
       const held =
-        fetchingRef.current === 0 && height > 0 && height === lastHeight;
+        fetchingRef.current === 0 &&
+        !loading &&
+        height > 0 &&
+        height === lastHeight;
       lastHeight = height;
       stableFrames = held ? stableFrames + 1 : 0;
       sampledFrames += 1;

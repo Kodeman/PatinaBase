@@ -525,11 +525,19 @@ test.describe('the mobile bar publishes its height (D-B47)', () => {
       `scroll-padding-bottom ${padding} vs the bar's ${barHeight}`,
     ).toBeLessThanOrEqual(1);
 
-    // At the foot of the paper the last stop is not underneath the bar.
-    await page.evaluate(() =>
-      window.scrollTo(0, document.documentElement.scrollHeight),
-    );
-    await settle(page);
+    // At the foot of the paper the last stop is not underneath the bar. The
+    // foot MOVES on the way there — every region the walk opens grows the
+    // paper below her (L-4) — so the end is chased until it stops receding.
+    let previousHeight = -1;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const height = await page.evaluate(() => {
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        return document.documentElement.scrollHeight;
+      });
+      await settle(page);
+      if (height === previousHeight) break;
+      previousHeight = height;
+    }
     const clears = await page.evaluate(() => {
       const roots = Array.from(
         document.querySelectorAll('[data-document-paper] [data-index-region]'),

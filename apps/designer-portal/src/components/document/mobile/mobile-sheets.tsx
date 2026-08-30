@@ -745,6 +745,11 @@ export function MobileSheets({
       // never moved) and then opens the same margin-item sheet the line's
       // own chip opened (D-B30's SHEET_RETURN_FALLBACKS still find it).
       if (row.anchor_kind === 'line' && row.anchor_id) {
+        // D-B46: every `ffe-selection-*` id lives in the FF&E region's body,
+        // and a quiet region has no body — so on a cold 390 load the line this
+        // row names does not exist yet. The promotion is flushed (D-B18), so
+        // the element is there by the next statement.
+        activeDoc?.onPromoteThrough?.('ffe');
         const reduceMotion = window.matchMedia?.(
           '(prefers-reduced-motion: reduce)',
         ).matches;

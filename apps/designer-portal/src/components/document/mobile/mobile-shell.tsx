@@ -66,6 +66,12 @@ export interface MobileActiveDoc {
    *  no-op if a publisher ever forgot it — where the pre-D-B18 code at least
    *  scrolled. `page.tsx` is the only publisher and always supplies it. */
   onJumpRegion: (key: DocumentIndexKey) => void;
+  /** D-B46 · the lens's promotion, without the jump. A margin row anchored to
+   *  an FF&E line scrolls to the LINE, not to a region — and while its region
+   *  is quiet that line is not mounted, so there is nothing to scroll to. The
+   *  sheet asks for the region to be opened first, then lands on the line.
+   *  Optional so a caller that predates D-B46 still type-checks. */
+  onPromoteThrough?: (key: DocumentIndexKey) => void;
   /** D-B30 · the letterhead- and section-anchored margin count (the same set
    *  `useLetterheadMargin` lists), so the bar's `Margin · N` door and the
    *  Margin sheet's head can print it without their own subscription.

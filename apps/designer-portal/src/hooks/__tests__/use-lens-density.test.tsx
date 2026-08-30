@@ -58,6 +58,16 @@ class CapturingIntersectionObserver {
   }
 
   fire(targets: Element[], isIntersecting = true): void {
+    // An entry that says "intersecting" is a statement about geometry, and the
+    // hook re-measures position at the moment it writes (a queued entry can
+    // outlive the paper it was computed against). So a fired crossing brings
+    // its target to the line, or the fixture would be asserting against a
+    // reading the browser could never produce.
+    if (isIntersecting) {
+      for (const target of targets) {
+        topAt(target as HTMLElement, window.innerHeight);
+      }
+    }
     this.callback(
       targets.map(
         (target) =>

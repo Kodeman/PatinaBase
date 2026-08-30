@@ -200,13 +200,32 @@ test.describe('the lens density — one direction (D-B16)', () => {
     await scrollSteps(page, 0);
     const after = await regionRects(page);
 
+    // D-B46 — was: EVERY root's offsetTop, unchanged. That held only because
+    // every root was already `full` at s0, which is the defect D-B46 closes:
+    // the lens promoted them off a skeleton-short paper before the walk began,
+    // so the walk had no promotion left to make. With the gate in place `ffe`,
+    // `money`, `care` and `record` are quiet at s0 and the walk opens them —
+    // and opening a region below the frame moves what is below IT. That is
+    // L-4, not a regression, and H5's actual sentence is about pixels at or
+    // above the frame (the forward-walk case below asserts exactly that).
+    //
+    // So: a root that was FULL at the origin has nothing above it left to
+    // grow, and must not move at all. A root that was quiet may only be
+    // pushed DOWN, by a region above it opening — never up, never shrunk.
     for (const b of before) {
       const a = after.find((r) => r.key === b.key);
       expect(a, `region "${b.key}" missing after the round trip`).toBeTruthy();
-      expect(
-        a!.offsetTop,
-        `region "${b.key}" offsetTop moved: ${b.offsetTop} -> ${a!.offsetTop}`,
-      ).toBe(b.offsetTop);
+      if (b.density === 'full') {
+        expect(
+          a!.offsetTop,
+          `region "${b.key}" was full at s0 and its offsetTop moved: ${b.offsetTop} -> ${a!.offsetTop}`,
+        ).toBe(b.offsetTop);
+      } else {
+        expect(
+          a!.offsetTop,
+          `region "${b.key}" was quiet at s0 and moved UP: ${b.offsetTop} -> ${a!.offsetTop}`,
+        ).toBeGreaterThanOrEqual(b.offsetTop);
+      }
     }
   });
 
