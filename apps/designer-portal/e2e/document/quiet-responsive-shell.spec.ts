@@ -491,3 +491,73 @@ test.describe('Quiet Work responsive document shell', () => {
     expect(inView, 'window.find matched but the match did not scroll into view').toBe(true);
   });
 });
+
+/**
+ * D-B47 — the paper's foot clears the bar that is actually there.
+ *
+ * The lead measured the bar at 93px at 390 (three lines in the left zone plus
+ * an act whose label wraps by ruling) against a 72px inset, so the paper's last
+ * ~21px — and a landed foot control's focus ring — sat under it. The bar now
+ * publishes its own box on `html`, and both the shell's inset and the scroll
+ * padding read it.
+ */
+test.describe('the mobile bar publishes its height (D-B47)', () => {
+  test('at 390 the scroll padding is the bar\u2019s own box, and the last stop clears it', async ({
+    authenticatedPage: page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/doc/${PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-document-shell]')).toBeVisible({
+      timeout: 30_000,
+    });
+    await settle(page);
+
+    const bar = page.locator('[data-testid="mobile-bar"]');
+    await expect(bar).toBeVisible();
+    const barHeight = (await bar.boundingBox())?.height ?? 0;
+    expect(barHeight, 'the bar has no box at 390').toBeGreaterThanOrEqual(72);
+
+    const padding = await page.evaluate(() =>
+      parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom),
+    );
+    expect(
+      Math.abs(padding - barHeight),
+      `scroll-padding-bottom ${padding} vs the bar's ${barHeight}`,
+    ).toBeLessThanOrEqual(1);
+
+    // At the foot of the paper the last stop is not underneath the bar.
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
+    await settle(page);
+    const clears = await page.evaluate(() => {
+      const roots = Array.from(
+        document.querySelectorAll('[data-document-paper] [data-index-region]'),
+      );
+      const last = roots[roots.length - 1] as HTMLElement | undefined;
+      if (!last) return null;
+      const barEl = document.querySelector('[data-testid="mobile-bar"]');
+      const barTop = barEl
+        ? barEl.getBoundingClientRect().top
+        : window.innerHeight;
+      return { bottom: last.getBoundingClientRect().bottom, barTop };
+    });
+    expect(clears, 'no region roots on this paper').not.toBeNull();
+    expect(
+      clears!.bottom,
+      `the last root ends at ${clears!.bottom}, the bar starts at ${clears!.barTop}`,
+    ).toBeLessThanOrEqual(clears!.barTop + 1);
+  });
+
+  test('at 1440 the bar publishes nothing and the inset is what it always was', async ({
+    authenticatedPage: page,
+  }) => {
+    await openProject(page, 1440);
+    await settle(page);
+
+    const published = await page.evaluate(() =>
+      document.documentElement.style.getPropertyValue('--doc-mobile-bar-height'),
+    );
+    expect(published, 'the desktop widths must not carry the bar token').toBe('');
+  });
+});

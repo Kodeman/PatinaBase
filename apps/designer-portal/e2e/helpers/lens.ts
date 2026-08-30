@@ -27,6 +27,50 @@ import type { Page } from '@playwright/test';
 
 const SHELL = '[data-document-shell]';
 
+/**
+ * W5-int — every running transform under the shell has finished.
+ *
+ * `@keyframes doc-raise` (`globals.css`, ~270ms) scales the whole shell on
+ * arrival, and a `getBoundingClientRect()` taken while it runs is the scaled
+ * rect: `lens-band-height.spec.ts` read `55.985` against a `56px` box with
+ * `transforms DIV:matrix(0.99974,…)` and wandered between cells. Nothing else
+ * waits it out — the shell is visible from its first frame, and the settle
+ * gate watches scroll velocity, which at scrollY 0 was never moving.
+ *
+ * Loaders are excluded rather than waited on: `animate-pulse` and anything
+ * else running forever would make this a timeout, and a pulsing skeleton
+ * never scales the box a rect is read from.
+ */
+async function transformsStill(page: Page): Promise<void> {
+  await page
+    .waitForFunction(
+      (sel) => {
+        const shell = document.querySelector(sel);
+        if (!shell) return true;
+        const root = shell as Element & {
+          getAnimations?: (opts?: { subtree?: boolean }) => Animation[];
+        };
+        if (typeof root.getAnimations !== 'function') return true;
+        return root
+          .getAnimations({ subtree: true })
+          .every((animation) => {
+            const timing = animation.effect?.getTiming();
+            if (timing?.iterations === Infinity) return true;
+            const name = (animation as Animation & { animationName?: string })
+              .animationName;
+            if (name && /pulse|spin/i.test(name)) return true;
+            return animation.playState === 'finished' || animation.playState === 'idle';
+          });
+      },
+      SHELL,
+      { timeout: 1_500 },
+    )
+    .catch(() => {
+      // Bounded on purpose: an animation that never ends is a finding for the
+      // spec that cares, not a reason to fail every wait routed through here.
+    });
+}
+
 /** One layout + one paint. `requestAnimationFrame` twice is the shortest wait
  *  that guarantees the style the second frame reads is the one the first
  *  frame's write produced. */
@@ -90,12 +134,24 @@ export async function settle(page: Page): Promise<void> {
     SHELL,
   );
   if (publishesAttr) {
+    // D-B46: settled is not the whole of "stopped moving" any more. Until the
+    // paper RESOLVES — no query fetching and `scrollHeight` held for three
+    // frames, or the 3,000ms deadline — the lens has deliberately promoted
+    // nothing, so a density map read at a settle alone would be read off a
+    // paper whose bodies are still arriving. Both attributes, or neither
+    // measurement means what it says.
     await page.waitForFunction(
-      (sel) =>
-        document.querySelector(sel)?.getAttribute('data-lens-settled') === 'true',
+      (sel) => {
+        const shell = document.querySelector(sel);
+        return (
+          shell?.getAttribute('data-lens-settled') === 'true' &&
+          shell?.getAttribute('data-lens-resolved') === 'true'
+        );
+      },
       SHELL,
       { timeout: 15_000 },
     );
+    await transformsStill(page);
     await twoFrames(page);
     return;
   }
@@ -104,6 +160,7 @@ export async function settle(page: Page): Promise<void> {
   await page.evaluate(() =>
     (window as unknown as { __lensSettled: () => Promise<true> }).__lensSettled(),
   );
+  await transformsStill(page);
   await twoFrames(page);
 }
 

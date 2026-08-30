@@ -431,3 +431,135 @@ test.describe('the lens density — one direction (D-B16)', () => {
     expect(await readMap()).toEqual(before);
   });
 });
+
+/**
+ * D-B46 — the cold load, which is the only state the defect ever appeared in.
+ *
+ * The lead's probe: on a fresh load the first five roots mount into a ~2,600px
+ * skeleton (schedule 89px, FF&E 282px against 923 / 5,780 settled), so `money`
+ * and `record` sit inside `innerHeight + 240` AT MOUNT. The layout-effect pass
+ * promoted them, and one direction meant `record` stood `full` 9,033px below
+ * the frame for the rest of the session. Every other case in this file scrolls
+ * first and so measures a paper that has long since resolved — which is why
+ * they were all green while this was true.
+ *
+ * The acceptance map is the lead's, verbatim (`w4-review-design.md` §1).
+ */
+test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
+  test.beforeAll(() => {
+    assertLongPaper();
+  });
+
+  const CELLS = [
+    {
+      width: 1440,
+      height: 900,
+      full: ['approvals', 'schedule'],
+      quiet: ['ffe', 'money', 'care', 'record'],
+    },
+    {
+      width: 390,
+      height: 844,
+      full: ['approvals'],
+      quiet: ['schedule', 'ffe', 'money', 'care', 'record'],
+    },
+  ] as const;
+
+  for (const cell of CELLS) {
+    test(`at ${cell.width}: only the stops at the lookahead line are full, and nothing below it is`, async ({
+      authenticatedPage: page,
+    }) => {
+      await page.setViewportSize({ width: cell.width, height: cell.height });
+
+      // Cold by construction: the query cache lives in memory, so a full
+      // navigation starts with an empty one. The storage clear takes the
+      // remembered folds with it, so no explicit choice can stand in for a
+      // density the lens is supposed to be deciding.
+      await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+      await page.evaluate(() => {
+        try {
+          window.localStorage.clear();
+        } catch {
+          /* private mode — nothing was remembered anyway */
+        }
+      });
+      await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('[data-document-shell]')).toBeVisible({
+        timeout: 30_000,
+      });
+
+      // No scroll anywhere in this case: what is asserted is the state the
+      // lens arrives at on its own.
+      await settle(page);
+      await quiet(page);
+      await settle(page);
+
+      const innerHeight = await page.evaluate(() => window.innerHeight);
+      const rects = await regionRects(page);
+      const map = Object.fromEntries(
+        rects.map((r) => [r.key, `${r.density}@${Math.round(r.top)}`]),
+      );
+
+      for (const key of cell.full) {
+        const region = rects.find((r) => r.key === key);
+        expect(region, `no [data-index-region="${key}"] root on the paper`).toBeTruthy();
+        expect(
+          region!.density,
+          `${key} should be full at the cold load — map: ${JSON.stringify(map)}`,
+        ).toBe('full');
+      }
+      for (const key of cell.quiet) {
+        const region = rects.find((r) => r.key === key);
+        if (!region) continue;
+        expect(
+          region.density,
+          `${key} sits ${Math.round(region.top)}px down and must be quiet on a cold load — ` +
+            `map: ${JSON.stringify(map)}`,
+        ).toBe('quiet');
+      }
+
+      // D-B16's invariants, at this settle too.
+      const quietTooClose = rects.filter(
+        (r) => r.density === 'quiet' && r.top <= innerHeight + LOOKAHEAD_PX,
+      );
+      expect(
+        quietTooClose,
+        `(i) quiet roots inside the lookahead line: ${JSON.stringify(quietTooClose)}`,
+      ).toEqual([]);
+      const passedNotFull = rects.filter((r) => r.passed && r.density !== 'full');
+      expect(
+        passedNotFull,
+        `(ii) passed roots that are not full: ${JSON.stringify(passedNotFull)}`,
+      ).toEqual([]);
+      const fullCount = rects.filter((r) => r.density === 'full').length;
+      expect(fullCount, '(iii) full count while roots are in frame').toBeGreaterThanOrEqual(1);
+    });
+  }
+
+  test('a warm second navigation arrives with the first stop already full', async ({
+    authenticatedPage: page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-document-shell]')).toBeVisible({
+      timeout: 30_000,
+    });
+    await settle(page);
+    await quiet(page);
+
+    await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-document-shell]')).toBeVisible({
+      timeout: 30_000,
+    });
+    await settle(page);
+
+    const shell = page.locator('[data-document-shell]');
+    await expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+    const approvals = await page.evaluate(() =>
+      document
+        .querySelector('[data-document-paper] [data-index-region="approvals"]')
+        ?.getAttribute('data-density'),
+    );
+    expect(approvals).toBe('full');
+  });
+});

@@ -514,3 +514,58 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     expect(within(panel).getByText('Put down', { exact: false })).toBeInTheDocument();
   });
 });
+
+describe('the bar publishes its own height (D-B47)', () => {
+  const HTML_VAR = '--doc-mobile-bar-height';
+  let rect: jest.SpyInstance;
+
+  function barHeight(height: number) {
+    rect = jest
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ height, top: 0, bottom: height } as DOMRect);
+  }
+
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    document.documentElement.style.removeProperty(HTML_VAR);
+  });
+
+  afterEach(() => {
+    rect?.mockRestore();
+    document.documentElement.style.removeProperty(HTML_VAR);
+  });
+
+  function published() {
+    return document.documentElement.style.getPropertyValue(HTML_VAR);
+  }
+
+  it('writes its measured box on mount — the paper insets by what is actually there', () => {
+    // The lead measured 93px at 390: three lines in the left zone and an act
+    // whose label wraps to two by ruling.
+    barHeight(93);
+    mountBar();
+    expect(published()).toBe('93px');
+  });
+
+  it('never publishes under the 72px reserve the paper was written against', () => {
+    barHeight(40);
+    mountBar();
+    expect(published()).toBe('72px');
+  });
+
+  it('publishes nothing where the bar is not laid out — the desktop inset is untouched', () => {
+    // `min-[1180px]:hidden` at 1440, or the log offer owning the edge: no box,
+    // no claim on the paper's foot.
+    barHeight(0);
+    mountBar();
+    expect(published()).toBe('');
+  });
+
+  it('takes the property back with it on unmount', () => {
+    barHeight(93);
+    const { unmount } = mountBar();
+    expect(published()).toBe('93px');
+    unmount();
+    expect(published()).toBe('');
+  });
+});

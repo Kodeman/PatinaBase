@@ -80,6 +80,10 @@ function openRegister() {
 const MENU_ITEM =
   'flex min-h-11 w-full items-center gap-3 border-b border-[rgba(250,247,242,0.1)] px-3 py-2 text-left text-[var(--color-pearl)] last:border-b-0 hover:bg-[rgba(250,247,242,0.06)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-50';
 
+/** OD-11's reserve, and the floor the published height can never go under —
+ *  the inset contract the paper was written against. */
+const MOBILE_BAR_FLOOR_PX = 72;
+
 export function MobileBar() {
   const pathname = usePathname();
   const hydrated = useHydrated();
@@ -102,6 +106,7 @@ export function MobileBar() {
   const hasUnseenFeedback = hydrated && (unseenFeedback?.length ?? 0) > 0;
 
   const [moreOpen, setMoreOpen] = useState(false);
+  const barRef = useRef<HTMLElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   // A menu row is a button or a link, so the ref is taken by callback.
@@ -181,6 +186,45 @@ export function MobileBar() {
     if (sheet || offer) setMoreOpen(false);
   }, [offer, sheet]);
 
+  // D-B47 — the paper's bottom inset is the bar's own box, not a number that
+  // hopes to match it. The bar measured 93px at 390 against a 72px inset (the
+  // three-line left zone plus an act whose label wraps by ruling), so the last
+  // ~21px of the paper and a landed foot control sat under it. Published on
+  // `html` because `--doc-shell-bottom-inset` lives on the shell and
+  // `scroll-padding-bottom` is on `html`, which cannot read it. A zero height
+  // is the bar not laid out at all — `min-[1180px]:hidden`, or the log offer
+  // owning the edge instead — and then the property comes off, so the desktop
+  // inset stays exactly what it was.
+  const barRendered = !offer;
+  useEffect(() => {
+    const root = document.documentElement;
+    const clear = () => root.style.removeProperty('--doc-mobile-bar-height');
+    const bar = barRef.current;
+    if (!bar) {
+      clear();
+      return clear;
+    }
+    const publish = () => {
+      const height = bar.getBoundingClientRect().height;
+      if (height <= 0) {
+        clear();
+        return;
+      }
+      root.style.setProperty(
+        '--doc-mobile-bar-height',
+        `${Math.max(MOBILE_BAR_FLOOR_PX, Math.round(height))}px`,
+      );
+    };
+    publish();
+    if (typeof ResizeObserver === 'undefined') return clear;
+    const observer = new ResizeObserver(publish);
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      clear();
+    };
+  }, [barRendered]);
+
   // The log offer becomes the edge owner while it is actionable.
   if (offer) return null;
 
@@ -219,6 +263,7 @@ export function MobileBar() {
   // more than the old two-line 64px reserve — bumped to 72px.
   return (
     <nav
+      ref={barRef}
       aria-label="Document bar"
       data-testid="mobile-bar"
       data-mobile-edge-owner="document-bar"
