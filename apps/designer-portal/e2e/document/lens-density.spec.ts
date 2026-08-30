@@ -27,6 +27,7 @@ import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 import { scrollTo, scrollSteps, settle } from '../helpers/lens';
 import {
   LONG_PAPER_ID,
+  PRE_WORK_ID,
   FOURTH_STOP_HEADING_ID,
   assertLongPaper,
 } from './lens-fixtures';
@@ -320,5 +321,62 @@ test.describe('the lens density — one direction (D-B16)', () => {
       .getByRole('navigation', { name: 'Document bar' })
       .getAttribute('data-reading-index');
     expect(barIndex).toBe(shellIndex);
+  });
+
+  // W5 — the pre-work paper (`…d6`, a sent/unopened proposal with no
+  // project behind it). D-B16's invariant is restated on it (a paper with
+  // four stops instead of six or seven is still one density direction), and
+  // W4-R1 is asserted directly: none of the six project-only stop keys ever
+  // mount here — this paper's own regions (`proposal`, `scope`, `vision`,
+  // `investment`) and the `record` stop are the whole set.
+  test('the pre-work paper (…d6): D-B16 holds on the proposal spread, and none of the six project keys ever mount', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page, `/doc/${PRE_WORK_ID}`);
+    const innerHeight = await page.evaluate(() => window.innerHeight);
+    const rects = await regionRects(page);
+    expect(rects.length, 'no [data-index-region] roots found on the pre-work paper').toBeGreaterThan(0);
+
+    // W4-R1 — a quiet Pieces or Money head on a brief/proposal spread would
+    // be a fiction; the spec asserts zero of the six stop bodies mount here.
+    const PROJECT_KEYS = ['approvals', 'schedule', 'ffe', 'money', 'care'];
+    const mountedKeys = rects.map((r) => r.key);
+    for (const key of PROJECT_KEYS) {
+      expect(
+        mountedKeys,
+        `"${key}" must never mount on the pre-work paper (W4-R1): ${JSON.stringify(mountedKeys)}`,
+      ).not.toContain(key);
+    }
+    // `record` mounts on every pre-work spread (OD-2); the proposal spread's
+    // own four stops are re-parented under it (W5-R2 item 1).
+    expect(mountedKeys).toEqual(
+      expect.arrayContaining(['proposal', 'scope', 'vision', 'investment', 'record']),
+    );
+
+    // D-B16, the same three sentences the long-paper cases assert, at rest —
+    // scoped to `[data-document-paper]` from the start (`regionRects` already
+    // does; the C2 unscoped-rail-selector defect this file's review note
+    // warns about lives in the rail, not in this paper-scoped query).
+    const quietTooClose = rects.filter(
+      (r) => r.density === 'quiet' && r.top <= innerHeight + LOOKAHEAD_PX,
+    );
+    expect(
+      quietTooClose,
+      `(i) quiet roots inside the lookahead line: ${JSON.stringify(quietTooClose)}`,
+    ).toEqual([]);
+
+    const passedNotFull = rects.filter((r) => r.passed && r.density !== 'full');
+    expect(
+      passedNotFull,
+      `(ii) passed roots that are not full: ${JSON.stringify(passedNotFull)}`,
+    ).toEqual([]);
+
+    const inFrame = rects.filter((r) => r.top < innerHeight);
+    const fullCount = rects.filter((r) => r.density === 'full').length;
+    expect(inFrame.length, 'no region is in frame at all on the pre-work paper').toBeGreaterThan(0);
+    expect(
+      fullCount,
+      `(iii) full count is ${fullCount} while ${inFrame.length} region(s) are in frame`,
+    ).toBeGreaterThanOrEqual(1);
   });
 });
