@@ -66,10 +66,6 @@ export interface MobileActiveDoc {
    *  no-op if a publisher ever forgot it — where the pre-D-B18 code at least
    *  scrolled. `page.tsx` is the only publisher and always supplies it. */
   onJumpRegion: (key: DocumentIndexKey) => void;
-  /** D-B46 · the lens's promotion, without the jump. Published for any
-   *  consumer that needs a region opened without landing on it. Optional so a
-   *  caller that predates D-B46 still type-checks. */
-  onPromoteThrough?: (key: DocumentIndexKey) => void;
   /** D-B46 · the whole press, for a target INSIDE a region rather than a
    *  region: `requestRegionUnfold('ffe')` → `forceFullThrough('ffe')` → land
    *  on `#ffe-selection-<lineId>`. The sheet cannot do this itself — an FF&E

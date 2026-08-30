@@ -13,7 +13,11 @@
 import { createRef } from 'react';
 import type { RefObject } from 'react';
 import { act, render } from '@testing-library/react';
-import { useLensDensity, useLensDensityStore } from '../use-lens-density';
+import {
+  useLensDensity,
+  useLensDensityStore,
+  useLensResolved,
+} from '../use-lens-density';
 import type { LensDensityApi } from '../use-lens-density';
 
 /**
@@ -115,7 +119,15 @@ function Probe({
 }) {
   api = useLensDensity(paperRef, { enabled });
   const spoken = useLensDensityStore(watch);
-  return <span data-testid="spoken">{spoken ?? 'silent'}</span>;
+  // D-B46's React half: what every root that could print `full` off its own
+  // data asks before it does.
+  const resolved = useLensResolved();
+  return (
+    <>
+      <span data-testid="spoken">{spoken ?? 'silent'}</span>
+      <span data-testid="resolved">{String(resolved)}</span>
+    </>
+  );
 }
 
 function mountPaper(keys: readonly string[] = REGION_KEYS) {
@@ -593,6 +605,70 @@ describe('useLensDensity', () => {
 
     expect(shell).toHaveAttribute('data-lens-resolved', 'true');
     expect(regionRoot('approvals')).toHaveAttribute('data-density', 'full');
+  });
+
+  it('publishes the resolution to the React writers, and holds them at quiet until it does', async () => {
+    // The design lead's fix-3 countersign: at 1440 the `record` root printed
+    // `full` for ~500ms and `quiet` after resolution, so `data-density` moved
+    // twice and the second move was backwards. The imperative writer already
+    // obeyed the gate; the React writers had nothing to obey it with. This is
+    // that something.
+    const { shell, paper } = mountPaper();
+    topAt(regionRoot('approvals'), 40);
+    const register = document.createElement('p');
+    register.setAttribute('role', 'status');
+    register.setAttribute('aria-busy', 'true');
+    paper.appendChild(register);
+
+    const { getByTestId } = render(<Probe watch="approvals" />);
+    await flush(400);
+
+    expect(shell).not.toHaveAttribute('data-lens-resolved');
+    expect(getByTestId('resolved')).toHaveTextContent('false');
+    // And no root the lens owns is reading `full` while that is so.
+    expect(
+      document.querySelectorAll('[data-index-region][data-density="full"]'),
+    ).toHaveLength(0);
+
+    register.remove();
+    await flush();
+
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+    expect(getByTestId('resolved')).toHaveTextContent('true');
+  });
+
+  it('closes the gate again when the paper is replaced, and opens it when the lens leaves', async () => {
+    const { paper } = mountPaper();
+    topAt(regionRoot('approvals'), 40);
+    const { getByTestId, unmount } = render(<Probe watch="approvals" />);
+    await flush();
+    expect(getByTestId('resolved')).toHaveTextContent('true');
+
+    // The page re-suspends: `<main data-document-paper>` is replaced, not
+    // refilled, and a verdict about the old element says nothing about the new
+    // one — whose bodies are, again, still arriving.
+    const replacement = document.createElement('main');
+    replacement.setAttribute('data-document-paper', '');
+    const region = document.createElement('section');
+    region.setAttribute('data-index-region', 'approvals');
+    region.setAttribute('data-density', 'quiet');
+    topAt(region, 3000);
+    replacement.appendChild(region);
+    const fresh = document.createElement('p');
+    fresh.setAttribute('aria-busy', 'true');
+    replacement.appendChild(fresh);
+    await act(async () => {
+      paper.replaceWith(replacement);
+    });
+    await flush();
+    expect(getByTestId('resolved')).toHaveTextContent('false');
+
+    // And a region rendered with no lens on the page has nothing to wait for.
+    unmount();
+    render(<Probe watch="approvals" enabled={false} />);
+    expect(document.querySelectorAll('[data-testid="resolved"]')[0]).toHaveTextContent(
+      'true',
+    );
   });
 
   it('does not resolve early when a query starts again inside the stable window', async () => {

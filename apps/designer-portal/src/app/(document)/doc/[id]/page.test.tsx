@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import DocumentPage from './page';
+import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import { paperRegionsForSection } from '@/lib/document/document-index';
 
@@ -168,12 +169,63 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
 // The project document's own sections are not what these tests exercise; the
 // guide strip and the margin are.
 const mockFFESection = jest.fn();
+/** P2-07 — the id `landOnFfeAnchor` lands on, when the FF&E body has already
+ *  mounted it. Null in every other case, which is the cold-load shape: the
+ *  anchor does not exist until the unfold has been asked for and the promotion
+ *  flushed, and that is the branch that waits two frames. */
+let mockFfeAnchorId: string | null = null;
 jest.mock('@/components/document/ffe-section', () => ({
   FFESection: (props: Record<string, unknown>) => {
     mockFFESection(props);
-    return null;
+    return mockFfeAnchorId ? <div id={mockFfeAnchorId} /> : null;
   },
 }));
+
+/** P2-07 — the press order, in one log, from the three things `landOnFfeAnchor`
+ *  composes. Each is recorded where it actually happens, so an implementation
+ *  that reordered them (or dropped one) reads differently here. */
+const pressOrder: string[] = [];
+
+jest.mock('@/lib/document/document-index', () => {
+  const actual = jest.requireActual('@/lib/document/document-index');
+  return {
+    __esModule: true,
+    ...actual,
+    requestRegionUnfold: (key: string) => {
+      pressOrder.push(`unfold:${key}`);
+      return actual.requestRegionUnfold(key);
+    },
+  };
+});
+
+jest.mock('@/hooks/use-lens-density', () => {
+  const actual = jest.requireActual('@/hooks/use-lens-density');
+  // The real API object is `useMemo([])`-stable, and the page keeps it in
+  // `useCallback` deps — so the wrapper has to be stable too, or every render
+  // would rebuild the very handlers this case reads.
+  const wrapped = new WeakMap<object, unknown>();
+  return {
+    __esModule: true,
+    ...actual,
+    useLensDensity: (...args: unknown[]) => {
+      const api = actual.useLensDensity(...args) as Record<string, unknown> & {
+        forceFullThrough: (key: string) => void;
+      };
+      let seen = wrapped.get(api);
+      if (!seen) {
+        seen = {
+          ...api,
+          forceFullThrough: (key: string) => {
+            pressOrder.push(`promote:${key}`);
+            api.forceFullThrough(key);
+          },
+        };
+        wrapped.set(api, seen);
+      }
+      return seen;
+    },
+  };
+});
 jest.mock('@/components/document/schedule/schedule-spine', () => ({ ScheduleSpine: () => null }));
 jest.mock('@/components/document/approvals/project-approval-document', () => ({
   ProjectApprovalDocument: () => null,
@@ -1294,6 +1346,110 @@ describe('DocumentPage guide activation', () => {
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
         'approvals', 'schedule', 'ffe', 'money', 'care', 'record',
       ]);
+    });
+  });
+
+  // ── P2-07 · `landOnFfeAnchor` — the composition the sheets ask for and
+  // nothing tested. The Margin sheet's line rows and the sections sheet's room
+  // rows both land on ids INSIDE the FF&E body, and a body that is quiet (or
+  // that she closed herself) is not mounted: the order is the whole mechanism.
+  // The sheets only ask; the page owns the landing (D-B46). ──
+  describe('the line-jump press order (D-B46, P2-07)', () => {
+    /** The handler the page publishes to the mobile shell — the one the Margin
+     *  sheet actually calls. Read from the publication, never re-derived. */
+    const publishedJumpToLine = (): ((lineId: string) => void) => {
+      const calls = (useMobileActiveDoc as jest.Mock).mock.calls;
+      for (let i = calls.length - 1; i >= 0; i -= 1) {
+        const doc = calls[i]?.[0] as { onJumpToLine?: (id: string) => void } | null;
+        if (doc?.onJumpToLine) return doc.onJumpToLine;
+      }
+      throw new Error('the page published no onJumpToLine');
+    };
+
+    beforeEach(() => {
+      pressOrder.length = 0;
+      mockFfeAnchorId = null;
+      (useMobileActiveDoc as jest.Mock).mockClear();
+    });
+
+    afterEach(() => {
+      mockFfeAnchorId = null;
+    });
+
+    it('asks for the unfold, flushes the promotion, THEN lands — in that order', () => {
+      mockFfeAnchorId = 'ffe-selection-ffe-2';
+      asProjectDocument();
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const anchor = document.getElementById('ffe-selection-ffe-2')!;
+      anchor.scrollIntoView = jest.fn(() => {
+        pressOrder.push('land:ffe-selection-ffe-2');
+      });
+
+      act(() => {
+        publishedJumpToLine()('ffe-2');
+      });
+
+      expect(pressOrder).toEqual([
+        'unfold:ffe',
+        'promote:ffe',
+        'land:ffe-selection-ffe-2',
+      ]);
+      // The landing is `block: 'start'` at either motion register; the
+      // behaviour follows `prefers-reduced-motion`, which the suite's own
+      // matchMedia stub answers, so only the block is asserted here.
+      expect(anchor.scrollIntoView).toHaveBeenCalledWith(
+        expect.objectContaining({ block: 'start' }),
+      );
+    });
+
+    it('waits two frames when the anchor is not mounted yet, and lands on the same id', () => {
+      // The cold-load shape: the promotion is flushed, but the UNFOLD is a
+      // React state change the region has to paint before its anchor exists.
+      asProjectDocument();
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const frames: FrameRequestCallback[] = [];
+      const raf = jest
+        .spyOn(window, 'requestAnimationFrame')
+        .mockImplementation((cb: FrameRequestCallback) => {
+          frames.push(cb);
+          return frames.length;
+        });
+
+      act(() => {
+        publishedJumpToLine()('ffe-2');
+      });
+
+      // Asked and promoted, but nothing landed — there is nothing to land on.
+      expect(pressOrder).toEqual(['unfold:ffe', 'promote:ffe']);
+      expect(frames).toHaveLength(1);
+
+      // The unfold paints: the body mounts its anchor.
+      const late = document.createElement('div');
+      late.id = 'ffe-selection-ffe-2';
+      late.scrollIntoView = jest.fn(() => {
+        pressOrder.push('land:ffe-selection-ffe-2');
+      });
+      document.body.appendChild(late);
+
+      act(() => {
+        frames.shift()!(0);
+      });
+      // Still one frame short — a single rAF is the write, not the paint.
+      expect(pressOrder).toEqual(['unfold:ffe', 'promote:ffe']);
+
+      act(() => {
+        frames.shift()!(0);
+      });
+      expect(pressOrder).toEqual([
+        'unfold:ffe',
+        'promote:ffe',
+        'land:ffe-selection-ffe-2',
+      ]);
+
+      raf.mockRestore();
+      late.remove();
     });
   });
 

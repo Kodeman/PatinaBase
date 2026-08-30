@@ -1,6 +1,9 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { PreviousWork } from './previous-work';
-import { __setDensityForTest } from '@/hooks/use-lens-density';
+import {
+  __setDensityForTest,
+  __setResolvedForTest,
+} from '@/hooks/use-lens-density';
 import { regionBoxSignature } from './region/region-box-signature';
 
 // W4 — the lens is a page-level observer; in jsdom it never runs, so the store
@@ -271,6 +274,51 @@ describe('PreviousWork', () => {
       // `allowNoActs` still stands the guard down in both densities.
       expect(errorSpy).not.toHaveBeenCalled();
       errorSpy.mockRestore();
+    });
+
+    it('holds the count-0 root at quiet until the paper resolves — the attribute moves once (D-B46)', () => {
+      // The design lead's fix-3 countersign, at 1440: this root printed `full`
+      // for ~500ms and `quiet` after resolution. `count` is 0 while the read is
+      // still out, and the W4-C16 zero-record form above states `full` — so a
+      // paper with a record printed `full`, then took it back, which is the one
+      // move D-B16 says `data-density` never makes.
+      act(() => {
+        __setDensityForTest(undefined);
+        __setResolvedForTest(false);
+      });
+      const { container, rerender } = render(<PreviousWork count={0}>{null}</PreviousWork>);
+      const root = () => container.querySelector('[data-index-region="record"]');
+
+      expect(root()).toHaveAttribute('data-density', 'quiet');
+      expect(container.textContent).toContain('Nothing yet');
+
+      // The read lands: three records, and the lens has still said nothing.
+      act(() => {
+        __setResolvedForTest(true);
+      });
+      rerender(<PreviousWork count={3}><div>Brief recap</div></PreviousWork>);
+      expect(root()).toHaveAttribute('data-density', 'quiet');
+
+      act(() => {
+        __setResolvedForTest(undefined);
+      });
+    });
+
+    it('states full at count 0 once the paper has resolved — W4-C16 still holds (D-B46)', () => {
+      act(() => {
+        __setDensityForTest(undefined);
+        __setResolvedForTest(true);
+      });
+      const { container } = render(<PreviousWork count={0}>{null}</PreviousWork>);
+
+      expect(container.querySelector('[data-index-region="record"]')).toHaveAttribute(
+        'data-density',
+        'full',
+      );
+
+      act(() => {
+        __setResolvedForTest(undefined);
+      });
     });
   });
 });

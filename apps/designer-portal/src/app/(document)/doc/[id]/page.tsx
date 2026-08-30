@@ -1832,7 +1832,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           ladderValues,
           clientCopy: ticketInput?.clientCopy != null,
           onJumpRegion: jumpToRegion,
-          onPromoteThrough: lens.forceFullThrough,
           onJumpToLine: jumpToLine,
           onJumpToRoom: jumpToRoom,
           marginCount: marginSheetCount,

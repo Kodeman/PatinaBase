@@ -11,11 +11,35 @@ describe('SectionLoadingLine', () => {
     const status = screen.getByRole('status');
     expect(status).toHaveTextContent('Reading the work');
     expect(status).toHaveAttribute('aria-live', 'polite');
-    // D-B46 — was: `not.toHaveAttribute('aria-busy')`. The register is now the
-    // lens's own signal that a body has not arrived, and `aria-busy` is the
-    // half of that signal which survives a class rename. It is also the honest
-    // reading of this element: a live region that is, right now, busy.
-    expect(status).toHaveAttribute('aria-busy', 'true');
+    // P2-01 — the live region is NOT busy. `aria-busy` on an announcing
+    // element defers its announcement until busy clears, and this one clears
+    // it by unmounting: the sr-only label, which is the whole reason the
+    // component exists, would never be spoken. It rides the pulse instead
+    // (asserted below and in the D-B46 contract block).
+    expect(status).not.toHaveAttribute('aria-busy');
+  });
+
+  it('carries the lens contract on the pulse, never on the live region (P2-01)', () => {
+    const { container } = render(<SectionLoadingLine label="Reading approvals" />);
+
+    const busy = container.querySelector('[aria-busy="true"]');
+    expect(busy).not.toBeNull();
+    // Hidden from assistive tech, so nothing it says is suppressed — and still
+    // inside the paper, so the lens's own selector finds it.
+    expect(busy).toHaveAttribute('aria-hidden');
+    expect(busy).toHaveClass('animate-pulse');
+    expect(screen.getByRole('status')).not.toHaveAttribute('aria-busy');
+  });
+
+  it('carries the lens contract on the pulse in the inline form too (P2-01)', () => {
+    const { container } = render(
+      <SectionLoadingLine label="Checking readiness" variant="inline" />,
+    );
+
+    const busy = container.querySelector('[aria-busy="true"]');
+    expect(busy).not.toBeNull();
+    expect(busy).toHaveAttribute('aria-hidden');
+    expect(screen.getByRole('status')).not.toHaveAttribute('aria-busy');
   });
 
   it('renders the label as sr-only text rather than visible prose', () => {

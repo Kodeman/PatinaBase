@@ -249,12 +249,31 @@ test.describe('the lens density — one direction (D-B16)', () => {
 
     let lastScrollHeight = 0;
     let lastAnchorOffsetTop: number | null = null;
+    // W4F3-08 — the anchor alone leaves four of six roots unguarded. H5's
+    // sentence is about EVERY pixel at or above the frame top, so every root
+    // that has reached it carries its own per-step guard: once a root's
+    // viewport top is <= 0 its `offsetTop` is frozen for the rest of the walk.
+    // Recorded on the step it first crosses, never re-recorded, so a root that
+    // moves after crossing fails against the position it crossed at.
+    const frozenAbove = new Map<string, number>();
 
     for (let y = 0; y <= 2000; y += 200) {
       await scrollTo(page, y);
       const scrollHeight = await page.evaluate(
         () => document.documentElement.scrollHeight,
       );
+      for (const rect of await regionRects(page)) {
+        if (!rect.key) continue;
+        const held = frozenAbove.get(rect.key);
+        if (held !== undefined) {
+          expect(
+            rect.offsetTop,
+            `region "${rect.key}" was at or above the frame top and its offsetTop moved at scrollY ${y}: ${held} -> ${rect.offsetTop}`,
+          ).toBe(held);
+          continue;
+        }
+        if (rect.top <= 0) frozenAbove.set(rect.key, rect.offsetTop);
+      }
       const anchorOffsetTop = await page.evaluate((key) => {
         // W4-C4: PAPER-scoped. The rail ladder's stops carry the same
         // `data-index-region` (C-4) and precede `<main>` in document order, so
@@ -633,10 +652,14 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
     // actionability check waits forever on a link nothing is actually
     // covering. The event still runs Next's own Link handler, which is what
     // makes the navigation client-side — the whole point of the case.
+    // P2-04 — a PRECONDITION, not a skip. `test.skip(true, …)` mid-body means
+    // this case stops running the day the exit link changes shape, and a case
+    // that proves the warm path should fail rather than vanish.
     const putDown = page.locator('a[aria-label="Put down document"]');
-    if ((await putDown.count()) === 0) {
-      test.skip(true, 'no "Put down document" exit at this width — nothing to navigate with');
-    }
+    expect(
+      await putDown.count(),
+      'no "Put down document" exit at this width — the warm path has nothing to navigate with',
+    ).toBeGreaterThan(0);
     await page.evaluate(() =>
       (
         document.querySelector(
@@ -647,9 +670,10 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
     await page.waitForURL(/\/desk/, { timeout: 30_000 });
 
     const backIn = page.locator(`a[href*="/doc/${LONG_PAPER_ID}"]`);
-    if ((await backIn.count()) === 0) {
-      test.skip(true, 'the desk carries no link back to the long paper on this seed');
-    }
+    expect(
+      await backIn.count(),
+      'the desk carries no link back to the long paper on this seed — the warm return cannot be walked',
+    ).toBeGreaterThan(0);
     await page.evaluate((id) => {
       (
         document.querySelector(`a[href*="/doc/${id}"]`) as HTMLElement | null

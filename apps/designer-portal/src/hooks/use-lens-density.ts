@@ -163,6 +163,72 @@ export function __setDensityForTest(
 ): void {
   testDensity = density;
   for (const region of Array.from(listeners.keys())) notify(region);
+  for (const listener of Array.from(resolvedListeners)) listener();
+}
+
+/* ── the resolution, published ───────────────────────────────────────────
+   D-B46, completed at W6 on the design lead's fix-3 countersign: at 1440 the
+   `record` root printed `full` for ~500ms before the paper resolved and
+   `quiet` after it, so `data-density` moved twice and the second move was
+   BACKWARDS — the one thing D-B16 says the attribute never does. The
+   imperative writer already obeyed the gate (`promote()` is unreachable
+   before `resolved`, except through `forceFullThrough` and OD-4's `enabled:
+   false`); the React writers did not, because a body's own data can read
+   `full` while its query is still out.
+
+   So the resolution is a second store, subscribed to exactly like the
+   density: a root holds `quiet` until the lens has resolved the paper it
+   stands on. `true` is the value with NO lens attached — a region rendered on
+   its own has nothing to wait for, and a gate that defaulted the other way
+   would leave every such mount quiet forever. */
+
+let storeResolved = true;
+const resolvedListeners = new Set<() => void>();
+
+function setStoreResolved(next: boolean): void {
+  if (storeResolved === next) return;
+  storeResolved = next;
+  for (const listener of Array.from(resolvedListeners)) listener();
+}
+
+function subscribeResolved(onChange: () => void): () => void {
+  resolvedListeners.add(onChange);
+  return () => {
+    resolvedListeners.delete(onChange);
+  };
+}
+
+let testResolved: boolean | undefined;
+
+function readResolved(): boolean {
+  if (testResolved !== undefined) return testResolved;
+  // A suite driving the store by hand is answering the density question
+  // itself, so the gate is not also holding it back.
+  return testDensity !== undefined ? true : storeResolved;
+}
+
+/**
+ * Test-only. Drives the gate directly, so a region suite can render the two
+ * sides of D-B46 — a paper that has not resolved and one that has — without
+ * mounting the page-level observer. `undefined` hands it back.
+ */
+export function __setResolvedForTest(resolved: boolean | undefined): void {
+  testResolved = resolved;
+  for (const listener of Array.from(resolvedListeners)) listener();
+}
+
+/**
+ * Has the lens resolved the paper? The React half of D-B46's gate: a root that
+ * could print `full` off data alone — the record's zero-count read, a stop the
+ * designer opened on an earlier visit — prints `quiet` until this is true, so
+ * `data-density` only ever moves one way.
+ *
+ * The server snapshot is `true`: the markup React hydrates is rendered with no
+ * lens attached, and the hook's own layout effect closes the gate before the
+ * first paint.
+ */
+export function useLensResolved(): boolean {
+  return useSyncExternalStore(subscribeResolved, readResolved, () => true);
 }
 
 /** The lens has left the paper. Cleared without notifying: the only caller is
@@ -431,6 +497,12 @@ export function useLensDensity(
         resolveDeadline = null;
       }
       writeResolved();
+      // The React writers' half of the gate, flushed first: a root that was
+      // holding `quiet` off its own data (the record's zero-count read, a stop
+      // the designer had already opened) takes its own height here, before a
+      // single position below it is measured. Un-holding after the cascade
+      // would move roots the cascade had already decided against.
+      flushSync(() => setStoreResolved(true));
       // ONE AT A TIME, re-measured after each, because the paper's geometry is
       // a function of this pass's own decisions. Measured on the seeded long
       // paper: at resolution every root stands at its quiet reserve, so all six
@@ -442,8 +514,16 @@ export function useLensDensity(
       // if each promotion is laid out before the next root is measured —
       // `flushSync` is what makes the body's real height exist in time to be
       // measured, the same reason the press path uses it (D-B18).
+      // W4F3-05, ruled by the ARCHITECT: `frozen` gates `commitPending()`
+      // ONLY, never this pass. A freeze is D-B19's "she is under the hand" —
+      // it holds back crossings the reader made while typing, which are hers
+      // to be surprised by. The resolution pass is not a crossing: it is the
+      // paper arriving at its real height, and a first paint that stayed quiet
+      // because a field happened to have focus would be the lens hanging, not
+      // deferring. No behaviour change; the exemption is stated so it is not
+      // rediscovered as a defect.
       for (const root of ordered) {
-        // W4F3-05: each `flushSync` renders a region body, and a body that
+        // W4F3-18: each `flushSync` renders a region body, and a body that
         // throws (or a navigation that lands mid-cascade) can tear this hook
         // down between steps. Every remaining measurement would then be taken
         // against a document the lens has already left.
@@ -623,6 +703,7 @@ export function useLensDensity(
         document
           .querySelector(SHELL_SELECTOR)
           ?.removeAttribute(RESOLVED_ATTRIBUTE);
+        setStoreResolved(false);
         if (resolveFrame === null) {
           resolveFrame = window.requestAnimationFrame(sampleResolution);
         }
@@ -729,6 +810,7 @@ export function useLensDensity(
       window.addEventListener('scroll', onScroll, { passive: true });
     }
 
+    setStoreResolved(resolved);
     writeSettled(true);
     discover();
 
@@ -795,6 +877,8 @@ export function useLensDensity(
       freezeRef.current = () => {};
       settledRef.current = () => Promise.resolve(true as const);
       clearStore();
+      // The lens is gone; nothing is waiting on it any more.
+      setStoreResolved(true);
     };
   }, [enabled, paperRef]);
 

@@ -40,6 +40,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { documentEvents } from '@/lib/analytics/document-events';
+import { useLensResolved } from '@/hooks/use-lens-density';
 
 export type RegionFoldKey =
   | 'approvals'
@@ -148,6 +149,13 @@ export function useRegionFold({
   forceOpen = false,
   positionDensity = null,
 }: UseRegionFoldArgs): RegionFold {
+  // D-B46 — until the lens has resolved the paper, a stop prints its quiet
+  // form whatever its own data says. A stop she opened on an earlier visit
+  // would otherwise print `full` against a skeleton, and `data-density` would
+  // move `full` -> `quiet` -> `full` on one load. `forceOpen` is exempt for
+  // the reason D-B27 ruled it: those postures print a whole paragraph and no
+  // `RegionHead`, so they have no quiet form to hold.
+  const lensResolved = useLensResolved();
   const [explicit, setExplicit] = useState<boolean | null>(null);
   const [latchedDefault, setLatchedDefault] = useState<boolean | null>(
     defaultFolded,
@@ -175,13 +183,17 @@ export function useRegionFold({
       : (explicit ?? latchedDefault ?? false);
 
   let density: RegionDensity = 'full';
-  if (stop && !forceOpen && explicit === null) {
-    // A stop she has not shut is quiet until the lens says otherwise, whatever
-    // its data derived: the derived default was only ever a fold answer, and
-    // under OD-10 a stop can only be folded explicitly. A stop that printed
-    // itself full 2,000px below the frame would be the render cost L-4 exists
-    // to remove. Nothing the lens says is written down.
-    density = positionDensity ?? 'quiet';
+  if (stop && !forceOpen) {
+    if (!lensResolved) {
+      density = 'quiet';
+    } else if (explicit === null) {
+      // A stop she has not shut is quiet until the lens says otherwise,
+      // whatever its data derived: the derived default was only ever a fold
+      // answer, and under OD-10 a stop can only be folded explicitly. A stop
+      // that printed itself full 2,000px below the frame would be the render
+      // cost L-4 exists to remove. Nothing the lens says is written down.
+      density = positionDensity ?? 'quiet';
+    }
   }
 
   const cause = explicit === true ? ('CLOSED BY YOU' as const) : null;

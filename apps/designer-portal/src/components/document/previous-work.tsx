@@ -4,7 +4,7 @@ import { useId, useState, type CSSProperties } from 'react';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { RegionHead } from './region/region-head';
 import type { RegionDensity } from './region/use-region-fold';
-import { useLensDensityStore } from '@/hooks/use-lens-density';
+import { useLensDensityStore, useLensResolved } from '@/hooks/use-lens-density';
 import {
   quietStateSentence,
   recordQuietStatus,
@@ -62,6 +62,12 @@ export function PreviousWork({
   // explicit choice is written directly: the lens speaks `full` or is silent,
   // and silence means quiet.
   const density: RegionDensity = useLensDensityStore('record') ?? 'quiet';
+  // D-B46 — the design lead measured this root printing `full` for ~500ms on a
+  // 1440 cold load and `quiet` after resolution: `count` is 0 while the read is
+  // out, and the zero-record form below states `full`. Until the lens has
+  // resolved the paper there is no honest answer to give, so the root holds its
+  // quiet form and moves once.
+  const lensResolved = useLensResolved();
 
   // W2 (C-2) — the `record` root is now ALWAYS emitted, empty body when
   // `count === 0` (this used to return null, which left the running index
@@ -73,8 +79,9 @@ export function PreviousWork({
   // prints exactly its `Nothing yet` head at either density — and therefore
   // states `full`, not `quiet` (W4-C16): a root whose printed form cannot
   // change with the lens must not claim a density it does not hold.
-  const quiet = density === 'quiet' && hasHistory;
-  const printedDensity: RegionDensity = hasHistory ? density : 'full';
+  const printedDensity: RegionDensity =
+    hasHistory || !lensResolved ? density : 'full';
+  const quiet = printedDensity === 'quiet';
 
   return (
     <section
