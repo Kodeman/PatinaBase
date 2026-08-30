@@ -194,11 +194,16 @@ export function ProjectApprovalDocument({
   clientProfileId,
   clientName,
   phases,
+  quietLeader = null,
 }: {
   projectId: string;
   clientProfileId: string | null;
   clientName?: string | null;
   phases: readonly ProjectApprovalPhase[];
+  /** NF4-01 / W4-R1 col 3 — the ranked need's act, when a need names this
+   *  region. Elected by the page, which owns the one act table (the same
+   *  destination the band's line 2 presses); null leaves `New approval`. */
+  quietLeader?: { label: string; onAct: () => void } | null;
 }) {
   const approvalsQuery = useProjectApprovals(projectId);
   const candidatesQuery = useProjectApprovalArtifactCandidates(projectId);
@@ -587,6 +592,22 @@ export function ProjectApprovalDocument({
         ),
       )
     : null;
+  // NF4-01 — at quiet the head prints ONE act, and it is the sharpest standing
+  // need's when a need names approvals. `actsAtQuiet='leader'` takes entry 0,
+  // so the election is a prepend and the full ledger is untouched: nothing
+  // about the open region's acts changes.
+  const quietLedger: RegionLedgerEntry[] =
+    quiet && quietLeader
+      ? [
+          {
+            key: 'approvals-quiet-leader',
+            label: quietLeader.label,
+            onClick: quietLeader.onAct,
+          },
+          ...headLedger,
+        ]
+      : headLedger;
+
   const quietStatus = approvalsQuietStatus({
     // The rail's two counts are disjoint; `openCount` holds the overdue ones.
     awaiting: Math.max(0, openCount - overdueCount),
@@ -655,7 +676,7 @@ export function ProjectApprovalDocument({
         eyebrow="Exact artifact · named authority"
         surfaceKey="open-document"
         regionKey="approvals-head"
-        actions={headLedger}
+        actions={quietLedger}
         actsAtQuiet={quiet ? 'leader' : 'all'}
         bodyId={APPROVALS_BODY_ID}
         onFold={() => fold.setFolded(true)}

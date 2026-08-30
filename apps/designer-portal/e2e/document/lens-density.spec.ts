@@ -356,4 +356,50 @@ test.describe('the lens density — one direction (D-B16)', () => {
       .getAttribute('data-reading-index');
     expect(barIndex).toBe(shellIndex);
   });
+
+  test('D-B36 — opening and closing the standing sheet at s2 changes neither the density map nor the lens state', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page);
+    await scrollTo(page, 400);
+
+    const readState = () =>
+      page
+        .locator('[data-document-shell]')
+        .getAttribute('data-lens-state');
+    const readMap = async () =>
+      (await regionRects(page)).map(
+        (region) => `${region.key}:${region.density}:${region.passed ? 'passed' : '-'}`,
+      );
+
+    const before = await readMap();
+    const stateBefore = await readState();
+
+    const door = page.locator('[data-lens-more]');
+    if ((await door.count()) === 0) {
+      // The sheet's door only prints when a second standing item is withheld.
+      // On a seed where it does not, there is no sheet to open and nothing to
+      // assert — say so rather than passing quietly.
+      test.skip(true, 'no [data-lens-more] door on this paper — no standing sheet to open');
+    }
+    await door.first().click();
+    await expect(
+      page.locator('[data-doc-sheet-kind="standing"]'),
+    ).toBeVisible();
+    await settle(page);
+
+    // A sheet is an overlay over the paper, not a move of it: the lens neither
+    // freezes (its state is unchanged) nor re-reads (the map is unchanged).
+    expect(await readState()).toBe(stateBefore);
+    expect(await readMap()).toEqual(before);
+
+    await page.keyboard.press('Escape');
+    await expect(
+      page.locator('[data-doc-sheet-kind="standing"]'),
+    ).toHaveCount(0);
+    await settle(page);
+
+    expect(await readState()).toBe(stateBefore);
+    expect(await readMap()).toEqual(before);
+  });
 });

@@ -132,18 +132,6 @@ import {
  */
 const QUIET_RESERVE = 'var(--doc-quiet-reserve-min)';
 
-/** `SEP 15` — the count line's register of a day. A bare DATE column must parse
- *  as LOCAL midnight, or the printed day slips back one west of UTC. */
-function railDay(iso: string): string | null {
-  const day = new Date(
-    /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso,
-  );
-  if (Number.isNaN(day.getTime())) return null;
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
-    .format(day)
-    .toUpperCase();
-}
-
 /** Best-effort phase_key from a free-typed name (phase_key is nullable + not
  *  unique on project_phases, so a plain slug is safe — no dedupe needed). */
 function slugifyPhaseKey(name: string): string {
@@ -859,6 +847,26 @@ export function ScheduleSpine({
   });
   const density: RegionDensity = scheduleFold.density;
 
+  // NF4-02 / W4-R1 col 3 — the leader that prints while the schedule stop is
+  // quiet is `Adjust dates`, not `+ New open item`: a reader who has not
+  // reached the schedule is being told when the install stands, and the one
+  // act that answers that line is the dates it names. It arms the same phase
+  // the drafting strip's own `Adjust dates` arms, through the ScheduleNav wire
+  // that already runs Spine → Rule, so there is no second act. `actsAtQuiet`
+  // takes entry 0, so the election is a prepend and the open region's ledger
+  // is untouched.
+  const scheduleHeadLedger: readonly RegionLedgerEntry[] =
+    density === 'quiet' && activePhaseId
+      ? [
+          {
+            key: 'adjust-phase-dates',
+            label: 'Adjust dates',
+            onClick: () => armEdit(activePhaseId),
+          },
+          ...scheduleLedger,
+        ]
+      : scheduleLedger;
+
   // W4-R1 — the quiet head's own status line: the install day and how far out
   // it stands. Phases never print here (the rail carries the count), and a
   // fact that is not known prints NOTHING rather than a placeholder.
@@ -1142,7 +1150,7 @@ export function ScheduleSpine({
             status={density === 'quiet' ? scheduleQuietLine : scheduleStatus}
             surfaceKey="open-document"
             regionKey="schedule"
-            actions={scheduleLedger}
+            actions={scheduleHeadLedger}
             actsAtQuiet={density === 'quiet' ? 'leader' : 'all'}
             bodyId={scheduleBodyId}
             onFold={() => scheduleFold.setFolded(true)}

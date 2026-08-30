@@ -58,15 +58,22 @@ interface ClsShift {
   step: number;
   value: number;
   sources: string[];
+  chrome: boolean;
 }
 
 interface ClsResult {
   initialLoadCls: number;
   /** The PAPER's shift — D-B29's gate, exactly 0. */
   scrollCls: number;
-  /** The rail's and the band's own reflow, printed but not gated (item 12). */
+  /** The rail's and the band's own reflow — D-B34: printed, and gated BY CAUSE
+   *  rather than by size (see `uncausedChrome`). */
   chromeCls: number;
   shifts: ClsShift[];
+  /** D-B34 — chrome entries that landed on a step where neither the reading
+   *  stop nor line 2's sentence changed. Chrome may reflow BECAUSE the reader
+   *  moved to a new stop or the band turned its sentence; it may not reflow for
+   *  any other reason, and an unexplained chrome shift is a real finding. */
+  uncausedChrome: ClsShift[];
 }
 
 type WindowWithCls = Window & {
@@ -150,10 +157,18 @@ async function measureCLS(
         // one of whose sources is chrome is counted and PRINTED separately
         // rather than folded into the paper's number, where it would make the
         // gate assert the opposite of OD-14.
+        // W4-N-02 — chrome is the RAIL or the BAND, named. The earlier form
+        // ("anything not inside the paper") swept in the mobile bar, the
+        // sheets and every portal, so a sheet opening under the reader would
+        // have been excused as chrome. Those are paper-side: they move what she
+        // is reading, and they belong in the gated number.
         const isChrome = (node: Element | null | undefined) => {
           if (!node) return false;
-          if (node.closest('[data-lens-band]')) return true;
-          return !node.closest('[data-document-paper]');
+          return Boolean(
+            node.closest('[data-lens-band]') ||
+              node.closest('[data-document-spine]') ||
+              node.closest('nav[aria-label="This paper"]'),
+          );
         };
         const chrome =
           (e.sources ?? []).length > 0 &&
@@ -177,10 +192,29 @@ async function measureCLS(
     observer.observe({ type: 'layout-shift', buffered: false } as PerformanceObserverInit);
   });
 
+  const readCause = () =>
+    page.evaluate(() => ({
+      stop:
+        document
+          .querySelector('[data-document-shell]')
+          ?.getAttribute('data-reading-index') ?? null,
+      sentence:
+        document.querySelector('[data-lens-sentence]')?.textContent?.trim() ??
+        null,
+    }));
+
   const step = TOTAL_SCROLL / STEPS;
   const countAtStep: number[] = [0];
+  // D-B34 — the steps on which the chrome had a REASON to reflow.
+  const causeSteps = new Set<number>();
+  let lastCause = await readCause();
   for (let i = 1; i <= STEPS; i += 1) {
     await scrollTo(page, Math.round(step * i));
+    const cause = await readCause();
+    if (cause.stop !== lastCause.stop || cause.sentence !== lastCause.sentence) {
+      causeSteps.add(i);
+    }
+    lastCause = cause;
     const count = await page.evaluate(
       () => (window as WindowWithCls).__scrollClsEntries?.length ?? 0,
     );
@@ -199,7 +233,12 @@ async function measureCLS(
         break;
       }
     }
-    return { step, value: entry.value, sources: entry.sources };
+    return {
+      step,
+      value: entry.value,
+      sources: entry.sources,
+      chrome: entry.chrome,
+    };
   });
 
   const scrollCls = rawEntries
@@ -208,7 +247,12 @@ async function measureCLS(
   const chromeCls = rawEntries
     .filter((entry) => entry.chrome)
     .reduce((sum, entry) => sum + entry.value, 0);
-  return { initialLoadCls, scrollCls, chromeCls, shifts };
+  // A chrome shift on a step where the stop and the sentence both held is
+  // chrome moving for no stated reason — not excused.
+  const uncausedChrome = shifts.filter(
+    (shift) => shift.chrome && !causeSteps.has(shift.step),
+  );
+  return { initialLoadCls, scrollCls, chromeCls, shifts, uncausedChrome };
 }
 
 test.describe('CLS — zero layout shift over a settled scroll (falsifiable sentence (c))', () => {
@@ -219,7 +263,8 @@ test.describe('CLS — zero layout shift over a settled scroll (falsifiable sent
   test('no-preference: cumulative layout shift is 0 from the settled s0, over a 30-step scroll', async ({
     authenticatedPage: page,
   }) => {
-    const { initialLoadCls, scrollCls, chromeCls, shifts } = await measureCLS(page, 'no-preference');
+    const { initialLoadCls, scrollCls, chromeCls, shifts, uncausedChrome } =
+      await measureCLS(page, 'no-preference');
     console.log(`CLS (initial load, buffered, navigation -> quiet): ${initialLoadCls}`);
     console.log(`CLS (scroll, unbuffered from settled s0, ${STEPS} steps, ${TOTAL_SCROLL}px): ${scrollCls}`);
     console.log(`CLS (scroll, CHROME only — rail segments + band line 2): ${chromeCls}`);
@@ -230,12 +275,17 @@ test.describe('CLS — zero layout shift over a settled scroll (falsifiable sent
       scrollCls,
       shifts.length ? `layout shift(s) during the scroll:\n${detail}` : undefined,
     ).toBe(0);
+    expect(
+      uncausedChrome.map((s) => `step ${s.step}: ${JSON.stringify(s.sources)}`),
+      'D-B34 — chrome reflowed on a step where neither the reading stop nor line 2 changed',
+    ).toEqual([]);
   });
 
   test('reduced motion: cumulative layout shift is 0 from the settled s0, over a 30-step scroll', async ({
     authenticatedPage: page,
   }) => {
-    const { initialLoadCls, scrollCls, chromeCls, shifts } = await measureCLS(page, 'reduce');
+    const { initialLoadCls, scrollCls, chromeCls, shifts, uncausedChrome } =
+      await measureCLS(page, 'reduce');
     console.log(`CLS (initial load, buffered, navigation -> quiet): ${initialLoadCls}`);
     console.log(`CLS (scroll, unbuffered from settled s0, ${STEPS} steps, ${TOTAL_SCROLL}px): ${scrollCls}`);
     console.log(`CLS (scroll, CHROME only — rail segments + band line 2): ${chromeCls}`);
@@ -246,5 +296,9 @@ test.describe('CLS — zero layout shift over a settled scroll (falsifiable sent
       scrollCls,
       shifts.length ? `layout shift(s) during the scroll:\n${detail}` : undefined,
     ).toBe(0);
+    expect(
+      uncausedChrome.map((s) => `step ${s.step}: ${JSON.stringify(s.sources)}`),
+      'D-B34 — chrome reflowed on a step where neither the reading stop nor line 2 changed',
+    ).toEqual([]);
   });
 });

@@ -108,9 +108,14 @@ export function PreviousWork({
             ? [
                 {
                   key: 'toggle-record',
-                  label: open ? 'Fold ↑' : 'Open the record',
+                  // W4-N-06 — at quiet the wrapper holds the sr-only line and
+                  // nothing else, so an `open` carried in from before the lens
+                  // withdrew would make this control announce a disclosure
+                  // that shows nothing. The disclosure is only expanded when
+                  // the body it names is actually printing.
+                  label: open && !quiet ? 'Fold ↑' : 'Open the record',
                   onClick: () => setOpen(!open),
-                  'aria-expanded': open,
+                  'aria-expanded': open && !quiet,
                   'aria-controls': contentId,
                 },
               ]

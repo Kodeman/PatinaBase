@@ -173,6 +173,39 @@ describe('useLensState', () => {
     expect(state()).toBe('editing');
   });
 
+  it('D-B36 — a field inside a sheet is not editing, and never freezes the lens', () => {
+    installMatchMedia(false);
+    const freeze = jest.fn();
+    render(<Harness freeze={freeze} />);
+
+    // A sheet is a PORTAL: `DocSheet` renders to `document.body`, outside the
+    // shell and outside the paper. The standing sheet, the margin-item sheet
+    // and the sections sheet all put fields there, and a reader opening one has
+    // not started editing the paper — so the lens must neither change state nor
+    // stop committing behind the overlay (D-B36).
+    const sheet = document.createElement('div');
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('data-doc-sheet-kind', 'standing');
+    const field = document.createElement('input');
+    field.setAttribute('aria-label', 'a sheet field');
+    sheet.appendChild(field);
+    document.body.appendChild(sheet);
+
+    act(() => {
+      field.focus();
+    });
+    expect(state()).toBe('rest');
+    expect(freeze).not.toHaveBeenCalled();
+
+    act(() => {
+      field.blur();
+    });
+    expect(state()).toBe('rest');
+    expect(freeze).not.toHaveBeenCalled();
+
+    document.body.removeChild(sheet);
+  });
+
   it('ignores an editable that is not on the paper', () => {
     installMatchMedia(false);
     const { getByLabelText } = render(<Harness />);

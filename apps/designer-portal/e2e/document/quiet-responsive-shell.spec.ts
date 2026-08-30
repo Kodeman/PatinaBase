@@ -225,15 +225,19 @@ test.describe('Quiet Work responsive document shell', () => {
       band.getByRole('button', { name: /Unfold/i }),
     ).toHaveCount(0);
     await expect(band).not.toHaveAttribute('data-unfolded', 'true');
-    await expect
-      .poll(async () => (await band.boundingBox())?.height ?? 0)
-      .toBe(56);
+    // W4-N-05 / D-B35 — the LAYOUT box, not `boundingBox()`. The band is
+    // `position: sticky`, and Playwright's quads come out of the compositor
+    // carrying its fractional sticky offset (55.7204 at 1280) while
+    // `getBoundingClientRect().height` is exactly 56 in both engines at every
+    // width. `lens-band-height.spec.ts` measures the same way, for the same
+    // reason: the box was right and the instrument was not.
+    const bandLayoutHeight = () =>
+      band.evaluate((el) => el.getBoundingClientRect().height);
+    await expect.poll(bandLayoutHeight).toBe(56);
 
     // Scrolled, the band is still 56px and still un-unfoldable.
     await scrollTo(page, 800);
-    await expect
-      .poll(async () => (await band.boundingBox())?.height ?? 0)
-      .toBe(56);
+    await expect.poll(bandLayoutHeight).toBe(56);
 
     // By its stable hook, not by its name: OD-11/A-01 puts the current stop
     // INTO the accessible name, so the name changes on every crossing and a

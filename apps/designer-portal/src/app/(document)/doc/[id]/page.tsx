@@ -69,6 +69,7 @@ import {
   scrollToRegion,
   useDocumentRunningIndex,
 } from '@/hooks/use-document-running-index';
+import { approvalsQuietLeader } from '@/lib/document/lens-quiet-status';
 import { useLensDensity } from '@/hooks/use-lens-density';
 import { useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
@@ -1551,6 +1552,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     });
   }, [row, rankedOperationalNeeds, activateDestination]);
 
+  // NF4-01 — the ranked need's act, elected from the rows that already carry
+  // each need's kind beside the destination the guide offers, so the approvals
+  // head's quiet leader presses exactly where the band's line 2 does. A need
+  // that states no act cannot be a leader; the head keeps `New approval`.
+  const approvalsLeaderRow = approvalsQuietLeader(redLetterRows);
+  const approvalsQuietLeaderAct =
+    approvalsLeaderRow && approvalsLeaderRow.actionLabel
+      ? {
+          label: approvalsLeaderRow.actionLabel,
+          onAct: approvalsLeaderRow.onAct,
+        }
+      : null;
+
   // W1 · the reading stop, lifted. The running index observes the region roots
   // (`data-index-region`); the margin rail's group counts and the mobile bar's
   // `AT <STOP>` line both need the answer, so the page owns the call — above
@@ -2341,6 +2355,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         />
 
         <ProjectApprovalDocumentMount
+          quietLeader={approvalsQuietLeaderAct}
           projectId={
             row.engagement_kind === 'project' ? row.project_id : null
           }

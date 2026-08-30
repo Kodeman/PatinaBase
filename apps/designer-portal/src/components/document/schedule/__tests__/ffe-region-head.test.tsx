@@ -399,6 +399,38 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     expect(screen.queryByText('Throughout')).not.toBeInTheDocument();
   });
 
+  it('F3 — prints its leader alone: every overflow act is NOT rendered at quiet', () => {
+    mockItems = [line({ id: 'ffe-1' })];
+    renderProject();
+
+    const head = document.querySelector('[data-region-head="ffe"]')!;
+    // One unspecified line, no claim and no PO: the election returns `spec`,
+    // so entry 0 is the spec-book act and `add-line` / `bill` are overflow.
+    expect(head).toContainElement(
+      screen.getByRole('link', { name: /Spec the 1 unspecified/ }),
+    );
+    // Not rendered, not hidden: `DocumentActionGroup`'s one-leader guard and
+    // `action-visibility.spec.ts` both COUNT `[data-action-key]` nodes, so an
+    // `aria-hidden` copy would still be one of them.
+    for (const key of [
+      'open-add-to-project',
+      'release-for-authorization',
+      'file-ffe-claim',
+      'chase-ffe-po',
+    ]) {
+      expect(
+        document.querySelectorAll(`[data-action-key="${key}"]`),
+      ).toHaveLength(0);
+    }
+    // The ledger prints ONE act beside the head's own Fold control.
+    const acts = Array.from(
+      head.querySelectorAll('[data-action-key]'),
+    ).map((el) => el.getAttribute('data-action-key'));
+    expect(acts.filter((key) => key !== 'ffe-fold')).toEqual([
+      'open-spec-book',
+    ]);
+  });
+
   it('names the damage the paper holds, and prints nothing where it holds none', () => {
     render(
       <FFESection

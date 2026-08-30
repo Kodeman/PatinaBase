@@ -9,6 +9,7 @@ const phaseStateMock = jest.fn();
 const useScheduleProposalsMock = jest.fn();
 const useCoordinationItemsMock = jest.fn();
 const registerRevealHandlerMock = jest.fn();
+const armEditMock = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
   excludeProjectArtifactApprovals: (items: unknown[]) => items,
@@ -119,7 +120,7 @@ jest.mock("../schedule-nav-context", () => ({
   useScheduleNav: () => ({
     registerRevealHandler: (...args: unknown[]) =>
       registerRevealHandlerMock(...args),
-    armEdit: jest.fn(),
+    armEdit: (...args: unknown[]) => armEditMock(...args),
   }),
 }));
 
@@ -234,6 +235,7 @@ beforeEach(() => {
   useScheduleProposalsMock.mockReturnValue({ data: [], isError: false });
   useCoordinationItemsMock.mockReturnValue({ data: [] });
   registerRevealHandlerMock.mockClear();
+  armEditMock.mockClear();
   phaseStateMock.mockReset();
 });
 
@@ -486,6 +488,26 @@ describe("ScheduleSpine quiet body (W4)", () => {
     expect(
       container.querySelectorAll('[data-action-variant="inked"]'),
     ).toHaveLength(1);
+  });
+
+  it("NF4-02 — the quiet leader is Adjust dates, not + New open item, and it arms the active phase", () => {
+    useResolvedScheduleMock.mockReturnValue(installSchedule());
+    const { container } = renderSpine();
+
+    const head = container.querySelector('[data-region-head="schedule"]')!;
+    const leader = screen.getByRole("button", { name: "Adjust dates" });
+    expect(head).toContainElement(leader);
+    // W4-R1 col 3: `Adjust dates` REPLACES the composer as entry 0 — a reader
+    // who has not reached the schedule is being told when the install stands,
+    // and the act that answers that line is the dates it names.
+    expect(
+      screen.queryByRole("button", { name: "+ New open item" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(leader);
+    // The same wire the drafting strip's own `Adjust dates` uses — one act,
+    // not a second copy of it.
+    expect(armEditMock).toHaveBeenCalledTimes(1);
   });
 
   it("leaves no aria-controls pointing at nothing while quiet (W4-C7)", () => {

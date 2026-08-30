@@ -581,6 +581,33 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     expect(screen.queryByText('Account band')).not.toBeInTheDocument();
   });
 
+  it('F3 — prints its leader alone: the two overflow acts are NOT rendered at quiet', () => {
+    liveMoney();
+    render(<MoneyRegion projectId="project-1" />);
+
+    const head = document.querySelector('[data-region-head="money-head"]')!;
+    // Entry 0 of a three-act ledger.
+    expect(head).toContainElement(
+      screen.getByRole('button', { name: 'Draw an invoice' }),
+    );
+    // Entries 1 and 2 are not rendered — not rendered inert, not aria-hidden:
+    // `DocumentActionGroup`'s one-leader guard and `action-visibility.spec.ts`
+    // both COUNT `[data-action-key]` nodes, so a hidden copy is still one of
+    // them (region-head.tsx, `actsAtQuiet`).
+    expect(
+      screen.queryByRole('button', { name: /Amendment|Add a change/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Hours · this project/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      head.querySelectorAll('[data-action-key="compose-project-amendment"]'),
+    ).toHaveLength(0);
+    expect(
+      head.querySelectorAll('[data-action-key="open-project-hours"]'),
+    ).toHaveLength(0);
+  });
+
   it('says Nothing yet when it holds neither figure', () => {
     render(<MoneyRegion projectId="project-1" />);
 

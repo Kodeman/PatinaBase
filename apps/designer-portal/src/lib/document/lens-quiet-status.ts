@@ -189,3 +189,31 @@ export function quietStateSentence(status: string, name: string): string {
   const first = status.split(' · ')[0] ?? status;
   return `${first} · not yet on the paper · press ${name} on the index to open`;
 }
+
+/**
+ * NF4-01 — which act stands as the approvals head's leader while the stop is
+ * quiet.
+ *
+ * W4-R1 column 3 describes it as "the head's leader as it prints today: the
+ * ranked need's act when the need names approvals, else `New approval`". The
+ * head printed no need-elected leader, so this is the election the ruling
+ * describes, in the shape `ffe-leader.ts` already uses for Pieces: the needs
+ * arrive ALREADY RANKED (`rankOperationalNeeds`), so the first one whose kind
+ * names this region is the sharpest, and there is no second ordering here.
+ *
+ * Generic over the row rather than typed to `NeedLine`, because the page hands
+ * it the red-letter rows — which carry each need's kind beside the act the
+ * guide would have offered, so the elected leader presses exactly where the
+ * band's line 2 presses and no second act table exists.
+ */
+export const APPROVALS_LEADER_KINDS: readonly string[] = ['overdue_decision'];
+
+export function namesApprovals(kind: string): boolean {
+  return APPROVALS_LEADER_KINDS.includes(kind);
+}
+
+export function approvalsQuietLeader<T extends { kind: string }>(
+  rows: readonly T[] | null | undefined,
+): T | null {
+  return rows?.find((row) => namesApprovals(row.kind)) ?? null;
+}

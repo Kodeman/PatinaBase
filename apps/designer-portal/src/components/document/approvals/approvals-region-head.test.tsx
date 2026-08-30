@@ -110,7 +110,9 @@ const baseReview = {
   updatedAt: '2026-08-10T12:05:00.000Z',
 } satisfies ProjectApprovalReview;
 
-const renderDocument = () =>
+const renderDocument = (
+  quietLeader: { label: string; onAct: () => void } | null = null,
+) =>
   render(
     <ProjectApprovalDocument
       projectId="project-1"
@@ -119,6 +121,7 @@ const renderDocument = () =>
       phases={[
         { id: 'phase-1', name: 'Design development', status: 'in_progress' },
       ]}
+      quietLeader={quietLeader}
     />,
   );
 
@@ -271,6 +274,35 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
       ),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Issued drawing set 02')).not.toBeInTheDocument();
+  });
+
+  it('NF4-01 — the ranked need\u2019s act is the quiet leader, and it is the ONLY act', () => {
+    const onAct = jest.fn();
+    renderDocument({ label: 'Chase the approval', onAct });
+
+    const head = document.querySelector('[data-region-head="approvals-head"]')!;
+    const leader = screen.getByRole('button', { name: 'Chase the approval' });
+    expect(head).toContainElement(leader);
+    fireEvent.click(leader);
+    expect(onAct).toHaveBeenCalledTimes(1);
+
+    // W4-R1 col 3 — the elected act REPLACES `New approval` as the leader; it
+    // does not stand beside it. `actsAtQuiet='leader'` prints entry 0 alone.
+    expect(
+      screen.queryByRole('button', { name: 'New approval' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('NF4-01 — with no need naming approvals the leader is still New approval', () => {
+    renderDocument(null);
+
+    const head = document.querySelector('[data-region-head="approvals-head"]')!;
+    expect(head).toContainElement(
+      screen.getByRole('button', { name: 'New approval' }),
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Chase the approval' }),
+    ).not.toBeInTheDocument();
   });
 
   it('says Nothing yet when nothing stands open — never a zero, never a dash', () => {
