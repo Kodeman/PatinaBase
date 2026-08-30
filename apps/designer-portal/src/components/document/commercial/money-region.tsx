@@ -24,7 +24,6 @@
  */
 
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
-import { usePurchaseOrders } from '@patina/supabase';
 import { useAccountPage } from '@/hooks/use-account-page';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
@@ -41,6 +40,10 @@ import { useRegionFold, type RegionFoldKey } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { ProjectAuthorityBandForProject } from './project-authority-band';
 import { ProjectCommerceSection } from './project-commerce-section';
+import {
+  moneyQuietStatus,
+  quietStateSentence,
+} from '@/lib/document/lens-quiet-status';
 
 /** The band's Money row is this region's index: it unfolds the region and
  *  scrolls to it. The band rides the top of the paper, so a landing at
@@ -116,9 +119,6 @@ export function MoneyRegion({
     settled: ladderSettled,
   } = useMoneyLadder(projectId);
   const accountQuery = useAccountPage(projectId);
-  // The quiet form's second fact. Same key and args `useMoneyLadder` already
-  // reads the POs under, so this is the cache, not a second fetch.
-  const purchaseOrdersQuery = usePurchaseOrders({ projectId });
 
   // The same word the accounts band uses for this act, derived the same way.
   const changeOnly = activeSection === 'install' || activeSection === 'care';
@@ -208,17 +208,15 @@ export function MoneyRegion({
       ? `${money(authority.authorizedCents)} budget · ${money(committedCents)} authorized`
       : `no budget yet · ${money(committedCents)} authorized`;
 
-  // R127 OD-12/OD-13 — the quiet form: the head unchanged, one count line, one
-  // leader, one state line. A fact the region has not read prints nothing.
+  // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else.
+  // The two figures are the same two the rail's value line prints (`$X out ·
+  // $Y not drawn`); the PO count belongs to the ledger, not to this line.
   const quiet = density === 'quiet';
-  const owedCents = ladder.owed.cents;
-  const poCount = (purchaseOrdersQuery.data ?? []).length;
-  const countLine = [
-    owedCents != null && owedCents > 0 ? `${money(owedCents)} OWED YOU` : null,
-    poCount > 0 ? `${poCount} ${poCount === 1 ? 'PO' : 'POS'}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const quietStatus = moneyQuietStatus({
+    outCents: ladder.owed.cents,
+    notDrawnCents: ladder.notDrawn.cents,
+    money,
+  });
 
   const ledger: RegionLedgerEntry[] = [
     // R74b — draw an invoice for THIS engagement: the anti-wizard composer,
@@ -286,23 +284,19 @@ export function MoneyRegion({
       <RegionHead
         headingId={HEADING_ID}
         name="Money"
-        status={headStatus}
+        status={quiet ? quietStatus : headStatus}
         eyebrow="The money · one region"
         surfaceKey="accounts"
         regionKey="money-head"
         actions={ledger}
+        actsAtQuiet={quiet ? 'leader' : 'all'}
         bodyId={BODY_ID}
         onFold={() => setFolded(true)}
       />
 
       {quiet ? (
         <div id={BODY_ID}>
-          {countLine && (
-            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-              {countLine}
-            </p>
-          )}
-          <p className="sr-only">Quiet — opens as you read</p>
+          <p className="sr-only">{quietStateSentence(quietStatus, 'Money')}</p>
         </div>
       ) : (
       <div id={BODY_ID}>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 let mockAuthority: Record<string, unknown>;
 let mockBudget: Record<string, unknown>;
@@ -12,12 +12,15 @@ let mockInvoices: Record<string, unknown>;
    attaches it) a stop renders QUIET, so every claim below about the region's
    body states which density it is making the claim at. `full` is the default
    here because these suites were written against the full body. */
-let mockLensDensity: 'full' | null = 'full';
-jest.mock('@/hooks/use-lens-density', () => ({
-  useLensDensityStore: () => mockLensDensity,
-}));
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
 beforeEach(() => {
-  mockLensDensity = 'full';
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
 });
 
 jest.mock('@patina/supabase', () => ({
@@ -64,6 +67,7 @@ jest.mock('./project-commerce-section', () => ({
 jest.mock('../account-band', () => ({ AccountBand: () => <div>Account band</div> }));
 
 import { MoneyRegion } from './money-region';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 const settledEmpty = {
   authority: { data: null, isLoading: false, error: null },
@@ -544,33 +548,47 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
   };
 
   beforeEach(() => {
-    mockLensDensity = null;
+    act(() => {
+      __setDensityForTest(null);
+    });
   });
 
-  it('prints the head, one count line and the state line — and no rungs', () => {
+  it('prints the head, its own status line and the state line — and no rungs', () => {
     liveMoney();
     render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
-    const count = screen.getByText('$1,750 OWED YOU · 1 PO');
-    expect(count.textContent!.length).toBeLessThanOrEqual(40);
+    // W4-R1: the two figures the rail's value line prints, on the head's own
+    // status line. The PO count belongs to the ledger, not to this line.
+    const head = document.querySelector('[data-region-head="money-head"]')!;
+    expect(head).toHaveTextContent('$1,750 out');
+    expect(head).not.toHaveTextContent(/PO/);
+    expect(
+      document.querySelectorAll('[data-region-count-line]'),
+    ).toHaveLength(0);
     // The head's own acts are the only acts (mockup governs what prints).
     expect(
       screen.queryByRole('button', { name: /See the money/ }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+    expect(
+      screen.getByText(
+        '$1,750 out · not yet on the paper · press Money on the index to open',
+      ),
+    ).toHaveClass('sr-only');
 
     expect(document.querySelectorAll('ol > li')).toHaveLength(0);
     expect(screen.queryByText(/^Budget · /)).not.toBeInTheDocument();
     expect(screen.queryByText('Account band')).not.toBeInTheDocument();
   });
 
-  it('prints no count line at all when it holds neither figure', () => {
+  it('says Nothing yet when it holds neither figure', () => {
     render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
-    expect(screen.queryByText(/OWED YOU|POS?$/)).not.toBeInTheDocument();
-    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+    const head = document.querySelector('[data-region-head="money-head"]')!;
+    expect(head).toHaveTextContent('Nothing yet');
+    expect(head).not.toHaveTextContent(/out|not drawn/);
+    expect(screen.getByText('Nothing yet', { selector: '.sr-only' })).toBeInTheDocument();
   });
 
   it('publishes its density and its short reserve on the index root (OD-12)', () => {
@@ -589,7 +607,9 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     const head = document.querySelector('[data-region-head="money-head"]');
     const heading = screen.getByRole('heading', { name: 'Money' });
 
-    mockLensDensity = 'full';
+    act(() => {
+      __setDensityForTest('full');
+    });
     rerender(<MoneyRegion projectId="project-1" />);
 
     expect(document.querySelector('[data-region-head="money-head"]')).toBe(head);
@@ -604,7 +624,9 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
   it('lets the fold she made outrank the lens, whatever the lens says', () => {
     liveMoney();
     window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
-    mockLensDensity = 'full';
+    act(() => {
+      __setDensityForTest('full');
+    });
     render(<MoneyRegion projectId="project-1" />);
 
     expect(document.querySelector('[data-fold-seam]')).not.toBeNull();

@@ -53,6 +53,10 @@ import {
   type FocusProjectApprovalDetail,
 } from './project-approval-navigation';
 import { SectionLoadingLine } from '../section-loading-line';
+import {
+  approvalsQuietStatus,
+  quietStateSentence,
+} from '@/lib/document/lens-quiet-status';
 
 const APPROVALS_BODY_ID = 'project-approvals-body';
 
@@ -559,18 +563,36 @@ export function ProjectApprovalDocument({
   );
   useRegionUnfoldRequest('approvals', openApprovalsRegion);
 
-  // R127 OD-12/OD-13 — the quiet form: the head unchanged, one count line, one
-  // leader, one state line. A count the region does not hold prints nothing.
+  // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else:
+  // the name, the head's own status line (the count line IS that line — there
+  // is no second paragraph), the one inked leader, and one sr-only sentence.
   const quiet = fold.density === 'quiet';
-  const overdueCount = approvals.filter(
+  const overdueReviews = approvals.filter(
     (review) => !isSealed(review) && review.isOverdue,
-  ).length;
-  const countLine = [
-    overdueCount > 0 ? `${overdueCount} OVERDUE` : null,
-    openCount > 0 ? `${openCount} OPEN` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  );
+  const overdueCount = overdueReviews.length;
+  // The oldest overdue item's age, derived as the rail derives its own
+  // (`page.tsx`'s ladder facts): the day-count only prints when exactly one
+  // item is overdue.
+  const oldestOverdueDueAt = overdueReviews.reduce<string | null>(
+    (oldest, review) =>
+      oldest === null || review.dueAt < oldest ? review.dueAt : oldest,
+    null,
+  );
+  const overdueDays = oldestOverdueDueAt
+    ? Math.max(
+        0,
+        Math.floor(
+          (Date.now() - new Date(oldestOverdueDueAt).getTime()) / 86_400_000,
+        ),
+      )
+    : null;
+  const quietStatus = approvalsQuietStatus({
+    // The rail's two counts are disjoint; `openCount` holds the overdue ones.
+    awaiting: Math.max(0, openCount - overdueCount),
+    overdue: overdueCount,
+    overdueDays,
+  });
 
   useEffect(() => {
     if (!fold.folded && unfoldFocusRef.current) {
@@ -629,22 +651,20 @@ export function ProjectApprovalDocument({
       <RegionHead
         headingId="project-approvals-title"
         name="Client approvals"
-        status={headStatus}
+        status={quiet ? quietStatus : headStatus}
         eyebrow="Exact artifact · named authority"
         surfaceKey="open-document"
         regionKey="approvals-head"
         actions={headLedger}
+        actsAtQuiet={quiet ? 'leader' : 'all'}
         bodyId={APPROVALS_BODY_ID}
         onFold={() => fold.setFolded(true)}
       />
       {quiet ? (
         <div id={APPROVALS_BODY_ID}>
-          {countLine && (
-            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-              {countLine}
-            </p>
-          )}
-          <p className="sr-only">Quiet — opens as you read</p>
+          <p className="sr-only">
+            {quietStateSentence(quietStatus, 'Client approvals')}
+          </p>
         </div>
       ) : (
       <div id={APPROVALS_BODY_ID}>

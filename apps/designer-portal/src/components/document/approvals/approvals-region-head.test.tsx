@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { ProjectApprovalDocument } from './project-approval-document';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 import type {
   ProjectApprovalArtifactCandidate,
   ProjectApprovalReview,
@@ -20,12 +21,15 @@ let candidates: ProjectApprovalArtifactCandidate[] = [];
    attaches it) a stop renders QUIET, so every claim below about the region's
    body states which density it is making the claim at. `full` is the default
    here because these suites were written against the full body. */
-let mockLensDensity: 'full' | null = 'full';
-jest.mock('@/hooks/use-lens-density', () => ({
-  useLensDensityStore: () => mockLensDensity,
-}));
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
 beforeEach(() => {
-  mockLensDensity = 'full';
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
 });
 
 jest.mock('@patina/supabase', () => ({
@@ -225,7 +229,9 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
   } satisfies ProjectApprovalReview;
 
   beforeEach(() => {
-    mockLensDensity = null;
+    act(() => {
+      __setDensityForTest(null);
+    });
     authority = {
       decisionLeadId: 'client-1',
       requiredCoapproverId: null,
@@ -234,19 +240,30 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
     approvals = [overdue, open2];
   });
 
-  it('prints the head, one count line and the state line — and no approvals', () => {
+  it('prints the head, its own status line and the state line — and no approvals', () => {
     renderDocument();
 
     expect(
       screen.getByRole('heading', { name: 'Client approvals' }),
     ).toBeInTheDocument();
-    const count = screen.getByText('1 OVERDUE · 2 OPEN');
-    expect(count.textContent!.length).toBeLessThanOrEqual(40);
+    // W4-R1: the count line IS the head's status line — no second paragraph,
+    // no uppercase strip. Two unsettled, one of them overdue, so the two counts
+    // are disjoint: `1 awaiting the client · 1 overdue`, with the day-count on
+    // the overdue half because exactly one item is overdue.
+    const head = document.querySelector('[data-region-head="approvals-head"]')!;
+    expect(head).toHaveTextContent(/1 awaiting the client · 1 overdue( \d+d)?/);
+    expect(
+      document.querySelectorAll('[data-region-count-line]'),
+    ).toHaveLength(0);
     // The head's own acts are the only acts (mockup governs what prints).
     expect(
       screen.queryByRole('button', { name: /See the approvals/ }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+    expect(
+      screen.getByText(
+        '1 awaiting the client · not yet on the paper · press Client approvals on the index to open',
+      ),
+    ).toHaveClass('sr-only');
 
     expect(
       screen.queryByText(
@@ -256,15 +273,18 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
     expect(screen.queryByText('Issued drawing set 02')).not.toBeInTheDocument();
   });
 
-  it('prints no count line at all when nothing stands open', () => {
+  it('says Nothing yet when nothing stands open — never a zero, never a dash', () => {
     approvals = [{ ...baseReview, disposition: 'withdrawn' }];
     renderDocument();
 
     expect(
       screen.getByRole('heading', { name: 'Client approvals' }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/OVERDUE|OPEN/)).not.toBeInTheDocument();
-    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+    const head = document.querySelector('[data-region-head="approvals-head"]')!;
+    expect(head).toHaveTextContent('Nothing yet');
+    // W4-R1: with no fact there is nothing to press toward, so the sr-only
+    // line is the phrase alone.
+    expect(screen.getByText('Nothing yet', { selector: '.sr-only' })).toBeInTheDocument();
   });
 
   it('publishes its density and its short reserve on the index root (OD-12)', () => {
@@ -283,7 +303,9 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
     const head = document.querySelector('[data-region-head="approvals-head"]');
     const heading = screen.getByRole('heading', { name: 'Client approvals' });
 
-    mockLensDensity = 'full';
+    act(() => {
+      __setDensityForTest('full');
+    });
     rerender(
       <ProjectApprovalDocument
         projectId="project-1"
@@ -304,7 +326,9 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
     expect(
       document.querySelector('[data-index-region="approvals"]'),
     ).toHaveAttribute('data-density', 'full');
-    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/not yet on the paper/),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText(
         /Bind each request to one issued plan, client-ready specification/,
@@ -314,7 +338,9 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
 
   it('lets the fold she made outrank the lens, whatever the lens says', () => {
     window.localStorage.setItem('patina:doc-fold:project-1:approvals', '1');
-    mockLensDensity = 'full';
+    act(() => {
+      __setDensityForTest('full');
+    });
     renderDocument();
 
     expect(document.querySelector('[data-fold-seam]')).not.toBeNull();

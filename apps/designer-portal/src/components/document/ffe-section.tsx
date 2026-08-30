@@ -118,6 +118,10 @@ import {
 import { useRoomLens } from './room-lens-context';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
+import {
+  piecesQuietStatus,
+  quietStateSentence,
+} from '@/lib/document/lens-quiet-status';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -1245,23 +1249,17 @@ function FFESectionBody({
     ...(ffeAwaiting ? [ffeAwaiting] : []),
   ];
 
-  // R127 OD-12/OD-13 — the quiet form. The head is unchanged; under it stand
-  // one count line, one leader and the state line the count line cannot say.
+  // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else:
+  // its own status line, the one inked leader, one sr-only sentence.
   const ffeQuiet = ffeFold.density === 'quiet';
   const ffeDamagedCount = needs.filter(
     (need) => need.kind === 'damage_claim',
   ).length;
-  // Every clause is a fact the paper holds; a fact it does not hold prints
-  // nothing rather than a zero.
-  const ffeCountLine = [
-    `${total} ${total === 1 ? 'LINE' : 'LINES'}`,
-    roomGroups.length > 0
-      ? `${roomGroups.length} ${roomGroups.length === 1 ? 'ROOM' : 'ROOMS'}`
-      : null,
-    ffeDamagedCount > 0 ? `${ffeDamagedCount} DAMAGED` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const ffeQuietStatus = piecesQuietStatus({
+    total,
+    rooms: roomGroups.length,
+    damaged: ffeDamagedCount,
+  });
 
   return (
     <section
@@ -1376,11 +1374,12 @@ function FFESectionBody({
               <RegionHead
                 headingId={ffeHeadingId}
                 name="Pieces"
-                status={ffeStatus}
+                status={ffeQuiet ? ffeQuietStatus : ffeStatus}
                 exceptions={ffeExceptions}
                 surfaceKey="project"
                 regionKey="ffe"
                 actions={ffeLedger}
+                actsAtQuiet={ffeQuiet ? 'leader' : 'all'}
                 bodyId={ffeBodyId}
                 onFold={() => ffeFold.setFolded(true)}
               />
@@ -1391,10 +1390,9 @@ function FFESectionBody({
 
       {!ffeFolded && ffeQuiet && (
         <div id={ffeBodyId}>
-          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            {ffeCountLine}
+          <p className="sr-only">
+            {quietStateSentence(ffeQuietStatus, 'Pieces')}
           </p>
-          <p className="sr-only">Quiet — opens as you read</p>
         </div>
       )}
 

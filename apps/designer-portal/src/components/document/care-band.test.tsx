@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 const useAuth = jest.fn();
 const useCloseProject = jest.fn();
@@ -30,10 +30,10 @@ jest.mock('@patina/supabase', () => ({
 // is mocked per suite. `null` is the shipped truth here (the lens is silent) and
 // every claim below was written against it; the quiet→full cases drive `'full'`,
 // which is the lens having reached this root.
-const mockLensDensity = jest.fn<'full' | null, [string]>(() => null);
-jest.mock('@/hooks/use-lens-density', () => ({
-  useLensDensityStore: (region: string) => mockLensDensity(region),
-}));
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
 jest.mock('./strata-mark', () => ({
   StrataMark: () => <span data-testid="strata-mark" />,
 }));
@@ -56,12 +56,12 @@ jest.mock('./document-action', () => ({
 }));
 
 import { CareBand } from './care-band';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 const settled = (data: unknown) => ({ data, isError: false });
 
 beforeEach(() => {
-  mockLensDensity.mockReset();
-  mockLensDensity.mockReturnValue(null);
+  __setDensityForTest(null);
   closeMutate.mockReset();
   useAuth.mockReturnValue({
     user: { id: 'owner-1' },
@@ -493,9 +493,17 @@ describe('CareBand quiet body (W4)', () => {
     });
 
     expect(screen.getByRole('heading', { name: 'Closing the book' })).toBeInTheDocument();
-    const countLine = screen.getByText('1 OF 6 CLOSED OUT');
-    expect(countLine.textContent!.length).toBeLessThanOrEqual(40);
-    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+    // W4-R1: the count line IS the head's status line.
+    const head = container.querySelector('[data-region-head="closure"]')!;
+    expect(head).toHaveTextContent('1 of 6 closed out');
+    expect(
+      container.querySelectorAll('[data-region-count-line]'),
+    ).toHaveLength(0);
+    expect(
+      screen.getByText(
+        '1 of 6 closed out · not yet on the paper · press Closing the book on the index to open',
+      ),
+    ).toHaveClass('sr-only');
 
     // The checklist, the snapshot fields and the fold-away act are not on the
     // paper until the lens reaches this root.
@@ -524,7 +532,9 @@ describe('CareBand quiet body (W4)', () => {
       'quiet',
     );
 
-    mockLensDensity.mockReturnValue('full');
+    act(() => {
+      __setDensityForTest('full');
+    });
     rerender(<CareBand projectId="project-1" indexRoot />);
 
     expect(container.querySelector('[data-index-region="care"]')).toHaveAttribute(
@@ -543,7 +553,9 @@ describe('CareBand quiet body (W4)', () => {
   it('lets her own fold outrank the lens — CLOSED BY YOU is the only cause a stop has', () => {
     nonInstall();
     window.localStorage.setItem('patina:doc-fold:project-1:care', '1');
-    mockLensDensity.mockReturnValue('full');
+    act(() => {
+      __setDensityForTest('full');
+    });
 
     const { container } = render(<CareBand projectId="project-1" indexRoot />);
 
@@ -631,7 +643,9 @@ describe('CareBand quiet body (W4)', () => {
         callbacks.onSuccess();
       },
     );
-    mockLensDensity.mockReturnValue('full');
+    act(() => {
+      __setDensityForTest('full');
+    });
     band.rerender(<CareBand projectId="project-1" indexRoot />);
     for (const label of [
       'Final walkthrough completed with client',

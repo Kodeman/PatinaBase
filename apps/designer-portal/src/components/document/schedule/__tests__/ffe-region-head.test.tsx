@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 let mockRooms: Record<string, unknown>[] = [];
@@ -11,12 +11,15 @@ let mockCoverage: Record<string, { coverage: string }> = {};
    attaches it) a stop renders QUIET, so every claim below about the region's
    body states which density it is making the claim at. `full` is the default
    here because these suites were written against the full body. */
-let mockLensDensity: 'full' | null = 'full';
-jest.mock('@/hooks/use-lens-density', () => ({
-  useLensDensityStore: () => mockLensDensity,
-}));
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
 beforeEach(() => {
-  mockLensDensity = 'full';
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
 });
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -107,6 +110,7 @@ jest.mock('../../line-unfold', () => ({ LineUnfold: () => null }));
 
 import { FFESection } from '../../ffe-section';
 import { RoomLensProvider } from '../../room-lens-context';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 /** A furnishing the studio still has to release. */
 const line = (over: Record<string, unknown> = {}) => ({
@@ -348,7 +352,7 @@ describe('FF&E room heading — the room lens press target', () => {
 /**
  * R127 W4 (L-4, OD-12, OD-13) — the quiet body. Until the lens reaches this
  * stop, Pieces prints its head, one count line, one leader and one state line;
- * the schedule itself is not on the paper. `mockLensDensity = null` is the lens
+ * the schedule itself is not on the paper. `__setDensityForTest(null)` is the lens
  * with nothing to say, which is exactly what the page renders 2,000px ahead.
  */
 describe('FF&E quiet body — the lens has not reached this stop', () => {
@@ -360,7 +364,9 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     mockTradeScopes = [];
     mockAuthority = { data: null };
     mockCoverage = {};
-    mockLensDensity = null;
+    act(() => {
+      __setDensityForTest(null);
+    });
   });
 
   it('prints the head, one count line and the state line — and no lines', () => {
@@ -371,13 +377,21 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     renderProject();
 
     expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
-    const count = screen.getByText('2 LINES · 1 ROOM');
-    expect(count.textContent!.length).toBeLessThanOrEqual(40);
+    // W4-R1: the count line IS the head's status line.
+    const head = document.querySelector('[data-region-head="ffe"]')!;
+    expect(head).toHaveTextContent('2 lines · 1 room');
+    expect(
+      document.querySelectorAll('[data-region-count-line]'),
+    ).toHaveLength(0);
     // The head's own acts are the only acts (mockup governs what prints).
     expect(
       screen.queryByRole('button', { name: /See the lines/ }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+    expect(
+      screen.getByText(
+        '2 lines · not yet on the paper · press Pieces on the index to open',
+      ),
+    ).toHaveClass('sr-only');
 
     // The schedule is not on the paper: no line, no room head, no Throughout.
     expect(screen.queryByText('Walnut bed, king')).not.toBeInTheDocument();
@@ -402,10 +416,14 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
         ]}
       />,
     );
-    expect(screen.getByText('1 LINE · 1 ROOM · 1 DAMAGED')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-region-head="ffe"]'),
+    ).toHaveTextContent('1 line · 1 room · 1 damaged');
 
     renderProject();
-    expect(screen.getByText('1 LINE · 1 ROOM')).toBeInTheDocument();
+    const heads = document.querySelectorAll('[data-region-head="ffe"]');
+    expect(heads[heads.length - 1]).toHaveTextContent('1 line · 1 room');
+    expect(heads[heads.length - 1]).not.toHaveTextContent('damaged');
   });
 
   it('publishes its density and its reserve on the index root (OD-12)', () => {
@@ -434,7 +452,9 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     const head = document.querySelector('[data-region-head="ffe"]');
     const heading = screen.getByRole('heading', { name: 'Pieces' });
 
-    mockLensDensity = 'full';
+    act(() => {
+      __setDensityForTest('full');
+    });
     rerender(
       <FFESection projectId="project-1" projectName="Ellsworth" mode="project" />,
     );
@@ -444,13 +464,17 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     expect(
       document.querySelector('[data-index-region="ffe"]'),
     ).toHaveAttribute('data-density', 'full');
-    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/not yet on the paper/),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
   });
 
   it('lets the fold she made outrank the lens, whatever the lens says', () => {
     window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
-    mockLensDensity = 'full';
+    act(() => {
+      __setDensityForTest('full');
+    });
     renderProject();
 
     expect(document.querySelector('[data-fold-seam]')).not.toBeNull();

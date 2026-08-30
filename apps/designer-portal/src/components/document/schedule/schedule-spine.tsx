@@ -119,6 +119,10 @@ import {
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { SectionLoadingLine } from '../section-loading-line';
+import {
+  quietStateSentence,
+  scheduleQuietStatus,
+} from '@/lib/document/lens-quiet-status';
 
 /**
  * OD-12 — the quiet height, held at EVERY density so a body shorter than its
@@ -855,26 +859,18 @@ export function ScheduleSpine({
   });
   const density: RegionDensity = scheduleFold.density;
 
-  // The quiet body's one count line (OD-3's 40-char cap, OD-1's casing): the
-  // install day and how many phases stand. A fact that is not known prints
-  // NOTHING — never a placeholder — so an undated install drops its half and
-  // a schedule with no phases drops the other; with neither, no line prints.
-  const scheduleCountLine = useMemo(() => {
-    const installStart =
-      mainLane.find((phase) => phase.id === installEntryPhaseId)?.start ?? null;
-    const day = installStart ? railDay(installStart) : null;
-    const parts = [
-      day ? `INSTALL ${day}` : null,
-      entries.length > 0
-        ? `${entries.length} ${entries.length === 1 ? 'PHASE' : 'PHASES'}`
-        : null,
-    ].filter(Boolean) as string[];
-    if (parts.length === 0) return null;
-    const line = parts.join(' \u00b7 ');
-    return line.length <= LENS_COUNT_MAX_CHARS
-      ? line
-      : line.slice(0, LENS_COUNT_MAX_CHARS).trimEnd();
-  }, [mainLane, installEntryPhaseId, entries.length]);
+  // W4-R1 — the quiet head's own status line: the install day and how far out
+  // it stands. Phases never print here (the rail carries the count), and a
+  // fact that is not known prints NOTHING rather than a placeholder.
+  const scheduleQuietLine = useMemo(
+    () =>
+      scheduleQuietStatus({
+        installStart:
+          mainLane.find((phase) => phase.id === installEntryPhaseId)?.start ??
+          null,
+      }),
+    [mainLane, installEntryPhaseId],
+  );
 
   useEffect(() => {
     scheduleFoldRef.current = scheduleFold;
@@ -1141,25 +1137,26 @@ export function ScheduleSpine({
           <RegionHead
             headingId={scheduleHeadingId}
             name="Schedule"
-            status={scheduleStatus}
+            status={density === 'quiet' ? scheduleQuietLine : scheduleStatus}
             surfaceKey="open-document"
             regionKey="schedule"
             actions={scheduleLedger}
+            actsAtQuiet={density === 'quiet' ? 'leader' : 'all'}
             bodyId={scheduleBodyId}
             onFold={() => scheduleFold.setFolded(true)}
           />
           {density === 'quiet' ? (
-            <>
-              {scheduleCountLine && (
-                <p
-                  data-region-count-line
-                  className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
-                >
-                  {scheduleCountLine}
-                </p>
-              )}
-              <p className="sr-only">Quiet — opens as you read</p>
-            </>
+            // W4-C7: the id rides the quiet wrapper too, as approvals, money
+            // and FF&E already do. `RegionHead` renders `aria-controls=
+            // {bodyId}` on the Fold button unconditionally, so a quiet branch
+            // that dropped the id left the button naming a node that is not on
+            // the page — axe `aria-valid-attr-value`, and a screen reader
+            // announcing a region that cannot be reached.
+            <div id={scheduleBodyId}>
+              <p className="sr-only">
+                {quietStateSentence(scheduleQuietLine, 'Schedule')}
+              </p>
+            </div>
           ) : (
             <div id={scheduleBodyId}>{scheduleBody}</div>
           )}

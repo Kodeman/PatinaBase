@@ -5,6 +5,10 @@ import { documentEvents } from '@/lib/analytics/document-events';
 import { RegionHead } from './region/region-head';
 import type { RegionDensity } from './region/use-region-fold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
+import {
+  quietStateSentence,
+  recordQuietStatus,
+} from '@/lib/document/lens-quiet-status';
 
 /**
  * W2 (C-2, `document-index.ts`) — the running index's stable id for this
@@ -66,13 +70,16 @@ export function PreviousWork({
   const hasHistory = count > 0;
 
   // A zero-record paper has no count to print and no body to promote, so it
-  // prints exactly its `Nothing yet` head at either density.
+  // prints exactly its `Nothing yet` head at either density — and therefore
+  // states `full`, not `quiet` (W4-C16): a root whose printed form cannot
+  // change with the lens must not claim a density it does not hold.
   const quiet = density === 'quiet' && hasHistory;
+  const printedDensity: RegionDensity = hasHistory ? density : 'full';
 
   return (
     <section
       data-index-region="record"
-      data-density={density}
+      data-density={printedDensity}
       style={{ '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties}
       className="mt-[var(--doc-region-gap)]"
       aria-label="The record"
@@ -81,9 +88,9 @@ export function PreviousWork({
         headingId={RECORD_HEADING_ID}
         // F90 — canon names it The Record (I137); the screen now says so.
         name="The record"
-        // Reconciliation §"Quiet regions": `N complete`, and `Nothing yet` for
-        // the empty read — the ratified string, not a paraphrase of it.
-        status={hasHistory ? `${count} complete` : 'Nothing yet'}
+        // W4-R1 — the head's own status line IS the count line at either
+        // density: `N complete`, and `Nothing yet` for the empty read.
+        status={recordQuietStatus({ complete: count })}
         surfaceKey="project"
         regionKey="record"
         // Only when a body actually renders. `RegionHead`'s dev guard ("a head
@@ -95,6 +102,7 @@ export function PreviousWork({
         // construction — a ratified state (W2, "the record root is now
         // ALWAYS emitted"), not a head someone forgot to finish.
         allowNoActs={!hasHistory}
+        actsAtQuiet={quiet ? 'leader' : 'all'}
         actions={
           hasHistory
             ? [
@@ -110,15 +118,18 @@ export function PreviousWork({
         }
       />
       {quiet ? (
-        <>
-          <p
-            data-region-count-line
-            className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
-          >
-            {`${count} COMPLETE`}
+        // W4-C7: the id rides the quiet wrapper too. Both the head's Fold
+        // button (`bodyId`) and the `toggle-record` act name `contentId`, and
+        // the record is the last stop on the paper — so the dangling reference
+        // was the state on every load until the reader reached the foot.
+        <div id={contentId}>
+          <p className="sr-only">
+            {quietStateSentence(
+              recordQuietStatus({ complete: count }),
+              'The record',
+            )}
           </p>
-          <p className="sr-only">Quiet — opens as you read</p>
-        </>
+        </div>
       ) : (
         <>
           {approvalsAwaitingPublish !== null &&

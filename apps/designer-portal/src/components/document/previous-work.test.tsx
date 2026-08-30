@@ -1,19 +1,21 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { PreviousWork } from './previous-work';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 // W4 — the lens is a page-level observer; in jsdom it never runs, so the store
 // is mocked per suite. `'full'` is the reading these W2/W3 claims were written
 // against (the reader is AT the record); the quiet cases below drive `null`,
 // which is the lens being silent — the state every unpromoted stop starts in.
-const mockLensDensity = jest.fn<'full' | null, [string]>(() => 'full');
-jest.mock('@/hooks/use-lens-density', () => ({
-  useLensDensityStore: (region: string) => mockLensDensity(region),
-}));
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
 
 describe('PreviousWork', () => {
   beforeEach(() => {
-    mockLensDensity.mockReset();
-    mockLensDensity.mockReturnValue('full');
+    act(() => {
+      __setDensityForTest('full');
+    });
   });
 
   it('is closed by default and exposes an accessible disclosure', () => {
@@ -132,7 +134,9 @@ describe('PreviousWork', () => {
   // are not on the paper until the lens reaches this root.
   describe('the quiet body (W4)', () => {
     const renderQuiet = (count = 2) => {
-      mockLensDensity.mockReturnValue(null);
+      act(() => {
+        __setDensityForTest(null);
+      });
       return render(
         <PreviousWork count={count}>
           <div>Brief recap</div>
@@ -150,23 +154,55 @@ describe('PreviousWork', () => {
       });
 
       expect(screen.getByRole('heading', { name: 'The record' })).toBeInTheDocument();
-      expect(screen.getByText('2 COMPLETE')).toBeInTheDocument();
-      expect(screen.getByText('2 COMPLETE').textContent!.length).toBeLessThanOrEqual(40);
+      // W4-R1: the count line IS the head's status line, at either density.
+      const head = container.querySelector('[data-region-head="record"]')!;
+      expect(head).toHaveTextContent('2 complete');
+      expect(
+        container.querySelectorAll('[data-region-count-line]'),
+      ).toHaveLength(0);
       // The quiet body grows NO act of its own: the mockup's condensed head
       // prints the head's own leader and nothing beside it, so a second inked
       // word would put two leaders on one region.
       expect(
         container.querySelectorAll('[data-action-variant="inked"]'),
       ).toHaveLength(1);
-      expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+      expect(
+        screen.getByText(
+          '2 complete · not yet on the paper · press The record on the index to open',
+        ),
+      ).toHaveClass('sr-only');
 
-      // The disclosure's own body is not on the paper at all while quiet.
+      // The disclosure's own CONTENT is not on the paper at all while quiet —
+      // but the wrapper carrying its id is (W4-C7): both the head's Fold
+      // button and the `toggle-record` act name it through `aria-controls`,
+      // and the record is the last stop, so a dangling reference would be the
+      // state on every load until the reader reached the foot.
       expect(screen.queryByText('Brief recap')).not.toBeInTheDocument();
-      expect(container.querySelector('div[id^="previous-work-"]')).toBeNull();
+      const quietBody = container.querySelector('div[id^="previous-work-"]');
+      expect(quietBody).not.toBeNull();
+      expect(quietBody).toContainElement(
+        screen.getByText(/not yet on the paper/),
+      );
+    });
+
+    it('leaves no aria-controls pointing at nothing while quiet (W4-C7)', () => {
+      const { container } = renderQuiet();
+
+      const referring = Array.from(
+        container.querySelectorAll<HTMLElement>('[aria-controls]'),
+      );
+      expect(referring.length).toBeGreaterThan(0);
+      for (const el of referring) {
+        for (const id of el.getAttribute('aria-controls')!.split(/\s+/)) {
+          expect(document.getElementById(id)).not.toBeNull();
+        }
+      }
     });
 
     it('keeps the SAME head element across quiet → full', () => {
-      mockLensDensity.mockReturnValue(null);
+      act(() => {
+        __setDensityForTest(null);
+      });
       const { container, rerender } = render(
         <PreviousWork count={2}>
           <div>Brief recap</div>
@@ -176,7 +212,9 @@ describe('PreviousWork', () => {
       const quietHeading = document.getElementById('previous-work-heading');
       expect(quietHead).not.toBeNull();
 
-      mockLensDensity.mockReturnValue('full');
+      act(() => {
+        __setDensityForTest('full');
+      });
       rerender(
         <PreviousWork count={2}>
           <div>Brief recap</div>
@@ -194,18 +232,25 @@ describe('PreviousWork', () => {
 
     it('prints the same Nothing yet head at count 0, quiet or full, and is never a press target', () => {
       const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      mockLensDensity.mockReturnValue(null);
+      act(() => {
+        __setDensityForTest(null);
+      });
       const { container, rerender } = render(<PreviousWork count={0}>{null}</PreviousWork>);
 
+      // W4-C16: a root whose printed form cannot change with the lens must not
+      // claim a density it does not hold. A zero-record paper prints exactly
+      // its `Nothing yet` head at either density, so it states `full`.
       expect(container.querySelector('[data-index-region="record"]')).toHaveAttribute(
         'data-density',
-        'quiet',
+        'full',
       );
       expect(screen.getByText('Nothing yet')).toBeInTheDocument();
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
       expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
 
-      mockLensDensity.mockReturnValue('full');
+      act(() => {
+        __setDensityForTest('full');
+      });
       rerender(<PreviousWork count={0}>{null}</PreviousWork>);
 
       expect(screen.getByText('Nothing yet')).toBeInTheDocument();
