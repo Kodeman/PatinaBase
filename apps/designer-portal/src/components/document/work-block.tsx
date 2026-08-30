@@ -12,9 +12,8 @@ import { useMemo, useRef, useState } from 'react';
 import {
   gateState,
   useCreateSectionTask,
-  useSectionGates,
-  useSectionLoggedMinutes,
-  useSectionTasks,
+  type SectionGate,
+  type SectionTask,
 } from '@/hooks/use-section-work';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, todayYmd } from '@/lib/document/format';
@@ -71,26 +70,44 @@ function normalizeWhen(selection: FolioSelection): FolioSelection {
     : selection;
 }
 
+/**
+ * D-B49 — this block stands INSIDE the FF&E region's body, so it mounts only
+ * when the lens promotes that region. Its three reads therefore used to fire
+ * on the promotion itself: `useSectionTasks`, `useSectionGates` and
+ * `useSectionLoggedMinutes` all carry the default `staleTime: 0`, so a fresh
+ * observer refetches on mount even against a warm cache. That is a promotion
+ * that fetches, which `lens-contrast.spec.ts:183` exists to forbid.
+ *
+ * The three reads now live at the region ROOT (`ffe-section.tsx`), which is
+ * mounted at every density, and arrive here as props. The mutations stay —
+ * a mutation hook issues no request until it is called.
+ */
 export function WorkBlock({
   projectId,
   sectionKey,
   sectionLabel,
   clientName,
+  tasks,
+  gates,
+  loggedMinutes,
+  workLoading,
+  workError,
+  onRetryWork,
 }: {
   projectId: string;
   sectionKey: SectionKey;
   sectionLabel: string;
   clientUserId: string | null;
   clientName: string;
+  /** D-B49 — read at the FF&E root, at every density. The block prints the
+   *  same three states it always did; only the reads moved. */
+  tasks: SectionTask[] | undefined;
+  gates: SectionGate[] | undefined;
+  loggedMinutes: number | undefined;
+  workLoading: boolean;
+  workError: boolean;
+  onRetryWork: () => void;
 }) {
-  const tasksQuery = useSectionTasks(projectId);
-  const gatesQuery = useSectionGates(projectId);
-  const tasks = tasksQuery.data;
-  const gates = gatesQuery.data;
-  const { data: loggedMinutes } = useSectionLoggedMinutes(
-    projectId,
-    sectionKey,
-  );
   const createTask = useCreateSectionTask(projectId);
   const toggleTask = useToggleSectionTask(projectId);
 
@@ -151,11 +168,11 @@ export function WorkBlock({
   const whenLabel =
     when == null ? null : when.kind === 'day' ? fmtDay(when.date) : chipSpanLabel(when.start, when.end);
 
-  if (tasksQuery.isLoading || gatesQuery.isLoading) {
+  if (workLoading) {
     return <SectionLoadingLine label="Reading the work" className="mb-1 mt-4" />;
   }
 
-  if (tasksQuery.isError || gatesQuery.isError) {
+  if (workError) {
     return (
       <div className="mb-1 mt-4 border-y border-[var(--color-pearl)] py-3">
         <p role="alert" className="text-[11.5px] text-[var(--color-terracotta-ink)]">
@@ -166,7 +183,7 @@ export function WorkBlock({
           surfaceKey="open-document"
           regionKey={`${sectionKey}-work-error`}
           variant="secondary"
-          onClick={() => void Promise.all([tasksQuery.refetch(), gatesQuery.refetch()])}
+          onClick={onRetryWork}
         >
           Try again
         </DocumentAction>

@@ -56,6 +56,7 @@ import {
   mapPhaseRowToScheduleInput,
   mapMilestoneRowToScheduleInput,
   useScheduleProposals,
+  useScheduleRevisions,
 } from '@patina/supabase';
 import type {
   ResolvedPhase,
@@ -189,6 +190,9 @@ export function ScheduleSpine({
   const { data: items } = useCoordinationItems(projectId);
   const { data: parties } = useProjectParties(projectId);
   const { data: tasks } = useSectionTasks(projectId);
+  // D-B49 — the revision ledger stands in this region's full body; its read
+  // belongs here, at the root, which is mounted at every density.
+  const { data: scheduleRevisions } = useScheduleRevisions(projectId);
   const { data: ffeRows } = useProjectFFEItems(projectId);
   const schedule = useResolvedSchedule(projectId);
   // Subscribe ONCE for the whole spine — the rows above re-read on invalidation.
@@ -1097,13 +1101,17 @@ export function ScheduleSpine({
             projectId={projectId}
             items={allItems}
             onOpenItem={openItem}
+            // D-B49 — read at this region's root (`:191`, `:190`), never
+            // inside the body that only mounts on a promotion.
+            tasks={tasks}
+            parties={parties}
           />
 
           {/* R100 "Memory" — the schedule's own append-only ledger at the
               spine's foot: v · reason · who · when, newest first, no actions.
               Studio-only by construction (inside the gated spine); renders
               nothing until a baseline is cut. */}
-          <RevisionLedger projectId={projectId} />
+          <RevisionLedger projectId={projectId} revisions={scheduleRevisions} />
         </>
       )}
     </>

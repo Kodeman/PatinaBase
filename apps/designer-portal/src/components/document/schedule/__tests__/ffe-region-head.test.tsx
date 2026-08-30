@@ -137,6 +137,36 @@ const renderInstall = (projectId = 'project-1') =>
     <FFESection projectId={projectId} projectName="Ellsworth" mode="install" />,
   );
 
+
+// D-B49 — the FF&E/schedule region ROOTS now own the work reads (they moved out
+// of `WorkBlock`/`CoordinationWork`, which mount only in a promoted body, so a
+// promotion no longer fetches). This suite mounts the region with no
+// QueryClientProvider — every other data hook it uses is mocked the same way —
+// so these three have to be mocked too or the root throws "No QueryClient set".
+const sectionWorkCalls = { tasks: 0, gates: 0, logged: 0 };
+jest.mock('@/hooks/use-section-work', () => {
+  const actual = jest.requireActual('@/hooks/use-section-work');
+  const idle = { mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false };
+  return {
+    ...actual,
+    useSectionTasks: () => {
+      sectionWorkCalls.tasks += 1;
+      return { data: [], isLoading: false, isError: false, refetch: jest.fn() };
+    },
+    useSectionGates: () => {
+      sectionWorkCalls.gates += 1;
+      return { data: [], isLoading: false, isError: false, refetch: jest.fn() };
+    },
+    useSectionLoggedMinutes: () => {
+      sectionWorkCalls.logged += 1;
+      return { data: 0 };
+    },
+    useCreateSectionTask: () => idle,
+    useToggleSectionTask: () => idle,
+    useRequestSectionGate: () => idle,
+  };
+});
+
 describe('FF&E project-mode region head', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -584,5 +614,65 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     // coordinator named) is identical whether the bar is mounted or not.
     expect(classesLoaded).toBe(classesLoading);
     expect(screen.queryByText('Checking readiness')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * D-B49 — a region's data hooks live at its ROOT, and the root is mounted at
+ * every density. The FF&E work reads used to sit inside `WorkBlock`, which
+ * mounts only in the promoted body, so the lens's own promotion refetched them
+ * (all three carry the default `staleTime: 0`) — a promotion that fetches,
+ * which `lens-contrast.spec.ts:183` forbids.
+ *
+ * The falsifier is a COUNT, not a presence: the reads must happen at quiet as
+ * well as at full, and the same number of times, or the promotion is still
+ * what triggers them.
+ */
+describe('D-B49 — the FF&E region root owns the work reads at every density', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    mockRooms = [{ id: 'room-1', name: 'Primary bedroom', budget_cents: 0 }];
+    mockItems = [line()];
+    mockInstruments = [];
+    mockTradeScopes = [];
+    mockAuthority = { data: null };
+    mockCoverage = {};
+    mockReadinessLoading = false;
+    sectionWorkCalls.tasks = 0;
+    sectionWorkCalls.gates = 0;
+    sectionWorkCalls.logged = 0;
+  });
+
+  it('reads tasks, gates and logged minutes while the stop is QUIET — before any promotion', () => {
+    act(() => {
+      __setDensityForTest(null);
+    });
+    renderProject();
+
+    expect(sectionWorkCalls.tasks).toBeGreaterThan(0);
+    expect(sectionWorkCalls.gates).toBeGreaterThan(0);
+    expect(sectionWorkCalls.logged).toBeGreaterThan(0);
+  });
+
+  it('promoting the stop to FULL adds no further read — the body takes props', () => {
+    act(() => {
+      __setDensityForTest(null);
+    });
+    renderProject();
+    const atQuiet = { ...sectionWorkCalls };
+
+    act(() => {
+      __setDensityForTest('full');
+    });
+
+    // The root re-renders with the promotion, so its own hook calls tick with
+    // the render — what must NOT happen is the body adding a fresh observer of
+    // its own. One caller per read, at both densities.
+    expect(sectionWorkCalls.tasks - atQuiet.tasks).toBeLessThanOrEqual(
+      sectionWorkCalls.logged - atQuiet.logged,
+    );
+    expect(sectionWorkCalls.gates - atQuiet.gates).toBeLessThanOrEqual(
+      sectionWorkCalls.logged - atQuiet.logged,
+    );
   });
 });

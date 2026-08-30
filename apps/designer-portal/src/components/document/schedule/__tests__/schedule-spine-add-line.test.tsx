@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 
 jest.mock('@patina/supabase', () => ({
+  // D-B49 — the revision ledger's read moved to the schedule region ROOT.
+  useScheduleRevisions: () => ({ data: [] }),
   excludeProjectArtifactApprovals: (items: unknown[]) => items,
   // R109/R110 — the spine's proposed-anchor block.
   useScheduleProposals: () => ({ data: [], isError: false }),

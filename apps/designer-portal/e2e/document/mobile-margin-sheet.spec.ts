@@ -152,6 +152,11 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
       comRow.locator('[data-margin-row-line]'),
     ).toHaveText(/Living Room · .+/);
 
+    // The origin the paper is measured against. Read HERE, immediately before
+    // the press: the sheet's own open animation has finished by now, and
+    // nothing else moves the page between this line and the click.
+    const scrollYBefore = await page.evaluate(() => window.scrollY);
+
     await comRow.getByText('Living room — fabric for the reading chair').click();
 
     await expect(

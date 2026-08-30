@@ -209,6 +209,26 @@ const STATES: { state: string; row: Record<string, unknown>; word: string }[] =
     },
   ];
 
+
+// D-B49 — the FF&E/schedule region ROOTS now own the work reads (they moved out
+// of `WorkBlock`/`CoordinationWork`, which mount only in a promoted body, so a
+// promotion no longer fetches). This suite mounts the region with no
+// QueryClientProvider — every other data hook it uses is mocked the same way —
+// so these three have to be mocked too or the root throws "No QueryClient set".
+jest.mock('@/hooks/use-section-work', () => {
+  const actual = jest.requireActual('@/hooks/use-section-work');
+  const idle = { mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false };
+  return {
+    ...actual,
+    useSectionTasks: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useSectionGates: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useSectionLoggedMinutes: () => ({ data: 0 }),
+    useCreateSectionTask: () => idle,
+    useToggleSectionTask: () => idle,
+    useRequestSectionGate: () => idle,
+  };
+});
+
 describe('F58 — one line, one word, on the paper and on the shelf', () => {
   it.each(STATES)('$state reads $word in both places', ({ row, word }) => {
     mockItems = [line(row)];

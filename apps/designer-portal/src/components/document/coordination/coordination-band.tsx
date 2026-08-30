@@ -159,7 +159,14 @@ export function CoordinationBand({
       ))}
 
       {/* The work + the dependency web — a blocked ⊘ tick opens its blocker's sheet. */}
-      <CoordinationWork projectId={projectId} items={allItems} onOpenItem={openItem} />
+      <CoordinationWork
+        projectId={projectId}
+        items={allItems}
+        onOpenItem={openItem}
+        // D-B49 — this band already reads both at its own root (`:74`, `:75`).
+        tasks={tasks}
+        parties={parties}
+      />
 
       {/* ── Overlays — DocSheet children at the band root so the document stays
           mounted beneath (D1). `open` is band-local state, never a route. ── */}

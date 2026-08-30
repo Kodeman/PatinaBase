@@ -78,6 +78,11 @@ import { LineUnfold } from './line-unfold';
 import { StrataMark } from './strata-mark';
 import { StrataMiniRule } from './strata-mini-rule';
 import { WorkBlock } from './work-block';
+import {
+  useSectionGates,
+  useSectionLoggedMinutes,
+  useSectionTasks,
+} from '@/hooks/use-section-work';
 import { FolioStrip } from './folio-strip';
 import {
   useAddDocumentRoom,
@@ -867,6 +872,20 @@ function FFESectionBody({
     projectId,
     mode === 'project',
   );
+  // D-B49 — the work block's three reads live HERE, at the region root, which
+  // is mounted at every density. Called from inside the block (which mounts
+  // only in the full body) they fired on the lens's own promotion: all three
+  // carry the default `staleTime: 0`, so a fresh observer refetches on mount
+  // even against a warm cache, and a promotion that fetches is what
+  // `lens-contrast.spec.ts:183` forbids. The block reads them as props.
+  const sectionTasksQuery = useSectionTasks(sectionKey ? projectId : null);
+  const sectionGatesQuery = useSectionGates(sectionKey ? projectId : null);
+  const sectionTasks = sectionTasksQuery.data;
+  const sectionGates = sectionGatesQuery.data;
+  const { data: sectionLoggedMinutes } = useSectionLoggedMinutes(
+    sectionKey ? projectId : null,
+    sectionKey ?? 'project',
+  );
   // Whether a trade line's REAL progress is actually known right now.
   // `isPending` (not `isLoading`) also covers install mode, where the query
   // is disabled outright — a disabled query in TanStack v5 sits at
@@ -1456,6 +1475,19 @@ function FFESectionBody({
         <WorkBlock
           projectId={projectId}
           sectionKey={sectionKey}
+          tasks={sectionTasks}
+          gates={sectionGates}
+          loggedMinutes={sectionLoggedMinutes}
+          workLoading={
+            sectionTasksQuery.isLoading || sectionGatesQuery.isLoading
+          }
+          workError={sectionTasksQuery.isError || sectionGatesQuery.isError}
+          onRetryWork={() => {
+            void Promise.all([
+              sectionTasksQuery.refetch(),
+              sectionGatesQuery.refetch(),
+            ]);
+          }}
           sectionLabel={sectionLabel}
           clientUserId={clientUserId}
           clientName={clientName}
