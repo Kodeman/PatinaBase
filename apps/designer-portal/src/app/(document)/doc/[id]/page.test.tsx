@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { ReactNode } from 'react';
 import DocumentPage from './page';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
+import { paperRegionsForSection } from '@/lib/document/document-index';
 
 /**
  * W3 — the band's line 2, the one printing of the sentence that changes (L-1).
@@ -1998,6 +1999,125 @@ describe('DocumentPage guide activation', () => {
       expect(screen.getByRole('button', { name: 'Begin the direction' })).toBeInTheDocument();
     });
   });
+
+  // W5 (OD-2) — before this the four spreads before the work starts rendered
+  // ZERO `[data-index-region]` and ZERO `[data-region-head]` elements (F16):
+  // the ladder had nothing to index and the lens nothing to observe.
+  describe('the pre-work spreads carry real regions', () => {
+    const paperRegionKeys = () =>
+      Array.from(
+        document.querySelectorAll('[data-document-paper] [data-index-region]'),
+      ).map((el) => el.getAttribute('data-index-region'));
+
+    const openSpread = (row: Record<string, unknown>) => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, ...row } },
+      };
+      render(<DocumentPage params={fulfilledParams} />);
+    };
+
+    const SPREADS = [
+      ['brief', { engagement_kind: 'lead', active_section: 'brief', lead_id: 'lead-1' }],
+      [
+        'discovery',
+        {
+          engagement_kind: 'relationship',
+          active_section: 'discovery',
+          engagement_id: 'relationship-1',
+          lead_id: null,
+          client_profile_id: 'client-1',
+        },
+      ],
+      [
+        'direction',
+        {
+          engagement_kind: 'proposal',
+          active_section: 'direction',
+          proposal_id: 'proposal-1',
+          lead_id: null,
+        },
+      ],
+      [
+        'proposal',
+        {
+          engagement_kind: 'proposal',
+          active_section: 'proposal',
+          proposal_id: 'proposal-1',
+          lead_id: null,
+        },
+      ],
+    ] as const;
+
+    it.each(SPREADS)(
+      'the %s spread mounts exactly the stops the index declares, in order',
+      (section, row) => {
+        openSpread(row);
+        expect(paperRegionKeys()).toEqual(
+          paperRegionsForSection(section).map((region) => region.key),
+        );
+      },
+    );
+
+    it.each(SPREADS)('every %s stop prints a region head', (_section, row) => {
+      openSpread(row);
+      for (const root of Array.from(
+        document.querySelectorAll('[data-document-paper] [data-index-region]'),
+      )) {
+        expect(root.querySelector('[data-region-head]')).not.toBeNull();
+      }
+    });
+
+    // OD-2 — a row the spread cannot state a number for prints a sentence,
+    // never a dash and never a placeholder figure.
+    it('prints NOTHING YET on a stop with no number', () => {
+      // The proposal read has answered, with a paper that has not gone out:
+      // the difference between `Reading…` and `Not sent yet` is the whole
+      // discipline of the count line.
+      mockProposalData = {
+        id: 'proposal-1',
+        status: 'draft',
+        version: 1,
+        sent_at: null,
+        viewed_at: null,
+        total_amount: null,
+        items: [],
+      };
+      openSpread({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        proposal_id: 'proposal-1',
+        lead_id: null,
+      });
+      const statusOf = (key: string) =>
+        document.querySelector(
+          `[data-document-paper] [data-index-region="${key}"] [data-region-head]`,
+        )?.textContent ?? '';
+      // Prose has nothing to count, so the vision row is a name over a
+      // sentence at every state.
+      expect(statusOf('vision')).toContain('Not written yet');
+      // `mockProposalData` is undefined here — nothing has gone out — and the
+      // row says so in words rather than with a dash or a $0 husk.
+      expect(statusOf('proposal')).toContain('Not sent yet');
+      expect(statusOf('scope')).toContain('Nothing yet');
+      expect(statusOf('investment')).toContain('Nothing yet');
+      expect(statusOf('vision')).not.toMatch(/—|--|\$0/);
+    });
+
+    // DL-02 — the three stage stops' printed names.
+    it('names the stage stops as the design lead ruled', () => {
+      openSpread({ engagement_kind: 'lead', active_section: 'brief', lead_id: 'lead-1' });
+      expect(
+        document
+          .querySelector(
+            '[data-document-paper] [data-index-region="brief"] [data-region-head]',
+          )
+          ?.querySelector('h2')?.textContent,
+      ).toBe('The brief');
+    });
+  });
+
 });
 
 describe('DocumentPage landedRef — A8 first-open gate', () => {
