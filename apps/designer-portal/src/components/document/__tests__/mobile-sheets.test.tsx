@@ -80,6 +80,9 @@ const heldDocument: MobileActiveDoc = {
   sections: [
     { key: 'project', label: 'Project', state: 'active', sub: 'In the project' },
   ],
+  // Required since W4: an optional handler made a press a silent no-op where
+  // the pre-D-B18 code at least scrolled.
+  onJumpRegion: () => {},
 };
 
 function HoldDocument({ doc }: { doc: MobileActiveDoc }) {
@@ -139,13 +142,16 @@ describe('the sections sheet · the region press (D-B18)', () => {
   });
 
   it('never scrolls behind the page — no half of the order survives in the sheet', () => {
-    // D-B32's grep: `scrollToRegion(` may be called from the page's handler and
-    // defined in the running-index hook, nowhere else. A publisher that carries
-    // no handler gets no jump rather than a landing the lens knows nothing of.
-    mountSheet(heldDocument);
+    // D-B18's grep: `scrollToRegion(` may be called from the page's handler and
+    // defined in the running-index hook, nowhere else. The sheet routes the
+    // whole press through `onJumpRegion` and runs no step of the order itself,
+    // or the scroll happens twice and the second one reads a stale y.
+    const onJumpRegion = jest.fn();
+    mountSheet({ ...heldDocument, onJumpRegion });
 
     fireEvent.click(screen.getByRole('button', { name: /pieces/i }));
 
+    expect(onJumpRegion).toHaveBeenCalledTimes(1);
     expect(mockRequestRegionUnfold).not.toHaveBeenCalled();
     expect(mockScrollToRegion).not.toHaveBeenCalled();
   });

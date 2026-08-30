@@ -30,9 +30,11 @@
  * the reader. Passing does not promote: a region above the frame growing from
  * its reserve to its full height is exactly the layout shift H5 forbids.
  *
- * Attachment is a `MutationObserver` on `[data-document-paper]`, not the
- * running index's retry window: regions arrive as their own queries settle, and
- * a subscription cannot miss one the way a lapsing retry can. Discovery is also
+ * Attachment is a `MutationObserver` on `document.body`, not the running
+ * index's retry window: regions arrive as their own queries settle, and a
+ * subscription cannot miss one the way a lapsing retry can. The body, not the
+ * paper, because the paper itself is replaced whenever the document re-enters
+ * `loading` (W4-C6). Discovery is also
  * where a root that is ALREADY at or above the lookahead line is answered — a
  * deep landing, a restored scroll — because a bottom-only rootMargin never
  * fires for one. The first pass runs from a `useLayoutEffect`, so the markup
@@ -102,14 +104,46 @@ function subscribeDensity(region: string, onChange: () => void): () => void {
   };
 }
 
+/** W4-C9 — the ONLY thing `__setDensityForTest` writes, and the only branch it
+ *  costs the shipped path. The fifteen region suites used to `jest.mock` the
+ *  module away, replacing a two-slot hook (`useCallback` +
+ *  `useSyncExternalStore`) with a zero-slot arrow function: a body that called
+ *  `useLensDensityStore` after an early return or inside a branch would have
+ *  broken React's hook-order invariant in production while every one of those
+ *  suites stayed green — which is exactly the class of bug C-8 asks to be
+ *  guarded against ("hook-order safety in every branch, esp. `care-band.tsx`'s
+ *  five branches"). With the real hook running under the real store, a
+ *  conditional call throws where the suite can see it. `undefined` is "not
+ *  under test", which is what production always is. */
+let testDensity: RegionDensity | null | undefined;
+
 function densityFor(region: string): RegionDensity | null {
+  if (testDensity !== undefined) return testDensity;
   return promotedKeys.has(region) ? 'full' : null;
+}
+
+/**
+ * Test-only. Puts every region at one density and tells every listener, so a
+ * suite can drive the fold's fourth voice WITHOUT mocking the hook away. Pass
+ * `undefined` to hand the store back to the observer.
+ */
+export function __setDensityForTest(
+  density: RegionDensity | null | undefined,
+): void {
+  testDensity = density;
+  for (const region of Array.from(listeners.keys())) notify(region);
 }
 
 /** The lens has left the paper. Cleared without notifying: the only caller is
  *  the hook's own teardown, and every listener is a body coming down with it. */
 function clearStore(): void {
+  // W4-C13: the invariant is "every store mutation notifies". Under
+  // StrictMode's dev double-invoke this cleanup runs while subscriber bodies
+  // are still mounted, and a silent clear changes their `useSyncExternalStore`
+  // snapshot with nothing to tell them so.
+  const cleared = Array.from(promotedKeys);
   promotedKeys.clear();
+  for (const region of cleared) notify(region);
 }
 
 /**
@@ -170,7 +204,6 @@ export function useLensDensity(
 
     let intersection: IntersectionObserver | null = null;
     let mutation: MutationObserver | null = null;
-    let mutationTarget: Node | null = null;
 
     let discoverQueued = false;
     let frameQueued = false;
@@ -181,7 +214,7 @@ export function useLensDensity(
      *  not from the last frame of any speed. */
     let lastFastAt = 0;
     let lastY = window.scrollY;
-    let waiting: Array<() => void> = [];
+    let waiting: Array<(reason?: Error) => void> = [];
     let stopped = false;
     let frozen = false;
 
@@ -204,10 +237,13 @@ export function useLensDensity(
         ?.setAttribute('data-lens-settled', next ? 'true' : 'false');
     };
 
-    const releaseWaiting = (): void => {
+    /** W4-C12: `settled` resolves the waiters; `stopped` REJECTS them. A
+     *  waiter resolved by a teardown reports a settle that never happened, and
+     *  an e2e wait that straddles a navigation would read it as one. */
+    const releaseWaiting = (reason?: Error): void => {
       const held = waiting;
       waiting = [];
-      for (const resolve of held) resolve();
+      for (const settleWaiter of held) settleWaiter(reason);
     };
 
     const promote = (root: HTMLElement): void => {
@@ -237,6 +273,11 @@ export function useLensDensity(
       window.innerHeight + LENS_LOOKAHEAD_PX;
 
     const markPassed = (): void => {
+      // D-B17's measurement is literal: with the lens off, `data-passed` is not
+      // written (W4-C14). Nothing reads it there — every root is `full` on
+      // arrival — and writing it would hand `content-visibility: auto` to a
+      // paper the lens is not managing.
+      if (!enabled) return;
       for (const root of ordered) {
         if (passed.has(root)) continue;
         if (root.getBoundingClientRect().bottom >= 0) continue;
@@ -316,13 +357,16 @@ export function useLensDensity(
     };
 
     const onIntersect: IntersectionObserverCallback = (entries) => {
+      let added = false;
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
         const root = entry.target as HTMLElement;
         if (committed.has(root)) continue;
         pending.add(root);
+        added = true;
       }
-      queueFrame();
+      // A callback carrying only leaving entries has nothing to commit.
+      if (added) queueFrame();
     };
 
     const discover = (): void => {
@@ -330,11 +374,6 @@ export function useLensDensity(
       if (stopped) return;
 
       const paper = resolvePaper();
-      if (mutation && paper && mutationTarget !== paper) {
-        mutation.disconnect();
-        mutation.observe(paper, { childList: true, subtree: true });
-        mutationTarget = paper;
-      }
 
       // The hook attaches above the page's early returns, so on the first pass
       // there is often no shell yet to carry the state. Discovery is where it
@@ -349,28 +388,48 @@ export function useLensDensity(
         : [];
       ordered = found;
 
+      // W4-C10: `promotedKeys` is module-level and outlives any one root, so a
+      // key whose last root has left the paper has to leave with it. Without
+      // this, a section switch — `paperRegionsForSection` gives a different
+      // region set per section — mounts fresh roots under keys the previous
+      // section's walk had promoted, and every one of them would render `full`
+      // at first paint however far below the frame it sits.
+      const stillClaimed = new Set(
+        found.map((root) => root.getAttribute('data-index-region') ?? ''),
+      );
       for (const root of Array.from(observed.keys())) {
         if (root.isConnected) continue;
+        const key = observed.get(root) ?? '';
         observed.delete(root);
         committed.delete(root);
         passed.delete(root);
         pending.delete(root);
         intersection?.unobserve(root);
+        if (!stillClaimed.has(key) && promotedKeys.delete(key)) notify(key);
       }
 
       for (const root of found) {
+        // The store is keyed on untrusted DOM: an empty `data-index-region`
+        // would be stored under `''` and notified on. `document-index.ts`
+        // never emits one, so a root that carries one is not a region.
         const key = root.getAttribute('data-index-region') ?? '';
+        if (!key) continue;
         observed.set(root, key);
         if (committed.has(root)) continue;
-        // Three roots arrive already owed a body (D-B16): one React re-created
-        // under a key the lens promoted before, one discovered at or above the
-        // lookahead line — a deep landing, a restored scroll, a query that
-        // settled after the reader passed its slot — and, with the lens off,
-        // all of them. A bottom-only rootMargin never fires for anything above
-        // the frame, so discovery is the only place they can be answered; the
+        // Two roots arrive already owed a body (D-B16): one discovered at or
+        // above the lookahead line — a deep landing, a restored scroll, a query
+        // that settled after the reader passed its slot, and a root React
+        // re-created under a key the lens promoted before, which is by
+        // definition where its predecessor was — and, with the lens off, all of
+        // them. A bottom-only rootMargin never fires for anything above the
+        // frame, so discovery is the only place they can be answered; the
         // reserve and the body arrive in the same commit, so no pixel she has
         // already read moves.
-        if (!enabled || promotedKeys.has(key) || withinLookahead(root)) {
+        //
+        // W4-C10: position is the WHOLE test. A bare `promotedKeys.has(key)`
+        // arm promoted on the key alone, which is a claim about a root that no
+        // longer exists — see the purge above.
+        if (!enabled || withinLookahead(root)) {
           promote(root);
           continue;
         }
@@ -399,9 +458,20 @@ export function useLensDensity(
     // that mounts late still has to be written `full`, or OD-4's fallback path
     // leaves it quiet forever.
     if (typeof MutationObserver !== 'undefined') {
+      // W4-C6: the watch stays on `document.body` for the hook's whole life and
+      // is never retargeted to the paper. The paper is REPLACED, not merely
+      // filled: `resolutionState` flipping back to `loading` (a refetch, a
+      // section change that re-suspends, an error→retry) unmounts `<main
+      // data-document-paper>` and React mounts a new element in its place. A
+      // watch that had narrowed to the old paper would be sitting on a detached
+      // node — the mutation that created the replacement lands on the shell,
+      // which it no longer observes — and discovery would never run again for
+      // the rest of the page's life. Body/subtree strictly contains
+      // paper/subtree, so nothing that used to queue a discovery stops doing
+      // so, and `queueDiscover` is rAF-debounced, which caps the extra churn at
+      // one `discover()` per frame however much of the app moves.
       mutation = new MutationObserver(queueDiscover);
-      mutationTarget = resolvePaper() ?? document.body;
-      mutation.observe(mutationTarget, { childList: true, subtree: true });
+      mutation.observe(document.body, { childList: true, subtree: true });
     }
 
     if (enabled) {
@@ -416,21 +486,35 @@ export function useLensDensity(
       // makes the bodies this commit mounts have heights before the handler
       // returns, so the y it reads is the y it lands on. The rAF path never
       // flushes — this is the press path alone.
+      // W4-C11: a stop the spread DECLARES but does not mount — the ladder
+      // renders exactly that case as a non-pressable `<div role="text">`, and
+      // the sections sheet has no mounted-check at all — is not in `ordered`,
+      // so a loop that breaks on the match ran to the end and flushed EVERY
+      // region on the paper inside a click handler. No target, no press.
+      const stop = ordered.findIndex((root) => observed.get(root) === key);
+      if (stop < 0) return;
       flushSync(() => {
-        for (const root of ordered) {
-          promote(root);
-          if (observed.get(root) === key) break;
-        }
+        for (const root of ordered.slice(0, stop + 1)) promote(root);
       });
     };
     freezeRef.current = (next: boolean) => {
+      if (frozen === next) return;
       frozen = next;
+      // W4-C5: D-B19's "one `commitPending()` runs at the next settle" has no
+      // next settle at rest — the timer is not running and only a scroll frame
+      // would drain the buffer, so a reader who left a field without scrolling
+      // held every buffered crossing quiet indefinitely. Thawing while already
+      // settled therefore drains on the next frame; thawing mid-scroll leaves
+      // it to the settle that is already armed (an unsettled document always
+      // has its timer running — `runScrollFrame` arms it on the same frame it
+      // unsettles).
+      if (!next && settled) queueFrame();
     };
     settledRef.current = () =>
       settled
         ? Promise.resolve(true as const)
-        : new Promise<true>((resolve) => {
-            waiting.push(() => resolve(true));
+        : new Promise<true>((resolve, reject) => {
+            waiting.push((reason) => (reason ? reject(reason) : resolve(true)));
           });
 
     window.__lensSettled = () => settledRef.current();
@@ -441,7 +525,9 @@ export function useLensDensity(
       intersection?.disconnect();
       mutation?.disconnect();
       window.removeEventListener('scroll', onScroll);
-      releaseWaiting();
+      releaseWaiting(
+        new Error('the lens left the paper before it settled'),
+      );
       if (window.__lensSettled) delete window.__lensSettled;
       forceRef.current = () => {};
       freezeRef.current = () => {};

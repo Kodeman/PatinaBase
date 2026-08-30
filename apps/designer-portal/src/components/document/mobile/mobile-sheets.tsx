@@ -512,7 +512,7 @@ export function MobileSheets({
                     // commit, THEN scroll. This sheet used to run the first and
                     // third steps itself, landing on a stop the lens had never
                     // been asked to promote.
-                    activeDoc?.onJumpRegion?.(region.key);
+                    activeDoc?.onJumpRegion(region.key);
                   }}
                   className={`flex min-h-11 w-full flex-col justify-center gap-0.5 py-1.5 text-left ${
                     current ? 'doc-room-lifted' : ''

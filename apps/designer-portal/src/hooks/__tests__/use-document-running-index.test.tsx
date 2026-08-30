@@ -3,6 +3,7 @@ import { useDocumentRunningIndex } from '../use-document-running-index';
 import {
   DOCUMENT_INDEX_KEYS,
   UNFOLD_REGION_EVENT,
+  requestRegionUnfold,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
 
@@ -80,15 +81,16 @@ function Probe({
 }: {
   keys?: readonly DocumentIndexKey[];
 }) {
-  const { activeKey, jump, mountedKeys } = useDocumentRunningIndex(
-    keys,
-    'proj-1',
-  );
+  const { activeKey, mountedKeys } = useDocumentRunningIndex(keys, 'proj-1');
   return (
     <div>
       <span data-testid="active">{activeKey ?? 'none'}</span>
       <span data-testid="mounted">{mountedKeys.join(',') || 'none'}</span>
-      <button type="button" onClick={() => jump('money')}>
+      {/* W4-C20: the hook no longer exports a `jump`. The press is one
+          handler in `page.tsx`, and the part of it this hook owns is the
+          unfold REQUEST — which is what arms the reading line's lock, and so
+          is what these cases drive. */}
+      <button type="button" onClick={() => requestRegionUnfold('money')}>
         jump
       </button>
     </div>
@@ -181,7 +183,11 @@ describe('useDocumentRunningIndex', () => {
     });
   }
 
-  it('asks a region to unfold before it jumps — the index never lands on a seam', () => {
+  it('takes the reading line to whoever asks a region to unfold, whoever that is', () => {
+    // W4-C20 retired this hook's own `jump`. What survives — and what D-B18's
+    // one page-level handler depends on — is that ANY unfold request commits
+    // the line, so the ticket's rows and the sections sheet get the same
+    // landing the rail does.
     mountRegions();
     const seen: DocumentIndexKey[] = [];
     const listener = (e: Event) => {
@@ -197,6 +203,7 @@ describe('useDocumentRunningIndex', () => {
     });
 
     expect(seen).toEqual(['money']);
+    expect(screen.getByTestId('active')).toHaveTextContent('money');
     window.removeEventListener(UNFOLD_REGION_EVENT, listener);
   });
 

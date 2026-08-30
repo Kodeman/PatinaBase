@@ -36,8 +36,25 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 export type LensState = 'rest' | 'reading' | 'editing' | 'mobile';
 
 const PAPER_SELECTOR = '[data-document-paper]';
-const EDITABLE_SELECTOR =
-  "input, textarea, select, [contenteditable=''], [contenteditable='true']";
+/** D-B19's `editing` is about a field being TYPED INTO — the one situation
+ *  where the paper must not move under the hand. W4-C5: the literal wording's
+ *  bare `input, … select` matched every checkbox, radio and `<select>` on the
+ *  paper (the approvals checklist, the care band's closure ticks, the FF&E line
+ *  controls). Focus PERSISTS on a checkbox after a click, so ticking one box
+ *  and then reading froze the lens for the rest of the session. Text entry
+ *  only: everything an `input` can be except the controls that are a choice or
+ *  a press, plus `textarea` and the three `contenteditable` spellings. Written
+ *  as exclusions so an `input` with a novel or invalid `type` — which every
+ *  engine treats as `text` — is still caught. */
+const EDITABLE_SELECTOR = [
+  'input:not([type=checkbox]):not([type=radio]):not([type=button])' +
+    ':not([type=submit]):not([type=reset]):not([type=image])' +
+    ':not([type=file]):not([type=color]):not([type=range])',
+  'textarea',
+  "[contenteditable='']",
+  "[contenteditable='true']",
+  "[contenteditable='plaintext-only']",
+].join(', ');
 const MOBILE_QUERY = '(max-width: 1179px)';
 
 export interface UseLensStateOptions {

@@ -10,6 +10,8 @@
  * read back the rootMargin the hook actually asked for.
  */
 
+import { createRef } from 'react';
+import type { RefObject } from 'react';
 import { act, render } from '@testing-library/react';
 import { useLensDensity, useLensDensityStore } from '../use-lens-density';
 import type { LensDensityApi } from '../use-lens-density';
@@ -62,11 +64,13 @@ let api: LensDensityApi;
 function Probe({
   enabled = true,
   watch = 'ffe',
+  paperRef,
 }: {
   enabled?: boolean;
   watch?: string;
+  paperRef?: RefObject<HTMLElement | null>;
 }) {
-  api = useLensDensity(undefined, { enabled });
+  api = useLensDensity(paperRef, { enabled });
   const spoken = useLensDensityStore(watch);
   return <span data-testid="spoken">{spoken ?? 'silent'}</span>;
 }
@@ -452,25 +456,54 @@ describe('useLensDensity', () => {
     });
     expect(ffe).toHaveAttribute('data-density', 'quiet');
 
-    // Unfreezing commits nothing by itself; the next settle does.
+    // W4-C5: at rest there is no next settle to wait for, so the thaw itself
+    // drains the buffer on the next frame. The old assertion here ("unfreezing
+    // commits nothing by itself") locked in the defect: a reader who ticked a
+    // checklist box and then stopped scrolling held every buffered crossing
+    // quiet indefinitely.
     act(() => {
       api.freeze(false);
     });
     await flush();
-    expect(ffe).toHaveAttribute('data-density', 'quiet');
-
-    await act(async () => {
-      scrollTo(1000);
-      jest.advanceTimersByTime(32);
-    });
-    await act(async () => {
-      scrollTo(1010);
-      jest.advanceTimersByTime(32);
-    });
-    await flush(160);
 
     expect(ffe).toHaveAttribute('data-density', 'full');
     expect(writes).toEqual(['full']);
+  });
+
+  it('thawing mid-scroll leaves the buffer to the settle that is already armed', async () => {
+    const { shell } = mountPaper();
+    render(<Probe />);
+    await flush();
+
+    const ffe = regionRoot('ffe');
+
+    act(() => {
+      api.freeze(true);
+    });
+
+    // One fast frame: unsettled, with the settle timer armed on that same
+    // frame (D-B32).
+    await act(async () => {
+      scrollTo(400);
+      jest.advanceTimersByTime(32);
+    });
+    expect(shell).toHaveAttribute('data-lens-settled', 'false');
+
+    await act(async () => {
+      observer().fire([ffe]);
+      jest.advanceTimersByTime(32);
+    });
+    expect(ffe).toHaveAttribute('data-density', 'quiet');
+
+    act(() => {
+      api.freeze(false);
+    });
+    // Still mid-flight: the thaw queues nothing, because a settle is coming.
+    expect(ffe).toHaveAttribute('data-density', 'quiet');
+
+    await flush(160);
+    expect(shell).toHaveAttribute('data-lens-settled', 'true');
+    expect(ffe).toHaveAttribute('data-density', 'full');
   });
 
   it('leaves the press with heights, not promises — the store is current before the handler returns', async () => {
@@ -570,23 +603,123 @@ describe('useLensDensity', () => {
 
   it('carries the settled state from the first commit, even when the shell arrives late', async () => {
     // The hook attaches above the page's early returns: on the first pass the
-    // document is still loading and there is no shell to write to.
-    const paper = document.createElement('main');
-    paper.setAttribute('data-document-paper', '');
-    document.body.appendChild(paper);
-
+    // document is still loading and there is neither shell nor paper to write
+    // to. W4-C22: the real nesting is `shell > main[data-document-paper]`, so
+    // the arrival that matters is the SHELL landing on the body — the branch
+    // an earlier version of this test inverted by appending the shell inside
+    // the paper.
     render(<Probe />);
     await flush();
     expect(document.querySelector('[data-document-shell]')).toBeNull();
+    expect(document.querySelector('[data-document-paper]')).toBeNull();
 
     const shell = document.createElement('div');
     shell.setAttribute('data-document-shell', '');
+    const paper = document.createElement('main');
+    paper.setAttribute('data-document-paper', '');
+    shell.appendChild(paper);
     await act(async () => {
-      paper.appendChild(shell);
+      document.body.appendChild(shell);
     });
     await flush();
 
     expect(shell).toHaveAttribute('data-lens-settled', 'true');
+  });
+
+  it('re-discovers when the paper element itself is replaced', async () => {
+    // W4-C6: `resolutionState` flipping back to `loading` unmounts `<main
+    // data-document-paper>` and React mounts a NEW element in its place. A
+    // MutationObserver that had narrowed to the old paper would be sitting on
+    // a detached node and the lens would be dead for the rest of the page.
+    const { shell, paper } = mountPaper();
+    render(<Probe watch="ffe" />);
+    await flush();
+    expect(observer().observed.size).toBe(REGION_KEYS.length);
+
+    await act(async () => {
+      paper.remove();
+    });
+    await flush();
+
+    const replacement = document.createElement('main');
+    replacement.setAttribute('data-document-paper', '');
+    const region = document.createElement('section');
+    region.setAttribute('data-index-region', 'ffe');
+    region.setAttribute('data-density', 'quiet');
+    // Above the frame and wholly past it — the deep-landing case discovery is
+    // the only answer to.
+    topAt(region, -400, 100);
+    replacement.appendChild(region);
+
+    await act(async () => {
+      shell.appendChild(replacement);
+    });
+    await flush();
+
+    expect(region).toHaveAttribute('data-density', 'full');
+    expect(region).toHaveAttribute('data-passed', '');
+  });
+
+  it('forgets a promoted key when its last root leaves the paper', async () => {
+    // W4-C10: `promotedKeys` is module-level. A section switch mounts fresh
+    // roots under the previous section's keys; promoting on the key alone
+    // would render a region 3,000px below the frame `full` at first paint.
+    const { paper } = mountPaper();
+    const { getByTestId } = render(<Probe watch="ffe" />);
+    await flush();
+
+    await act(async () => {
+      observer().fire([regionRoot('ffe')]);
+      jest.advanceTimersByTime(32);
+    });
+    expect(api.getDensity('ffe')).toBe('full');
+
+    await act(async () => {
+      paper.innerHTML = '';
+    });
+    await flush();
+    expect(api.getDensity('ffe')).toBeNull();
+    expect(getByTestId('spoken')).toHaveTextContent('silent');
+
+    // The new section's `ffe`, far below the frame: quiet, key or no key.
+    const reborn = document.createElement('section');
+    reborn.setAttribute('data-index-region', 'ffe');
+    reborn.setAttribute('data-density', 'quiet');
+    topAt(reborn, 4000);
+    await act(async () => {
+      paper.appendChild(reborn);
+    });
+    await flush();
+
+    expect(reborn).toHaveAttribute('data-density', 'quiet');
+    expect(api.getDensity('ffe')).toBeNull();
+  });
+
+  it('still opens a root React re-creates under a promoted key where its predecessor was', async () => {
+    // The legitimate half of D-B16: position answers it, so dropping the
+    // key-alone arm costs nothing.
+    const { paper } = mountPaper();
+    render(<Probe watch="ffe" />);
+    await flush();
+
+    await act(async () => {
+      observer().fire([regionRoot('ffe')]);
+      jest.advanceTimersByTime(32);
+    });
+    expect(api.getDensity('ffe')).toBe('full');
+
+    const old = regionRoot('ffe');
+    const reborn = document.createElement('section');
+    reborn.setAttribute('data-index-region', 'ffe');
+    reborn.setAttribute('data-density', 'quiet');
+    topAt(reborn, 200);
+    await act(async () => {
+      paper.replaceChild(reborn, old);
+    });
+    await flush();
+
+    expect(reborn).toHaveAttribute('data-density', 'full');
+    expect(api.getDensity('ffe')).toBe('full');
   });
 
   it('holds a burst open until 120ms after its last frame', async () => {
@@ -610,6 +743,32 @@ describe('useLensDensity', () => {
 
     await flush(40);
     expect(shell).toHaveAttribute('data-lens-settled', 'true');
+  });
+
+  it.each([
+    ['the paper itself', (paper: HTMLElement) => paper],
+    ['an ancestor of the paper', (paper: HTMLElement) => paper.parentElement!],
+    [
+      'a descendant of the paper',
+      (paper: HTMLElement) => paper.querySelector<HTMLElement>('section')!,
+    ],
+  ])('resolves the paper from a ref held on %s', async (_label, pick) => {
+    // Every other case in this suite calls `useLensDensity(undefined, …)`, so
+    // `resolvePaper`'s three `paperRef` arms — `matches`, `querySelector`,
+    // `closest` — were never exercised at all.
+    const { paper } = mountPaper();
+    const ref = createRef<HTMLElement>();
+    (ref as { current: HTMLElement | null }).current = pick(paper);
+
+    render(<Probe paperRef={ref} watch="ffe" />);
+    await flush();
+
+    expect(observer().observed.size).toBe(REGION_KEYS.length);
+    await act(async () => {
+      observer().fire([regionRoot('ffe')]);
+      jest.advanceTimersByTime(32);
+    });
+    expect(regionRoot('ffe')).toHaveAttribute('data-density', 'full');
   });
 
   it('hands each key its own reading', async () => {

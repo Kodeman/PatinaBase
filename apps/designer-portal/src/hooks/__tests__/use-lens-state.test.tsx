@@ -44,6 +44,18 @@ function Harness({ freeze }: { freeze?: (frozen: boolean) => void }) {
         <input aria-label="a field" />
         <div contentEditable aria-label="a note" />
         <button type="button">not a field</button>
+        {/* W4-C5: the controls the paper is full of — a checklist tick, a
+            closure tick, an FF&E line control. Focus PERSISTS on them after a
+            click, so treating them as `editing` froze the lens for the rest of
+            the session. */}
+        <input type="checkbox" aria-label="a tick" />
+        <input type="radio" aria-label="a choice" />
+        <select aria-label="a picker">
+          <option>one</option>
+        </select>
+        <input type="submit" aria-label="a submit" value="go" />
+        <input type="number" aria-label="a quantity" />
+        <div contentEditable="plaintext-only" aria-label="a plain note" />
       </main>
       <input aria-label="off the paper" />
     </div>
@@ -120,6 +132,45 @@ describe('useLensState', () => {
       getByText('not a field').focus();
     });
     expect(state()).toBe('rest');
+  });
+
+  it.each([
+    ['a tick', 'checkbox'],
+    ['a choice', 'radio'],
+    ['a picker', 'select'],
+    ['a submit', 'submit button'],
+  ])('never enters editing for %s (a %s is a choice, not a field)', (label) => {
+    installMatchMedia(false);
+    const { getByLabelText } = render(<Harness />);
+    act(() => {
+      getByLabelText(label).focus();
+    });
+    expect(state()).toBe('rest');
+  });
+
+  it('never freezes the lens for a checkbox, at any point in the gesture', () => {
+    installMatchMedia(false);
+    const freeze = jest.fn();
+    const { getByLabelText } = render(<Harness freeze={freeze} />);
+    act(() => {
+      getByLabelText('a tick').focus();
+    });
+    act(() => {
+      getByLabelText('a tick').blur();
+    });
+    expect(freeze).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a quantity', 'a number field'],
+    ['a plain note', 'a plaintext-only contenteditable'],
+  ])('enters editing for %s (%s IS text entry)', (label) => {
+    installMatchMedia(false);
+    const { getByLabelText } = render(<Harness />);
+    act(() => {
+      getByLabelText(label).focus();
+    });
+    expect(state()).toBe('editing');
   });
 
   it('ignores an editable that is not on the paper', () => {

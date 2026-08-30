@@ -60,8 +60,12 @@ export interface MobileActiveDoc {
    *  `(document)/layout.tsx`, above the page that owns the lens, so the press
    *  order rides the published document. Without it the sheet scrolls to a
    *  stop whose body the lens has not been asked to promote, and the landing
-   *  reads a y that the promotion then moves. */
-  onJumpRegion?: (key: DocumentIndexKey) => void;
+   *  reads a y that the promotion then moves.
+   *
+   *  REQUIRED. It was optional, which made a sections-sheet press a silent
+   *  no-op if a publisher ever forgot it — where the pre-D-B18 code at least
+   *  scrolled. `page.tsx` is the only publisher and always supplies it. */
+  onJumpRegion: (key: DocumentIndexKey) => void;
 }
 
 type Sheet =

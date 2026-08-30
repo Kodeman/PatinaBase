@@ -49,7 +49,6 @@ function regionRoot(key: DocumentIndexKey): Element | null {
 
 export interface DocumentRunningIndex {
   activeKey: DocumentIndexKey | null;
-  jump: (key: DocumentIndexKey) => void;
   /**
    * The keys whose `[data-index-region]` root is on the paper right now, in
    * paper order. A stop with no root is nowhere to jump to — no scroll, no
@@ -257,18 +256,13 @@ export function useDocumentRunningIndex(
     return () => window.removeEventListener(UNFOLD_REGION_EVENT, onUnfold);
   }, []);
 
-  const jump = useCallback(
-    (key: DocumentIndexKey) => {
-      // A folded region has no body to land in — ask it to open first, then
-      // scroll once the paint that mounted it has happened. The lock rides on
-      // the request above.
-      requestRegionUnfold(key);
-      scrollToRegion(key, projectId);
-    },
-    [projectId],
-  );
-
-  return { activeKey, jump, mountedKeys };
+  // W4-C20 — `jump` is DELETED, not kept unused. D-B18 moved the press to one
+  // handler in `page.tsx` (`requestRegionUnfold → lens.forceFullThrough →
+  // scrollToRegion`); this hook's version had no `forceFullThrough` and would
+  // land the reader on a still-quiet root, which is exactly the bug D-B18
+  // exists to answer. A dead footgun one autocomplete from re-introducing it
+  // is not a smaller risk than a live one.
+  return { activeKey, mountedKeys };
 }
 
 /**
