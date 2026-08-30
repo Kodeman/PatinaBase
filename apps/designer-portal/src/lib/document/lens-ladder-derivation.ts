@@ -24,7 +24,7 @@ import {
 } from './lens-constants';
 import {
   DOCUMENT_INDEX_LABELS,
-  PROJECT_PAPER_ORDER,
+  paperRegionFor,
   paperRegionsForSection,
   type DocumentIndexKey,
 } from './document-index';
@@ -107,6 +107,27 @@ export interface LadderRecordFacts {
   complete: number;
 }
 
+/**
+ * The pre-work stops' own figures (Wave 5, OD-2). `deriveTicket` states none of
+ * them — a proposal's lifecycle, its scope and its total are the paper's, not
+ * the job's — so they are passed in, from reads `page.tsx` already makes.
+ *
+ * `brief`, `discovery`, `direction` and `vision` carry NO number and take no
+ * fact here: prose has nothing to count, so those four rows print their name
+ * over `NOTHING YET` at every state (OD-2, DL-02).
+ */
+export interface LadderPreworkFacts {
+  settled: boolean;
+  /** The day the proposal went to the client. */
+  sentOn: string | null;
+  /** The day the client first opened it, where they have. */
+  openedOn: string | null;
+  /** Rooms in the proposal's scope — `Scope & engagement`'s extent. */
+  scopeRooms: number;
+  /** The proposal's own total, in cents (`proposals.total_amount`). */
+  investmentCents: number | null;
+}
+
 export interface LadderInput {
   /** The same facts the ticket is derived from (OD-8). */
   ticket: TicketInput;
@@ -117,6 +138,9 @@ export interface LadderInput {
    *  `TicketLine` does not carry, and the only fact the Pieces value adds. */
   damagedOn?: string | null;
   heldRoomId?: string | null;
+  /** The pre-work spreads' figures. Absent on a Project spread, which prints
+   *  none of those stops. */
+  prework?: LadderPreworkFacts;
   /** Stops whose root is actually on the paper. Defaults to every stop this
    *  spread prints. */
   mountedKeys?: readonly DocumentIndexKey[];
@@ -161,6 +185,17 @@ function railDate(iso: string): string | null {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
     .format(day)
     .toUpperCase();
+}
+
+/** `Aug 19` — the count line's register of a day the paper states without a
+ *  weekday. A send has no weekday in the print contract; an install does. */
+function plainDate(iso: string): string | null {
+  const day = asLocalDate(iso);
+  if (Number.isNaN(day.getTime())) return null;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+  }).format(day);
 }
 
 /** `Tue Sep 15` — the count line's register of the same day. */
@@ -431,6 +466,70 @@ function recordRegister(facts: LadderRecordFacts): Register {
   };
 }
 
+/** `SENT AUG 19 · UNOPENED 6D` — the proposal's own lifecycle, the one dated
+ *  fact a pre-work spread carries (OD-2). */
+function proposalRegister(facts: LadderPreworkFacts | undefined, now: Date): Register {
+  if (!facts) return empty('Nothing yet');
+  if (!facts.settled) return reading();
+  if (!facts.sentOn) return empty('Not sent yet');
+  const rail = railDate(facts.sentOn);
+  const long = plainDate(facts.sentOn);
+  if (rail === null || long === null) return empty('Nothing yet');
+  if (facts.openedOn) {
+    return {
+      value: cap(`SENT ${rail} · OPENED`, LENS_VALUE_MAX_CHARS),
+      narrowValue: cap(`SENT ${rail} · OPENED`, LENS_VALUE_MAX_CHARS),
+      countLine: cap(`Sent ${long} · opened`, LENS_COUNT_MAX_CHARS),
+      fallback: null,
+      extent: 1,
+    };
+  }
+  const days = calendarDaysUntil(facts.sentOn, now);
+  // Days SINCE, so the sign flips: the send is behind her.
+  const since = days === null ? null : -days;
+  const tail = since != null && since > 0 ? ` · UNOPENED ${since}D` : '';
+  const words = since != null && since > 0 ? ` · unopened ${since}d` : ' · not opened';
+  return {
+    value: cap(`SENT ${rail}${tail}`, LENS_VALUE_MAX_CHARS),
+    narrowValue: cap(`SENT ${rail}${tail}`, LENS_VALUE_MAX_CHARS),
+    countLine: cap(`Sent ${long}${words}`, LENS_COUNT_MAX_CHARS),
+    fallback: null,
+    extent: 1,
+  };
+}
+
+function scopeRegister(facts: LadderPreworkFacts | undefined): Register {
+  if (!facts) return empty('Nothing yet');
+  if (!facts.settled) return reading();
+  if (facts.scopeRooms <= 0) return empty('Nothing yet');
+  const word = facts.scopeRooms === 1 ? 'ROOM' : 'ROOMS';
+  return {
+    value: cap(`${facts.scopeRooms} ${word}`, LENS_VALUE_MAX_CHARS),
+    narrowValue: cap(`${facts.scopeRooms} ${word}`, LENS_VALUE_MAX_CHARS),
+    countLine: cap(
+      `${facts.scopeRooms} ${word.toLowerCase()} in scope`,
+      LENS_COUNT_MAX_CHARS,
+    ),
+    fallback: null,
+    extent: facts.scopeRooms,
+  };
+}
+
+function investmentRegister(facts: LadderPreworkFacts | undefined): Register {
+  if (!facts) return empty('Nothing yet');
+  if (!facts.settled) return reading();
+  const cents = facts.investmentCents ?? 0;
+  if (cents <= 0) return empty('Nothing yet');
+  const figure = money(cents);
+  return {
+    value: cap(figure, LENS_VALUE_MAX_CHARS),
+    narrowValue: cap(figure, LENS_VALUE_MAX_CHARS),
+    countLine: cap(figure, LENS_COUNT_MAX_CHARS),
+    fallback: null,
+    extent: 1,
+  };
+}
+
 function registerFor(key: DocumentIndexKey, input: LadderInput): Register {
   switch (key) {
     case 'approvals':
@@ -445,20 +544,37 @@ function registerFor(key: DocumentIndexKey, input: LadderInput): Register {
       return careRegister(input.care);
     case 'record':
       return recordRegister(input.record);
+    case 'proposal':
+      return proposalRegister(input.prework, input.ticket.now ?? new Date());
+    case 'scope':
+      return scopeRegister(input.prework);
+    case 'investment':
+      return investmentRegister(input.prework);
+    // The three stage stops and the vision have no number to state — a brief,
+    // a discovery, a direction and a vision are prose. They print their name
+    // over `NOTHING YET` at every state (OD-2, DL-02).
+    case 'brief':
+    case 'discovery':
+    case 'direction':
+      return empty('Nothing yet');
+    case 'vision':
+      return empty('Not written yet');
   }
 }
 
 /**
- * One segment per region this spread mounts, in `PROJECT_PAPER_ORDER`. A spread
- * that puts no Project region on the paper gets an empty ladder, and the track
- * prints its one line (OD-2).
+ * One segment per region this spread mounts, in the spread's own mount order.
+ * Wave 5 gave the four pre-work spreads their rows, so the empty track and its
+ * one line are now reachable only where a section declares no region at all.
  */
 export function deriveLadderSegments(input: LadderInput): LadderSegment[] {
+  // The declared keys already ride the spread's own mount order (`page.tsx`
+  // builds them from `paperRegionsForSection`), and a pre-work spread's order
+  // is not `PROJECT_PAPER_ORDER`'s — so the list is resolved key by key rather
+  // than filtered through the Project array.
   const declared =
     input.ticket.paperRegions != null
-      ? PROJECT_PAPER_ORDER.filter((region) =>
-          input.ticket.paperRegions?.includes(region.key),
-        )
+      ? input.ticket.paperRegions.map(paperRegionFor)
       : paperRegionsForSection(input.ticket.section);
   const mounted = input.mountedKeys
     ? new Set(input.mountedKeys)

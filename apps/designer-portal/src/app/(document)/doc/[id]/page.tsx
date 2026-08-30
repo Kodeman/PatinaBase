@@ -46,7 +46,7 @@ import {
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
-import { MobileMarginChips } from '@/components/document/mobile/mobile-margin-chips';
+import { useMarginSheet } from '@/hooks/use-margin-sheet';
 import {
   documentEvents,
   rememberDocumentInHand,
@@ -109,6 +109,7 @@ import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
 import { MoneyRegion } from '@/components/document/commercial/money-region';
+import { PreworkRegion } from '@/components/document/prework/prework-region';
 import { KickoffBand } from '@/components/document/roster/kickoff-band';
 import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
@@ -182,6 +183,7 @@ import {
   deriveLadderSegments,
 } from '@/lib/document/lens-ladder-derivation';
 import { deriveMoneyLadder, type MoneyLadder } from '@/lib/document/money-ladder';
+import { money } from '@/lib/document/project-commerce';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
 import {
@@ -817,6 +819,15 @@ function TicketFacts({
 /** The subset of the ticket's input the ladder's registers are read from
  *  (`lens-ladder-derivation.ts`). Two inputs with the same signature print the
  *  same rail, whatever their object identity. */
+/** The four stages before the work starts. Their spreads carry no project, so
+ *  they are gated by section rather than by engagement kind (OD-2). */
+const PREWORK_SECTIONS: readonly SectionKey[] = [
+  'brief',
+  'discovery',
+  'direction',
+  'proposal',
+];
+
 function ladderFactsSignature(input: TicketInput): string {
   return JSON.stringify({
     section: input.section,
@@ -1572,10 +1583,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // W2 (D-B6, retired): this is now the ONE call on the document. The rail's
   // own observer went with `spine-shelved-blocks.tsx`; the ladder is handed
   // `activeKey` and `jump` as props.
+  // W5 (OD-2) — the four pre-work spreads mount their own roots now, so the
+  // index observes them too. A project engagement still needs its project id:
+  // every Project region's heading is keyed on it.
   const runningIndexRegions =
-    row?.engagement_kind === 'project' && row.project_id
-      ? paperRegionsForSection(row.active_section)
-      : [];
+    !row
+      ? []
+      : row.engagement_kind === 'project'
+        ? row.project_id
+          ? paperRegionsForSection(row.active_section)
+          : []
+        : PREWORK_SECTIONS.includes(row.active_section)
+          ? paperRegionsForSection(row.active_section)
+          : [];
   const {
     activeKey,
     mountedKeys,
@@ -1687,6 +1707,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         // already carries (D-B9, closed).
         damagedOn,
         heldRoomId,
+        // W5 (OD-2) — the pre-work stops' own figures. Every one is read off
+        // `useProposal`, which this page already runs; no new query.
+        prework: {
+          settled:
+            !proposalId || liveProposal !== undefined || proposalIsError,
+          sentOn: liveProposal?.sent_at ?? null,
+          openedOn: liveProposal?.viewed_at ?? null,
+          // The paper's own rooms: on a projectless proposal these ARE the
+          // proposal's scope rooms (`ProjectlessTicketFacts`).
+          scopeRooms: ticketInput.rooms.list.length,
+          investmentCents: liveProposal?.total_amount ?? null,
+        },
       })
     : [];
   const ladderDoors = ticketInput
@@ -1728,6 +1760,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       segment.narrowValue ?? segment.fallback ?? undefined,
     ]),
   ) as Partial<Record<DocumentIndexKey, string>>;
+  // W5 — a pre-work region's head prints the SAME line its rail segment does,
+  // read off the one derivation, so the head and the ladder cannot state the
+  // stop two ways.
+  const preworkStatus = (key: DocumentIndexKey): string =>
+    ladderSegments.find((segment) => segment.key === key)?.countLine ??
+    'Nothing yet';
+
+  // W5-R1: the whole-margin count — the mobile bar's "Margin · N" door and
+  // the Margin sheet's head both read it off `MobileActiveDoc` rather than
+  // each re-deriving it.
+  const { count: marginSheetCount } = useMarginSheet({
+    projectId: row?.project_id ?? null,
+    proposalId: row?.proposal_id ?? null,
+    clientName: row?.client_name ?? '',
+  });
 
   // D13: publish the held document to the mobile shell (bar + spine sheet).
   useMobileActiveDoc(
@@ -1743,6 +1790,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           ladderValues,
           clientCopy: ticketInput?.clientCopy != null,
           onJumpRegion: jumpToRegion,
+          marginCount: marginSheetCount,
         }
       : null,
   );
@@ -1780,6 +1828,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // deliberately NOT the project room lens (room-lens-context): different
   // store, different subject, and this one persists at every width (A7).
   const [roomInHand, setRoomInHand] = useState<string | null>(null);
+  // W5-R2 item 4 — the brief/discovery spreads' own inline heads are retired
+  // (one head per stop); the sub-label they used to print (a response
+  // deadline, a readiness stamp) is reported up here and printed in the
+  // `PreworkRegion` eyebrow instead, the same report-up shape `onDamagedOn`
+  // already uses on this page.
+  const [briefEyebrow, setBriefEyebrow] = useState<string | null>(null);
+  const [discoveryEyebrow, setDiscoveryEyebrow] = useState<string | null>(
+    null,
+  );
   // W4b — whether the schedule has a release to offer. Reported up by the FF&E
   // section, which is where `canRelease` and per-line eligibility are derived;
   // the Delivery table head only prints the leader it is told exists.
@@ -1841,6 +1898,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const bandSent = liveProposal?.sent_at
     ? fmtDay(liveProposal.sent_at).toUpperCase()
     : null;
+  const bandInvestment =
+    (liveProposal?.total_amount ?? 0) > 0
+      ? money(liveProposal.total_amount)
+      : null;
   // The standing set is the red letter's own rows under the same gate the
   // guide-or-zone ternary used to apply: a composed Desk answer for THIS
   // engagement, and not a failed read (whose retry rides the guide's act).
@@ -1900,10 +1961,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         : null,
       installDate: bandInstall,
       moneyFigure: bandMoney,
-      // The proposal's own investment total is the Wave-5 `investment` stop; no
-      // read on this page states it today, so the proposal spread's right slot
-      // prints its sent date alone rather than an FF&E budget wearing its name.
-      proposalInvestment: null,
+      // W5 (W3-R4 discharged) — the `investment` stop exists, so the proposal
+      // spread's right slot prints `SENT AUG 19 · $9,400`. The figure is the
+      // proposal's OWN total (DL-01), never an FF&E budget.
+      proposalInvestment: bandInvestment,
       sentDate: bandSent,
       readingStop: bandStop,
     });
@@ -1926,6 +1987,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     bandInstall,
     bandMoney,
     bandSent,
+    bandInvestment,
     bandStop,
   ]);
 
@@ -2107,6 +2169,71 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // already redirected off before the table composes. The frame mounts these
   // only on the Speccing table; building them here for other rows creates
   // elements, never mounts.
+  // W5 (OD-2) — the proposal body, cut into the stops the ladder declares. The
+  // pieces are built once and placed twice: the proposal spread distributes
+  // them across its four regions, the direction spread takes all four into its
+  // one. Each is null without a proposal, which is what a stop with a name and
+  // no body prints.
+  const preworkEyebrow =
+    [
+      liveProposal?.version ? `v${liveProposal.version}` : null,
+      sections.find((s) => s.key === spreadSection)?.sub ?? null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || undefined;
+  const proposalVerdictHead = !row.proposal_id ? null : finalizeTable ? (
+    // W4a — the Finalize table's head: the verdict roll-up as the headline
+    // sentence, and the one inked leader the lifecycle × verdicts × send-wall
+    // matrix allows.
+    <FinalizeHead proposalId={row.proposal_id} clientName={row.client_name} />
+  ) : row.engagement_kind === 'proposal' && verdictSummary ? (
+    // C3 — a quiet read of where the client's verdicts stand ("4 of 12
+    // approved · 1 flagged"). Nothing when the client hasn't weighed in yet.
+    // On the Finalize table this whisper stands down — the same sentence is
+    // that table's headline, and one fact prints at one weight.
+    <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      {verdictSummary}
+    </p>
+  ) : null;
+  const proposalLifecycle =
+    row.proposal_id && row.engagement_kind === 'proposal' ? (
+      <>
+        {/* The proposal instruments: the Drafting Room doorway for a draft, the
+            Send/Preview/Revise overlay row once it's in the client's hands, and
+            the version-history strip. Local-state overlays never unmount the
+            document beneath (D1). */}
+        <ProposalInstruments
+          proposalId={row.proposal_id}
+          clientName={row.client_name}
+          onFinalizeTable={finalizeTable}
+        />
+        {/* S18: name the model — what's below is a read-only preview of the
+            proposal; the editing happens in the Drafting Room. */}
+        {liveProposal?.status === 'draft' && (
+          <p className="mb-2 mt-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+            Read-only preview · edit in the Drafting Room
+          </p>
+        )}
+        {/* R85 — the Folio mounts on proposal-stage documents (space
+            plans/drawings clip here pre-project; flagged files reach the
+            client's proposal copy via 00252's client read leg). */}
+        <ProposalFolioStrip proposalId={row.proposal_id} />
+      </>
+    ) : null;
+  const proposalBlocks = row.proposal_id ? (
+    <ProposalBlocksReadOnly
+      proposalId={row.proposal_id}
+      omitOfferBlocks={finalizeTable}
+    />
+  ) : null;
+  // W4a — the Drafting Room's Offer movement (Phases · Exclusions · Payments ·
+  // Terms), folding open under the spread in the Room's own seam form. It is
+  // the engagement's own terms, so on the proposal spread it stands under
+  // `Scope & engagement`.
+  const proposalOffer =
+    row.proposal_id && finalizeTable ? (
+      <OfferFacets proposalId={row.proposal_id} />
+    ) : null;
   const speccingSlots: SpeccingTableSlots = row.proposal_id
     ? {
         'rooms-rail': (
@@ -2345,14 +2472,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           <FolioLetterhead projectId={row.project_id} />
         )}
 
-        {/* D13: letterhead-anchored margin items (Pulse, section items) as
-            chips beneath the title — the desktop margin rail hides on mobile. */}
-        <MobileMarginChips
-          projectId={row.project_id}
-          proposalId={row.proposal_id}
-          anchorKind="letterhead"
-          clientName={row.client_name}
-        />
+        {/* D-B30: the letterhead margin chips block is retired at 390 — the
+            Margin sheet (mobile-bar's "In this document" door) replaces it.
+            The `marginCount` it needs rides `useMobileActiveDoc` below. */}
 
         <ProjectApprovalDocumentMount
           quietLeader={approvalsQuietLeaderAct}
@@ -2456,84 +2578,100 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 clientName={row.client_name}
               />
             )}
-            {spreadSection === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
-            {spreadSection === 'discovery' && row.engagement_id && row.designer_id && (
-              <DiscoverySection
-                engagementId={row.engagement_id}
-                designerId={row.designer_id}
-                clientProfileId={row.client_profile_id}
-                clientName={row.client_name}
-                projectId={row.project_id ?? null}
-              />
+            {spreadSection === 'brief' && (
+              <PreworkRegion
+                region="brief"
+                status={preworkStatus('brief')}
+                eyebrow={briefEyebrow ?? undefined}
+              >
+                {row.lead_id ? (
+                  <BriefSection leadId={row.lead_id} onEyebrow={setBriefEyebrow} />
+                ) : null}
+              </PreworkRegion>
             )}
-            {(spreadSection === 'direction' || spreadSection === 'proposal') &&
-              row.proposal_id && (
-                <section>
-                  <div className="mb-1.5 mt-5 flex items-baseline justify-between">
-                    <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-                      {spreadSection === 'direction' ? 'Direction' : 'Proposal'}
-                      {liveProposal?.version ? ` · v${liveProposal.version}` : ''}
-                    </h2>
-                    <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {sections.find((s) => s.key === spreadSection)?.sub}
-                    </span>
-                  </div>
-                  {/* C3 — a quiet letterhead read of where the client's verdicts
-                      stand ("4 of 12 approved · 1 flagged"). Nothing when the
-                      client hasn't weighed in yet. W4a: on the Finalize table
-                      this whisper stands down — the same sentence is that
-                      table's headline, and one fact prints at one weight. */}
-                  {row.engagement_kind === 'proposal' &&
-                    verdictSummary &&
-                    !finalizeTable && (
-                      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                        {verdictSummary}
-                      </p>
-                    )}
-                  {/* W4a — the Finalize table's head: the verdict roll-up as the
-                      headline sentence, and the one inked leader the lifecycle ×
-                      verdicts × send-wall matrix allows. */}
-                  {finalizeTable && (
-                    <FinalizeHead
-                      proposalId={row.proposal_id}
-                      clientName={row.client_name}
-                    />
-                  )}
-                  {/* The proposal instruments (gated to engagement_kind
-                      ==='proposal'): the Drafting Room doorway for a draft, the
-                      Send/Preview/Revise overlay row once it's in the client's
-                      hands, and the version-history strip. Local-state overlays
-                      never unmount the document beneath (D1). */}
-                  {row.engagement_kind === 'proposal' && (
-                    <ProposalInstruments
-                      proposalId={row.proposal_id}
-                      clientName={row.client_name}
-                      onFinalizeTable={finalizeTable}
-                    />
-                  )}
-                  {/* S18: name the model — what's below is a read-only preview of
-                      the proposal; the editing happens in the Drafting Room. */}
-                  {row.engagement_kind === 'proposal' && liveProposal?.status === 'draft' && (
-                    <p className="mb-2 mt-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-                      Read-only preview · edit in the Drafting Room
-                    </p>
-                  )}
-                  {/* R85 — the Folio mounts on proposal-stage documents (space
-                      plans/drawings clip here pre-project; flagged files reach the
-                      client's proposal copy via 00252's client read leg). */}
-                  {row.engagement_kind === 'proposal' && (
-                    <ProposalFolioStrip proposalId={row.proposal_id} />
-                  )}
-                  <ProposalBlocksReadOnly
-                    proposalId={row.proposal_id}
-                    omitOfferBlocks={finalizeTable}
+            {spreadSection === 'discovery' && (
+              <PreworkRegion
+                region="discovery"
+                status={preworkStatus('discovery')}
+                eyebrow={discoveryEyebrow ?? undefined}
+              >
+                {row.engagement_id && row.designer_id ? (
+                  <DiscoverySection
+                    engagementId={row.engagement_id}
+                    designerId={row.designer_id}
+                    clientProfileId={row.client_profile_id}
+                    clientName={row.client_name}
+                    projectId={row.project_id ?? null}
+                    onEyebrow={setDiscoveryEyebrow}
                   />
-                  {/* W4a — the Drafting Room's Offer movement (Phases ·
-                      Exclusions · Payments · Terms), folding open under the
-                      spread in the Room's own seam form. */}
-                  {finalizeTable && <OfferFacets proposalId={row.proposal_id} />}
-                </section>
-              )}
+                ) : null}
+              </PreworkRegion>
+            )}
+            {/* The direction spread has ONE stop (OD-2), so it takes the four
+                pieces in the order they printed before Wave 5. */}
+            {spreadSection === 'direction' && (
+              <PreworkRegion
+                region="direction"
+                status={preworkStatus('direction')}
+                eyebrow={preworkEyebrow}
+              >
+                {proposalVerdictHead}
+                {proposalLifecycle}
+                {proposalBlocks}
+                {proposalOffer}
+              </PreworkRegion>
+            )}
+            {/* The proposal spread's four stops (OD-2, re-parented W5-R2 item
+                1): `scope` takes the per-room budgets and the engagement's
+                terms, `vision` takes the description, `investment` takes the
+                totals ledger with the Offer at its foot — the Offer must stay
+                UNDER the spread it folds open beneath
+                (`worktable-finalize.test.tsx`). A stop with nothing of its
+                own prints its name over its sentence (OD-1), which
+                `ProposalBlocksReadOnly`'s `only` filter returns null for. */}
+            {spreadSection === 'proposal' && (
+              <>
+                <PreworkRegion
+                  region="proposal"
+                  status={preworkStatus('proposal')}
+                  eyebrow={preworkEyebrow}
+                >
+                  {proposalVerdictHead}
+                  {proposalLifecycle}
+                </PreworkRegion>
+                <PreworkRegion region="scope" status={preworkStatus('scope')}>
+                  {row.proposal_id ? (
+                    <ProposalBlocksReadOnly
+                      proposalId={row.proposal_id}
+                      omitOfferBlocks={finalizeTable}
+                      only="scope"
+                    />
+                  ) : null}
+                </PreworkRegion>
+                <PreworkRegion region="vision" status={preworkStatus('vision')}>
+                  {row.proposal_id ? (
+                    <ProposalBlocksReadOnly
+                      proposalId={row.proposal_id}
+                      omitOfferBlocks={finalizeTable}
+                      only="vision"
+                    />
+                  ) : null}
+                </PreworkRegion>
+                <PreworkRegion
+                  region="investment"
+                  status={preworkStatus('investment')}
+                >
+                  {row.proposal_id ? (
+                    <ProposalBlocksReadOnly
+                      proposalId={row.proposal_id}
+                      omitOfferBlocks={finalizeTable}
+                      only="investment"
+                    />
+                  ) : null}
+                  {proposalOffer}
+                </PreworkRegion>
+              </>
+            )}
               {spreadSection === 'project' && row.project_id && (
                 <>
                   {/* W4b — the release ceremony's leader, at the head of the

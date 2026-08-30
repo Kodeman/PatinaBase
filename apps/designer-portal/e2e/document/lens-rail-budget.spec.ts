@@ -124,6 +124,15 @@ test.describe('the rail budget', () => {
     console.log(
       `pre-work paper rail census: ${distinct.size} distinct labels (${census.stops} stops, ${census.doors} doors) — ceiling ${ceiling}`,
     );
+    // `…d6` is a sent proposal with no project: the proposal spread's own
+    // four stops (proposal/scope/vision/investment) plus `record` — five,
+    // never the long paper's six/seven (OD-2, W4-R1). A self-derived ceiling
+    // alone would pass even if a stop went missing; this pins the count the
+    // program plan states ("5 stops on the proposal spread").
+    expect(
+      census.stops,
+      `expected 5 stops on the pre-work paper's proposal spread, saw ${census.stops}`,
+    ).toBe(5);
     expect(
       distinct.size,
       `labels: ${JSON.stringify([...distinct])}`,

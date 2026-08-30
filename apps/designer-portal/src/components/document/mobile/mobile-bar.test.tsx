@@ -26,6 +26,9 @@ jest.mock('@patina/supabase', () => ({
   // margin summary unconditionally, whichever sheet kind is open.
   useCoordinationItems: () => ({ data: [] }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  // W5-R1: useMarginSheet's line-label lookup — this file's suites never
+  // seed margin items with a line anchor, so an empty list is enough.
+  useProjectFFEItems: () => ({ data: [] }),
   isProjectArtifactApproval: () => false,
 }));
 
@@ -203,6 +206,45 @@ describe('the More menu · In this document (F49)', () => {
     const menu = openMore();
     expect(menu.queryByRole('group', { name: 'In this document' })).toBeNull();
     expect(menu.getByText('Find anything')).toBeInTheDocument();
+  });
+});
+
+describe('the Margin door (D-B30)', () => {
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    mockCallSheetOn = true;
+  });
+
+  it('leads "In this document" with "Margin · N" from activeDoc.marginCount, above Plan room', () => {
+    mountBar({ doc: { ...heldDocument, marginCount: 3 } });
+    const menu = openMore();
+    const group = menu.getByRole('group', { name: 'In this document' });
+    const labels = Array.from(group.querySelectorAll('a, button')).map((row) =>
+      row.textContent?.replace('→', ''),
+    );
+    expect(labels[0]).toBe('Margin · 3');
+    expect(labels.indexOf('Margin · 3')).toBeLessThan(labels.indexOf('Plan room'));
+  });
+
+  it('stands even off a project — margin items are not project-keyed like the four doors', () => {
+    mountBar({
+      doc: { ...heldDocument, projectId: null, marginCount: 1 },
+    });
+    const menu = openMore();
+    expect(menu.getByRole('button', { name: 'Margin · 1' })).toBeInTheDocument();
+    expect(menu.queryByRole('link', { name: 'Plan room' })).toBeNull();
+  });
+
+  it('is absent when marginCount is unknown (null) — never printed as "Margin · null"', () => {
+    mountBar({ doc: { ...heldDocument, marginCount: null } });
+    const menu = openMore();
+    expect(menu.queryByText(/^Margin ·/)).toBeNull();
+  });
+
+  it('is never a fourth bar item — it lives only inside More, not in the visible bar', () => {
+    mountBar({ doc: { ...heldDocument, marginCount: 5 } });
+    const bar = screen.getByTestId('mobile-bar');
+    expect(within(bar).queryByText(/^Margin ·/)).toBeNull();
   });
 });
 

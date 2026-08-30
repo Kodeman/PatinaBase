@@ -104,6 +104,9 @@ jest.mock('@patina/supabase', () => ({
   useCoordinationItems: () => mockCoordinationQuery,
   // The mobile spine summary counts handoffs alongside margin items (I114).
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  // W5-R1: useMarginSheet's line-label lookup — this file seeds no
+  // line-anchored margin items, so an empty list is enough.
+  useProjectFFEItems: () => ({ data: [] }),
   isProjectArtifactApproval: (item: { approval_contract?: string | null }) =>
     item.approval_contract === 'project_artifact_v1',
 }));
@@ -180,6 +183,29 @@ function OpenProjectSpine() {
       }}
     >
       Open project spine
+    </button>
+  );
+}
+
+// D-B30/W5-R1: the classification notice and the item list moved out of the
+// spine sheet into the Margin sheet — this stub opens that one instead.
+function OpenProjectMargin() {
+  const { setActiveDoc, openMargin } = useMobileShell();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setActiveDoc({
+          projectId: 'project-1',
+          proposalId: null,
+          clientName: 'Client',
+          title: 'Project',
+          sections: [],
+        });
+        openMargin();
+      }}
+    >
+      Open project margin
     </button>
   );
 }
@@ -346,7 +372,7 @@ describe('compact-spine timer doorway', () => {
     ['loading', { isLoading: true }, 'status'],
     ['error', { isError: true }, 'alert'],
   ] as const)(
-    'withholds decision bodies and announces %s classification in the mobile spine',
+    'withholds decision bodies and announces %s classification in the Margin sheet (D-B30/W5-R1)',
     (_state, queryState, role) => {
       setViewportWidth(320);
       mockMarginQuery = {
@@ -383,13 +409,13 @@ describe('compact-spine timer doorway', () => {
 
       render(
         <MobileShellProvider>
-          <OpenProjectSpine />
+          <OpenProjectMargin />
           <MobileSheets />
         </MobileShellProvider>,
       );
 
       fireEvent.click(
-        screen.getByRole('button', { name: 'Open project spine' }),
+        screen.getByRole('button', { name: 'Open project margin' }),
       );
 
       expect(screen.getByRole(role)).toBeVisible();

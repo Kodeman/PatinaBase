@@ -9,6 +9,7 @@ import {
   deriveLadderDoors,
   deriveLadderSegments,
   type LadderInput,
+  type LadderPreworkFacts,
 } from '../lens-ladder-derivation';
 import { LENS_VALUE_MAX_CHARS } from '../lens-constants';
 import type { MoneyLadder } from '../money-ladder';
@@ -215,9 +216,15 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
     }
   });
 
-  it('prints no stop at all on a spread before the work starts (OD-2)', () => {
+  it('prints the pre-work stops on a spread before the work starts (OD-2)', () => {
     const model = input({ ticket: ticket({ section: 'proposal' }) });
-    expect(deriveLadderSegments(model)).toEqual([]);
+    expect(deriveLadderSegments(model).map((segment) => segment.key)).toEqual([
+      'proposal',
+      'scope',
+      'vision',
+      'investment',
+      'record',
+    ]);
   });
 
   it('is a press target only where the stop’s root is on the paper', () => {
@@ -387,5 +394,101 @@ describe('deriveLadderDoors', () => {
     expect(onOpenLeaf).toHaveBeenCalledWith('specbook');
     doors[3].onOpen();
     expect(onOpenCallSheet).toHaveBeenCalled();
+  });
+});
+
+/**
+ * The pre-work stops (Wave 5, OD-2/DL-02). Every string is the print
+ * contract's; the digits are the specimen's.
+ */
+describe('deriveLadderSegments · the pre-work stops', () => {
+  const prework = (overrides: Partial<LadderPreworkFacts> = {}) =>
+    byKey(
+      input({
+        ticket: ticket({
+          section: 'proposal',
+          project: false,
+          rooms: {
+            settled: true,
+            list: [
+              { id: 'r1', name: 'Living room' },
+              { id: 'r2', name: 'Dining room' },
+            ],
+          },
+        }),
+        prework: {
+          settled: true,
+          sentOn: '2026-08-19',
+          openedOn: null,
+          scopeRooms: 4,
+          investmentCents: 18_450_000,
+          ...overrides,
+        },
+      }),
+    );
+
+  it('states the proposal, its scope and its total', () => {
+    const segments = prework();
+    expect(segments.proposal.name).toBe('The proposal');
+    expect(segments.proposal.value).toBe('SENT AUG 19 · UNOPENED 6D');
+    expect(segments.proposal.countLine).toBe('Sent Aug 19 · unopened 6d');
+    expect(segments.scope.name).toBe('Scope & engagement');
+    expect(segments.scope.value).toBe('4 ROOMS');
+    expect(segments.investment.name).toBe('The investment');
+    expect(segments.investment.value).toBe('$184,500');
+  });
+
+  it('prints the sentence, never a dash, where the stop has no number', () => {
+    const segments = prework();
+    // OD-2: prose has nothing to count, so the vision row is a name over a
+    // sentence at every state.
+    expect(segments.vision.name).toBe('Design vision');
+    expect(segments.vision.value).toBeNull();
+    expect(segments.vision.fallback).toBe('NOTHING YET');
+    expect(segments.vision.countLine).toBe('Not written yet');
+  });
+
+  it('says NOTHING YET on a proposal that has not gone out, and no $0 husk', () => {
+    const segments = prework({
+      sentOn: null,
+      scopeRooms: 0,
+      investmentCents: null,
+    });
+    expect(segments.proposal.value).toBeNull();
+    expect(segments.proposal.fallback).toBe('NOTHING YET');
+    expect(segments.proposal.countLine).toBe('Not sent yet');
+    expect(segments.scope.fallback).toBe('NOTHING YET');
+    expect(segments.investment.value).toBeNull();
+    expect(segments.investment.fallback).toBe('NOTHING YET');
+  });
+
+  it('drops the day-count once the client has opened it', () => {
+    const segments = prework({ openedOn: '2026-08-21' });
+    expect(segments.proposal.value).toBe('SENT AUG 19 · OPENED');
+    expect(segments.proposal.countLine).toBe('Sent Aug 19 · opened');
+  });
+
+  it('gives the three stage stops their names over NOTHING YET (DL-02)', () => {
+    for (const section of ['brief', 'discovery', 'direction'] as const) {
+      const segments = byKey(
+        input({ ticket: ticket({ section, project: false }) }),
+      );
+      const stop = segments[section];
+      expect(stop.value).toBeNull();
+      expect(stop.fallback).toBe('NOTHING YET');
+      expect(stop.countLine).toBe('Nothing yet');
+    }
+    expect(
+      byKey(input({ ticket: ticket({ section: 'brief', project: false }) }))
+        .brief.name,
+    ).toBe('The brief');
+  });
+
+  it('holds every value inside the rail measure', () => {
+    for (const segment of Object.values(prework())) {
+      expect((segment.value ?? '').length).toBeLessThanOrEqual(
+        LENS_VALUE_MAX_CHARS,
+      );
+    }
   });
 });

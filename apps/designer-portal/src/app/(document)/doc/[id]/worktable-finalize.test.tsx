@@ -61,6 +61,7 @@ jest.mock('@patina/supabase', () => ({
   useProjectRoster: () => ({ data: [] }),
   useDiscovery: () => ({ data: undefined, isLoading: false, isError: false }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  useCoordinationItems: () => ({ data: [] }),
   useResolvedSchedule: () => ({
     phases: [],
     milestones: [],
@@ -94,6 +95,13 @@ jest.mock('@patina/supabase', () => ({
       select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
     }),
   }),
+}));
+
+// W5-R1: the Margin sheet's whole-margin derivation lives in this local
+// hook, not `@patina/supabase` — mocking it keeps the fix top-of-file only
+// (no QueryClientProvider needed: the real `useQuery` inside it never runs).
+jest.mock('@/hooks/use-margin-items', () => ({
+  useMarginItems: () => ({ data: [] }),
 }));
 
 /* The money ladder under the ticket's Money row: four commercial reads that
@@ -643,17 +651,18 @@ describe('the Finalize table (W4a)', () => {
     }
   });
 
-  it('prints no investment figure it cannot derive — never a placeholder (W3-R4)', () => {
-    // Replaces "says nothing about the copy on either band line when it has
-    // not gone out", whose subject was the ninth ROW’s state line. The
-    // surviving truth is the absent-never-placeholder rule: this spread’s
-    // investment total is the Wave-5 `investment` stop, no read on this page
-    // states it, so the right slot prints its sent date alone.
+  it('prints the proposal’s own investment total beside its send date (W3-R4, discharged in W5)', () => {
+    // W3-R4 held this slot to the sent date alone "until Wave 5's `investment`
+    // stop lands". It has landed: the figure is `proposals.total_amount` — the
+    // proposal's OWN total (DL-01), never an FF&E budget wearing its name —
+    // and the absent-never-placeholder rule still governs the shape.
     const { container } = renderPage();
 
     const rightFlush =
       container.querySelector('[data-lens-right-flush]')?.textContent ?? '';
-    expect(rightFlush).not.toContain('$5,000');
+    // At s0 the slot is `moneyOnly` — the investment total alone (OD-1); the
+    // send date joins it once the band pins.
+    expect(rightFlush).toBe('$5,000');
     expect(rightFlush).not.toMatch(/—|--|n\/a/i);
   });
 
