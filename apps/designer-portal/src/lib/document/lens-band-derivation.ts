@@ -39,6 +39,9 @@ export type LensSpreadKind =
   | 'care';
 
 export interface LensAct {
+  /** N-05 — the act's own stable key, for telemetry. The printed LABEL is
+   *  copy: it changes with the short form, with a rewording, with the tier. */
+  key: string;
   label: string;
   onAct: () => void;
 }
@@ -72,6 +75,29 @@ const SENSE_ORDER: Record<LensDeadlineSense, number> = {
 
 /** D-B24 — the 390 form: `<STATE> <DAYS>D · <SUBJECT>`, or `<STATE> · <SUBJECT>`
  *  when the source states no day count. */
+const asLocalDate = (iso: string) =>
+  new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
+
+const DAY_MS = 86_400_000;
+
+/** Whole calendar days from `now` to `iso` — negative once the day has passed.
+ *  Midnight-to-midnight, so "tomorrow" is 1 at any hour of either day. */
+function calendarDaysUntil(iso: string, now: Date): number | null {
+  const then = asLocalDate(iso);
+  if (Number.isNaN(then.getTime())) return null;
+  const thenMidnight = new Date(
+    then.getFullYear(),
+    then.getMonth(),
+    then.getDate(),
+  ).getTime();
+  const nowMidnight = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  return Math.round((thenMidnight - nowMidnight) / DAY_MS);
+}
+
 export interface LensShortForm {
   state: string;
   days: number | null;
@@ -86,8 +112,11 @@ export interface LensStandingItem {
   sentence: string;
   act: LensAct | null;
   tier: LensStandingTier;
-  /** The day count the source states, where it states one. */
+  /** The day count the source states in its own prose, where it states one.
+   *  A LAST RESORT for the distance — the desk prints dates, not counts. */
   days: number | null;
+  /** N-01 — the ISO day this is due on, where the source holds one. */
+  deadline: string | null;
   standingSince: string | null;
   /** W3-R1 — which side of its day this stands on, and how far. */
   sense: LensDeadlineSense;
@@ -157,8 +186,15 @@ export interface LensBandLine2 {
   /** D-B24's 390 form. Null when the line has no standing item behind it (the
    *  guide's sentence has no state, no day count and no object to shorten to). */
   short: LensLine2Form | null;
-  /** Every standing exception AND every open input — what `+N MORE` counts. */
+  /** Every standing exception AND every open input — the sheet's row count. */
   standingCount: number;
+  /**
+   * N-02 — what the `+N MORE` door prints. NOT `standingCount − 1`: line 2 only
+   * takes a row off the door when it is NAMING one. On a guide line nothing on
+   * the paper is a sheet row, so a guide with one open input prints `+1 MORE`
+   * (W3-R2's own example) where the old arithmetic printed no door at all.
+   */
+  withheld: number;
 }
 
 export interface LensBandModel {
@@ -183,6 +219,9 @@ export interface LensBandInput {
   guide: LensGuideLine | null;
   /** D-B24 — which measure line 2 has to fit. The page's own media tier. */
   tier: LensTier;
+  /** N-01 — the day the deadlines are measured against. Injected so a test can
+   *  state it and so the model does not change under the reader at midnight. */
+  now?: Date;
   household: string;
   /** `Procurement & Orders`, `Proposal`, `Brief` — the stage, never the stop. */
   stageWord: string;
@@ -253,8 +292,14 @@ export function shortSubject(sentence: string): string {
         !/^\d/.test(token) &&
         !SUBJECT_QUALIFIERS.has(token.toUpperCase()),
     );
-  const chosen = code ?? money ?? word ?? lead.trim();
-  return chosen.toUpperCase().slice(0, 12).trim();
+  const chosen = (code ?? money ?? word ?? lead.trim()).toUpperCase();
+  if (chosen.length <= 12) return chosen;
+  // N-08 — cut at a word boundary, never mid-word: `UNSPECIFIED LI` names
+  // nothing, and a subject is the one half of the short form a reader cannot
+  // reconstruct from the state word beside it.
+  const cut = chosen.slice(0, 12);
+  const boundary = cut.lastIndexOf(' ');
+  return (boundary > 0 ? cut.slice(0, boundary) : cut).trim();
 }
 
 /** The need kinds that are something already past its day. */
@@ -346,22 +391,41 @@ function shortState(eyebrow: string, sense: LensDeadlineSense): string {
 }
 
 /**
- * W3-R1 — which side of its day an item stands on, and how far.
+ * W3-R1 / N-01 — which side of its day an item stands on, and how far.
  *
- * A deadline is a stated day count. `overdue` tiers are past their day (the
- * distance is negative, so the most overdue sorts first); `decision-due` and
- * `damage` are ahead of theirs when the source states one, and are otherwise a
- * silence; `po-silence` has no day behind it at all.
+ * The distance comes from the STRUCTURED deadline the source holds, measured
+ * against an injected `now`. The regex over the printed sentence is the last
+ * resort only: the desk's templates print dates ("— oldest due Aug 23"), so a
+ * scrape finds nothing and every overdue item collapses to the same distance,
+ * which is the sort going inert on real data.
+ *
+ * A `po-silence` is a silence whatever date it carries: `po_unacknowledged`
+ * sets `dueOn` from the PO's SENT day, which is provenance, not a deadline —
+ * and W3-R1 ranks a maker's fourteen-day quiet last, below a window closing
+ * tomorrow. When nothing dates the item, an `overdue` tier still stands past
+ * its day (distance 0, behind everything that states how far past it is).
  */
-function deadline(
+function deadlineOf(
   tier: LensStandingTier,
-  days: number | null,
+  deadline: string | null,
+  statedDayCount: number | null,
+  now: Date,
 ): { sense: LensDeadlineSense; distance: number | null } {
-  if (tier === 'overdue') return { sense: 'past', distance: -(days ?? 0) };
-  if (tier === 'po-silence' || days == null) {
-    return { sense: 'none', distance: null };
+  if (tier === 'po-silence') return { sense: 'none', distance: null };
+  const structured = deadline != null ? calendarDaysUntil(deadline, now) : null;
+  const scraped =
+    statedDayCount == null
+      ? null
+      : tier === 'overdue'
+        ? -statedDayCount
+        : statedDayCount;
+  const days = structured ?? scraped;
+  if (days == null) {
+    return tier === 'overdue'
+      ? { sense: 'past', distance: 0 }
+      : { sense: 'none', distance: null };
   }
-  return { sense: 'ahead', distance: days };
+  return days < 0 ? { sense: 'past', distance: days } : { sense: 'ahead', distance: days };
 }
 
 /**
@@ -376,6 +440,10 @@ function deadline(
 export function rankStanding(
   rows: readonly TicketRow[],
   needs: readonly RedLetterRow[],
+  /** N-01 — injected, never read off the clock in here: a derivation that
+   *  reads `Date.now()` cannot be tested at a stated day and re-renders into
+   *  a different answer at midnight. */
+  now: Date = new Date(),
 ): LensStandingItem[] {
   const items: { item: LensStandingItem; tieBreak: number }[] = [];
   const seen = new Set<string>();
@@ -383,14 +451,23 @@ export function rankStanding(
   const compose = (
     parts: Omit<LensStandingItem, 'sense' | 'distance' | 'short'>,
   ): LensStandingItem => {
-    const { sense, distance } = deadline(parts.tier, parts.days);
+    const { sense, distance } = deadlineOf(
+      parts.tier,
+      parts.deadline,
+      parts.days,
+      now,
+    );
+    // N-01 — the short form's day count is the SAME distance the sort used, so
+    // `OVERDUE 7D` cannot disagree with the order it was ranked in.
+    const days =
+      distance != null && distance !== 0 ? Math.abs(distance) : null;
     return {
       ...parts,
       sense,
       distance,
       short: {
         state: shortState(parts.eyebrow, sense),
-        days: parts.days,
+        days,
         subject: shortSubject(parts.sentence),
       },
     };
@@ -408,10 +485,11 @@ export function rankStanding(
         eyebrow: NEED_EYEBROW[need.kind],
         sentence: need.text,
         act: need.actionLabel
-          ? { label: need.actionLabel, onAct: need.onAct }
+          ? { key: need.key, label: need.actionLabel, onAct: need.onAct }
           : null,
         tier: NEED_TIER[need.kind],
         days: statedDays(need.text),
+        deadline: need.dueOn ?? null,
         standingSince: null,
         namesMoney: need.kind === 'overdue_invoice',
       }),
@@ -437,6 +515,9 @@ export function rankStanding(
         act: null,
         tier: TICKET_TIER[exception.rank],
         days: statedDays(exception.phrase),
+        // OD-8 keeps `ticket-derivation.ts` byte-untouched, and a ticket
+        // exception states only when it BEGAN standing, never when it is due.
+        deadline: null,
         standingSince: exception.standingSince,
         namesMoney: row.key === 'money',
       }),
@@ -533,7 +614,7 @@ const sentencePx = (sentence: string) =>
 const monoPx = (label: string) => label.length * LENS_MONO_PX_PER_CHAR;
 
 export function deriveLensBand(input: LensBandInput): LensBandModel {
-  const standing = rankStanding(input.ticket, input.needs);
+  const standing = rankStanding(input.ticket, input.needs, input.now);
   const inputs = input.inputs ?? [];
   const worst = standing[0] ?? null;
   const readingStop = input.readingStop ?? null;
@@ -553,6 +634,8 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
   // W3-R2 — the door counts the open inputs too: at every offset they are one
   // press away, in the sheet's own section.
   const standingCount = standing.length + inputs.length;
+  // N-02 — line 2 discounts a row only when it is naming one.
+  const withheld = standingCount - (worst ? 1 : 0);
 
   const long: LensLine2Form = {
     sentence: worst ? worst.sentence : (input.guide?.text ?? ''),
@@ -565,7 +648,11 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
             ? `${worst.short.state} · ${worst.short.subject}`
             : `${worst.short.state} ${worst.short.days}D · ${worst.short.subject}`,
         act: worst.act
-          ? { label: shortenAct(worst.act.label), onAct: worst.act.onAct }
+          ? {
+              key: worst.act.key,
+              label: shortenAct(worst.act.label),
+              onAct: worst.act.onAct,
+            }
           : null,
       }
     : null;
@@ -573,9 +660,7 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
   // The door's own words print whole in both forms, so its width is spent
   // before the sentence gets its measure.
   const doorPx =
-    standingCount > 1
-      ? monoPx(`+${standingCount - 1} MORE`) + LENS_LINE2_GAP_PX
-      : 0;
+    withheld > 0 ? monoPx(`+${withheld} MORE`) + LENS_LINE2_GAP_PX : 0;
   const budgetPx = (act: LensAct | null) =>
     LENS_LINE2_MEASURE_PX[input.tier] -
     doorPx -
@@ -597,6 +682,7 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
     long,
     short,
     standingCount,
+    withheld,
   };
 
   return {

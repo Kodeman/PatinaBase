@@ -54,6 +54,12 @@ export interface RedLetterRow {
   actionLabel: string | null;
   onAct: () => void;
   urgent: boolean;
+  /** N-01 — the ISO day the need is DUE on (`NeedLine.dueOn`), carried
+   *  through rather than left to be scraped back out of `text`. The desk's
+   *  templates print DATES ("— oldest due Aug 23"), never day counts, so a
+   *  regex over the sentence finds nothing and every deadline collapses to the
+   *  same distance. `null` where the rule states no date even in its prose. */
+  dueOn?: string | null;
 }
 
 /**

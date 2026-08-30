@@ -20,7 +20,7 @@ export function deriveGuideModel(
   return {
     text: model.headline,
     act: model.action
-      ? { label: model.action.label, onAct: onActivate }
+      ? { key: model.action.key, label: model.action.label, onAct: onActivate }
       : null,
   };
 }

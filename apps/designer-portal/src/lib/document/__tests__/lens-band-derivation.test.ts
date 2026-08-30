@@ -26,6 +26,8 @@ const need = (
   kind: RedLetterRow['kind'],
   text: string,
   actionLabel: string | null,
+  /** N-01 — the day the need is DUE on, as `desk-derivation.ts` emits it. */
+  dueOn: string | null = null,
 ): RedLetterRow => ({
   key,
   kind,
@@ -33,7 +35,11 @@ const need = (
   actionLabel,
   onAct: jest.fn(),
   urgent: true,
+  dueOn,
 });
+
+/** A stated day, so no test reads the wall clock (N-01). */
+const NOW = new Date('2026-08-29T12:00:00');
 
 const VANDERSTEEN_NEEDS: RedLetterRow[] = [
   need(
@@ -252,6 +258,7 @@ describe('deriveLensBand · line 2 (L-1)', () => {
         long: { sentence: '', act: null },
         short: null,
         standingCount: 0,
+        withheld: 0,
       });
       expect(model.standing).toEqual([]);
       expect(model.line1.rightFlush).toBeNull();
@@ -393,6 +400,132 @@ describe('rankStanding · deadline distance, not kind (W3-R1)', () => {
   });
 });
 
+describe('rankStanding · the deadline is a DATE, not a scraped day count (N-01)', () => {
+  /**
+   * The desk's own templates. `desk-derivation.ts` prints DATES — "— oldest
+   * due Aug 23", "closes Aug 26" — and states the day it is due on in
+   * `NeedLine.dueOn`, which `RedLetterRow` now carries. A regex over the
+   * printed sentence finds no day count in any of these, so before N-01 every
+   * one of them ranked at distance 0 and the deadline sort was inert on every
+   * real paper.
+   */
+  const invoice = need(
+    'inv',
+    'overdue_invoice',
+    'Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22',
+    'Send reminder',
+    '2026-08-22', // seven days past NOW
+  );
+  const decisions = need(
+    'dec',
+    'overdue_decision',
+    '2 decisions overdue — oldest due Aug 23',
+    'Chase the approval',
+    '2026-08-23', // six days past NOW
+  );
+
+  it('ranks two same-tie-break needs by their dates, not by their order', () => {
+    // Both are `TIE_BREAK_RANK` 2, so nothing but the deadline can separate
+    // them — and the desk hands them over decisions-first.
+    const ranked = rankStanding([], [decisions, invoice], NOW);
+    expect(ranked.map((item) => item.key)).toEqual(['need:inv', 'need:dec']);
+    expect(ranked.map((item) => item.distance)).toEqual([-7, -6]);
+    expect(ranked.map((item) => item.sense)).toEqual(['past', 'past']);
+  });
+
+  it('reads no day count out of the sentence — the date is the whole answer', () => {
+    // The proof the regex is not what is working: the same sentences with no
+    // `dueOn` collapse to one distance and keep the desk's own order.
+    const undated = [
+      { ...decisions, dueOn: null },
+      { ...invoice, dueOn: null },
+    ];
+    const ranked = rankStanding([], undated, NOW);
+    expect(ranked.map((item) => item.days)).toEqual([null, null]);
+    expect(ranked.map((item) => item.distance)).toEqual([0, 0]);
+    expect(ranked.map((item) => item.key)).toEqual(['need:dec', 'need:inv']);
+  });
+
+  it('puts a window closing tomorrow above a decision due weeks out', () => {
+    // The cross-tier falsifier, in the desk's shapes: the retired four-tier
+    // sort put `decision-due` above `damage` on kind alone.
+    const ranked = rankStanding(
+      [],
+      [
+        need('task', 'task_due', 'Kickoff walkthrough — due Sep 19', 'Open it', '2026-09-19'),
+        need('claim', 'damage_claim', 'FDL-0912 — carrier window closes Aug 30', 'File it', '2026-08-30'),
+      ],
+      NOW,
+    );
+    expect(ranked.map((item) => item.key)).toEqual(['need:claim', 'need:task']);
+    expect(ranked.map((item) => item.distance)).toEqual([1, 21]);
+  });
+
+  it('files a maker’s silence last, whatever day its PO was sent', () => {
+    // `po_unacknowledged` sets `dueOn` from the PO's SENT day — provenance,
+    // not a deadline. Read as a date it would rank 14 days "overdue" and lead
+    // the paper; W3-R1 ranks it last, below a window closing tomorrow.
+    const ranked = rankStanding(
+      [],
+      [
+        need('po', 'po_unacknowledged', 'PO-2026-0418 sent — no acknowledgment', 'Follow up', '2026-08-15'),
+        need('claim', 'damage_claim', 'FDL-0912 — carrier window closes Aug 30', 'File it', '2026-08-30'),
+      ],
+      NOW,
+    );
+    expect(ranked.map((item) => item.key)).toEqual(['need:claim', 'need:po']);
+    expect(ranked.map((item) => item.sense)).toEqual(['ahead', 'none']);
+  });
+
+  it('states the short form’s day count off the SAME distance it ranked on', () => {
+    const [worst] = rankStanding([], [decisions, invoice], NOW);
+    expect(worst.short).toEqual({
+      state: 'OVERDUE',
+      days: 7,
+      subject: 'INV-2026-114',
+    });
+    const model = deriveLensBand(
+      input({ needs: [decisions, invoice], tier: 'mobile', now: NOW }),
+    );
+    expect(model.line2.sentence).toBe('OVERDUE 7D · INV-2026-114');
+  });
+});
+
+describe('the door counts what the sheet holds (N-02)', () => {
+  it('prints a door on a GUIDE line with one open input', () => {
+    // W3-R2's own example: nothing on the paper is a sheet row, so the input
+    // is not discounted and the door stands. `standingCount − 1` printed none.
+    const model = deriveLensBand(
+      input({
+        guide: { text: 'Sent Aug 23 — not yet opened', act: null },
+        inputs: [
+          {
+            key: 'signature',
+            eyebrow: 'SIGNATURE',
+            sentence: 'Client signature · Client · blocks Project activation',
+            act: null,
+          },
+        ],
+      }),
+    );
+    expect(model.line2.kind).toBe('guide');
+    expect(model.line2.standingCount).toBe(1);
+    expect(model.line2.withheld).toBe(1);
+  });
+
+  it('discounts exactly the one row line 2 is naming', () => {
+    const model = deriveLensBand(input({ needs: VANDERSTEEN_NEEDS }));
+    expect(model.line2.kind).toBe('standing');
+    expect(model.line2.standingCount).toBe(4);
+    expect(model.line2.withheld).toBe(3);
+  });
+
+  it('prints no door when the one thing standing is the thing on line 2', () => {
+    const model = deriveLensBand(input({ needs: [VANDERSTEEN_NEEDS[0]] }));
+    expect(model.line2.withheld).toBe(0);
+  });
+});
+
 describe('the short form and the act’s verb (D-B24, C-07)', () => {
   it('keeps the act’s FIRST word — the verb, never a particle or a surname', () => {
     expect(shortenAct('FOLLOW UP')).toBe('FOLLOW');
@@ -414,6 +547,17 @@ describe('the short form and the act’s verb (D-B24, C-07)', () => {
       'DECISIONS',
     );
     expect(shortSubject('$17,500 owed you')).toBe('$17,500');
+  });
+
+  it('cuts a long subject at a word boundary, never mid-word (N-08)', () => {
+    // `UNSPECIFIED LI` names nothing; the subject is the half a reader cannot
+    // reconstruct from the state word beside it.
+    expect(shortSubject('Unspecified line items on the schedule')).toBe(
+      'UNSPECIFIED',
+    );
+    expect(shortSubject('Reinhardt lake house approval')).toBe('REINHARDT');
+    // A single word longer than the cap still has to give somewhere.
+    expect(shortSubject('Antidisestablishmentarian chair')).toHaveLength(12);
   });
 
   it('prints `<STATE> <DAYS>D · <SUBJECT>` — and drops the day count where there is none', () => {
