@@ -21,7 +21,7 @@
  * toast (D2), zero shadows (D4).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   useCoordinationItems,
   useFfeInvoiceCoverage,
@@ -47,7 +47,8 @@ import {
 import { StrataMark } from './strata-mark';
 import { DocumentAction } from './document-action';
 import { RegionHead, type RegionLedgerEntry } from './region/region-head';
-import { useRegionFold } from './region/use-region-fold';
+import { useRegionFold, type RegionDensity } from './region/use-region-fold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
 import { FoldSeam, focusRegionHeading } from './region/fold-seam';
 import { RegionRule } from './region/region-rule';
 
@@ -62,6 +63,13 @@ const CHECKLIST_ID = 'closing-the-book';
  * those keys), so this is the literal fallback named by the build plan.
  */
 const CARE_INDEX_HEADING_ID = 'care-region-heading';
+/**
+ * OD-12 — the quiet height, held at EVERY density so a body shorter than its
+ * reserve cannot shrink the region on mount. W3-L3 declares both floors as
+ * tokens; `-exc` is for a head that prints standing exceptions, and this head
+ * prints none, so the care root takes the minimum.
+ */
+const QUIET_RESERVE = 'var(--doc-quiet-reserve-min)';
 
 type AnyRecord = any;
 
@@ -214,12 +222,19 @@ export function CareBand({
     onCloseoutReady?.({ ready, closed: done, total });
   }, [onCloseoutReady, ready, done, total]);
 
+  // W4 (C-8) — the lens's fourth voice. The body never reads the DOM: it
+  // subscribes to the store the page-level observer writes, and the fold hook
+  // resolves that against the three voices that outrank it.
+  const positionDensity = useLensDensityStore('care');
   const fold = useRegionFold({
     docId: projectId,
     region: 'care',
     defaultFolded: ready === undefined ? null : !nearClose,
     forceOpen: nearClose,
+    positionDensity,
   });
+  const density: RegionDensity = fold.density;
+
   const unfoldFocusRef = useRef(false);
 
   useEffect(() => {
@@ -236,11 +251,17 @@ export function CareBand({
   // jump focuses `regionHeadingId('care')`, and `.focus()` on an element that
   // cannot take focus is a silent no-op — the reader lands on the region with
   // focus still in the rail.
+  // W4 — `data-density` is RENDERED BY REACT from the fold's answer (OD-13),
+  // never written imperatively here, and the reserve rides the same root at
+  // every density (OD-12). Both belong to the index root only: the second
+  // `CareBand` mount is not a stop and has nothing for the lens to say.
   const indexRootAttrs = indexRoot
     ? {
         'data-index-region': 'care' as const,
         id: CARE_INDEX_HEADING_ID,
         tabIndex: -1,
+        'data-density': density,
+        style: { '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties,
       }
     : {};
 
@@ -406,6 +427,17 @@ export function CareBand({
         </div>
       </div>
 
+      {density === 'quiet' ? (
+        <>
+          <p
+            data-region-count-line
+            className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
+          >
+            {`${done} OF ${total} CLOSED OUT`}
+          </p>
+          <p className="sr-only">Quiet — opens as you read</p>
+        </>
+      ) : (
       <div id={BODY_ID}>
       {/* The closure checklist — square ticks that fill sage (the Work
           block's stamp grammar, not a SaaS checkbox). */}
@@ -566,6 +598,7 @@ export function CareBand({
         </div>
       )}
       </div>
+      )}
     </div>
   );
 }

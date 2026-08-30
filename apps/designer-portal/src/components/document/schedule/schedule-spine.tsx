@@ -34,6 +34,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from 'react';
 import {
   useCoordinationItems,
@@ -78,13 +79,19 @@ import {
   sortItemsBlockingFirst,
 } from '@/lib/document/coordination-derivation';
 import { phaseAnchorId } from '@/lib/document/phase-anchor';
+import { LENS_COUNT_MAX_CHARS } from '@/lib/document/lens-constants';
 import {
   useScheduleNav,
   type ScheduleRevealTarget,
 } from './schedule-nav-context';
 import { useRippleSession } from './schedule-ripple-context';
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
-import { useRegionFold, type RegionFold } from '../region/use-region-fold';
+import {
+  useRegionFold,
+  type RegionDensity,
+  type RegionFold,
+} from '../region/use-region-fold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
@@ -112,6 +119,26 @@ import {
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { SectionLoadingLine } from '../section-loading-line';
+
+/**
+ * OD-12 — the quiet height, held at EVERY density so a body shorter than its
+ * reserve cannot shrink the region on mount. W3-L3 declares both floors as
+ * tokens; `-exc` is for a head that prints standing exceptions, and this head
+ * prints none, so the schedule root takes the minimum.
+ */
+const QUIET_RESERVE = 'var(--doc-quiet-reserve-min)';
+
+/** `SEP 15` — the count line's register of a day. A bare DATE column must parse
+ *  as LOCAL midnight, or the printed day slips back one west of UTC. */
+function railDay(iso: string): string | null {
+  const day = new Date(
+    /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso,
+  );
+  if (Number.isNaN(day.getTime())) return null;
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
+    .format(day)
+    .toUpperCase();
+}
 
 /** Best-effort phase_key from a free-typed name (phase_key is nullable + not
  *  unique on project_phases, so a plain slug is safe — no dedupe needed). */
@@ -816,11 +843,39 @@ export function ScheduleSpine({
       pendingProposalCount === 0 &&
       openItemCount === 0;
 
+  // W4 (C-8) — the lens's fourth voice. The body never reads the DOM: it
+  // subscribes to the store the page-level observer writes, and the fold hook
+  // resolves that against the three voices that outrank it.
+  const positionDensity = useLensDensityStore('schedule');
   const scheduleFold = useRegionFold({
     docId: projectId,
     region: 'schedule',
     defaultFolded: scheduleDefaultFolded,
+    positionDensity,
   });
+  const density: RegionDensity = scheduleFold.density;
+
+  // The quiet body's one count line (OD-3's 40-char cap, OD-1's casing): the
+  // install day and how many phases stand. A fact that is not known prints
+  // NOTHING — never a placeholder — so an undated install drops its half and
+  // a schedule with no phases drops the other; with neither, no line prints.
+  const scheduleCountLine = useMemo(() => {
+    const installStart =
+      mainLane.find((phase) => phase.id === installEntryPhaseId)?.start ?? null;
+    const day = installStart ? railDay(installStart) : null;
+    const parts = [
+      day ? `INSTALL ${day}` : null,
+      entries.length > 0
+        ? `${entries.length} ${entries.length === 1 ? 'PHASE' : 'PHASES'}`
+        : null,
+    ].filter(Boolean) as string[];
+    if (parts.length === 0) return null;
+    const line = parts.join(' \u00b7 ');
+    return line.length <= LENS_COUNT_MAX_CHARS
+      ? line
+      : line.slice(0, LENS_COUNT_MAX_CHARS).trimEnd();
+  }, [mainLane, installEntryPhaseId, entries.length]);
+
   useEffect(() => {
     scheduleFoldRef.current = scheduleFold;
   });
@@ -1057,6 +1112,11 @@ export function ScheduleSpine({
     <section
       id="document-decision-controls"
       data-index-region="schedule"
+      // W4 — RENDERED BY REACT from the fold's answer (OD-13), never written
+      // imperatively here; the reserve rides the same root at every density
+      // so a short body cannot shrink the region on mount (OD-12).
+      data-density={density}
+      style={{ '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties}
       tabIndex={-1}
       aria-label="Project schedule"
       className="mt-[var(--doc-region-gap)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
@@ -1088,7 +1148,21 @@ export function ScheduleSpine({
             bodyId={scheduleBodyId}
             onFold={() => scheduleFold.setFolded(true)}
           />
-          <div id={scheduleBodyId}>{scheduleBody}</div>
+          {density === 'quiet' ? (
+            <>
+              {scheduleCountLine && (
+                <p
+                  data-region-count-line
+                  className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
+                >
+                  {scheduleCountLine}
+                </p>
+              )}
+              <p className="sr-only">Quiet — opens as you read</p>
+            </>
+          ) : (
+            <div id={scheduleBodyId}>{scheduleBody}</div>
+          )}
         </>
       )}
 
