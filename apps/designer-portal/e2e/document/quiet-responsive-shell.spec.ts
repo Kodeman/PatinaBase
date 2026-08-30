@@ -215,6 +215,12 @@ test.describe('Quiet Work responsive document shell', () => {
     authenticatedPage: page,
   }) => {
     await openProject(page, 1280);
+    // The 390 half of this case reaches the mobile bar's sections door, which
+    // renders only once the page has PUBLISHED its active document. `settle()`
+    // answers for the lens, not for that: run late in a long basket the door
+    // was not there yet, and the same code passes alone every time. D-B28's
+    // ruled precondition.
+    await quiet(page);
     const band = page.locator('[data-lens-band]');
     await expect(band).toBeVisible();
     await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);

@@ -250,7 +250,14 @@ test.describe('the lens band’s declared height', () => {
       console.log(
         `D-B38 · line 2 offset inside the band at ${size.label}: s0 ${atRest}px, pinned ${pinned}px`,
       );
-      expect(pinned).toBe(atRest);
+      // D-B38's defect was a 7.7px LIFT — half a collapsed 15.4px line box —
+      // and that is what this gate exists to catch. The measurement is a
+      // difference of two composited `getBoundingClientRect().top`s, so it
+      // carries the sub-pixel noise D-B35 documented: run late in a long
+      // basket it reads 26.19 against 26.17 at s0, and passes exactly on the
+      // same code run alone. One decimal place separates "line 2 held" from
+      // "line 2 moved half a line" by two orders of magnitude.
+      expect(pinned).toBeCloseTo(atRest, 1);
     });
   }
 
