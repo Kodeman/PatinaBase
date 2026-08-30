@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * The D13 mobile shell — the phone's physics for the document model
@@ -28,9 +28,9 @@ import {
   useMemo,
   useRef,
   useState,
-} from "react";
-import type { SpineSection } from "@/lib/document/section-derivation";
-import type { DocumentIndexKey } from "@/lib/document/document-index";
+} from 'react';
+import type { SpineSection } from '@/lib/document/section-derivation';
+import type { DocumentIndexKey } from '@/lib/document/document-index';
 
 export interface MobileActiveDoc {
   projectId: string | null;
@@ -63,11 +63,11 @@ export interface MobileActiveDoc {
 }
 
 type Sheet =
-  | { kind: "spine" }
-  | { kind: "timer" }
-  | { kind: "drawer" }
-  | { kind: "margin-item"; itemId: string }
-  | { kind: "margin" };
+  | { kind: 'spine' }
+  | { kind: 'timer' }
+  | { kind: 'drawer' }
+  | { kind: 'margin-item'; itemId: string }
+  | { kind: 'margin' };
 
 export type MobilePrimaryAction = {
   actionKey: string;
@@ -75,8 +75,8 @@ export type MobilePrimaryAction = {
   regionKey: string;
   label: string;
   target:
-    | { kind: "press"; onPress: () => void }
-    | { kind: "href"; href: string };
+    | { kind: 'press'; onPress: () => void }
+    | { kind: 'href'; href: string };
   disabled?: boolean;
   loading?: boolean;
   onSelected?: () => void;
@@ -118,7 +118,7 @@ const Ctx = createContext<MobileShellValue | null>(null);
 
 export function useMobileShell(): MobileShellValue {
   const v = useContext(Ctx);
-  if (!v) throw new Error("useMobileShell requires MobileShellProvider");
+  if (!v) throw new Error('useMobileShell requires MobileShellProvider');
   return v;
 }
 
@@ -199,12 +199,12 @@ export function MobileShellProvider({
       activeDoc,
       setActiveDoc,
       sheet,
-      openSpine: () => setSheet({ kind: "spine" }),
-      openTimer: () => setSheet({ kind: "timer" }),
-      openDrawer: () => setSheet({ kind: "drawer" }),
+      openSpine: () => setSheet({ kind: 'spine' }),
+      openTimer: () => setSheet({ kind: 'timer' }),
+      openDrawer: () => setSheet({ kind: 'drawer' }),
       openMarginItem: (itemId: string) =>
-        setSheet({ kind: "margin-item", itemId }),
-      openMargin: () => setSheet({ kind: "margin" }),
+        setSheet({ kind: 'margin-item', itemId }),
+      openMargin: () => setSheet({ kind: 'margin' }),
       closeSheet: () => setSheet(null),
       primaryAction,
       registerPrimaryAction,
@@ -231,14 +231,14 @@ export function useMobilePrimaryAction(
   options: { priority?: number } = {},
 ) {
   const { registerPrimaryAction } = useMobileShell();
-  const owner = useRef(Symbol("mobile-primary-action"));
+  const owner = useRef(Symbol('mobile-primary-action'));
   const latest = useRef(action);
   latest.current = action;
   const priority = options.priority ?? 0;
 
   const press = useCallback(() => {
     const current = latest.current;
-    if (current?.target.kind === "press") current.target.onPress();
+    if (current?.target.kind === 'press') current.target.onPress();
   }, []);
   const selected = useCallback(() => {
     latest.current?.onSelected?.();
@@ -251,7 +251,7 @@ export function useMobilePrimaryAction(
   const disabled = action?.disabled ?? false;
   const loading = action?.loading ?? false;
   const targetKind = action?.target.kind ?? null;
-  const href = action?.target.kind === "href" ? action.target.href : null;
+  const href = action?.target.kind === 'href' ? action.target.href : null;
 
   useEffect(() => {
     const ownerId = owner.current;
@@ -261,9 +261,9 @@ export function useMobilePrimaryAction(
           ...current,
           onSelected: selected,
           target:
-            current.target.kind === "href"
-              ? { kind: "href", href: current.target.href }
-              : { kind: "press", onPress: press },
+            current.target.kind === 'href'
+              ? { kind: 'href', href: current.target.href }
+              : { kind: 'press', onPress: press },
         }
       : null;
     registerPrimaryAction(ownerId, normalized, priority);
@@ -287,7 +287,7 @@ export function useMobilePrimaryAction(
 /** Surface-side: publish a quiet mobile act into the existing More shelf. */
 export function useMobileSecondaryAction(action: MobileSecondaryAction | null) {
   const { registerSecondaryAction } = useMobileShell();
-  const owner = useRef(Symbol("mobile-secondary-action"));
+  const owner = useRef(Symbol('mobile-secondary-action'));
   const latest = useRef(action);
   latest.current = action;
 
@@ -317,21 +317,21 @@ export function useMobileActiveDoc(doc: MobileActiveDoc | null) {
   // Re-publish when the engagement or its sections change (sections drive the
   // bar's section label + the spine sheet's section list).
   const sectionsSig = [
-    doc?.sections.map((s) => `${s.key}:${s.state}`).join("|") ?? "",
-    doc?.rooms?.map((r) => r.id).join("|") ?? "",
-  ].join("//");
+    doc?.sections.map((s) => `${s.key}:${s.state}`).join('|') ?? '',
+    doc?.rooms?.map((r) => r.id).join('|') ?? '',
+  ].join('//');
   // W2 — the reading stop and the ladder's values change while the engagement
   // and its sections stand still, and they are what the bar's `AT <STOP>` line
   // and the sections sheet print. Without them in the signature the published
   // document is the one from the first paint for the life of the document.
   const stateSig = [
-    doc?.readingIndex ?? "",
+    doc?.readingIndex ?? '',
     Object.entries(doc?.ladderValues ?? {})
-      .map(([stop, value]) => `${stop}=${value ?? ""}`)
-      .join("|"),
-    doc?.clientCopy ? "copy" : "",
-    doc?.marginCount ?? "",
-  ].join("//");
+      .map(([stop, value]) => `${stop}=${value ?? ''}`)
+      .join('|'),
+    doc?.clientCopy ? 'copy' : '',
+    doc?.marginCount ?? '',
+  ].join('//');
   useEffect(() => {
     setActiveDoc(doc);
     return () => setActiveDoc(null);

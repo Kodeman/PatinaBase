@@ -22,13 +22,13 @@
  * BROWSERS (test-impact, "Browser ruling"): chromium + webkit. Firefox is
  * skipped with its reason, the repo's own idiom.
  */
-import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
-import { scrollTo, settle } from "../helpers/lens";
-import { LONG_PAPER_ID, PRE_WORK_ID, assertLongPaper } from "./lens-fixtures";
+import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
+import { scrollTo, settle } from '../helpers/lens';
+import { LONG_PAPER_ID, PRE_WORK_ID, assertLongPaper } from './lens-fixtures';
 
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: 'serial' });
 test.skip(
-  ({ browserName }) => browserName === "firefox",
+  ({ browserName }) => browserName === 'firefox',
   'the lens specs run chromium + webkit (test-impact, "Browser ruling"); Firefox is not a shipped target for this portal and its sub-pixel box model would make an exact 56 a coin-toss',
 );
 
@@ -45,14 +45,14 @@ const SC2_MAX_BOTTOM = 108;
 const OFFSETS = [0, 400, 1200] as const;
 
 const WIDTHS = [
-  { label: "1440", width: 1440, height: 900 },
-  { label: "1280", width: 1280, height: 900 },
-  { label: "390", width: 390, height: 844 },
+  { label: '1440', width: 1440, height: 900 },
+  { label: '1280', width: 1280, height: 900 },
+  { label: '390', width: 390, height: 844 },
 ] as const;
 
 const PAPERS = [
-  { label: "the long paper", id: LONG_PAPER_ID },
-  { label: "the pre-work paper", id: PRE_WORK_ID },
+  { label: 'the long paper', id: LONG_PAPER_ID },
+  { label: 'the pre-work paper', id: PRE_WORK_ID },
 ] as const;
 
 async function openPaper(
@@ -62,8 +62,8 @@ async function openPaper(
   height: number,
 ): Promise<void> {
   await page.setViewportSize({ width, height });
-  await page.goto(`/doc/${id}`, { waitUntil: "domcontentloaded" });
-  await expect(page.locator("[data-document-shell]")).toBeVisible({
+  await page.goto(`/doc/${id}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[data-document-shell]')).toBeVisible({
     timeout: 30_000,
   });
   await settle(page);
@@ -80,7 +80,7 @@ function tokenPx(page: AuthenticatedPage, name: string): Promise<number> {
   );
 }
 
-test.describe("the lens band’s declared height", () => {
+test.describe('the lens band’s declared height', () => {
   test.beforeAll(() => {
     assertLongPaper();
   });
@@ -92,12 +92,12 @@ test.describe("the lens band’s declared height", () => {
       }) => {
         await openPaper(page, paper.id, size.width, size.height);
 
-        const band = page.locator("[data-lens-band]");
+        const band = page.locator('[data-lens-band]');
         await expect(band).toBeVisible({ timeout: 20_000 });
 
         // The token is declared once and lengths only (C-7): if it drifts, the
         // sticky `top`, the landing clearance and SC1 all drift with it.
-        expect(await tokenPx(page, "--doc-band-height")).toBe(BAND_HEIGHT);
+        expect(await tokenPx(page, '--doc-band-height')).toBe(BAND_HEIGHT);
 
         for (const offset of OFFSETS) {
           await scrollTo(page, offset);
@@ -115,33 +115,31 @@ test.describe("the lens band’s declared height", () => {
     }
   }
 
-  test("SC1 — the first region head stands at or above 405px at rest, at 1440", async ({
+  test('SC1 — the first region head stands at or above 405px at rest, at 1440', async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 1440, 900);
     await scrollTo(page, 0);
 
     const firstHead = page
-      .locator("[data-document-paper] [data-region-head]")
+      .locator('[data-document-paper] [data-region-head]')
       .first();
     await expect(firstHead).toBeVisible({ timeout: 20_000 });
     const box = await firstHead.boundingBox();
     expect(box).not.toBeNull();
     // Printed on every run: the threshold is a ceiling, the number is the
     // measurement §6 actually claims.
-    console.log(
-      `SC1 · first [data-region-head] top at 1440, rest: ${box!.y}px`,
-    );
+    console.log(`SC1 · first [data-region-head] top at 1440, rest: ${box!.y}px`);
     expect(box!.y).toBeLessThanOrEqual(SC1_MAX_Y);
   });
 
-  test("SC2 — the band’s bottom edge is at or above 108px at scrollY 400", async ({
+  test('SC2 — the band’s bottom edge is at or above 108px at scrollY 400', async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 1440, 900);
     await scrollTo(page, 400);
 
-    const box = await page.locator("[data-lens-band]").boundingBox();
+    const box = await page.locator('[data-lens-band]').boundingBox();
     expect(box).not.toBeNull();
     const bottom = box!.y + box!.height;
     console.log(`SC2 · band bottom at 1440, scrollY 400: ${bottom}px`);
@@ -157,7 +155,7 @@ test.describe("the lens band’s declared height", () => {
   // this branch, so there is nothing to delete here — this is the GROSS
   // assertion D-B30 promotes it to. If a future merge brings the W3-fix
   // allowance line into this file, delete it in favour of this case.
-  test("D-B30 — at 390 the letterhead chips block is gone and the first region head stands at or above 400px gross", async ({
+  test('D-B30 — at 390 the letterhead chips block is gone and the first region head stands at or above 400px gross', async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 390, 844);
@@ -168,7 +166,7 @@ test.describe("the lens band’s declared height", () => {
     ).toHaveCount(0);
 
     const firstHead = page
-      .locator("[data-document-paper] [data-region-head]")
+      .locator('[data-document-paper] [data-region-head]')
       .first();
     await expect(firstHead).toBeVisible({ timeout: 20_000 });
     const box = await firstHead.boundingBox();

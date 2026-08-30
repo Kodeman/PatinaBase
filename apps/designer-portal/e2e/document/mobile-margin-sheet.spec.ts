@@ -23,12 +23,12 @@
  * deleted chips block printed, per D-B30 item 2 ("the sheet lists exactly
  * what the block printed").
  */
-import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
-import { settle } from "../helpers/lens";
-import { LONG_PAPER_ID, assertLongPaper } from "./lens-fixtures";
+import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
+import { settle } from '../helpers/lens';
+import { LONG_PAPER_ID, assertLongPaper } from './lens-fixtures';
 
 test.skip(
-  ({ browserName }) => browserName === "firefox",
+  ({ browserName }) => browserName === 'firefox',
   'the lens specs run chromium + webkit (test-impact, "Browser ruling"); Firefox is not a shipped target for this portal',
 );
 
@@ -36,26 +36,26 @@ test.skip(
  *  comment — not the whole margin (7), which includes the 3 Pieces-line-
  *  anchored items this sheet does not list (D-B30). */
 const EXPECTED_TITLES = [
-  "Primary bedroom — rug and nightstands",
-  "Dining room — finish sample",
-  "Whole-house hardware",
-  "INV-2026-114",
+  'Primary bedroom — rug and nightstands',
+  'Dining room — finish sample',
+  'Whole-house hardware',
+  'INV-2026-114',
 ] as const;
 
 async function openPaperAt390(page: AuthenticatedPage): Promise<void> {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: "domcontentloaded" });
-  await expect(page.locator("[data-document-shell]")).toBeVisible({
+  await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[data-document-shell]')).toBeVisible({
     timeout: 30_000,
   });
   await settle(page);
 }
 
 function moreDoor(page: AuthenticatedPage) {
-  return page.getByRole("button", { name: "More studio actions" });
+  return page.getByRole('button', { name: 'More studio actions' });
 }
 
-test.describe("the Margin sheet at 390 (D-B30)", () => {
+test.describe('the Margin sheet at 390 (D-B30)', () => {
   test.beforeAll(() => {
     assertLongPaper();
   });
@@ -71,59 +71,59 @@ test.describe("the Margin sheet at 390 (D-B30)", () => {
     ).toHaveCount(0);
 
     await moreDoor(page).click();
-    const menu = page.getByRole("group", { name: "More studio actions" });
-    const inThisDocument = menu.getByRole("group", {
-      name: "In this document",
+    const menu = page.getByRole('group', { name: 'More studio actions' });
+    const inThisDocument = menu.getByRole('group', {
+      name: 'In this document',
     });
-    const margin = inThisDocument.getByRole("button", { name: "Margin · 4" });
+    const margin = inThisDocument.getByRole('button', { name: 'Margin · 4' });
     await expect(margin).toBeVisible();
 
-    const rows = inThisDocument.locator("a, button");
+    const rows = inThisDocument.locator('a, button');
     const first = await rows.first().textContent();
-    expect(first?.replace("→", "")).toBe("Margin · 4");
+    expect(first?.replace('→', '')).toBe('Margin · 4');
   });
 
-  test("opens the Margin sheet listing the four letterhead-anchored items, each with one inline act", async ({
+  test('opens the Margin sheet listing the four letterhead-anchored items, each with one inline act', async ({
     authenticatedPage: page,
   }) => {
     await openPaperAt390(page);
     await moreDoor(page).click();
     await page
-      .getByRole("group", { name: "In this document" })
-      .getByRole("button", { name: "Margin · 4" })
+      .getByRole('group', { name: 'In this document' })
+      .getByRole('button', { name: 'Margin · 4' })
       .click();
 
-    const sheet = page.getByRole("dialog", { name: "The margin" });
+    const sheet = page.getByRole('dialog', { name: 'The margin' });
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByText("Margin")).toBeVisible();
+    await expect(sheet.getByText('Margin')).toBeVisible();
     // The overdue rug/nightstands decision (state=overdue, six days) is the
     // one letterhead item the derivation counts as overdue.
-    await expect(sheet.getByText("1 overdue")).toBeVisible();
+    await expect(sheet.getByText('1 overdue')).toBeVisible();
 
-    const rows = sheet.locator("[data-margin-row]");
+    const rows = sheet.locator('[data-margin-row]');
     await expect(rows).toHaveCount(EXPECTED_TITLES.length);
 
     for (const title of EXPECTED_TITLES) {
       const row = rows.filter({ hasText: title });
       await expect(row).toHaveCount(1);
-      await expect(row.locator("[data-margin-row-act]")).toHaveCount(1);
+      await expect(row.locator('[data-margin-row-act]')).toHaveCount(1);
     }
   });
 
-  test("Escape returns focus to the More door", async ({
+  test('Escape returns focus to the More door', async ({
     authenticatedPage: page,
   }) => {
     await openPaperAt390(page);
     const door = moreDoor(page);
     await door.click();
     await page
-      .getByRole("group", { name: "In this document" })
-      .getByRole("button", { name: "Margin · 4" })
+      .getByRole('group', { name: 'In this document' })
+      .getByRole('button', { name: 'Margin · 4' })
       .click();
 
-    const sheet = page.getByRole("dialog", { name: "The margin" });
+    const sheet = page.getByRole('dialog', { name: 'The margin' });
     await expect(sheet).toBeVisible();
-    await page.keyboard.press("Escape");
+    await page.keyboard.press('Escape');
     await expect(sheet).toBeHidden();
     // Selecting any More row focuses the More button before its action runs
     // (mobile-bar.tsx `closeThen`) — the same mechanic every door-opened

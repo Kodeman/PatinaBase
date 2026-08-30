@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * D-B30 — the letterhead- and section-anchored margin set, extracted from
@@ -10,17 +10,17 @@
  * their own inline filter in `mobile-margin-chips.tsx`.
  */
 
-import { useMemo } from "react";
-import { useMarginItems } from "@/hooks/use-margin-items";
-import { useCoordinationItems } from "@patina/supabase";
+import { useMemo } from 'react';
+import { useMarginItems } from '@/hooks/use-margin-items';
+import { useCoordinationItems } from '@patina/supabase';
 import {
   classifyMarginItems,
   marginDecisionClassificationState,
   type MarginDecisionClassificationState,
-} from "@/lib/document/stage2-approval-exclusions";
-import type { MarginItemRow } from "@/lib/document/margin-derivation";
-import { useHandoffGates } from "@/components/document/margin-handoff-item";
-import type { WorkflowGate } from "@/lib/document/workflow-gate";
+} from '@/lib/document/stage2-approval-exclusions';
+import type { MarginItemRow } from '@/lib/document/margin-derivation';
+import { useHandoffGates } from '@/components/document/margin-handoff-item';
+import type { WorkflowGate } from '@/lib/document/workflow-gate';
 
 export interface LetterheadMargin {
   /** Non-time items anchored to the letterhead or a section — what the
@@ -41,7 +41,7 @@ export interface LetterheadMargin {
 export function useLetterheadMargin({
   projectId,
   proposalId,
-  clientName = "",
+  clientName = '',
 }: {
   projectId: string | null;
   proposalId: string | null;
@@ -55,7 +55,7 @@ export function useLetterheadMargin({
     () =>
       (items ?? []).filter(
         (item) =>
-          item.anchor_kind === "letterhead" || item.anchor_kind === "section",
+          item.anchor_kind === 'letterhead' || item.anchor_kind === 'section',
       ),
     [items],
   );
@@ -80,7 +80,7 @@ export function useLetterheadMargin({
   );
 
   const items_ = useMemo(
-    () => classifiedMargin.items.filter((item) => item.kind !== "time"),
+    () => classifiedMargin.items.filter((item) => item.kind !== 'time'),
     [classifiedMargin.items],
   );
 
@@ -91,7 +91,7 @@ export function useLetterheadMargin({
 
   const overdueCount = useMemo(
     () =>
-      items_.filter((row) => row.state === "overdue").length +
+      items_.filter((row) => row.state === 'overdue').length +
       gates.filter((gate) => gate.overdue.isOverdue).length,
     [items_, gates],
   );
