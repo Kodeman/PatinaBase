@@ -16,6 +16,39 @@ import { act, render } from '@testing-library/react';
 import { useLensDensity, useLensDensityStore } from '../use-lens-density';
 import type { LensDensityApi } from '../use-lens-density';
 
+/**
+ * D-B46's first half. The hook reads the live query count off the cache's own
+ * subscription (W4F3-06 — no render for a number only a rAF reads), so the
+ * fake client is the seam: the suite sets `fetching` and notifies, and a paper
+ * can be held "still loading" for as long as a case needs.
+ */
+let fetching = 0;
+let notifyCache: () => void = () => {};
+jest.mock('@tanstack/react-query', () => ({
+  QueryClientContext: jest.requireActual('react').createContext(undefined),
+  QueryClient: class {
+    isFetching() {
+      return fetching;
+    }
+    getQueryCache() {
+      return {
+        subscribe: (listener: () => void) => {
+          notifyCache = listener;
+          return () => {
+            notifyCache = () => {};
+          };
+        },
+      };
+    }
+  },
+}));
+
+/** The query count moved: the cache tells its subscribers, as it would. */
+function setFetching(count: number) {
+  fetching = count;
+  notifyCache();
+}
+
 class CapturingIntersectionObserver {
   static instances: CapturingIntersectionObserver[] = [];
 
@@ -47,6 +80,16 @@ class CapturingIntersectionObserver {
   }
 
   fire(targets: Element[], isIntersecting = true): void {
+    // An entry that says "intersecting" is a statement about geometry, and the
+    // hook re-measures position at the moment it writes (a queued entry can
+    // outlive the paper it was computed against). So a fired crossing brings
+    // its target to the line, or the fixture would be asserting against a
+    // reading the browser could never produce.
+    if (isIntersecting) {
+      for (const target of targets) {
+        topAt(target as HTMLElement, window.innerHeight);
+      }
+    }
     this.callback(
       targets.map(
         (target) =>
@@ -94,7 +137,18 @@ function mountPaper(keys: readonly string[] = REGION_KEYS) {
   });
   shell.appendChild(paper);
   document.body.appendChild(shell);
+  // D-B46's second half: jsdom lays nothing out, so `scrollHeight` is 0 for
+  // every element and a paper would never look resolved. The suite states the
+  // height it means, and changes it to play a paper that is still growing.
+  setPaperHeight(paper, 5000);
   return { shell, paper };
+}
+
+function setPaperHeight(paper: HTMLElement, height: number) {
+  Object.defineProperty(paper, 'scrollHeight', {
+    value: height,
+    configurable: true,
+  });
 }
 
 function regionRoot(key: string): HTMLElement {
@@ -106,8 +160,10 @@ function observer(): CapturingIntersectionObserver {
 }
 
 /** Attributes are written inside a rAF; a `MutationObserver` delivers on a
- *  microtask. Both have to drain before the DOM can be read. */
-async function flush(ms = 32) {
+ *  microtask. Both have to drain before the DOM can be read. The default is
+ *  six frames rather than two because D-B46's gate spends four of them: one to
+ *  take the paper's first height, three to watch it hold. */
+async function flush(ms = 96) {
   await act(async () => {
     jest.advanceTimersByTime(ms);
   });
@@ -143,6 +199,8 @@ describe('useLensDensity', () => {
 
   beforeEach(() => {
     jest.useFakeTimers();
+    fetching = 0;
+    notifyCache = () => {};
     document.body.innerHTML = '';
     CapturingIntersectionObserver.instances = [];
     global.IntersectionObserver =
@@ -220,6 +278,16 @@ describe('useLensDensity', () => {
     await flush();
 
     const approvals = regionRoot('approvals');
+    // W4F3-09 / D-B16(ii): the mark only ever lands on a root the lens has
+    // opened — a quiet root that took it would make "every `[data-passed]` root
+    // is full" false, and the attribute is never removed. So she reaches it
+    // first, and passes it after.
+    await act(async () => {
+      observer().fire([approvals]);
+      jest.advanceTimersByTime(32);
+    });
+    expect(approvals).toHaveAttribute('data-density', 'full');
+
     const write = jest.spyOn(approvals, 'setAttribute');
 
     bottomAt(approvals, -10);
@@ -391,25 +459,362 @@ describe('useLensDensity', () => {
     expect(late).not.toHaveAttribute('data-density');
   });
 
-  it('promotes what is already in frame before paint, with no observer record at all', async () => {
-    mountPaper();
-    // The first screen: approvals in the frame, schedule just under the
-    // lookahead line, the rest far below it.
+  // ── D-B46 · the resolution gate ──────────────────────────────────────────
+  // Was: "promotes what is already in frame before paint" — the layout-effect
+  // pass ran at mount and its promotions were asserted synchronously after
+  // `render()`. The lead's cold-load probe showed what that measured: five
+  // roots mounting into a ~2,600px skeleton put `money` and `record` inside
+  // `innerHeight + 240`, and one direction meant `record` stood `full` 9,033px
+  // below the frame on every cold load. The pass now waits for the paper.
+
+  it('promotes nothing into a paper that is still growing', async () => {
+    const { paper } = mountPaper();
     topAt(regionRoot('approvals'), 40);
-    topAt(regionRoot('schedule'), window.innerHeight + 200);
+    topAt(regionRoot('schedule'), 300);
+    topAt(regionRoot('ffe'), 600);
 
     const { getByTestId } = render(<Probe watch="approvals" />);
 
-    // No flush, no entry fired: the layout effect has already corrected the
-    // SSR-quiet markup, so hydration paints these full.
+    // The skeleton grows every frame, exactly as the bodies resolve.
+    let height = 400;
+    for (let frame = 0; frame < 12; frame += 1) {
+      height += 400;
+      setPaperHeight(paper, height);
+      await flush(16);
+      expect(regionRoot('approvals')).toHaveAttribute('data-density', 'quiet');
+    }
+
+    expect(regionRoot('schedule')).toHaveAttribute('data-density', 'quiet');
+    expect(regionRoot('ffe')).toHaveAttribute('data-density', 'quiet');
+    expect(getByTestId('spoken')).toHaveTextContent('silent');
+    expect(
+      document.querySelector('[data-document-shell]'),
+    ).not.toHaveAttribute('data-lens-resolved');
+  });
+
+  it('promotes nothing while a query is still fetching, however still the paper is', async () => {
+    setFetching(1);
+    mountPaper();
+    topAt(regionRoot('approvals'), 40);
+
+    render(<Probe watch="approvals" />);
+    await flush(320);
+
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'quiet');
+    expect(
+      document.querySelector('[data-document-shell]'),
+    ).not.toHaveAttribute('data-lens-resolved');
+    // Observed, ordered, waiting — the gate defers the promotion, it does not
+    // drop the root.
+    expect(observer().observed.has(regionRoot('approvals'))).toBe(true);
+  });
+
+  it('runs D-B15(c)\u2019s pass the moment the paper resolves, and only on the roots at the line', async () => {
+    const { shell, paper } = mountPaper();
+    topAt(regionRoot('approvals'), 40);
+    topAt(regionRoot('schedule'), window.innerHeight + 200);
+    topAt(regionRoot('ffe'), window.innerHeight + 400);
+
+    setFetching(1);
+    setPaperHeight(paper, 9000);
+    const { getByTestId } = render(<Probe watch="approvals" />);
+    await flush(160);
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'quiet');
+
+    // The last query settles — the cache says so, and no render happens.
+    setFetching(0);
+    await flush();
+
+    // In frame, and inside the 240 lookahead: promoted.
     expect(regionRoot('approvals')).toHaveAttribute('data-density', 'full');
     expect(regionRoot('schedule')).toHaveAttribute('data-density', 'full');
+    // 400px below the line: not.
     expect(regionRoot('ffe')).toHaveAttribute('data-density', 'quiet');
+    expect(regionRoot('money')).toHaveAttribute('data-density', 'quiet');
     expect(getByTestId('spoken')).toHaveTextContent('full');
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+  });
 
-    // Promoted at discovery is promoted without ever being watched.
-    expect(observer().observed.has(regionRoot('approvals'))).toBe(false);
-    expect(observer().observed.has(regionRoot('ffe'))).toBe(true);
+  it('runs the same pass at the 3000ms deadline when the paper never settles', async () => {
+    const { shell, paper } = mountPaper();
+    topAt(regionRoot('approvals'), 40);
+
+    // A query that keeps retrying: the gate's first half never opens.
+    setFetching(1);
+    render(<Probe watch="approvals" />);
+
+    let height = 400;
+    for (let frame = 0; frame < 20; frame += 1) {
+      height += 100;
+      setPaperHeight(paper, height);
+      await flush(16);
+    }
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'quiet');
+
+    await flush(3000);
+
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'full');
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+  });
+
+  it('resolves a warm paper inside three frames — D-B15\u2019s no-flash intent, to within the gate', async () => {
+    const { shell } = mountPaper();
+    topAt(regionRoot('approvals'), 40);
+
+    // Warm: the cache is primed, so nothing is fetching and the paper is laid
+    // out at its full height on the first commit.
+    render(<Probe watch="approvals" />);
+    await flush(64);
+
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'full');
+  });
+
+  it('does not resolve in a lull — a register still printing holds the gate', async () => {
+    // The readiness queries are dependent, so `isFetching` returns to 0 between
+    // waves while the paper is still a skeleton, and three stable frames fit
+    // inside that lull. A body still printing its loading register has no
+    // honest height, whatever the query count says.
+    const { shell, paper } = mountPaper();
+    topAt(regionRoot('approvals'), 40);
+    const register = document.createElement('p');
+    register.setAttribute('role', 'status');
+    register.setAttribute('aria-busy', 'true');
+    paper.appendChild(register);
+
+    render(<Probe watch="approvals" />);
+    await flush(400);
+
+    expect(shell).not.toHaveAttribute('data-lens-resolved');
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'quiet');
+
+    register.remove();
+    await flush();
+
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'full');
+  });
+
+  it('does not resolve early when a query starts again inside the stable window', async () => {
+    const { shell } = mountPaper();
+    topAt(regionRoot('approvals'), 40);
+
+    render(<Probe watch="approvals" />);
+    // Two stable frames, then the next wave begins: the count restarts, so the
+    // three consecutive frames the gate wants never happen here.
+    await flush(32);
+    setFetching(1);
+    await flush(32);
+    expect(shell).not.toHaveAttribute('data-lens-resolved');
+
+    setFetching(0);
+    await flush(32);
+    expect(shell).not.toHaveAttribute('data-lens-resolved');
+
+    await flush();
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+  });
+
+  it('cascades: the pass opens the prefix that stays at the line, and stops there', async () => {
+    // The paper's geometry is a function of this pass's own decisions. Each
+    // root is laid out from the heights of the roots above it, and a promoted
+    // root takes its real height — the same arithmetic the browser does, which
+    // is what makes "all six are inside the lookahead at reserve" true and
+    // "all six should open" false.
+    const SPEC = [
+      { key: 'approvals', reserve: 68, full: 340 },
+      { key: 'schedule', reserve: 68, full: 920 },
+      { key: 'ffe', reserve: 112, full: 5780 },
+      { key: 'money', reserve: 70, full: 1080 },
+      { key: 'care', reserve: 102, full: 846 },
+      { key: 'record', reserve: 68, full: 68 },
+    ];
+    const { shell } = mountPaper(SPEC.map((entry) => entry.key));
+    const roots = SPEC.map((entry) => regionRoot(entry.key));
+    const heightOf = (index: number) =>
+      roots[index].getAttribute('data-density') === 'full'
+        ? SPEC[index].full
+        : SPEC[index].reserve;
+    roots.forEach((root, index) => {
+      root.getBoundingClientRect = () => {
+        let top = 300; // the letterhead and the band above the first stop
+        for (let above = 0; above < index; above += 1) {
+          top += heightOf(above) + 24; // --doc-region-gap
+        }
+        const height = heightOf(index);
+        return {
+          top,
+          bottom: top + height,
+          height,
+          left: 0,
+          right: 0,
+          width: 0,
+        } as DOMRect;
+      };
+    });
+
+    // At reserve every root stands inside the lookahead: a single-measurement
+    // pass would open all six.
+    const line = window.innerHeight + 240;
+    for (const root of roots) {
+      expect(root.getBoundingClientRect().top).toBeLessThanOrEqual(line);
+    }
+
+    render(<Probe />);
+    await flush();
+
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'full');
+    expect(regionRoot('schedule')).toHaveAttribute('data-density', 'full');
+    // `ffe` lands at 1,608 once the two above it carry their real heights,
+    // which is past the line — and the walk stops there rather than measuring
+    // on down a paper that is still about to grow.
+    expect(regionRoot('ffe')).toHaveAttribute('data-density', 'quiet');
+    expect(regionRoot('money')).toHaveAttribute('data-density', 'quiet');
+    expect(regionRoot('care')).toHaveAttribute('data-density', 'quiet');
+    expect(regionRoot('record')).toHaveAttribute('data-density', 'quiet');
+    // Never opened is never unobserved: the four below the break are still
+    // watched, so the observer speaks for them when she reaches them.
+    for (const key of ['ffe', 'money', 'care', 'record']) {
+      expect(observer().observed.has(regionRoot(key))).toBe(true);
+    }
+  });
+
+  it('returns a stale crossing to waiting — position is measured at the write', async () => {
+    // An `IntersectionObserver` entry is queued at the end of the frame that
+    // computed it, so one measured against the skeleton can land after the
+    // paper has grown under it. The commit re-checks rather than trusting it.
+    mountPaper();
+    render(<Probe />);
+    await flush();
+
+    const money = regionRoot('money');
+    await act(async () => {
+      observer().fire([money]);
+    });
+    // The paper grows between the entry and the commit: the root it named is
+    // now 6,000px down.
+    topAt(money, 6000);
+    await act(async () => {
+      scrollTo(400);
+      jest.advanceTimersByTime(32);
+    });
+    await flush(200);
+
+    expect(money).toHaveAttribute('data-density', 'quiet');
+    expect(observer().observed.has(money)).toBe(true);
+    expect(api.getDensity('money')).toBeNull();
+  });
+
+  it('starts the deadline when the paper arrives, not when the hook mounts (W4F3-01)', async () => {
+    // The hook attaches above the page's early returns. A clock armed there
+    // expires while the document is still compiling or its first query is
+    // still out — and a deadline that fires with no paper would latch
+    // `resolved` against nothing, so every root the MutationObserver later
+    // found would promote against the skeleton it mounted into. That is the
+    // lead's defect, reached through the fallback that exists to prevent it.
+    const shell = document.createElement('div');
+    shell.setAttribute('data-document-shell', '');
+    document.body.appendChild(shell);
+
+    // A query that never stops: the stable-frames route is closed, so the
+    // deadline is the only clock in this case.
+    setFetching(1);
+    render(<Probe />);
+    await flush(5000);
+    expect(shell).not.toHaveAttribute('data-lens-resolved');
+
+    const paper = document.createElement('main');
+    paper.setAttribute('data-document-paper', '');
+    const near = document.createElement('section');
+    near.setAttribute('data-index-region', 'approvals');
+    near.setAttribute('data-density', 'quiet');
+    topAt(near, 120);
+    const far = document.createElement('section');
+    far.setAttribute('data-index-region', 'record');
+    far.setAttribute('data-density', 'quiet');
+    topAt(far, 4000);
+    paper.append(near, far);
+    setPaperHeight(paper, 6000);
+
+    await act(async () => {
+      shell.appendChild(paper);
+    });
+    await flush(32);
+    expect(shell).not.toHaveAttribute('data-lens-resolved');
+
+    await flush(2900);
+    expect(shell).not.toHaveAttribute('data-lens-resolved');
+
+    await flush(200);
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+    // And the cascade ran against the paper that is there NOW.
+    expect(near).toHaveAttribute('data-density', 'full');
+    expect(far).toHaveAttribute('data-density', 'quiet');
+  });
+
+  it('buffers a crossing made during the load and lands it at resolution', async () => {
+    const { paper } = mountPaper();
+    setFetching(1);
+    render(<Probe />);
+    await flush();
+
+    // She is scrolling while the paper loads — the crossing is real, and it
+    // waits for a paper that can be measured.
+    await act(async () => {
+      observer().fire([regionRoot('money')]);
+      jest.advanceTimersByTime(32);
+    });
+    expect(regionRoot('money')).toHaveAttribute('data-density', 'quiet');
+
+    setFetching(0);
+    setPaperHeight(paper, 5000);
+    await flush();
+
+    expect(regionRoot('money')).toHaveAttribute('data-density', 'full');
+  });
+
+  it('lands a press before the paper resolves — a press is her, not the lens guessing', async () => {
+    mountPaper();
+    setFetching(1);
+    render(<Probe />);
+    await flush(160);
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'quiet');
+
+    await act(async () => {
+      api.forceFullThrough('ffe');
+    });
+
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'full');
+    expect(regionRoot('schedule')).toHaveAttribute('data-density', 'full');
+    expect(regionRoot('ffe')).toHaveAttribute('data-density', 'full');
+    expect(regionRoot('money')).toHaveAttribute('data-density', 'quiet');
+  });
+
+  it('promotes a deep landing once resolved — in frame and inside the lookahead', async () => {
+    const { paper } = mountPaper();
+    render(<Probe />);
+    await flush();
+
+    // She lands deep on the paper: a late root arrives above the frame, and
+    // another just inside the line.
+    const above = document.createElement('section');
+    above.setAttribute('data-index-region', 'record');
+    above.setAttribute('data-density', 'quiet');
+    topAt(above, -900);
+    const ahead = document.createElement('section');
+    ahead.setAttribute('data-index-region', 'care');
+    ahead.setAttribute('data-density', 'quiet');
+    topAt(ahead, window.innerHeight + 100);
+
+    await act(async () => {
+      paper.appendChild(above);
+      paper.appendChild(ahead);
+    });
+    await flush();
+
+    expect(above).toHaveAttribute('data-density', 'full');
+    expect(ahead).toHaveAttribute('data-density', 'full');
   });
 
   it('answers a root discovered above the frame — nothing below will ever cross for it', async () => {
@@ -641,6 +1046,10 @@ describe('useLensDensity', () => {
     });
     await flush();
 
+    // W4F3-04: the verdict went with the old element — a paper that has been
+    // replaced has not resolved, whatever was decided about its predecessor.
+    expect(shell).not.toHaveAttribute('data-lens-resolved');
+
     const replacement = document.createElement('main');
     replacement.setAttribute('data-document-paper', '');
     const region = document.createElement('section');
@@ -650,13 +1059,20 @@ describe('useLensDensity', () => {
     // the only answer to.
     topAt(region, -400, 100);
     replacement.appendChild(region);
+    setPaperHeight(replacement, 4000);
 
     await act(async () => {
       shell.appendChild(replacement);
     });
     await flush();
 
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
     expect(region).toHaveAttribute('data-density', 'full');
+
+    // W4F3-09: the mark follows the promotion by a frame — `markPassed` only
+    // ever marks a root the lens has opened, and this one opened in the
+    // resolution pass that ran after the last sweep.
+    await flush(32);
     expect(region).toHaveAttribute('data-passed', '');
   });
 

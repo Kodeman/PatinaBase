@@ -232,8 +232,11 @@
    their legacy-portal position outside this route group. The below-1180 value
    is the bar's own floor, so it holds with no safe area to add. */
 .document-route-shell {
+  /* D-B47: `--doc-mobile-bar-height` is published on `html` by the bar's own
+     ResizeObserver (min 72px), and is absent wherever the bar is not laid
+     out — so the fallback is the contract this rule always carried. */
   --doc-shell-bottom-inset: max(
-    72px,
+    var(--doc-mobile-bar-height, 72px),
     calc(60px + env(safe-area-inset-bottom))
   );
   --doc-shell-floating-bottom: calc(var(--doc-shell-bottom-inset) + 1.5rem);
@@ -1091,7 +1094,10 @@
    bar at the very width the clearance rule exists for. The token itself is
    declared on `.document-route-shell` and cannot be read from `html`. */
 html:has([data-document-shell]) {
-  scroll-padding-bottom: max(72px, calc(60px + env(safe-area-inset-bottom)));
+  scroll-padding-bottom: max(
+    var(--doc-mobile-bar-height, 72px),
+    calc(60px + env(safe-area-inset-bottom))
+  );
 }
 
 /* R127/A-07 — the foot reserve. The last stop on the paper has to be able to

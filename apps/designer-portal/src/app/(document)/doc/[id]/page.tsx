@@ -1619,6 +1619,48 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     [lens, runningIndexProjectId],
   );
 
+  // D-B46 — the same press order for a target INSIDE a region: the Margin
+  // sheet's line rows and the sections sheet's room rows both land on ids that
+  // live in the FF&E body, and a body that is quiet (or that she closed
+  // herself — a stop's fold is explicit-only, C-8) is not mounted. So: ask for
+  // the unfold, flush the promotion, then land two frames later, when the
+  // paint that mounted the body has happened. The same two-frame idiom
+  // `scrollToRegion` uses, for the same reason.
+  const landOnFfeAnchor = useCallback(
+    (elementId: string) => {
+      requestRegionUnfold('ffe');
+      lens.forceFullThrough('ffe');
+      const reduceMotion = window.matchMedia?.(
+        '(prefers-reduced-motion: reduce)',
+      ).matches;
+      const land = () =>
+        document.getElementById(elementId)?.scrollIntoView({
+          block: 'start',
+          behavior: reduceMotion ? 'auto' : 'smooth',
+        });
+      // The promotion above is flushed, so a region that was merely quiet has
+      // its body already: land now, in the same turn as the press. Only an
+      // unfold — a React state change the event above asked for — needs the
+      // paint to happen first, and that is the one case that waits.
+      if (document.getElementById(elementId)) {
+        land();
+        return;
+      }
+      requestAnimationFrame(() => {
+        requestAnimationFrame(land);
+      });
+    },
+    [lens],
+  );
+  const jumpToLine = useCallback(
+    (lineId: string) => landOnFfeAnchor(`ffe-selection-${lineId}`),
+    [landOnFfeAnchor],
+  );
+  const jumpToRoom = useCallback(
+    (roomId: string) => landOnFfeAnchor(`doc-room-${roomId}`),
+    [landOnFfeAnchor],
+  );
+
   // W3 · the two yields the lens line needs: whether the letterhead is still in
   // frame (the band's s0 form, and L-6 on the rail head) and which stop's own
   // head is crossing the frame's top band (L-3 on the ladder). Called above
@@ -1790,6 +1832,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           ladderValues,
           clientCopy: ticketInput?.clientCopy != null,
           onJumpRegion: jumpToRegion,
+          onPromoteThrough: lens.forceFullThrough,
+          onJumpToLine: jumpToLine,
+          onJumpToRoom: jumpToRoom,
           marginCount: marginSheetCount,
         }
       : null,

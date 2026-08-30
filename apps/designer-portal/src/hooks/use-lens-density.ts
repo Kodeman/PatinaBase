@@ -41,6 +41,17 @@
  * hydration paints has the in-frame regions full and there is no quiet→full
  * flash on the first screen.
  *
+ * That pass waits for the paper to RESOLVE (D-B46). Measuring a paper whose
+ * bodies are still loading measures a fiction: on a cold load the first five
+ * roots mount into a ~2,600px skeleton, so stops that settle 7,000–9,000px down
+ * are inside `innerHeight + 240` at that instant, and one direction means the
+ * lens can never take those promotions back. Resolved means no query is
+ * fetching AND `scrollHeight` has held for three frames — or, if that never
+ * comes, 3,000ms after mount against whatever is laid out, so the lens cannot
+ * hang quiet. Until then discovery observes and orders roots but promotes
+ * nothing, and crossings buffer; a press still promotes at once, because a
+ * press is the reader acting rather than the lens guessing.
+ *
  * The store is module-level rather than a context because the hook is called
  * once, at the page's root, while the bodies that listen are several levels
  * down inside components the page composes but does not wrap.
@@ -48,6 +59,7 @@
 
 import {
   useCallback,
+  useContext,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -55,8 +67,11 @@ import {
 } from 'react';
 import type { RefObject } from 'react';
 import { flushSync } from 'react-dom';
+import { QueryClient, QueryClientContext } from '@tanstack/react-query';
 import {
   LENS_LOOKAHEAD_PX,
+  LENS_RESOLVE_MAX_MS,
+  LENS_RESOLVE_STABLE_FRAMES,
   LENS_SETTLE_MS,
   LENS_SETTLE_VELOCITY_PX,
 } from '@/lib/document/lens-constants';
@@ -66,6 +81,22 @@ import type { RegionDensity } from '@/components/document/region/use-region-fold
 const PAPER_SELECTOR = '[data-document-paper]';
 const REGION_SELECTOR = '[data-index-region]';
 const SHELL_SELECTOR = '[data-document-shell]';
+const RESOLVED_ATTRIBUTE = 'data-lens-resolved';
+/**
+ * The design lead's own alternative mechanism for defect 1, in the DOM: "defer
+ * the initial commit until the region's loading register is gone". Measured on
+ * the seeded long paper, the fetch signal alone is not enough — the readiness
+ * queries are DEPENDENT (they fire only once the FF&E items resolve), so
+ * `isFetching` returns to 0 in the lull between waves while the paper is still
+ * a 2,163px skeleton, and three stable frames pass inside that lull. A body
+ * that is still printing its loading register is a body whose height is not
+ * its own yet, whatever the query count says.
+ */
+export const LOADING_SELECTOR = '[aria-busy="true"], .animate-pulse';
+
+/** Never mounted, never fetching: the count it reports is 0 forever. */
+const STANDBY_CLIENT = new QueryClient();
+
 
 declare global {
   interface Window {
@@ -191,6 +222,34 @@ export function useLensDensity(
   const settledRef = useRef<() => Promise<true>>(() => Promise.resolve(true));
   const freezeRef = useRef<(frozen: boolean) => void>(() => {});
 
+  // D-B46 — the resolution gate's first half. Read through a ref because the
+  // sampler runs in a `requestAnimationFrame` inside an effect that must not
+  // re-run when the count changes: re-running would tear down the observers
+  // and lose every buffered crossing on each query settling.
+  //
+  // W4F3-06: read through the cache's own subscription, never `useIsFetching`.
+  // That hook re-renders the whole document page on EVERY query in the app
+  // starting or finishing — a mood-board thumbnail, a header count — to feed a
+  // number only a `requestAnimationFrame` ever reads. The cache subscription
+  // costs no render at all, and it needs no list of the paper's query keys to
+  // stay honest.
+  //
+  // The client comes from context rather than a hook lookup, which THROWS
+  // where there is no provider: the lens attaches unconditionally, including
+  // on the paper's own page suites, which mock every data hook and set up no
+  // client, and a gate that crashed the page it was protecting would cost more
+  // than the defect. With no provider the standby client reads 0 forever and
+  // the paper's own height and registers carry the gate alone.
+  const client = useContext(QueryClientContext) ?? STANDBY_CLIENT;
+  const fetchingRef = useRef(0);
+  useLayoutEffect(() => {
+    const read = () => {
+      fetchingRef.current = client.isFetching();
+    };
+    read();
+    return client.getQueryCache().subscribe(read);
+  }, [client]);
+
   useLayoutEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -217,6 +276,34 @@ export function useLensDensity(
     let waiting: Array<(reason?: Error) => void> = [];
     let stopped = false;
     let frozen = false;
+    /** D-B46 — with the lens off there is nothing to wait for: OD-4's fallback
+     *  writes every root `full` on arrival. */
+    let resolved = !enabled;
+    let stableFrames = 0;
+    let lastHeight = -1;
+    /** A `requestAnimationFrame` is not always a frame: suites that stub it to
+     *  run its callback synchronously (`paper-order.test.tsx`) turn a chain
+     *  that waits on wall-clock time into recursion. Depth is capped at the few
+     *  frames the gate actually needs — enough for a stable paper to resolve
+     *  where frames cost nothing, and no further, because deeper than that is
+     *  not time passing. The wall-clock deadline remains the ONE clock, which
+     *  is also the right answer for a background tab whose frames are
+     *  throttled to a stop. */
+    let syncDepth = 0;
+    const MAX_SYNC_DEPTH = LENS_RESOLVE_STABLE_FRAMES + 2;
+    let resolveFrame: number | null = null;
+    let resolveDeadline: ReturnType<typeof setTimeout> | null = null;
+    /** W4F3-01 — the paper the deadline is running for. The clock cannot start
+     *  before there is a paper to time: armed at mount it would expire while
+     *  the document was still compiling or its first query still out, latch
+     *  `resolved` with nothing laid out, and then promote every root the
+     *  MutationObserver later found against the skeleton it mounted into —
+     *  the lead's defect, reached by the fallback that exists to prevent it. */
+    let deadlineFor: HTMLElement | null = null;
+    /** W4F3-04 — the paper resolution was decided on. `<main data-document-paper>`
+     *  is REPLACED, not refilled, when the page re-suspends, and a verdict about
+     *  a detached element cannot govern its successor. */
+    let resolvedPaper: HTMLElement | null = null;
 
     const resolvePaper = (): HTMLElement | null => {
       const held = paperRef?.current ?? null;
@@ -260,8 +347,21 @@ export function useLensDensity(
     };
 
     const commitPending = (): void => {
-      if (frozen || pending.size === 0) return;
-      for (const root of ordered) if (pending.has(root)) promote(root);
+      // D-B46: a crossing during the load is a real crossing — it buffers, and
+      // it lands with everything else the moment the paper has a height.
+      if (!resolved || frozen || pending.size === 0) return;
+      // Position is the test, always measured at the moment of the write. An
+      // `IntersectionObserver` entry is queued at the end of the frame that
+      // computed it, so an entry can arrive AFTER the paper it was measured
+      // against has gone: on the seeded long paper the skeleton put all six
+      // roots inside the lookahead, and those entries were still landing when
+      // the paper reached 10,636px — promoting `money` at 7,691 and `care` at
+      // 8,794 off a reading of a page that no longer existed. A root that no
+      // longer stands at the line goes back to waiting; it is still observed,
+      // so the observer will say so again when she reaches it.
+      for (const root of ordered) {
+        if (pending.has(root) && withinLookahead(root)) promote(root);
+      }
       // A root that left the paper between crossing and settling is no longer
       // in `ordered`; it has nothing left to be written to.
       pending.clear();
@@ -280,9 +380,135 @@ export function useLensDensity(
       if (!enabled) return;
       for (const root of ordered) {
         if (passed.has(root)) continue;
+        // W4F3-09 / D-B16(ii): every `[data-passed]` root is `full`. A quiet
+        // root that drifted above the frame during the load would otherwise
+        // take the mark and hold it forever — the attribute is never removed —
+        // and the invariant W4-L4 asserts would be false on the state the lens
+        // itself produced. It is not lost: the root is still observed, and the
+        // commit re-measures, so passing above the frame promotes it and the
+        // mark follows on the next frame.
+        if (!committed.has(root)) continue;
         if (root.getBoundingClientRect().bottom >= 0) continue;
         passed.add(root);
         root.setAttribute('data-passed', '');
+      }
+    };
+
+    const writeResolved = (): void => {
+      const shell = document.querySelector(SHELL_SELECTOR);
+      if (shell && !shell.hasAttribute(RESOLVED_ATTRIBUTE)) {
+        shell.setAttribute(RESOLVED_ATTRIBUTE, 'true');
+      }
+    };
+
+    /** D-B46 (3) — the first pass, in the frame the paper resolved in: exactly
+     *  D-B15(c)'s, now against a paper that has its real height, then the
+     *  buffer that scrolling filled while it was loading. */
+    const markResolved = (): void => {
+      // `typeof window` is the torn-down environment, not a browser state: the
+      // gate outlives a tree that was never unmounted (a suite that renders the
+      // paper and ends), and both the sampler's frame and the deadline would
+      // otherwise fire into a document that no longer exists.
+      if (stopped || resolved || typeof window === 'undefined') return;
+      // W4F3-01: a deadline that fires with no paper resolves nothing. It
+      // releases its own clock and leaves the sampler running, so the gate is
+      // decided by the paper that eventually arrives rather than by its
+      // absence — and the cascade below always measures the CURRENT paper.
+      const paper = resolvePaper();
+      if (!paper) {
+        resolveDeadline = null;
+        deadlineFor = null;
+        return;
+      }
+      resolved = true;
+      resolvedPaper = paper;
+      if (resolveFrame !== null) {
+        window.cancelAnimationFrame(resolveFrame);
+        resolveFrame = null;
+      }
+      if (resolveDeadline) {
+        clearTimeout(resolveDeadline);
+        resolveDeadline = null;
+      }
+      writeResolved();
+      // ONE AT A TIME, re-measured after each, because the paper's geometry is
+      // a function of this pass's own decisions. Measured on the seeded long
+      // paper: at resolution every root stands at its quiet reserve, so all six
+      // are inside the lookahead of a 2,163px paper and a single-measurement
+      // pass promotes all six — `money` at what becomes 7,715 and `care` at
+      // 8,817. Promoting `approvals` alone moves `schedule` to 964 (still at
+      // the line, so it opens too) and that moves `ffe` to 1,910, which is
+      // past it. That cascade is the lead's acceptance map, and it only exists
+      // if each promotion is laid out before the next root is measured —
+      // `flushSync` is what makes the body's real height exist in time to be
+      // measured, the same reason the press path uses it (D-B18).
+      for (const root of ordered) {
+        // W4F3-05: each `flushSync` renders a region body, and a body that
+        // throws (or a navigation that lands mid-cascade) can tear this hook
+        // down between steps. Every remaining measurement would then be taken
+        // against a document the lens has already left.
+        if (stopped) return;
+        if (committed.has(root)) continue;
+        if (!withinLookahead(root)) break;
+        flushSync(() => promote(root));
+      }
+      // Then the buffer — which `commitPending` re-measures, so what she
+      // crossed while the paper loaded lands, and what merely LOOKED crossed
+      // against the skeleton does not. Measured: on the seeded long paper's
+      // 2,163px skeleton all six roots stand at their quiet reserve inside the
+      // lookahead, so `onIntersect` fired for every one of them; a blind drain
+      // promotes exactly what waiting refused.
+      commitPending();
+      // And the marks these promotions have just made eligible (W4F3-09 holds
+      // `data-passed` back until a root is open). Nothing else would sweep
+      // them on a deep-landed load: no scroll, no crossing, no mutation.
+      markPassed();
+    };
+
+    const sampleResolution = (): void => {
+      resolveFrame = null;
+      if (stopped || resolved || typeof window === 'undefined') return;
+      const paper = resolvePaper();
+      const height = paper ? paper.scrollHeight : 0;
+
+      // W4F3-01 — the deadline starts at the first frame that HAS a paper, and
+      // restarts if that paper is replaced. Before then there is nothing for a
+      // clock to be a fallback for. Existence, not height: the height is the
+      // stability half's business, and an environment with no layout at all
+      // (jsdom, where every `scrollHeight` is 0) would otherwise never arm a
+      // clock or resolve — while a real paper that sits at 0 for three frames
+      // is held by the other two conditions, its queries being in flight and
+      // its registers still printing.
+      if (!paper) {
+        if (resolveDeadline) clearTimeout(resolveDeadline);
+        resolveDeadline = null;
+        deadlineFor = null;
+        stableFrames = 0;
+        lastHeight = -1;
+      } else if (deadlineFor !== paper) {
+        if (resolveDeadline) clearTimeout(resolveDeadline);
+        deadlineFor = paper;
+        resolveDeadline = setTimeout(markResolved, LENS_RESOLVE_MAX_MS);
+      }
+
+      const loading = paper ? paper.querySelector(LOADING_SELECTOR) !== null : true;
+      // A paper with no height yet is not a paper that has settled at zero —
+      // it is one whose bodies have not arrived. The deadline covers the case
+      // where they never do.
+      const held =
+        fetchingRef.current === 0 && !loading && height === lastHeight;
+      lastHeight = height;
+      stableFrames = held ? stableFrames + 1 : 0;
+      if (stableFrames >= LENS_RESOLVE_STABLE_FRAMES) {
+        markResolved();
+        return;
+      }
+      if (syncDepth >= MAX_SYNC_DEPTH) return;
+      syncDepth += 1;
+      try {
+        resolveFrame = window.requestAnimationFrame(sampleResolution);
+      } finally {
+        syncDepth -= 1;
       }
     };
 
@@ -383,6 +609,26 @@ export function useLensDensity(
       const shell = document.querySelector(SHELL_SELECTOR);
       if (shell && !shell.hasAttribute('data-lens-settled')) writeSettled(settled);
 
+      // W4F3-04: the paper is REPLACED when the page re-suspends (a refetch, a
+      // section change, an error→retry), and a verdict reached about the old
+      // element says nothing about the new one — whose bodies are, again, still
+      // arriving. The gate re-arms and the whole sequence runs for the paper
+      // actually on screen.
+      if (enabled && resolved && resolvedPaper && resolvedPaper !== paper) {
+        resolved = false;
+        resolvedPaper = null;
+        deadlineFor = null;
+        stableFrames = 0;
+        lastHeight = -1;
+        document
+          .querySelector(SHELL_SELECTOR)
+          ?.removeAttribute(RESOLVED_ATTRIBUTE);
+        if (resolveFrame === null) {
+          resolveFrame = window.requestAnimationFrame(sampleResolution);
+        }
+      }
+      if (enabled && resolved) writeResolved();
+
       const found = paper
         ? Array.from(paper.querySelectorAll<HTMLElement>(REGION_SELECTOR))
         : [];
@@ -429,7 +675,12 @@ export function useLensDensity(
         // W4-C10: position is the WHOLE test. A bare `promotedKeys.has(key)`
         // arm promoted on the key alone, which is a claim about a root that no
         // longer exists — see the purge above.
-        if (!enabled || withinLookahead(root)) {
+        // D-B46: before the paper resolves this arm is closed — the root is
+        // observed and ordered like any other, and the resolution pass will
+        // measure it against a paper that has a height. After resolution it is
+        // D-B16 unchanged, which is what answers a late root the bottom-only
+        // rootMargin can never fire for.
+        if (!enabled || (resolved && withinLookahead(root))) {
           promote(root);
           continue;
         }
@@ -481,6 +732,12 @@ export function useLensDensity(
     writeSettled(true);
     discover();
 
+    // The deadline is armed by the sampler's first frame that finds a laid-out
+    // paper (W4F3-01), never here.
+    if (enabled) {
+      resolveFrame = window.requestAnimationFrame(sampleResolution);
+    }
+
     forceRef.current = (key: DocumentIndexKey) => {
       // D-B18: the press reads the target's y two frames later. `flushSync`
       // makes the bodies this commit mounts have heights before the handler
@@ -522,6 +779,11 @@ export function useLensDensity(
     return () => {
       stopped = true;
       if (settleTimer) clearTimeout(settleTimer);
+      if (resolveDeadline) clearTimeout(resolveDeadline);
+      if (resolveFrame !== null) window.cancelAnimationFrame(resolveFrame);
+      document
+        .querySelector(SHELL_SELECTOR)
+        ?.removeAttribute(RESOLVED_ATTRIBUTE);
       intersection?.disconnect();
       mutation?.disconnect();
       window.removeEventListener('scroll', onScroll);

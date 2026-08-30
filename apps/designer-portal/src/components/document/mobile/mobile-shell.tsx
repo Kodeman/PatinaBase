@@ -66,6 +66,21 @@ export interface MobileActiveDoc {
    *  no-op if a publisher ever forgot it — where the pre-D-B18 code at least
    *  scrolled. `page.tsx` is the only publisher and always supplies it. */
   onJumpRegion: (key: DocumentIndexKey) => void;
+  /** D-B46 · the lens's promotion, without the jump. Published for any
+   *  consumer that needs a region opened without landing on it. Optional so a
+   *  caller that predates D-B46 still type-checks. */
+  onPromoteThrough?: (key: DocumentIndexKey) => void;
+  /** D-B46 · the whole press, for a target INSIDE a region rather than a
+   *  region: `requestRegionUnfold('ffe')` → `forceFullThrough('ffe')` → land
+   *  on `#ffe-selection-<lineId>`. The sheet cannot do this itself — an FF&E
+   *  the reader closed keeps its body unmounted whatever the density says
+   *  (C-8: a stop's fold is explicit-only), so the id does not exist until the
+   *  unfold has been asked for AND the promotion flushed. The page owns the
+   *  landing; no sheet calls `scrollIntoView`. */
+  onJumpToLine?: (lineId: string) => void;
+  /** The same press for a room heading (`#doc-room-<roomId>`), which also
+   *  lives inside the FF&E body and was unreachable for the same reason. */
+  onJumpToRoom?: (roomId: string) => void;
   /** D-B30 · the letterhead- and section-anchored margin count (the same set
    *  `useLetterheadMargin` lists), so the bar's `Margin · N` door and the
    *  Margin sheet's head can print it without their own subscription.

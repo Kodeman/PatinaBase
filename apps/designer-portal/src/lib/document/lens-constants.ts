@@ -14,6 +14,20 @@ export const LENS_LOOKAHEAD_PX = 240;
 export const LENS_SETTLE_VELOCITY_PX = 40;
 export const LENS_SETTLE_MS = 120;
 
+/**
+ * D-B46 — the resolution gate. The lens may not measure a paper whose bodies
+ * are still loading: a skeleton-short paper puts stops 9,000px below the frame
+ * inside the lookahead, and one direction means they never come back. The
+ * paper is RESOLVED when no query is fetching and its `scrollHeight` has held
+ * for this many consecutive frames.
+ */
+export const LENS_RESOLVE_STABLE_FRAMES = 3;
+
+/** D-B46 — and if that never comes (a query retrying, a poller), the lens runs
+ *  its first pass anyway at this age, against whatever is laid out. Stated, so
+ *  the lens can never hang quiet. */
+export const LENS_RESOLVE_MAX_MS = 3000;
+
 /** OD-7: the same stop is never announced twice inside this window. */
 export const LENS_ANNOUNCE_DEDUPE_MS = 2000;
 

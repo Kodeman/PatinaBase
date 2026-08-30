@@ -153,10 +153,15 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
     await expect(
       page.getByRole('dialog', { name: 'Margin item' }),
     ).toBeVisible();
-    const scrollYAfter = await page.evaluate(() => window.scrollY);
-    // The row jumped to its line before opening the item sheet (openRow,
-    // mobile-sheets.tsx) — the paper moved under the sheet that now covers it.
-    expect(scrollYAfter).not.toBe(scrollYBefore);
+    // The row asked the PAGE to land (D-B46: unfold → promote → scroll), and
+    // the paper moved under the sheet that now covers it. POLLED, not read
+    // once: `scrollIntoView` is smooth outside the reduce register, so the
+    // offset arrives over several frames — and at 390 the press now mounts
+    // FF&E's 62 lines first, which is exactly the work that used to make a
+    // single read win this race by accident.
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY), { timeout: 10_000 })
+      .not.toBe(scrollYBefore);
   });
 
   test('Escape returns focus to the More door', async ({
