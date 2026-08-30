@@ -316,6 +316,7 @@ export function LensLadder({
             const body = (
               <>
                 <span
+                  data-rail-label
                   className={`${NAME_CLASS} ${
                     current
                       ? 'font-semibold text-[var(--color-charcoal)]'
@@ -342,6 +343,7 @@ export function LensLadder({
                   aria-hidden={yielded ? 'true' : undefined}
                   data-ladder-value={segment.key}
                   data-ladder-value-yielded={yielded ? 'true' : undefined}
+                  data-rail-value
                 >
                   {segment.value === null ? (
                     <span className={`${VALUE_CLASS} text-[var(--text-muted)]`}>
@@ -495,7 +497,10 @@ export function LensLadder({
           34px reserve and a word standing over nothing. */}
       {doors.length > 0 && (
         <div className="mt-3 shrink-0 border-t border-[var(--color-pearl)] pt-3">
-          <p className="mb-1 min-h-[34px] font-mono text-[11px] uppercase leading-tight tracking-[0.1em] text-[var(--text-muted)]">
+          <p
+            data-rail-label
+            className="mb-1 min-h-[34px] font-mono text-[11px] uppercase leading-tight tracking-[0.1em] text-[var(--text-muted)]"
+          >
             Filed with this job
           </p>
           {doors.map((door) => {
@@ -506,6 +511,7 @@ export function LensLadder({
                 key={door.key}
                 href={door.href}
                 data-ladder-door={door.key}
+                data-rail-label
                 className={className}
               >
                 {door.label}
@@ -515,6 +521,7 @@ export function LensLadder({
                 key={door.key}
                 type="button"
                 data-ladder-door={door.key}
+                data-rail-label
                 onClick={door.onOpen}
                 className={className}
               >

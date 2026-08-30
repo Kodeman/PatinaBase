@@ -133,6 +133,7 @@ export function DocSpine({
         >
           {household && (
             <p
+              data-rail-label
               className={`truncate text-[13px] leading-tight transition-colors motion-reduce:transition-none ${
                 letterheadInFrame
                   ? 'text-[var(--text-muted)]'
@@ -232,6 +233,7 @@ export function DocSpine({
                 away. It yields in place: the head's height is reserved, so
                 nothing below it moves. */}
               <span
+                data-rail-label
                 data-letterhead-in-frame={letterheadInFrame ? 'true' : undefined}
                 className={`block break-words transition-opacity duration-200 motion-reduce:transition-none ${
                   letterheadInFrame ? 'opacity-0' : 'opacity-100'
@@ -247,6 +249,7 @@ export function DocSpine({
               {stagePhrase.bottom && (
                 <span
                   data-spine-stage-count
+                  data-rail-value
                   className={`block break-words transition-colors duration-200 motion-reduce:transition-none ${
                     letterheadInFrame
                       ? 'text-[var(--text-muted)]'
