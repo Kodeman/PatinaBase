@@ -19,10 +19,8 @@ import type {
 export const DEFAULT_PREFS: Prefs = {
   defaultDestination: { type: 'personal' },
   autoDetect: true,
-  tradeLayer: true,
   dupeWarnings: true,
   captureConfirmation: true,
-  ocrEnabled: true,
   snapshotFallbackEnabled: true,
 };
 
@@ -49,7 +47,6 @@ export function initialCaptureState(prefs: Prefs = DEFAULT_PREFS): CaptureState 
       },
     },
     dedup: { match: null, confidence: 0, mergePicks: {} },
-    queue: { items: [], online: true, lastSyncAt: null },
     prefs,
     io: {
       isExtracting: false,
@@ -58,6 +55,7 @@ export function initialCaptureState(prefs: Prefs = DEFAULT_PREFS): CaptureState 
       lastSavedProductId: null,
       pendingPlacementProductId: null,
       lastPlacementOutcome: null,
+      lastCommitKind: null,
     },
   };
 }
@@ -166,13 +164,6 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
         ...state,
         draft: state.draft ? { ...state.draft, snapshotUrl: action.snapshotUrl } : state.draft,
         nav: { ...state.nav, screen: 'R2' },
-        io: { ...state.io, isExtracting: false },
-      };
-
-    case 'EXTRACTION_UNKNOWN':
-      return {
-        ...state,
-        nav: { ...state.nav, screen: 'R4' },
         io: { ...state.io, isExtracting: false },
       };
 
@@ -349,17 +340,6 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
         routing: { ...state.routing, commitTarget: action.target },
       };
 
-    case 'INBOX_TARGET_SET':
-      return {
-        ...state,
-        routing: {
-          ...state.routing,
-          proposalId: action.proposalId,
-          scopeRoomId: action.scopeRoomId,
-          ffeCategorySlug: action.ffeCategorySlug,
-        },
-      };
-
     case 'SPEC_BOOK_PLACEMENT_SET':
       return {
         ...state,
@@ -400,17 +380,6 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
         },
       };
 
-    case 'DUPLICATE_FOUND':
-      return {
-        ...state,
-        dedup: {
-          match: action.match,
-          confidence: action.confidence,
-          mergePicks: {},
-        },
-        nav: { ...state.nav, screen: 'D1' },
-      };
-
     case 'DUPLICATE_CLEARED':
       return {
         ...state,
@@ -434,7 +403,12 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
       return {
         ...state,
         routing: { ...state.routing, commitTarget: action.target },
-        io: { ...state.io, isSaving: true, error: null },
+        io: {
+          ...state.io,
+          isSaving: true,
+          error: null,
+          lastCommitKind: action.lastCommitKind ?? state.io.lastCommitKind,
+        },
       };
 
     case 'SAVE_SUCCESS':
@@ -483,23 +457,11 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
           lastSavedProductId: null,
           pendingPlacementProductId: null,
           lastPlacementOutcome: null,
+          lastCommitKind: null,
         },
       };
 
-    // ── connectivity / prefs ─────────────────────────────────────────────
-    case 'CONNECTIVITY':
-      return { ...state, queue: { ...state.queue, online: action.online } };
-
-    case 'QUEUE_STATUS':
-      return {
-        ...state,
-        queue: {
-          ...state.queue,
-          items: action.items,
-          lastSyncAt: action.lastSyncAt,
-        },
-      };
-
+    // ── prefs ────────────────────────────────────────────────────────────
     case 'PREFS_LOADED':
       return { ...state, prefs: action.prefs };
 

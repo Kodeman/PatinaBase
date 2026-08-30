@@ -57,6 +57,16 @@ if matches '^apps/manufacturer-portal/'; then
   run pnpm exec turbo run type-check --filter=@patina/manufacturer-portal
 fi
 
+# The extension is not wired into turbo's build graph and consumes
+# packages/shared from source (not a built dist), so a packages/shared change
+# affects it too even though it isn't caught by the packages/ block below.
+if matches '^apps/extension/|^packages/shared/'; then
+  run pnpm --filter @patina/extension type-check
+  run pnpm --filter @patina/extension test
+  run pnpm --filter @patina/extension build
+  run bash apps/extension/scripts/check-bundle.sh
+fi
+
 for service in orders media projects; do
   if matches "^services/$service/"; then
     # Route through turbo, not raw `pnpm --filter`, same as the apps block above:

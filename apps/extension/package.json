@@ -1,7 +1,7 @@
 {
   "name": "@patina/extension",
   "displayName": "Patina Capture",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Capture furniture products for your Patina catalog",
   "author": "Patina",
   "scripts": {
@@ -13,16 +13,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@patina/catalog-ui": "workspace:*",
     "@patina/shared": "workspace:*",
-    "@plasmohq/storage": "^1.15.0",
     "@supabase/supabase-js": "^2.43.0",
     "plasmo": "^0.90.5",
     "posthog-js": "^1.356.1",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tesseract.js": "^7.0.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
@@ -58,8 +55,7 @@
       "alarms"
     ],
     "host_permissions": [
-      "https://*/*",
-      "http://*/*"
+      "https://*/*"
     ],
     "commands": {
       "capture-product": {
@@ -71,13 +67,7 @@
       }
     },
     "content_security_policy": {
-      "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-    },
-    "web_accessible_resources": [
-      {
-        "resources": ["tesseract/*"],
-        "matches": ["<all_urls>"]
-      }
-    ]
+      "extension_pages": "script-src 'self'; object-src 'self'"
+    }
   }
 }

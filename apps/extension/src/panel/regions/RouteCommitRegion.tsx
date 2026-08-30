@@ -60,6 +60,15 @@ export function RouteCommitRegion() {
         <div role="status" aria-label="Loading project placement" className="h-11 animate-pulse rounded-md border border-line bg-paper-3" />
       )}
 
+      <textarea
+        aria-label="Capture note"
+        value={draft.note}
+        onChange={(event) => dispatch({ type: 'NOTE_SET', note: event.target.value })}
+        rows={2}
+        placeholder="A note for later — provenance, the client's reaction, what to check"
+        className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none placeholder:text-ink-faint focus:border-verdigris"
+      />
+
       {styles.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-1">
           {styles.map((s) => {

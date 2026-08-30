@@ -3,44 +3,10 @@
  * verified/edited/missing badges, inline-editable. The hero image opens the C3
  * curation sheet; tapping a field marks it edited.
  */
-import { useState } from 'react';
-import { useCapture, useDraft, useCaptureDispatch } from '../../state/CaptureProvider';
+import { useRef, useState } from 'react';
+import { useDraft, useCaptureDispatch } from '../../state/CaptureProvider';
 import { FieldBadge } from '../FieldBadge';
-import { runOcr } from '../../lib/ocr';
-
-function OcrTrigger({ imageUrl }: { imageUrl: string }) {
-  const dispatch = useCaptureDispatch();
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
-
-  const read = async () => {
-    setBusy(true);
-    setDone(null);
-    const fields = await runOcr(imageUrl);
-    setBusy(false);
-    if (!fields) {
-      setDone('No text read');
-      return;
-    }
-    if (fields.name) dispatch({ type: 'FIELD_EDIT', field: 'name', value: fields.name });
-    if (fields.price)
-      dispatch({ type: 'FIELD_EDIT', field: 'price', value: (fields.price.value / 100).toFixed(2) });
-    if (fields.materials?.length)
-      dispatch({ type: 'FIELD_EDIT', field: 'materials', value: fields.materials });
-    setDone('Filled from image');
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={read}
-      disabled={busy}
-      className="w-full rounded-md border border-line py-1.5 font-mono text-[0.6rem] uppercase tracking-[0.08em] text-ink-soft transition-colors hover:border-verdigris hover:text-verdigris disabled:opacity-50"
-    >
-      {busy ? 'Reading image…' : (done ?? 'Read text from image')}
-    </button>
-  );
-}
+import type { EditableDimensions } from '../../state/types';
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -50,19 +16,153 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AddFieldButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-verdigris hover:text-verdigris-2"
+    >
+      + {label}
+    </button>
+  );
+}
+
+function DimInput({
+  label,
+  value,
+  onChange,
+  inputRef,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  inputRef?: React.Ref<HTMLInputElement>;
+}) {
+  return (
+    <input
+      ref={inputRef}
+      aria-label={label}
+      value={value}
+      inputMode="decimal"
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={label}
+      className="w-full min-w-0 bg-transparent font-mono text-[0.8rem] text-ink outline-none placeholder:text-ink-soft/50 border-b border-line/60 focus:border-line"
+    />
+  );
+}
+
+const CURRENCY_GLYPHS: Record<string, string> = {
+  USD: '$',
+  CAD: 'CA$',
+  GBP: '£',
+  EUR: '€',
+};
+
+/** The glyph to sit ahead of the price, or the ISO code when we know no glyph. */
+function currencyGlyph(code: string): string {
+  return CURRENCY_GLYPHS[code] ?? `${code} `;
+}
+
+/** Dimension keys minus 'unit', which is edited separately via a <select>. */
+type DimKey = Exclude<keyof EditableDimensions, 'unit'>;
+
+const DIM_LABELS: Record<DimKey, string> = {
+  width: 'Width',
+  height: 'Height',
+  depth: 'Depth',
+  seatHeight: 'Seat height',
+  seatDepth: 'Seat depth',
+  seatWidth: 'Seat width',
+  armHeight: 'Arm height',
+  backHeight: 'Back height',
+  legHeight: 'Leg height',
+  clearance: 'Clearance',
+};
+
+/** Fields carried by EditableDimensions beyond width/height/depth/unit — the "More" disclosure. */
+const EXTRA_DIM_FIELDS: DimKey[] = [
+  'seatHeight',
+  'seatDepth',
+  'seatWidth',
+  'armHeight',
+  'backHeight',
+  'legHeight',
+  'clearance',
+];
+
+const ALL_DIM_KEYS: DimKey[] = ['width', 'height', 'depth', ...EXTRA_DIM_FIELDS];
+
+function hasAnyDimValue(d: EditableDimensions): boolean {
+  return ALL_DIM_KEYS.some((k) => d[k] !== '');
+}
+
+/** Focus an element on the next frame — used so a freshly-revealed input is
+ * actually mounted before we try to focus it. */
+function focusSoon(ref: React.RefObject<HTMLInputElement | null>) {
+  requestAnimationFrame(() => ref.current?.focus());
+}
+
 export function RecordRegion() {
   const draft = useDraft();
-  const { prefs } = useCapture();
   const dispatch = useCaptureDispatch();
+  const initialDims = draft?.fields.dimensions.value;
+  const [dimsOpen, setDimsOpen] = useState(false);
+  const [dimsExpanded, setDimsExpanded] = useState(() =>
+    initialDims ? EXTRA_DIM_FIELDS.some((k) => initialDims[k] !== '') : false
+  );
+  const [materialsOpen, setMaterialsOpen] = useState(false);
+  const [materialInput, setMaterialInput] = useState('');
+  const [finishOpen, setFinishOpen] = useState(false);
+  const [skuOpen, setSkuOpen] = useState(false);
+  const widthInputRef = useRef<HTMLInputElement>(null);
+  const materialInputRef = useRef<HTMLInputElement>(null);
+  const finishInputRef = useRef<HTMLInputElement>(null);
+  const skuInputRef = useRef<HTMLInputElement>(null);
   if (!draft) return null;
 
   const f = draft.fields;
   const hero = draft.images.selected.map((i) => draft.images.all[i])[0] ?? draft.images.all[0];
-  const ocrEligible =
-    prefs.ocrEnabled &&
-    !!hero &&
-    (draft.captureKind === 'snapshot' || draft.captureKind === 'image');
   const vendorName = draft.manufacturer.vendor?.name ?? draft.retailer.vendor?.name ?? null;
+
+  const currency = draft.currency.toUpperCase();
+  const dims = f.dimensions.value;
+  // Sticky once opened — clearing a value (or removing the last chip) must
+  // never unmount the input the person is actively editing.
+  const showDims = dimsOpen || hasAnyDimValue(dims);
+  const showMaterials = materialsOpen || f.materials.value.length > 0;
+  const showFinish = finishOpen || !!f.finish.value;
+  const showSku = skuOpen || !!f.sku.value;
+  const populatedExtrasCount = EXTRA_DIM_FIELDS.filter((k) => dims[k] !== '').length;
+
+  function updateDim(key: DimKey, value: string) {
+    setDimsOpen(true);
+    dispatch({ type: 'FIELD_EDIT', field: 'dimensions', value: { ...dims, [key]: value } });
+  }
+
+  function updateDimUnit(unit: EditableDimensions['unit']) {
+    setDimsOpen(true);
+    dispatch({ type: 'FIELD_EDIT', field: 'dimensions', value: { ...dims, unit } });
+  }
+
+  function addMaterial() {
+    const value = materialInput.trim();
+    setMaterialsOpen(true);
+    if (!value) return;
+    const isDuplicate = f.materials.value.some((m) => m.toLowerCase() === value.toLowerCase());
+    setMaterialInput('');
+    if (isDuplicate) return;
+    dispatch({ type: 'FIELD_EDIT', field: 'materials', value: [...f.materials.value, value] });
+  }
+
+  function removeMaterial(index: number) {
+    setMaterialsOpen(true);
+    dispatch({
+      type: 'FIELD_EDIT',
+      field: 'materials',
+      value: f.materials.value.filter((_, i) => i !== index),
+    });
+  }
 
   return (
     <section className="space-y-3">
@@ -87,8 +187,6 @@ export function RecordRegion() {
         )}
       </button>
 
-      {ocrEligible && hero && <OcrTrigger imageUrl={hero.url} />}
-
       {/* Name */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
@@ -106,11 +204,18 @@ export function RecordRegion() {
       {/* Price */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <Label>Price</Label>
+          <div className="flex items-baseline gap-1.5">
+            <Label>Price</Label>
+            {currency !== 'USD' && (
+              <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-soft">
+                {currency}
+              </span>
+            )}
+          </div>
           <FieldBadge status={f.price.status} />
         </div>
         <div className="flex items-center gap-1">
-          <span className="font-mono text-ink-soft">$</span>
+          <span className="font-mono text-ink-soft">{currencyGlyph(currency)}</span>
           <input
             value={f.price.value}
             inputMode="decimal"
@@ -128,6 +233,178 @@ export function RecordRegion() {
           <span className="text-[0.85rem] text-ink-2">{vendorName}</span>
         </div>
       )}
+
+      {/* SKU / model # */}
+      <div className="space-y-1.5 border-t border-line pt-2">
+        <div className="flex items-center justify-between">
+          <Label>SKU / model #</Label>
+          <FieldBadge status={f.sku.status} />
+        </div>
+        {showSku ? (
+          <input
+            ref={skuInputRef}
+            aria-label="SKU / model #"
+            value={f.sku.value}
+            onChange={(e) => {
+              setSkuOpen(true);
+              dispatch({ type: 'FIELD_EDIT', field: 'sku', value: e.target.value });
+            }}
+            placeholder="SKU / model #"
+            className="w-full bg-transparent font-mono text-[0.8rem] text-ink outline-none placeholder:text-ink-soft/50 border-b border-transparent focus:border-line"
+          />
+        ) : (
+          <AddFieldButton
+            label="Add SKU"
+            onClick={() => {
+              setSkuOpen(true);
+              focusSoon(skuInputRef);
+            }}
+          />
+        )}
+      </div>
+
+      {/* Dimensions */}
+      <div className="space-y-1.5 border-t border-line pt-2">
+        <div className="flex items-center justify-between">
+          <Label>Dimensions</Label>
+          <FieldBadge status={f.dimensions.status} />
+        </div>
+        {showDims ? (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <DimInput
+                label="Width"
+                value={dims.width}
+                onChange={(v) => updateDim('width', v)}
+                inputRef={widthInputRef}
+              />
+              <span className="font-mono text-[0.7rem] text-ink-soft">×</span>
+              <DimInput label="Height" value={dims.height} onChange={(v) => updateDim('height', v)} />
+              <span className="font-mono text-[0.7rem] text-ink-soft">×</span>
+              <DimInput label="Depth" value={dims.depth} onChange={(v) => updateDim('depth', v)} />
+              <select
+                aria-label="Unit"
+                value={dims.unit}
+                onChange={(e) => updateDimUnit(e.target.value as EditableDimensions['unit'])}
+                className="shrink-0 bg-transparent font-mono text-[0.7rem] text-ink-soft outline-none border-b border-line/60 focus:border-line"
+              >
+                <option value="in">in</option>
+                <option value="cm">cm</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDimsExpanded((v) => !v)}
+              className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-ink-soft underline decoration-line underline-offset-2"
+            >
+              {dimsExpanded ? 'Less' : populatedExtrasCount > 0 ? `More (${populatedExtrasCount})` : 'More'}
+            </button>
+            {dimsExpanded && (
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                {EXTRA_DIM_FIELDS.map((key) => (
+                  <DimInput
+                    key={key}
+                    label={DIM_LABELS[key]}
+                    value={dims[key]}
+                    onChange={(v) => updateDim(key, v)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <AddFieldButton
+            label="Add dimensions"
+            onClick={() => {
+              setDimsOpen(true);
+              focusSoon(widthInputRef);
+            }}
+          />
+        )}
+      </div>
+
+      {/* Materials */}
+      <div className="space-y-1.5 border-t border-line pt-2">
+        <div className="flex items-center justify-between">
+          <Label>Materials</Label>
+          <FieldBadge status={f.materials.status} />
+        </div>
+        {showMaterials ? (
+          <div className="space-y-1.5">
+            {f.materials.value.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {f.materials.value.map((m, i) => (
+                  <span
+                    key={`${m}-${i}`}
+                    className="inline-flex items-center gap-1 font-mono text-[0.6rem] uppercase tracking-[0.06em] px-1.5 py-0.5 rounded-sm border border-line text-ink-2"
+                  >
+                    {m}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${m}`}
+                      onClick={() => removeMaterial(i)}
+                      className="text-ink-soft hover:text-rust"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input
+              ref={materialInputRef}
+              aria-label="Add a material"
+              value={materialInput}
+              onChange={(e) => setMaterialInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addMaterial();
+                }
+              }}
+              placeholder="Add a material"
+              className="w-full bg-transparent text-[0.85rem] text-ink outline-none placeholder:text-ink-soft/50 border-b border-transparent focus:border-line"
+            />
+          </div>
+        ) : (
+          <AddFieldButton
+            label="Add materials"
+            onClick={() => {
+              setMaterialsOpen(true);
+              focusSoon(materialInputRef);
+            }}
+          />
+        )}
+      </div>
+
+      {/* Finish */}
+      <div className="space-y-1.5 border-t border-line pt-2">
+        <div className="flex items-center justify-between">
+          <Label>Finish</Label>
+          <FieldBadge status={f.finish.status} />
+        </div>
+        {showFinish ? (
+          <input
+            ref={finishInputRef}
+            aria-label="Finish"
+            value={f.finish.value}
+            onChange={(e) => {
+              setFinishOpen(true);
+              dispatch({ type: 'FIELD_EDIT', field: 'finish', value: e.target.value });
+            }}
+            placeholder="Finish"
+            className="w-full bg-transparent text-[0.85rem] text-ink outline-none placeholder:text-ink-soft/50 border-b border-transparent focus:border-line"
+          />
+        ) : (
+          <AddFieldButton
+            label="Add finish"
+            onClick={() => {
+              setFinishOpen(true);
+              focusSoon(finishInputRef);
+            }}
+          />
+        )}
+      </div>
 
       {/* Description */}
       <div className="space-y-1 border-t border-line pt-2">

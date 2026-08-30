@@ -8,6 +8,7 @@ import type { DraftFieldKey } from '../../state/types';
 const FIELD_KEYS: DraftFieldKey[] = [
   'name',
   'price',
+  'sku',
   'description',
   'materials',
   'colors',
@@ -35,14 +36,9 @@ export function InsightRegion() {
       onClick={() => dispatch({ type: 'OPEN_OVERLAY', overlay: 'C5' })}
       className="block w-full rounded-md border border-line bg-paper-3 p-3 text-left"
     >
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-verdigris">
-          Patina insight
-        </span>
-        <span className="font-mono text-[0.55rem] uppercase tracking-[0.08em] text-ink-soft">
-          {draft.confidence} confidence
-        </span>
-      </div>
+      <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-verdigris">
+        Patina insight
+      </span>
       <p className="mt-1.5 text-[0.78rem] leading-snug text-ink-2">
         Read {read} of {FIELD_KEYS.length} fields from <span className="text-ink">{host}</span>.
         {flagged.length > 0 && (

@@ -46,6 +46,26 @@ describe('draftFromExtraction', () => {
     expect(draft.fields.price.value).toBe('5499.00');
   });
 
+  it('carries the extraction currency onto the draft (CL-R13)', () => {
+    const draft = draftFromExtraction(
+      makeExtraction({ currency: 'GBP', price: { value: 25000, currency: 'GBP', raw: '£250.00' } })
+    );
+    expect(draft.currency).toBe('GBP');
+  });
+
+  it('falls back to the price currency when the extraction carries none', () => {
+    const extraction = makeExtraction({
+      price: { value: 25000, currency: 'EUR', raw: '€250,00' },
+    });
+    delete (extraction as { currency?: string }).currency;
+    expect(draftFromExtraction(extraction).currency).toBe('EUR');
+  });
+
+  it('defaults the draft currency to USD when nothing declares one', () => {
+    const draft = draftFromExtraction(makeExtraction({ price: null }));
+    expect(draft.currency).toBe('USD');
+  });
+
   it('flags absent fields as missing', () => {
     const draft = draftFromExtraction(
       makeExtraction({ productName: null, price: null } as Partial<ExtractedProductData>)
@@ -54,6 +74,18 @@ describe('draftFromExtraction', () => {
     expect(draft.fields.name.status).toBe('missing');
     expect(draft.fields.price.value).toBe('');
     expect(draft.fields.price.status).toBe('missing');
+  });
+
+  it('seeds the sku as a present, extracted field (CL-R1)', () => {
+    const draft = draftFromExtraction(makeExtraction({ sku: 'H4614' }));
+    expect(draft.fields.sku.value).toBe('H4614');
+    expect(draft.fields.sku.status).toBe('extracted');
+  });
+
+  it('flags an absent sku as missing', () => {
+    const draft = draftFromExtraction(makeExtraction());
+    expect(draft.fields.sku.value).toBe('');
+    expect(draft.fields.sku.status).toBe('missing');
   });
 
   it('maps colors and finish to plain string values', () => {
@@ -116,5 +148,30 @@ describe('draftToProductPayload', () => {
     expect(row.owner_user_id).toBe('user-123');
     expect(row.layer).toBe('personal');
     expect(row.source_url).toBe('https://example.com/p/1');
+  });
+
+  it('carries an edited sku through to the products row (CL-R1)', () => {
+    const draft = draftFromExtraction(makeExtraction({ sku: 'H4614' }));
+    draft.fields.sku.value = ' H4614-B ';
+
+    const input = draftToProductPayload(draft, 'user-123');
+    expect(input.sku).toBe(' H4614-B ');
+    expect(buildProductInsertPayload(input).sku).toBe('H4614-B');
+  });
+
+  it('drops a whitespace-only finish rather than saving a blank name', () => {
+    const draft = draftFromExtraction(makeExtraction());
+    draft.fields.finish.value = '   ';
+
+    expect(draftToProductPayload(draft, 'user-123').extractedData.finish).toBeNull();
+  });
+
+  it('trims a finish that carries surrounding whitespace', () => {
+    const draft = draftFromExtraction(makeExtraction());
+    draft.fields.finish.value = '  Matte Walnut  ';
+
+    expect(draftToProductPayload(draft, 'user-123').extractedData.finish).toEqual({
+      name: 'Matte Walnut',
+    });
   });
 });

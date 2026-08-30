@@ -50,6 +50,43 @@ export function scorePageMode(signals: PageModeSignals): ModeScore {
 }
 
 /**
+ * CL-R14: social feeds and pinboards. They render product-shaped markup
+ * (og:title, an image, money-shaped tokens in their script payloads) but carry
+ * no product record, so extraction produces a confident-looking wrong capture.
+ * Capture refuses them outright.
+ */
+const KNOWN_BAD_DOMAINS = [
+  'pinterest.com',
+  'pin.it',
+  'instagram.com',
+  'facebook.com',
+  'tiktok.com',
+  'x.com',
+  'twitter.com',
+];
+
+export const KNOWN_BAD_DOMAIN_MESSAGE =
+  "This page doesn't carry product details. Snapshot it, or add the piece by hand.";
+
+/**
+ * True when the URL is on a known-bad domain (or one of its subdomains).
+ *
+ * Pinterest runs a per-country TLD (pinterest.co.uk, pinterest.de, …), so any
+ * host that starts `pinterest.` counts too.
+ */
+export function isKnownBadDomain(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    if (hostname.startsWith('pinterest.')) return true;
+    return KNOWN_BAD_DOMAINS.some(
+      (domain) => hostname === domain || hostname.endsWith('.' + domain)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * URL-only fallback for mode detection when the content script
  * is not available (e.g. chrome:// pages, restricted tabs).
  */

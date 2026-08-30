@@ -9,7 +9,32 @@ import { getKnownRetailerName } from './retailer';
 export interface ExtractedManufacturer {
   name: string;
   confidence: VendorMatchConfidence;
-  source: 'json-ld' | 'meta-tag' | 'title-pattern' | 'dom-element';
+  source: 'json-ld' | 'meta-tag' | 'dom-element' | 'inline-script';
+}
+
+/** JSON-LD `@type` is a string or an array of strings. */
+function schemaTypes(obj: Record<string, unknown>): string[] {
+  const type = obj['@type'];
+  if (typeof type === 'string') return [type];
+  if (Array.isArray(type)) return type.filter((t): t is string => typeof t === 'string');
+  return [];
+}
+
+/** A brand/manufacturer value: a string, a {name}, or an array of either. */
+function brandValueToName(value: unknown): string | null {
+  if (typeof value === 'string') return value.length > 0 ? value : null;
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const name = brandValueToName(entry);
+      if (name) return name;
+    }
+    return null;
+  }
+  if (value && typeof value === 'object') {
+    const name = (value as Record<string, unknown>).name;
+    if (typeof name === 'string' && name.length > 0) return name;
+  }
+  return null;
 }
 
 /**
@@ -19,32 +44,15 @@ function findBrandInJsonLd(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
 
   const obj = data as Record<string, unknown>;
+  const types = schemaTypes(obj);
 
-  // Check for Product type with brand or manufacturer
-  if (obj['@type'] === 'Product') {
-    // Check brand field
-    const brand = obj.brand;
-    if (typeof brand === 'string' && brand.length > 0) {
-      return brand;
-    }
-    if (typeof brand === 'object' && brand !== null) {
-      const brandObj = brand as Record<string, unknown>;
-      if (typeof brandObj.name === 'string') {
-        return brandObj.name;
-      }
-    }
+  // A configurator publishes its brand on the ProductGroup, not the variants.
+  if (types.includes('Product') || types.includes('ProductGroup')) {
+    const brand = brandValueToName(obj.brand);
+    if (brand) return brand;
 
-    // Check manufacturer field
-    const manufacturer = obj.manufacturer;
-    if (typeof manufacturer === 'string' && manufacturer.length > 0) {
-      return manufacturer;
-    }
-    if (typeof manufacturer === 'object' && manufacturer !== null) {
-      const mfgObj = manufacturer as Record<string, unknown>;
-      if (typeof mfgObj.name === 'string') {
-        return mfgObj.name;
-      }
-    }
+    const manufacturer = brandValueToName(obj.manufacturer);
+    if (manufacturer) return manufacturer;
   }
 
   // Recurse into arrays
@@ -138,44 +146,24 @@ function extractFromMetaTags(): ExtractedManufacturer | null {
 }
 
 /**
- * Extract manufacturer from "by [Brand]" pattern in product title
+ * Extract manufacturer from a microdata brand element
  */
-function extractFromTitlePattern(): ExtractedManufacturer | null {
-  // Get product title from various sources
-  const titleSources = [
-    document.querySelector('h1')?.textContent,
-    document.querySelector('meta[property="og:title"]')?.getAttribute('content'),
-    document.querySelector('.product-title')?.textContent,
-    document.querySelector('[itemprop="name"]')?.textContent,
+function extractFromItemprop(): ExtractedManufacturer | null {
+  const el = document.querySelector('[itemprop="brand"]');
+  if (!el) return null;
+
+  const nested = el.querySelector('[itemprop="name"]');
+  const candidates = [
+    el.getAttribute('content'),
+    el.getAttribute('data-brand'),
+    nested?.getAttribute('content') ?? nested?.textContent,
+    el.textContent,
   ];
 
-  // Patterns for brand extraction from title
-  const byPatterns = [
-    /\bby\s+([A-Z][A-Za-z0-9\s&'-]+?)(?:\s*[-|–—]|\s*$)/i,  // "Chair by West Elm"
-    /\bfrom\s+([A-Z][A-Za-z0-9\s&'-]+?)(?:\s*[-|–—]|\s*$)/i, // "Chair from West Elm"
-    /^([A-Z][A-Za-z0-9\s&'-]+?)\s+[-|–—]\s+/,               // "West Elm - Chair Name"
-  ];
-
-  for (const title of titleSources) {
-    if (!title) continue;
-
-    for (const pattern of byPatterns) {
-      const match = title.match(pattern);
-      if (match && match[1]) {
-        const brandName = match[1].trim();
-        // Validate: not too short, not too long, not a generic word
-        if (
-          brandName.length >= 2 &&
-          brandName.length <= 50 &&
-          !/^(the|a|an|new|sale|shop|buy)$/i.test(brandName)
-        ) {
-          return {
-            name: brandName,
-            confidence: 'medium',
-            source: 'title-pattern',
-          };
-        }
-      }
+  for (const candidate of candidates) {
+    const text = candidate?.trim();
+    if (text && text.length > 1 && text.length <= 50) {
+      return { name: text, confidence: 'medium', source: 'dom-element' };
     }
   }
 
@@ -183,47 +171,66 @@ function extractFromTitlePattern(): ExtractedManufacturer | null {
 }
 
 /**
- * Extract manufacturer from DOM elements with brand-related classes/attributes
+ * Some storefronts (DWR) publish the brand only as a catalog slug inside an
+ * inline bootstrap script: {"brand":"brands-herman-miller"}. Only the
+ * `brands-` prefixed form is accepted — bare `"brand":"…"` values on other
+ * sites are opaque internal ids (1stDibs emits `"brand":"f_8350"`).
  */
-function extractFromDomElements(): ExtractedManufacturer | null {
-  const brandSelectors = [
-    '[itemprop="brand"]',
-    '.product-brand',
-    '.brand-name',
-    '[class*="brand"]',
-    '[data-brand]',
-    '.manufacturer',
-    '[class*="manufacturer"]',
-    '.vendor-name',
+const BRAND_SLUG_PATTERN = /"brand"\s*:\s*"brands-([a-z0-9]+(?:-[a-z0-9]+)*)"/;
+
+/** Slugs whose real name title-casing would mangle. */
+const BRAND_SLUG_NAMES: Record<string, string> = {
+  'b-b-italia': 'B&B Italia',
+  'rh-modern': 'RH Modern',
+  cb2: 'CB2',
+  hay: 'HAY',
+  dwr: 'Design Within Reach',
+};
+
+function brandNameFromSlug(slug: string): string {
+  const known = BRAND_SLUG_NAMES[slug];
+  if (known) return known;
+  return slug
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function extractFromInlineScript(): ExtractedManufacturer | null {
+  for (const script of document.querySelectorAll('script')) {
+    const text = script.textContent;
+    if (!text || !text.includes('"brand"')) continue;
+    const match = text.match(BRAND_SLUG_PATTERN);
+    if (match) {
+      return {
+        name: brandNameFromSlug(match[1]),
+        confidence: 'medium',
+        source: 'inline-script',
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract the brand the page itself declares, in source-precedence order.
+ *
+ * CL-R12: this never falls back to the domain, so a multi-brand retailer with
+ * no brand markup yields null rather than reporting itself as the maker. On a
+ * direct-to-consumer maker site the brand legitimately equals the retailer —
+ * that case is kept here (only extractManufacturerFromPage nulls it out).
+ */
+export function extractPageBrand(): ExtractedManufacturer | null {
+  const extractors = [
+    extractFromJsonLd,
+    extractFromMetaTags,
+    extractFromItemprop,
+    extractFromInlineScript,
   ];
 
-  for (const selector of brandSelectors) {
-    try {
-      const el = document.querySelector(selector);
-      if (el) {
-        // Check data attribute first
-        const dataBrand = el.getAttribute('data-brand');
-        if (dataBrand && dataBrand.length > 0) {
-          return {
-            name: dataBrand,
-            confidence: 'medium',
-            source: 'dom-element',
-          };
-        }
-
-        // Check text content
-        const text = el.textContent?.trim();
-        if (text && text.length > 1 && text.length < 50) {
-          return {
-            name: text,
-            confidence: 'medium',
-            source: 'dom-element',
-          };
-        }
-      }
-    } catch {
-      // Invalid selector, continue
-    }
+  for (const extractor of extractors) {
+    const result = extractor();
+    if (result) return result;
   }
 
   return null;
@@ -234,29 +241,16 @@ function extractFromDomElements(): ExtractedManufacturer | null {
  * Returns null if manufacturer is same as retailer (direct brand site)
  */
 export function extractManufacturerFromPage(pageUrl: string): ExtractedManufacturer | null {
-  // Try extraction methods in priority order
-  const extractors = [
-    extractFromJsonLd,
-    extractFromMetaTags,
-    extractFromTitlePattern,
-    extractFromDomElements,
-  ];
+  const result = extractPageBrand();
+  if (!result) return null;
 
-  for (const extractor of extractors) {
-    const result = extractor();
-    if (result) {
-      // Check if manufacturer is same as retailer (direct brand site)
-      const retailerName = getKnownRetailerName(pageUrl);
-      if (retailerName && result.name.toLowerCase() === retailerName.toLowerCase()) {
-        // Same as retailer - this is a direct brand site, no separate manufacturer
-        return null;
-      }
-
-      return result;
-    }
+  // Same as retailer - this is a direct brand site, no separate manufacturer
+  const retailerName = getKnownRetailerName(pageUrl);
+  if (retailerName && result.name.toLowerCase() === retailerName.toLowerCase()) {
+    return null;
   }
 
-  return null;
+  return result;
 }
 
 /**

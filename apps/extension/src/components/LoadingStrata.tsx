@@ -16,9 +16,9 @@ export function LoadingStrata({ size = 'md', className = '' }: LoadingStrataProp
 
   return (
     <div className={`flex flex-col ${gap} items-center ${py} ${className}`}>
-      <div className={`${h} ${w[0]} rounded-sm bg-mocha animate-strata-pulse`} />
-      <div className={`${h} ${w[1]} rounded-sm bg-clay animate-strata-pulse`} style={{ animationDelay: '0.15s' }} />
-      <div className={`${h} ${w[2]} rounded-sm bg-clay opacity-50 animate-strata-pulse`} style={{ animationDelay: '0.3s' }} />
+      <div className={`${h} ${w[0]} rounded-sm bg-ink animate-strata-pulse`} />
+      <div className={`${h} ${w[1]} rounded-sm bg-ink-soft animate-strata-pulse`} style={{ animationDelay: '0.15s' }} />
+      <div className={`${h} ${w[2]} rounded-sm bg-ink-soft opacity-50 animate-strata-pulse`} style={{ animationDelay: '0.3s' }} />
     </div>
   );
 }

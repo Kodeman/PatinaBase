@@ -8,13 +8,11 @@ import type {
   ExtractedVendorData,
   VendorCaptureInput,
   ExtractedVendorStory,
-  VendorCertification,
   OwnershipType,
   MarketPosition,
   ProductionModel,
 } from '@patina/shared/types';
 import { OWNERSHIP_OPTIONS } from '@patina/shared/types';
-import { CertificationChips } from './CertificationChips';
 
 interface VendorCaptureFormProps {
   extractedVendorData: ExtractedVendorData | null;
@@ -67,22 +65,22 @@ function CollapsibleSection({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="border border-pearl rounded-md overflow-hidden">
+    <div className="border border-line rounded-md overflow-hidden">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2.5 bg-off-white hover:bg-pearl/40 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2.5 bg-paper-3 hover:bg-paper-2/40 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="font-display font-medium text-[1.2rem] text-charcoal">{title}</span>
+          <span className="font-display font-medium text-[1.2rem] text-ink">{title}</span>
           {badge && (
-            <span className="px-1.5 py-0.5 font-mono text-[0.55rem] bg-sage/20 text-sage rounded-[3px]">
+            <span className="px-1.5 py-0.5 font-mono text-[0.55rem] bg-verdigris/20 text-verdigris rounded-[3px]">
               {badge}
             </span>
           )}
         </div>
         <svg
-          className={`w-4 h-4 text-aged-oak transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-ink-soft transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -115,9 +113,9 @@ function StoryTextArea({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak">{label}</label>
+        <label className="font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft">{label}</label>
         <span
-          className={`font-mono text-[0.55rem] ${isNearLimit ? 'text-golden-hour' : 'text-aged-oak'}`}
+          className={`font-mono text-[0.55rem] ${isNearLimit ? 'text-brass' : 'text-ink-soft'}`}
         >
           {charCount}/{maxLength}
         </span>
@@ -127,9 +125,9 @@ function StoryTextArea({
         onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
         placeholder={placeholder}
         rows={3}
-        className="w-full px-3 py-2 text-[0.88rem] bg-surface border border-pearl rounded-[3px]
-                   focus:border-clay focus:ring-1 focus:ring-clay
-                   placeholder-aged-oak resize-none outline-none"
+        className="w-full px-3 py-2 text-[0.88rem] bg-paper-3 border border-line rounded-[3px]
+                   focus:border-verdigris focus:ring-1 focus:ring-verdigris
+                   placeholder-ink-soft resize-none outline-none"
       />
     </div>
   );
@@ -170,7 +168,6 @@ export function VendorCaptureForm({
   const [craftsmanship, setCraftsmanship] = useState('');
 
   // Credentials
-  const [certifications, setCertifications] = useState<VendorCertification[]>([]);
   const [ownershipType, setOwnershipType] = useState<OwnershipType | ''>('');
   const [madeIn, setMadeIn] = useState('');
 
@@ -199,7 +196,6 @@ export function VendorCaptureForm({
       setPhilosophy(extractedVendorData.story?.philosophy || '');
       setHistory(extractedVendorData.story?.history || '');
       setCraftsmanship(extractedVendorData.story?.craftsmanship || '');
-      setCertifications(extractedVendorData.certifications || []);
       setOwnershipType(extractedVendorData.ownershipType || '');
       setMadeIn(extractedVendorData.madeIn || '');
     } else {
@@ -221,7 +217,7 @@ export function VendorCaptureForm({
   ).length;
 
   // Count credentials
-  const credentialsCount = certifications.length + (ownershipType ? 1 : 0) + (madeIn ? 1 : 0);
+  const credentialsCount = (ownershipType ? 1 : 0) + (madeIn ? 1 : 0);
 
   // Count contact fields
   const contactCount = [contactEmail, contactPhone, instagram, pinterest, facebook].filter(
@@ -256,7 +252,6 @@ export function VendorCaptureForm({
       headquartersCity: headquartersCity.trim() || undefined,
       headquartersState: headquartersState.trim() || undefined,
       story,
-      certifications: certifications.length > 0 ? certifications : undefined,
       ownershipType: ownershipType || undefined,
       madeIn: madeIn.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -268,16 +263,16 @@ export function VendorCaptureForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Header info */}
-      <div className="p-3 bg-surface border-l-[3px] border-dusty-blue rounded-md shadow-sm">
-        <p className="text-xs text-aged-oak">
+      <div className="p-3 bg-paper-3 border-l-[3px] border-ink-soft rounded-md shadow-sm">
+        <p className="text-xs text-ink-soft">
           Capturing vendor information from this website. Fill in what you know - you can always update later.
         </p>
       </div>
 
       {/* Core Identity */}
       <div className="space-y-3">
-        <h3 className="font-display font-medium text-[1.2rem] text-charcoal flex items-center gap-2">
-          <svg className="w-4 h-4 text-aged-oak" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <h3 className="font-display font-medium text-[1.2rem] text-ink flex items-center gap-2">
+          <svg className="w-4 h-4 text-ink-soft" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
           </svg>
           Core Identity
@@ -285,38 +280,38 @@ export function VendorCaptureForm({
 
         {/* Name */}
         <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
-            Vendor Name <span className="text-terracotta">*</span>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">
+            Vendor Name <span className="text-rust">*</span>
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Enter vendor name"
-            className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                     focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+            className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                     focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
           />
         </div>
 
         {/* Website */}
         <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
-            Website <span className="text-terracotta">*</span>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">
+            Website <span className="text-rust">*</span>
           </label>
           <input
             type="text"
             value={website}
             onChange={(e) => setWebsite(e.target.value)}
             placeholder="www.example.com"
-            className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                     focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+            className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                     focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
           />
         </div>
 
         {/* Logo URL */}
         <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
-            Logo URL <span className="text-aged-oak">(optional)</span>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">
+            Logo URL <span className="text-ink-soft">(optional)</span>
           </label>
           <div className="flex gap-2">
             <input
@@ -324,11 +319,11 @@ export function VendorCaptureForm({
               value={logoUrl}
               onChange={(e) => setLogoUrl(e.target.value)}
               placeholder="https://..."
-              className="flex-1 px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                       focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+              className="flex-1 px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
             {logoUrl && (
-              <div className="w-10 h-10 rounded-[3px] border border-pearl overflow-hidden">
+              <div className="w-10 h-10 rounded-[3px] border border-line overflow-hidden">
                 <img src={logoUrl} alt="Logo preview" className="w-full h-full object-contain" />
               </div>
             )}
@@ -340,7 +335,7 @@ export function VendorCaptureForm({
       <CollapsibleSection title="Business Details" defaultOpen={true}>
         {/* Market Position */}
         <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-2">Market Position</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-2">Market Position</label>
           <div className="grid grid-cols-2 gap-2">
             {MARKET_POSITIONS.map((pos) => (
               <button
@@ -349,12 +344,12 @@ export function VendorCaptureForm({
                 onClick={() => setMarketPosition(marketPosition === pos.value ? '' : pos.value)}
                 className={`px-3 py-2 text-left rounded-[3px] border transition-colors
                          ${marketPosition === pos.value
-                           ? 'bg-charcoal text-off-white shadow-sm border-charcoal'
-                           : 'bg-surface border-pearl text-charcoal hover:border-clay'
+                           ? 'bg-ink text-paper shadow-sm border-ink'
+                           : 'bg-paper-3 border-line text-ink hover:border-verdigris'
                          }`}
               >
                 <span className="text-sm font-medium">{pos.label}</span>
-                <p className={`text-xs mt-0.5 ${marketPosition === pos.value ? 'text-off-white/80' : 'text-aged-oak'}`}>
+                <p className={`text-xs mt-0.5 ${marketPosition === pos.value ? 'text-paper/80' : 'text-ink-soft'}`}>
                   {pos.description}
                 </p>
               </button>
@@ -364,7 +359,7 @@ export function VendorCaptureForm({
 
         {/* Production Model */}
         <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-2">Production Model</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-2">Production Model</label>
           <div className="grid grid-cols-2 gap-2">
             {PRODUCTION_MODELS.map((model) => (
               <button
@@ -373,12 +368,12 @@ export function VendorCaptureForm({
                 onClick={() => setProductionModel(productionModel === model.value ? '' : model.value)}
                 className={`px-3 py-2 text-left rounded-[3px] border transition-colors
                          ${productionModel === model.value
-                           ? 'bg-charcoal text-off-white shadow-sm border-charcoal'
-                           : 'bg-surface border-pearl text-charcoal hover:border-clay'
+                           ? 'bg-ink text-paper shadow-sm border-ink'
+                           : 'bg-paper-3 border-line text-ink hover:border-verdigris'
                          }`}
               >
                 <span className="text-sm font-medium">{model.label}</span>
-                <p className={`text-xs mt-0.5 ${productionModel === model.value ? 'text-off-white/80' : 'text-aged-oak'}`}>
+                <p className={`text-xs mt-0.5 ${productionModel === model.value ? 'text-paper/80' : 'text-ink-soft'}`}>
                   {model.description}
                 </p>
               </button>
@@ -388,13 +383,13 @@ export function VendorCaptureForm({
 
         {/* Category */}
         <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Primary Category</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">Primary Category</label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full px-3 py-2 text-[0.88rem] bg-surface border border-pearl rounded-[3px]
-                     focus:border-clay focus:ring-1 focus:ring-clay
-                     text-charcoal outline-none"
+            className="w-full px-3 py-2 text-[0.88rem] bg-paper-3 border border-line rounded-[3px]
+                     focus:border-verdigris focus:ring-1 focus:ring-verdigris
+                     text-ink outline-none"
           >
             <option value="">Select category...</option>
             {CATEGORIES.map((cat) => (
@@ -408,36 +403,36 @@ export function VendorCaptureForm({
         {/* Founded Year & Headquarters */}
         <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Founded</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">Founded</label>
             <input
               type="text"
               value={foundedYear}
               onChange={(e) => setFoundedYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
               placeholder="1985"
-              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                       focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
           </div>
           <div>
-            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">City</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">City</label>
             <input
               type="text"
               value={headquartersCity}
               onChange={(e) => setHeadquartersCity(e.target.value)}
               placeholder="New York"
-              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                       focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
           </div>
           <div>
-            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">State</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">State</label>
             <input
               type="text"
               value={headquartersState}
               onChange={(e) => setHeadquartersState(e.target.value)}
               placeholder="NY"
-              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                       focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
           </div>
         </div>
@@ -483,65 +478,65 @@ export function VendorCaptureForm({
       >
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Email</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">Email</label>
             <input
               type="email"
               value={contactEmail}
               onChange={(e) => setContactEmail(e.target.value)}
               placeholder="contact@..."
-              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                       focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
           </div>
           <div>
-            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Phone</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">Phone</label>
             <input
               type="tel"
               value={contactPhone}
               onChange={(e) => setContactPhone(e.target.value)}
               placeholder="(555) 555-5555"
-              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                       focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
           </div>
         </div>
 
         <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Instagram</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">Instagram</label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-aged-oak text-sm">@</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft text-sm">@</span>
             <input
               type="text"
               value={instagram}
               onChange={(e) => setInstagram(e.target.value.replace(/^@/, ''))}
               placeholder="username"
-              className="w-full pl-7 pr-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                       focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+              className="w-full pl-7 pr-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Pinterest</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">Pinterest</label>
             <input
               type="text"
               value={pinterest}
               onChange={(e) => setPinterest(e.target.value)}
               placeholder="pinterest.com/..."
-              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                       focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
           </div>
           <div>
-            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Facebook</label>
+            <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">Facebook</label>
             <input
               type="text"
               value={facebook}
               onChange={(e) => setFacebook(e.target.value)}
               placeholder="facebook.com/..."
-              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                       focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+              className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                       focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
             />
           </div>
         </div>
@@ -553,19 +548,9 @@ export function VendorCaptureForm({
         defaultOpen={credentialsCount > 0}
         badge={credentialsCount > 0 ? `${credentialsCount}` : undefined}
       >
-        {/* Certifications */}
-        <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-2">Certifications</label>
-          <CertificationChips
-            selected={certifications}
-            onChange={setCertifications}
-            detected={extractedVendorData?.certifications || []}
-          />
-        </div>
-
         {/* Ownership */}
         <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-2">Ownership</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-2">Ownership</label>
           <div className="grid grid-cols-2 gap-2">
             {OWNERSHIP_OPTIONS.map((opt) => (
               <button
@@ -574,8 +559,8 @@ export function VendorCaptureForm({
                 onClick={() => setOwnershipType(ownershipType === opt.value ? '' : opt.value)}
                 className={`px-3 py-2 text-sm rounded-[3px] border transition-colors
                          ${ownershipType === opt.value
-                           ? 'bg-charcoal text-off-white shadow-sm border-charcoal'
-                           : 'bg-surface border-pearl text-charcoal hover:border-clay'
+                           ? 'bg-ink text-paper shadow-sm border-ink'
+                           : 'bg-paper-3 border-line text-ink hover:border-verdigris'
                          }`}
               >
                 {opt.label}
@@ -586,22 +571,22 @@ export function VendorCaptureForm({
 
         {/* Made In */}
         <div>
-          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">Made In</label>
+          <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">Made In</label>
           <input
             type="text"
             value={madeIn}
             onChange={(e) => setMadeIn(e.target.value)}
             placeholder="USA, Italy, North Carolina..."
-            className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                     focus:border-clay focus:ring-1 focus:ring-clay outline-none"
+            className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                     focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none"
           />
         </div>
       </CollapsibleSection>
 
       {/* Notes */}
       <div>
-        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
-          Notes <span className="text-aged-oak">(optional)</span>
+        <label className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-ink-soft mb-1">
+          Notes <span className="text-ink-soft">(optional)</span>
         </label>
         <textarea
           value={notes}
@@ -609,15 +594,15 @@ export function VendorCaptureForm({
           placeholder="Any additional notes about this vendor..."
           rows={3}
           maxLength={500}
-          className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-pearl bg-surface
-                   focus:border-clay focus:ring-1 focus:ring-clay outline-none resize-none"
+          className="w-full px-3 py-2 text-[0.88rem] rounded-[3px] border border-line bg-paper-3
+                   focus:border-verdigris focus:ring-1 focus:ring-verdigris outline-none resize-none"
         />
-        <p className="font-mono text-[0.55rem] text-aged-oak text-right">{notes.length}/500</p>
+        <p className="font-mono text-[0.55rem] text-ink-soft text-right">{notes.length}/500</p>
       </div>
 
       {/* Validation message */}
       {!isValid && (
-        <p className="text-xs text-terracotta">
+        <p className="text-xs text-rust">
           Name and website are required to save.
         </p>
       )}

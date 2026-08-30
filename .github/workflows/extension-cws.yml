@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'extension-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and package only; do not upload/publish"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -42,6 +48,7 @@ jobs:
 
       - name: Validate release version
         id: version
+        if: github.event_name == 'push'
         shell: bash
         run: |
           TAG_VERSION="${GITHUB_REF#refs/tags/extension-v}"
@@ -52,10 +59,57 @@ jobs:
           fi
           echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Version from package.json (dispatch)
+        id: version_dispatch
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          PACKAGE_VERSION="$(node -p "require('./apps/extension/package.json').version")"
+          echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Quality gate
         run: |
           pnpm --filter @patina/extension type-check
           pnpm --filter @patina/extension test
+
+      - name: Verify prod config parity
+        env:
+          EXT_SUPABASE_URL: ${{ secrets.EXT_SUPABASE_URL }}
+          EXT_SUPABASE_ANON_KEY: ${{ secrets.EXT_SUPABASE_ANON_KEY }}
+        shell: bash
+        run: |
+          HOST="$(node -e "console.log(new URL(process.env.EXT_SUPABASE_URL).host)")"
+          if [ "$HOST" != "bkvcixdmuyejfzcijpdg.supabase.co" ]; then
+            echo "EXT_SUPABASE_URL host ($HOST) is not the production Strata project (bkvcixdmuyejfzcijpdg.supabase.co)" >&2
+            exit 1
+          fi
+
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -H "apikey: $EXT_SUPABASE_ANON_KEY" "$EXT_SUPABASE_URL/auth/v1/settings")
+          echo "auth/v1/settings responded: $code"
+          if [ "$code" != "200" ]; then
+            echo "EXT_SUPABASE_ANON_KEY was rejected by $EXT_SUPABASE_URL/auth/v1/settings (HTTP $code)" >&2
+            exit 1
+          fi
+
+          # apps/designer-portal/wrangler.jsonc is JSONC (line + block comments,
+          # trailing commas) — strip both before JSON.parse. The top-level `vars`
+          # block (not env.staging.vars) is the production config.
+          WRANGLER_ANON_KEY="$(node -e "
+            const fs = require('fs');
+            let text = fs.readFileSync('apps/designer-portal/wrangler.jsonc', 'utf8');
+            text = text.replace(/\/\*[\s\S]*?\*\//g, '');
+            text = text.replace(/(^|[^:])\/\/.*$/gm, '\$1');
+            text = text.replace(/,(\s*[}\]])/g, '\$1');
+            const json = JSON.parse(text);
+            console.log(json.vars.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+          ")"
+
+          SECRET_HASH="$(printf '%s' "$EXT_SUPABASE_ANON_KEY" | sha256sum | cut -d' ' -f1)"
+          WRANGLER_HASH="$(printf '%s' "$WRANGLER_ANON_KEY" | sha256sum | cut -d' ' -f1)"
+          if [ "$SECRET_HASH" != "$WRANGLER_HASH" ]; then
+            echo "anon key in EXT_SUPABASE_ANON_KEY differs from wrangler.jsonc production anon key" >&2
+            exit 1
+          fi
 
       - name: Build extension
         env:
@@ -63,10 +117,12 @@ jobs:
           PLASMO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXT_SUPABASE_ANON_KEY }}
           PLASMO_PUBLIC_PORTAL_URL: ${{ secrets.EXT_PORTAL_URL }}
           PLASMO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXT_POSTHOG_KEY }}
-          PLASMO_PUBLIC_UPDATE_URL: ''
         run: |
           pnpm --filter @patina/extension build
           pnpm --filter @patina/extension package
+
+      - name: Check bundle
+        run: bash apps/extension/scripts/check-bundle.sh
 
       - name: Find built zip
         id: zip
@@ -84,6 +140,13 @@ jobs:
           fi
           echo "path=$ZIP" >> "$GITHUB_OUTPUT"
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: patina-capture-${{ steps.version.outputs.version || steps.version_dispatch.outputs.version }}
+          path: ${{ steps.zip.outputs.path }}
+          if-no-files-found: error
+
       # The CLI version is PINNED on purpose. Do not bump to 4.x without also
       # adding a CWS_PUBLISHER_ID secret: 4.x removed the --client-id /
       # --client-secret / --refresh-token flags (fregante/chrome-webstore-upload-cli#80)
@@ -91,6 +154,7 @@ jobs:
       # publisherId. 3.5.0 is the last release on the still-live v1.1 API, and it
       # already accepts every credential via environment variables.
       - name: Upload to Chrome Web Store
+        if: github.event_name == 'push' || inputs.dry_run == false
         env:
           EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
           CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
@@ -101,6 +165,7 @@ jobs:
             --source "${{ steps.zip.outputs.path }}"
 
       - name: Publish to Chrome Web Store
+        if: github.event_name == 'push' || inputs.dry_run == false
         env:
           EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
           CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
@@ -110,4 +175,5 @@ jobs:
           npx --yes chrome-webstore-upload-cli@3.5.0 publish
 
       - name: Publish result
+        if: github.event_name == 'push' || inputs.dry_run == false
         run: echo "Publish request submitted to the Chrome Web Store — this SUBMITS the extension for Google review, it does not go live immediately."

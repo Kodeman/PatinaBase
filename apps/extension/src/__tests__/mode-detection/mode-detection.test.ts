@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { scorePageMode, detectModeFromUrl } from '../../lib/mode-detection';
+import {
+  scorePageMode,
+  detectModeFromUrl,
+  isKnownBadDomain,
+  KNOWN_BAD_DOMAIN_MESSAGE,
+} from '../../lib/mode-detection';
 import type { PageModeSignals } from '@patina/shared';
 
 function makeSignals(overrides: Partial<PageModeSignals> = {}): PageModeSignals {
@@ -200,5 +205,57 @@ describe('detectModeFromUrl', () => {
 
   it('handles invalid URLs gracefully', () => {
     expect(detectModeFromUrl('not-a-url')).toEqual({ mode: 'product', autoDetected: false });
+  });
+});
+
+describe('isKnownBadDomain (CL-R14)', () => {
+  it('refuses the social feeds and pinboards', () => {
+    const urls = [
+      'https://www.pinterest.com/pin/378724649918852625/',
+      'https://www.instagram.com/p/DcjKbTzEVTf/',
+      'https://www.facebook.com/marketplace/item/123',
+      'https://www.tiktok.com/@maker/video/123',
+      'https://x.com/maker/status/123',
+      'https://twitter.com/maker/status/123',
+    ];
+    for (const url of urls) {
+      expect(isKnownBadDomain(url), url).toBe(true);
+    }
+  });
+
+  it('refuses subdomains of a known-bad domain', () => {
+    expect(isKnownBadDomain('https://business.instagram.com/p/abc/')).toBe(true);
+    expect(isKnownBadDomain('https://ro.pinterest.com/pin/123/')).toBe(true);
+  });
+
+  it('refuses Pinterest short links and country TLDs', () => {
+    expect(isKnownBadDomain('https://pin.it/abc123')).toBe(true);
+    expect(isKnownBadDomain('https://www.pinterest.co.uk/pin/123/')).toBe(true);
+    expect(isKnownBadDomain('https://pinterest.de/pin/123/')).toBe(true);
+    expect(isKnownBadDomain('https://pinterest.com.au/pin/123/')).toBe(true);
+  });
+
+  it('refuses a facebook about page that would otherwise route to vendor mode', () => {
+    const url = 'https://www.facebook.com/somemaker/about';
+    // The URL heuristic reads this as a vendor page, so the known-bad guard
+    // has to run BEFORE the mode branch in use-capture-controller.
+    expect(detectModeFromUrl(url).mode).toBe('vendor');
+    expect(isKnownBadDomain(url)).toBe(true);
+  });
+
+  it('allows vendor domains that merely contain a known-bad name', () => {
+    expect(isKnownBadDomain('https://www.westelm.com/products/harris-sofa-96-h4614/')).toBe(false);
+    expect(isKnownBadDomain('https://notinstagram.com/p/abc/')).toBe(false);
+    expect(isKnownBadDomain('https://instagram.com.example.net/p/abc/')).toBe(false);
+  });
+
+  it('does not throw on a malformed URL', () => {
+    expect(isKnownBadDomain('not-a-url')).toBe(false);
+  });
+
+  it('carries the copy the panel shows', () => {
+    expect(KNOWN_BAD_DOMAIN_MESSAGE).toBe(
+      "This page doesn't carry product details. Snapshot it, or add the piece by hand."
+    );
   });
 });

@@ -7,6 +7,7 @@ import type { DraftFieldKey } from '../state/types';
 const ROWS: { key: DraftFieldKey; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'price', label: 'Price' },
+  { key: 'sku', label: 'SKU / model #' },
   { key: 'description', label: 'Description' },
   { key: 'materials', label: 'Materials' },
   { key: 'colors', label: 'Colors' },
@@ -26,7 +27,7 @@ export function InsightSheet() {
   }
 
   return (
-    <OverlaySheet title="What we read" subtitle={`${draft.confidence} confidence`}>
+    <OverlaySheet title="What we read">
       <p className="mb-3 text-[0.82rem] leading-snug text-ink-2">
         Pulled from <span className="text-ink">{host}</span>. Verdigris means we're confident;
         rust means it needs your eye.

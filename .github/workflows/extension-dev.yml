@@ -41,7 +41,6 @@ jobs:
           PLASMO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXT_SUPABASE_ANON_KEY }}
           PLASMO_PUBLIC_PORTAL_URL: ${{ secrets.EXT_PORTAL_URL }}
           PLASMO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXT_POSTHOG_KEY }}
-          PLASMO_PUBLIC_UPDATE_URL: https://bkvcixdmuyejfzcijpdg.supabase.co/storage/v1/object/public/extension-releases/version.json
         run: |
           pnpm --filter @patina/extension type-check
           pnpm --filter @patina/extension test
@@ -65,32 +64,6 @@ jobs:
           cp "$ZIP" "$LATEST"
           echo "versioned=$VERSIONED" >> "$GITHUB_OUTPUT"
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
-
-          node -e "const fs=require('fs');fs.writeFileSync('apps/extension/build/version.json',JSON.stringify({version:process.argv[1],downloadUrl:'https://bkvcixdmuyejfzcijpdg.supabase.co/storage/v1/object/public/extension-releases/patina-capture-'+process.argv[1]+'.zip',changelog:'',releasedAt:new Date().toISOString()},null,2)+'\n')" "$VERSION"
-
-      - name: Upload development artifacts to Supabase Storage
-        env:
-          SUPABASE_URL: ${{ secrets.EXT_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        shell: bash
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          upload() {
-            local source="$1"
-            local destination="$2"
-            local content_type="$3"
-            curl -f -X POST \
-              "${SUPABASE_URL}/storage/v1/object/extension-releases/${destination}" \
-              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-              -H "Content-Type: ${content_type}" \
-              -H "x-upsert: true" \
-              --data-binary "@${source}"
-          }
-
-          upload apps/extension/build/version.json version.json application/json
-          upload "${{ steps.artifact.outputs.versioned }}" "patina-capture-${VERSION}.zip" application/zip
-          upload "${{ steps.artifact.outputs.latest }}" patina-capture-beta-latest.zip application/zip
 
       - name: Create GitHub prerelease
         uses: softprops/action-gh-release@v2

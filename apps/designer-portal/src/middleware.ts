@@ -54,7 +54,13 @@ export async function middleware(req: NextRequest) {
   const isPreferencesPage =
     req.nextUrl.pathname === '/preferences' ||
     req.nextUrl.pathname === '/preferences/unsubscribe';
-  const isPublicPage = isLandingPage || isPreferencesPage;
+  // CL-R4: /privacy and /terms are static legal pages, linked from the
+  // signed-out signup form and required (live, no auth wall) for the Chrome
+  // Web Store listing. Same public-not-landing treatment as /preferences:
+  // reachable signed out, and not bounced away from when signed in.
+  const isLegalPage =
+    req.nextUrl.pathname === '/privacy' || req.nextUrl.pathname === '/terms';
+  const isPublicPage = isLandingPage || isPreferencesPage || isLegalPage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;

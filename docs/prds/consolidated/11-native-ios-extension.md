@@ -165,7 +165,7 @@ This area has no bespoke Next.js API routes and no NestJS endpoints of its own �
 
 **On prod:** Field-capture migrations 00232–00235 are on prod per the tier-1 deploy (commit `cb15fb37`: "prod deploy tier 1 (migrations 00230–00254) done + verified"; prod tip previously 00229). The `capture-media` bucket + commit/route/dismiss RPCs ship with those migrations.
 
-**Not shipped / runtime-unverified:** The Capture iOS app is validation-build only (sync + auth simulated) — nothing writes to `field_captures` in prod yet. The companion edge functions (`companion-context`/`message`/`history`) exist in-repo; their prod deploy state is unverified and `companion-context` references a missing table (`saved_products`). `confirm-scan-bundle` is in-repo and used only by the Patina app. The Chrome extension is v0.1.0 (CWS/self-hosted update URL via `PLASMO_PUBLIC_UPDATE_URL`), not a store release. Per project memory, iOS on-device re-walks were pending and "real OAuth/sync deferred" for Capture.
+**Not shipped / runtime-unverified:** The Capture iOS app is validation-build only (sync + auth simulated) — nothing writes to `field_captures` in prod yet. The companion edge functions (`companion-context`/`message`/`history`) exist in-repo; their prod deploy state is unverified and `companion-context` references a missing table (`saved_products`). `confirm-scan-bundle` is in-repo and used only by the Patina app. The Chrome extension ships through the Chrome Web Store (tag `extension-v*` → `extension-cws.yml`); dev builds are GitHub prereleases (`extension-dev.yml`). Per project memory, iOS on-device re-walks were pending and "real OAuth/sync deferred" for Capture.
 
 ## 10. Superseded Sources
 

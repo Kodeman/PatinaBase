@@ -4,12 +4,11 @@
  */
 import { useCapture } from '../state/CaptureProvider';
 import { RecordRegion } from '../panel/regions/RecordRegion';
-import { TradeRegion } from '../panel/regions/TradeRegion';
 import { InsightRegion } from '../panel/regions/InsightRegion';
 import { RouteCommitRegion } from '../panel/regions/RouteCommitRegion';
 
 export function RecordScreen() {
-  const { draft, dedup, prefs, io } = useCapture();
+  const { draft, dedup, io } = useCapture();
   if (!draft) return null;
 
   return (
@@ -36,7 +35,6 @@ export function RecordScreen() {
       )}
 
       <RecordRegion />
-      {prefs.tradeLayer && <TradeRegion />}
       <InsightRegion />
       <RouteCommitRegion />
     </div>

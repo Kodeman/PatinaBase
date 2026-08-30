@@ -96,12 +96,14 @@ export function draftFromExtraction(data: ExtractedProductData): DraftSlice {
     sourceUrl: data.url,
     snapshotUrl: null,
     confidence: data.confidence,
+    currency: data.currency ?? data.price?.currency ?? 'USD',
     fields: {
       name: field(data.productName ?? '', !!data.productName),
       price: field(
         data.price ? (data.price.value / 100).toFixed(2) : '',
         !!data.price
       ),
+      sku: field(data.sku ?? '', !!data.sku),
       description: field(data.description ?? '', !!data.description),
       materials: field(data.materials ?? [], (data.materials?.length ?? 0) > 0),
       colors: field(colors, colors.length > 0),
@@ -153,9 +155,11 @@ export function emptyDraft(url: string): DraftSlice {
     sourceUrl: url,
     snapshotUrl: null,
     confidence: 'low',
+    currency: 'USD',
     fields: {
       name: blank(''),
       price: blank(''),
+      sku: blank(''),
       description: blank(''),
       materials: blank<string[]>([]),
       colors: blank<string[]>([]),
@@ -185,7 +189,7 @@ export function draftToProductPayload(
     description: f.description.value || null,
     materials: f.materials.value,
     colors: f.colors.value.length ? f.colors.value.map((name) => ({ name })) : null,
-    finish: f.finish.value ? { name: f.finish.value } : null,
+    finish: f.finish.value.trim() ? { name: f.finish.value.trim() } : null,
     dimensions: editableDimensionsToExtracted(f.dimensions.value, draft.raw.dimensions),
     availableColors: draft.raw.availableColors,
     availableFinishes: draft.raw.availableFinishes,
@@ -200,6 +204,7 @@ export function draftToProductPayload(
     productName: f.name.value,
     extractedData,
     price: f.price.value,
+    sku: f.sku.value,
     images,
     vendorId: draft.manufacturer.vendor?.id ?? null,
     retailerId: draft.retailer.vendor?.id ?? null,

@@ -12,9 +12,13 @@ import type {
   VendorSummaryForCapture,
 } from '@patina/shared';
 import { supabase } from '../lib/supabase';
-import { detectModeFromUrl } from '../lib/mode-detection';
+import {
+  detectModeFromUrl,
+  isKnownBadDomain,
+  KNOWN_BAD_DOMAIN_MESSAGE,
+} from '../lib/mode-detection';
 import { bestProductMatch } from '../lib/product-similarity';
-import { ocrTextToFields } from '../lib/ocr';
+import { textToFields } from '../lib/text-to-fields';
 
 interface PendingIntent {
   kind: 'capture-page' | 'capture-image' | 'capture-selection';
@@ -32,6 +36,47 @@ export interface CaptureController {
   switchToProduct: () => void;
   portalChecking: boolean;
   currentUrl: string;
+  /**
+   * Date.now() at the start of the current capture cycle (reset on every
+   * C1) — the clock `product.captured`'s captureTimeMs reads from. Optional
+   * so hand-built test controllers (error-screen.test.tsx et al.) don't all
+   * need updating for a field they don't exercise.
+   */
+  captureStartedAt?: number;
+}
+
+/** Coarse error-message classes for the `extraction_failed` event (CL W3-E10). */
+function extractionErrorClass(message: string): string {
+  if (message === KNOWN_BAD_DOMAIN_MESSAGE) return 'known_bad_domain';
+  if (message === 'Cannot access current tab') return 'tab_access';
+  if (message === 'Failed to extract product data') return 'extraction_failed';
+  return 'unknown';
+}
+
+/** Non-empty extracted fields, for the `extraction_completed` field_count (CL W3-E10). */
+function countExtractedFields(data: ExtractedProductData): number {
+  const keys: Array<keyof ExtractedProductData> = [
+    'productName',
+    'description',
+    'price',
+    'dimensions',
+    'materials',
+    'colors',
+    'finish',
+    'availableColors',
+    'manufacturer',
+  ];
+  let n = 0;
+  for (const key of keys) {
+    const v = data[key];
+    if (Array.isArray(v)) {
+      if (v.length) n++;
+    } else if (v != null && v !== '') {
+      n++;
+    }
+  }
+  if (data.images?.length) n++;
+  return n;
 }
 
 export function useCaptureController(): CaptureController {
@@ -48,6 +93,78 @@ export function useCaptureController(): CaptureController {
   const dupeWarnings = state.prefs.dupeWarnings;
   const signedIn = state.session.status === 'signed-in';
 
+  // Current-capture-cycle clock — captureTimeMs (product.captured) and
+  // cancelled's openMs both read off this; reset on every C1. A ref, not
+  // state (CL W3-E10): it's timing-only, never drives a render.
+  const captureStartedAtRef = useRef(Date.now());
+
+  // Mirror the latest draft/saved-ness into refs so the pagehide/unmount
+  // handlers below (stale closures otherwise — effects with `[]` deps close
+  // over mount-time state) see what was actually on screen when the panel
+  // closed.
+  const draftRef = useRef(state.draft);
+  useEffect(() => {
+    draftRef.current = state.draft;
+  }, [state.draft]);
+  const savedRef = useRef(false);
+  useEffect(() => {
+    if (state.nav.screen === 'S4' || state.nav.screen === 'S5') savedRef.current = true;
+  }, [state.nav.screen]);
+  // Guards pagehide/visibilitychange/unmount from double-firing `cancelled`
+  // for the same capture — pagehide can fire and then React can still
+  // unmount before the tab is fully gone.
+  const cancelledSentRef = useRef(false);
+
+  // A fresh capture cycle starts — both EXTRACTION_START and CAPTURE_NEXT
+  // land on 'C1', nothing else does. Reset the saved-ness/sent-ness flags (a
+  // stale `true` from the PREVIOUS capture would suppress `cancelled` on
+  // this one) and re-anchor the clock so captureTimeMs times this capture,
+  // not however long the panel's been open across several captures in a row.
+  useEffect(() => {
+    if (state.nav.screen === 'C1') {
+      savedRef.current = false;
+      cancelledSentRef.current = false;
+      captureStartedAtRef.current = Date.now();
+    }
+  }, [state.nav.screen]);
+
+  // capture.extension.cancelled — the panel closed with an unsaved draft.
+  // `pagehide` (falling back to `visibilitychange`→hidden, since MV3 side
+  // panels don't reliably fire pagehide in every Chrome build) is the real
+  // signal — closing the panel tears down the document, and React's own
+  // unmount effect cleanup isn't guaranteed to run before that happens. The
+  // unmount cleanup stays registered as a secondary path for the cases
+  // where the component does unmount cleanly; cancelledSentRef keeps
+  // whichever fires first from being reported twice.
+  useEffect(() => {
+    const sendCancelled = () => {
+      if (cancelledSentRef.current) return;
+      const draft = draftRef.current;
+      if (!draft || savedRef.current) return;
+      cancelledSentRef.current = true;
+      let domain: string | undefined;
+      try {
+        domain = new URL(draft.sourceUrl).hostname.replace(/^www\./, '');
+      } catch {
+        domain = undefined;
+      }
+      extensionEvents.cancelled({
+        domain,
+        openMs: Date.now() - captureStartedAtRef.current,
+      });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') sendCancelled();
+    };
+    window.addEventListener('pagehide', sendCancelled);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', sendCancelled);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      sendCancelled();
+    };
+  }, []);
+
   // Read any context-menu / shortcut intent once on mount.
   useEffect(() => {
     try {
@@ -56,7 +173,8 @@ export function useCaptureController(): CaptureController {
         chrome.storage.session.remove('patina_pending_intent');
         setIntentReady(true);
       });
-    } catch {
+    } catch (err) {
+      console.warn('[capture] pending intent read failed', err);
       setIntentReady(true);
     }
   }, []);
@@ -67,14 +185,16 @@ export function useCaptureController(): CaptureController {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         prevUser = session.user.id;
-        identifyUser(session.user.id, { emailDomain: session.user.email?.split('@')[1] });
+        identifyUser(session.user.id);
         dispatch({ type: 'SESSION_RESOLVED', user: session.user });
       }
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session?.user) {
         if (!prevUser) {
-          identifyUser(session.user.id, { emailDomain: session.user.email?.split('@')[1] });
+          identifyUser(session.user.id);
         }
         prevUser = session.user.id;
         dispatch({ type: 'SESSION_RESOLVED', user: session.user });
@@ -138,15 +258,15 @@ export function useCaptureController(): CaptureController {
             match: {
               id: data.id,
               name: data.name,
-              imageUrl: Array.isArray(data.images) ? data.images[0] ?? null : null,
+              imageUrl: Array.isArray(data.images) ? (data.images[0] ?? null) : null,
               priceRetail: data.price_retail,
               capturedAt: data.captured_at,
             },
             confidence: 1,
           });
         }
-      } catch {
-        /* no duplicate */
+      } catch (err) {
+        console.warn('[capture] duplicate lookup failed', err);
       }
     },
     [dispatch]
@@ -173,7 +293,11 @@ export function useCaptureController(): CaptureController {
             priceRetail: r.price_retail,
             vendorId: r.vendor_id,
           })),
-          { name: data.productName, priceCents: data.price?.value ?? null, vendorId: null }
+          {
+            name: data.productName,
+            priceCents: data.price?.value ?? null,
+            vendorId: null,
+          }
         );
         if (best && best.score >= 0.85) {
           extensionEvents.duplicateDetected('product');
@@ -189,8 +313,8 @@ export function useCaptureController(): CaptureController {
             confidence: best.score,
           });
         }
-      } catch {
-        /* best-effort */
+      } catch (err) {
+        console.warn('[capture] near-match lookup failed', err);
       }
     },
     [dispatch, dupeWarnings]
@@ -201,24 +325,36 @@ export function useCaptureController(): CaptureController {
       let hostname = '';
       try {
         hostname = new URL(sourceUrl).hostname.replace(/^www\./, '');
-      } catch {
-        /* invalid */
+      } catch (err) {
+        console.warn('[capture] source URL parse failed', err);
       }
       const toSummary = (v: {
-        id: string; name: string; logo_url: string | null; website: string | null;
-        market_position: string | null; production_model: string | null; primary_category: string | null;
+        id: string;
+        name: string;
+        logo_url: string | null;
+        website: string | null;
+        market_position: string | null;
+        production_model: string | null;
+        primary_category: string | null;
       }): VendorSummaryForCapture => ({
-        id: v.id, name: v.name, logoUrl: v.logo_url, website: v.website,
+        id: v.id,
+        name: v.name,
+        logoUrl: v.logo_url,
+        website: v.website,
         marketPosition: v.market_position as MarketPosition | null,
         productionModel: v.production_model as ProductionModel | null,
-        primaryCategory: v.primary_category, rating: null, reviewCount: 0,
+        primaryCategory: v.primary_category,
+        rating: null,
+        reviewCount: 0,
       });
       try {
         let domainResults: VendorSummaryForCapture[] = [];
         if (hostname) {
           const { data } = await supabase
             .from('vendors')
-            .select('id, name, logo_url, website, market_position, production_model, primary_category')
+            .select(
+              'id, name, logo_url, website, market_position, production_model, primary_category'
+            )
             .ilike('website', `%${hostname}%`)
             .limit(10);
           if (data) domainResults = data.map(toSummary);
@@ -227,7 +363,9 @@ export function useCaptureController(): CaptureController {
         if (manufacturerName) {
           const { data } = await supabase
             .from('vendors')
-            .select('id, name, logo_url, website, market_position, production_model, primary_category')
+            .select(
+              'id, name, logo_url, website, market_position, production_model, primary_category'
+            )
             .ilike('name', `%${manufacturerName}%`)
             .limit(10);
           if (data) nameResults = data.map(toSummary);
@@ -236,22 +374,34 @@ export function useCaptureController(): CaptureController {
           const exact = domainResults.find((v) => {
             if (!v.website) return false;
             try {
-              const h = new URL(v.website.startsWith('http') ? v.website : `https://${v.website}`)
-                .hostname.replace(/^www\./, '');
+              const h = new URL(
+                v.website.startsWith('http') ? v.website : `https://${v.website}`
+              ).hostname.replace(/^www\./, '');
               return h === hostname;
-            } catch {
+            } catch (err) {
+              console.warn('[capture] vendor website parse failed', err);
               return false;
             }
           });
-          dispatch({ type: 'VENDOR_SET', role: 'retailer', vendor: exact ?? domainResults[0], confidence: exact ? 'exact' : 'high' });
+          dispatch({
+            type: 'VENDOR_SET',
+            role: 'retailer',
+            vendor: exact ?? domainResults[0],
+            confidence: exact ? 'exact' : 'high',
+          });
         }
         if (manufacturerName && nameResults.length > 0) {
           const lower = manufacturerName.toLowerCase();
           const exact = nameResults.find((v) => v.name.toLowerCase() === lower);
-          dispatch({ type: 'VENDOR_SET', role: 'manufacturer', vendor: exact ?? nameResults[0], confidence: exact ? 'exact' : 'high' });
+          dispatch({
+            type: 'VENDOR_SET',
+            role: 'manufacturer',
+            vendor: exact ?? nameResults[0],
+            confidence: exact ? 'exact' : 'high',
+          });
         }
-      } catch {
-        /* suggestions are optional */
+      } catch (err) {
+        console.warn('[capture] vendor suggestions failed', err);
       }
     },
     [dispatch]
@@ -260,6 +410,7 @@ export function useCaptureController(): CaptureController {
   const onExtracted = useCallback(
     (data: ExtractedProductData) => {
       dispatch({ type: 'EXTRACTION_SUCCESS', data });
+      extensionEvents.extractionComplete('product', countExtractedFields(data), data.confidence);
       loadVendorSuggestions(data.manufacturer, data.url);
       checkNearMatch(data);
     },
@@ -269,10 +420,20 @@ export function useCaptureController(): CaptureController {
   const extractDirectly = useCallback(
     async (nonce: number) => {
       try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
         if (nonce !== nonceRef.current) return;
         if (!tab?.id || !tab?.url) {
-          dispatch({ type: 'EXTRACTION_ERROR', error: 'Cannot access current tab' });
+          dispatch({
+            type: 'EXTRACTION_ERROR',
+            error: 'Cannot access current tab',
+          });
+          extensionEvents.extractionError(
+            'product',
+            extractionErrorClass('Cannot access current tab')
+          );
           return;
         }
         const results = await chrome.scripting.executeScript({
@@ -286,37 +447,87 @@ export function useCaptureController(): CaptureController {
                   if (!obj || typeof obj !== 'object') return null;
                   const o = obj as Record<string, unknown>;
                   if (o['@type'] === 'Product') return o as { name?: string };
-                  if (Array.isArray(obj)) for (const i of obj) { const r = find(i); if (r) return r; }
-                  if (Array.isArray(o['@graph'])) for (const i of o['@graph'] as unknown[]) { const r = find(i); if (r) return r; }
+                  if (Array.isArray(obj))
+                    for (const i of obj) {
+                      const r = find(i);
+                      if (r) return r;
+                    }
+                  if (Array.isArray(o['@graph']))
+                    for (const i of o['@graph'] as unknown[]) {
+                      const r = find(i);
+                      if (r) return r;
+                    }
                   return null;
                 };
                 const p = find(data);
-                if (p?.name) { title = p.name as string; break; }
-              } catch { /* invalid */ }
+                if (p?.name) {
+                  title = p.name as string;
+                  break;
+                }
+              } catch {
+                /* invalid */
+              }
             }
             if (!title) {
-              title = document.querySelector('h1')?.textContent?.trim() ||
+              title =
+                document.querySelector('h1')?.textContent?.trim() ||
                 document.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
                 document.title;
             }
             let price: { value: number; currency: string; raw: string } | null = null;
-            const mp = document.querySelector('meta[property="product:price:amount"]')?.getAttribute('content');
-            if (mp) { const v = parseFloat(mp); if (!isNaN(v) && v > 0) price = { value: Math.round(v * 100), currency: 'USD', raw: mp }; }
-            const images: Array<{ url: string; score: number; width: number; height: number; alt: string }> = [];
+            const mp = document
+              .querySelector('meta[property="product:price:amount"]')
+              ?.getAttribute('content');
+            if (mp) {
+              const v = parseFloat(mp);
+              if (!isNaN(v) && v > 0)
+                price = {
+                  value: Math.round(v * 100),
+                  currency: 'USD',
+                  raw: mp,
+                };
+            }
+            const images: Array<{
+              url: string;
+              score: number;
+              width: number;
+              height: number;
+              alt: string;
+            }> = [];
             const seen = new Set<string>();
             for (const img of document.querySelectorAll('img')) {
               const w = img.naturalWidth || img.width || 0;
               const h = img.naturalHeight || img.height || 0;
               const src = img.getAttribute('data-src') || img.src;
               if (!src || src.startsWith('data:') || seen.has(src)) continue;
-              if (w >= 200 && h >= 200) { seen.add(src); images.push({ url: src, score: 50, width: w, height: h, alt: img.alt || '' }); }
+              if (w >= 200 && h >= 200) {
+                seen.add(src);
+                images.push({
+                  url: src,
+                  score: 50,
+                  width: w,
+                  height: h,
+                  alt: img.alt || '',
+                });
+              }
             }
             const og = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
-            if (og && !seen.has(og)) { seen.add(og); images.push({ url: og, score: 35, width: 0, height: 0, alt: '' }); }
+            if (og && !seen.has(og)) {
+              seen.add(og);
+              images.push({ url: og, score: 35, width: 0, height: 0, alt: '' });
+            }
             images.sort((a, b) => b.score - a.score);
-            const desc = document.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
-              document.querySelector('meta[name="description"]')?.getAttribute('content') || null;
-            return { productName: title, description: desc, price, images: images.slice(0, 10), url: window.location.href };
+            const desc =
+              document.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
+              document.querySelector('meta[name="description"]')?.getAttribute('content') ||
+              null;
+            return {
+              productName: title,
+              description: desc,
+              price,
+              images: images.slice(0, 10),
+              url: window.location.href,
+            };
           },
         });
         if (nonce !== nonceRef.current) return;
@@ -336,11 +547,26 @@ export function useCaptureController(): CaptureController {
             confidence: data.images?.length > 0 && data.productName ? 'medium' : 'low',
           } as ExtractedProductData);
         } else {
-          dispatch({ type: 'EXTRACTION_ERROR', error: 'Failed to extract product data' });
+          dispatch({
+            type: 'EXTRACTION_ERROR',
+            error: 'Failed to extract product data',
+          });
+          extensionEvents.extractionError(
+            'product',
+            extractionErrorClass('Failed to extract product data')
+          );
         }
-      } catch {
+      } catch (err) {
         if (nonce === nonceRef.current) {
-          dispatch({ type: 'EXTRACTION_ERROR', error: 'Failed to extract product data' });
+          console.warn('[capture] direct extraction failed', err);
+          dispatch({
+            type: 'EXTRACTION_ERROR',
+            error: 'Failed to extract product data',
+          });
+          extensionEvents.extractionError(
+            'product',
+            extractionErrorClass('Failed to extract product data')
+          );
         }
       }
     },
@@ -351,8 +577,16 @@ export function useCaptureController(): CaptureController {
     (url: string) => {
       const nonce = ++nonceRef.current;
       exactMatchedRef.current = false;
-      dispatch({ type: 'EXTRACTION_START', url, entry: 'toolbar' });
+      // extraction_started always precedes extraction_failed, even for a
+      // known-bad refusal, so the funnel never shows a failed with no start.
       extensionEvents.extractionStart('product');
+      // CL-R14: refuse known-bad domains before any extraction request.
+      if (isKnownBadDomain(url)) {
+        dispatch({ type: 'EXTRACTION_ERROR', error: KNOWN_BAD_DOMAIN_MESSAGE });
+        extensionEvents.extractionError('product', extractionErrorClass(KNOWN_BAD_DOMAIN_MESSAGE));
+        return;
+      }
+      dispatch({ type: 'EXTRACTION_START', url, entry: 'toolbar' });
       checkDuplicate(url);
       chrome.runtime.sendMessage({ type: 'EXTRACT_REQUEST' }, (response) => {
         if (nonce !== nonceRef.current) return;
@@ -380,17 +614,41 @@ export function useCaptureController(): CaptureController {
     intentRef.current = null; // consume — subsequent navigations extract normally
 
     if (intent?.kind === 'capture-image' && intent.srcUrl) {
-      dispatch({ type: 'IMAGE_CAPTURED', sourceUrl: currentUrl, imageUrl: intent.srcUrl });
+      dispatch({
+        type: 'IMAGE_CAPTURED',
+        sourceUrl: currentUrl,
+        imageUrl: intent.srcUrl,
+      });
       return;
     }
     if (intent?.kind === 'capture-selection' && intent.selectionText) {
       dispatch({ type: 'MANUAL_START', url: currentUrl });
-      const fields = ocrTextToFields(intent.selectionText);
+      const fields = textToFields(intent.selectionText);
       if (fields.name) dispatch({ type: 'FIELD_EDIT', field: 'name', value: fields.name });
       if (fields.price)
-        dispatch({ type: 'FIELD_EDIT', field: 'price', value: (fields.price.value / 100).toFixed(2) });
+        dispatch({
+          type: 'FIELD_EDIT',
+          field: 'price',
+          value: (fields.price.value / 100).toFixed(2),
+        });
       if (fields.materials?.length)
-        dispatch({ type: 'FIELD_EDIT', field: 'materials', value: fields.materials });
+        dispatch({
+          type: 'FIELD_EDIT',
+          field: 'materials',
+          value: fields.materials,
+        });
+      return;
+    }
+
+    // CL-R14: refuse before the mode branch — facebook.com/<page>/about reads
+    // as a vendor URL, and the vendor screen would extract it just as wrongly.
+    if (isKnownBadDomain(currentUrl)) {
+      // This call site never reaches runProductExtraction (which fires its
+      // own extraction_started) — fire one here so extraction_failed still
+      // has a preceding start.
+      extensionEvents.extractionStart('product');
+      dispatch({ type: 'EXTRACTION_ERROR', error: KNOWN_BAD_DOMAIN_MESSAGE });
+      extensionEvents.extractionError('product', extractionErrorClass(KNOWN_BAD_DOMAIN_MESSAGE));
       return;
     }
 
@@ -423,5 +681,6 @@ export function useCaptureController(): CaptureController {
     switchToProduct,
     portalChecking: portalSession.isChecking,
     currentUrl,
+    captureStartedAt: captureStartedAtRef.current,
   };
 }

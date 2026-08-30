@@ -28,8 +28,7 @@ export const SUPABASE_AUTH_STORAGE_KEY =
  *
  * Auth state is persisted via `chrome.storage.local` (see
  * chrome-storage-adapter.ts) so the sidepanel and the MV3 background
- * service worker share the same session — `supabase.auth.getSession()`
- * in background.ts depends on this for the offline capture queue sync.
+ * service worker share the same session.
  */
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {

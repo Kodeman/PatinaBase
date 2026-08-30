@@ -1,0 +1,119 @@
+{
+  "generatedAt": "2026-08-29T19:34:10.417Z",
+  "lane": "capture-launch/w2-d4",
+  "notes": [
+    "RecordScreen (RecordRegion + InsightRegion + RouteCommitRegion) mounted directly under <CaptureProvider initial={...}> in state C2 — the same seam src/__tests__/state/CaptureProvider.test.tsx and src/__tests__/spec-books/route-commit-ga.test.tsx use — rather than through PanelShell, which pulls in useCaptureController()/useSettingsSync() side effects not needed for this survey.",
+    "FFESlotPicker and useReferenceData were left real (not mocked away) so the route region select/input counts reflect actual render output; supabase is mocked via src/__tests__/mocks/supabase.ts so those queries resolve to empty projects/styles without a network call.",
+    "CL-R1 fix pass (2026-08-29): visibleInDom now splits rowPresent (the Label + FieldBadge is in the DOM, regardless of value) from valueVisible (a populated input/chip is in the DOM) for dimensions/materials/finish, since those rows can be present-but-empty (a \"+ Add …\" button standing in for the hidden inputs). visibleFields is kept as a flat alias of valueVisible so this stays comparable to the W0 baseline report, whose single visibleInDom flag meant \"value visible\"."
+  ],
+  "cases": [
+    {
+      "file": "dwr.com.eames-lounge-chair-and-ottoman.html",
+      "url": "https://www.dwr.com/living-lounge-chairs/eames-lounge-chair-and-ottoman/5667.html?lang=en_US",
+      "extracted": {
+        "name": true,
+        "price": true,
+        "description": true,
+        "manufacturer": "Herman Miller",
+        "dimensionFieldCount": 3,
+        "materialsCount": 7,
+        "colorsCount": 0,
+        "finish": null,
+        "imagesCount": 1
+      },
+      "visibleInDom": {
+        "rowPresent": {
+          "name": true,
+          "price": true,
+          "description": true,
+          "brand": false,
+          "dimensions": true,
+          "materials": true,
+          "colors": false,
+          "finish": true,
+          "images": true
+        },
+        "valueVisible": {
+          "name": true,
+          "price": true,
+          "description": true,
+          "brand": false,
+          "dimensions": true,
+          "materials": true,
+          "colors": false,
+          "finish": false,
+          "images": true
+        }
+      },
+      "visibleFields": {
+        "name": true,
+        "price": true,
+        "description": true,
+        "brand": false,
+        "dimensions": true,
+        "materials": true,
+        "colors": false,
+        "finish": false,
+        "images": true
+      },
+      "routeRegion": {
+        "selectCount": 1,
+        "inputCount": 0
+      }
+    },
+    {
+      "file": "1stdibs.com.rare-1964-eames-lounge-chair.html",
+      "url": "https://www.1stdibs.com/furniture/seating/lounge-chairs/rare-1964-rosewood-herman-miller-eames-lounge-chair-ottoman-w-original-receipt/id-f_48117292/",
+      "extracted": {
+        "name": true,
+        "price": true,
+        "description": true,
+        "manufacturer": null,
+        "dimensionFieldCount": 0,
+        "materialsCount": 3,
+        "colorsCount": 0,
+        "finish": null,
+        "imagesCount": 0
+      },
+      "visibleInDom": {
+        "rowPresent": {
+          "name": true,
+          "price": true,
+          "description": true,
+          "brand": false,
+          "dimensions": true,
+          "materials": true,
+          "colors": false,
+          "finish": true,
+          "images": true
+        },
+        "valueVisible": {
+          "name": true,
+          "price": true,
+          "description": true,
+          "brand": false,
+          "dimensions": false,
+          "materials": true,
+          "colors": false,
+          "finish": false,
+          "images": false
+        }
+      },
+      "visibleFields": {
+        "name": true,
+        "price": true,
+        "description": true,
+        "brand": false,
+        "dimensions": false,
+        "materials": true,
+        "colors": false,
+        "finish": false,
+        "images": false
+      },
+      "routeRegion": {
+        "selectCount": 1,
+        "inputCount": 0
+      }
+    }
+  ]
+}

@@ -16,6 +16,9 @@ const PRODUCTS_COLUMNS = new Set([
   'layer', 'owner_user_id',
   // 00232 field-capture origin (now also written by the extension, P2-8)
   'capture_source', 'capture_provenance',
+  // 00060 catalog columns — CL-R1 writes the captured SKU here, NOT the
+  // normalizer-owned vendor_sku from 00306.
+  'sku',
 ]);
 
 function makeExtractedData(overrides: Partial<ExtractedProductData> = {}): ExtractedProductData {
@@ -145,6 +148,37 @@ describe('buildProductInsertPayload', () => {
     expect(payload.name).toBe('Extracted Name');
   });
 
+  describe('sku (CL-R1)', () => {
+    function withSku(sku?: string | null) {
+      return buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        sku,
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+      });
+    }
+
+    it('writes a trimmed sku', () => {
+      expect(withSku('  H4614 ').sku).toBe('H4614');
+    });
+
+    it('writes null for a blank, whitespace-only, or absent sku', () => {
+      expect(withSku('').sku).toBeNull();
+      expect(withSku('   ').sku).toBeNull();
+      expect(withSku(null).sku).toBeNull();
+      expect(withSku().sku).toBeNull();
+    });
+
+    it('never writes vendor_sku — that column belongs to the catalog normalizer (00306)', () => {
+      const payload = withSku('H4614');
+      expect('vendor_sku' in payload).toBe(false);
+    });
+  });
+
   describe('capture_source / capture_provenance (P2-8)', () => {
     it('marks every extension capture with capture_source: web_extension', () => {
       const payload = buildProductInsertPayload({
@@ -221,6 +255,64 @@ describe('buildProductInsertPayload', () => {
 
       expect(payload.finish).toBe('Matte');
       expect(payload.available_colors).toEqual(['Walnut', 'Ebony']);
+    });
+  });
+
+  describe('capture note lives in capture_provenance.note, not usage_notes (CL-R1 / c)', () => {
+    it('trims and carries the capture note into capture_provenance.note', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+        note: '  Check the client likes the walnut finish  ',
+      });
+      expect(payload.capture_provenance.note).toBe('Check the client likes the walnut finish');
+    });
+
+    it('omits capture_provenance.note when no note is provided', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+      });
+      expect(payload.capture_provenance.note).toBeUndefined();
+      expect('note' in payload.capture_provenance).toBe(false);
+    });
+
+    it('treats a whitespace-only note as omitted', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+        note: '   ',
+      });
+      expect('note' in payload.capture_provenance).toBe(false);
+    });
+
+    it('never writes products.usage_notes — that column belongs to studio promotion, not capture', () => {
+      const payload = buildProductInsertPayload({
+        productName: 'Chair',
+        extractedData: makeExtractedData(),
+        price: '',
+        images: [],
+        vendorId: null,
+        retailerId: null,
+        userId: 'u1',
+        note: 'Check the finish sample',
+      });
+      expect('usage_notes' in payload).toBe(false);
     });
   });
 });

@@ -108,6 +108,66 @@ describe('sticky spec-book placement context', () => {
       roomId: null,
     });
   });
+
+  it('round-trips routeKind alongside project and room (CL-R1 / D5)', async () => {
+    const storageGet = chrome.storage.local.get as unknown as ReturnType<typeof vi.fn>;
+    storageGet.mockResolvedValueOnce({
+      [SPEC_BOOK_PLACEMENT_CONTEXT_KEY]: {
+        projectId: 'project-1',
+        roomId: 'room-1',
+        routeKind: 'fill_slot',
+      },
+    });
+
+    await expect(loadSpecBookPlacementContext()).resolves.toEqual({
+      projectId: 'project-1',
+      roomId: 'room-1',
+      routeKind: 'fill_slot',
+    });
+
+    await saveSpecBookPlacementContext({
+      projectId: 'project-2',
+      roomId: 'room-2',
+      routeKind: 'create_line',
+    });
+    expect(chrome.storage.local.set).toHaveBeenCalledWith({
+      [SPEC_BOOK_PLACEMENT_CONTEXT_KEY]: {
+        projectId: 'project-2',
+        roomId: 'room-2',
+        routeKind: 'create_line',
+      },
+    });
+  });
+
+  it('still loads a context saved before routeKind existed (missing → default as today)', async () => {
+    const storageGet = chrome.storage.local.get as unknown as ReturnType<typeof vi.fn>;
+    storageGet.mockResolvedValueOnce({
+      [SPEC_BOOK_PLACEMENT_CONTEXT_KEY]: {
+        projectId: 'project-1',
+        roomId: 'room-1',
+      },
+    });
+
+    const loaded = await loadSpecBookPlacementContext();
+    expect(loaded).toEqual({ projectId: 'project-1', roomId: 'room-1' });
+    expect(loaded.routeKind).toBeUndefined();
+  });
+
+  it('fails closed to an empty context when routeKind is not a recognized route kind', async () => {
+    const storageGet = chrome.storage.local.get as unknown as ReturnType<typeof vi.fn>;
+    storageGet.mockResolvedValueOnce({
+      [SPEC_BOOK_PLACEMENT_CONTEXT_KEY]: {
+        projectId: 'project-1',
+        roomId: 'room-1',
+        routeKind: 'not_a_real_route',
+      },
+    });
+
+    await expect(loadSpecBookPlacementContext()).resolves.toEqual({
+      projectId: null,
+      roomId: null,
+    });
+  });
 });
 
 describe('place_product_in_project payloads', () => {

@@ -17,7 +17,7 @@ import type {
 import type { NavState } from './screens';
 import type { PlacementOutcome, SpecBookPlacementRoute } from '../lib/spec-book-placement';
 
-// ─── Routing destination (mirrors @patina/catalog-ui DestinationPicker) ──────
+// ─── Routing destination ──────────────────────────────────────────────────
 
 export type Destination =
   | { type: 'personal' }
@@ -25,6 +25,15 @@ export type Destination =
 
 /** Where a finished capture commits. */
 export type CommitTarget = 'library' | 'inbox' | 'decision';
+
+/**
+ * The distinct save paths CommitBar's footer can trigger — carried on
+ * SAVE_START/io.lastCommitKind (CL W3-E10 F2) so an R5 retry re-runs the
+ * exact button the user pressed instead of re-deriving a guess from
+ * dedup/routing state (which can't distinguish "declined a merge, save new"
+ * from "update").
+ */
+export type CommitKind = 'library' | 'inbox' | 'update' | 'reuse';
 
 // ─── Per-field status (drives Region A verified/edited/missing badges) ───────
 
@@ -41,6 +50,7 @@ export interface DraftField<T> {
 export type DraftFieldKey =
   | 'name'
   | 'price'
+  | 'sku'
   | 'description'
   | 'materials'
   | 'colors'
@@ -84,9 +94,13 @@ export interface DraftSlice {
   /** R2 snapshot public URL, once uploaded. */
   snapshotUrl: string | null;
   confidence: 'high' | 'medium' | 'low';
+  /** ISO code the price field is denominated in (CL-R13). */
+  currency: string;
   fields: {
     name: DraftField<string>;
     price: DraftField<string>;
+    /** Vendor SKU / model number (CL-R1). */
+    sku: DraftField<string>;
     description: DraftField<string>;
     materials: DraftField<string[]>;
     colors: DraftField<string[]>;
@@ -148,26 +162,11 @@ export interface DedupSlice {
   mergePicks: Partial<Record<DraftFieldKey, 'existing' | 'new'>>;
 }
 
-export interface QueuedCaptureSummary {
-  id: string;
-  name: string;
-  attempts: number;
-  status: 'pending' | 'syncing' | 'failed';
-}
-
-export interface QueueSlice {
-  items: QueuedCaptureSummary[];
-  online: boolean;
-  lastSyncAt: string | null;
-}
-
 export interface Prefs {
   defaultDestination: Destination;
   autoDetect: boolean;
-  tradeLayer: boolean;
   dupeWarnings: boolean;
   captureConfirmation: boolean;
-  ocrEnabled: boolean;
   snapshotFallbackEnabled: boolean;
 }
 
@@ -179,6 +178,8 @@ export interface IoSlice {
   /** Durable Product retained when only the project-placement RPC failed. */
   pendingPlacementProductId: UUID | null;
   lastPlacementOutcome: PlacementOutcome | null;
+  /** The kind SAVE_START was dispatched with — what an R5 retry re-runs (CL W3-E10 F2). */
+  lastCommitKind: CommitKind | null;
 }
 
 export interface CaptureState {
@@ -187,7 +188,6 @@ export interface CaptureState {
   draft: DraftSlice | null;
   routing: RoutingSlice;
   dedup: DedupSlice;
-  queue: QueueSlice;
   prefs: Prefs;
   io: IoSlice;
 }
@@ -213,7 +213,6 @@ export type CaptureAction =
       missing: DraftFieldKey[];
     }
   | { type: 'EXTRACTION_BLOCKED'; snapshotUrl: string | null }
-  | { type: 'EXTRACTION_UNKNOWN' }
   | { type: 'EXTRACTION_ERROR'; error: string }
   | { type: 'MANUAL_START'; url: string }
   | { type: 'SNAPSHOT_CAPTURED'; sourceUrl: string; imageUrl: string }
@@ -238,12 +237,6 @@ export type CaptureAction =
   | { type: 'SHELF_SET'; shelf: string | null }
   | { type: 'COMMIT_TARGET_SET'; target: CommitTarget }
   | {
-      type: 'INBOX_TARGET_SET';
-      proposalId: UUID | null;
-      scopeRoomId: UUID | null;
-      ffeCategorySlug: string | null;
-    }
-  | {
       type: 'SPEC_BOOK_PLACEMENT_SET';
       route: SpecBookPlacementRoute | null;
       valid?: boolean;
@@ -255,21 +248,19 @@ export type CaptureAction =
       match: ExistingProductMatch;
       confidence: number;
     }
-  | { type: 'DUPLICATE_FOUND'; match: ExistingProductMatch; confidence: number }
   | { type: 'DUPLICATE_CLEARED' }
   | { type: 'MERGE_FIELD_PICK'; field: DraftFieldKey; pick: 'existing' | 'new' }
   // save lifecycle
-  | { type: 'SAVE_START'; target: CommitTarget }
-  | { type: 'SAVE_SUCCESS'; productId: UUID; landed: 'library' | 'inbox'; placementOutcome?: PlacementOutcome | null }
+  | { type: 'SAVE_START'; target: CommitTarget; lastCommitKind?: CommitKind }
+  | {
+      type: 'SAVE_SUCCESS';
+      productId: UUID;
+      landed: 'library' | 'inbox';
+      placementOutcome?: PlacementOutcome | null;
+    }
   | { type: 'SAVE_ERROR'; error: string; preservedProductId?: UUID }
   | { type: 'CAPTURE_NEXT' }
-  // offline / prefs
-  | { type: 'CONNECTIVITY'; online: boolean }
-  | {
-      type: 'QUEUE_STATUS';
-      items: QueuedCaptureSummary[];
-      lastSyncAt: string | null;
-    }
+  // prefs
   | { type: 'PREFS_LOADED'; prefs: Prefs }
   | { type: 'PREF_SET'; key: keyof Prefs; value: Prefs[keyof Prefs] };
 
