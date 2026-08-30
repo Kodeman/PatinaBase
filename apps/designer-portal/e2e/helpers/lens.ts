@@ -200,12 +200,23 @@ export async function scrollSteps(
  * read from the same DOM the labels came from, so the formula and the
  * measurement can never drift apart.
  *
+ * W6 (audit drift 1, W3-R5 §6): labels are read by the `data-rail-label`
+ * attribute rather than by structure — the rail head lines (`doc-spine.tsx`'s
+ * household + stage-phrase-top spans), each stop's name, the "Filed with
+ * this job" heading and each door name all carry it (`lens-ladder.tsx`,
+ * `doc-spine.tsx`). A value line (a stop's fact, `NOTHING YET`, the rail
+ * head's own `N OF M` count) carries `data-rail-value` instead and is never
+ * counted here. Filtered to what is actually PAINTED (never `display:none`,
+ * `visibility:hidden`, or `opacity:0` on the element or an ancestor) so the
+ * L-6/RF-02 yields that hide a label or a value do not inflate the count.
+ *
  * Deliberately excluded: the "Put down document" exit link (studio chrome,
- * not a map of the paper), every ladder VALUE span (the fact beside a
- * stop's name — `region-head.tsx`'s own printed figures are the paper's,
- * not the rail's, per SP-08), and room sub-rungs (`[data-room-chip]`,
- * Override 2) — the rail budget's own formula is "stops + doors", never
- * rooms, and a room held open must not move this gate.
+ * not a map of the paper, and carries neither attribute), every ladder VALUE
+ * span (the fact beside a stop's name — `region-head.tsx`'s own printed
+ * figures are the paper's, not the rail's, per SP-08), and room sub-rungs
+ * (`[data-room-chip]`, Override 2) — the rail budget's own formula is
+ * "stops + doors", never rooms, and a room held open must not move this
+ * gate.
  */
 export interface RailCensus {
   labels: string[];
@@ -218,40 +229,30 @@ export async function railCensus(page: Page): Promise<RailCensus> {
     const spine = document.querySelector('[data-document-spine]');
     if (!spine) return { labels: [], stops: 0, doors: 0 };
 
-    const labels: string[] = [];
-    const push = (el: Element | null | undefined) => {
-      const text = el?.textContent?.replace(/\s+/g, ' ').trim();
-      if (text) labels.push(text);
+    const isPainted = (el: Element): boolean => {
+      let node: Element | null = el;
+      while (node) {
+        const style = getComputedStyle(node);
+        if (
+          style.display === 'none' ||
+          style.visibility === 'hidden' ||
+          parseFloat(style.opacity) <= 0
+        ) {
+          return false;
+        }
+        node = node.parentElement;
+      }
+      return true;
     };
 
-    // Head furniture: the household line, then the stage phrase's own
-    // top/bottom spans (doc-spine.tsx) — one to three labels, never a value.
-    const head = spine.querySelector('[data-spine-head]');
-    push(
-      head?.querySelector(
-        ':scope > p:first-of-type:not([data-spine-stage-phrase]):not([data-spine-room-in-hand])',
-      ),
-    );
-    head
-      ?.querySelectorAll('[data-spine-stage-phrase] > span')
-      .forEach((span) => push(span));
+    const labels: string[] = [];
+    spine.querySelectorAll('[data-rail-label]').forEach((el) => {
+      const text = el.textContent?.replace(/\s+/g, ' ').trim();
+      if (text && isPainted(el)) labels.push(text);
+    });
 
-    // The ladder: one label per stop — the NAME span only (`lens-ladder.tsx`'s
-    // `body` fragment always renders the name as its first child, mounted or
-    // not), never the value/count line beside it.
     const ladder = spine.querySelector('[data-lens-ladder]');
-    ladder
-      ?.querySelectorAll('[data-index-region] > span:first-child')
-      .forEach((span) => push(span));
     const stops = ladder?.querySelectorAll('[data-index-region]').length ?? 0;
-
-    // "Filed with this job" — the doors' own head line, always rendered
-    // (even with zero doors, OD-8): the first `<p>` of the ladder's OTHER
-    // top-level div (the track carries `[data-lens-track]`).
-    push(ladder?.querySelector(':scope > div:not([data-lens-track]) > p:first-child'));
-
-    // The doors themselves, one label each.
-    ladder?.querySelectorAll('[data-ladder-door]').forEach((door) => push(door));
     const doors = ladder?.querySelectorAll('[data-ladder-door]').length ?? 0;
 
     return { labels, stops, doors };

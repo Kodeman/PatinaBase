@@ -845,4 +845,76 @@ describe('the rail around the ladder', () => {
     const putDown = screen.getByRole('link', { name: 'Put down document' });
     expect(ladderNav().contains(putDown)).toBe(false);
   });
+
+  /**
+   * W6 (audit drift 1, W3-R5 §6) — the rail-budget e2e instrument counts
+   * DISTINCT VISIBLE `[data-rail-label]` elements rather than walking the
+   * DOM by structure. Every label/value element carries exactly one of the
+   * two attributes, and this fixture (the household + stage phrase, six
+   * project stops, four doors — the same shape the long paper `…d5` prints)
+   * pins the real numbers the instrument now measures.
+   *
+   * The rail head's own `N OF M` count (`stagePhrase.bottom`, `doc-spine.tsx`)
+   * is a VALUE, not a third head label — it is the same fact the letterhead's
+   * arc restates, never a name on the paper (RF-02). That reclassifies one
+   * of the pre-W6 "3 fixed head labels" (household + stage-top + stage-count,
+   * counted structurally and indiscriminately by the old census) as a value,
+   * so this fixture's true label count is **13**, not the 14 the pre-W6
+   * ceiling arithmetic assumed; the e2e ceiling (`3 + stops + 1 + doors`)
+   * keeps its literal "3" as an UPPER BOUND unaffected by this split — 13
+   * labels is still within a 14 ceiling, never over it.
+   */
+  it('stamps every rail word as exactly one of label/value, never both — 13 labels, 6+1 values (W6)', () => {
+    const { segments, doors } = ladderFor('project');
+    render(
+      <DocSpine
+        sections={sections}
+        onJump={jest.fn()}
+        household="Vandersteen"
+        projectId="p1"
+        segments={segments}
+        doors={doors}
+        stageWord="Procurement & Orders"
+        stageIndex="4 OF 6"
+      />,
+    );
+    const spine = document.querySelector('[data-document-spine]') as HTMLElement;
+    const labels = Array.from(
+      spine.querySelectorAll<HTMLElement>('[data-rail-label]'),
+    );
+    const values = Array.from(
+      spine.querySelectorAll<HTMLElement>('[data-rail-value]'),
+    );
+
+    for (const el of labels) {
+      expect(el).not.toHaveAttribute('data-rail-value');
+    }
+    for (const el of values) {
+      expect(el).not.toHaveAttribute('data-rail-label');
+    }
+
+    // 2 head lines (household, the stage phrase's top) + 6 stop names + the
+    // "Filed with this job" heading + 4 door names.
+    expect(labels.map((el) => el.textContent)).toEqual([
+      'Vandersteen',
+      'Procurement & Orders',
+      'Client approvals',
+      'Schedule',
+      'Pieces',
+      'Money',
+      'Closing the book',
+      'The record',
+      'Filed with this job',
+      'Plan room',
+      'Spec book',
+      'Boards',
+      'Call sheet',
+    ]);
+    expect(labels).toHaveLength(13);
+
+    // The rail head's own count (1) + one value line per stop (6) — Pieces'
+    // wrapper carries both the narrow and full measures (OD-14) but is still
+    // ONE `[data-rail-value]` element, so this is 6 + 1, never 6 + 2.
+    expect(values).toHaveLength(7);
+  });
 });
