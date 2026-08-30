@@ -60,6 +60,20 @@ async function openPaper(page: AuthenticatedPage): Promise<void> {
     timeout: 30_000,
   });
   await settle(page);
+  // The ladder's own count line — which every pre-work head's status line is
+  // (`page.tsx` `preworkStatus` reads `ladderSegments[].countLine`) — prints
+  // the literal `Reading…` placeholder while its query is in flight.
+  // `settle()` waits on scroll velocity, not on data, so on a warm webkit
+  // worker (this file runs SECOND in its shard, after mobile-margin-sheet)
+  // a status read can land on the placeholder. Waiting for it to clear is
+  // the precondition every case here already assumes; it asserts nothing.
+  await expect(
+    page
+      .locator(
+        '[data-document-paper] [data-index-region] [data-region-head] h2 + p',
+      )
+      .filter({ hasText: /^Reading…$/ }),
+  ).toHaveCount(0, { timeout: 20_000 });
 }
 
 /** The head's own status line — the first `<p>` immediately after its
