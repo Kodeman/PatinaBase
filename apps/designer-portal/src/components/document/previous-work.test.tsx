@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { PreviousWork } from './previous-work';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { regionBoxSignature } from './region/region-box-signature';
 
 // W4 — the lens is a page-level observer; in jsdom it never runs, so the store
 // is mocked per suite. `'full'` is the reading these W2/W3 claims were written
@@ -209,6 +210,10 @@ describe('PreviousWork', () => {
         </PreviousWork>,
       );
       const quietHead = container.querySelector('[data-region-head="record"]');
+      // H5 — the root's OUTER box may not depend on its density.
+      const quietBox = regionBoxSignature(
+        container.querySelector('[data-index-region="record"]'),
+      );
       const quietHeading = document.getElementById('previous-work-heading');
       expect(quietHead).not.toBeNull();
 
@@ -228,6 +233,14 @@ describe('PreviousWork', () => {
         screen.queryByText('Quiet — opens as you read'),
       ).not.toBeInTheDocument();
       expect(screen.getByText('2 complete')).toBeInTheDocument();
+      // The same outer box on the other side of the promotion: same
+      // margins, same border, same reserve, same rules. A stop that grew a
+      // top margin on promotion would move every root below it.
+      expect(
+        regionBoxSignature(
+          container.querySelector('[data-index-region="record"]'),
+        ),
+      ).toBe(quietBox);
     });
 
     it('prints the same Nothing yet head at count 0, quiet or full, and is never a press target', () => {

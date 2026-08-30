@@ -6,6 +6,7 @@ import type {
   ProjectApprovalArtifactCandidate,
   ProjectApprovalReview,
 } from '@patina/supabase';
+import { regionBoxSignature } from '../region/region-box-signature';
 
 const setAuthority = jest.fn();
 const createApproval = jest.fn();
@@ -333,6 +334,10 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
   it('keeps the same head element when the lens promotes it to full', () => {
     const { rerender } = renderDocument();
     const head = document.querySelector('[data-region-head="approvals-head"]');
+    // H5 — the root's OUTER box may not depend on its density.
+    const quietBox = regionBoxSignature(
+      document.querySelector('[data-index-region="approvals"]'),
+    );
     const heading = screen.getByRole('heading', { name: 'Client approvals' });
 
     act(() => {
@@ -366,6 +371,14 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
         /Bind each request to one issued plan, client-ready specification/,
       ),
     ).toBeInTheDocument();
+    // The same outer box on the other side of the promotion: same
+    // margins, same border, same reserve, same rules. A stop that grew a
+    // top margin on promotion would move every root below it.
+    expect(
+      regionBoxSignature(
+        document.querySelector('[data-index-region="approvals"]'),
+      ),
+    ).toBe(quietBox);
   });
 
   it('lets the fold she made outrank the lens, whatever the lens says', () => {
