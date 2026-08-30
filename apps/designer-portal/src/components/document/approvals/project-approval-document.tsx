@@ -883,10 +883,10 @@ export function ProjectApprovalDocument({
       <div className="mt-6 min-w-0 border-t border-[var(--color-pearl)] pt-4">
         <h3 className="font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Approval record
+          {(approvalsQuery.isLoading || authorityQuery.isLoading) && (
+            <SectionLoadingLine variant="inline" label="Reading approvals" />
+          )}
         </h3>
-        {(approvalsQuery.isLoading || authorityQuery.isLoading) && (
-          <SectionLoadingLine label="Reading approvals" className="mt-3" />
-        )}
         {approvalsQuery.isError && (
           <p
             role="alert"

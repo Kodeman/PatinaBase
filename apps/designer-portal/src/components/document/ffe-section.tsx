@@ -1299,6 +1299,9 @@ function FFESectionBody({
                 : 'Pieces'}
           </h2>
           <span className="flex items-baseline gap-3">
+            {isLoading && (
+              <SectionLoadingLine variant="inline" label="Reading the schedule" />
+            )}
             {!selecting && meta && (
               <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                 {meta}
@@ -1376,7 +1379,17 @@ function FFESectionBody({
               <RegionHead
                 headingId={ffeHeadingId}
                 name="Pieces"
-                status={ffeStatus}
+                status={
+                  <>
+                    {ffeStatus}
+                    {!readinessQuery.isError && readinessQuery.isLoading && (
+                      <SectionLoadingLine variant="inline" label="Checking readiness" />
+                    )}
+                    {isLoading && (
+                      <SectionLoadingLine variant="inline" label="Reading the schedule" />
+                    )}
+                  </>
+                }
                 exceptions={ffeExceptions}
                 surfaceKey="project"
                 regionKey="ffe"
@@ -1418,10 +1431,6 @@ function FFESectionBody({
             Try again
           </DocumentAction>
         </div>
-      )}
-
-      {mode === 'project' && !readinessQuery.isError && readinessQuery.isLoading && (
-        <SectionLoadingLine label="Checking readiness" className="mb-2" />
       )}
 
       {/* The head button stays visible (never vanishes on the designer) but
@@ -1469,8 +1478,6 @@ function FFESectionBody({
           sectionDragOver={sectionDragOver}
         />
       )}
-
-      {isLoading && <SectionLoadingLine label="Reading the schedule" className="py-3" />}
 
       {!isLoading && isError && (
         <div className="border-t border-[var(--color-pearl)] py-3">
