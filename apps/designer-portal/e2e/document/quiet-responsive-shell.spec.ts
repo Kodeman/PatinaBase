@@ -235,9 +235,12 @@ test.describe('Quiet Work responsive document shell', () => {
       .poll(async () => (await band.boundingBox())?.height ?? 0)
       .toBe(56);
 
+    // By its stable hook, not by its name: OD-11/A-01 puts the current stop
+    // INTO the accessible name, so the name changes on every crossing and a
+    // name-based locator races the scroll it is measuring.
     const sectionsDoor = page
       .getByRole('navigation', { name: 'Document bar' })
-      .getByRole('button', { name: /^Open sections/ });
+      .locator('[data-sections-door]');
     await expect(sectionsDoor).toBeVisible();
     await sectionsDoor.click();
     await expect(

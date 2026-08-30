@@ -229,6 +229,12 @@ export function MobileBar() {
         <button
           type="button"
           onClick={openSpine}
+          // A stable hook for the door, because its accessible NAME is not
+          // stable by design: OD-11/A-01 puts the current stop in it, so the
+          // name changes on every crossing. A spec that reached the door by
+          // name raced the scroll — chromium resolved it and then reported the
+          // element detached, webkit never found it at all.
+          data-sections-door=""
           aria-label={
             stopLabel ? `Open sections, at ${stopLabel}` : 'Open sections'
           }
@@ -242,15 +248,24 @@ export function MobileBar() {
             <span className="block truncate font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
               {household}
             </span>
-            {stopLabel && (
-              // F56/contrast.test.ts: mobile-bar.tsx is a charcoal ground —
-              // `--color-clay-ink` reads 2.41:1 there and fails AA; the base
-              // `--color-clay` pigment (6.21:1) is this file's established
-              // dark-ground accent (see the elapsed-time text below).
-              <span className="block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)]">
-                At {stopLabel}
-              </span>
-            )}
+            {/* PRE-PRINTED and swapped by `visibility`, exactly as A-01 ruled
+                — never mounted and unmounted. A line that comes and goes as
+                the reading index arrives re-lays the bar under the reader's
+                thumb and churns the door's subtree on every crossing. The
+                72px reserve above is already sized for three lines.
+
+                F56/contrast.test.ts: mobile-bar.tsx is a charcoal ground —
+                `--color-clay-ink` reads 2.41:1 there and fails AA; the base
+                `--color-clay` pigment (6.21:1) is this file's established
+                dark-ground accent (see the elapsed-time text below). */}
+            <span
+              aria-hidden={stopLabel ? undefined : true}
+              className={`block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] ${
+                stopLabel ? '' : 'invisible'
+              }`}
+            >
+              At {stopLabel ?? '\u00a0'}
+            </span>
           </span>
         </button>
       ) : (
