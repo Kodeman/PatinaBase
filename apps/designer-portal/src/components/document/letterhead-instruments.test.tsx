@@ -1,15 +1,21 @@
 /**
- * The letterhead ledger's two printings (W3-R4).
+ * The letterhead ledger's one printing (W3-R4, labels per W3-R5 §1/§2).
  *
  * The five full-label acts took ~616px out of a track that was starving the
  * title's, so the PRINT sheds every word the paper already says: the family
- * word (the household chip states it 20px above) at every width, and the
- * sharing act's tier word below 1180. What it must never shed is the
- * ACCESSIBLE NAME — a screen reader hears the whole sentence at both tiers.
+ * word (the household chip states it 20px above) AND the sharing act's tier
+ * word, at every width. W3-R5 §1: the tier is state the sharing panel prints
+ * one press away, and on the letterhead it was the only label that cost a
+ * second row. What the ledger must never shed is the ACCESSIBLE NAME — a
+ * screen reader hears `Sharing · Milestones` at both tiers.
  *
  * There is no separate MILESTONES instrument to fold: `SharingTierInstrument`
- * is ONE act whose label states its current tier, which is why the ≥1180 row
- * reads `SHARING · MILESTONES` and the 390 one reads `SHARING`.
+ * is ONE act whose accessible name states its current tier.
+ *
+ * The two tiers now differ only in REGISTER (W3-R5 §2): below 1180 the ledger
+ * prints at the paper's 11px mono floor so its four acts are one row inside a
+ * 327px run; at ≥1180 they stay at 12px. That is a class on the group, and it
+ * is asserted here as a source literal — jsdom lays nothing out.
  *
  * The mocking shape is letterhead-instruments-scan-door.test.tsx's, minus the
  * scan (no photo resolves, so the scan door never mounts and the row is the
@@ -100,12 +106,12 @@ function printedLabels(): string[] {
 describe('the letterhead ledger — what it prints at ≥1180', () => {
   beforeEach(() => installTier(true));
 
-  it('prints MESSAGE · PREVIEW · SHARING · MILESTONES · CALL SHEET · N', () => {
+  it('prints MESSAGE · PREVIEW · SHARING · CALL SHEET · N', () => {
     renderLedger();
     expect(printedLabels()).toEqual([
       'Message',
       'Preview',
-      'Sharing · Milestones',
+      'Sharing',
       'Call sheet · 2',
     ]);
   });
@@ -122,7 +128,7 @@ describe('the letterhead ledger — what it prints at ≥1180', () => {
 describe('the letterhead ledger — what it prints below 1180', () => {
   beforeEach(() => installTier(false));
 
-  it('prints MESSAGE · PREVIEW · SHARING · CALL SHEET · N — the tier word folds into the panel', () => {
+  it('prints the same four labels — the row is identical at every width', () => {
     renderLedger();
     expect(printedLabels()).toEqual([
       'Message',
@@ -130,6 +136,22 @@ describe('the letterhead ledger — what it prints below 1180', () => {
       'Sharing',
       'Call sheet · 2',
     ]);
+  });
+
+  it('drops the acts to the 11px mono floor below 1180, and only below it', () => {
+    renderLedger();
+    const group = document.querySelector(
+      '[role="group"][data-action-region="letterhead-actions"]',
+    )!;
+    // A descendant selector, because `DocumentAction`'s own `text-[12px]` is a
+    // single class: `.parent .da-act` (0,2,0) beats it, where a `text-[11px]`
+    // passed down as `className` would race it in the stylesheet.
+    expect(group.className).toContain('[&_.da-act]:text-[11px]');
+    expect(group.className).toContain('min-[1180px]:[&_.da-act]:text-[12px]');
+    // The press target is `min-h`, and the register never touches it.
+    for (const act of group.querySelectorAll('[data-action-key]')) {
+      expect(act.className).toContain('min-h-[44px]');
+    }
   });
 });
 

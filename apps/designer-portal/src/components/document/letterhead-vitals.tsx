@@ -413,7 +413,12 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           rather than hide a `Set dates` act behind the ellipsis. */}
       <div
         data-letterhead-vitals
-        className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-[var(--text-primary)] min-[1180px]:flex-nowrap"
+        // N-07 — `overflow-clip` with a margin, not `overflow-hidden`: the row
+        // holds real focusable acts (`Set dates`), and a hidden overflow clips
+        // their focus ring flat against the text. `text-ellipsis` is dropped:
+        // it is inert on a flex container, which has no inline content of its
+        // own to elide.
+        className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 overflow-clip [overflow-clip-margin:6px] whitespace-nowrap text-[11px] text-[var(--text-primary)] min-[1180px]:flex-nowrap"
       >
         {phaseWord && <span>{phaseWord}</span>}
         <VitalDate
@@ -477,7 +482,7 @@ export function LetterheadTitle({
   return (
     /* 32px at phone widths, 40px from `sm` up (W3-R4): 40px of Playfair spends
        ~46 characters of a 1440 measure but only ~11 of a 390 one. */
-    <h1 className="flex items-baseline gap-2 font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] sm:text-[40px]">
+    <h1 className="flex items-baseline gap-2 font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] min-[1180px]:text-[40px]">
       <input
         type="text"
         aria-label="Project title"
@@ -495,7 +500,7 @@ export function LetterheadTitle({
           }
         }}
         disabled={state === 'saving'}
-        className="min-w-0 flex-1 border-b border-transparent bg-transparent font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60 sm:text-[40px]"
+        className="min-w-0 flex-1 border-b border-transparent bg-transparent font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60 min-[1180px]:text-[40px]"
       />
       <SaveDot state={state} errorMsg={errorMsg} />
     </h1>

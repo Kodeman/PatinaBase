@@ -60,25 +60,6 @@ const TIERS = [
   },
 ] as const;
 
-/** The width at which the ledger stands in the letterhead's own bounded track
- *  and can afford the sharing act's tier word (W3-R4). */
-const WIDE_TIER = '(min-width: 1180px)';
-
-/** Assumed true, so the server render and the first client render agree and an
- *  effect corrects it — the same shape as shelf-panel's `useFullTier`. */
-function useWideTier(): boolean {
-  const [wide, setWide] = useState(true);
-  useEffect(() => {
-    const query = window.matchMedia?.(WIDE_TIER);
-    if (!query) return;
-    const sync = () => setWide(query.matches);
-    sync();
-    query.addEventListener?.('change', sync);
-    return () => query.removeEventListener?.('change', sync);
-  }, []);
-  return wide;
-}
-
 const getSupabase = () => createBrowserClient() as any;
 
 interface ScanArtifact {
@@ -336,7 +317,17 @@ export function LetterheadInstruments({
       <DocumentActionGroup
         surfaceKey="open-document"
         regionKey="letterhead-actions"
-        className="mt-1"
+        // W3-R5 §2 — the ledger's own register. Below 1180 the four acts at
+        // 12px/0.1em measure 385px in a 327px run and can never be one row, so
+        // the ledger drops to the paper's 11px mono floor (7.5 px/char → 303px,
+        // one row inside 327). A descendant selector because `DocumentAction`'s
+        // own `text-[12px]` is a single class: `.parent .da-act` (0,2,0) beats
+        // it, where a `text-[11px]` passed down as `className` would race it in
+        // the stylesheet. The 44px target is `min-h`, untouched by either.
+        // No top margin of its own: the letterhead grid's `gap-y` already
+        // separates row 2 from the title at ≥1180, and stacks it under the
+        // vitals with the same gap below it.
+        className="[&_.da-act]:text-[11px] min-[1180px]:[&_.da-act]:text-[12px]"
         aria-label="Document letterhead actions"
       >
         {/* W3-R4: the family word is dropped from the PRINT at every width —
@@ -498,7 +489,6 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
   const save = useSaveProjectVitals(projectId);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const wide = useWideTier();
 
   const current = (project?.client_visibility_tier ??
     'milestone') as (typeof TIERS)[number]['value'];
@@ -526,10 +516,11 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
 
   return (
     <span className="relative">
-      {/* W3-R4: this ONE act is both "sharing" and its tier — there is no
-          separate MILESTONES instrument to fold. Below 1180 it prints the bare
-          word so the row stays one line; the tier is one press away inside the
-          panel, and the accessible name states it at every width. */}
+      {/* W3-R5 §1: this ONE act is both "sharing" and its tier — there is no
+          separate MILESTONES instrument to fold. It prints the bare word at
+          EVERY width: the tier is state the panel below prints one press away,
+          and on the letterhead it is the only label that costs a second row.
+          The accessible name states it at every width. */}
       <DocumentAction
         actionKey="sharing-settings"
         variant="tertiary"
@@ -537,7 +528,7 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
         aria-label={`Sharing · ${currentLabel}`}
         onClick={() => setOpen((v) => !v)}
       >
-        {wide ? `Sharing · ${currentLabel}` : 'Sharing'}
+        Sharing
       </DocumentAction>
       {open && (
         <span

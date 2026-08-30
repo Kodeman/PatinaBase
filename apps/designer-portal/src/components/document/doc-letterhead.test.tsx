@@ -36,7 +36,7 @@ describe('the letterhead', () => {
     expect(document.body).not.toHaveTextContent('In hand');
   });
 
-  it('prints the title at 32px on a phone and the Life Review’s 40px from sm, and closes on the mid rule', () => {
+  it('prints the title at 32px below 1180 and the Life Review’s 40px from the shell’s own tier, and closes on the mid rule', () => {
     const { container } = render(
       <DocLetterhead title="Vandersteen residence" vitals="Procurement" />,
     );
@@ -44,7 +44,11 @@ describe('the letterhead', () => {
     expect(title).toHaveClass(
       'font-heading',
       'text-[32px]',
-      'sm:text-[40px]',
+      // NF-02 — the switch is the SHELL's tier, not Tailwind's `sm` (640px):
+      // W3-R4 rules 32px "at 390" against the mockup's `#frame-390`, and
+      // D-B26/W3-R5 price the 40px title only where the ledger has its own
+      // bounded track. `sm` put 40px on every phone wider than 640.
+      'min-[1180px]:text-[40px]',
       'tracking-[-0.015em]',
       'text-[var(--text-primary)]',
     );

@@ -75,7 +75,7 @@ export function DocLetterhead({
           ) : (
             /* 32px at phone widths, 40px from `sm` up: 40px of Playfair spends
                ~46 characters of a 1440 measure but only ~11 of a 390 one. */
-            <h1 className="font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] sm:text-[40px]">
+            <h1 className="font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] min-[1180px]:text-[40px]">
               {title}
             </h1>
           )}
