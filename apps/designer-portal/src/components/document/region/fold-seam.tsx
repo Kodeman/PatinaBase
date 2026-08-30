@@ -32,6 +32,10 @@ export interface FoldSeamProps {
   bodyId: string;
   name: ReactNode;
   summary: ReactNode;
+  /** Why the region stands folded. `'CLOSED BY YOU'` only ever comes from an
+   *  explicit choice (`useRegionFold`), so a derived-default fold prints
+   *  nothing here. */
+  cause?: 'CLOSED BY YOU' | null;
   onUnfold: () => void;
   surfaceKey: string;
   regionKey: string;
@@ -47,6 +51,7 @@ export function FoldSeam({
   headingId,
   name,
   summary,
+  cause = null,
   onUnfold,
   surfaceKey,
   regionKey,
@@ -68,8 +73,16 @@ export function FoldSeam({
       <span className="font-heading text-[12.5px] font-medium italic text-[var(--color-charcoal)]">
         {name}
       </span>
-      <span className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-        {summary}
+      {/* One cell, so the cause rides the summary's own line: a fourth grid
+          column would open an implicit row and the seam would stop being the
+          44px one-line control its target size rests on. */}
+      <span className="flex min-w-0 items-baseline gap-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <span className="truncate">{summary}</span>
+        {cause ? (
+          <span data-fold-cause className="shrink-0">
+            {cause}
+          </span>
+        ) : null}
       </span>
       <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
         unfold{' '}

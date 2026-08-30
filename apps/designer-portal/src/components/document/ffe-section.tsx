@@ -1328,6 +1328,7 @@ function FFESectionBody({
               bodyId={ffeBodyId}
               name="Pieces"
               summary={ffeSeamSummary}
+              cause={ffeFold.cause}
               onUnfold={() => ffeFold.setFolded(false)}
               surfaceKey="project"
               regionKey="ffe"

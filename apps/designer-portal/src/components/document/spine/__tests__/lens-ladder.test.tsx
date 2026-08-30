@@ -161,6 +161,36 @@ describe('the ladder’s stops', () => {
     expect(screen.getByText('Nothing on this paper yet')).toBeInTheDocument();
   });
 
+  // B4 — the line was in the DOM and off the paper: the track's floors sum to
+  // 0px on a pre-work spread, and a definite `flex-basis: 0px` with nothing to
+  // grow into laid it out at zero height under `overflow-y-auto`. jsdom cannot
+  // measure that, so the flex the browser is handed is asserted instead.
+  it('gives the empty track the height of the one line it prints, and prints it once, unpressable', () => {
+    mount({}, 'proposal');
+    const track = ladderNav().querySelector('[data-lens-track]') as HTMLElement;
+    expect(track.style.flexBasis).toBe('auto');
+    expect(track.style.flexGrow).toBe('0');
+    expect(track.style.flexShrink).toBe('0');
+
+    const line = screen.getByText('Nothing on this paper yet');
+    expect(screen.getAllByText('Nothing on this paper yet')).toHaveLength(1);
+    expect(line.tagName).toBe('P');
+    expect(line.closest('button')).toBeNull();
+    expect(line).not.toHaveAttribute('tabindex');
+    expect(line).not.toHaveAttribute('data-ladder-row');
+    expect(line.onclick).toBeNull();
+  });
+
+  it('keeps the track on its measured floor wherever the spread does print stops', () => {
+    mount();
+    const track = ladderNav().querySelector('[data-lens-track]') as HTMLElement;
+    // jsdom drops a `var()` it cannot resolve, so the floor branch is asserted
+    // by what it is NOT: the content-height flex the empty track takes.
+    expect(track.style.flexBasis).not.toBe('auto');
+    expect(track.style.flexGrow).toBe('1');
+    expect(track.style.flexShrink).not.toBe('0');
+  });
+
   it('marks exactly one stop current, and jumps from any of them', () => {
     const onJump = jest.fn();
     mount({ activeKey: 'ffe', onJump });
@@ -316,6 +346,40 @@ describe('the doors', () => {
     const doors = doorRows();
     expect(doors).toHaveLength(5);
     expect(doors[4]).toHaveTextContent('The client’s copy');
+  });
+
+  // B4 — an empty heading is clutter of the loudest kind: the word, its rule
+  // and its 34px reserve stood over nothing on the pre-work paper.
+  it('prints no heading where there is no door to file under it', () => {
+    render(
+      <LensLadder
+        segments={[]}
+        doors={[]}
+        activeKey={null}
+        onJump={jest.fn()}
+      />,
+    );
+    expect(screen.queryByText('Filed with this job')).toBeNull();
+    expect(doorRows()).toHaveLength(0);
+    expect(ladderNav().querySelector('.border-t')).toBeNull();
+  });
+
+  // The seed's `…d6`: a sent proposal with project_id NULL, and its ninth row
+  // only on the Finalize table. OD-8 gives it no door, so the whole block goes
+  // — and the track still says what the paper is.
+  it('files nothing under the pre-work proposal paper, and keeps its one line', () => {
+    const input = model({ ticket: ticket({ section: 'proposal', project: false }) });
+    render(
+      <LensLadder
+        segments={deriveLadderSegments(input)}
+        doors={deriveLadderDoors({ ticket: input.ticket, held: false })}
+        activeKey={null}
+        onJump={jest.fn()}
+      />,
+    );
+    expect(doorRows()).toHaveLength(0);
+    expect(screen.queryByText('Filed with this job')).toBeNull();
+    expect(screen.getByText('Nothing on this paper yet')).toBeInTheDocument();
   });
 
   it('gives every door a 44px target', () => {

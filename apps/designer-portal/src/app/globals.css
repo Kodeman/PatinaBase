@@ -1058,10 +1058,22 @@
 /* R127 — the paper's scrolling root is the WINDOW: `[data-document-shell]` is
    a `min-h-screen` grid with no overflow of its own, so the scroll padding
    belongs on `html`, scoped by the shell so no other portal surface inherits
-   it. 60px is the persistent bottom edge (mobile bar / studio drawer) that a
-   stop scrolled into view must not come to rest behind. */
+   it. The value is the shell's own `--doc-shell-bottom-inset` arithmetic
+   restated: below 1180 the persistent edge is the 72px MobileBar, above it the
+   60px Studio Drawer, and a 60px padding leaves a stop resting 12px behind the
+   bar at the very width the clearance rule exists for. The token itself is
+   declared on `.document-route-shell` and cannot be read from `html`. */
 html:has([data-document-shell]) {
-  scroll-padding-bottom: 60px;
+  scroll-padding-bottom: max(72px, calc(60px + env(safe-area-inset-bottom)));
+}
+
+/* R127/A-07 — the foot reserve. The last stop on the paper has to be able to
+   come to rest at `--doc-landing-clear` like every stop above it, and without
+   this the document simply runs out of scroll extent and the head lands
+   wherever the paper ends. `4rem` is the colophon's own standing room, which
+   is already below the last stop. */
+[data-document-paper] {
+  padding-block-end: calc(100dvh - var(--doc-landing-clear) - 4rem);
 }
 
 /* Typography: now provided by @patina/design-system/styles/typography.css.

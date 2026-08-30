@@ -14,7 +14,6 @@ import { DocumentGuide } from '../document-guide';
 import { MOBILE_ACTION_PRIORITY, signedProposalMobileAction } from './lifecycle-mobile-action';
 
 const mockOpenPost = jest.fn();
-const mockGuideSelected = jest.fn();
 let mockPathname = '/desk';
 let mockUnseenFeedback: Array<{ id: string }> = [];
 let mockTimeState = {
@@ -65,7 +64,6 @@ jest.mock('@/lib/analytics/document-events', () => ({
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     guideShown: jest.fn(),
-    guideSelected: (...args: unknown[]) => mockGuideSelected(...args),
   },
 }));
 
@@ -95,7 +93,6 @@ describe('unified mobile edge owner', () => {
       offer: null,
     };
     mockOpenPost.mockClear();
-    mockGuideSelected.mockClear();
     jest.mocked(openFeedbackSheet).mockClear();
   });
 
@@ -173,12 +170,12 @@ describe('unified mobile edge owner', () => {
     expect(guideActivate).not.toHaveBeenCalled();
   });
 
-  // W3 rewrite (OD-11 / DL-05): the guide no longer registers the bar's act —
-  // the band's line 2 is the one printing of it — so the selection this case
-  // measures is now made on the guide's own act, and what it still proves is
-  // unchanged: `guideSelected` carries the LATEST input count, not the one
-  // captured at first render.
-  it('uses the latest guide input count when its act is selected', () => {
+  // W3 rewrite (OD-11 / DL-05, D-B22): the guide no longer registers the bar's
+  // act — the band's line 2 is the one printing of it — and `guideSelected`
+  // retired with the strip that fired it. What survives, and is the whole of
+  // what this case can still prove, is that the bar's centre slot never prints
+  // the guide's act however many times the guide re-renders.
+  it('never lets the guide’s act into the bar, at any input count', () => {
     const baseModel = {
       state: 'needs_input' as const,
       stage: 'discovery' as const,
@@ -214,8 +211,14 @@ describe('unified mobile edge owner', () => {
         name: 'Continue Discovery',
       }),
     ).not.toBeInTheDocument();
+    // The act is on the paper, not in the bar, and pressing it changes nothing
+    // about that.
     fireEvent.click(screen.getByRole('button', { name: 'Continue Discovery' }));
-    expect(mockGuideSelected).toHaveBeenLastCalledWith(expect.objectContaining({ input_count: 1 }));
+    expect(
+      within(screen.getByTestId('mobile-bar')).queryByRole('button', {
+        name: 'Continue Discovery',
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps secondary doorways in an accessible More disclosure', () => {

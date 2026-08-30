@@ -2,7 +2,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { deriveGuideModel, DocumentGuide } from './document-guide';
 import type { DocumentGuideModel } from '@/lib/document/document-guide';
-import { documentEvents } from '@/lib/analytics/document-events';
 
 // OD-11 / DL-05 — the guide no longer registers the bar's primary act; the
 // band's line 2 is the one printing of it at every width. The spy survives as
@@ -14,7 +13,7 @@ jest.mock('./mobile/mobile-shell', () => ({
 }));
 
 jest.mock('@/lib/analytics/document-events', () => ({
-  documentEvents: { guideShown: jest.fn(), guideSelected: jest.fn(), actionShown: jest.fn(), actionSelected: jest.fn() },
+  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 
 const model = (headline: string): DocumentGuideModel => ({
@@ -94,13 +93,8 @@ describe('DocumentGuide', () => {
     expect(screen.getByText(/Input needed · Working budget/).parentElement).toHaveTextContent(
       'Client · blocks Direction · +2 more',
     );
-    expect(documentEvents.guideShown).toHaveBeenCalledWith(
-      expect.objectContaining({ input_count: 3 }),
-    );
-    screen.getByRole('button', { name: 'Open the FF&E schedule' }).click();
-    expect(documentEvents.guideSelected).toHaveBeenCalledWith(
-      expect.objectContaining({ input_count: 3 }),
-    );
+    // D-B22 — the two guide events retired with the strip that fired them; the
+    // lens line's three are asserted in `page.test.tsx`, where they fire.
   });
 
   it('keeps focus on the action when enrichment swaps it from button to link', () => {

@@ -275,10 +275,17 @@ export function LensLadder({
           {
             '--track-floor-narrow': `${narrowTrackFloorPx}px`,
             '--track-floor-full': `${trackFloorPx}px`,
-            flexBasis: 'var(--track-floor)',
-            // A pre-work spread's track has one line to print; growing it
-            // opened ~450px of nothing above `FILED WITH THIS JOB`.
+            // A pre-work spread's floors sum to 0px, so a definite basis of
+            // `var(--track-floor)` with nothing to grow into laid the track
+            // out at zero height and `overflow-y-auto` clipped OD-2's one
+            // line out of sight — the empty track printed NOTHING, under a
+            // head that was still speaking. It takes its content's height
+            // there instead: it does not grow (growing it opened ~450px of
+            // nothing above `FILED WITH THIS JOB`) and does not shrink below
+            // the line it has to say.
+            flexBasis: segments.length > 0 ? 'var(--track-floor)' : 'auto',
             flexGrow: segments.length > 0 ? 1 : 0,
+            flexShrink: segments.length > 0 ? 1 : 0,
           } as CSSProperties
         }
       >
@@ -460,36 +467,43 @@ export function LensLadder({
 
       {/* The doors. F09's four words never vanish below the top at either
           desktop tier; the head reserves its two narrow lines (OD-14) so it can
-          never overprint `Plan room`. */}
-      <div className="mt-3 shrink-0 border-t border-[var(--color-pearl)] pt-3">
-        <p className="mb-1 min-h-[34px] font-mono text-[11px] uppercase leading-tight tracking-[0.1em] text-[var(--text-muted)]">
-          Filed with this job
-        </p>
-        {doors.map((door) => {
-          const className =
-            'flex min-h-11 w-full items-center text-left text-[13px] leading-tight text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
-          return door.href ? (
-            <Link
-              key={door.key}
-              href={door.href}
-              data-ladder-door={door.key}
-              className={className}
-            >
-              {door.label}
-            </Link>
-          ) : (
-            <button
-              key={door.key}
-              type="button"
-              data-ladder-door={door.key}
-              onClick={door.onOpen}
-              className={className}
-            >
-              {door.label}
-            </button>
-          );
-        })}
-      </div>
+          never overprint `Plan room`.
+
+          The heading is the doors' — it prints only where there is a door to
+          file under it. A spread with none (a pre-work proposal carries no
+          project, so OD-8 gives it none of the project doors) got a rule, a
+          34px reserve and a word standing over nothing. */}
+      {doors.length > 0 && (
+        <div className="mt-3 shrink-0 border-t border-[var(--color-pearl)] pt-3">
+          <p className="mb-1 min-h-[34px] font-mono text-[11px] uppercase leading-tight tracking-[0.1em] text-[var(--text-muted)]">
+            Filed with this job
+          </p>
+          {doors.map((door) => {
+            const className =
+              'flex min-h-11 w-full items-center text-left text-[13px] leading-tight text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+            return door.href ? (
+              <Link
+                key={door.key}
+                href={door.href}
+                data-ladder-door={door.key}
+                className={className}
+              >
+                {door.label}
+              </Link>
+            ) : (
+              <button
+                key={door.key}
+                type="button"
+                data-ladder-door={door.key}
+                onClick={door.onOpen}
+                className={className}
+              >
+                {door.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </nav>
   );
 }

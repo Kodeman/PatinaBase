@@ -569,6 +569,7 @@ export function ProjectApprovalDocument({
           bodyId={APPROVALS_BODY_ID}
           name="Client approvals"
           summary={`${leadPhrase} · ${authoredPhrase}`}
+          cause={fold.cause}
           onUnfold={() => {
             unfoldFocusRef.current = true;
             fold.setFolded(false);
@@ -585,7 +586,11 @@ export function ProjectApprovalDocument({
       aria-labelledby="project-approvals-title"
       data-index-region="approvals"
       data-project-approval-document
-      className="mt-[var(--doc-region-gap)] min-w-0 border-y border-[var(--border-subtle)]"
+      // FID-07 — `py-6` is the region's own breathing room inside its `border-y`,
+      // not a gap between roots; it was collateral of the `mt-6 … py-6` →
+      // `mt-[var(--doc-region-gap)]` replacement, and without it the head and
+      // the content sit flush against the region's own rules.
+      className="mt-[var(--doc-region-gap)] min-w-0 border-y border-[var(--border-subtle)] py-6"
     >
       <RegionRule />
       <RegionHead

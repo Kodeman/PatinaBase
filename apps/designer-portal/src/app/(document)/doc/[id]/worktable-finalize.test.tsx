@@ -301,9 +301,10 @@ jest.mock('@/lib/analytics/document-events', () => ({
   rememberDocumentInHand: jest.fn(),
   readRecentDocumentsInHand: () => [],
   documentEvents: {
+    lensLineShown: jest.fn(),
+    lensLineActed: jest.fn(),
+    lensStandingSheetOpened: jest.fn(),
     historyToggled: jest.fn(),
-    guideShown: jest.fn(),
-    guideSelected: jest.fn(),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     wayfinding: { marginNote: jest.fn() },
@@ -605,65 +606,55 @@ describe('the Finalize table (W4a)', () => {
   });
 
   it('prints the same two band lines whether or not the ninth row stands', () => {
-    // W3-L5, replacing "prints the client’s copy as the ticket’s NINTH row".
+    // W3-L5, replacing "prints the client’s copy as the ticket’s NINTH row",
+    // and rewritten again in the W3 fix lane (C-15): the two cases this
+    // replaced the row assertions with called `deriveLensBand` on a fixture
+    // this FILE built, so neither could fail on a `page.tsx` regression, and
+    // one of them asserted `SENT AUG 10 · $5,000` — a line the shipped page
+    // cannot print, because it passes `proposalInvestment: null` (W3-R4).
+    // Both now read the band the page actually rendered.
     //
-    // The nine-row list dies with the ticket — the band prints TWO LINES and no
-    // rows at all — so the list assertion has no subject. What the list carried
-    // does survive in two halves, and both are asserted rather than dropped:
-    //
+    // What the nine-row list carried survives in two halves:
     //   · the copy is still reached from the document’s own map, now as the
     //     ladder’s `clientcopy` door on the proposal spread only (OD-8 / DL-04).
     //     That door lives in `spine/lens-ladder.tsx` and is proved in
     //     `spine/__tests__/lens-ladder.test.tsx`; this suite stubs `DocSpine`,
     //     so no ladder — and no door — stands on this paper to press.
     //   · the copy’s own STATE ("as sent, live" / "not sent yet") is on
-    //     NEITHER band line (OD-1: it is a door, never line 2), and the ninth
-    //     row’s arrival changes nothing the band prints. That is this suite’s
-    //     to hold, because the band is the DOCUMENT’s map and the Finalize
-    //     table is what comes and goes beneath it.
+    //     NEITHER band line (OD-1: it is a door, never line 2). That is this
+    //     suite’s to hold, because the band is the DOCUMENT’s map and the
+    //     Finalize table is what comes and goes beneath it.
     const { container } = renderPage();
 
     // The spine’s shelves block, and the transitional row that stood in for it,
     // are gone. (Survivor.)
     expect(container.querySelector('[data-shelf-trigger]')).toBeNull();
 
-    const withNinthRow = deriveLensBand(bandInput({ ticket: [CLIENT_COPY_ROW] }));
-    const withoutNinthRow = deriveLensBand(bandInput());
-
-    expect(withNinthRow.line1).toEqual({
-      identity: 'AVERY STONE',
-      stage: 'PROPOSAL',
-      rightFlush: 'SENT AUG 10 · $5,000',
-      moneyOnly: '$5,000',
-    });
-    expect(withoutNinthRow.line1).toEqual(withNinthRow.line1);
-    expect(withNinthRow.line2.sentence).toBe(withoutNinthRow.line2.sentence);
-
-    for (const printed of [
-      withNinthRow.line1.identity,
-      withNinthRow.line1.stage,
-      withNinthRow.line1.rightFlush,
-      withNinthRow.line2.sentence,
-    ]) {
-      expect((printed ?? '').toLowerCase()).not.toContain('copy');
+    expect(container.querySelectorAll('[data-lens-band]')).toHaveLength(1);
+    const printed = [
+      container.querySelector('[data-lens-identity]')?.textContent ?? '',
+      container.querySelector('[data-lens-right-flush]')?.textContent ?? '',
+      container.querySelector('[data-lens-sentence]')?.textContent ?? '',
+    ];
+    for (const text of printed) {
+      expect(text.toLowerCase()).not.toContain('copy');
+      expect(text.toLowerCase()).not.toContain('as sent, live');
+      expect(text.toLowerCase()).not.toContain('not sent yet');
     }
   });
 
-  it('says nothing about the copy on either band line when it has not gone out', () => {
-    // Replaces "says the copy has not gone out when the proposal has no sent
-    // day". That claim read the ninth ROW’s state line, which no longer exists.
-    // The replacement truth: an unsent copy moves the band’s SENT fact off
-    // line 1 and puts the copy’s state nowhere at all — it is a door.
-    const model = deriveLensBand(
-      bandInput({ ticket: [CLIENT_COPY_ROW], sentDate: null }),
-    );
+  it('prints no investment figure it cannot derive — never a placeholder (W3-R4)', () => {
+    // Replaces "says nothing about the copy on either band line when it has
+    // not gone out", whose subject was the ninth ROW’s state line. The
+    // surviving truth is the absent-never-placeholder rule: this spread’s
+    // investment total is the Wave-5 `investment` stop, no read on this page
+    // states it, so the right slot prints its sent date alone.
+    const { container } = renderPage();
 
-    expect(model.line1.rightFlush).toBe('$5,000');
-    expect(model.line1.identity).toBe('AVERY STONE');
-    for (const printed of [model.line1.rightFlush, model.line2.sentence]) {
-      expect((printed ?? '').toLowerCase()).not.toContain('copy');
-      expect((printed ?? '').toLowerCase()).not.toContain('not sent yet');
-    }
+    const rightFlush =
+      container.querySelector('[data-lens-right-flush]')?.textContent ?? '';
+    expect(rightFlush).not.toContain('$5,000');
+    expect(rightFlush).not.toMatch(/—|--|n\/a/i);
   });
 
   it('mounts none of it with the flag off — parity', () => {

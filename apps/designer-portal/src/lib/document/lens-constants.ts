@@ -17,6 +17,33 @@ export const LENS_SETTLE_MS = 120;
 /** OD-7: the same stop is never announced twice inside this window. */
 export const LENS_ANNOUNCE_DEDUPE_MS = 2000;
 
+/** L-1: the outgoing sentence fades out in this window before the new one is
+ *  printed. Under `prefers-reduced-motion: reduce` the swap is immediate. */
+export const LENS_TURN_OUT_MS = 90;
+
+/**
+ * D-B24 — line 2's measure per tier, in px: the paper's own text run at that
+ * width (measured on the seed, 18px root). The pixel budget, not a character
+ * cap, is what decides whether the long form prints: a character cap
+ * calibrated for the 900px measure never fires before CSS ellipsis at 327.
+ */
+export const LENS_LINE2_MEASURE_PX = {
+  full: 900,
+  narrow: 950,
+  mobile: 327,
+} as const;
+
+export type LensTier = keyof typeof LENS_LINE2_MEASURE_PX;
+
+/** Measured on the seed: Inter 15px, the line-2 sentence register. */
+export const LENS_LINE2_PX_PER_CHAR = 7.7;
+
+/** Measured on the seed: DM Mono 11px, the act and the `+N MORE` door. */
+export const LENS_MONO_PX_PER_CHAR = 7.5;
+
+/** The `gap-2` between the sentence, the act and the door. */
+export const LENS_LINE2_GAP_PX = 9;
+
 /** The ladder's value line, one string at both desktop tiers. */
 export const LENS_VALUE_MAX_CHARS = 30;
 

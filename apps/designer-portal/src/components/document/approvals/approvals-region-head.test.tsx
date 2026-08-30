@@ -169,7 +169,7 @@ describe('Client approvals region head', () => {
       screen.queryByRole('heading', { name: 'Client approvals' }),
     ).not.toBeInTheDocument();
     const seam = screen.getByRole('button', {
-      name: 'Client approvals No decision lead · no approvals authored unfold ↓',
+      name: 'Client approvals No decision lead · no approvals authored CLOSED BY YOU unfold ↓',
     });
     expect(seam).toBeInTheDocument();
     expect(seam).toHaveAttribute('aria-expanded', 'false');

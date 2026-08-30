@@ -45,6 +45,22 @@ beforeEach(() => {
 });
 
 describe('KickoffBand — the two roster doorways', () => {
+  it('takes the one region gap on its root — it stands between two stops', () => {
+    // B7: the kickoff band sits between the care stop and the Record, so every
+    // block-to-block gap on that path is the same 24px token. Top edge only —
+    // a bottom margin here would double the gap into the Record.
+    const { container } = render(
+      <KickoffBand projectId="proj-1" rows={[row({ kind: 'team', display_name: 'Leah' })]} />,
+    );
+
+    const root = container.querySelector<HTMLElement>('[data-kickoff-band]')!;
+    expect(root).not.toBeNull();
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root.className.split(/\s+/).filter((cls) => /^m[trblxy]?-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+  });
+
   it('FROM THE ROLODEX dispatches document:open-call-sheet with mode "picker"', async () => {
     const opened = jest.fn();
     window.addEventListener('document:open-call-sheet', opened);

@@ -1071,6 +1071,7 @@ export function ScheduleSpine({
           bodyId={scheduleBodyId}
           name="Schedule"
           summary={scheduleStatus}
+          cause={scheduleFold.cause}
           onUnfold={handleScheduleUnfold}
           surfaceKey="open-document"
           regionKey="schedule"

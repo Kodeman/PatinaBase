@@ -215,7 +215,7 @@ export function ProjectMoodBoards({
   }, [activeSelectionRows, attentionQuery.data, canCreate, liveBoards, pathname, readinessQuery.data, revealSelection]);
 
   const boardsEmpty = liveBoards.length === 0 && frozenBoards.length === 0;
-  const { folded: boardsFolded, setFolded: setBoardsFolded } = useRegionFold({
+  const { folded: boardsFolded, setFolded: setBoardsFolded, cause: boardsCause } = useRegionFold({
     docId: projectId,
     region: 'boards',
     defaultFolded: isLoading ? null : boardsEmpty,
@@ -285,6 +285,7 @@ export function ProjectMoodBoards({
           bodyId={BODY_ID}
           name="Boards"
           summary={status}
+          cause={boardsCause}
           onUnfold={() => {
             unfoldFocusRef.current = true;
             setBoardsFolded(false);
