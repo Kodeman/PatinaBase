@@ -1804,6 +1804,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // deliberately NOT the project room lens (room-lens-context): different
   // store, different subject, and this one persists at every width (A7).
   const [roomInHand, setRoomInHand] = useState<string | null>(null);
+  // W5-R2 item 4 — the brief/discovery spreads' own inline heads are retired
+  // (one head per stop); the sub-label they used to print (a response
+  // deadline, a readiness stamp) is reported up here and printed in the
+  // `PreworkRegion` eyebrow instead, the same report-up shape `onDamagedOn`
+  // already uses on this page.
+  const [briefEyebrow, setBriefEyebrow] = useState<string | null>(null);
+  const [discoveryEyebrow, setDiscoveryEyebrow] = useState<string | null>(
+    null,
+  );
   // W4b — whether the schedule has a release to offer. Reported up by the FF&E
   // section, which is where `canRelease` and per-line eligibility are derived;
   // the Delivery table head only prints the leader it is told exists.
@@ -2550,14 +2559,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               />
             )}
             {spreadSection === 'brief' && (
-              <PreworkRegion region="brief" status={preworkStatus('brief')}>
-                {row.lead_id ? <BriefSection leadId={row.lead_id} /> : null}
+              <PreworkRegion
+                region="brief"
+                status={preworkStatus('brief')}
+                eyebrow={briefEyebrow ?? undefined}
+              >
+                {row.lead_id ? (
+                  <BriefSection leadId={row.lead_id} onEyebrow={setBriefEyebrow} />
+                ) : null}
               </PreworkRegion>
             )}
             {spreadSection === 'discovery' && (
               <PreworkRegion
                 region="discovery"
                 status={preworkStatus('discovery')}
+                eyebrow={discoveryEyebrow ?? undefined}
               >
                 {row.engagement_id && row.designer_id ? (
                   <DiscoverySection
@@ -2566,6 +2582,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     clientProfileId={row.client_profile_id}
                     clientName={row.client_name}
                     projectId={row.project_id ?? null}
+                    onEyebrow={setDiscoveryEyebrow}
                   />
                 ) : null}
               </PreworkRegion>
@@ -2584,10 +2601,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 {proposalOffer}
               </PreworkRegion>
             )}
-            {/* The proposal spread's four stops (OD-2). `vision` has a name and
-                a position but no body yet — the description still prints with
-                the blocks under `The investment` — so it stands as the row it
-                is rather than as a hole. */}
+            {/* The proposal spread's four stops (OD-2, re-parented W5-R2 item
+                1): `scope` takes the per-room budgets and the engagement's
+                terms, `vision` takes the description, `investment` takes the
+                totals ledger with the Offer at its foot — the Offer must stay
+                UNDER the spread it folds open beneath
+                (`worktable-finalize.test.tsx`). A stop with nothing of its
+                own prints its name over its sentence (OD-1), which
+                `ProposalBlocksReadOnly`'s `only` filter returns null for. */}
             {spreadSection === 'proposal' && (
               <>
                 <PreworkRegion
@@ -2598,20 +2619,35 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   {proposalVerdictHead}
                   {proposalLifecycle}
                 </PreworkRegion>
-                {/* `scope` and `vision` have a name and a position but no body
-                    yet: the engagement's terms and the vision both still print
-                    with the blocks under `The investment`, and the Offer must
-                    stay UNDER the spread it folds open beneath
-                    (`worktable-finalize.test.tsx`). Re-parenting them is a
-                    later lane's move; a stop with no body prints its name over
-                    its sentence, which is the row OD-2 declares. */}
-                <PreworkRegion region="scope" status={preworkStatus('scope')} />
-                <PreworkRegion region="vision" status={preworkStatus('vision')} />
+                <PreworkRegion region="scope" status={preworkStatus('scope')}>
+                  {row.proposal_id ? (
+                    <ProposalBlocksReadOnly
+                      proposalId={row.proposal_id}
+                      omitOfferBlocks={finalizeTable}
+                      only="scope"
+                    />
+                  ) : null}
+                </PreworkRegion>
+                <PreworkRegion region="vision" status={preworkStatus('vision')}>
+                  {row.proposal_id ? (
+                    <ProposalBlocksReadOnly
+                      proposalId={row.proposal_id}
+                      omitOfferBlocks={finalizeTable}
+                      only="vision"
+                    />
+                  ) : null}
+                </PreworkRegion>
                 <PreworkRegion
                   region="investment"
                   status={preworkStatus('investment')}
                 >
-                  {proposalBlocks}
+                  {row.proposal_id ? (
+                    <ProposalBlocksReadOnly
+                      proposalId={row.proposal_id}
+                      omitOfferBlocks={finalizeTable}
+                      only="investment"
+                    />
+                  ) : null}
                   {proposalOffer}
                 </PreworkRegion>
               </>

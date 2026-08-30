@@ -290,7 +290,14 @@ jest.mock('@/components/document/discovery/discovery-section', () => ({
     </>
   ),
 }));
-jest.mock('@/components/document/proposal-blocks-readonly', () => ({ ProposalBlocksReadOnly: () => null }));
+jest.mock('@/components/document/proposal-blocks-readonly', () => ({
+  // W5-R2 item 1 — the mock renders a testid keyed on `only` so a test can
+  // find which region root a given call landed under, without pulling in
+  // the real block components' own hooks.
+  ProposalBlocksReadOnly: ({ only }: { only?: string }) => (
+    <div data-testid={`blocks-${only ?? 'full'}`} />
+  ),
+}));
 jest.mock('@/components/document/proposal-instruments', () => ({ ProposalInstruments: () => null }));
 jest.mock('@/components/document/folio-strip', () => ({ FolioLetterhead: () => null, ProposalFolioStrip: () => null }));
 jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({ MobileMarginChips: () => null }));
@@ -2115,6 +2122,65 @@ describe('DocumentPage guide activation', () => {
           )
           ?.querySelector('h2')?.textContent,
       ).toBe('The brief');
+    });
+
+    // W5-R2 item 1 — the proposal spread re-parents the blocks that used to
+    // stand entirely under `investment`: `vision` takes the description,
+    // `scope` takes the per-room budgets and the terms, `investment` keeps
+    // the totals ledger alone.
+    describe('re-parents the proposal blocks by region (W5-R2 item 1)', () => {
+      const PROPOSAL_ROW = {
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        proposal_id: 'proposal-1',
+        lead_id: null,
+      } as const;
+
+      it.each([
+        ['scope', 'scope'],
+        ['vision', 'vision'],
+        ['investment', 'investment'],
+      ] as const)('mounts the %s block under the %s stop', (group, region) => {
+        openSpread(PROPOSAL_ROW);
+        expect(
+          document.querySelector(
+            `[data-document-paper] [data-index-region="${region}"] [data-testid="blocks-${group}"]`,
+          ),
+        ).not.toBeNull();
+      });
+
+      it('mounts no block under a stop it was not re-parented to', () => {
+        openSpread(PROPOSAL_ROW);
+        const regionOf = (testId: string) =>
+          document
+            .querySelector(`[data-testid="${testId}"]`)
+            ?.closest('[data-index-region]')
+            ?.getAttribute('data-index-region');
+        expect(regionOf('blocks-scope')).toBe('scope');
+        expect(regionOf('blocks-vision')).toBe('vision');
+        expect(regionOf('blocks-investment')).toBe('investment');
+        // Never doubled onto `proposal` (the lifecycle stop) or onto each
+        // other's region.
+        expect(
+          document.querySelector(
+            '[data-index-region="proposal"] [data-testid^="blocks-"]',
+          ),
+        ).toBeNull();
+      });
+
+      it('the direction spread keeps every block under its one stop, unfiltered', () => {
+        openSpread({
+          engagement_kind: 'proposal',
+          active_section: 'direction',
+          proposal_id: 'proposal-1',
+          lead_id: null,
+        });
+        expect(
+          document.querySelector(
+            '[data-document-paper] [data-index-region="direction"] [data-testid="blocks-full"]',
+          ),
+        ).not.toBeNull();
+      });
     });
   });
 
