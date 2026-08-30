@@ -16,6 +16,18 @@ let authority: Record<string, unknown> | null = null;
 let approvals: ProjectApprovalReview[] = [];
 let candidates: ProjectApprovalArtifactCandidate[] = [];
 
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+let mockLensDensity: 'full' | null = 'full';
+jest.mock('@/hooks/use-lens-density', () => ({
+  useLensDensityStore: () => mockLensDensity,
+}));
+beforeEach(() => {
+  mockLensDensity = 'full';
+});
+
 jest.mock('@patina/supabase', () => ({
   useProjectApprovals: () => ({
     data: approvals,
@@ -193,5 +205,124 @@ describe('Client approvals region head', () => {
     expect(
       screen.queryByRole('button', { name: /unfold/i }),
     ).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * R127 W4 (L-4, OD-12, OD-13) — the quiet body. Until the lens reaches it,
+ * Client approvals prints its head, one count line, one leader and one state
+ * line; the approvals themselves are not on the paper.
+ */
+describe('Client approvals quiet body — the lens has not reached this stop', () => {
+  const overdue = {
+    ...baseReview,
+    decisionId: 'decision-overdue',
+    isOverdue: true,
+  } satisfies ProjectApprovalReview;
+  const open2 = {
+    ...baseReview,
+    decisionId: 'decision-2',
+  } satisfies ProjectApprovalReview;
+
+  beforeEach(() => {
+    mockLensDensity = null;
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [overdue, open2];
+  });
+
+  it('prints the head, one count line and the state line — and no approvals', () => {
+    renderDocument();
+
+    expect(
+      screen.getByRole('heading', { name: 'Client approvals' }),
+    ).toBeInTheDocument();
+    const count = screen.getByText('1 OVERDUE · 2 OPEN');
+    expect(count.textContent!.length).toBeLessThanOrEqual(40);
+    // The head's own acts are the only acts (mockup governs what prints).
+    expect(
+      screen.queryByRole('button', { name: /See the approvals/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+
+    expect(
+      screen.queryByText(
+        /Bind each request to one issued plan, client-ready specification/,
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Issued drawing set 02')).not.toBeInTheDocument();
+  });
+
+  it('prints no count line at all when nothing stands open', () => {
+    approvals = [{ ...baseReview, disposition: 'withdrawn' }];
+    renderDocument();
+
+    expect(
+      screen.getByRole('heading', { name: 'Client approvals' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/OVERDUE|OPEN/)).not.toBeInTheDocument();
+    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+  });
+
+  it('publishes its density and its short reserve on the index root (OD-12)', () => {
+    renderDocument();
+    const root = document.querySelector<HTMLElement>(
+      '[data-index-region="approvals"]',
+    );
+    expect(root).toHaveAttribute('data-density', 'quiet');
+    expect(root!.style.getPropertyValue('--doc-quiet-reserve')).toBe(
+      'var(--doc-quiet-reserve-min)',
+    );
+  });
+
+  it('keeps the same head element when the lens promotes it to full', () => {
+    const { rerender } = renderDocument();
+    const head = document.querySelector('[data-region-head="approvals-head"]');
+    const heading = screen.getByRole('heading', { name: 'Client approvals' });
+
+    mockLensDensity = 'full';
+    rerender(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        clientName="Marta Chen"
+        phases={[
+          { id: 'phase-1', name: 'Design development', status: 'in_progress' },
+        ]}
+      />,
+    );
+
+    expect(document.querySelector('[data-region-head="approvals-head"]')).toBe(
+      head,
+    );
+    expect(screen.getByRole('heading', { name: 'Client approvals' })).toBe(
+      heading,
+    );
+    expect(
+      document.querySelector('[data-index-region="approvals"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Bind each request to one issued plan, client-ready specification/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('lets the fold she made outrank the lens, whatever the lens says', () => {
+    window.localStorage.setItem('patina:doc-fold:project-1:approvals', '1');
+    mockLensDensity = 'full';
+    renderDocument();
+
+    expect(document.querySelector('[data-fold-seam]')).not.toBeNull();
+    expect(
+      screen.queryByRole('heading', { name: 'Client approvals' }),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-index-region="approvals"]'),
+    ).toHaveAttribute('data-density', 'full');
   });
 });

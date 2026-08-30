@@ -8,6 +8,18 @@ let mockAccount: Record<string, unknown>;
 let mockPurchaseOrders: Record<string, unknown>;
 let mockInvoices: Record<string, unknown>;
 
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+let mockLensDensity: 'full' | null = 'full';
+jest.mock('@/hooks/use-lens-density', () => ({
+  useLensDensityStore: () => mockLensDensity,
+}));
+beforeEach(() => {
+  mockLensDensity = 'full';
+});
+
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
   usePurchaseOrders: () => mockPurchaseOrders,
@@ -498,5 +510,117 @@ describe('MoneyRegion', () => {
 
     expect(heard).toHaveBeenCalledTimes(1);
     window.removeEventListener('document:compose-amendment', heard);
+  });
+});
+
+/**
+ * R127 W4 (L-4, OD-12, OD-13) — the quiet body. Until the lens reaches it,
+ * Money prints its head, one count line, one leader and one state line; the
+ * six-rung ladder is not on the paper.
+ */
+describe('MoneyRegion quiet body — the lens has not reached this stop', () => {
+  /** One open invoice ($1,750 out) against one PO — the two facts the count
+   *  line states. */
+  const liveMoney = () => {
+    mockInvoices = {
+      data: [
+        {
+          id: 'invoice-1',
+          invoice_number: '2026-114',
+          status: 'sent',
+          due_date: '2026-08-03',
+          total_cents: 175_000,
+          amount_paid_cents: 0,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    };
+    mockPurchaseOrders = {
+      data: [{ id: 'po-1', po_number: 'PO-2026-0418', payments: [] }],
+      isLoading: false,
+      error: null,
+    };
+  };
+
+  beforeEach(() => {
+    mockLensDensity = null;
+  });
+
+  it('prints the head, one count line and the state line — and no rungs', () => {
+    liveMoney();
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
+    const count = screen.getByText('$1,750 OWED YOU · 1 PO');
+    expect(count.textContent!.length).toBeLessThanOrEqual(40);
+    // The head's own acts are the only acts (mockup governs what prints).
+    expect(
+      screen.queryByRole('button', { name: /See the money/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+
+    expect(document.querySelectorAll('ol > li')).toHaveLength(0);
+    expect(screen.queryByText(/^Budget · /)).not.toBeInTheDocument();
+    expect(screen.queryByText('Account band')).not.toBeInTheDocument();
+  });
+
+  it('prints no count line at all when it holds neither figure', () => {
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
+    expect(screen.queryByText(/OWED YOU|POS?$/)).not.toBeInTheDocument();
+    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+  });
+
+  it('publishes its density and its short reserve on the index root (OD-12)', () => {
+    liveMoney();
+    render(<MoneyRegion projectId="project-1" />);
+    const root = document.querySelector<HTMLElement>('[data-index-region="money"]');
+    expect(root).toHaveAttribute('data-density', 'quiet');
+    expect(root!.style.getPropertyValue('--doc-quiet-reserve')).toBe(
+      'var(--doc-quiet-reserve-min)',
+    );
+  });
+
+  it('keeps the same head element when the lens promotes it to full', () => {
+    liveMoney();
+    const { rerender } = render(<MoneyRegion projectId="project-1" />);
+    const head = document.querySelector('[data-region-head="money-head"]');
+    const heading = screen.getByRole('heading', { name: 'Money' });
+
+    mockLensDensity = 'full';
+    rerender(<MoneyRegion projectId="project-1" />);
+
+    expect(document.querySelector('[data-region-head="money-head"]')).toBe(head);
+    expect(screen.getByRole('heading', { name: 'Money' })).toBe(heading);
+    expect(
+      document.querySelector('[data-index-region="money"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+    expect(screen.getByText(/^Owed · /)).toBeInTheDocument();
+  });
+
+  it('lets the fold she made outrank the lens, whatever the lens says', () => {
+    liveMoney();
+    window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
+    mockLensDensity = 'full';
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(document.querySelector('[data-fold-seam]')).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Money' })).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-index-region="money"]'),
+    ).toHaveAttribute('data-density', 'full');
+  });
+
+  it('leaves the Delivery table seam full — `money-table` is not a stop', () => {
+    liveMoney();
+    render(<MoneyRegion projectId="project-1" tableSeam />);
+
+    expect(
+      document.querySelector('[data-index-region="money"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
   });
 });

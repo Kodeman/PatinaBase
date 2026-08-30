@@ -23,9 +23,11 @@
  * region head now carries it.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { usePurchaseOrders } from '@patina/supabase';
 import { useAccountPage } from '@/hooks/use-account-page';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { type MoneyRung } from '@/lib/document/money-ladder';
 import { money } from '@/lib/document/project-commerce';
@@ -45,6 +47,14 @@ import { ProjectCommerceSection } from './project-commerce-section';
  *  `block: 'start'` would put the money under the map that sent the reader
  *  here. The band's height is declared, so the clearance is a constant. */
 const SEAM_CLEARANCE = { scrollMarginTop: 'var(--doc-landing-clear)' };
+
+/** OD-12 — the reserve a quiet region holds. This head prints no standing
+ *  exceptions (`RegionHead` takes no `exceptions` here), so it is the short
+ *  one at every density. */
+const QUIET_RESERVE = {
+  ...SEAM_CLEARANCE,
+  '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+} as CSSProperties;
 
 const HEADING_ID = 'money-region-heading';
 const BODY_ID = 'money-region-body';
@@ -106,6 +116,9 @@ export function MoneyRegion({
     settled: ladderSettled,
   } = useMoneyLadder(projectId);
   const accountQuery = useAccountPage(projectId);
+  // The quiet form's second fact. Same key and args `useMoneyLadder` already
+  // reads the POs under, so this is the cache, not a second fetch.
+  const purchaseOrdersQuery = usePurchaseOrders({ projectId });
 
   // The same word the accounts band uses for this act, derived the same way.
   const changeOnly = activeSection === 'install' || activeSection === 'care';
@@ -154,10 +167,14 @@ export function MoneyRegion({
   //     chasing the designer — and the table suppresses the AccountBand's own
   //     home, so a folded seam would state it nowhere at all.
   const tableFolded = allSettled ? accountQuiet : null;
-  const { folded, setFolded, cause } = useRegionFold({
+  // R127 L-4 — the lens's reading of this stop. The table seam is not a stop
+  // (`money-table` has no `[data-index-region]` root), so it is never quiet.
+  const positionDensity = useLensDensityStore('money');
+  const { folded, density, setFolded, cause } = useRegionFold({
     docId: projectId,
     region: (tableSeam ? 'money-table' : 'money') satisfies RegionFoldKey,
     defaultFolded: tableSeam ? tableFolded : defaultFolded,
+    positionDensity,
   });
 
   // The running index jumps to readable content, never to a seam.
@@ -190,6 +207,18 @@ export function MoneyRegion({
     : authority
       ? `${money(authority.authorizedCents)} budget · ${money(committedCents)} authorized`
       : `no budget yet · ${money(committedCents)} authorized`;
+
+  // R127 OD-12/OD-13 — the quiet form: the head unchanged, one count line, one
+  // leader, one state line. A fact the region has not read prints nothing.
+  const quiet = density === 'quiet';
+  const owedCents = ladder.owed.cents;
+  const poCount = (purchaseOrdersQuery.data ?? []).length;
+  const countLine = [
+    owedCents != null && owedCents > 0 ? `${money(owedCents)} OWED YOU` : null,
+    poCount > 0 ? `${poCount} ${poCount === 1 ? 'PO' : 'POS'}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   const ledger: RegionLedgerEntry[] = [
     // R74b — draw an invoice for THIS engagement: the anti-wizard composer,
@@ -226,8 +255,9 @@ export function MoneyRegion({
       <section
         aria-label="Money"
         data-index-region="money"
+        data-density={density}
         className="mt-[var(--doc-region-gap)]"
-        style={SEAM_CLEARANCE}
+        style={QUIET_RESERVE}
       >
         <RegionRule weight="mid" />
         <FoldSeam
@@ -248,8 +278,9 @@ export function MoneyRegion({
     <section
       aria-label="Money"
       data-index-region="money"
+      data-density={density}
       className="mt-[var(--doc-region-gap)]"
-      style={SEAM_CLEARANCE}
+      style={QUIET_RESERVE}
     >
       <RegionRule />
       <RegionHead
@@ -264,6 +295,16 @@ export function MoneyRegion({
         onFold={() => setFolded(true)}
       />
 
+      {quiet ? (
+        <div id={BODY_ID}>
+          {countLine && (
+            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+              {countLine}
+            </p>
+          )}
+          <p className="sr-only">Quiet — opens as you read</p>
+        </div>
+      ) : (
       <div id={BODY_ID}>
         <ol className="mt-3 space-y-2">
           <Rung
@@ -317,6 +358,7 @@ export function MoneyRegion({
           />
         </div>
       </div>
+      )}
     </section>
   );
 }

@@ -7,6 +7,18 @@ let mockTradeScopes: Record<string, unknown>[] = [];
 let mockAuthority: { data: unknown } = { data: null };
 let mockCoverage: Record<string, { coverage: string }> = {};
 
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+let mockLensDensity: 'full' | null = 'full';
+jest.mock('@/hooks/use-lens-density', () => ({
+  useLensDensityStore: () => mockLensDensity,
+}));
+beforeEach(() => {
+  mockLensDensity = 'full';
+});
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
@@ -330,5 +342,132 @@ describe('FF&E room heading — the room lens press target', () => {
     // the room lens — "Primary bedroom" prints as plain text, not a button.
     const heading = screen.getByText('Primary bedroom');
     expect(heading.closest('button')).toBeNull();
+  });
+});
+
+/**
+ * R127 W4 (L-4, OD-12, OD-13) — the quiet body. Until the lens reaches this
+ * stop, Pieces prints its head, one count line, one leader and one state line;
+ * the schedule itself is not on the paper. `mockLensDensity = null` is the lens
+ * with nothing to say, which is exactly what the page renders 2,000px ahead.
+ */
+describe('FF&E quiet body — the lens has not reached this stop', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    mockRooms = [{ id: 'room-1', name: 'Primary bedroom', budget_cents: 0 }];
+    mockItems = [line()];
+    mockInstruments = [];
+    mockTradeScopes = [];
+    mockAuthority = { data: null };
+    mockCoverage = {};
+    mockLensDensity = null;
+  });
+
+  it('prints the head, one count line and the state line — and no lines', () => {
+    mockItems = [
+      line({ id: 'ffe-1' }),
+      line({ id: 'ffe-2', project_room_id: null, room: null }),
+    ];
+    renderProject();
+
+    expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
+    const count = screen.getByText('2 LINES · 1 ROOM');
+    expect(count.textContent!.length).toBeLessThanOrEqual(40);
+    // The head's own acts are the only acts (mockup governs what prints).
+    expect(
+      screen.queryByRole('button', { name: /See the lines/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Quiet — opens as you read')).toHaveClass('sr-only');
+
+    // The schedule is not on the paper: no line, no room head, no Throughout.
+    expect(screen.queryByText('Walnut bed, king')).not.toBeInTheDocument();
+    expect(screen.queryByText('Primary bedroom')).not.toBeInTheDocument();
+    expect(screen.queryByText('Throughout')).not.toBeInTheDocument();
+  });
+
+  it('names the damage the paper holds, and prints nothing where it holds none', () => {
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Ellsworth"
+        mode="project"
+        needs={[
+          {
+            kind: 'damage_claim',
+            text: 'PO-2026-0418 has an open damage claim',
+            actionLabel: 'Review the claim',
+            stamp: { label: 'CLAIM OPEN', color: 'var(--color-terracotta)' },
+            urgent: false,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('1 LINE · 1 ROOM · 1 DAMAGED')).toBeInTheDocument();
+
+    renderProject();
+    expect(screen.getByText('1 LINE · 1 ROOM')).toBeInTheDocument();
+  });
+
+  it('publishes its density and its reserve on the index root (OD-12)', () => {
+    // The fixture line carries neither a piece nor an invoice, so the head
+    // prints standing exceptions and takes the taller reserve.
+    renderProject();
+    const root = document.querySelector<HTMLElement>('[data-index-region="ffe"]');
+    expect(root).toHaveAttribute('data-density', 'quiet');
+    expect(root!.style.getPropertyValue('--doc-quiet-reserve')).toBe(
+      'var(--doc-quiet-reserve-exc)',
+    );
+  });
+
+  it('takes the short reserve when the head prints no standing exception', () => {
+    mockItems = [line({ product_id: 'product-1' })];
+    mockCoverage = { 'line-1': { coverage: 'invoiced' } };
+    renderProject();
+    const root = document.querySelector<HTMLElement>('[data-index-region="ffe"]');
+    expect(root!.style.getPropertyValue('--doc-quiet-reserve')).toBe(
+      'var(--doc-quiet-reserve-min)',
+    );
+  });
+
+  it('keeps the same head element when the lens promotes it to full', () => {
+    const { rerender } = renderProject();
+    const head = document.querySelector('[data-region-head="ffe"]');
+    const heading = screen.getByRole('heading', { name: 'Pieces' });
+
+    mockLensDensity = 'full';
+    rerender(
+      <FFESection projectId="project-1" projectName="Ellsworth" mode="project" />,
+    );
+
+    expect(document.querySelector('[data-region-head="ffe"]')).toBe(head);
+    expect(screen.getByRole('heading', { name: 'Pieces' })).toBe(heading);
+    expect(
+      document.querySelector('[data-index-region="ffe"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+    expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
+  });
+
+  it('lets the fold she made outrank the lens, whatever the lens says', () => {
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
+    mockLensDensity = 'full';
+    renderProject();
+
+    expect(document.querySelector('[data-fold-seam]')).not.toBeNull();
+    expect(
+      screen.queryByRole('heading', { name: 'Pieces' }),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-index-region="ffe"]'),
+    ).toHaveAttribute('data-density', 'full');
+  });
+
+  it('leaves install mode full — its head has no quiet form to stand in', () => {
+    renderInstall();
+    expect(
+      document.querySelector('[data-index-region="ffe"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
+    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
   });
 });
