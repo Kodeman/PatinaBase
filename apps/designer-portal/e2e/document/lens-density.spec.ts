@@ -141,6 +141,16 @@ test.describe('the lens density — one direction (D-B16)', () => {
     );
     expect(quietTooClose, JSON.stringify(quietTooClose)).toEqual([]);
 
+    // W4-C19: D-B16 names invariant (ii) as part of the set asserted "at 0 /
+    // 400 / 1200 AND on a deep-landed load" — and the deep landing is the one
+    // scenario where a passed-but-quiet root is actually reachable, because
+    // everything above the frame is discovered and marked in the same commit.
+    const passedNotFull = rects.filter((r) => r.passed && r.density !== 'full');
+    expect(
+      passedNotFull,
+      `(ii) passed roots that are not full: ${JSON.stringify(passedNotFull)}`,
+    ).toEqual([]);
+
     const inFrame = rects.filter((r) => r.top < innerHeight);
     const fullCount = rects.filter((r) => r.density === 'full').length;
     expect(inFrame.length).toBeGreaterThan(0);
@@ -188,7 +198,13 @@ test.describe('the lens density — one direction (D-B16)', () => {
         () => document.documentElement.scrollHeight,
       );
       const anchorOffsetTop = await page.evaluate((key) => {
-        const el = document.querySelector(`[data-index-region="${key}"]`);
+        // W4-C4: PAPER-scoped. The rail ladder's stops carry the same
+        // `data-index-region` (C-4) and precede `<main>` in document order, so
+        // an unscoped query reads a `sticky` button that cannot move whatever
+        // the paper does — the assertion below would be true by construction.
+        const el = document.querySelector(
+          `[data-document-paper] [data-index-region="${key}"]`,
+        );
         return el ? (el as HTMLElement).offsetTop : null;
       }, anchorKey);
 
@@ -234,8 +250,10 @@ test.describe('the lens density — one direction (D-B16)', () => {
       await scrollTo(page, y);
       return page.evaluate(
         (key) =>
+          // W4-C2: paper-scoped — the ladder stop carries no `data-density`,
+          // so an unscoped read is always `null` and can never reach 'full'.
           document
-            .querySelector(`[data-index-region="${key}"]`)
+            .querySelector(`[data-document-paper] [data-index-region="${key}"]`)
             ?.getAttribute('data-density') ?? null,
         target,
       );
@@ -304,8 +322,9 @@ test.describe('the lens density — one direction (D-B16)', () => {
 
     const density = await page.evaluate(
       (key) =>
+        // W4-C2: paper-scoped, as above.
         document
-          .querySelector(`[data-index-region="${key}"]`)
+          .querySelector(`[data-document-paper] [data-index-region="${key}"]`)
           ?.getAttribute('data-density') ?? null,
       shellIndex,
     );

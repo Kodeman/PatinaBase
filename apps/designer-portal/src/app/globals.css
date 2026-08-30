@@ -222,6 +222,7 @@
   --doc-landing-clear: calc(var(--doc-band-height) + 16px); /* R127: 72px — where a jumped-to stop or focused control comes to rest, clear of the band. The gap is an absolute 16px, not 1rem: this route's root font-size is 18px, so a `1rem` arm computes to 74px against the proposal's declared 72. */
   --doc-quiet-reserve-min: 68px; /* R127/OD-12: a quiet region's floor — head + count line + one leader */
   --doc-quiet-reserve-exc: 112px; /* R127/OD-12: the same floor when the region also prints standing exceptions */
+  --doc-passed-reserve: 112px; /* R127/OD-4 (W4-C8): the estimate a PASSED region spends before the engine has ever remembered a real size for it — deliberately not --doc-quiet-reserve, which every region root shadows on itself */
 }
 
 /* The Document owns one persistent viewport edge at every width: the 72px
@@ -1069,7 +1070,7 @@
    `block: start`, and the band is what is holding that top. FF&E's own 4rem
    floor is retired rather than kept as a `max()` arm: --doc-landing-clear is
    72px, which already clears 64px, so the floor can never bind again. */
-[data-document-shell] [data-index-region] {
+[data-document-paper] [data-index-region] {
   scroll-margin-top: var(--doc-landing-clear);
 }
 
@@ -1114,8 +1115,15 @@ html:has([data-document-shell]) {
    contract (technical-design.md §5) names no separate body-wrapper attribute
    — `data-passed` and `data-density` are both written on the SAME element
    that carries `[data-index-region]` — so this selects the region root
-   directly rather than a child "body" element. */
-[data-document-shell] [data-index-region] {
+   directly rather than a child "body" element.
+
+   Scoped to `[data-document-paper]`, NEVER `[data-document-shell]`: C-4 puts
+   `data-index-region` on the rail ladder's stops too (`spine/lens-ladder.tsx`,
+   both the pressable `<button>` and the unmounted `<div role="text">`), and
+   the ladder is inside the shell. A shell-scoped floor gives every stop a 68px
+   minimum and blows OD-14's derived segment floors (45/45/112/60/45/29) past
+   the 336px track. `lens-css-scope.test.ts` holds the scope. */
+[data-document-paper] [data-index-region] {
   min-block-size: var(--doc-quiet-reserve, 68px);
 }
 
@@ -1125,21 +1133,37 @@ html:has([data-document-shell]) {
    engine that doesn't support the property is unaffected by the whole rule
    (`@supports` gates it, so there is no attribute-removal fallback to
    maintain — OD-4 names this cost-only-on-unsupported-engines fallback
-   explicitly). The reserved-size fallback favours the LARGER reserve (112px,
-   not the 68px floor above): `contain-intrinsic-size: auto <length>` only
-   spends `<length>` before the engine has ever remembered a real size for the
-   element, and `content-visibility: auto`'s own contract there is "guess
-   generously, don't clip" — under-reserving risks visible overlap the instant
-   the region is promoted back to `full`, over-reserving only costs blank
-   space for one frame. The Wave-4 find-in-page gate (chromium + webkit,
+   explicitly).
+
+   W4-C8 · which form, and why. OD-4's literal text is `contain-intrinsic-size:
+   auto` with no length; that is not valid grammar (`auto? [ none | <length>
+   ]{1,2}`), so the whole declaration would be dropped and the skipped region
+   would fall back to `none` — an element sized as if empty, i.e. the paper
+   collapsing by exactly the passed region's height. The shipped form is the
+   `auto <length>` one, which is the form that REMEMBERS: `auto` makes the
+   engine use the element's last-remembered size whenever it has one — the
+   ordinary case, a region the reader actually scrolled through at full height
+   — and spends `<length>` only before the element has ever been laid out.
+
+   The length is `--doc-passed-reserve`, NOT `--doc-quiet-reserve`. All six
+   region bodies set `--doc-quiet-reserve` on the region root itself, which is
+   the same element this rule matches, so the old `var(--doc-quiet-reserve,
+   112px)` could never reach its 112px fallback: it resolved to the root's own
+   `--doc-quiet-reserve-min` (68px) for five of six regions, spending the
+   SMALLER reserve while the comment claimed the larger. `--doc-passed-reserve`
+   is declared once, on `:root`, and no region root shadows it.
+
+   The Wave-4 find-in-page gate (chromium + webkit,
    `quiet-responsive-shell.spec.ts`) is the only runtime proof of this rule;
    its pre-agreed failure move is to DELETE this block and log the finding in
    `deviations.md` as an "OD-4 fallback candidate" — never a CSS change that
-   tries to keep both. */
+   tries to keep both. `lens-cls.spec.ts`'s deep-landed case (a restored scroll
+   that lands with passed regions above the frame → CLS 0) is what measures the
+   reserve itself. */
 @supports (content-visibility: auto) {
-  [data-index-region][data-passed] {
+  [data-document-paper] [data-index-region][data-passed] {
     content-visibility: auto;
-    contain-intrinsic-size: auto var(--doc-quiet-reserve, 112px);
+    contain-intrinsic-size: auto var(--doc-passed-reserve, 112px);
   }
 }
 

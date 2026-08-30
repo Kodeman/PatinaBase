@@ -22,6 +22,7 @@
  * debouncing until a full quiet window has passed with none — the wait
  * length is decided by the network, not guessed by the test.
  */
+import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 const SHELL = '[data-document-shell]';
@@ -39,22 +40,39 @@ export async function twoFrames(page: Page): Promise<void> {
 }
 
 /**
+ * D-B28(5) — a server that is not serving the Wave-4 build fails LOUDLY.
+ *
+ * W4-C18: `settle()` used to carry a third tier that silently returned after
+ * two frames when neither publisher existed. A server serving W3 code, or a
+ * W4 build whose hook throws on mount, demoted every spec routed through here
+ * to a two-frame wait and they all went green measuring nothing. The hook
+ * installs `window.__lensSettled` unconditionally, so its absence is a broken
+ * build and nothing else.
+ */
+export async function assertLensBuild(page: Page): Promise<void> {
+  const built = await page.evaluate(
+    () =>
+      typeof (window as unknown as { __lensSettled?: unknown })
+        .__lensSettled === 'function',
+  );
+  expect(
+    built,
+    'window.__lensSettled is absent — this server is not serving the Wave-4 lens build (D-B28.5)',
+  ).toBe(true);
+}
+
+/**
  * The document has stopped moving, as far as it is able to say so.
  *
- * (W4-L4 extension.) Three tiers, tried in order, because the density
- * observer that will eventually own both signals is a Wave-4 lane this file
- * does not implement:
+ * Two tiers, tried in order:
  *   1. `[data-document-shell][data-lens-settled="true"]` — the DOM's own
- *      attribute (OD-3, §3), cheapest to read, correct once the density rAF
- *      exists.
- *   2. `window.__lensSettled?.()` — the Promise form §3 says is "exposed
- *      unconditionally" once the observer attaches; a second path to the
- *      same fact for a caller that reads the window before the attribute
- *      exists, or for a build where the attribute write and the promise
- *      resolution race.
- *   3. Neither publisher exists yet (pre-Wave-4 code, or a page with no
- *      lens): the two frames already awaited above are the whole wait — the
- *      original W3-L5 behaviour, unchanged.
+ *      attribute (OD-3, §3), cheapest to read.
+ *   2. `window.__lensSettled()` — the Promise form §3 says is "exposed
+ *      unconditionally" once the observer attaches; the path for a caller
+ *      that reads the window before the shell exists, or for a build where
+ *      the attribute write and the promise resolution race.
+ *
+ * There is no third tier: see `assertLensBuild`.
  */
 export async function settle(page: Page): Promise<void> {
   await twoFrames(page);
@@ -74,16 +92,11 @@ export async function settle(page: Page): Promise<void> {
     return;
   }
 
-  const hasSettledFn = await page.evaluate(
-    () => typeof (window as unknown as { __lensSettled?: unknown }).__lensSettled === 'function',
+  await assertLensBuild(page);
+  await page.evaluate(() =>
+    (window as unknown as { __lensSettled: () => Promise<true> }).__lensSettled(),
   );
-  if (hasSettledFn) {
-    await page.evaluate(() =>
-      (window as unknown as { __lensSettled: () => Promise<true> }).__lensSettled(),
-    );
-    await twoFrames(page);
-    return;
-  }
+  await twoFrames(page);
 }
 
 /** Put the window at `y` and wait for the document to settle there. */
@@ -389,15 +402,24 @@ export async function blankPaperCensus(
       ) as HTMLElement[];
       if (roots.length === 0) return { cls: 'pre-region', key: null };
 
-      const ownRoot = el ? (el.closest('[data-index-region]') as HTMLElement | null) : null;
+      // W4-C2: a `closest()` from the frame's centre can land on a rail
+      // ladder stop (same attribute, C-4) whenever the sticky rail overlaps
+      // the centre point; require the paper.
+      const ownRootRaw = el ? (el.closest('[data-index-region]') as HTMLElement | null) : null;
+      const ownRoot =
+        ownRootRaw && ownRootRaw.closest('[data-document-paper]') ? ownRootRaw : null;
       if (ownRoot) {
         const key = ownRoot.getAttribute('data-index-region');
         const density = ownRoot.getAttribute('data-density');
         if (density === 'full') return { cls: 'content', key };
         const head = ownRoot.querySelector('[data-region-head]') as HTMLElement | null;
-        const headBottom = head
-          ? head.getBoundingClientRect().bottom
-          : ownRoot.getBoundingClientRect().top;
+        // W4-C21: a quiet root with NO printed head — care's four
+        // whole-paragraph branches, FF&E's install/selecting posture — has no
+        // head bottom to be below. Falling back to the root's own top made
+        // every point inside it read as `blank`, which is a lookahead miss the
+        // lens never made. Whatever it prints, it is printing something.
+        if (!head) return { cls: 'content', key };
+        const headBottom = head.getBoundingClientRect().bottom;
         return { cls: cy <= headBottom ? 'content' : 'blank', key };
       }
 
@@ -472,8 +494,13 @@ export async function blankPaperCensus(
   const landingDensity = last?.key
     ? await page.evaluate(
         (key) =>
-          document.querySelector(`[data-index-region="${key}"]`)?.getAttribute('data-density') ??
-          null,
+          // W4-C2: PAPER-scoped. The rail ladder's stops carry the same
+          // `data-index-region` (C-4) and come first in document order, so an
+          // unscoped read returns the ladder button — which never carries
+          // `data-density`, so D-B31's landing gate could never pass.
+          document
+            .querySelector(`[data-document-paper] [data-index-region="${key}"]`)
+            ?.getAttribute('data-density') ?? null,
         last.key,
       )
     : null;
