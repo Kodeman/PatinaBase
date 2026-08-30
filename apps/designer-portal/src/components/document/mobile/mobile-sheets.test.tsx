@@ -11,6 +11,11 @@ import {
 
 let mockItems: MarginItemRow[] = [];
 let mockGates: WorkflowGate[] = [];
+let mockFfeItems: Array<{
+  id: string;
+  name: string;
+  room?: { name?: string | null } | null;
+}> = [];
 const mockRouterPush = jest.fn();
 
 jest.mock('next/navigation', () => ({
@@ -28,6 +33,7 @@ jest.mock('@patina/supabase', () => ({
     isPending: false,
     isError: false,
   }),
+  useProjectFFEItems: () => ({ data: mockFfeItems }),
   isProjectArtifactApproval: () => false,
 }));
 
@@ -158,6 +164,7 @@ function marginPanel() {
 beforeEach(() => {
   mockItems = [];
   mockGates = [];
+  mockFfeItems = [];
   mockRouterPush.mockClear();
   window.matchMedia = jest.fn().mockImplementation((query: string) => ({
     matches: true,
@@ -171,7 +178,7 @@ beforeEach(() => {
   })) as unknown as typeof window.matchMedia;
 });
 
-describe('the Margin sheet (D-B30)', () => {
+describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
   it('the door prints "Margin · N" as the first row of More, above Plan room', () => {
     mockItems = [row({ item_id: 'a' }), row({ item_id: 'b', anchor_kind: 'section' })];
     mountBarAndSheets({ marginCount: 2 });
@@ -238,6 +245,101 @@ describe('the Margin sheet (D-B30)', () => {
     fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
     fireEvent.click(screen.getByText('Primary bedroom approval'));
     expect(screen.getByRole('dialog', { name: 'Margin item' })).toBeInTheDocument();
+  });
+
+  it('W5-R1 — groups THE WHOLE JOB above BESIDE PIECES, counting the whole margin (7 on the seed’s shape)', () => {
+    mockItems = [
+      row({ item_id: 'overdue6', title: 'Primary bedroom', state: 'overdue' }),
+      row({ item_id: 'dining', title: 'Dining finish', state: 'responded' }),
+      row({ item_id: 'hardware', title: 'Hardware', state: 'responded' }),
+      row({ item_id: 'invoice', kind: 'invoice', title: 'INV-2026-114', state: 'sent' }),
+      row({
+        item_id: 'com',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-2',
+        title: 'Living room fabric',
+        state: 'overdue',
+      }),
+      row({
+        item_id: 'console',
+        kind: 'message',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-1',
+        title: 'Console thread',
+        state: 'unread',
+      }),
+      row({
+        item_id: 'po',
+        kind: 'message',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-19',
+        title: 'PO thread',
+        state: 'unread',
+      }),
+    ];
+    mountBarAndSheets({ marginCount: 7 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 7' }));
+    const panel = marginPanel();
+
+    expect(within(panel).getByText('THE WHOLE JOB · 4')).toBeInTheDocument();
+    expect(within(panel).getByText('BESIDE PIECES · 3')).toBeInTheDocument();
+    expect(panel.querySelectorAll('[data-margin-row]')).toHaveLength(7);
+    // "2 overdue" — the rug/nightstands decision (whole job) and the COM
+    // decision (beside Pieces); the invoice is money and never counts.
+    expect(within(panel).getByText('2 overdue')).toBeInTheDocument();
+  });
+
+  it('W5-R1 — a line-anchored row names its line on a second line', () => {
+    mockItems = [
+      row({
+        item_id: 'com',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-2',
+        title: 'Living room fabric',
+      }),
+    ];
+    mockFfeItems = [
+      { id: 'ffe-2', name: 'Reading Chair — COM Fabric Pending', room: { name: 'Living Room' } },
+    ];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    expect(
+      within(marginPanel()).getByText('Living Room · Reading Chair — COM Fabric Pending'),
+    ).toBeInTheDocument();
+  });
+
+  it('W5-R1 — tapping a line-anchored row jumps to its line and opens the margin-item sheet', () => {
+    const target = document.createElement('div');
+    target.id = 'ffe-selection-ffe-2';
+    target.scrollIntoView = jest.fn();
+    document.body.appendChild(target);
+
+    mockItems = [
+      row({
+        item_id: 'com',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-2',
+        title: 'Living room fabric',
+      }),
+    ];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    fireEvent.click(screen.getByText('Living room fabric'));
+
+    expect(target.scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ block: 'start' }),
+    );
+    expect(screen.getByRole('dialog', { name: 'Margin item' })).toBeInTheDocument();
+    document.body.removeChild(target);
+  });
+
+  it('prints no BESIDE group when nothing is line-anchored', () => {
+    mockItems = [row({ item_id: 'a', title: 'Primary bedroom approval' })];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    const panel = marginPanel();
+    expect(within(panel).getByText('THE WHOLE JOB · 1')).toBeInTheDocument();
+    expect(within(panel).queryByText(/^BESIDE/)).toBeNull();
   });
 
   it('Escape returns focus to the door', async () => {

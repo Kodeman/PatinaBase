@@ -55,10 +55,26 @@ function OpenedItem() {
   );
 }
 
+function mockBelow980(matches: boolean) {
+  window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  })) as unknown as typeof window.matchMedia;
+}
+
 describe('MobileMarginChips (D-B30)', () => {
+  const originalMatchMedia = window.matchMedia;
+
   beforeEach(() => {
     mockItems = [];
     mockGates = [];
+    window.matchMedia = originalMatchMedia;
   });
 
   it('the letterhead branch lists exactly what useLetterheadMargin yields, tagged data-mobile-margin-chips="letterhead"', () => {
@@ -124,6 +140,47 @@ describe('MobileMarginChips (D-B30)', () => {
     expect(screen.getByText('This line item')).toBeInTheDocument();
     expect(screen.queryByText('A different line item')).toBeNull();
     expect(screen.queryByText('A letterhead item')).toBeNull();
+  });
+
+  it('W5-R1 — the line branch prints nothing below 980, once the Margin sheet carries the margin', () => {
+    mockBelow980(true);
+    mockItems = [
+      row({ item_id: 'a', anchor_kind: 'line', anchor_id: 'line-1', title: 'This line item' }),
+    ];
+
+    const { container } = render(
+      <MobileShellProvider>
+        <MobileMarginChips
+          projectId="proj-1"
+          proposalId={null}
+          anchorKind="line"
+          anchorId="line-1"
+        />
+      </MobileShellProvider>,
+    );
+
+    expect(screen.queryByText('This line item')).toBeNull();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('W5-R1 — at >=980 the line branch is unchanged (matches: false, jest\'s default stub)', () => {
+    mockBelow980(false);
+    mockItems = [
+      row({ item_id: 'a', anchor_kind: 'line', anchor_id: 'line-1', title: 'This line item' }),
+    ];
+
+    render(
+      <MobileShellProvider>
+        <MobileMarginChips
+          projectId="proj-1"
+          proposalId={null}
+          anchorKind="line"
+          anchorId="line-1"
+        />
+      </MobileShellProvider>,
+    );
+
+    expect(screen.getByText('This line item')).toBeInTheDocument();
   });
 
   it('prints nothing when there is nothing to show', () => {

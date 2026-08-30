@@ -46,7 +46,7 @@ import {
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
-import { useLetterheadMargin } from '@/hooks/use-letterhead-margin';
+import { useMarginSheet } from '@/hooks/use-margin-sheet';
 import {
   documentEvents,
   rememberDocumentInHand,
@@ -1640,10 +1640,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     ]),
   ) as Partial<Record<DocumentIndexKey, string>>;
 
-  // D-B30: the letterhead- and section-anchored margin count — the mobile
-  // bar's "Margin · N" door and the Margin sheet's head both read it off
-  // `MobileActiveDoc` rather than each re-deriving it.
-  const { count: letterheadMarginCount } = useLetterheadMargin({
+  // W5-R1: the whole-margin count — the mobile bar's "Margin · N" door and
+  // the Margin sheet's head both read it off `MobileActiveDoc` rather than
+  // each re-deriving it.
+  const { count: marginSheetCount } = useMarginSheet({
     projectId: row?.project_id ?? null,
     proposalId: row?.proposal_id ?? null,
     clientName: row?.client_name ?? '',
@@ -1662,7 +1662,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           readingIndex: activeKey,
           ladderValues,
           clientCopy: ticketInput?.clientCopy != null,
-          marginCount: letterheadMarginCount,
+          marginCount: marginSheetCount,
         }
       : null,
   );

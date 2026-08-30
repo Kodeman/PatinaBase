@@ -27,7 +27,7 @@ import {
 } from '@/lib/document/margin-derivation';
 import { ACTIVITIES, fmtElapsed } from '@/lib/document/time-derivation';
 import { MarginItemBody } from '../margin-bodies';
-import { useLetterheadMargin } from '@/hooks/use-letterhead-margin';
+import { useMarginSheet } from '@/hooks/use-margin-sheet';
 import { overdueStampLabel } from '@/lib/document/overdue-condition';
 import { openLedger } from '../command-bar';
 import { openAccount } from '../account/account-sheet';
@@ -417,11 +417,10 @@ export function MobileSheets({
   // Still the whole margin (every anchor kind) — the margin-item sheet below
   // opens any item, line-anchored ones included.
   const allItems = useMemo(() => [...raised, ...settled], [raised, settled]);
-  // D-B30: the letterhead- and section-anchored subset + handoff gates, for
-  // the Margin sheet (and the bar's door count) — the same hook the deleted
-  // 390 chips block used, so the two never disagree.
+  // W5-R1: the whole margin, grouped as the desktop rail groups it — the
+  // Margin sheet's list and the bar's door count both read this one hook.
   const clientName = activeDoc?.clientName ?? '';
-  const letterheadMargin = useLetterheadMargin({
+  const marginSheet = useMarginSheet({
     projectId,
     proposalId,
     clientName,
@@ -723,25 +722,39 @@ export function MobileSheets({
     );
   }
 
-  // ── Margin (paper): the letterhead- and section-anchored items + handoff
-  //    gates that used to print as chips between the band and the first
-  //    region (D-B30). Moved out of the spine sheet above, which keeps only
-  //    sections and the doors. Each item's own act lives in the margin-item
-  //    sheet (openMarginItem, below) — the inline act here shares that act's
-  //    label rather than re-deriving or firing it blind from a compact row;
-  //    the real act needs the item's own fetched detail (decision options,
+  // ── Margin (paper): the WHOLE margin (W5-R1) — every anchor kind, grouped
+  //    "THE WHOLE JOB" (letterhead/section) then one "BESIDE <region>" group
+  //    per region with a line-anchored member, as the desktop rail groups
+  //    them (margin-rail.tsx `anchorGroups`; W5-R1 prints WHOLE JOB first).
+  //    Moved out of the spine sheet above, which keeps only sections and the
+  //    doors. Each item's own act lives in the margin-item sheet
+  //    (openMarginItem, below) — the inline act here shares that act's label
+  //    rather than re-deriving or firing it blind from a compact row; the
+  //    real act needs the item's own fetched detail (decision options,
   //    invoice lines, a thread) this list does not hold, so duplicating a
   //    live mutation here would risk a second, divergent path (§5's one-act
   //    invariant). ──
   if (sheet.kind === 'margin') {
-    const {
-      items: marginItems,
-      gates,
-      decisionState,
-      showDecisionNotice,
-      count,
-      overdueCount,
-    } = letterheadMargin;
+    const { groups, gates, decisionState, showDecisionNotice, count, overdueCount } =
+      marginSheet;
+    const openRow = (row: MarginItemRow) => {
+      // A line-anchored row jumps to its line first (the sheet covers the
+      // paper; without this she would close it to a scroll position that
+      // never moved) and then opens the same margin-item sheet the line's
+      // own chip opened (D-B30's SHEET_RETURN_FALLBACKS still find it).
+      if (row.anchor_kind === 'line' && row.anchor_id) {
+        const reduceMotion = window.matchMedia?.(
+          '(prefers-reduced-motion: reduce)',
+        ).matches;
+        document
+          .getElementById(`ffe-selection-${row.anchor_id}`)
+          ?.scrollIntoView({
+            block: 'start',
+            behavior: reduceMotion ? 'auto' : 'smooth',
+          });
+      }
+      openMarginItem(row.item_id);
+    };
     return (
       <Sheet tone="paper" kind="margin" onClose={closeSheet}>
         <h2 className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
@@ -781,50 +794,65 @@ export function MobileSheets({
             ))}
           </ul>
         )}
-        {marginItems.length === 0 && gates.length === 0 ? (
+        {groups.length === 0 && gates.length === 0 ? (
           <p className="mt-2 py-1.5 text-[14px] italic text-[var(--text-muted)]">
             The margin — decisions, messages, and money gather here.
           </p>
-        ) : marginItems.length === 0 ? null : (
-          <ul className="mt-2">
-            {marginItems.map((row) => (
-              <li
-                key={`${row.kind}-${row.item_id}`}
-                data-margin-row
-                className="mb-1.5 flex items-stretch gap-2 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)]"
-                style={{
-                  borderLeft: `2.5px solid ${marginAccent(row.kind).border}`,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => openMarginItem(row.item_id)}
-                  className="min-w-0 flex-1 px-2.5 py-2 text-left"
-                >
-                  <span
-                    className="block font-mono text-[12px] font-semibold uppercase tracking-[0.06em]"
-                    style={{ color: marginAccent(row.kind).label }}
+        ) : (
+          groups.map((group) => (
+            <div key={group.key ?? 'whole-job'} data-margin-group={group.key ?? 'whole-job'}>
+              <p className="mb-1.5 mt-3 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                {group.heading} · {group.rows.length}
+              </p>
+              <ul>
+                {group.rows.map(({ row, lineLabel }) => (
+                  <li
+                    key={`${row.kind}-${row.item_id}`}
+                    data-margin-row
+                    className="mb-1.5 flex items-stretch gap-2 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)]"
+                    style={{
+                      borderLeft: `2.5px solid ${marginAccent(row.kind).border}`,
+                    }}
                   >
-                    {deriveKindLine(row)}
-                  </span>
-                  <span className="mt-0.5 block text-[14px] leading-snug text-[var(--color-charcoal)]">
-                    {row.title}
-                  </span>
-                  <span className="mt-0.5 block font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                    {marginRowOwner(row)}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  data-margin-row-act
-                  onClick={() => openMarginItem(row.item_id)}
-                  className="shrink-0 self-center px-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)]"
-                >
-                  {marginRowActLabel(row)}
-                </button>
-              </li>
-            ))}
-          </ul>
+                    <button
+                      type="button"
+                      onClick={() => openRow(row)}
+                      className="min-w-0 flex-1 px-2.5 py-2 text-left"
+                    >
+                      <span
+                        className="block font-mono text-[12px] font-semibold uppercase tracking-[0.06em]"
+                        style={{ color: marginAccent(row.kind).label }}
+                      >
+                        {deriveKindLine(row)}
+                      </span>
+                      <span className="mt-0.5 block text-[14px] leading-snug text-[var(--color-charcoal)]">
+                        {row.title}
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                        {marginRowOwner(row)}
+                      </span>
+                      {lineLabel && (
+                        <span
+                          data-margin-row-line
+                          className="mt-0.5 block text-[12px] italic text-[var(--color-aged-oak)]"
+                        >
+                          {lineLabel}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      data-margin-row-act
+                      onClick={() => openRow(row)}
+                      className="shrink-0 self-center px-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)]"
+                    >
+                      {marginRowActLabel(row)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
         )}
       </Sheet>
     );

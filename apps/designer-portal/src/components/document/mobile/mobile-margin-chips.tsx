@@ -6,15 +6,17 @@
  * item as a paper sheet. Mobile only — the desktop margin rail owns these
  * above 980px.
  *
- * D-B30: the letterhead branch now reads `useLetterheadMargin`, the same
- * hook the Margin sheet (`mobile-sheets.tsx`) lists from, so the two can
- * never disagree about what stands beside the letterhead. It is unmounted
- * in product (`page.tsx` deleted the call site — the Margin sheet is the
- * 390 door now) but kept correct here for any future non-390 caller and for
- * this file's own tests.
+ * D-B30: the letterhead branch reads `useLetterheadMargin` (`use-margin-
+ * sheet.ts`) — kept for a >=980 (desktop) caller; it is unmounted in
+ * product below 1180 (`page.tsx` deleted the call site — the Margin sheet
+ * is the 390 door now).
+ *
+ * W5-R1: the LINE branch retires below 980 too — the Margin sheet now
+ * carries the whole margin, line-anchored items included, grouped "BESIDE
+ * <region>", so a chip under the same FF&E line would print it twice.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useCoordinationItems } from '@patina/supabase';
 import {
@@ -23,8 +25,29 @@ import {
   MarginDecisionClassificationNotice,
 } from '@/lib/document/stage2-approval-exclusions';
 import { marginAccent, deriveKindLine, type MarginItemRow } from '@/lib/document/margin-derivation';
-import { useLetterheadMargin } from '@/hooks/use-letterhead-margin';
+import { useLetterheadMargin } from '@/hooks/use-margin-sheet';
 import { useMobileShell } from './mobile-shell';
+
+/** W5-R1 — below 980 the Margin sheet already carries every line-anchored
+ *  item (grouped "BESIDE <region>"); a chip under the same line would be the
+ *  same item printed twice. `matches: false` by default (jest's global
+ *  matchMedia stub, jest.setup.js) reads as "not narrow", so a test opts in
+ *  by stubbing the query explicitly — see mobile-margin-chips.test.tsx. */
+function useBelow980(): boolean {
+  const [below, setBelow] = useState(() =>
+    typeof window === 'undefined'
+      ? false
+      : window.matchMedia('(max-width: 979px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 979px)');
+    setBelow(mq.matches);
+    const onChange = (event: MediaQueryListEvent) => setBelow(event.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return below;
+}
 
 interface MobileMarginChipsProps {
   projectId: string | null;
@@ -108,6 +131,7 @@ function LineMarginChips({
   anchorId = null,
 }: MobileMarginChipsProps) {
   const { openMarginItem } = useMobileShell();
+  const below980 = useBelow980();
   const { data: items } = useMarginItems(projectId, proposalId);
   const coordinationQuery = useCoordinationItems(projectId);
   const coordinationItems = coordinationQuery.data;
@@ -142,6 +166,9 @@ function LineMarginChips({
   );
   const showDecisionNotice = classifiedMargin.withheldDecisionCount > 0;
 
+  // W5-R1: the Margin sheet already carries every line-anchored item below
+  // 980 (grouped "BESIDE <region>"); the chip would be the same item twice.
+  if (below980) return null;
   if (chips.length === 0 && !showDecisionNotice) return null;
 
   return (

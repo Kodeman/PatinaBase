@@ -26,6 +26,9 @@ jest.mock('@patina/supabase', () => ({
   // margin summary unconditionally, whichever sheet kind is open.
   useCoordinationItems: () => ({ data: [] }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  // W5-R1: useMarginSheet's line-label lookup — this file's suites never
+  // seed margin items with a line anchor, so an empty list is enough.
+  useProjectFFEItems: () => ({ data: [] }),
   isProjectArtifactApproval: () => false,
 }));
 
