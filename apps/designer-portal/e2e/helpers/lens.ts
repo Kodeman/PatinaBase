@@ -316,3 +316,176 @@ export async function quiet(
     page.off('request', onRequest);
   }
 }
+
+/**
+ * D-B31's fling census — the falsifier for L-4/R4 that `scrollTo` cannot be:
+ * a real fling delivers dozens of wheel deltas across many frames while the
+ * lens is still catching up, which a single JS-driven jump never exercises.
+ *
+ * Samples every rAF from the FIRST frame where `scrollY` has changed (the
+ * two pre-motion frames are not the fling) until 120ms after the LAST
+ * observed movement, and at each sampled frame classifies
+ * `document.elementFromPoint(innerWidth/2, innerHeight/2)`:
+ *
+ *   - `content`     — inside a `[data-index-region]` root that is either
+ *                     `data-density="full"`, OR quiet but the point is at or
+ *                     above its `[data-region-head]`'s bottom (the head+
+ *                     count line print at every density, OD-13);
+ *   - `blank`       — inside a quiet root BELOW its printed head (the 68/
+ *                     112px reserve with nothing painted there yet), or the
+ *                     point has no root ancestor, sits between two roots,
+ *                     and no `[data-region-head]` on the page intersects the
+ *                     viewport at all;
+ *   - `pre-region`  — no root ancestor and the point is above the first
+ *                     root's top (the letterhead/band paper — this prints at
+ *                     every state and velocity, so it is never "blank" no
+ *                     matter what the lens has or hasn't promoted, D-B31);
+ *   - `post-region` — no root ancestor and the point is at or below the
+ *                     last root's bottom (the colophon/foot reserve).
+ *
+ * `landing` reports the region key (if any) under the centre point at the
+ * LAST sampled frame, and that region's `data-density` at that same moment —
+ * D-B31's "the landing frame must read full `<key>`".
+ */
+export type BlankPaperClass = 'content' | 'blank' | 'pre-region' | 'post-region';
+
+export interface BlankPaperSample {
+  tMs: number;
+  scrollY: number;
+  classification: BlankPaperClass;
+  regionKey: string | null;
+}
+
+export interface BlankPaperCensus {
+  samples: BlankPaperSample[];
+  counts: Record<BlankPaperClass, number>;
+  landing: { regionKey: string | null; density: string | null };
+}
+
+type RawFlingSample = { t: number; scrollY: number; cls: BlankPaperClass; key: string | null };
+type WindowWithFling = Window & {
+  __flingSamples?: RawFlingSample[];
+  __flingDone?: boolean;
+};
+
+export async function blankPaperCensus(
+  page: Page,
+  opts: { deltaY?: number; ticks?: number } = {},
+): Promise<BlankPaperCensus> {
+  const deltaY = opts.deltaY ?? 3200;
+  const ticks = opts.ticks ?? 16;
+
+  await page.evaluate(() => {
+    const win = window as WindowWithFling;
+    win.__flingSamples = [];
+    win.__flingDone = false;
+
+    const classify = (): { cls: string; key: string | null } => {
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      const el = document.elementFromPoint(cx, cy);
+      const roots = Array.from(
+        document.querySelectorAll('[data-document-paper] [data-index-region]'),
+      ) as HTMLElement[];
+      if (roots.length === 0) return { cls: 'pre-region', key: null };
+
+      const ownRoot = el ? (el.closest('[data-index-region]') as HTMLElement | null) : null;
+      if (ownRoot) {
+        const key = ownRoot.getAttribute('data-index-region');
+        const density = ownRoot.getAttribute('data-density');
+        if (density === 'full') return { cls: 'content', key };
+        const head = ownRoot.querySelector('[data-region-head]') as HTMLElement | null;
+        const headBottom = head
+          ? head.getBoundingClientRect().bottom
+          : ownRoot.getBoundingClientRect().top;
+        return { cls: cy <= headBottom ? 'content' : 'blank', key };
+      }
+
+      const firstRoot = roots[0]!;
+      const lastRoot = roots[roots.length - 1]!;
+      const firstTop = firstRoot.getBoundingClientRect().top;
+      const lastBottom = lastRoot.getBoundingClientRect().bottom;
+      if (cy < firstTop) return { cls: 'pre-region', key: null };
+      if (cy >= lastBottom) return { cls: 'post-region', key: null };
+
+      const headInFrame = roots.some((root) => {
+        const head = root.querySelector('[data-region-head]');
+        if (!head) return false;
+        const rect = (head as HTMLElement).getBoundingClientRect();
+        return rect.bottom > 0 && rect.top < window.innerHeight;
+      });
+      return { cls: headInFrame ? 'content' : 'blank', key: null };
+    };
+
+    let lastMoveAt = performance.now();
+    let lastScrollY = window.scrollY;
+    let started = false;
+    const start = performance.now();
+
+    const tick = () => {
+      const now = performance.now();
+      const y = window.scrollY;
+      if (y !== lastScrollY) {
+        lastScrollY = y;
+        lastMoveAt = now;
+        started = true;
+      }
+      if (started) {
+        const { cls, key } = classify();
+        win.__flingSamples!.push({ t: now - start, scrollY: y, cls: cls as BlankPaperClass, key });
+      }
+      if (started && now - lastMoveAt > 120) {
+        win.__flingDone = true;
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+
+  // The fling itself — many wheel ticks in a tight loop, ≥3000px in <300ms
+  // wall-clock, which is the actual falsifier: one `scrollTo` jump is a
+  // single frame of layout and never touches the lookahead line frame by
+  // frame the way a real fling does.
+  const perTick = Math.round(deltaY / ticks);
+  for (let i = 0; i < ticks; i += 1) {
+    await page.mouse.wheel(0, perTick);
+  }
+
+  await page.waitForFunction(
+    () => (window as WindowWithFling).__flingDone === true,
+    undefined,
+    { timeout: 15_000 },
+  );
+
+  const raw = await page.evaluate(() => (window as WindowWithFling).__flingSamples ?? []);
+
+  const counts: Record<BlankPaperClass, number> = {
+    content: 0,
+    blank: 0,
+    'pre-region': 0,
+    'post-region': 0,
+  };
+  for (const sample of raw) counts[sample.cls] += 1;
+
+  const last = raw[raw.length - 1];
+  const landingDensity = last?.key
+    ? await page.evaluate(
+        (key) =>
+          document.querySelector(`[data-index-region="${key}"]`)?.getAttribute('data-density') ??
+          null,
+        last.key,
+      )
+    : null;
+
+  return {
+    samples: raw.map((s) => ({
+      tMs: s.t,
+      scrollY: s.scrollY,
+      classification: s.cls,
+      regionKey: s.key,
+    })),
+    counts,
+    landing: { regionKey: last?.key ?? null, density: landingDensity },
+  };
+}

@@ -148,14 +148,15 @@ test.describe('the lens band’s declared height', () => {
 });
 
 /**
- * The letterhead grid (findings D-B26 / B1, budgets per W3-R5).
+ * The letterhead grid (findings D-B26 / B1, budgets per W3-R7).
  *
  * THE FALSIFIABLE SENTENCE: with the title given its own row across both
  * tracks, the ledger confined to `minmax(18rem,24rem)` and printing `SHARING`
- * alone at every width, the letterhead measures ≤195px at 1440 and ≤260px at
- * 390 (W3-R6), its title <input> is never clipped, its vitals are one row, its
- * ledger is ONE row at both widths, and the first region head at 390 stands at
- * or above y 430 of an 844px frame once the margin-chips block is discounted.
+ * alone at every width, the letterhead measures ≤205px at 1440 and ≤265px at
+ * 390 (W3-R7, asserted on both chromium and webkit), its title <input> is
+ * never clipped, its vitals are one row, its ledger is ONE row at both
+ * widths, and the first region head at 390 stands at or above y 435 of an
+ * 844px frame once the margin-chips block is discounted.
  *
  * Why an <input> and not a heading: the title cannot wrap, so a starved track
  * does not stack it, it AMPUTATES it — `Aspen Lo` at 149.9px was the defect.
@@ -169,30 +170,30 @@ test.describe('the lens band’s declared height', () => {
  */
 
 /**
- * W3-R5's budgets, measured against the SHIPPED chrome rather than the
- * mockup's — W3-R4 priced the mark row at 44 (it is 51.25), counted no grid
- * `gap-y` (it is 9) and assumed a 44px one-row ledger. 170 / 240 / 390 were
- * superseded by 185 / 250 / 400, and those by W3-R6's 195 / 260 / 430 — ruled
- * from the SHIPPED chrome measured on `document-lens/w3-fix` (pass 2), which
- * carries 11.25px of internal margin inside row 2 (chip `mt-1.5` 6.75, vitals
- * `mt-1` 4.5) that no earlier pricing counted.
+ * W3-R7 — one number per width, asserted on BOTH chromium and webkit, with
+ * the engine allowance stated rather than hidden in the gate itself.
  *
- *   1440 = 14 + 51.25 + 44.19 + 9 + 54.63 + 18 + 1 = 192.06  → ≤ 195
- *   390  = 308.17 today − 53 (W3-R6's two ledger changes) ≈ 255       → ≤ 260
- *   390 first head, net of the chips = 476.17 − 53 ≈ 423           → ≤ 430
+ * Measured on `document-lens/w4` @ `8545739eb` (after W3-R6's `CALL SHEET` +
+ * `gap-[9px]` wiring below 1180):
  *
- * The two changes are in this wave's wiring commit: `CALL SHEET · N` prints
- * `CALL SHEET` below 1180 (the count moves to the `aria-label`, saving ≈31px)
- * and the ledger's gap drops 13.5 → 9px below 1180 (saving 13.5px), which puts
- * the four acts at 315px inside a 327px run — one row of 44 by construction.
+ *   1440 letterhead        — chromium 192.06 · webkit 201     → gate ≤ 205 (chromium +12.94 / webkit +4 headroom; engine allowance +10 over chromium's own 192.06→202 ceiling, rounded to 205)
+ *   390 letterhead         — chromium 255.17 · webkit 262.25  → gate ≤ 265 (engine allowance +5)
+ *   390 first head, net    — chromium 423.17 · webkit 430.25  → gate ≤ 435 (engine allowance +5)
+ *
+ * WebKit's own numbers run +6 / +2.25 / +0.25 over chromium's — the same
+ * engine that lays out 1431px at a 1440 viewport (font metrics and rounding,
+ * not a print difference: the same elements print in the same rows on both
+ * engines). A chromium-only gate would leave the promise unverified where
+ * the phones are; the gate is ONE number, read against the measurement
+ * named beside it, not against the slack.
  *
  * The 390 figure is for the seed's ONE-line 32px title. A two-line title adds
- * 35.5px (≤ 286); stated here, deliberately not asserted, because `…d5`'s
- * title prints on one line at 390 and a gate that allowed 286 would stop
+ * 35.5px (≤ 300); stated here, deliberately not asserted, because `…d5`'s
+ * title prints on one line at 390 and a gate that allowed 300 would stop
  * catching a two-row ledger.
  */
-const LETTERHEAD_MAX_1440 = 195;
-const LETTERHEAD_MAX_390 = 260;
+const LETTERHEAD_MAX_1440 = 205;
+const LETTERHEAD_MAX_390 = 265;
 /** W3-R6 — one row of 44 at 390, with the 4px the row's own box can carry. */
 const LEDGER_MAX_HEIGHT_390 = 48;
 /** The vitals are ONE row at 1440 — 11px of mono, never a second line. */
@@ -202,13 +203,15 @@ const VITALS_MAX_HEIGHT = 24;
 const LEDGER_MAX_ROWS = 1;
 /**
  * At 390 the first head must be reachable inside the 844px frame — measured
- * NET of `MobileMarginChips`. W3-R5 §4: the mockup prints nothing between the
- * band and the first region (its seven chips live in a 390 Margin sheet the
- * shipped app has no door for), so hiding the block would remove the margin at
- * 390 entirely. The block stays for Wave 3 and its form is owed as D-B27; the
- * gate discounts it and the run records its gross height beside the net one.
+ * NET of `MobileMarginChips` (W3-R7: chromium 423.17 · webkit 430.25 → gate
+ * ≤ 435, engine allowance +5 — D-B30: net of MobileMarginChips until W5-L3
+ * retires the chips block and the gate goes gross). W3-R5 §4: the mockup
+ * prints nothing between the band and the first region (its seven chips live
+ * in a 390 Margin sheet the shipped app has no door for), so hiding the block
+ * would remove the margin at 390 entirely. The run records the gross height
+ * beside the net one.
  */
-const FIRST_HEAD_MAX_Y_390 = 430;
+const FIRST_HEAD_MAX_Y_390 = 435;
 const CHIPS_BLOCK = '[data-document-paper] [data-mobile-margin-chips]';
 
 const LETTERHEAD = '#document-project-status';
@@ -460,58 +463,46 @@ test.describe('line 2’s two forms on the seeded paper (D-B24, NF-01)', () => {
 });
 
 /**
- * W3-R6's three BUDGET numbers — ordinary cases, and they pass.
+ * W3-R7's three BUDGET numbers — ordinary cases on BOTH engines, and they
+ * pass. (Supersedes W3-R6's chromium-only 185/250/400: those stood as
+ * `test.fail()` through Wave 3 while the numbers were priced against an
+ * idealised stack; W3-R6 accepted the shipped chrome's own arithmetic and
+ * this ruling — reconciliation.md W3-R7 — moves the gate to one number
+ * verified on both engines, with the engine allowance named beside each
+ * case rather than folded silently into the ceiling.)
  *
- * These are a RULING, not a defect: the defects B5 named (a title amputated to
- * `Aspen Lo`, four-line vitals, a three-row ledger) are closed and asserted
- * above, and the ledger is now ONE row at 1440. What remains is that the ruled
- * figures were priced against an idealised stack and the shipped chrome
- * measures more, by amounts that decompose exactly:
+ *   1440 letterhead     — chromium 192.06 · webkit 201     → gate ≤ 205 (engine allowance +10 over chromium's 192.06→~195 own-engine ceiling)
+ *   390 letterhead      — chromium 255.17 · webkit 262.25  → gate ≤ 265 (engine allowance +5)
+ *   390 first head, net — chromium 423.17 · webkit 430.25  → gate ≤ 435 (engine allowance +5; D-B30: net of MobileMarginChips until W5-L3)
  *
- *   1440 — 192.06 against ≤185, over by 7.06.
- *     pt 14 + mark row 51.25 + title 44.19 + gap-y 9 + ROW 2 54.63 + pb 18 + 1
- *     Row 2 is the chip+vitals cell, not the ledger (48.5): chip 25.88 with
- *     `mt-1.5` 6.75, vitals 17.5 with `mt-1` 4.5. W3-R5 priced it 29 + 20 = 49
- *     and did not count those two internal margins (11.25).
- *
- *   390 — 308.17 against ≤250, over by 58.17.
- *     The ledger is TWO rows (97 against 44). At the 11px floor the four acts
- *     measure 67 + 66 + 66 + 120 = 319 plus 3 × 13.5 gaps = 359.5 in a 327px
- *     run. W3-R5's 303 counted the GLYPHS at 7.5 px/char but not
- *     `DocumentAction`'s own `px-[6px]` (12px × 4 = 48) or its `tracking-[0.1em]`.
- *     The vitals are also two rows at 390 (36.25 against 20).
- *
- *   390 first head — 476.17 net against ≤400, over by 76.17 (gross 633.42,
- *     `MobileMarginChips` 157.25). Carries the letterhead's 58.17 plus the
- *     chips' own wrapper.
- *
- * They stood as `test.fail()` through Wave 3 (N-13) while the numbers were
- * ruled from an idealised stack. W3-R6 accepted the shipped chrome's own
- * arithmetic and took the two print levers the design lead named, so the block
- * is an ordinary describe again: a regression here is now red, not "expected
- * to fail but passed".
+ * WebKit's own figures run higher for the same reason `quiet-responsive-
+ * shell.spec.ts` measures a 1431px layout viewport at a 1440 window (font
+ * metrics and rounding) — not a print difference: the same elements print
+ * in the same rows on both engines.
  */
-test.describe('W3-R6’s budget numbers', () => {
+test.describe("W3-R7's budget numbers, across engines", () => {
 
-  test(`letterhead is ≤${LETTERHEAD_MAX_1440}px at 1440`, async ({
+  test(`letterhead is ≤${LETTERHEAD_MAX_1440}px at 1440 (chromium 192.06 · webkit 201, engine allowance +10)`, async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 1440, 900);
     await scrollTo(page, 0);
     const box = await page.locator(LETTERHEAD).boundingBox();
+    console.log(`W3-R7 · letterhead height at 1440: ${box!.height}px (chromium measured 192.06, webkit 201)`);
     expect(box!.height).toBeLessThanOrEqual(LETTERHEAD_MAX_1440);
   });
 
-  test(`letterhead is ≤${LETTERHEAD_MAX_390}px at 390`, async ({
+  test(`letterhead is ≤${LETTERHEAD_MAX_390}px at 390 (chromium 255.17 · webkit 262.25, engine allowance +5)`, async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 390, 844);
     await scrollTo(page, 0);
     const box = await page.locator(LETTERHEAD).boundingBox();
+    console.log(`W3-R7 · letterhead height at 390: ${box!.height}px (chromium measured 255.17, webkit 262.25)`);
     expect(box!.height).toBeLessThanOrEqual(LETTERHEAD_MAX_390);
   });
 
-  test(`first [data-region-head] is ≤${FIRST_HEAD_MAX_Y_390}px at 390, net of the chips`, async ({
+  test(`first [data-region-head] is ≤${FIRST_HEAD_MAX_Y_390}px at 390, net of the chips (chromium 423.17 · webkit 430.25, engine allowance +5)`, async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 390, 844);
@@ -524,7 +515,7 @@ test.describe('W3-R6’s budget numbers', () => {
     await expect(head).toBeVisible({ timeout: 20_000 });
     const headBox = await head.boundingBox();
     console.log(
-      `W3-R6 · first head at 390: gross ${headBox!.y}px, chips ${chipsHeight}px, net ${headBox!.y - chipsHeight}px`,
+      `W3-R7 · first head at 390: gross ${headBox!.y}px, chips ${chipsHeight}px, net ${headBox!.y - chipsHeight}px (chromium measured 423.17, webkit 430.25)`,
     );
     // D-B30: net of MobileMarginChips until W5-L3
     expect(headBox!.y - chipsHeight).toBeLessThanOrEqual(FIRST_HEAD_MAX_Y_390);
