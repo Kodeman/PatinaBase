@@ -9,6 +9,7 @@
  * accepted or declined leads read as a terminal record.
  */
 
+import { useEffect } from 'react';
 import { useLead } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
 import { formatBudgetRange, formatTimeline } from '@/lib/document/brief-chips';
@@ -29,11 +30,33 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-export function BriefSection({ leadId }: { leadId: string }) {
+export function BriefSection({
+  leadId,
+  onEyebrow,
+}: {
+  leadId: string;
+  /** W5-R2 item 4 — the brief's own inline `<h2>` and its "Respond by …" /
+   *  "Reconnect …" sub-label are retired; the region's single head
+   *  (`PreworkRegion` → `RegionHead`) is the only head. The sub-label names a
+   *  distinct fact (a date), not the region's name, so it moves up into the
+   *  head's eyebrow slot via this report-up — the same shape `onDamagedOn`
+   *  and its siblings already use on this page. */
+  onEyebrow?: (text: string | null) => void;
+}) {
   const { data: lead, isLoading } = useLead(leadId) as {
     data: Record<string, any> | undefined;
     isLoading: boolean;
   };
+
+  const eyebrow =
+    lead?.response_deadline
+      ? lead.status === 'contacted'
+        ? `Reconnect ${fmtDay(lead.response_deadline)}`
+        : `Respond by ${fmtDay(lead.response_deadline)}`
+      : null;
+  useEffect(() => {
+    onEyebrow?.(eyebrow);
+  }, [eyebrow, onEyebrow]);
 
   if (isLoading) {
     return <SectionLoadingLine label="Opening the brief" className="py-3" />;
@@ -64,19 +87,6 @@ export function BriefSection({ leadId }: { leadId: string }) {
 
   return (
     <section>
-      <div className="mb-1.5 mt-5 flex items-baseline justify-between">
-        <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">Brief</h2>
-        {lead.response_deadline && (
-          <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-            {/* R65 — response_deadline doubles as the reconnect date once
-                nurtured; the label follows the status. */}
-            {lead.status === 'contacted'
-              ? `Reconnect ${fmtDay(lead.response_deadline)}`
-              : `Respond by ${fmtDay(lead.response_deadline)}`}
-          </span>
-        )}
-      </div>
-
       {/* The captured contact — who reached out, and how they came in. */}
       {(contactName || contactEmail) && (
         <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-[var(--color-pearl)] pb-3">
