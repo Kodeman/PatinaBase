@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The open document — full bleed (D12): the paper IS the screen. No
@@ -9,9 +9,17 @@
  * presence. Esc puts down (sheet-first priority, §3).
  */
 
-import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import {
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   computeArAging,
   invoiceDaysOverdue,
@@ -32,7 +40,7 @@ import {
   useBoards,
   usePurchaseOrders,
   useResolvedSchedule,
-} from '@patina/supabase';
+} from "@patina/supabase";
 import {
   rollupVerdicts,
   formatVerdictRollup,
@@ -42,120 +50,126 @@ import {
   targetEnd,
   type Fidelity,
   type PhaseStatus,
-} from '@patina/utils';
-import { useDocumentEngagement } from '@/hooks/use-document-state';
-import { useHoldDocument } from '@/hooks/document-time-provider';
-import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
-import { useLetterheadMargin } from '@/hooks/use-letterhead-margin';
+} from "@patina/utils";
+import { useDocumentEngagement } from "@/hooks/use-document-state";
+import { useHoldDocument } from "@/hooks/document-time-provider";
+import { useMobileActiveDoc } from "@/components/document/mobile/mobile-shell";
+import { useLetterheadMargin } from "@/hooks/use-letterhead-margin";
 import {
   documentEvents,
   rememberDocumentInHand,
   readRecentDocumentsInHand,
-} from '@/lib/analytics/document-events';
-import { useDocumentPresence } from '@/hooks/use-document-presence';
-import { useProposal } from '@/hooks/use-proposals';
+} from "@/lib/analytics/document-events";
+import { useDocumentPresence } from "@/hooks/use-document-presence";
+import { useProposal } from "@/hooks/use-proposals";
 import {
   deriveSections,
   type SectionLineage,
   type SectionScheduleFacts,
-} from '@/lib/document/section-derivation';
-import { type DocumentStateRow, type SectionKey } from '@/lib/document/desk-derivation';
+} from "@/lib/document/section-derivation";
+import {
+  type DocumentStateRow,
+  type SectionKey,
+} from "@/lib/document/desk-derivation";
 import {
   paperRegionsForSection,
   type DocumentIndexKey,
-} from '@/lib/document/document-index';
-import { useDocumentRunningIndex } from '@/hooks/use-document-running-index';
-import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
+} from "@/lib/document/document-index";
+import { useDocumentRunningIndex } from "@/hooks/use-document-running-index";
+import { rankOperationalNeeds } from "@/lib/document/need-tie-break";
 import {
   deriveProposalWatch,
   deriveSendWallLine,
-} from '@/lib/document/proposal-watch-derivation';
-import { sectionAnchorId } from '@/lib/document/section-anchor';
-import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
-import { documentResolutionState } from '@/lib/document/document-resolution-state';
-import { DocSpine } from '@/components/document/doc-spine';
-import { DocLetterhead } from '@/components/document/doc-letterhead';
-import { SettledBar } from '@/components/document/settled-bar';
-import { PreviousWork } from '@/components/document/previous-work';
-import { deriveGuideModel } from '@/components/document/document-guide';
-import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-readonly';
-import { FFESection } from '@/components/document/ffe-section';
-import { ScheduleSpine } from '@/components/document/schedule/schedule-spine';
-import { RoomFilesSection } from '@/components/room-file/room-files-section';
-import { InstallWindowCeremony } from '@/components/document/schedule/install-window-ceremony';
-import { BriefSection } from '@/components/document/brief-section';
-import { BriefRecap } from '@/components/document/brief-recap';
-import {
-  CareBand,
-  type CloseoutState,
-} from '@/components/document/care-band';
-import { CareSection } from '@/components/document/quiet-sections';
-import { DiscoverySection } from '@/components/document/discovery/discovery-section';
-import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
-import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
+} from "@/lib/document/proposal-watch-derivation";
+import { sectionAnchorId } from "@/lib/document/section-anchor";
+import { fmtDay, fmtMonthYear, fmtUsd } from "@/lib/document/format";
+import { documentResolutionState } from "@/lib/document/document-resolution-state";
+import { DocSpine } from "@/components/document/doc-spine";
+import { DocLetterhead } from "@/components/document/doc-letterhead";
+import { SettledBar } from "@/components/document/settled-bar";
+import { PreviousWork } from "@/components/document/previous-work";
+import { deriveGuideModel } from "@/components/document/document-guide";
+import { ProposalBlocksReadOnly } from "@/components/document/proposal-blocks-readonly";
+import { FFESection } from "@/components/document/ffe-section";
+import { ScheduleSpine } from "@/components/document/schedule/schedule-spine";
+import { RoomFilesSection } from "@/components/room-file/room-files-section";
+import { InstallWindowCeremony } from "@/components/document/schedule/install-window-ceremony";
+import { BriefSection } from "@/components/document/brief-section";
+import { BriefRecap } from "@/components/document/brief-recap";
+import { CareBand, type CloseoutState } from "@/components/document/care-band";
+import { CareSection } from "@/components/document/quiet-sections";
+import { DiscoverySection } from "@/components/document/discovery/discovery-section";
+import { DiscoveryRecap } from "@/components/document/discovery/discovery-recap";
+import { DiscoveryMargin } from "@/components/document/discovery/discovery-margin";
 import {
   MarginRail,
   openMarginRail,
   ResponsiveMarginRail,
-} from '@/components/document/margin-rail';
-import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
-import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
-import { AccountBand } from '@/components/document/account-band';
-import { MoneyRegion } from '@/components/document/commercial/money-region';
-import { KickoffBand } from '@/components/document/roster/kickoff-band';
-import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
-import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
-import { ScheduleRuleRegion } from '@/components/document/schedule/schedule-rule-region';
-import { SectionStageLineMount } from '@/components/document/section-stage-line-mount';
-import { ProjectApprovalDocumentMount } from '@/components/document/project-approval-document-mount';
-import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
-import { CallSheetMount } from '@/components/document/roster/call-sheet-mount';
-import type { CallSheetOpenMode } from '@/components/document/roster/call-sheet';
-import { HouseholdChip } from '@/components/document/household-chip';
-import { ProposalInstruments } from '@/components/document/proposal-instruments';
-import { FolioLetterhead, ProposalFolioStrip } from '@/components/document/folio-strip';
-import { DocColophon } from '@/components/document/doc-colophon';
-import { useDocumentRooms } from '@/hooks/use-document-rooms';
-import { gateState, useSectionGates } from '@/hooks/use-section-work';
-import { deriveFillState } from '@/lib/document/fill-state';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { useHydrated } from '@/hooks/use-hydrated';
-import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
+} from "@/components/document/margin-rail";
+import { useDocumentSurface } from "@/lib/help-system/use-document-surface";
+import { DOCUMENT_SURFACE_KEYS } from "@/lib/help-system/document-surface-keys";
+import { AccountBand } from "@/components/document/account-band";
+import { MoneyRegion } from "@/components/document/commercial/money-region";
+import { KickoffBand } from "@/components/document/roster/kickoff-band";
+import { ScheduleNavProvider } from "@/components/document/schedule/schedule-nav-context";
+import { RippleProvider } from "@/components/document/schedule/schedule-ripple-context";
+import { ScheduleRuleRegion } from "@/components/document/schedule/schedule-rule-region";
+import { SectionStageLineMount } from "@/components/document/section-stage-line-mount";
+import { ProjectApprovalDocumentMount } from "@/components/document/project-approval-document-mount";
+import { LetterheadInstruments } from "@/components/document/letterhead-instruments";
+import { CallSheetMount } from "@/components/document/roster/call-sheet-mount";
+import type { CallSheetOpenMode } from "@/components/document/roster/call-sheet";
+import { HouseholdChip } from "@/components/document/household-chip";
+import { ProposalInstruments } from "@/components/document/proposal-instruments";
+import {
+  FolioLetterhead,
+  ProposalFolioStrip,
+} from "@/components/document/folio-strip";
+import { DocColophon } from "@/components/document/doc-colophon";
+import { useDocumentRooms } from "@/hooks/use-document-rooms";
+import { gateState, useSectionGates } from "@/hooks/use-section-work";
+import { deriveFillState } from "@/lib/document/fill-state";
+import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { authorizationDoorwayFor } from "@/lib/document/authorization-doorway";
 import {
   asLegacyProposalLifecycle,
   deriveDocumentGuide,
   needGuideAction,
   type DocumentGuideAction,
   type ProposalGuideFacts,
-} from '@/lib/document/document-guide';
+} from "@/lib/document/document-guide";
 import {
   composeDocumentGuideInputs,
   type DocumentGuideReadinessFacts,
-} from '@/lib/document/document-guide-inputs';
-import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
+} from "@/lib/document/document-guide-inputs";
+import { deriveGates, nearestOpenGate } from "@/lib/document/workflow-gate";
 import {
   asCommercialDocumentKind,
   asCommercialState,
   commercialDocumentExperience,
-} from '@/lib/document/commercial-documents';
-import { useDraftingState } from '@/hooks/use-drafting-state';
+} from "@/lib/document/commercial-documents";
+import { useDraftingState } from "@/hooks/use-drafting-state";
 import {
   selectOperationalNeedForDocument,
   selectOperationalNeedsForDocument,
   useDeskEngagements,
-} from '@/hooks/use-desk-engagements';
-import { callSheetPending, openLedger } from '@/components/document/command-bar';
-import { type RedLetterRow } from '@/components/document/red-letter-zone';
+} from "@/hooks/use-desk-engagements";
+import {
+  callSheetPending,
+  openLedger,
+} from "@/components/document/command-bar";
+import { type RedLetterRow } from "@/components/document/red-letter-zone";
 import {
   RoomLensProvider,
   useRoomLens,
-} from '@/components/document/room-lens-context';
-import { LensBand } from '@/components/document/lens-band';
+} from "@/components/document/room-lens-context";
+import { LensBand } from "@/components/document/lens-band";
 import {
   deriveLensBand,
   type LensReadingStop,
-} from '@/lib/document/lens-band-derivation';
-import { useLensFrame } from '@/hooks/use-lens-frame';
+} from "@/lib/document/lens-band-derivation";
+import { useLensFrame } from "@/hooks/use-lens-frame";
 import {
   deriveTicket,
   type TicketClientCopy,
@@ -166,50 +180,53 @@ import {
   type TicketRow,
   type TicketSlotKey,
   type TicketUnansweredPo,
-} from '@/lib/document/ticket-derivation';
+} from "@/lib/document/ticket-derivation";
 import {
   deriveLadderDoors,
   deriveLadderSegments,
-} from '@/lib/document/lens-ladder-derivation';
-import { deriveMoneyLadder, type MoneyLadder } from '@/lib/document/money-ladder';
-import { useMoneyLadder } from '@/hooks/use-money-ladder';
-import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
+} from "@/lib/document/lens-ladder-derivation";
+import {
+  deriveMoneyLadder,
+  type MoneyLadder,
+} from "@/lib/document/money-ladder";
+import { useMoneyLadder } from "@/hooks/use-money-ladder";
+import { selectUndrawnVendorPayments } from "@/lib/document/vendor-payouts";
 import {
   deriveLineStamp,
   OPEN_DAMAGE_CLAIM_STATES,
   type LineStampInput,
-} from '@/lib/document/stamp-derivation';
-import { deriveTableComposition } from '@/lib/document/table-derivation';
-import { useTablePin } from '@/components/document/worktable/use-table-pin';
-import { ReleaseLift } from '@/components/document/worktable/release-lift';
-import { TableFrame } from '@/components/document/worktable/table-frame';
+} from "@/lib/document/stamp-derivation";
+import { deriveTableComposition } from "@/lib/document/table-derivation";
+import { useTablePin } from "@/components/document/worktable/use-table-pin";
+import { ReleaseLift } from "@/components/document/worktable/release-lift";
+import { TableFrame } from "@/components/document/worktable/table-frame";
 import {
   markSealTurn,
   readAndClearSealTurn,
-} from '@/components/document/worktable/seal-turn';
-import type { SpeccingTableSlots } from '@/components/document/worktable/table-slots';
-import { RoomsRail } from '@/components/document/worktable/rooms-rail';
-import { Scheme } from '@/components/document/worktable/scheme';
-import { BoardsStrip } from '@/components/document/worktable/boards-strip';
-import { LibraryReachIn } from '@/components/document/worktable/library-reach-in';
-import { FinalizeHead } from '@/components/document/worktable/finalize-head';
-import { OfferFacets } from '@/components/document/worktable/offer-facets';
-import { IntakeSpreadHeader } from '@/components/document/worktable/intake-spread-header';
-import { DocumentShelves } from '@/components/document/shelves/document-shelves';
+} from "@/components/document/worktable/seal-turn";
+import type { SpeccingTableSlots } from "@/components/document/worktable/table-slots";
+import { RoomsRail } from "@/components/document/worktable/rooms-rail";
+import { Scheme } from "@/components/document/worktable/scheme";
+import { BoardsStrip } from "@/components/document/worktable/boards-strip";
+import { LibraryReachIn } from "@/components/document/worktable/library-reach-in";
+import { FinalizeHead } from "@/components/document/worktable/finalize-head";
+import { OfferFacets } from "@/components/document/worktable/offer-facets";
+import { IntakeSpreadHeader } from "@/components/document/worktable/intake-spread-header";
+import { DocumentShelves } from "@/components/document/shelves/document-shelves";
 import {
   NEW_BOARD_EVENT,
   isShelfLeafKey,
   shelfRouteFor,
   type ShelfKey,
   type ShelfLeafKey,
-} from '@/lib/document/shelves';
+} from "@/lib/document/shelves";
 
 const prettyPhase = (phase: string | null) =>
   phase
     ? phase
-        .split('_')
+        .split("_")
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ')
+        .join(" ")
     : null;
 
 type AnyRecord = any;
@@ -256,20 +273,22 @@ interface ScheduleVitals {
  * project-level target the header may state, band-honest, at month precision.
  */
 function targetVitalFor(
-  target: ScheduleVitals['target'],
+  target: ScheduleVitals["target"],
   projectTargetEndDate: string | null | undefined,
 ): string | null {
   if (!target.date) {
-    return projectTargetEndDate ? `Target ~${fmtMonthYear(projectTargetEndDate)}` : null;
+    return projectTargetEndDate
+      ? `Target ~${fmtMonthYear(projectTargetEndDate)}`
+      : null;
   }
   const month = fmtMonthYear(target.date);
   switch (target.fidelity) {
-    case 'committed':
-    case 'record':
+    case "committed":
+    case "record":
       return `Target ${month}`;
-    case 'frame':
+    case "frame":
       return `Target ~${month}`;
-    case 'band':
+    case "band":
       return `Target band · ${month}`;
   }
 }
@@ -285,16 +304,16 @@ function deskEnrichmentApplies(row: DocumentStateRow | null): boolean {
   if (!row || row.is_paused || row.is_archived) return false;
   return Boolean(
     row.project_id ||
-      (row.engagement_kind === 'proposal' && row.proposal_id) ||
-      (row.engagement_kind === 'lead' && row.lead_id),
+    (row.engagement_kind === "proposal" && row.proposal_id) ||
+    (row.engagement_kind === "lead" && row.lead_id),
   );
 }
 
 /** The two Speccing tools the ticket's Rooms and Boards rows anchor to. A
  *  module constant so the mounts' memos see one identity across renders. */
 const SPECCING_TICKET_SLOTS: readonly TicketSlotKey[] = [
-  'rooms-rail',
-  'boards-strip',
+  "rooms-rail",
+  "boards-strip",
 ];
 
 function vitalsFor(
@@ -306,26 +325,35 @@ function vitalsFor(
   // Project + proposal carry the client as a first-class subtitle (the
   // HouseholdChip in the title block), so the vitals drop the client name to
   // avoid showing it twice — they state the phase/target/money only.
-  if (row.engagement_kind === 'project') {
+  if (row.engagement_kind === "project") {
     return [
-      (schedule ? schedule.activePhaseName : null) ?? prettyPhase(row.current_phase),
+      (schedule ? schedule.activePhaseName : null) ??
+        prettyPhase(row.current_phase),
       // While the schedule loads the header states no target at all — a firmer
       // claim that later softens would be the same lie, briefly.
-      schedule ? targetVitalFor(schedule.target, project?.target_end_date) : null,
-      project?.total_amount_cents != null ? fmtUsd(project.total_amount_cents) : null,
+      schedule
+        ? targetVitalFor(schedule.target, project?.target_end_date)
+        : null,
+      project?.total_amount_cents != null
+        ? fmtUsd(project.total_amount_cents)
+        : null,
     ]
       .filter(Boolean)
-      .join(' · ');
+      .join(" · ");
   }
-  if (row.engagement_kind === 'proposal') {
-    return [proposal?.total_amount != null ? `${fmtUsd(proposal.total_amount)} proposed` : null]
+  if (row.engagement_kind === "proposal") {
+    return [
+      proposal?.total_amount != null
+        ? `${fmtUsd(proposal.total_amount)} proposed`
+        : null,
+    ]
       .filter(Boolean)
-      .join(' · ');
+      .join(" · ");
   }
-  if (row.engagement_kind === 'lead') {
-    return [row.client_name, 'New inquiry'].filter(Boolean).join(' · ');
+  if (row.engagement_kind === "lead") {
+    return [row.client_name, "New inquiry"].filter(Boolean).join(" · ");
   }
-  return [row.client_name, 'In discovery'].filter(Boolean).join(' · ');
+  return [row.client_name, "In discovery"].filter(Boolean).join(" · ");
 }
 
 /**
@@ -503,7 +531,7 @@ function ProjectTicketFacts({
   );
 
   const boardsCount =
-    (liveBoardsQuery.data ?? []).filter((board) => board.status !== 'archived')
+    (liveBoardsQuery.data ?? []).filter((board) => board.status !== "archived")
       .length + (signedBoardsQuery.data ?? []).length;
 
   const paperRegionKeys = useMemo(
@@ -560,7 +588,11 @@ function ProjectTicketFacts({
       clientCopy:
         copySettled == null || copySent == null
           ? null
-          : { settled: copySettled, sent: copySent, failed: copyFailed ?? false },
+          : {
+              settled: copySettled,
+              sent: copySent,
+              failed: copyFailed ?? false,
+            },
       paperRegions: paperRegionKeys,
     }),
     [
@@ -649,7 +681,7 @@ function ProjectlessTicketFacts({
     () =>
       (scopeRoomsQuery.data ?? []).map((room) => ({
         id: room.id,
-        name: room.name ?? 'Room',
+        name: room.name ?? "Room",
       })),
     [scopeRoomsQuery.data],
   );
@@ -659,14 +691,14 @@ function ProjectlessTicketFacts({
         // A proposal line has no movement — nothing is ordered from a document
         // that has not become a project — so every line reads as the schedule's
         // own `specified` register and the census counts it `not ordered yet`.
-        stamp: 'specified' as const,
+        stamp: "specified" as const,
         roomId: item.scope_room_id ?? null,
         specified: Boolean(item.product_id),
       })),
     [proposalItemsQuery.data],
   );
   const boardsCount = (proposalBoardsQuery.data ?? []).filter(
-    (board) => board.status !== 'archived',
+    (board) => board.status !== "archived",
   ).length;
 
   const paperRegionKeys = useMemo(
@@ -707,7 +739,11 @@ function ProjectlessTicketFacts({
       clientCopy:
         copySettled == null || copySent == null
           ? null
-          : { settled: copySettled, sent: copySent, failed: copyFailed ?? false },
+          : {
+              settled: copySettled,
+              sent: copySent,
+              failed: copyFailed ?? false,
+            },
       paperRegions: paperRegionKeys,
     }),
     [
@@ -789,7 +825,11 @@ function ladderFactsSignature(input: TicketInput): string {
   });
 }
 
-export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+export default function DocumentPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   // F2 — the body is keyed on the document id so picking up a DIFFERENT
   // document is a fresh mount by our own construction, not by trusting the
   // router to remount a segment whose param changed. What depends on it: the
@@ -815,7 +855,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // Start to Signature W2 — the Worktable composes the paper's middle. Fails
   // closed: with the flag off this page prints exactly the composition it has
   // always printed, and every fixed part of the paper is identical either way.
-  const worktableOn = useFeatureFlag('worktable').value;
+  const worktableOn = useFeatureFlag("worktable").value;
 
   const {
     data: resolution,
@@ -824,32 +864,40 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     isError,
     refetch: retryDocumentResolution,
   } = useDocumentEngagement(id);
-  const row = resolution?.kind === 'engagement' ? resolution.row : null;
-  const projectId = row?.project_id ?? '';
-  const proposalId = row?.proposal_id ?? '';
+  const row = resolution?.kind === "engagement" ? resolution.row : null;
+  const projectId = row?.project_id ?? "";
+  const proposalId = row?.proposal_id ?? "";
 
-  const { data: project, isLoading: projectIsLoading, isError: projectIsError } = useProjectV2(projectId) as {
+  const {
+    data: project,
+    isLoading: projectIsLoading,
+    isError: projectIsError,
+  } = useProjectV2(projectId) as {
     data: AnyRecord;
     isLoading: boolean;
     isError: boolean;
   };
-  const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
+  const { data: phases } = useProjectPhases(projectId) as {
+    data: AnyRecord[] | undefined;
+  };
   // W4: the same key ProjectApprovalDocument already holds hot — read here only
   // to count what is drafted and unsent, for the recap line.
   const approvalsQuery = useProjectApprovals(projectId || undefined);
   // R108/R111 — one derivation, several mouths: the letterhead vitals, the
   // Project sub-label, and the Install sub-label all read this.
   const scheduleQuery = useResolvedSchedule(projectId || undefined);
-  const { data: liveProposal, isError: proposalIsError } = useProposal(proposalId) as {
+  const { data: liveProposal, isError: proposalIsError } = useProposal(
+    proposalId,
+  ) as {
     data: any;
     isError: boolean;
   };
   const discoveryQuery = useDiscovery(
-    row?.active_section === 'discovery' ? row.engagement_id : null,
+    row?.active_section === "discovery" ? row.engagement_id : null,
   );
   const draftingState = useDraftingState(
     proposalId,
-    row?.active_section === 'direction' && Boolean(proposalId),
+    row?.active_section === "direction" && Boolean(proposalId),
   );
   const deskEnrichment = deskEnrichmentApplies(row);
   const enrichedOperationalQuery = useDeskEngagements({
@@ -861,7 +909,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // it there would let a composition that never covered this document answer
   // "no need" for it.
   const enrichedOperationalNeed = deskEnrichment
-    ? selectOperationalNeedForDocument(enrichedOperationalQuery.data, row?.engagement_id)
+    ? selectOperationalNeedForDocument(
+        enrichedOperationalQuery.data,
+        row?.engagement_id,
+      )
     : undefined;
   // The letterhead's red-letter zone (project documents only): every need this
   // document is carrying, printed once, instead of the guide's single sentence.
@@ -871,7 +922,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // pass deriveNeeds the invoice/schedule facts the Desk holds, so that
   // fallback silently printed a SHORT list as if it were the whole list.
   const enrichedOperationalNeeds = deskEnrichment
-    ? selectOperationalNeedsForDocument(enrichedOperationalQuery.data, row?.engagement_id)
+    ? selectOperationalNeedsForDocument(
+        enrichedOperationalQuery.data,
+        row?.engagement_id,
+      )
     : undefined;
   // One clock for the document: the margin's overdue stamp and the guide's
   // sentence read the same instant, so they cannot disagree across a midnight.
@@ -912,11 +966,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   });
   const others = useDocumentPresence(row?.engagement_id ?? null);
   const designerClientId =
-    row?.engagement_kind === 'relationship'
+    row?.engagement_kind === "relationship"
       ? row.engagement_id
-      : row?.engagement_kind === 'proposal'
+      : row?.engagement_kind === "proposal"
         ? (liveProposal?.designer_client_id ?? null)
-        : row?.engagement_kind === 'project'
+        : row?.engagement_kind === "project"
           ? (project?.proposal?.designer_client_id ?? null)
           : null;
 
@@ -931,7 +985,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       rollupVerdicts(
         totalLines,
         proposalFeedback.map((f) => ({
-          lineId: f.proposal_item_id ?? '',
+          lineId: f.proposal_item_id ?? "",
           verdict: f.verdict,
           createdAt: f.created_at,
           resolvedAt: f.resolved_at,
@@ -959,7 +1013,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const settledCountRef = useRef(0);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
-  const [pendingNoteAnchor, setPendingNoteAnchor] = useState<string | null>(null);
+  const [pendingNoteAnchor, setPendingNoteAnchor] = useState<string | null>(
+    null,
+  );
   // The Call Sheet (Wave 3) — an overlay, never a section (D1). Closed by
   // default; the letterhead instrument and ⌘K's "This surface" row both
   // dispatch document:open-call-sheet rather than holding their own state.
@@ -989,7 +1045,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }, []);
   // FIX 2 — the event's optional { mode } detail (default 'sheet'), read off
   // whichever dispatch opened it and forwarded straight through to CallSheet.
-  const [callSheetMode, setCallSheetMode] = useState<CallSheetOpenMode>('sheet');
+  const [callSheetMode, setCallSheetMode] =
+    useState<CallSheetOpenMode>("sheet");
   // The shelves — one leaf open at a time, beside the spine. The call sheet is
   // not one of them: it is a doorway to the roster sheet mounted below.
   const [openShelf, setOpenShelf] = useState<ShelfLeafKey | null>(null);
@@ -1001,48 +1058,56 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
   // Click a spine marker (or a settled bar): unfold that phase and scroll to it.
   // The active phase has no settled bar — the scroll just lands on its section.
-  const jumpToSection = useCallback((key: SectionKey, focusId?: string, activate = false) => {
-    if (key !== row?.active_section && !historyOpen) {
-      setHistoryOpen(true);
-      documentEvents.historyToggled({
-        expanded: true,
-        completed_count: settledCountRef.current,
-      });
-    }
-    setOpenSection(key);
-    // A margin-owned anchor lives in a sheet that is `inert` while closed, so
-    // focus would silently no-op. Raise it before the focus frame.
-    if (focusId?.startsWith('document-handoff-')) openMarginRail();
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const section = document.getElementById(sectionAnchorId(key));
-        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        section?.scrollIntoView({
-          block: 'start',
-          behavior: reduceMotion ? 'auto' : 'smooth',
+  const jumpToSection = useCallback(
+    (key: SectionKey, focusId?: string, activate = false) => {
+      if (key !== row?.active_section && !historyOpen) {
+        setHistoryOpen(true);
+        documentEvents.historyToggled({
+          expanded: true,
+          completed_count: settledCountRef.current,
         });
-        const responsiveFocusId =
-          focusId === 'document-pulse-control'
-            ? `${focusId}-${window.matchMedia?.('(min-width: 1180px)').matches ? 'desktop' : 'mobile'}`
-            : focusId;
-        const focusTarget =
-          (responsiveFocusId ? document.getElementById(responsiveFocusId) : null) ??
-          section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
-        focusTarget?.focus({ preventScroll: true });
-        // Idempotence rests on the target declaring its own state: an expandable
-        // focus target must publish aria-expanded, or a second activation would
-        // toggle it shut. Non-expandable targets (the mobile margin chip, which
-        // opens a sheet rather than toggling) carry none and stay safe to press.
-        if (
-          activate &&
-          focusTarget instanceof HTMLButtonElement &&
-          focusTarget.getAttribute('aria-expanded') !== 'true'
-        ) {
-          focusTarget.click();
-        }
+      }
+      setOpenSection(key);
+      // A margin-owned anchor lives in a sheet that is `inert` while closed, so
+      // focus would silently no-op. Raise it before the focus frame.
+      if (focusId?.startsWith("document-handoff-")) openMarginRail();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const section = document.getElementById(sectionAnchorId(key));
+          const reduceMotion = window.matchMedia?.(
+            "(prefers-reduced-motion: reduce)",
+          ).matches;
+          section?.scrollIntoView({
+            block: "start",
+            behavior: reduceMotion ? "auto" : "smooth",
+          });
+          const responsiveFocusId =
+            focusId === "document-pulse-control"
+              ? `${focusId}-${window.matchMedia?.("(min-width: 1180px)").matches ? "desktop" : "mobile"}`
+              : focusId;
+          const focusTarget =
+            (responsiveFocusId
+              ? document.getElementById(responsiveFocusId)
+              : null) ??
+            section?.querySelector<HTMLElement>("[data-settled-heading]") ??
+            section;
+          focusTarget?.focus({ preventScroll: true });
+          // Idempotence rests on the target declaring its own state: an expandable
+          // focus target must publish aria-expanded, or a second activation would
+          // toggle it shut. Non-expandable targets (the mobile margin chip, which
+          // opens a sheet rather than toggling) carry none and stay safe to press.
+          if (
+            activate &&
+            focusTarget instanceof HTMLButtonElement &&
+            focusTarget.getAttribute("aria-expanded") !== "true"
+          ) {
+            focusTarget.click();
+          }
+        });
       });
-    });
-  }, [historyOpen, row?.active_section]);
+    },
+    [historyOpen, row?.active_section],
+  );
 
   // D13: the mobile spine sheet lives outside this React tree — it asks for a
   // section jump via a CustomEvent (mirrors the account sheet's open-account).
@@ -1051,8 +1116,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       const key = (e as CustomEvent).detail as SectionKey | undefined;
       if (key) jumpToSection(key);
     };
-    window.addEventListener('document:open-section', onOpenSection);
-    return () => window.removeEventListener('document:open-section', onOpenSection);
+    window.addEventListener("document:open-section", onOpenSection);
+    return () =>
+      window.removeEventListener("document:open-section", onOpenSection);
   }, [jumpToSection]);
 
   // The Call Sheet's doorways (⌘K, the letterhead instrument, the kickoff
@@ -1060,20 +1126,23 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // above. A no-op off a project document (the sheet below never mounts).
   useEffect(() => {
     const onOpenCallSheet = (e: Event) => {
-      const mode = (e as CustomEvent<{ mode?: CallSheetOpenMode }>).detail?.mode ?? 'sheet';
+      const mode =
+        (e as CustomEvent<{ mode?: CallSheetOpenMode }>).detail?.mode ??
+        "sheet";
       setCallSheetMode(mode);
       setCallSheetOpen(true);
     };
-    window.addEventListener('document:open-call-sheet', onOpenCallSheet);
+    window.addEventListener("document:open-call-sheet", onOpenCallSheet);
     // A ⌘K row that named a document NOT in hand walked here instead of
     // dispatching into a page that had no listener yet; the flag is the
     // intent, read and cleared once on arrival (openCaptureLead's pattern).
     if (callSheetPending.value) {
       callSheetPending.value = false;
-      setCallSheetMode('sheet');
+      setCallSheetMode("sheet");
       setCallSheetOpen(true);
     }
-    return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
+    return () =>
+      window.removeEventListener("document:open-call-sheet", onOpenCallSheet);
   }, []);
 
   // DL-04 — the sections sheet's fifth door (`The client's copy`). The sheet
@@ -1086,8 +1155,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       if (!leaf) return;
       setOpenShelf((current) => (current === leaf ? null : leaf));
     };
-    window.addEventListener('document:open-leaf', onOpenLeaf);
-    return () => window.removeEventListener('document:open-leaf', onOpenLeaf);
+    window.addEventListener("document:open-leaf", onOpenLeaf);
+    return () => window.removeEventListener("document:open-leaf", onOpenLeaf);
   }, []);
 
   // R25 rooms (spine-sheet jump rows + headings) · R23 gates (settled stamps).
@@ -1100,7 +1169,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // R6: an activated proposal's id redirects to its project document —
   // pre-signing links survive the signing moment. replace(), not push.
   useEffect(() => {
-    if (resolution?.kind !== 'redirect') return;
+    if (resolution?.kind !== "redirect") return;
     // W2 — the turn the seal performs is announced on the destination's paper.
     if (worktableOn) markSealTurn(resolution.projectId);
     router.replace(`/doc/${resolution.projectId}`);
@@ -1118,12 +1187,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // which keeps its own place on the page; the disclosure below it only ever
   // holds settled bars.
   const openApprovals = useCallback(() => {
-    const section = document.querySelector<HTMLElement>('[data-project-approval-document]');
+    const section = document.querySelector<HTMLElement>(
+      "[data-project-approval-document]",
+    );
     if (!section) return;
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    section.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+    const reduceMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    section.scrollIntoView({
+      block: "start",
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
     const target =
-      section.querySelector<HTMLElement>('#project-approvals-title') ?? section;
+      section.querySelector<HTMLElement>("#project-approvals-title") ?? section;
     target.focus({ preventScroll: true });
   }, []);
 
@@ -1132,13 +1208,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // open shelf leaf (ShelfPanel closes it); only a bare document is put down.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== "Escape") return;
       if (document.querySelector('[role="dialog"]')) return;
       if (openShelf) return;
-      router.push('/desk');
+      router.push("/desk");
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [router, openShelf]);
 
   // The shelf rows. A leaf toggles; the call sheet dispatches at the roster
@@ -1146,7 +1222,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const toggleShelf = useCallback((key: ShelfKey) => {
     if (!isShelfLeafKey(key)) {
       window.dispatchEvent(
-        new CustomEvent('document:open-call-sheet', { detail: { mode: 'sheet' } }),
+        new CustomEvent("document:open-call-sheet", {
+          detail: { mode: "sheet" },
+        }),
       );
       return;
     }
@@ -1161,14 +1239,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // H4 — the band's one reversing act: pressing the household on line 1 puts
   // the reader back at the top of the paper, focus on the letterhead itself.
   const toTop = useCallback(() => {
-    const head = document.getElementById('document-project-status');
+    const head = document.getElementById("document-project-status");
     if (!head) return;
     const reduceMotion = window.matchMedia?.(
-      '(prefers-reduced-motion: reduce)',
+      "(prefers-reduced-motion: reduce)",
     ).matches;
     head.scrollIntoView({
-      block: 'start',
-      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: "start",
+      behavior: reduceMotion ? "auto" : "smooth",
     });
     head.focus({ preventScroll: true });
   }, []);
@@ -1178,7 +1256,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // listening — the guard is the shelf's own state, so the re-fire cannot loop.
   const forwardBoardIntent = useRef(false);
   const shelvesAvailable =
-    row?.active_section === 'project' && Boolean(row?.project_id);
+    row?.active_section === "project" && Boolean(row?.project_id);
   useEffect(() => {
     // Only where the shelves are actually on the rail. Off the Project
     // section there is no mood-board room to open and no shelf row to press,
@@ -1187,16 +1265,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     if (!shelvesAvailable) return;
     const onNewBoard = () => {
       setOpenShelf((current) => {
-        if (current === 'moodboards') return current;
+        if (current === "moodboards") return current;
         forwardBoardIntent.current = true;
-        return 'moodboards';
+        return "moodboards";
       });
     };
     window.addEventListener(NEW_BOARD_EVENT, onNewBoard);
     return () => window.removeEventListener(NEW_BOARD_EVENT, onNewBoard);
   }, [shelvesAvailable]);
   useEffect(() => {
-    if (openShelf !== 'moodboards' || !forwardBoardIntent.current) return;
+    if (openShelf !== "moodboards" || !forwardBoardIntent.current) return;
     forwardBoardIntent.current = false;
     window.dispatchEvent(new CustomEvent(NEW_BOARD_EVENT));
   }, [openShelf]);
@@ -1213,17 +1291,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     if (!row || landedRef.current) return;
     landedRef.current = true;
-    const seenBefore = readRecentDocumentsInHand().some((d) => d.id === row.engagement_id);
+    const seenBefore = readRecentDocumentsInHand().some(
+      (d) => d.id === row.engagement_id,
+    );
     if (!seenBefore) return;
-    const el = mainRef.current?.querySelector('[data-active-section]');
+    const el = mainRef.current?.querySelector("[data-active-section]");
     if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
-      el.scrollIntoView({ block: 'start' });
+      el.scrollIntoView({ block: "start" });
     }
   }, [row]);
 
   // Lineage (R1): activating proposal for signed work; live proposal pre-signing.
   const lineage: SectionLineage | null = useMemo(() => {
-    const src = row?.engagement_kind === 'project' ? project?.proposal : liveProposal;
+    const src =
+      row?.engagement_kind === "project" ? project?.proposal : liveProposal;
     if (!src) return null;
     return {
       createdAt: src.created_at ?? null,
@@ -1237,30 +1318,41 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // Sections are derived above the early returns so the mobile shell hook
   // (D13) can publish them unconditionally (rules of hooks). Guarded for the
   // pre-resolution null row.
-  const installPhase = (phases ?? []).find((p) => p.phase_key === 'installation');
+  const installPhase = (phases ?? []).find(
+    (p) => p.phase_key === "installation",
+  );
   const scheduleFacts = useMemo<SectionScheduleFacts | null>(() => {
     const resolved = scheduleQuery.resolved;
     if (!resolved) return null;
     const statuses = new Map<string, PhaseStatus>(
-      scheduleQuery.phases.map((p) => [p.id, (p.status ?? 'pending') as PhaseStatus]),
+      scheduleQuery.phases.map((p) => [
+        p.id,
+        (p.status ?? "pending") as PhaseStatus,
+      ]),
     );
     const sortOrders = new Map<string, number>(
       scheduleQuery.phases.map((p) => [p.id, p.sort_order ?? 0]),
     );
     const today = new Date().toISOString().slice(0, 10);
     const selection = selectActivePhase(resolved, statuses, today, sortOrders);
-    const active = resolved.phases.find((p) => p.id === selection.activePhaseId) ?? null;
+    const active =
+      resolved.phases.find((p) => p.id === selection.activePhaseId) ?? null;
     const installResolved = installPhase
       ? (resolved.phases.find((p) => p.id === installPhase.id) ?? null)
       : null;
     return {
       selection,
-      fidelity: active ? phaseFidelity(active, statuses.get(active.id) ?? 'pending') : 'band',
+      fidelity: active
+        ? phaseFidelity(active, statuses.get(active.id) ?? "pending")
+        : "band",
       positionText: positionText(resolved, selection, today),
       install: installResolved
         ? {
             date: installResolved.start,
-            fidelity: phaseFidelity(installResolved, statuses.get(installResolved.id) ?? 'pending'),
+            fidelity: phaseFidelity(
+              installResolved,
+              statuses.get(installResolved.id) ?? "pending",
+            ),
           }
         : null,
     };
@@ -1298,27 +1390,28 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // Schedule line both read the derivation above. Neither computes a second
   // position sentence that could drift from the letterhead's.
   const scheduleRuleSummary = useMemo(() => {
-    if (!scheduleFacts) return 'Phase dates';
+    if (!scheduleFacts) return "Phase dates";
     const install = scheduleFacts.install;
     const installText =
       install?.date != null
-        ? install.fidelity === 'committed' || install.fidelity === 'record'
+        ? install.fidelity === "committed" || install.fidelity === "record"
           ? `Install ${fmtMonthYear(install.date)}`
           : `Install ~${fmtMonthYear(install.date)}`
         : null;
-    return [scheduleFacts.positionText, installText].filter(Boolean).join(' · ');
+    return [scheduleFacts.positionText, installText]
+      .filter(Boolean)
+      .join(" · ");
   }, [scheduleFacts]);
 
   const sections = row
-    ? deriveSections(
-        {
-          row,
-          lineage,
-          schedule: scheduleFacts,
-          lineageResolved:
-            row.engagement_kind !== 'project' || (!projectIsLoading && !projectIsError),
-        },
-      )
+    ? deriveSections({
+        row,
+        lineage,
+        schedule: scheduleFacts,
+        lineageResolved:
+          row.engagement_kind !== "project" ||
+          (!projectIsLoading && !projectIsError),
+      })
     : [];
   // The wall's own line, for the proposal stage's dated headline and SP-12's
   // live verb. Built here rather than through `useProposalWatch` because the
@@ -1357,23 +1450,32 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         projectId: liveProposal.project_id ?? null,
       }
     : null;
-  const discoveryReadiness: DocumentGuideReadinessFacts['discovery'] = discoveryQuery.isError
-    ? { state: 'error' }
-    : discoveryQuery.isLoading
-      ? { state: 'loading' }
-      : discoveryQuery.data
-        ? { state: 'ready', data: discoveryQuery.data.row ?? discoveryQuery.data.prefill ?? {} }
-        : { state: 'idle' };
-  const draftingReadiness: DocumentGuideReadinessFacts['drafting'] = draftingState.error
-    ? { state: 'error' }
-    : draftingState.isLoading
-      ? { state: 'loading' }
-      : { state: 'ready', data: { gaps: draftingState.gaps } };
+  const discoveryReadiness: DocumentGuideReadinessFacts["discovery"] =
+    discoveryQuery.isError
+      ? { state: "error" }
+      : discoveryQuery.isLoading
+        ? { state: "loading" }
+        : discoveryQuery.data
+          ? {
+              state: "ready",
+              data:
+                discoveryQuery.data.row ?? discoveryQuery.data.prefill ?? {},
+            }
+          : { state: "idle" };
+  const draftingReadiness: DocumentGuideReadinessFacts["drafting"] =
+    draftingState.error
+      ? { state: "error" }
+      : draftingState.isLoading
+        ? { state: "loading" }
+        : { state: "ready", data: { gaps: draftingState.gaps } };
   const guideInputs = row
     ? composeDocumentGuideInputs({
         row,
         proposal: proposalGuideFacts,
-        readiness: { discovery: discoveryReadiness, drafting: draftingReadiness },
+        readiness: {
+          discovery: discoveryReadiness,
+          drafting: draftingReadiness,
+        },
       })
     : [];
   // A3-L7's rest states read an empty `guideInputs` as "nothing outstanding".
@@ -1381,25 +1483,30 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // flight, so the stage would announce itself finished on a fact nobody has
   // stated yet. Pending is not quiet.
   const guideInputsPending =
-    (row?.active_section === 'discovery' && discoveryReadiness.state !== 'ready') ||
-    (row?.active_section === 'direction' && draftingReadiness.state !== 'ready');
+    (row?.active_section === "discovery" &&
+      discoveryReadiness.state !== "ready") ||
+    (row?.active_section === "direction" &&
+      draftingReadiness.state !== "ready");
   // A failed Desk read only blanks guidance that depended on it. A document its
   // side feeds never key on keeps its own truthful guidance through the outage.
   const deskGuidanceFailed = deskEnrichment && enrichedOperationalQuery.isError;
   const guideUnavailable = Boolean(
-    row && (
-      deskGuidanceFailed ||
-      (row.engagement_kind === 'project' && projectIsError) ||
-      ((row.active_section === 'direction' || row.active_section === 'proposal') && proposalIsError) ||
-      (row.active_section === 'discovery' && discoveryQuery.isError) ||
-      (row.active_section === 'direction' && draftingState.error)
-    ),
+    row &&
+    (deskGuidanceFailed ||
+      (row.engagement_kind === "project" && projectIsError) ||
+      ((row.active_section === "direction" ||
+        row.active_section === "proposal") &&
+        proposalIsError) ||
+      (row.active_section === "discovery" && discoveryQuery.isError) ||
+      (row.active_section === "direction" && draftingState.error)),
   );
   // B2 — the eight rows the ticket is printing, reported up by its mount. The
   // guide's leader is elected from these, so it can never name something the
   // map on the same paper does not show. Null on a document with no ticket,
   // and null until the mount's first report.
-  const [ticketRows, setTicketRows] = useState<readonly TicketRow[] | null>(null);
+  const [ticketRows, setTicketRows] = useState<readonly TicketRow[] | null>(
+    null,
+  );
   // W2 design review, item 11 — reported by the ticket mount, which is where
   // the FF&E read (and its `damage_claims` embed) already stands.
   const [damagedOn, setDamagedOn] = useState<string | null>(null);
@@ -1434,7 +1541,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const guideModel = row
     ? deriveDocumentGuide({
         row,
-        availability: guideUnavailable ? 'unavailable' : 'ready',
+        availability: guideUnavailable ? "unavailable" : "ready",
         retryAvailable: deskGuidanceFailed,
         proposal: proposalGuideFacts
           ? { ...proposalGuideFacts, sendWall: sendWallLine }
@@ -1451,19 +1558,24 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // Split from activateGuide so the red-letter zone's per-need actions (below)
   // can reach the same switch without going through the guide's own model.
   const activateDestination = useCallback(
-    (destination: DocumentGuideAction['destination']) => {
-      if (destination.kind === 'retry') {
+    (destination: DocumentGuideAction["destination"]) => {
+      if (destination.kind === "retry") {
         void enrichedOperationalQuery.refetch();
         return;
       }
-      if (destination.kind === 'anchor') {
-        jumpToSection(destination.section, destination.focusId, destination.activate);
+      if (destination.kind === "anchor") {
+        jumpToSection(
+          destination.section,
+          destination.focusId,
+          destination.activate,
+        );
       }
-      if (destination.kind === 'ledger') openLedger(destination.name, destination.context);
+      if (destination.kind === "ledger")
+        openLedger(destination.name, destination.context);
       // W3 — the guide's deep links used to be an `<a href>` the zone rendered
       // itself. The band prints one act, as a press, so the switch has to carry
       // the fourth destination or a deep-linked guide act would open nothing.
-      if (destination.kind === 'href') router.push(destination.href);
+      if (destination.kind === "href") router.push(destination.href);
     },
     [enrichedOperationalQuery, jumpToSection, router],
   );
@@ -1474,11 +1586,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }, [activateDestination, guideModel]);
 
   const redLetterRows: RedLetterRow[] = useMemo(() => {
-    if (!row || row.engagement_kind !== 'project') return [];
+    if (!row || row.engagement_kind !== "project") return [];
     const needs = rankedOperationalNeeds;
     if (!needs) return [];
     return needs.map((need, index) => {
-      const action = needGuideAction(need, row.active_section, row.project_id ?? null);
+      const action = needGuideAction(
+        need,
+        row.active_section,
+        row.project_id ?? null,
+      );
       return {
         key: `${need.kind}-${index}`,
         kind: need.kind,
@@ -1498,7 +1614,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // own observer went with `spine-shelved-blocks.tsx`; the ladder is handed
   // `activeKey` and `jump` as props.
   const runningIndexRegions =
-    row?.engagement_kind === 'project' && row.project_id
+    row?.engagement_kind === "project" && row.project_id
       ? paperRegionsForSection(row.active_section)
       : [];
   const {
@@ -1507,7 +1623,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     mountedKeys,
   } = useDocumentRunningIndex(
     runningIndexRegions.map((region) => region.key),
-    row?.project_id ?? '',
+    row?.project_id ?? "",
   );
 
   // W3 · the two yields the lens line needs: whether the letterhead is still in
@@ -1520,7 +1636,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // early returns below, alongside the page's other hooks. The roster fetch is
   // gated on the flag so a cohort without it doesn't pay for a query neither
   // the kickoff band nor the instrument will render from.
-  const callSheetGate = useFeatureFlag('call-sheet');
+  const callSheetGate = useFeatureFlag("call-sheet");
 
   // W2 · THE LADDER — one segment per stop the spread puts on the paper, and
   // the doors filed beneath them. Derived once, here, and printed twice: by
@@ -1535,7 +1651,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // for good.
   const unsettledApprovals = approvalRecords.filter(
     (approval) =>
-      approval.disposition === 'active' && approval.outcome !== 'approved',
+      approval.disposition === "active" && approval.outcome !== "approved",
   );
   const overdueApprovals = unsettledApprovals.filter(
     (approval) => approval.isOverdue,
@@ -1571,8 +1687,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             ? Math.max(
                 0,
                 Math.floor(
-                  (gateNow.getTime() -
-                    new Date(oldestOverdueDueAt).getTime()) /
+                  (gateNow.getTime() - new Date(oldestOverdueDueAt).getTime()) /
                     86_400_000,
                 ),
               )
@@ -1590,7 +1705,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         },
         record: {
           settled: true,
-          complete: sections.filter((section) => section.state === 'settled')
+          complete: sections.filter((section) => section.state === "settled")
             .length,
         },
         // The carrier window on the damaged line: the oldest open damage
@@ -1609,20 +1724,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         // the door opens.
         callSheetEnabled: callSheetGate.value,
         routes: {
-          planroom: shelfRouteFor('planroom', id),
-          specbook: shelfRouteFor('specbook', id),
-          moodboards: shelfRouteFor('moodboards', id),
+          planroom: shelfRouteFor("planroom", id),
+          specbook: shelfRouteFor("specbook", id),
+          moodboards: shelfRouteFor("moodboards", id),
           // Null, both of them: the call sheet is an overlay and the client's
           // copy is reached by the Preview act below 1440 (`shelves.ts`), so
           // each stays a press rather than becoming a link to nowhere.
-          callsheet: shelfRouteFor('callsheet', id),
-          clientcopy: shelfRouteFor('clientcopy', id),
+          callsheet: shelfRouteFor("callsheet", id),
+          clientcopy: shelfRouteFor("clientcopy", id),
         },
         onOpenLeaf: toggleShelf,
         onOpenCallSheet: () =>
           window.dispatchEvent(
-            new CustomEvent('document:open-call-sheet', {
-              detail: { mode: 'sheet' },
+            new CustomEvent("document:open-call-sheet", {
+              detail: { mode: "sheet" },
             }),
           ),
         onReleaseRoom: () => {
@@ -1646,7 +1761,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const { count: letterheadMarginCount } = useLetterheadMargin({
     projectId: row?.project_id ?? null,
     proposalId: row?.proposal_id ?? null,
-    clientName: row?.client_name ?? '',
+    clientName: row?.client_name ?? "",
   });
 
   // D13: publish the held document to the mobile shell (bar + spine sheet).
@@ -1674,7 +1789,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const heldTitle = row?.title ?? null;
   const heldSubtitle = row?.client_name ?? null;
   useEffect(() => {
-    rememberDocumentInHand(heldEngagementId, { title: heldTitle, subtitle: heldSubtitle });
+    rememberDocumentInHand(heldEngagementId, {
+      title: heldTitle,
+      subtitle: heldSubtitle,
+    });
   }, [heldEngagementId, heldTitle, heldSubtitle]);
 
   // W2 — which table the paper composes as, and the pin that holds it still.
@@ -1716,7 +1834,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }, [worktableOn, arrivedProjectId]);
 
   const rosterProjectId =
-    callSheetGate.value && row?.engagement_kind === 'project' && row.project_id
+    callSheetGate.value && row?.engagement_kind === "project" && row.project_id
       ? row.project_id
       : null;
   const { data: rosterRows, isLoading: rosterLoading } =
@@ -1732,7 +1850,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // SSR always starts with an empty engagement cache, while client navigation
   // can arrive with a warm React Query cache. Hold the first client paint to
   // the server's loading tree so those two render contracts cannot diverge.
-  if (!hydrated || resolutionState === 'loading') {
+  if (!hydrated || resolutionState === "loading") {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
         <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
@@ -1742,7 +1860,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     );
   }
 
-  if (resolutionState === 'error') {
+  if (resolutionState === "error") {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)] px-10 py-12">
         <p className="mb-3 font-heading text-[16px] text-[var(--color-charcoal)]">
@@ -1764,7 +1882,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     );
   }
 
-  if (resolutionState === 'missing' || !row) {
+  if (resolutionState === "missing" || !row) {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)] px-10 py-12">
         <p className="mb-3 font-heading text-[16px] text-[var(--color-charcoal)]">
@@ -1780,12 +1898,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     );
   }
 
-  const settled = sections.filter((s) => s.state === 'settled');
+  const settled = sections.filter((s) => s.state === "settled");
   settledCountRef.current = settled.length;
   // The band's stage word where no phase is placed — the same fallback the
   // rail head takes (`doc-spine.tsx`).
   const activeSectionLabel =
-    sections.find((s) => s.state === 'active')?.label ?? '';
+    sections.find((s) => s.state === "active")?.label ?? "";
   const heldRoomName =
     (docRooms ?? []).find((r) => r.id === heldRoomId)?.name ?? null;
   // W1 — the letterhead's setup chip. deriveNeed returns at most one need per
@@ -1794,11 +1912,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // remedy anchors to the active section directly rather than borrowing the
   // guide's action, which an open workflow gate can point somewhere else.
   const needsSetup =
-    enrichedOperationalNeed?.kind === 'schedule_unconfigured'
+    enrichedOperationalNeed?.kind === "schedule_unconfigured"
       ? [
           {
             text: enrichedOperationalNeed.text,
-            remedyLabel: enrichedOperationalNeed.actionLabel ?? 'Review',
+            remedyLabel: enrichedOperationalNeed.actionLabel ?? "Review",
             onActivate: () => jumpToSection(row.active_section),
           },
         ]
@@ -1809,10 +1927,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const approvalsAwaitingPublish = approvalsQuery.isLoading
     ? null
     : (approvalsQuery.data ?? []).filter(
-        (approval) => approval.lifecycleStatus === 'draft' && approval.disposition === 'active',
+        (approval) =>
+          approval.lifecycleStatus === "draft" &&
+          approval.disposition === "active",
       ).length;
   const unfoldProposalId =
-    row.engagement_kind === 'project' ? (project?.proposal?.id ?? null) : (row.proposal_id ?? null);
+    row.engagement_kind === "project"
+      ? (project?.proposal?.id ?? null)
+      : (row.proposal_id ?? null);
   // W2 — the table, or nothing. Which section's spread stands on the paper is
   // the pinned composition's answer while the flag is on, so a derivation that
   // moves under the designer's hands cannot re-compose the middle; every other
@@ -1831,9 +1953,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // prints nothing at all — the wrong leader was the document's only act. Same
   // predicate `OfferFacets` holds one component down.
   const finalizeTable =
-    table?.table === 'finalize' &&
-    row.engagement_kind === 'proposal' &&
-    commercialDocumentExperience(liveProposal?.document_kind) === 'legacy';
+    table?.table === "finalize" &&
+    row.engagement_kind === "proposal" &&
+    commercialDocumentExperience(liveProposal?.document_kind) === "legacy";
   // The client's copy, and whether it has gone out — the proposal's one shelf
   // until B2 made it the ticket's NINTH row. Non-null only on the Finalize
   // table, which is what keeps the ticket eight rows on every other paper. The
@@ -1854,7 +1976,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // the release leader stands at the table head. Null off the flag, so nothing
   // below it can lift, seam, or demote anything.
   const deliveryProcurement =
-    table?.table === 'delivery' && table.setting === 'procurement';
+    table?.table === "delivery" && table.setting === "procurement";
   // W3 — the Speccing table's four tools on W2's slots: rooms → the work →
   // the tools. Proposal-keyed on `row.proposal_id`: 00327's Shape B emits the
   // LIVE chain version (pr.id) there while `engagement_id` carries the chain
@@ -1864,7 +1986,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // elements, never mounts.
   const speccingSlots: SpeccingTableSlots = row.proposal_id
     ? {
-        'rooms-rail': (
+        "rooms-rail": (
           <RoomsRail
             proposalId={row.proposal_id}
             value={roomInHand}
@@ -1872,10 +1994,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           />
         ),
         scheme: <Scheme proposalId={row.proposal_id} roomFilter={roomInHand} />,
-        'boards-strip': (
+        "boards-strip": (
           <BoardsStrip proposalId={row.proposal_id} roomFilter={roomInHand} />
         ),
-        'reach-in': <LibraryReachIn proposalId={row.proposal_id} />,
+        "reach-in": <LibraryReachIn proposalId={row.proposal_id} />,
       }
     : {};
   // THE FACTS — the document's own reads, mounted ONCE here and printing
@@ -1891,12 +2013,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // below). The derivation reads the SAME predicate, so a row never claims a
   // door this document has not mounted.
   const ticketLeaves =
-    row.engagement_kind === 'project' && Boolean(row.project_id);
+    row.engagement_kind === "project" && Boolean(row.project_id);
   // The Speccing table already stands I139's rooms rail and Q1/C9's on-paper
   // boards strip on this paper, so those two rows anchor to them instead of
   // opening a second door to the same subject (direction-b §9).
   const ticketSlots: readonly TicketSlotKey[] | undefined =
-    table?.table === 'speccing' && row.proposal_id
+    table?.table === "speccing" && row.proposal_id
       ? SPECCING_TICKET_SLOTS
       : undefined;
   // direction-b §3.3's project specimen rides the Pieces row.
@@ -1951,7 +2073,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // engagement, and not a failed read (whose retry rides the guide's act).
   // With nothing standing, line 2 prints the guide's sentence instead (C-6).
   const bandNeeds =
-    row.engagement_kind === 'project' &&
+    row.engagement_kind === "project" &&
     enrichedOperationalNeeds &&
     !deskGuidanceFailed
       ? redLetterRows
@@ -1970,8 +2092,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // may state, the same test `scheduleRegister` applies on the rail.
   const bandInstall =
     scheduleFacts?.install?.date &&
-    (scheduleFacts.install.fidelity === 'committed' ||
-      scheduleFacts.install.fidelity === 'record')
+    (scheduleFacts.install.fidelity === "committed" ||
+      scheduleFacts.install.fidelity === "record")
       ? fmtDay(scheduleFacts.install.date).toUpperCase()
       : null;
   const bandModel = deriveLensBand({
@@ -1985,7 +2107,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       ? { position: ticketPhase.position, of: ticketPhase.of }
       : null,
     installDate: bandInstall,
-    moneyFigure: ticketRows?.find((r) => r.key === 'money')?.emphasis ?? null,
+    moneyFigure: ticketRows?.find((r) => r.key === "money")?.emphasis ?? null,
     // The proposal's own investment total is the Wave-5 `investment` stop; no
     // read on this page states it today, so the proposal spread's right slot
     // prints its sent date alone rather than an FF&E budget wearing its name.
@@ -2001,14 +2123,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // fall under the vitals (the same `grid-cols-1` collapse `region-head.tsx`
   // uses). Two mounts would register `useMobilePrimaryAction` twice.
   const letterheadInstruments =
-    row.engagement_kind === 'project' && row.project_id ? (
+    row.engagement_kind === "project" && row.project_id ? (
       <LetterheadInstruments
         projectId={row.project_id}
         clientProfileId={row.client_profile_id}
         clientName={row.client_name}
         engagementId={row.engagement_id}
       />
-    ) : row.engagement_kind !== 'project' && row.client_profile_id ? (
+    ) : row.engagement_kind !== "project" && row.client_profile_id ? (
       <LetterheadInstruments
         clientProfileId={row.client_profile_id}
         clientName={row.client_name}
@@ -2019,7 +2141,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     ? {
         date: fmtDay(lineage.signedAt),
         by:
-          (row.engagement_kind === 'project'
+          (row.engagement_kind === "project"
             ? project?.proposal?.signed_by_name
             : liveProposal?.signed_by_name) ?? null,
       }
@@ -2037,7 +2159,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         className="pointer-events-none absolute inset-0 z-0"
         style={{
           background:
-            'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(139,115,85,0.01) 3px, rgba(139,115,85,0.01) 4px)',
+            "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(139,115,85,0.01) 3px, rgba(139,115,85,0.01) 4px)",
         }}
       />
 
@@ -2078,7 +2200,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       <main
         ref={mainRef}
         data-document-paper
-        data-shelf-open={openShelf ? 'true' : undefined}
+        data-shelf-open={openShelf ? "true" : undefined}
         className="w-full min-w-0 max-w-[1040px] justify-self-center px-7 pb-32 pt-8 min-[1180px]:px-10 min-[1440px]:px-12"
       >
         {/* The household — who this document is for — is a first-class subtitle
@@ -2090,12 +2212,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // The cast is the narrowing: `project` is still the page-wide
           // AnyRecord, but the letterhead may only reach the three columns it
           // actually reads.
-          vitals={vitalsFor(row, project as ProjectVitalsRecord, liveProposal, scheduleVitals)}
+          vitals={vitalsFor(
+            row,
+            project as ProjectVitalsRecord,
+            liveProposal,
+            scheduleVitals,
+          )}
           // R80: project vitals self-save at the letterhead (blur-save law).
-          projectId={row.engagement_kind === 'project' ? row.project_id : null}
+          projectId={row.engagement_kind === "project" ? row.project_id : null}
           fill={deriveFillState(sections)}
           client={
-            row.engagement_kind === 'project' || row.engagement_kind === 'proposal' ? (
+            row.engagement_kind === "project" ||
+            row.engagement_kind === "proposal" ? (
               <HouseholdChip
                 engagementKind={row.engagement_kind}
                 projectId={row.project_id}
@@ -2143,7 +2271,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           onToTop={toTop}
         />
 
-        {row.engagement_kind === 'project' && row.project_id && (
+        {row.engagement_kind === "project" && row.project_id && (
           <FolioLetterhead projectId={row.project_id} />
         )}
 
@@ -2152,11 +2280,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             The `marginCount` it needs rides `useMobileActiveDoc` below. */}
 
         <ProjectApprovalDocumentMount
-          projectId={
-            row.engagement_kind === 'project' ? row.project_id : null
-          }
+          projectId={row.engagement_kind === "project" ? row.project_id : null}
           clientProfileId={
-            row.engagement_kind === 'project' ? (project?.client_id ?? null) : null
+            row.engagement_kind === "project"
+              ? (project?.client_id ?? null)
+              : null
           }
           clientName={row.client_name}
           phases={phases}
@@ -2182,7 +2310,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               (a non-project document) the hook is fully inert — `??''` keeps
               the provider total there (proposal/brief docs never begin a
               ripple). */}
-          <RippleProvider projectId={row.project_id ?? ''}>
+          <RippleProvider projectId={row.project_id ?? ""}>
             {/* Field Coordination (light-PM slice): the phase schedule as a
                 horizontal instrument — status-weighted segments, a today cut,
                 draggable phase bars. Project-wide (shows across
@@ -2199,145 +2327,163 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               summary={scheduleRuleSummary}
             />
 
-          {/* The active section — exactly one (§4). */}
-          <div
-            id={sectionAnchorId(row.active_section)}
-            data-active-section
-            tabIndex={-1}
-            className="scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-            onDragOver={(e) => {
-              if (!row.project_id || !e.dataTransfer?.types?.includes('Files')) return;
-              e.preventDefault();
-              setSectionDrag(true);
-            }}
-            onDragLeave={() => setSectionDrag(false)}
-            onDrop={(e) => {
-              if (!row.project_id) return;
-              e.preventDefault();
-              setSectionDrag(false);
-              const files = Array.from(e.dataTransfer.files ?? []);
-              if (files.length) setFolioDrop(files);
-            }}
-          >
-            {/* R1 / M1-after (I114): the stage sub-label and its track bands are
+            {/* The active section — exactly one (§4). */}
+            <div
+              id={sectionAnchorId(row.active_section)}
+              data-active-section
+              tabIndex={-1}
+              className="scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              onDragOver={(e) => {
+                if (
+                  !row.project_id ||
+                  !e.dataTransfer?.types?.includes("Files")
+                )
+                  return;
+                e.preventDefault();
+                setSectionDrag(true);
+              }}
+              onDragLeave={() => setSectionDrag(false)}
+              onDrop={(e) => {
+                if (!row.project_id) return;
+                e.preventDefault();
+                setSectionDrag(false);
+                const files = Array.from(e.dataTransfer.files ?? []);
+                if (files.length) setFolioDrop(files);
+              }}
+            >
+              {/* R1 / M1-after (I114): the stage sub-label and its track bands are
                 the head of the OPEN section, not a free-standing band under the
                 letterhead. They ride inside <div data-active-section> so they
                 read as the section's own sub-label, exactly as the deck draws
                 the open Project row. */}
-            <SectionStageLineMount
-              projectId={
-                row.engagement_kind === 'project' ? row.project_id : null
-              }
-              activeSection={row.active_section}
-            />
-            <TableFrame
-              composition={table}
-              pending={worktableOn ? tablePin.pending : null}
-              onTurn={tablePin.turn}
-              sealTurn={sealTurnNoted ? { signedDate: seal?.date ?? null } : null}
-              slots={speccingSlots}
-            >
-            {/* W4c — Table I's spread header: the household chip promoted into
+              <SectionStageLineMount
+                projectId={
+                  row.engagement_kind === "project" ? row.project_id : null
+                }
+                activeSection={row.active_section}
+              />
+              <TableFrame
+                composition={table}
+                pending={worktableOn ? tablePin.pending : null}
+                onTurn={tablePin.turn}
+                sealTurn={
+                  sealTurnNoted ? { signedDate: seal?.date ?? null } : null
+                }
+                slots={speccingSlots}
+              >
+                {/* W4c — Table I's spread header: the household chip promoted into
                 the spread. Printed identity only (Q6). Mounted only on the
                 composed Intake table — `table` is null with the flag off, so
                 the flag off is byte-identical — and only on the DISCOVERY
                 spread, because on the brief spread BriefSection prints the same
                 three facts immediately below. The component holds both gates as
                 its own law. */}
-            {table?.table === 'intake' && (
-              <IntakeSpreadHeader
-                table={table.table}
-                section={spreadSection}
-                leadId={row.lead_id}
-                clientName={row.client_name}
-              />
-            )}
-            {spreadSection === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
-            {spreadSection === 'discovery' && row.engagement_id && row.designer_id && (
-              <DiscoverySection
-                engagementId={row.engagement_id}
-                designerId={row.designer_id}
-                clientProfileId={row.client_profile_id}
-                clientName={row.client_name}
-                projectId={row.project_id ?? null}
-              />
-            )}
-            {(spreadSection === 'direction' || spreadSection === 'proposal') &&
-              row.proposal_id && (
-                <section>
-                  <div className="mb-1.5 mt-5 flex items-baseline justify-between">
-                    <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-                      {spreadSection === 'direction' ? 'Direction' : 'Proposal'}
-                      {liveProposal?.version ? ` · v${liveProposal.version}` : ''}
-                    </h2>
-                    <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {sections.find((s) => s.key === spreadSection)?.sub}
-                    </span>
-                  </div>
-                  {/* C3 — a quiet letterhead read of where the client's verdicts
+                {table?.table === "intake" && (
+                  <IntakeSpreadHeader
+                    table={table.table}
+                    section={spreadSection}
+                    leadId={row.lead_id}
+                    clientName={row.client_name}
+                  />
+                )}
+                {spreadSection === "brief" && row.lead_id && (
+                  <BriefSection leadId={row.lead_id} />
+                )}
+                {spreadSection === "discovery" &&
+                  row.engagement_id &&
+                  row.designer_id && (
+                    <DiscoverySection
+                      engagementId={row.engagement_id}
+                      designerId={row.designer_id}
+                      clientProfileId={row.client_profile_id}
+                      clientName={row.client_name}
+                      projectId={row.project_id ?? null}
+                    />
+                  )}
+                {(spreadSection === "direction" ||
+                  spreadSection === "proposal") &&
+                  row.proposal_id && (
+                    <section>
+                      <div className="mb-1.5 mt-5 flex items-baseline justify-between">
+                        <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
+                          {spreadSection === "direction"
+                            ? "Direction"
+                            : "Proposal"}
+                          {liveProposal?.version
+                            ? ` · v${liveProposal.version}`
+                            : ""}
+                        </h2>
+                        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                          {sections.find((s) => s.key === spreadSection)?.sub}
+                        </span>
+                      </div>
+                      {/* C3 — a quiet letterhead read of where the client's verdicts
                       stand ("4 of 12 approved · 1 flagged"). Nothing when the
                       client hasn't weighed in yet. W4a: on the Finalize table
                       this whisper stands down — the same sentence is that
                       table's headline, and one fact prints at one weight. */}
-                  {row.engagement_kind === 'proposal' &&
-                    verdictSummary &&
-                    !finalizeTable && (
-                      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                        {verdictSummary}
-                      </p>
-                    )}
-                  {/* W4a — the Finalize table's head: the verdict roll-up as the
+                      {row.engagement_kind === "proposal" &&
+                        verdictSummary &&
+                        !finalizeTable && (
+                          <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                            {verdictSummary}
+                          </p>
+                        )}
+                      {/* W4a — the Finalize table's head: the verdict roll-up as the
                       headline sentence, and the one inked leader the lifecycle ×
                       verdicts × send-wall matrix allows. */}
-                  {finalizeTable && (
-                    <FinalizeHead
-                      proposalId={row.proposal_id}
-                      clientName={row.client_name}
-                    />
-                  )}
-                  {/* The proposal instruments (gated to engagement_kind
+                      {finalizeTable && (
+                        <FinalizeHead
+                          proposalId={row.proposal_id}
+                          clientName={row.client_name}
+                        />
+                      )}
+                      {/* The proposal instruments (gated to engagement_kind
                       ==='proposal'): the Drafting Room doorway for a draft, the
                       Send/Preview/Revise overlay row once it's in the client's
                       hands, and the version-history strip. Local-state overlays
                       never unmount the document beneath (D1). */}
-                  {row.engagement_kind === 'proposal' && (
-                    <ProposalInstruments
-                      proposalId={row.proposal_id}
-                      clientName={row.client_name}
-                      onFinalizeTable={finalizeTable}
-                    />
-                  )}
-                  {/* S18: name the model — what's below is a read-only preview of
+                      {row.engagement_kind === "proposal" && (
+                        <ProposalInstruments
+                          proposalId={row.proposal_id}
+                          clientName={row.client_name}
+                          onFinalizeTable={finalizeTable}
+                        />
+                      )}
+                      {/* S18: name the model — what's below is a read-only preview of
                       the proposal; the editing happens in the Drafting Room. */}
-                  {row.engagement_kind === 'proposal' && liveProposal?.status === 'draft' && (
-                    <p className="mb-2 mt-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-                      Read-only preview · edit in the Drafting Room
-                    </p>
-                  )}
-                  {/* R85 — the Folio mounts on proposal-stage documents (space
+                      {row.engagement_kind === "proposal" &&
+                        liveProposal?.status === "draft" && (
+                          <p className="mb-2 mt-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+                            Read-only preview · edit in the Drafting Room
+                          </p>
+                        )}
+                      {/* R85 — the Folio mounts on proposal-stage documents (space
                       plans/drawings clip here pre-project; flagged files reach the
                       client's proposal copy via 00252's client read leg). */}
-                  {row.engagement_kind === 'proposal' && (
-                    <ProposalFolioStrip proposalId={row.proposal_id} />
-                  )}
-                  <ProposalBlocksReadOnly
-                    proposalId={row.proposal_id}
-                    omitOfferBlocks={finalizeTable}
-                  />
-                  {/* W4a — the Drafting Room's Offer movement (Phases ·
+                      {row.engagement_kind === "proposal" && (
+                        <ProposalFolioStrip proposalId={row.proposal_id} />
+                      )}
+                      <ProposalBlocksReadOnly
+                        proposalId={row.proposal_id}
+                        omitOfferBlocks={finalizeTable}
+                      />
+                      {/* W4a — the Drafting Room's Offer movement (Phases ·
                       Exclusions · Payments · Terms), folding open under the
                       spread in the Room's own seam form. */}
-                  {finalizeTable && <OfferFacets proposalId={row.proposal_id} />}
-                </section>
-              )}
-              {spreadSection === 'project' && row.project_id && (
-                <>
-                  {/* W4b — the release ceremony's leader, at the head of the
+                      {finalizeTable && (
+                        <OfferFacets proposalId={row.proposal_id} />
+                      )}
+                    </section>
+                  )}
+                {spreadSection === "project" && row.project_id && (
+                  <>
+                    {/* W4b — the release ceremony's leader, at the head of the
                     Delivery table instead of inside the FF&E region's ledger.
                     The section below demotes to its next verb so the page still
                     carries exactly one inked release. */}
-                  {deliveryProcurement && releaseOffered && <ReleaseLift />}
-                  {/* Track 5 — the coordination band (ball-in-court + dependency web).
+                    {deliveryProcurement && releaseOffered && <ReleaseLift />}
+                    {/* Track 5 — the coordination band (ball-in-court + dependency web).
                     The band resolves designerClientId itself from clientUserId
                     (work-block.tsx pattern); the page passes clientUserId, never a
                     raw uid. Mounts ABOVE the FF&E section in the project home (D1:
@@ -2345,118 +2491,123 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     B3 retired the schedule-spine flip gate — the Spine is the
                     ledger, unconditionally; CoordinationBand was its fallback
                     and no longer mounts anywhere. */}
-                  <ScheduleSpine
-                    projectId={row.project_id}
-                    clientUserId={row.client_profile_id}
-                    clientName={row.client_name}
-                    projectStatus={project?.status}
-                  />
-                  {/* Wave 1P (spec §11.2) — the Room-files zone the component's
+                    <ScheduleSpine
+                      projectId={row.project_id}
+                      clientUserId={row.client_profile_id}
+                      clientName={row.client_name}
+                      projectStatus={project?.status}
+                    />
+                    {/* Wave 1P (spec §11.2) — the Room-files zone the component's
                     own docstring was written for and nothing ever mounted.
                     Unflagged by FC-R10: it returns null for a project with no
                     Room-File-bearing scans, so a field-less project renders
                     exactly as it did before this line existed. */}
-                  <RoomFilesSection projectId={row.project_id} />
-                  <FFESection
-                    projectId={row.project_id}
-                    projectName={row.title}
-                    mode="project"
-                    needs={rankedOperationalNeeds}
-                    highlightId={highlightLineId}
-                    onAddNote={setPendingNoteAnchor}
-                    sectionKey="project"
-                    clientUserId={row.client_profile_id}
-                    clientName={row.client_name}
-                    folioDrop={folioDrop}
-                    onFolioDropConsumed={() => setFolioDrop(null)}
-                    sectionDragOver={sectionDrag}
-                    releaseLeaderElsewhere={deliveryProcurement}
-                    onReleaseOffered={
-                      deliveryProcurement ? setReleaseOffered : undefined
-                    }
-                  />
-                  {/* W2 — one money region: authority → plan → committed →
+                    <RoomFilesSection projectId={row.project_id} />
+                    <FFESection
+                      projectId={row.project_id}
+                      projectName={row.title}
+                      mode="project"
+                      needs={rankedOperationalNeeds}
+                      highlightId={highlightLineId}
+                      onAddNote={setPendingNoteAnchor}
+                      sectionKey="project"
+                      clientUserId={row.client_profile_id}
+                      clientName={row.client_name}
+                      folioDrop={folioDrop}
+                      onFolioDropConsumed={() => setFolioDrop(null)}
+                      sectionDragOver={sectionDrag}
+                      releaseLeaderElsewhere={deliveryProcurement}
+                      onReleaseOffered={
+                        deliveryProcurement ? setReleaseOffered : undefined
+                      }
+                    />
+                    {/* W2 — one money region: authority → plan → committed →
                     moved, over the four surfaces that used to stand apart
                     (design authority, working budget, authorizations & trade
                     scopes, the accounts). Gated on engagement_kind exactly as
                     the four tail mounts it replaced were. */}
-                  {row.engagement_kind === 'project' && (
-                    <MoneyRegion
-                      projectId={row.project_id}
-                      projectName={row.title}
-                      clientName={row.client_name}
-                      activeSection={row.active_section}
-                      /* W4b — on the table money is what the work is measured
+                    {row.engagement_kind === "project" && (
+                      <MoneyRegion
+                        projectId={row.project_id}
+                        projectName={row.title}
+                        clientName={row.client_name}
+                        activeSection={row.active_section}
+                        /* W4b — on the table money is what the work is measured
                          against, not the work: one seam, one press from full. */
-                      tableSeam={deliveryProcurement}
-                    />
-                  )}
-                  {/* R80: the Care band — closure stays reachable from an active
+                        tableSeam={deliveryProcurement}
+                      />
+                    )}
+                    {/* R80: the Care band — closure stays reachable from an active
                     project (a quiet folded line until install nears).
                     W2 (C-2): the project spread's mount is the running index's
                     `care` root — one root per stop, so the scrollspy cannot
                     see two. */}
-                  <CareBand
-                    projectId={row.project_id}
-                    onCloseoutReady={acceptCloseout}
-                    indexRoot
-                  />
-                </>
-              )}
-            {spreadSection === 'install' && row.project_id && (
-              <>
-                <FFESection
-                  projectId={row.project_id}
-                  projectName={row.title}
-                  mode="install"
-                  needs={rankedOperationalNeeds}
-                  highlightId={highlightLineId}
-                  onAddNote={setPendingNoteAnchor}
-                  sectionKey="install"
-                  clientUserId={row.client_profile_id}
-                  clientName={row.client_name}
-                  folioDrop={folioDrop}
-                  onFolioDropConsumed={() => setFolioDrop(null)}
-                  sectionDragOver={sectionDrag}
-                />
-                {/* R112: the install week's commitment act, on the section
-                    whose whole subject is that week. */}
-                <InstallWindowCeremony projectId={row.project_id} />
-                {/* R80: at install the band opens unfolded — closing out IS the
-                    work of this stage. */}
-                <CareBand projectId={row.project_id} onCloseoutReady={acceptCloseout} />
-              </>
-            )}
-            {spreadSection === 'care' && (
-              <>
-                <CareSection
-                  completedLabel={
-                    project?.target_end_date ? fmtMonthYear(project.target_end_date) : null
-                  }
-                  projectId={row.project_id}
-                />
-                {row.project_id && (
-                  <FFESection
-                    projectId={row.project_id}
-                    mode="install"
-                    needs={rankedOperationalNeeds}
-                    highlightId={highlightLineId}
-                    sectionKey="care"
-                    clientUserId={row.client_profile_id}
-                    clientName={row.client_name}
-                    folioDrop={folioDrop}
-                    onFolioDropConsumed={() => setFolioDrop(null)}
-                    sectionDragOver={sectionDrag}
-                  />
+                    <CareBand
+                      projectId={row.project_id}
+                      onCloseoutReady={acceptCloseout}
+                      indexRoot
+                    />
+                  </>
                 )}
-              </>
-            )}
-            </TableFrame>
-          </div>
+                {spreadSection === "install" && row.project_id && (
+                  <>
+                    <FFESection
+                      projectId={row.project_id}
+                      projectName={row.title}
+                      mode="install"
+                      needs={rankedOperationalNeeds}
+                      highlightId={highlightLineId}
+                      onAddNote={setPendingNoteAnchor}
+                      sectionKey="install"
+                      clientUserId={row.client_profile_id}
+                      clientName={row.client_name}
+                      folioDrop={folioDrop}
+                      onFolioDropConsumed={() => setFolioDrop(null)}
+                      sectionDragOver={sectionDrag}
+                    />
+                    {/* R112: the install week's commitment act, on the section
+                    whose whole subject is that week. */}
+                    <InstallWindowCeremony projectId={row.project_id} />
+                    {/* R80: at install the band opens unfolded — closing out IS the
+                    work of this stage. */}
+                    <CareBand
+                      projectId={row.project_id}
+                      onCloseoutReady={acceptCloseout}
+                    />
+                  </>
+                )}
+                {spreadSection === "care" && (
+                  <>
+                    <CareSection
+                      completedLabel={
+                        project?.target_end_date
+                          ? fmtMonthYear(project.target_end_date)
+                          : null
+                      }
+                      projectId={row.project_id}
+                    />
+                    {row.project_id && (
+                      <FFESection
+                        projectId={row.project_id}
+                        mode="install"
+                        needs={rankedOperationalNeeds}
+                        highlightId={highlightLineId}
+                        sectionKey="care"
+                        clientUserId={row.client_profile_id}
+                        clientName={row.client_name}
+                        folioDrop={folioDrop}
+                        onFolioDropConsumed={() => setFolioDrop(null)}
+                        sectionDragOver={sectionDrag}
+                      />
+                    )}
+                  </>
+                )}
+              </TableFrame>
+            </div>
           </RippleProvider>
         </ScheduleNavProvider>
 
-        {row.engagement_kind === 'project' && row.project_id && (
+        {row.engagement_kind === "project" && row.project_id && (
           <>
             {/* Supporting project records follow the active work so a newly
                 opened document reaches the schedule before its reference material.
@@ -2468,7 +2619,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 pinned spread; a band gated on the live row would print the
                 accounts twice (or nowhere) for as long as an armed turn goes
                 unpressed. Off the flag `spreadSection` IS `row.active_section`. */}
-            {spreadSection !== 'project' && (
+            {spreadSection !== "project" && (
               <AccountBand
                 projectId={row.project_id}
                 clientName={row.client_name}
@@ -2496,73 +2647,90 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           onOpenApprovals={openApprovals}
         >
           {settled.map((s) => {
-          const isOpen = openSection === s.key;
-          const toggle = () => setOpenSection((prev) => (prev === s.key ? null : s.key));
+            const isOpen = openSection === s.key;
+            const toggle = () =>
+              setOpenSection((prev) => (prev === s.key ? null : s.key));
 
-          // R23: a gate-settled section wears the client's grant; the Proposal
-          // wears its signing seal.
-          const approvedGate = (sectionGates ?? []).find(
-            (g) => g.section_key === s.key && gateState(g) === 'approved',
-          );
-          const stamp =
-            s.key === 'proposal' && seal
-              ? { label: `Signed · ${seal.date}`, color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' }
-              : approvedGate
+            // R23: a gate-settled section wears the client's grant; the Proposal
+            // wears its signing seal.
+            const approvedGate = (sectionGates ?? []).find(
+              (g) => g.section_key === s.key && gateState(g) === "approved",
+            );
+            const stamp =
+              s.key === "proposal" && seal
                 ? {
-                    label: `Approved${approvedGate.responded_at ? ` · ${fmtDay(approvedGate.responded_at)}` : ''}`,
-                    color: 'var(--color-sage)',
-                    ink: 'var(--color-sage-ink)',
+                    label: `Signed · ${seal.date}`,
+                    color: "var(--color-sage)",
+                    ink: "var(--color-sage-ink)",
                   }
-                : undefined;
+                : approvedGate
+                  ? {
+                      label: `Approved${approvedGate.responded_at ? ` · ${fmtDay(approvedGate.responded_at)}` : ""}`,
+                      color: "var(--color-sage)",
+                      ink: "var(--color-sage-ink)",
+                    }
+                  : undefined;
 
-          // The read-only review body — what the designer reviews on unfold.
-          // Brief → the lead record (triage auto-hides once accepted); Discovery
-          // → the captured facts recap; Direction/Proposal → the proposal blocks.
-          let body: ReactNode = null;
-          if (s.key === 'brief') {
-            body = <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} />;
-          } else if (s.key === 'discovery') {
-            body = (
-              <DiscoveryRecap
-                clientProfileId={row.client_profile_id}
-                engagementKind={row.engagement_kind}
-                engagementId={row.engagement_id}
-                proposalId={row.proposal_id}
-              />
-            );
-          } else if ((s.key === 'direction' || s.key === 'proposal') && unfoldProposalId) {
-            body = (
-              <>
-                <ProposalBlocksReadOnly proposalId={unfoldProposalId} />
-                {s.key === 'proposal' && seal && (
-                  <p className="mt-4 border-t border-[var(--color-pearl)] pt-3 text-[11px] text-[var(--text-muted)]">
-                    {seal.by ? `Signed by ${seal.by} · ${seal.date}` : `Signed · ${seal.date}`}
-                  </p>
-                )}
-              </>
-            );
-          }
+            // The read-only review body — what the designer reviews on unfold.
+            // Brief → the lead record (triage auto-hides once accepted); Discovery
+            // → the captured facts recap; Direction/Proposal → the proposal blocks.
+            let body: ReactNode = null;
+            if (s.key === "brief") {
+              body = (
+                <BriefRecap
+                  clientProfileId={row.client_profile_id}
+                  leadId={row.lead_id}
+                />
+              );
+            } else if (s.key === "discovery") {
+              body = (
+                <DiscoveryRecap
+                  clientProfileId={row.client_profile_id}
+                  engagementKind={row.engagement_kind}
+                  engagementId={row.engagement_id}
+                  proposalId={row.proposal_id}
+                />
+              );
+            } else if (
+              (s.key === "direction" || s.key === "proposal") &&
+              unfoldProposalId
+            ) {
+              body = (
+                <>
+                  <ProposalBlocksReadOnly proposalId={unfoldProposalId} />
+                  {s.key === "proposal" && seal && (
+                    <p className="mt-4 border-t border-[var(--color-pearl)] pt-3 text-[11px] text-[var(--text-muted)]">
+                      {seal.by
+                        ? `Signed by ${seal.by} · ${seal.date}`
+                        : `Signed · ${seal.date}`}
+                    </p>
+                  )}
+                </>
+              );
+            }
 
-          return (
-            <SettledBar
-              key={s.key}
-              anchorId={sectionAnchorId(s.key)}
-              name={
-                s.key === 'proposal' && lineage?.version ? `Proposal · v${lineage.version}` : s.label
-              }
-              hint={s.key === 'proposal' ? undefined : s.sub}
-              stamp={stamp}
-              open={isOpen}
-              onToggle={body ? toggle : undefined}
-            >
-              {body}
-            </SettledBar>
-          );
+            return (
+              <SettledBar
+                key={s.key}
+                anchorId={sectionAnchorId(s.key)}
+                name={
+                  s.key === "proposal" && lineage?.version
+                    ? `Proposal · v${lineage.version}`
+                    : s.label
+                }
+                hint={s.key === "proposal" ? undefined : s.sub}
+                stamp={stamp}
+                open={isOpen}
+                onToggle={body ? toggle : undefined}
+              >
+                {body}
+              </SettledBar>
+            );
           })}
         </PreviousWork>
 
         {/* R29: the colophon — the paper's last line states its own facts. */}
-        {row.engagement_kind === 'project' && row.project_id && (
+        {row.engagement_kind === "project" && row.project_id && (
           <DocColophon
             projectId={row.project_id}
             designerId={row.designer_id}
@@ -2578,10 +2746,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           sheet's summary. From 1180–1439px it opens on demand; only the wide
           Document gives it a permanent grid column. */}
       <ResponsiveMarginRail>
-        {row.active_section === 'discovery' ? (
+        {row.active_section === "discovery" ? (
           // R66: at Discovery (Shape D) there is no project/proposal — the
           // margin is notes-only, keyed on the relationship.
-          <DiscoveryMargin designerClientId={row.engagement_id ?? ''} />
+          <DiscoveryMargin designerClientId={row.engagement_id ?? ""} />
         ) : (
           <MarginRail
             projectId={row.project_id}
@@ -2589,7 +2757,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             clientName={row.client_name}
             clientUserId={row.client_profile_id}
             now={gateNow}
-            approvalSurfaceMounted={row.engagement_kind === 'project'}
+            approvalSurfaceMounted={row.engagement_kind === "project"}
             currentStop={activeKey}
             onHoverLine={setHighlightLineId}
             pendingNoteAnchor={pendingNoteAnchor}
@@ -2613,7 +2781,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           which become the synthetic row leading the CLIENT SIDE group. */}
       {/* The shelves' leaf — the reference material that does not fit inline,
           beside the spine and over the canvas, never over the paper's text. */}
-      {row.engagement_kind === 'project' && row.project_id && (
+      {row.engagement_kind === "project" && row.project_id && (
         <DocumentShelves
           openShelf={openShelf}
           onClose={() => setOpenShelf(null)}
@@ -2622,7 +2790,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           rooms={docRooms ?? []}
           /* The ticket's `Boards` row means one act at every width and on
              every project-kind spread; the leaf answers as its page does. */
-          canCreateBoards={row.engagement_kind === 'project'}
+          canCreateBoards={row.engagement_kind === "project"}
         />
       )}
 
@@ -2637,7 +2805,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         />
       )}
 
-      {row.engagement_kind === 'project' && row.project_id && (
+      {row.engagement_kind === "project" && row.project_id && (
         <CallSheetMount
           open={callSheetOpen}
           onClose={() => setCallSheetOpen(false)}

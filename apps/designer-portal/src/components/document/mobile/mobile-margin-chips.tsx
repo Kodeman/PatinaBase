@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Anchored margin chips (D3-2). Margin items render as chips beneath the
@@ -14,29 +14,33 @@
  * this file's own tests.
  */
 
-import { useMemo } from 'react';
-import { useMarginItems } from '@/hooks/use-margin-items';
-import { useCoordinationItems } from '@patina/supabase';
+import { useMemo } from "react";
+import { useMarginItems } from "@/hooks/use-margin-items";
+import { useCoordinationItems } from "@patina/supabase";
 import {
   classifyMarginItems,
   marginDecisionClassificationState,
   MarginDecisionClassificationNotice,
-} from '@/lib/document/stage2-approval-exclusions';
-import { marginAccent, deriveKindLine, type MarginItemRow } from '@/lib/document/margin-derivation';
-import { useLetterheadMargin } from '@/hooks/use-letterhead-margin';
-import { useMobileShell } from './mobile-shell';
+} from "@/lib/document/stage2-approval-exclusions";
+import {
+  marginAccent,
+  deriveKindLine,
+  type MarginItemRow,
+} from "@/lib/document/margin-derivation";
+import { useLetterheadMargin } from "@/hooks/use-letterhead-margin";
+import { useMobileShell } from "./mobile-shell";
 
 interface MobileMarginChipsProps {
   projectId: string | null;
   proposalId: string | null;
   /** 'line' chips sit under their FF&E row; 'letterhead' under the title. */
-  anchorKind: 'line' | 'letterhead';
+  anchorKind: "line" | "letterhead";
   anchorId?: string | null;
   clientName?: string;
 }
 
 export function MobileMarginChips(props: MobileMarginChipsProps) {
-  return props.anchorKind === 'letterhead' ? (
+  return props.anchorKind === "letterhead" ? (
     <LetterheadMarginChips {...props} />
   ) : (
     <LineMarginChips {...props} />
@@ -46,7 +50,7 @@ export function MobileMarginChips(props: MobileMarginChipsProps) {
 function LetterheadMarginChips({
   projectId,
   proposalId,
-  clientName = '',
+  clientName = "",
 }: MobileMarginChipsProps) {
   const { openMarginItem } = useMobileShell();
   const margin = useLetterheadMargin({ projectId, proposalId, clientName });
@@ -70,7 +74,7 @@ function LetterheadMarginChips({
         <span
           key={gate.id}
           className="inline-flex max-w-full items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] py-1.5 pl-2 pr-2.5 text-[11px] text-[var(--color-charcoal)]"
-          style={{ borderLeft: '2.5px solid var(--color-golden-hour)' }}
+          style={{ borderLeft: "2.5px solid var(--color-golden-hour)" }}
         >
           <span className="truncate">
             {gate.lane} · {gate.terms}
@@ -83,7 +87,9 @@ function LetterheadMarginChips({
           <button
             key={`${row.kind}-${row.item_id}`}
             type="button"
-            id={row.kind === 'pulse' ? 'document-pulse-control-mobile' : undefined}
+            id={
+              row.kind === "pulse" ? "document-pulse-control-mobile" : undefined
+            }
             onClick={() => openMarginItem(row.item_id)}
             className="inline-flex max-w-full items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] py-1.5 pl-2 pr-2.5 text-[11px] text-[var(--color-charcoal)] active:border-[#cfc8bb]"
             style={{ borderLeft: `2.5px solid ${accent.border}` }}
@@ -114,7 +120,7 @@ function LineMarginChips({
   const anchoredItems = useMemo(
     () =>
       (items ?? []).filter(
-        (item) => item.anchor_kind === 'line' && item.anchor_id === anchorId,
+        (item) => item.anchor_kind === "line" && item.anchor_id === anchorId,
       ),
     [anchorId, items],
   );
@@ -137,7 +143,7 @@ function LineMarginChips({
   );
 
   const chips = useMemo(
-    () => classifiedMargin.items.filter((item) => item.kind !== 'time'),
+    () => classifiedMargin.items.filter((item) => item.kind !== "time"),
     [classifiedMargin.items],
   );
   const showDecisionNotice = classifiedMargin.withheldDecisionCount > 0;
@@ -157,7 +163,9 @@ function LineMarginChips({
           <button
             key={`${row.kind}-${row.item_id}`}
             type="button"
-            id={row.kind === 'pulse' ? 'document-pulse-control-mobile' : undefined}
+            id={
+              row.kind === "pulse" ? "document-pulse-control-mobile" : undefined
+            }
             onClick={() => openMarginItem(row.item_id)}
             className="inline-flex max-w-full items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] py-1.5 pl-2 pr-2.5 text-[11px] text-[var(--color-charcoal)] active:border-[#cfc8bb]"
             style={{ borderLeft: `2.5px solid ${accent.border}` }}

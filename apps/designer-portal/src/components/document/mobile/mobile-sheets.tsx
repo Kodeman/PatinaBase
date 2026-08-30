@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The D13 bottom sheets. Paper sheets are document parts (spine, margin item,
@@ -9,45 +9,45 @@
  * 1180px; the timer alone remains the compact spine's sheet through 1439px.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useMarginItems } from '@/hooks/use-margin-items';
-import { useCoordinationItems } from '@patina/supabase';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMarginItems } from "@/hooks/use-margin-items";
+import { useCoordinationItems } from "@patina/supabase";
 import {
   classifyMarginItems,
   marginDecisionClassificationState,
   MarginDecisionClassificationNotice,
-} from '@/lib/document/stage2-approval-exclusions';
-import { useDocumentTime } from '@/hooks/document-time-provider';
+} from "@/lib/document/stage2-approval-exclusions";
+import { useDocumentTime } from "@/hooks/document-time-provider";
 import {
   marginAccent,
   deriveKindLine,
   partitionMargin,
   type MarginItemRow,
-} from '@/lib/document/margin-derivation';
-import { ACTIVITIES, fmtElapsed } from '@/lib/document/time-derivation';
-import { MarginItemBody } from '../margin-bodies';
-import { useLetterheadMargin } from '@/hooks/use-letterhead-margin';
-import { overdueStampLabel } from '@/lib/document/overdue-condition';
-import { openLedger } from '../command-bar';
-import { openAccount } from '../account/account-sheet';
-import { MobileAccountHeader } from '../account/mobile-account-header';
-import { DocumentAction, DocumentActionRow } from '../document-action';
-import { lockBodyScroll } from '../overlays/body-scroll-lock';
+} from "@/lib/document/margin-derivation";
+import { ACTIVITIES, fmtElapsed } from "@/lib/document/time-derivation";
+import { MarginItemBody } from "../margin-bodies";
+import { useLetterheadMargin } from "@/hooks/use-letterhead-margin";
+import { overdueStampLabel } from "@/lib/document/overdue-condition";
+import { openLedger } from "../command-bar";
+import { openAccount } from "../account/account-sheet";
+import { MobileAccountHeader } from "../account/mobile-account-header";
+import { DocumentAction, DocumentActionRow } from "../document-action";
+import { lockBodyScroll } from "../overlays/body-scroll-lock";
 import {
   isElementRendered,
   topActiveModalDialog,
-} from '../overlays/active-dialog';
-import { useMobileShell } from './mobile-shell';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { boardsRoutePath } from '@/lib/document/registry';
+} from "../overlays/active-dialog";
+import { useMobileShell } from "./mobile-shell";
+import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { boardsRoutePath } from "@/lib/document/registry";
 import {
   paperRegionsForSection,
   DOCUMENT_INDEX_LABELS,
   requestRegionUnfold,
   type DocumentIndexKey,
-} from '@/lib/document/document-index';
-import { scrollToRegion } from '@/hooks/use-document-running-index';
+} from "@/lib/document/document-index";
+import { scrollToRegion } from "@/hooks/use-document-running-index";
 
 const SHEET_FOCUSABLE = [
   'a[href]:not([tabindex="-1"])',
@@ -57,7 +57,7 @@ const SHEET_FOCUSABLE = [
   'textarea:not([disabled]):not([tabindex="-1"])',
   '[contenteditable="true"]:not([tabindex="-1"])',
   '[tabindex]:not([tabindex="-1"])',
-].join(',');
+].join(",");
 
 function focusableSheetControls(panel: HTMLElement) {
   return Array.from(
@@ -66,11 +66,11 @@ function focusableSheetControls(panel: HTMLElement) {
     const style = window.getComputedStyle(control);
     return (
       !control.hidden &&
-      !control.matches(':disabled') &&
-      control.getAttribute('aria-disabled') !== 'true' &&
+      !control.matches(":disabled") &&
+      control.getAttribute("aria-disabled") !== "true" &&
       !control.closest('[hidden], [aria-hidden="true"], [inert]') &&
-      style.display !== 'none' &&
-      style.visibility !== 'hidden'
+      style.display !== "none" &&
+      style.visibility !== "hidden"
     );
   });
 }
@@ -80,52 +80,52 @@ const LEDGERS: {
   name: string;
   spine: string;
   count: string;
-  weight: 'room' | 'sheet';
+  weight: "room" | "sheet";
 }[] = [
   // D14: Library, People, and Rooms are Rooms (walk in); the rest are Sheets
   // (pulled over). `name` must lowercase to the registry key — openLedger()
   // dispatches `name.toLowerCase()` and the drawer matches on `key`.
   {
-    key: 'library',
-    name: 'Library',
-    spine: 'var(--color-clay)',
-    count: 'a room · walk in',
-    weight: 'room',
+    key: "library",
+    name: "Library",
+    spine: "var(--color-clay)",
+    count: "a room · walk in",
+    weight: "room",
   },
   {
-    key: 'orders',
-    name: 'Orders',
-    spine: 'var(--color-dusty-blue)',
-    count: 'cross-engagement POs',
-    weight: 'sheet',
+    key: "orders",
+    name: "Orders",
+    spine: "var(--color-dusty-blue)",
+    count: "cross-engagement POs",
+    weight: "sheet",
   },
   {
-    key: 'accounts',
-    name: 'Accounts',
-    spine: 'var(--color-sage)',
-    count: 'revenue · A/R',
-    weight: 'sheet',
+    key: "accounts",
+    name: "Accounts",
+    spine: "var(--color-sage)",
+    count: "revenue · A/R",
+    weight: "sheet",
   },
   {
-    key: 'people',
-    name: 'People',
-    spine: 'var(--color-terracotta)',
-    count: 'a room · walk in',
-    weight: 'room',
+    key: "people",
+    name: "People",
+    spine: "var(--color-terracotta)",
+    count: "a room · walk in",
+    weight: "room",
   },
   {
-    key: 'rooms',
-    name: 'Rooms',
-    spine: 'var(--color-aged-oak)',
-    count: 'a room · walk in',
-    weight: 'room',
+    key: "rooms",
+    name: "Rooms",
+    spine: "var(--color-aged-oak)",
+    count: "a room · walk in",
+    weight: "room",
   },
   {
-    key: 'hours',
-    name: 'Hours',
-    spine: 'var(--color-mocha)',
-    count: 'this week',
-    weight: 'sheet',
+    key: "hours",
+    name: "Hours",
+    spine: "var(--color-mocha)",
+    count: "this week",
+    weight: "sheet",
   },
 ];
 
@@ -133,22 +133,22 @@ const MOBILE_MORE_DOORWAY =
   '[data-mobile-edge-owner="document-bar"] [aria-label="More studio actions"]';
 
 const SHEET_RETURN_FALLBACKS: Record<
-  'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin',
+  "drawer" | "timer" | "spine" | "margin-item" | "margin",
   readonly string[]
 > = {
-  drawer: ['[data-studio-books-doorway]', MOBILE_MORE_DOORWAY],
+  drawer: ["[data-studio-books-doorway]", MOBILE_MORE_DOORWAY],
   timer: [
     // The studio drawer's `In hand today` clock is the timer's doorway at
     // every width from W1; the spine's two (`[data-compact-spine-timer-doorway]`,
     // `[data-full-spine-timer]`) went with `spine-timer.tsx` (OD-16).
-    '[data-drawer-timer-doorway]',
+    "[data-drawer-timer-doorway]",
     MOBILE_MORE_DOORWAY,
-    '[data-studio-books-doorway]',
+    "[data-studio-books-doorway]",
   ],
-  spine: ['[data-document-spine] button', MOBILE_MORE_DOORWAY],
-  'margin-item': [
-    '[data-margin-trigger]',
-    '[data-document-spine] button',
+  spine: ["[data-document-spine] button", MOBILE_MORE_DOORWAY],
+  "margin-item": [
+    "[data-margin-trigger]",
+    "[data-document-spine] button",
     MOBILE_MORE_DOORWAY,
   ],
   // D-B30: the door is the first row of More's "In this document" list.
@@ -186,14 +186,14 @@ function restoreSheetFocus(
 /** One accessible name per sheet kind — every `role="dialog"` this file opens
  *  names itself, the sections sheet included (it carried none before). */
 const SHEET_ARIA_LABEL: Record<
-  'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin',
+  "drawer" | "timer" | "spine" | "margin-item" | "margin",
   string
 > = {
-  drawer: 'Studio actions',
-  timer: 'Time in hand',
-  spine: 'Sections of this document',
-  'margin-item': 'Margin item',
-  margin: 'The margin',
+  drawer: "Studio actions",
+  timer: "Time in hand",
+  spine: "Sections of this document",
+  "margin-item": "Margin item",
+  margin: "The margin",
 };
 
 function Sheet({
@@ -202,12 +202,12 @@ function Sheet({
   onClose,
   children,
 }: {
-  tone: 'paper' | 'dark';
-  kind: 'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin';
+  tone: "paper" | "dark";
+  kind: "drawer" | "timer" | "spine" | "margin-item" | "margin";
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  const compactTimer = kind === 'timer';
+  const compactTimer = kind === "timer";
   const dialogRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -230,14 +230,14 @@ function Sheet({
       const panel = panelRef.current;
       if (!dialog || !panel || topActiveModalDialog() !== dialog) return;
 
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
         closeRef.current();
         return;
       }
 
-      if (event.key !== 'Tab' || event.defaultPrevented) return;
+      if (event.key !== "Tab" || event.defaultPrevented) return;
       const controls = focusableSheetControls(panel);
       if (controls.length === 0) {
         event.preventDefault();
@@ -260,10 +260,10 @@ function Sheet({
       }
     };
 
-    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
       unlockBodyScroll();
       restoreSheetFocus(kindRef.current, returnFocusTarget);
     };
@@ -272,16 +272,16 @@ function Sheet({
   return (
     <div
       ref={dialogRef}
-      id={compactTimer ? 'mobile-timer-sheet' : undefined}
+      id={compactTimer ? "mobile-timer-sheet" : undefined}
       data-mobile-sheet-kind={kind}
       // W1 — the timer sheet lost its ceiling with `spine-timer.tsx`: the
       // studio drawer's clock is its doorway at 1440 too, so it is the one
       // sheet with no width regime at all.
       data-mobile-sheet-regime={
-        compactTimer ? 'every-width' : 'below-1180-only'
+        compactTimer ? "every-width" : "below-1180-only"
       }
       className={`fixed inset-0 z-[58] ${
-        compactTimer ? '' : 'min-[1180px]:hidden'
+        compactTimer ? "" : "min-[1180px]:hidden"
       }`}
       role="dialog"
       aria-label={SHEET_ARIA_LABEL[kind]}
@@ -299,20 +299,20 @@ function Sheet({
         tabIndex={-1}
         data-mobile-sheet-panel
         className={`absolute inset-x-0 bottom-0 max-h-[80%] overflow-y-auto rounded-t-[14px] pb-[max(0.9rem,env(safe-area-inset-bottom))] motion-safe:animate-[doc-sheet-up_250ms_var(--ease-editorial)] ${
-          tone === 'paper'
-            ? 'border-t border-[var(--doc-ink-border)] bg-[var(--doc-paper)]'
-            : 'border-t border-[rgba(250,247,242,0.18)] bg-[var(--color-charcoal)]'
+          tone === "paper"
+            ? "border-t border-[var(--doc-ink-border)] bg-[var(--doc-paper)]"
+            : "border-t border-[rgba(250,247,242,0.18)] bg-[var(--color-charcoal)]"
         } ${
           compactTimer
-            ? 'min-[1180px]:left-14 min-[1180px]:right-auto min-[1180px]:w-[28rem] min-[1180px]:rounded-tr-[14px]'
-            : ''
+            ? "min-[1180px]:left-14 min-[1180px]:right-auto min-[1180px]:w-[28rem] min-[1180px]:rounded-tr-[14px]"
+            : ""
         }`}
       >
         <div
           className={`mx-auto mb-1 mt-[9px] h-[4px] w-[36px] rounded-full ${
-            tone === 'paper'
-              ? 'bg-[var(--color-pearl)]'
-              : 'bg-[rgba(250,247,242,0.2)]'
+            tone === "paper"
+              ? "bg-[var(--color-pearl)]"
+              : "bg-[rgba(250,247,242,0.2)]"
           }`}
         />
         <div className="px-[1.1rem] pb-2 pt-1">{children}</div>
@@ -326,23 +326,23 @@ function Sheet({
  *  in the margin-item sheet this row opens). */
 function marginRowOwner(row: MarginItemRow): string {
   switch (row.kind) {
-    case 'decision':
-    case 'pulse':
-      return 'Client';
-    case 'message':
-      return (row.payload.sender_name as string | undefined) ?? 'Client';
-    case 'invoice':
+    case "decision":
+    case "pulse":
+      return "Client";
+    case "message":
+      return (row.payload.sender_name as string | undefined) ?? "Client";
+    case "invoice":
       return row.payload.po_payment
-        ? ((row.payload.vendor_name as string | undefined) ?? 'Vendor')
-        : 'Client';
-    case 'note':
-      return (row.payload.author_name as string | undefined) ?? 'You';
-    case 'field_sms':
-      return (row.payload.party_kind as string | undefined) === 'vendor'
-        ? 'Vendor'
-        : 'Field';
-    case 'time':
-      return '';
+        ? ((row.payload.vendor_name as string | undefined) ?? "Vendor")
+        : "Client";
+    case "note":
+      return (row.payload.author_name as string | undefined) ?? "You";
+    case "field_sms":
+      return (row.payload.party_kind as string | undefined) === "vendor"
+        ? "Vendor"
+        : "Field";
+    case "time":
+      return "";
   }
 }
 
@@ -352,23 +352,25 @@ function marginRowOwner(row: MarginItemRow): string {
  *  the button opens that sheet instead of firing the act from here. */
 function marginRowActLabel(row: MarginItemRow): string {
   switch (row.kind) {
-    case 'decision':
-      if (row.state === 'expired') return 'Extend & reopen';
-      if (row.state === 'responded') return 'Open the record';
-      return row.payload.reminder_sent_at ? 'Nudge again' : 'Send a nudge';
-    case 'message':
-      return 'Reply';
-    case 'invoice':
-      if (row.payload.po_payment) return 'Open the folio';
-      return row.state === 'draft' ? 'Review & send invoice' : 'Open the folio';
-    case 'pulse':
-      return row.state === 'sent' ? 'Open' : 'Send Pulse';
-    case 'note':
-      return row.state === 'escalated' ? 'Open' : 'Client decision';
-    case 'field_sms':
-      return row.state === 'needs_review' ? 'Review on the desk' : 'Open the thread';
-    case 'time':
-      return 'Open';
+    case "decision":
+      if (row.state === "expired") return "Extend & reopen";
+      if (row.state === "responded") return "Open the record";
+      return row.payload.reminder_sent_at ? "Nudge again" : "Send a nudge";
+    case "message":
+      return "Reply";
+    case "invoice":
+      if (row.payload.po_payment) return "Open the folio";
+      return row.state === "draft" ? "Review & send invoice" : "Open the folio";
+    case "pulse":
+      return row.state === "sent" ? "Open" : "Send Pulse";
+    case "note":
+      return row.state === "escalated" ? "Open" : "Client decision";
+    case "field_sms":
+      return row.state === "needs_review"
+        ? "Review on the desk"
+        : "Open the thread";
+    case "time":
+      return "Open";
   }
 }
 
@@ -385,7 +387,7 @@ export function MobileSheets({
     useMobileShell();
   const ladderValues = ladderValuesProp ?? activeDoc?.ladderValues ?? {};
   const router = useRouter();
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
+  const { value: callSheetOn } = useFeatureFlag("call-sheet");
   const projectId = activeDoc?.projectId ?? null;
   const proposalId = activeDoc?.proposalId ?? null;
   const { data: items } = useMarginItems(projectId, proposalId);
@@ -420,7 +422,7 @@ export function MobileSheets({
   // D-B30: the letterhead- and section-anchored subset + handoff gates, for
   // the Margin sheet (and the bar's door count) — the same hook the deleted
   // 390 chips block used, so the two never disagree.
-  const clientName = activeDoc?.clientName ?? '';
+  const clientName = activeDoc?.clientName ?? "";
   const letterheadMargin = useLetterheadMargin({
     projectId,
     proposalId,
@@ -434,22 +436,22 @@ export function MobileSheets({
     // place Pause / Resume / `+ Log manually` live, and the studio drawer's
     // clock opens it at 1440 as well as below. Every other sheet still closes
     // when the compact regime ends.
-    if (sheetKind === 'timer') return;
+    if (sheetKind === "timer") return;
 
-    const validRegime = window.matchMedia('(max-width: 1179px)');
+    const validRegime = window.matchMedia("(max-width: 1179px)");
     const closeOutsideRegime = () => {
       if (!validRegime.matches) closeSheet();
     };
 
     closeOutsideRegime();
-    validRegime.addEventListener('change', closeOutsideRegime);
-    return () => validRegime.removeEventListener('change', closeOutsideRegime);
+    validRegime.addEventListener("change", closeOutsideRegime);
+    return () => validRegime.removeEventListener("change", closeOutsideRegime);
   }, [closeSheet, sheetKind]);
 
   if (!sheet) return null;
 
   // ── Drawer: the six books ──
-  if (sheet.kind === 'drawer') {
+  if (sheet.kind === "drawer") {
     return (
       <Sheet tone="dark" kind="drawer" onClose={closeSheet}>
         {/* The maker's nameplate — tap to open the Account sheet (identity,
@@ -463,7 +465,7 @@ export function MobileSheets({
           }}
         />
         <h2 className="mt-3 font-heading text-[1.05rem] text-[var(--color-pearl)]">
-          The drawer{' '}
+          The drawer{" "}
           <em className="italic text-[var(--color-clay)]">· six books</em>
         </h2>
         <p className="mt-0.5 text-[14px] text-[rgba(250,247,242,0.58)]">
@@ -481,7 +483,7 @@ export function MobileSheets({
                 }}
                 className="flex w-full items-center gap-3 border-b border-[rgba(250,247,242,0.08)] py-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)]"
               >
-                {l.weight === 'room' ? (
+                {l.weight === "room" ? (
                   <span
                     aria-hidden
                     className="flex shrink-0 flex-col gap-[2px]"
@@ -500,7 +502,7 @@ export function MobileSheets({
                 <span className="min-w-0 flex-1">
                   <span className="block font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
                     {l.name}
-                    {l.weight === 'room' && (
+                    {l.weight === "room" && (
                       <span
                         aria-hidden
                         className="ml-1.5 font-mono text-[12px] text-[var(--color-clay)] opacity-70"
@@ -522,7 +524,7 @@ export function MobileSheets({
   }
 
   // ── Timer (paper) ──
-  if (sheet.kind === 'timer') {
+  if (sheet.kind === "timer") {
     return (
       <Sheet tone="paper" kind="timer" onClose={closeSheet}>
         <MobileTimerSheet />
@@ -535,9 +537,9 @@ export function MobileSheets({
   //    stepper this sheet used to print is retired: the ladder names the
   //    six regions of the spread actually in hand, which is what the
   //    desktop rail's LensLadder prints for the same spread. ──
-  if (sheet.kind === 'spine') {
+  if (sheet.kind === "spine") {
     const activeSectionKey =
-      activeDoc?.sections.find((s) => s.state === 'active')?.key ?? null;
+      activeDoc?.sections.find((s) => s.state === "active")?.key ?? null;
     const ladderRegions = activeSectionKey
       ? paperRegionsForSection(activeSectionKey)
       : [];
@@ -547,7 +549,7 @@ export function MobileSheets({
           type="button"
           onClick={() => {
             closeSheet();
-            router.push('/desk');
+            router.push("/desk");
           }}
           className="block min-h-11 w-full border-b border-[var(--color-pearl)] py-2 text-left font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
         >
@@ -561,21 +563,21 @@ export function MobileSheets({
               <li key={region.key}>
                 <button
                   type="button"
-                  aria-current={current ? 'true' : undefined}
+                  aria-current={current ? "true" : undefined}
                   onClick={() => {
                     closeSheet();
                     requestRegionUnfold(region.key);
-                    scrollToRegion(region.key, projectId ?? '');
+                    scrollToRegion(region.key, projectId ?? "");
                   }}
                   className={`flex min-h-11 w-full flex-col justify-center gap-0.5 py-1.5 text-left ${
-                    current ? 'doc-room-lifted' : ''
+                    current ? "doc-room-lifted" : ""
                   }`}
                 >
                   <span
                     className={`block text-[14px] ${
                       current
-                        ? 'font-semibold text-[var(--color-charcoal)]'
-                        : 'text-[var(--color-charcoal)]'
+                        ? "font-semibold text-[var(--color-charcoal)]"
+                        : "text-[var(--color-charcoal)]"
                     }`}
                   >
                     {DOCUMENT_INDEX_LABELS[region.key]}
@@ -643,8 +645,8 @@ export function MobileSheets({
                     onClick={() => {
                       closeSheet();
                       window.dispatchEvent(
-                        new CustomEvent('document:open-call-sheet', {
-                          detail: { mode: 'sheet' },
+                        new CustomEvent("document:open-call-sheet", {
+                          detail: { mode: "sheet" },
                         }),
                       );
                     }}
@@ -669,15 +671,15 @@ export function MobileSheets({
                 Filed with this job
               </p>
             )}
-            <ul className={projectId ? '' : 'mt-1'}>
+            <ul className={projectId ? "" : "mt-1"}>
               <li>
                 <button
                   type="button"
                   onClick={() => {
                     closeSheet();
                     window.dispatchEvent(
-                      new CustomEvent('document:open-leaf', {
-                        detail: { leaf: 'clientcopy' },
+                      new CustomEvent("document:open-leaf", {
+                        detail: { leaf: "clientcopy" },
                       }),
                     );
                   }}
@@ -706,8 +708,8 @@ export function MobileSheets({
                       document
                         .getElementById(`doc-room-${r.id}`)
                         ?.scrollIntoView({
-                          block: 'start',
-                          behavior: 'smooth',
+                          block: "start",
+                          behavior: "smooth",
                         });
                     }}
                     className="block w-full py-1.5 text-left font-heading text-[13px] italic text-[var(--color-charcoal)]"
@@ -733,7 +735,7 @@ export function MobileSheets({
   //    invoice lines, a thread) this list does not hold, so duplicating a
   //    live mutation here would risk a second, divergent path (§5's one-act
   //    invariant). ──
-  if (sheet.kind === 'margin') {
+  if (sheet.kind === "margin") {
     const {
       items: marginItems,
       gates,
@@ -745,7 +747,7 @@ export function MobileSheets({
     return (
       <Sheet tone="paper" kind="margin" onClose={closeSheet}>
         <h2 className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
-          Margin{' '}
+          Margin{" "}
           <span className="font-mono text-[13px] font-normal text-[var(--color-aged-oak)]">
             · {count}
           </span>
@@ -764,7 +766,7 @@ export function MobileSheets({
               <li
                 key={gate.id}
                 className="mb-1.5 flex w-full items-start gap-2 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-2 text-left"
-                style={{ borderLeft: '2.5px solid var(--color-golden-hour)' }}
+                style={{ borderLeft: "2.5px solid var(--color-golden-hour)" }}
               >
                 <span className="text-[14px] leading-snug text-[var(--color-charcoal)]">
                   {gate.lane} · {gate.terms}
@@ -772,7 +774,7 @@ export function MobileSheets({
                 {overdueStampLabel(gate.overdue) && (
                   <span
                     className="ml-auto shrink-0 font-mono text-[12px] font-semibold uppercase tracking-[0.04em]"
-                    style={{ color: 'var(--color-charcoal)' }}
+                    style={{ color: "var(--color-charcoal)" }}
                   >
                     {overdueStampLabel(gate.overdue)}
                   </span>
@@ -831,7 +833,7 @@ export function MobileSheets({
   }
 
   // ── Margin item (paper): the full item + its actions (D3-2) ──
-  if (sheet.kind === 'margin-item') {
+  if (sheet.kind === "margin-item") {
     const row = allItems.find((i) => i.item_id === sheet.itemId);
     if (!row) {
       // The item left the list (resolved/refetch) — fall back to the spine.
@@ -849,13 +851,13 @@ export function MobileSheets({
         <h2 className="font-heading text-[1rem] font-medium leading-tight text-[var(--color-charcoal)]">
           {row.title}
         </h2>
-        {row.kind !== 'time' && (
+        {row.kind !== "time" && (
           <div className="mt-1">
             <MarginItemBody
               row={row}
               projectId={projectId}
-              clientName={activeDoc?.clientName ?? ''}
-              decisionRows={allItems.filter((i) => i.kind === 'decision')}
+              clientName={activeDoc?.clientName ?? ""}
+              decisionRows={allItems.filter((i) => i.kind === "decision")}
             />
           </div>
         )}
@@ -876,8 +878,8 @@ function MobileTimerSheet() {
     resume,
     manualLog,
   } = useDocumentTime();
-  const [minutes, setMinutes] = useState('');
-  const [activity, setActivity] = useState('design');
+  const [minutes, setMinutes] = useState("");
+  const [activity, setActivity] = useState("design");
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -891,7 +893,7 @@ function MobileTimerSheet() {
   return (
     <div data-mobile-timer-sheet-content>
       <span className="doc-type-meta font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
-        In hand{paused ? ' · paused' : ''}
+        In hand{paused ? " · paused" : ""}
       </span>
       <p className="mb-2 mt-1 font-mono text-[26px] tracking-[0.04em] text-[var(--color-charcoal)]">
         {fmtElapsed(elapsedSeconds)}
@@ -963,7 +965,7 @@ function MobileTimerSheet() {
                 setBusy(true);
                 try {
                   await manualLog(parsed, activity);
-                  setMinutes('');
+                  setMinutes("");
                   setFormOpen(false);
                 } finally {
                   setBusy(false);
@@ -984,4 +986,4 @@ function MobileTimerSheet() {
 }
 
 const BTN =
-  'doc-type-meta min-h-11 min-w-11 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 font-medium text-[var(--color-charcoal)] active:border-[var(--color-clay)]';
+  "doc-type-meta min-h-11 min-w-11 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2 font-medium text-[var(--color-charcoal)] active:border-[var(--color-clay)]";
