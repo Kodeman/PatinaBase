@@ -62,9 +62,23 @@ async function openPaper(page: AuthenticatedPage): Promise<void> {
   await settle(page);
   // Every claim in this file is about a PRINTED STRING, and every one of them
   // is derived from a query: `settle()` answers only for the lens, so a read
-  // taken on its own catches `Reading…` where the proposal's own fetch has
-  // not landed. D-B28's ruled precondition.
+  // taken on its own catches `Reading…` where the proposal's own fetch has not
+  // landed. D-B28's ruled precondition.
   await quiet(page);
+  // And the symptom itself, named: the ladder's own count line — which every
+  // pre-work head's status line IS (`page.tsx` `preworkStatus` reads
+  // `ladderSegments[].countLine`) — prints the literal `Reading…` placeholder
+  // while its query is in flight. Kept beside `quiet()` rather than instead of
+  // it because it says what went wrong when it goes wrong, and because this
+  // file runs SECOND in its webkit shard, after `mobile-margin-sheet`, against
+  // a warm worker. It asserts nothing.
+  await expect(
+    page
+      .locator(
+        '[data-document-paper] [data-index-region] [data-region-head] h2 + p',
+      )
+      .filter({ hasText: /^Reading…$/ }),
+  ).toHaveCount(0, { timeout: 20_000 });
 }
 
 /** The head's own status line — the first `<p>` immediately after its
