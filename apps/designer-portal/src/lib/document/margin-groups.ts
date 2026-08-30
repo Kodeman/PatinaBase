@@ -40,9 +40,13 @@ export function marginListable(
  * Group already-listable rows by anchor, in the paper's own region order.
  *
  * `order: 'whole-job-first'` is the sheet's (W5-R1); `'regions-first'` is the
- * rail's. A group with no members is never printed. `decorate` builds each
- * caller's row shape, and `extra` contributes rows that count toward a
- * group's heading without appearing in `rows` — the rail's settled fold.
+ * rail's. A group with no members is never printed, and `decorate` builds each
+ * caller's row shape.
+ *
+ * W5F2-03 — this used to document an `extra` parameter ("rows that count toward
+ * a group's heading without appearing in `rows`") the signature never had. The
+ * rail does that split itself, over the rows this returns
+ * (`margin-rail.tsx` — raised vs settled).
  */
 export function groupMarginRows<T>(
   rows: readonly MarginItemRow[],

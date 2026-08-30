@@ -1740,12 +1740,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // W5F-03 — ONE section source for both of the stage strip's gates: the
   // suppression above the spread and the re-host inside `scope`. They read the
   // same value, so they cannot disagree about which spread this is.
-  // (`row.active_section` at both mounts, which sit below the row guard — the
-  // value is the same, the null-safe read is only for this derivation.)
-  const stageStripSpread = row?.active_section ?? null;
+  //
+  // Residual, closed at W6: that value has to be the SPREAD's section, not the
+  // row's. The `scope` region that hosts one of the two mounts is gated on
+  // `spreadSection` (`= table ? table.section : row.active_section`), and a
+  // pinned worktable deliberately holds a stale composition — so an
+  // `active_section: 'proposal'` under a pinned `section: 'project'` suppressed
+  // the free-standing strip and never mounted `scope`, printing ZERO strips.
+  // `stageStripInScope` is therefore computed below, beside `spreadSection`,
+  // and both use sites sit under it.
   // W5F-02 — `scope` mounts on the PROPOSAL spread only, so only the proposal
   // spread re-hosts the strip. brief/discovery/direction keep it where it was.
-  const stageStripInScope = stageStripSpread === 'proposal';
   const ladderSegments = ticketInput
     ? deriveLadderSegments({
         ticket: ticketInput,
@@ -2209,6 +2214,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // read on this page stays on the live row.
   const table = worktableOn ? tablePin.composition : null;
   const spreadSection = table ? table.section : row.active_section;
+  // W5F-03 (residual) — the gate both stage-strip mounts read, off the spread
+  // the page is actually printing.
+  const stageStripInScope = spreadSection === 'proposal';
   // W4a — the Finalize table: the LEGACY proposal in the client's hands. Its
   // head, its leader, its Offer facets and its one shelf stand only here.
   //
@@ -2645,8 +2653,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 brief, discovery and direction lost the strip entirely rather
                 than re-hosting it. `section-stage-line-mount.tsx`'s
                 section-mode branch exists precisely for those three.
-                W5F-03: both gates read `stageStripSpread`, so they cannot
-                disagree about which spread this is. */}
+                W5F-03: both gates read `spreadSection`, so they cannot
+                disagree about which spread this is — including under a pinned
+                worktable, where the row's own section is deliberately stale. */}
             {!stageStripInScope && (
               <SectionStageLineMount
                 projectId={
@@ -2743,11 +2752,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                       `stageStripInScope` above is the same fact read once. */}
                   {stageStripInScope && (
                     <SectionStageLineMount
-                      projectId={
-                        row.engagement_kind === 'project'
-                          ? row.project_id
-                          : null
-                      }
+                      // W5F2-01 — NULL, always. N2 rules `scope`'s fact to be
+                      // the SECTION's, and the head and the rail segment both
+                      // derive it that way (`preworkStageLine` is a pure
+                      // `deriveSectionWorkflowStageDocument(active_section)`).
+                      // A non-null id sends the mount down the project branch
+                      // instead, so on a project engagement still sitting at
+                      // `active_section: 'proposal'` the head printed
+                      // `Core · stage 03` while the body beneath it printed the
+                      // project's real workflow stage — the one-fact-two-
+                      // derivations shape N2 exists to close, reintroduced
+                      // through the branch rather than through the mount.
+                      projectId={null}
                       activeSection={row.active_section}
                       hosted
                     />
