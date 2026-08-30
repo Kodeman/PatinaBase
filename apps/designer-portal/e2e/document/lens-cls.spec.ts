@@ -62,7 +62,10 @@ interface ClsShift {
 
 interface ClsResult {
   initialLoadCls: number;
+  /** The PAPER's shift — D-B29's gate, exactly 0. */
   scrollCls: number;
+  /** The rail's and the band's own reflow, printed but not gated (item 12). */
+  chromeCls: number;
   shifts: ClsShift[];
 }
 
@@ -70,7 +73,7 @@ type WindowWithCls = Window & {
   __lensSettled?: () => Promise<true>;
   __initialClsEntries?: number[];
   __initialClsObserver?: PerformanceObserver;
-  __scrollClsEntries?: Array<{ value: number; sources: string[] }>;
+  __scrollClsEntries?: Array<{ value: number; sources: string[]; chrome: boolean }>;
 };
 
 async function measureCLS(
@@ -137,6 +140,24 @@ async function measureCLS(
           }>;
         };
         if (e.hadRecentInput) continue;
+        // W4 item 12 · WHOSE shift. D-B29's 0 is a claim about the PAPER —
+        // H5's sentence is "a region above the frame growing from its reserve
+        // is the layout shift the design forbids". The rail and the band are
+        // chrome that OD-14 requires to change as the reader moves (the
+        // current stop's segment carries its room rungs; line 2 names the
+        // worst standing exception), and the band's own height is a declared
+        // 56px constant, so neither can move a pixel of paper. An entry every
+        // one of whose sources is chrome is counted and PRINTED separately
+        // rather than folded into the paper's number, where it would make the
+        // gate assert the opposite of OD-14.
+        const isChrome = (node: Element | null | undefined) => {
+          if (!node) return false;
+          if (node.closest('[data-lens-band]')) return true;
+          return !node.closest('[data-document-paper]');
+        };
+        const chrome =
+          (e.sources ?? []).length > 0 &&
+          (e.sources ?? []).every((s) => isChrome(s.node as Element | null));
         const sources = (e.sources ?? []).map((s) => {
           const node = s.node as HTMLElement | null | undefined;
           const tag = node?.tagName?.toLowerCase() ?? 'unknown';
@@ -150,7 +171,7 @@ async function measureCLS(
             `${JSON.stringify(s.previousRect)} -> ${JSON.stringify(s.currentRect)}`
           );
         });
-        win.__scrollClsEntries!.push({ value: e.value, sources });
+        win.__scrollClsEntries!.push({ value: e.value, sources, chrome });
       }
     });
     observer.observe({ type: 'layout-shift', buffered: false } as PerformanceObserverInit);
@@ -181,8 +202,13 @@ async function measureCLS(
     return { step, value: entry.value, sources: entry.sources };
   });
 
-  const scrollCls = rawEntries.reduce((sum, entry) => sum + entry.value, 0);
-  return { initialLoadCls, scrollCls, shifts };
+  const scrollCls = rawEntries
+    .filter((entry) => !entry.chrome)
+    .reduce((sum, entry) => sum + entry.value, 0);
+  const chromeCls = rawEntries
+    .filter((entry) => entry.chrome)
+    .reduce((sum, entry) => sum + entry.value, 0);
+  return { initialLoadCls, scrollCls, chromeCls, shifts };
 }
 
 test.describe('CLS — zero layout shift over a settled scroll (falsifiable sentence (c))', () => {
@@ -193,9 +219,10 @@ test.describe('CLS — zero layout shift over a settled scroll (falsifiable sent
   test('no-preference: cumulative layout shift is 0 from the settled s0, over a 30-step scroll', async ({
     authenticatedPage: page,
   }) => {
-    const { initialLoadCls, scrollCls, shifts } = await measureCLS(page, 'no-preference');
+    const { initialLoadCls, scrollCls, chromeCls, shifts } = await measureCLS(page, 'no-preference');
     console.log(`CLS (initial load, buffered, navigation -> quiet): ${initialLoadCls}`);
     console.log(`CLS (scroll, unbuffered from settled s0, ${STEPS} steps, ${TOTAL_SCROLL}px): ${scrollCls}`);
+    console.log(`CLS (scroll, CHROME only — rail segments + band line 2): ${chromeCls}`);
     const detail = shifts
       .map((s) => `  step ${s.step} (value ${s.value}): ${JSON.stringify(s.sources)}`)
       .join('\n');
@@ -208,9 +235,10 @@ test.describe('CLS — zero layout shift over a settled scroll (falsifiable sent
   test('reduced motion: cumulative layout shift is 0 from the settled s0, over a 30-step scroll', async ({
     authenticatedPage: page,
   }) => {
-    const { initialLoadCls, scrollCls, shifts } = await measureCLS(page, 'reduce');
+    const { initialLoadCls, scrollCls, chromeCls, shifts } = await measureCLS(page, 'reduce');
     console.log(`CLS (initial load, buffered, navigation -> quiet): ${initialLoadCls}`);
     console.log(`CLS (scroll, unbuffered from settled s0, ${STEPS} steps, ${TOTAL_SCROLL}px): ${scrollCls}`);
+    console.log(`CLS (scroll, CHROME only — rail segments + band line 2): ${chromeCls}`);
     const detail = shifts
       .map((s) => `  step ${s.step} (value ${s.value}): ${JSON.stringify(s.sources)}`)
       .join('\n');

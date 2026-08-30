@@ -75,9 +75,9 @@ describe('R127 W4-C1 — the lens reserve never reaches the rail', () => {
     const guarded = selectors(css).filter(({ selector }) =>
       selector.includes('[data-index-region]'),
     );
-    // The scroll-margin landing rule, the OD-12 reserve, and the OD-4
-    // `@supports` block — three at the time of writing, never zero.
-    expect(guarded.length).toBeGreaterThanOrEqual(3);
+    // The scroll-margin landing rule and the OD-12 reserve — two since D-B33
+    // retired the OD-4 `@supports` block, never zero.
+    expect(guarded.length).toBeGreaterThanOrEqual(2);
   });
 
   it('never scopes a [data-index-region] rule to the shell', () => {
@@ -86,15 +86,19 @@ describe('R127 W4-C1 — the lens reserve never reaches the rail', () => {
     );
   });
 
-  it('spends a passed region reserve that no region root can shadow', () => {
-    // W4-C8: every region body sets `--doc-quiet-reserve` on the region ROOT,
-    // which is the element the `[data-passed]` rule matches — so a
-    // `var(--doc-quiet-reserve, …)` there can never reach its own fallback.
-    const passedRule = withoutComments(css).match(
-      /\[data-passed\]\s*\{[^}]*\}/,
-    );
-    expect(passedRule).not.toBeNull();
-    expect(passedRule![0]).toContain('contain-intrinsic-size: auto');
-    expect(passedRule![0]).not.toContain('--doc-quiet-reserve');
+  it('declares no content-visibility anywhere (D-B33)', () => {
+    // OD-4's `content-visibility: auto` on `[data-passed]` measured CLS 0.8658
+    // against a gate of exactly 0 (D-B29) and was deleted by OD-4's own
+    // pre-agreed failure move. The property toggling is the shift, so a future
+    // reader who reinstates it without a new ruling turns the gate red — this
+    // says so before the browser has to.
+    expect(withoutComments(css)).not.toMatch(/content-visibility\s*:/);
+  });
+
+  it('keeps the passed reserve token declared, unspent, for the OD-4 candidate', () => {
+    // W4-C8's finding survives the deletion: whoever takes the candidate up
+    // must not spend `--doc-quiet-reserve`, which every region root shadows on
+    // itself — the same element a `[data-passed]` rule would match.
+    expect(css).toContain('--doc-passed-reserve:');
   });
 });

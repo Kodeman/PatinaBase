@@ -1127,45 +1127,41 @@ html:has([data-document-shell]) {
   min-block-size: var(--doc-quiet-reserve, 68px);
 }
 
-/* R127/OD-4 (W4-L4) — an engine that supports `content-visibility` is told a
-   region already scrolled past (`[data-passed]`, written imperatively by the
-   density observer and never removed) can skip its own rendering work; an
-   engine that doesn't support the property is unaffected by the whole rule
-   (`@supports` gates it, so there is no attribute-removal fallback to
-   maintain — OD-4 names this cost-only-on-unsupported-engines fallback
-   explicitly).
+/* R127/OD-4 (W4-L4) — DELETED, by OD-4's own pre-agreed failure move.
+   Item 12 · what was here:
 
-   W4-C8 · which form, and why. OD-4's literal text is `contain-intrinsic-size:
-   auto` with no length; that is not valid grammar (`auto? [ none | <length>
-   ]{1,2}`), so the whole declaration would be dropped and the skipped region
-   would fall back to `none` — an element sized as if empty, i.e. the paper
-   collapsing by exactly the passed region's height. The shipped form is the
-   `auto <length>` one, which is the form that REMEMBERS: `auto` makes the
-   engine use the element's last-remembered size whenever it has one — the
-   ordinary case, a region the reader actually scrolled through at full height
-   — and spends `<length>` only before the element has ever been laid out.
+     @supports (content-visibility: auto) {
+       [data-document-paper] [data-index-region][data-passed] {
+         content-visibility: auto;
+         contain-intrinsic-size: auto var(--doc-passed-reserve, 112px);
+       }
+     }
 
-   The length is `--doc-passed-reserve`, NOT `--doc-quiet-reserve`. All six
-   region bodies set `--doc-quiet-reserve` on the region root itself, which is
-   the same element this rule matches, so the old `var(--doc-quiet-reserve,
-   112px)` could never reach its 112px fallback: it resolved to the root's own
-   `--doc-quiet-reserve-min` (68px) for five of six regions, spending the
-   SMALLER reserve while the comment claimed the larger. `--doc-passed-reserve`
-   is declared once, on `:root`, and no region root shadows it.
+   MEASURED, chromium, 1440x900, the 30-step settled scroll `lens-cls.spec.ts`
+   drives: CLS **0.8658** with the block, **0.000986** with the single
+   `content-visibility: auto` declaration removed and everything else
+   unchanged — the property is 99.9% of the shift, and D-B29's gate is exactly
+   0. The two shifts it produces are step 9 (a folded region's `FoldSeam`
+   subtree collapsing 219.73px -> 40.94px and back, 0.078 each way) and step 24
+   (four `li#ffe-selection-…` rows zeroing and returning, 0.353 + 0.355).
 
-   The Wave-4 find-in-page gate (chromium + webkit,
-   `quiet-responsive-shell.spec.ts`) is the only runtime proof of this rule;
-   its pre-agreed failure move is to DELETE this block and log the finding in
-   `deviations.md` as an "OD-4 fallback candidate" — never a CSS change that
-   tries to keep both. `lens-cls.spec.ts`'s deep-landed case (a restored scroll
-   that lands with passed regions above the frame → CLS 0) is what measures the
-   reserve itself. */
-@supports (content-visibility: auto) {
-  [data-document-paper] [data-index-region][data-passed] {
-    content-visibility: auto;
-    contain-intrinsic-size: auto var(--doc-passed-reserve, 112px);
-  }
-}
+   Both are the property TOGGLING, not a missing reserve. `contain-intrinsic-
+   size: auto <length>` was already the remembering form, and deferring
+   `data-passed` until two frames after the promotion — so the engine has laid
+   the full body out and has a real last-remembered size before it may skip it
+   — was tried and moved the number NOT AT ALL (0.8657658230921531 both runs,
+   to the digit). A region whose contents the engine skips and unskips as it
+   crosses the relevance margin shifts on each crossing whatever size is
+   remembered for it.
+
+   OD-4's own text names the remedy for exactly this: "its pre-agreed failure
+   move is to DELETE this block and log the finding in `deviations.md` as an
+   'OD-4 fallback candidate' — never a CSS change that tries to keep both."
+   Logged as D-B33. `--doc-passed-reserve` stays declared on `:root`, unspent,
+   for whoever takes the candidate up.
+
+   Note the find-in-page gate (`quiet-responsive-shell.spec.ts`, chromium AND
+   webkit) PASSES either way — it was never the thing that failed here. */
 
 /* Typography: now provided by @patina/design-system/styles/typography.css.
    Font variable mappings set on body below in @layer base. */

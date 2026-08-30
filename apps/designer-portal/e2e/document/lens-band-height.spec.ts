@@ -1,7 +1,7 @@
 /**
  * The band's declared height, in all eighteen cells (R127 Wave 3, proposal §9).
  *
- * THE FALSIFIABLE SENTENCE: `[data-lens-band]`'s `boundingBox().height` is
+ * THE FALSIFIABLE SENTENCE: `[data-lens-band]`'s layout height is
  * exactly 56 on the long paper and on the pre-work paper, at 1440×900,
  * 1280×900 and 390×844, at scrollY 0, 400 and 1200 — two documents × three
  * widths × three offsets = eighteen cells. A band whose height is a fact and
@@ -22,6 +22,7 @@
  * BROWSERS (test-impact, "Browser ruling"): chromium + webkit. Firefox is
  * skipped with its reason, the repo's own idiom.
  */
+import type { Locator } from '@playwright/test';
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 import { scrollTo, settle } from '../helpers/lens';
 import { LONG_PAPER_ID, PRE_WORK_ID, assertLongPaper } from './lens-fixtures';
@@ -36,6 +37,24 @@ test.skip(
  *  (C-7). The spec asserts the token AND the measured box, because a token that
  *  says 56 while the box measures 61 is exactly the defect this catches. */
 const BAND_HEIGHT = 56;
+
+/**
+ * The LAYOUT height, not the composited one.
+ *
+ * W4 items 14/16: `locator.boundingBox()` reads quads out of the compositor
+ * (`DOM.getBoxModel`), and for a `position: sticky` element — the band, and the
+ * line-2 act inside it — those quads carry the compositor's own fractional
+ * sticky offset. It read 55.7204 for the band at 1280 and 43.9895/43.6648 for
+ * the act while `getBoundingClientRect().height`, `offsetHeight` and the
+ * computed `height` were all EXACTLY 56 and 44 in chromium AND webkit at
+ * 1440/1280/390. There is nothing in the CSS to correct: the box is the
+ * declared constant, and the instrument was the thing that was wrong. Measured
+ * this way the contract holds as written — `toBe(56)`, `>= 44`, no engine
+ * allowance and no `44.5px` floor papering over a box that is already right.
+ */
+async function layoutHeight(locator: Locator): Promise<number> {
+  return locator.evaluate((el) => el.getBoundingClientRect().height);
+}
 
 /** SC1 — the first region head at rest, at 1440. */
 const SC1_MAX_Y = 405;
@@ -101,13 +120,8 @@ test.describe('the lens band’s declared height', () => {
 
         for (const offset of OFFSETS) {
           await scrollTo(page, offset);
-          const box = await band.boundingBox();
           expect(
-            box,
-            `${paper.label} · ${size.label} · scrollY ${offset}: the band has no box`,
-          ).not.toBeNull();
-          expect(
-            box!.height,
+            await layoutHeight(band),
             `${paper.label} · ${size.label} · scrollY ${offset}`,
           ).toBe(BAND_HEIGHT);
         }
@@ -367,8 +381,12 @@ test.describe('line 2’s act is a whole 44px target at 390 (C-02)', () => {
     }
     const box = await act.first().boundingBox();
     expect(box).not.toBeNull();
-    console.log(`line 2 act box at 390: ${box!.width}×${box!.height}px`);
-    expect(box!.height).toBeGreaterThanOrEqual(44);
+    const height = await layoutHeight(act.first());
+    console.log(
+      `line 2 act box at 390: ${box!.width}×${height}px (layout) · ` +
+        `${box!.height}px (composited)`,
+    );
+    expect(height).toBeGreaterThanOrEqual(44);
 
     // And it is genuinely hittable at its own top and bottom edges: the point
     // 2px inside each edge resolves to the control, not to the clipped line.

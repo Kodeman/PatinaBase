@@ -50,15 +50,23 @@ export async function twoFrames(page: Page): Promise<void> {
  * build and nothing else.
  */
 export async function assertLensBuild(page: Page): Promise<void> {
-  const built = await page.evaluate(
-    () =>
-      typeof (window as unknown as { __lensSettled?: unknown })
-        .__lensSettled === 'function',
-  );
-  expect(
-    built,
-    'window.__lensSettled is absent — this server is not serving the Wave-4 lens build (D-B28.5)',
-  ).toBe(true);
+  // WAITS rather than reads once: the hook installs the publisher in a layout
+  // effect, so a caller that settles immediately after `goto` can be ahead of
+  // hydration. An absence that OUTLASTS the wait is the broken build.
+  try {
+    await page.waitForFunction(
+      () =>
+        typeof (window as unknown as { __lensSettled?: unknown })
+          .__lensSettled === 'function',
+      undefined,
+      { timeout: 15_000 },
+    );
+  } catch {
+    expect(
+      false,
+      'window.__lensSettled never appeared — this server is not serving the Wave-4 lens build (D-B28.5)',
+    ).toBe(true);
+  }
 }
 
 /**

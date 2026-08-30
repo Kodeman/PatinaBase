@@ -24,7 +24,7 @@
  * red, and it turns green the moment W4-L1/L2/L3 attach the observer.
  */
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
-import { scrollTo, scrollSteps, settle } from '../helpers/lens';
+import { quiet, scrollTo, scrollSteps, settle } from '../helpers/lens';
 import {
   LONG_PAPER_ID,
   FOURTH_STOP_HEADING_ID,
@@ -186,6 +186,16 @@ test.describe('the lens density — one direction (D-B16)', () => {
   }) => {
     await openPaper(page);
     await scrollTo(page, 0);
+    // The origin is the SETTLED, QUIET s0 — D-B29's own origin. `settle()`
+    // answers only for the lens; the paper's own queries can still be landing
+    // after it, and a late 11px arriving above the first region between the
+    // baseline read and the first step is a DATA arrival, not the lens moving
+    // a root above the frame. (Measured: the anchor read 315 immediately after
+    // the first settle and 326 from the next step on, with the letterhead
+    // 192.06px and the band 56px unchanged at both.) With the quiet origin the
+    // walk measures what the invariant is about.
+    await quiet(page);
+    await settle(page);
     const anchorKey = (await regionRects(page))[0]?.key ?? null;
     expect(anchorKey, 'no first region to anchor on').not.toBeNull();
 
@@ -227,18 +237,26 @@ test.describe('the lens density — one direction (D-B16)', () => {
     authenticatedPage: page,
   }) => {
     await openPaper(page);
+    await quiet(page);
     await scrollTo(page, 0);
     const innerHeight = await page.evaluate(() => window.innerHeight);
     const rects = await regionRects(page);
 
-    // A target that starts OUTSIDE the initial lookahead window, so it has a
-    // real quiet->full crossing ahead of it rather than being pre-promoted.
+    // A target that starts OUTSIDE the initial lookahead window AND IS STILL
+    // QUIET, so it has a real quiet->full crossing ahead of it. Distance alone
+    // is not enough: `data-density` is the FOLD's answer, and the lens is only
+    // its fourth voice — a region whose own data opens it (D-B27's FF&E
+    // install/care `forceOpen`, a default-open posture) prints `full` at s0
+    // however far down the paper it sits, and bisecting for a crossing it will
+    // never make is a test that cannot pass for a reason that is not a defect.
     const candidate = rects
-      .filter((r) => r.top > innerHeight + LOOKAHEAD_PX)
+      .filter((r) => r.top > innerHeight + LOOKAHEAD_PX && r.density !== 'full')
       .sort((a, b) => a.top - b.top)[0];
     expect(
       candidate,
-      'no region starts outside the initial lookahead window at this viewport — nothing to bisect',
+      `no region starts outside the initial lookahead window AND quiet at this viewport — nothing to bisect. rects: ${JSON.stringify(
+        rects.map((r) => ({ key: r.key, top: Math.round(r.top), density: r.density })),
+      )}`,
     ).toBeTruthy();
     const target = candidate!.key!;
 
@@ -259,33 +277,31 @@ test.describe('the lens density — one direction (D-B16)', () => {
       );
     }
 
-    let lo = 0;
-    let hi = Math.max(40, Math.floor(totalHeight / 40) * 40);
-    const loDensity = await densityAt(lo);
-    expect(
-      loDensity,
-      `"${target}" is already full at scrollY 0 — pick a target further down the paper`,
-    ).not.toBe('full');
-    const hiDensity = await densityAt(hi);
-    expect(
-      hiDensity,
-      `"${target}" never becomes full even scrolled to the foot (${hi}px) — expected until the density observer is wired (W4-L1/L2/L3)`,
-    ).toBe('full');
-
-    while (hi - lo > 40) {
-      const mid = Math.round((lo + hi) / 2 / 40) * 40;
-      if (mid === lo || mid === hi) break;
-      const midDensity = await densityAt(mid);
-      if (midDensity === 'full') hi = mid;
-      else lo = mid;
-    }
-
-    const from = Math.max(0, lo - 40 - 24);
-    const to = hi + 40 + 24;
+    // A FORWARD walk, not a bisection. The lens never demotes (D-B16), so a
+    // bisection that scrolls back up re-reads a root its own earlier probe
+    // already promoted and every later reading is `full` — the instrument
+    // destroys the state it is measuring. (Measured: the bisection's ±24px
+    // sweep returned `[{y:0,full},{y:40,full},{y:80,full}]` on a target the
+    // same test had just asserted was quiet at scrollY 0.) One walk down the
+    // paper at the reader's own 40px pace answers the sentence directly: the
+    // boundary is crossed exactly once, and never back.
     const readings: { y: number; density: string | null }[] = [];
-    for (let y = from; y <= to; y += 40) {
-      readings.push({ y, density: await densityAt(y) });
+    let sawFull = false;
+    let after = 0;
+    for (let y = 0; y <= totalHeight; y += 40) {
+      const density = await densityAt(y);
+      readings.push({ y, density });
+      if (density === 'full') {
+        sawFull = true;
+        after += 1;
+        // Three steps past the crossing is enough to catch a flap back.
+        if (after >= 3) break;
+      }
     }
+    expect(
+      sawFull,
+      `"${target}" never turned full over the whole paper: ${JSON.stringify(readings)}`,
+    ).toBe(true);
 
     let transitions = 0;
     let sawFullToQuiet = false;
