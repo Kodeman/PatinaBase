@@ -75,6 +75,10 @@ import {
   DocumentActionGroup,
   DocumentActionRow,
 } from './document-action';
+import {
+  groupMarginRows,
+  marginListable,
+} from '@/lib/document/margin-groups';
 
 /**
  * Ask the margin to open. Between 1180px and 1440px the rail is a closed,
@@ -402,7 +406,14 @@ export function MarginRail({
       classifyMarginItems(items ?? [], coordItems ?? [], classificationState),
     [classificationState, coordItems, items],
   );
-  const visibleItems = classifiedMargin.items;
+  // W5F-06 — `marginListable` is the margin's own "what the margin LISTS"
+  // rule, shared with the 390 sheet: everything but the studio's own clock.
+  // The rail did not filter `time`, so a logged entry counted toward
+  // `THE WHOLE JOB · N` here and not there — one margin, two numbers.
+  const visibleItems = useMemo(
+    () => marginListable(classifiedMargin.items),
+    [classifiedMargin.items],
+  );
   const { data: fileChanges } = useProjectFileChangeNotifications(projectId);
   const markFileChangeRead = useMarkProjectFileChangeRead();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -435,45 +446,27 @@ export function MarginRail({
   // items stay folded — that is R12 — but the fold now lives INSIDE its own
   // group rather than as a separate section below every group, so folding
   // never changes a heading's count.
+  // W5F-06 / W5-R5 §3 — the margin's ONE grouper (shared with the 390 sheet),
+  // over EVERY item in the group so the heading's count is the group's; the
+  // raised/settled split is then applied inside each group, because R12's fold
+  // may not change a heading's number. The rail leads with the regions; the
+  // sheet leads with the whole job (W5-R1 reverses the print order, not the
+  // grouping mechanic).
   const anchorGroups = useMemo(() => {
-    const bucketFor = (
-      map: Map<DocumentIndexKey | null, MarginItemRow[]>,
-      row: MarginItemRow,
-    ) => {
-      const key = marginAnchorRegion(row);
-      const bucket = map.get(key);
-      if (bucket) bucket.push(row);
-      else map.set(key, [row]);
-    };
-    const raisedBy = new Map<DocumentIndexKey | null, MarginItemRow[]>();
-    const settledBy = new Map<DocumentIndexKey | null, MarginItemRow[]>();
-    for (const row of raised) bucketFor(raisedBy, row);
-    for (const row of settled) bucketFor(settledBy, row);
-
-    const ordered: Array<{
-      key: DocumentIndexKey | null;
-      heading: string;
-      rows: MarginItemRow[];
-      settledRows: MarginItemRow[];
-      count: number;
-    }> = [];
-    const push = (key: DocumentIndexKey | null, heading: string) => {
-      const rows = raisedBy.get(key) ?? [];
-      const settledRows = settledBy.get(key) ?? [];
-      if (rows.length + settledRows.length === 0) return;
-      ordered.push({
-        key,
-        heading,
-        rows,
-        settledRows,
-        count: rows.length + settledRows.length,
-      });
-    };
-    for (const region of PROJECT_PAPER_ORDER) {
-      push(region.key, `BESIDE ${marginRegionName(region.key)}`);
-    }
-    push(null, 'THE WHOLE JOB');
-    return ordered;
+    // Grouped over `raised` THEN `settled`, not over `visibleItems`, so
+    // `partitionMargin`'s R12 ordering survives inside each group: needs-action
+    // floats to the top of its own group, and the settled fold keeps its own
+    // order beneath.
+    const isSettled = new Set(settled);
+    return groupMarginRows<MarginItemRow>([...raised, ...settled], {
+      order: 'regions-first',
+      decorate: (row) => row,
+    }).map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) => !isSettled.has(row)),
+      settledRows: group.rows.filter((row) => isSettled.has(row)),
+      count: group.rows.length,
+    }));
   }, [raised, settled]);
 
   const publishSummary = useContext(MarginSummaryContext);

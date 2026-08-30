@@ -537,7 +537,16 @@ export function LetterheadTitle({
               commit();
               leaveEdit();
             } else if (e.key === 'Escape') {
+              // W5-R6 / 1b — three things, in this order, and the third
+              // matters as much as the first two: the shell puts the paper
+              // down on Escape (D1), so without stopping here the reader
+              // restored the name and lost the document underneath her
+              // (`/doc/…` → `/desk`). `nativeEvent.stopImmediatePropagation`
+              // as well as React's own, because the shell's listener is on
+              // `document` and outside React's tree.
               e.stopPropagation();
+              e.nativeEvent.stopImmediatePropagation();
+              e.preventDefault();
               // D-B48: Escape RESTORES. It used to blur, and blur commits — so
               // the one key that means "leave it alone" saved.
               focused.current = false;

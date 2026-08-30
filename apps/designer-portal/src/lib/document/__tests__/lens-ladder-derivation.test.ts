@@ -446,6 +446,22 @@ describe('deriveLadderSegments · the pre-work stops', () => {
     expect(segments.investment.value).toBe('$184,500');
   });
 
+  it('W5F-04 — scope states the same thing at quiet and at full', () => {
+    // The stage phrase used to be reported up by the strip, which after N2 is
+    // a child of `PreworkRegion` — and `PreworkRegion` UNMOUNTS its children
+    // at quiet. So the head's status line and the rail's value changed on
+    // promotion, which W5-R3 forbids, and D-B37 could not see it because it
+    // runs on `…d5`, where no pre-work stop exists. The fact is derived from
+    // the section key now, so the segment cannot know or care whether the
+    // strip is mounted: the same facts in, the same strings out.
+    const quiet = prework();
+    const full = prework();
+    expect(full.scope.value).toBe(quiet.scope.value);
+    expect(full.scope.narrowValue).toBe(quiet.scope.narrowValue);
+    expect(full.scope.countLine).toBe(quiet.scope.countLine);
+    expect(quiet.scope.value).toBe('CORE · STAGE 03 · 4 ROOMS');
+  });
+
   it('prints the sentence, never a dash, where the stop has no number', () => {
     const segments = prework();
     // OD-2: prose has nothing to count, so the vision row is a name over a

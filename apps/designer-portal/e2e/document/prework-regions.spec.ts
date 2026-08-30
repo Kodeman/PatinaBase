@@ -236,6 +236,52 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
     expect(railStage.split('\n').filter((l) => l.trim()).length).toBe(1);
   });
 
+  test('W5F-04 — scope says the same thing at quiet and at full', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page);
+
+    // The stage phrase used to be reported UP by the strip, which after N2 is
+    // a child of `PreworkRegion` — and `PreworkRegion` unmounts its children
+    // at quiet. So the head's status line and the rail's value changed on
+    // promotion, which W5-R3 forbids; D-B37 cannot see it because it runs on
+    // `…d5`, where no pre-work stop exists. The fact is derived from the
+    // section key now, so the strip's mount state cannot reach it.
+    const read = async () => ({
+      status: (await statusOf(page, 'scope').textContent())?.trim() ?? '',
+      rail:
+        (
+          await page
+            .locator('[data-ladder-segment="scope"]')
+            .textContent()
+        )?.trim() ?? '',
+      density: await page
+        .locator('[data-document-paper] [data-index-region="scope"]')
+        .getAttribute('data-density'),
+    });
+
+    // At s0 `scope` sits below the lookahead on this paper: quiet.
+    const atRest = await read();
+    expect(atRest.status).toContain('Core · stage 03');
+    expect(atRest.rail).toContain('CORE · STAGE 03');
+
+    // Walk to it, so the lens promotes it.
+    await page.evaluate(() => {
+      document
+        .querySelector('[data-document-paper] [data-index-region="scope"]')
+        ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    });
+    await settle(page);
+    const promoted = await read();
+
+    expect(
+      promoted.density,
+      'scope never promoted — the walk proved nothing',
+    ).toBe('full');
+    expect(promoted.status).toBe(atRest.status);
+    expect(promoted.rail).toBe(atRest.rail);
+  });
+
   test('W5-R5 §2 (N2) — the stage-line strip is the scope stop\'s body, so the first thing after the band is a region head', async ({
     authenticatedPage: page,
   }) => {

@@ -509,21 +509,25 @@ describe('the Sections sheet no longer carries the margin (D-B30)', () => {
       ).toBeDisabled();
     });
 
-    it('anchors BESIDE the reading stop when the reader has landed on one', () => {
+    it('D-B44 — says ABOUT THE WHOLE JOB even while she is reading a stop', () => {
       mockItems = [row({ item_id: 'a' })];
       openMargin(1, { ...heldDocument, readingIndex: 'ffe' });
       fireEvent.click(
         within(marginPanel()).getByRole('button', { name: /capture a note/i }),
       );
 
-      expect(
-        screen
-          .getByRole('dialog', { name: 'Note to the margin' })
-          .querySelector('[data-margin-note-anchor]'),
-      ).toHaveTextContent('Beside Pieces');
+      // The `Beside Pieces` line promised an attachment the row could not
+      // keep: `margin_notes.anchor_id` is a uuid, a stop key is not, so a
+      // section anchor is only ever recorded WITHOUT the stop and the note
+      // files under THE WHOLE JOB regardless. One line, one truth.
+      const anchor = screen
+        .getByRole('dialog', { name: 'Note to the margin' })
+        .querySelector('[data-margin-note-anchor]');
+      expect(anchor).toHaveTextContent('About the whole job');
+      expect(anchor).not.toHaveTextContent('Beside');
     });
 
-    it('saves through useCreateMarginNote with the anchor the sheet printed', () => {
+    it('D-B44 — saves the whole-job anchor the sheet printed, from a stop', () => {
       mockItems = [row({ item_id: 'a' })];
       openMargin(1, { ...heldDocument, readingIndex: 'ffe' });
       fireEvent.click(
@@ -532,6 +536,10 @@ describe('the Sections sheet no longer carries the margin (D-B30)', () => {
       const dialog = screen.getByRole('dialog', {
         name: 'Note to the margin',
       });
+      // The sheet printed it; the write must match it.
+      expect(
+        dialog.querySelector('[data-margin-note-anchor]'),
+      ).toHaveTextContent('About the whole job');
       fireEvent.change(
         within(dialog).getByRole('textbox', { name: 'Note body' }),
         { target: { value: '  the console arrives Tuesday  ' } },
@@ -541,8 +549,7 @@ describe('the Sections sheet no longer carries the margin (D-B30)', () => {
       expect(mockCreateNote).toHaveBeenCalledWith(
         expect.objectContaining({
           body: 'the console arrives Tuesday',
-          anchorKind: 'section',
-          // `margin_notes.anchor_id` is a uuid; a stop key is not one.
+          anchorKind: 'letterhead',
           anchorId: null,
         }),
         expect.objectContaining({ onSuccess: expect.any(Function) }),

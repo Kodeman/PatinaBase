@@ -989,16 +989,26 @@ export function MobileSheets({
      *  after the margin sheet has printed it. */
     const backToMargin = () => {
       openMargin();
+      // TWO frames, not one: after a SAVE the margin sheet re-renders with the
+      // new row AND a changed head, and the act is not in the document when
+      // the first frame runs. One frame was enough for Discard, which changes
+      // nothing, and that is exactly why it looked right.
       window.requestAnimationFrame(() => {
-        document
-          .querySelector<HTMLButtonElement>('[data-margin-capture-note]')
-          ?.focus({ preventScroll: true });
+        window.requestAnimationFrame(() => {
+          document
+            .querySelector<HTMLButtonElement>('[data-margin-capture-note]')
+            ?.focus({ preventScroll: true });
+        });
       });
     };
-    const anchorStop = activeDoc?.readingIndex ?? null;
-    const anchorLabel = anchorStop
-      ? `Beside ${DOCUMENT_INDEX_LABELS[anchorStop]}`
-      : 'About the whole job';
+    // D-B44 (amended) — for I152 a note captured from the sheet anchors THE
+    // WHOLE JOB, at every stop. The `BESIDE <STOP>` line promised an
+    // attachment the row could not keep: `margin_notes.anchor_id` is a `uuid`
+    // (`00196_per_item_claims_and_margin_notes.sql`) and a stop key is `'ffe'`,
+    // so a section anchor can only ever be recorded WITHOUT the stop — the
+    // note then files under THE WHOLE JOB anyway (`useMarginSheet` groups
+    // BESIDE only on `'line'`), and the reader was told otherwise. One line,
+    // one truth: `About the whole job`, and that is where it lands.
     const saveNote = () => {
       const body = noteBody.trim();
       if (!body) return;
@@ -1007,19 +1017,8 @@ export function MobileSheets({
           projectId,
           proposalId,
           body,
-          // The reading stop makes this a SECTION anchor, as W5-R4(a) rules.
-          //
-          // `anchorId` stays NULL, and it has to: `margin_notes.anchor_id` is
-          // a `uuid` (`00196_per_item_claims_and_margin_notes.sql`), and a
-          // stop key is `'ffe'`, not a uuid — writing one is a 400
-          // (`22P02 invalid input syntax for type uuid`), which is how this
-          // was found. A section-anchored note therefore files under THE
-          // WHOLE JOB, exactly where every other section-anchored margin item
-          // already files (`useMarginSheet` groups BESIDE only on `'line'`).
-          // The anchor line still tells her where she was standing when she
-          // wrote it. Recording WHICH stop would need a column the table has
-          // not got — flagged for a ruling, not invented here.
-          anchorKind: anchorStop ? 'section' : 'letterhead',
+          // D-B44 (amended): always the whole job, whatever she is reading.
+          anchorKind: 'letterhead',
           anchorId: null,
           dueDate: noteDue
             ? new Date(`${noteDue}T17:00:00`).toISOString()
@@ -1045,7 +1044,7 @@ export function MobileSheets({
           data-margin-note-anchor
           className="mt-0.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]"
         >
-          {anchorLabel}
+          About the whole job
         </p>
         <textarea
           rows={3}

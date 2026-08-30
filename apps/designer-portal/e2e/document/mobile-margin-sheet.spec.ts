@@ -207,7 +207,7 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
       );
     });
 
-    test('files a note from the sheet: the anchor follows the reading stop, and the head counts it', async ({
+    test('files a note from the sheet: it is about the whole job at every stop (D-B44(a) / W5-R6), and the head counts it', async ({
       authenticatedPage: page,
     }) => {
       await openPaperAt390(page);
@@ -230,10 +230,10 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
       ).toHaveCount(0);
       await expect(sheet.getByRole('textbox')).toHaveCount(0);
 
-      // The anchor is the reader's own stop. At s0 on this paper the first
-      // region is already in frame, so `data-reading-index` names it — the
-      // `About the whole job` fallback is the no-stop case, covered in jest
-      // (`mobile-sheets.test.tsx`), which can hold `readingIndex: null`.
+      // D-B44 — the anchor is THE WHOLE JOB, at every stop. At s0 on this
+      // paper the first region is already in frame, so `data-reading-index`
+      // names it; the composer says `About the whole job` anyway, because that
+      // is what it writes.
       await act.click();
       const composer = page.getByRole('dialog', {
         name: 'Note to the margin',
@@ -241,7 +241,7 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
       await expect(composer).toBeVisible();
       await expect(
         composer.locator('[data-margin-note-anchor]'),
-      ).toHaveText('Beside Client approvals');
+      ).toHaveText('About the whole job');
       await expect(
         composer.getByRole('button', { name: 'Save' }),
       ).toBeDisabled();
@@ -257,7 +257,7 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
         page.getByRole('dialog', { name: 'The margin' }),
       ).toBeHidden();
 
-      // Land on Pieces, and the anchor follows the reading stop.
+      // Land on Pieces. D-B44: the anchor does NOT follow the stop.
       await page.evaluate(() => {
         document
           .querySelector('[data-document-paper] [data-index-region="ffe"]')
@@ -276,7 +276,7 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
       });
       await expect(
         composer2.locator('[data-margin-note-anchor]'),
-      ).toHaveText('Beside Pieces');
+      ).toHaveText('About the whole job');
 
       // Write it, save it, and the margin comes back one longer.
       await composer2.getByRole('textbox', { name: 'Note body' }).fill(BODY);
@@ -286,17 +286,40 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
       const back = page.getByRole('dialog', { name: 'The margin' });
       await expect(back.getByText('· 8')).toBeVisible();
       await expect(back.getByText('2 overdue')).toBeVisible();
-      // Under THE WHOLE JOB: `margin_notes.anchor_id` is a uuid and cannot
-      // hold a stop key, so a section-anchored note files where every other
-      // section-anchored item files.
+      // D-B44 — captured while reading Pieces, filed under THE WHOLE JOB, and
+      // BESIDE PIECES gains nothing.
+      const wholeJob = back.locator('[data-margin-group="whole-job"]');
+      await expect(wholeJob.getByText(BODY)).toBeVisible();
+      await expect(wholeJob).toContainText('THE WHOLE JOB · 5');
       await expect(
-        back
-          .locator('[data-margin-group="whole-job"]')
-          .getByText(BODY),
-      ).toBeVisible();
+        back.locator('[data-margin-group="ffe"]'),
+      ).toContainText('BESIDE PIECES · 3');
+      await expect(
+        back.locator('[data-margin-group="ffe"]').getByText(BODY),
+      ).toHaveCount(0);
       await expect(
         back.locator('[data-margin-capture-note]'),
       ).toBeFocused();
+
+      // ── and it SURVIVES a reload in the same group ──────────────────────
+      // NOT `openMargin()`: that helper names the door `Margin · 7`, and the
+      // margin is one longer now.
+      await openPaperAt390(page);
+      await moreDoor(page).click();
+      await page
+        .getByRole('group', { name: 'More studio actions' })
+        .getByRole('button', { name: /^Margin · / })
+        .click();
+      const reopened = page.getByRole('dialog', { name: 'The margin' });
+      await expect(reopened.getByText('· 8')).toBeVisible();
+      const wholeJobAfter = reopened.locator(
+        '[data-margin-group="whole-job"]',
+      );
+      await expect(wholeJobAfter.getByText(BODY)).toBeVisible();
+      await expect(wholeJobAfter).toContainText('THE WHOLE JOB · 5');
+      await expect(
+        reopened.locator('[data-margin-group="ffe"]'),
+      ).toContainText('BESIDE PIECES · 3');
     });
   });
 });

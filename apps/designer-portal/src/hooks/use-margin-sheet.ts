@@ -39,6 +39,10 @@ import {
 } from '@/lib/document/document-index';
 import { useHandoffGates } from '@/components/document/margin-handoff-item';
 import type { WorkflowGate } from '@/lib/document/workflow-gate';
+import {
+  groupMarginRows,
+  marginListable,
+} from '@/lib/document/margin-groups';
 
 export interface MarginSheetRow {
   row: MarginItemRow;
@@ -102,7 +106,7 @@ export function useMarginSheet({
   // The whole margin, every anchor kind — W5-R1 supersedes D-B30's
   // letterhead-only scope.
   const allItems = useMemo(
-    () => classifiedMargin.items.filter((item) => item.kind !== 'time'),
+    () => marginListable(classifiedMargin.items),
     [classifiedMargin.items],
   );
 
@@ -121,36 +125,27 @@ export function useMarginSheet({
     return map;
   }, [ffeItems]);
 
-  const groups = useMemo(() => {
-    const byKey = new Map<DocumentIndexKey | null, MarginSheetRow[]>();
-    for (const row of allItems) {
-      const key = marginAnchorRegion(row);
-      const line = row.anchor_id ? lineById.get(row.anchor_id) : undefined;
-      const lineLabel =
-        key && line ? [line.room, line.name].filter(Boolean).join(' · ') : null;
-      const entry: MarginSheetRow = { row, lineLabel };
-      const bucket = byKey.get(key);
-      if (bucket) bucket.push(entry);
-      else byKey.set(key, [entry]);
-    }
-
-    const ordered: MarginSheetGroup[] = [];
-    const wholeJob = byKey.get(null);
-    if (wholeJob?.length) {
-      ordered.push({ key: null, heading: 'THE WHOLE JOB', rows: wholeJob });
-    }
-    for (const region of PROJECT_PAPER_ORDER) {
-      const rows = byKey.get(region.key);
-      if (rows?.length) {
-        ordered.push({
-          key: region.key,
-          heading: `BESIDE ${marginRegionName(region.key)}`,
-          rows,
-        });
-      }
-    }
-    return ordered;
-  }, [allItems, lineById]);
+  // W5F-06 — the margin's ONE grouper, shared with the desktop rail. W5-R1
+  // leads with the whole job; the rail leads with the regions. Same mechanic,
+  // one implementation.
+  const groups = useMemo(
+    () =>
+      groupMarginRows<MarginSheetRow>(allItems, {
+        order: 'whole-job-first',
+        decorate: (row) => {
+          const key = marginAnchorRegion(row);
+          const line = row.anchor_id ? lineById.get(row.anchor_id) : undefined;
+          return {
+            row,
+            lineLabel:
+              key && line
+                ? [line.room, line.name].filter(Boolean).join(' · ')
+                : null,
+          };
+        },
+      }),
+    [allItems, lineById],
+  );
 
   const handoffNow = useMemo(() => new Date(), []);
   const { gates } = useHandoffGates({ projectId, clientName, now: handoffNow });

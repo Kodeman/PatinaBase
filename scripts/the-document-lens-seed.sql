@@ -81,8 +81,21 @@ DECLARE
   -- money figures, the dates, the same client and designer, an activating
   -- lineage proposal) — it does not carry …d5's 62 FF&E lines, POs, decisions
   -- or margin, none of which the letterhead's own height depends on.
-  v_oneline_id  UUID := 'b0000000-0000-0000-0000-0000000000d4';
+  -- NOT `…d4`: that id is ALREADY `Marrow & Vale Residence`, the 7-phase
+  -- high-extreme schedule fixture in `supabase/seed/schedule-extremes.sql`.
+  -- D-B48 named `…d4` as unused; it is not. `…d7` is the next free id in this
+  -- family (checked against `supabase/`, `scripts/` and the local database).
+  v_oneline_id  UUID := 'b0000000-0000-0000-0000-0000000000d7';
   v_oneline_lineage UUID := 'b0000000-0000-0000-0005-000000001402';
+  -- W5F-07: the letterhead reads the project's PHASES (the vitals' stage and
+  -- its dates), so the one-line paper carries the same five-phase main lane
+  -- `…d5` does — otherwise its letterhead is a different shape from the one
+  -- the 390 gate is comparing against.
+  v_ol_phase_concept UUID := 'b0000000-0000-0000-0005-000000001411';
+  v_ol_phase_dd      UUID := 'b0000000-0000-0000-0005-000000001412';
+  v_ol_phase_proc    UUID := 'b0000000-0000-0000-0005-000000001413';
+  v_ol_phase_inst    UUID := 'b0000000-0000-0000-0005-000000001414';
+  v_ol_phase_comp    UUID := 'b0000000-0000-0000-0005-000000001415';
 
   -- ── Rooms ────────────────────────────────────────────────────────────────
   v_room_living UUID := 'b0000000-0000-0000-0005-000000000101';
@@ -858,6 +871,57 @@ BEGIN
     UPDATE public.proposals SET project_id = v_oneline_id WHERE id = v_oneline_lineage;
     PERFORM set_config('app.proposal_activation_id', '', true);
   END IF;
+
+  -- W5F-07 · the one-line paper's phases — the same five-phase main lane as
+  -- `…d5`, because the letterhead's vitals read them. Idempotent by fixed id,
+  -- like every other section here.
+  DELETE FROM public.project_phases
+   WHERE id IN (v_ol_phase_concept, v_ol_phase_dd, v_ol_phase_proc,
+                v_ol_phase_inst, v_ol_phase_comp);
+
+  PERFORM set_config(
+    'app.project_phase_batch_token',
+    format('project_phase_batch:%s:%s', v_oneline_id, pg_catalog.txid_current()),
+    true
+  );
+
+  INSERT INTO public.project_phases (
+    id, project_id, name, phase_key, status,
+    start_date, target_end_date, duration_days, follows_phase_id, anchor_date, lane, sort_order
+  ) VALUES (
+    v_ol_phase_concept, v_oneline_id, 'Concept & Schematic Design', NULL, 'completed',
+    CURRENT_DATE - 70, CURRENT_DATE - 50, 20, NULL, CURRENT_DATE - 70, 'main', 0
+  );
+  INSERT INTO public.project_phases (
+    id, project_id, name, phase_key, status,
+    start_date, target_end_date, duration_days, follows_phase_id, anchor_date, lane, sort_order
+  ) VALUES (
+    v_ol_phase_dd, v_oneline_id, 'Design Development', NULL, 'completed',
+    CURRENT_DATE - 50, CURRENT_DATE - 25, 25, v_ol_phase_concept, NULL, 'main', 1
+  );
+  INSERT INTO public.project_phases (
+    id, project_id, name, phase_key, status,
+    start_date, target_end_date, duration_days, follows_phase_id, anchor_date, lane, sort_order
+  ) VALUES (
+    v_ol_phase_proc, v_oneline_id, 'Procurement & Orders', 'procurement', 'in_progress',
+    CURRENT_DATE - 25, v_install_date, (v_install_date - (CURRENT_DATE - 25)), v_ol_phase_dd, NULL, 'main', 2
+  );
+  INSERT INTO public.project_phases (
+    id, project_id, name, phase_key, status,
+    start_date, target_end_date, duration_days, follows_phase_id, anchor_date, lane, sort_order
+  ) VALUES (
+    v_ol_phase_inst, v_oneline_id, 'Installation & Styling', 'installation', 'pending',
+    v_install_date, v_install_date + 5, 5, v_ol_phase_proc, v_install_date, 'main', 3
+  );
+  INSERT INTO public.project_phases (
+    id, project_id, name, phase_key, status,
+    start_date, target_end_date, duration_days, follows_phase_id, anchor_date, lane, sort_order
+  ) VALUES (
+    v_ol_phase_comp, v_oneline_id, 'Completion', NULL, 'pending',
+    v_install_date + 5, v_install_date + 12, 7, v_ol_phase_inst, NULL, 'main', 4
+  );
+
+  PERFORM set_config('app.project_phase_batch_token', '', true);
 
   RAISE NOTICE 'the-document-lens-seed.sql: seeded project %, 5 rooms, 62 FF&E lines, 4 POs, 2 receiving inspections, 4 decisions, 2 margin threads, 1 invoice, 5 phases, 4 milestones, pre-work doc %, one-line-name paper %',
     v_project_id, v_prework_id, v_oneline_id;

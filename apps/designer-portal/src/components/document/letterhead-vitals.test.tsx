@@ -349,6 +349,32 @@ describe('LetterheadTitle (D-B48)', () => {
     ).toHaveTextContent(NAME);
   });
 
+  // W5-R6 / 1b. The shell puts the paper down on Escape (D1). Amending the
+  // name and pressing the one key that means "leave it alone" restored the
+  // name AND navigated `/doc/…` → `/desk`: the reader lost the document.
+  it('Escape keeps the key to itself — focus lands on the name, nothing above the input hears it', async () => {
+    const shell = jest.fn();
+    document.addEventListener('keydown', shell);
+    try {
+      renderTitle();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Rename the project' }),
+      );
+      const input = screen.getByLabelText('Project title');
+      fireEvent.change(input, { target: { value: 'something else' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+
+      const button = await screen.findByRole('button', {
+        name: 'Rename the project',
+      });
+      await waitFor(() => expect(button).toHaveFocus());
+      expect(button).toHaveTextContent(NAME);
+      expect(shell).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener('keydown', shell);
+    }
+  });
+
   it('never saves a blank name', () => {
     renderTitle();
     fireEvent.click(screen.getByRole('button', { name: 'Rename the project' }));

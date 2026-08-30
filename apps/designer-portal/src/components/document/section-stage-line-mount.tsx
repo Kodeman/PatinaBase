@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useProjectWorkflow, useResolvedSchedule } from "@patina/supabase";
 import {
   phaseFidelity,
@@ -22,22 +22,46 @@ import { SectionLoadingLine } from "./section-loading-line";
 
 const NO_SELECTION: ScheduleSelection = { activePhaseId: null, reason: "none" };
 
+/**
+ * The waiting and unavailable lines wear the same frame as the strip itself —
+ * a landmark named "Workflow stage" free-standing, and no second landmark when
+ * a stop already names it (see `SectionStageLine`'s `hosted`).
+ */
+function StageFrame({
+  hosted,
+  busy,
+  children,
+}: {
+  hosted: boolean;
+  busy?: boolean;
+  children: ReactNode;
+}) {
+  const shared = {
+    "data-workflow-document": true,
+    "data-section-stage-line": true,
+    className: "mb-1 min-w-0",
+    ...(busy ? { "aria-busy": "true" as const } : {}),
+  };
+  return hosted ? (
+    <div {...shared}>{children}</div>
+  ) : (
+    <section aria-label="Workflow stage" {...shared}>
+      {children}
+    </section>
+  );
+}
+
 export interface SectionStageLineMountProps {
   projectId: string | null;
   activeSection: SectionKey;
-  /**
-   * W5-R5 §2 (N2) — the stage phrase this strip prints, reported up so the
-   * `scope` stop's head and its ladder segment can state the SAME fact
-   * (`Core · stage 03`) rather than a second derivation of it. The same
-   * report-up shape `onEyebrow`/`onDamagedOn` already use.
-   */
-  onStageLine?: (subLabel: string | null) => void;
+  /** W5 follow-up — see `SectionStageLine`'s own `hosted`. */
+  hosted?: boolean;
 }
 
 export function SectionStageLineMount({
   projectId,
   activeSection,
-  onStageLine,
+  hosted = false,
 }: SectionStageLineMountProps) {
   const workflow = useProjectWorkflow(projectId);
   const schedule = useResolvedSchedule(projectId ?? undefined);
@@ -83,43 +107,27 @@ export function SectionStageLineMount({
     [activeSection, projectId, workflow.data, resolverFacts],
   );
 
-  const reportStageLine = onStageLine;
-  useEffect(() => {
-    reportStageLine?.(model?.subLabel ?? null);
-  }, [reportStageLine, model?.subLabel]);
-
   // The schedule query joins the loading gate so no half-derived label flashes
   // — a stage named before its position resolves would be the same lie in a
   // slower form.
   if (projectId && (workflow.isLoading || schedule.isLoading)) {
     return (
-      <section
-        aria-label="Workflow stage"
-        aria-busy="true"
-        data-workflow-document
-        data-section-stage-line
-        className="mb-1 min-w-0"
-      >
+      <StageFrame hosted={hosted} busy>
         <SectionLoadingLine label="Reading project workflow" />
-      </section>
+      </StageFrame>
     );
   }
 
   if (projectId && workflow.isError) {
     return (
-      <section
-        aria-label="Workflow stage"
-        data-workflow-document
-        data-section-stage-line
-        className="mb-1 min-w-0"
-      >
+      <StageFrame hosted={hosted}>
         <p
           role="status"
           className="font-mono text-[12px] uppercase tracking-[0.09em] text-[var(--text-muted)]"
         >
           Stage position unavailable · the schedule itself is unchanged
         </p>
-      </section>
+      </StageFrame>
     );
   }
 
@@ -127,6 +135,7 @@ export function SectionStageLineMount({
     <SectionStageLine
       model={model}
       fidelity={projectId ? resolverFacts.fidelity : null}
+      hosted={hosted}
     />
   );
 }

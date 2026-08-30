@@ -21,12 +21,14 @@ export const LONG_PAPER_ID = 'b0000000-0000-0000-0000-0000000000d5';
  *  designer: sent, unopened, no project behind it. */
 export const PRE_WORK_ID = 'b0000000-0000-0000-0000-0000000000d6';
 
-/** D-B48 — the ONE-LINE-name paper. `…d5`'s `Aspen Loft — the long paper`
+/** D-B48 — the ONE-LINE-name paper, on `…d7`. (NOT `…d4`, which D-B48 named
+ *  but which is already `Marrow & Vale Residence` in
+ *  `supabase/seed/schedule-extremes.sql`.) `…d5`'s `Aspen Loft — the long paper`
  *  wraps to two lines at 390 (32px Playfair spends ~11 characters of a 327px
  *  measure), and the 390 gates are chosen by measured line count, so the specs
  *  need the other arm. Seeded by `scripts/the-document-lens-seed.sql` with the
  *  same project shape everything the letterhead reads depends on. */
-export const ONE_LINE_PAPER_ID = 'b0000000-0000-0000-0000-0000000000d4';
+export const ONE_LINE_PAPER_ID = 'b0000000-0000-0000-0000-0000000000d7';
 
 /**
  * The FOURTH stop's heading id (W4-L4) — `document-index.ts`'s

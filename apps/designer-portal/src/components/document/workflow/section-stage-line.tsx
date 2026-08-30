@@ -32,26 +32,46 @@ export interface SectionStageLineProps {
    * silent when it knows nothing at all.
    */
   fidelity?: Fidelity | null;
+  /**
+   * W5 follow-up — the strip is HOSTED by a stop that already names it.
+   *
+   * Inside `scope` the region head prints the stop's name and status, and the
+   * strip printed its own label under it: `Core · stage 03` three times down
+   * one column. A hosted strip drops the label line and the `Workflow stage`
+   * eyebrow — the head is the name — and the bars with `CORE · 03` become the
+   * whole body.
+   */
+  hosted?: boolean;
 }
 
-export function SectionStageLine({ model, fidelity }: SectionStageLineProps) {
+export function SectionStageLine({
+  model,
+  fidelity,
+  hosted = false,
+}: SectionStageLineProps) {
   const headingId = useId();
   const tracksId = useId();
+  // Hosted, it is not its own region: a second landmark named "Workflow stage"
+  // sitting inside the stop that already carries that name is one more thing
+  // to walk past.
+  const Frame = hosted ? 'div' : 'section';
 
   return (
-    <section
-      aria-labelledby={headingId}
+    <Frame
+      {...(hosted ? {} : { 'aria-labelledby': headingId })}
       data-workflow-document
       data-section-stage-line
       className="mb-1 min-w-0 max-w-full overflow-x-clip"
     >
-      <h3 id={headingId} className="sr-only">
-        Workflow stage
-      </h3>
+      {!hosted && (
+        <h3 id={headingId} className="sr-only">
+          Workflow stage
+        </h3>
+      )}
 
       {model ? (
         <>
-          {model.subLabel && (
+          {!hosted && model.subLabel && (
             <p className="min-w-0 break-words font-mono text-[12px] font-semibold uppercase tracking-[0.09em] text-[var(--color-aged-oak)]">
               {model.subLabel}
             </p>
@@ -102,6 +122,6 @@ export function SectionStageLine({ model, fidelity }: SectionStageLineProps) {
           {FIDELITY_WORD[fidelity]}
         </p>
       ) : null}
-    </section>
+    </Frame>
   );
 }
