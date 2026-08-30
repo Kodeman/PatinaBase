@@ -270,10 +270,16 @@ export function CareBand({
   // jump focuses `regionHeadingId('care')`, and `.focus()` on an element that
   // cannot take focus is a silent no-op — the reader lands on the region with
   // focus still in the rail.
-  // W4 — `data-density` is RENDERED BY REACT from the fold's answer (OD-13),
-  // never written imperatively here, and the reserve rides the same root at
-  // every density (OD-12). Both belong to the index root only: the second
-  // `CareBand` mount is not a stop and has nothing for the lens to say.
+  // W4 — this FILE renders `data-density` from the fold's answer (OD-13) and
+  // writes nothing imperatively; the density rAF also writes `'full'` on the
+  // same element, and both owners are deliberate (F6, §5's DOM table): the
+  // imperative write is what makes a deep landing's first paint correct before
+  // React has committed, and React's is what a re-created root mounts with.
+  // They cannot disagree — the store snapshot is read at render time and the
+  // hook only ever writes `'full'` earlier than React would. The reserve rides
+  // the same root at every density (OD-12). Both belong to the index root
+  // only: the second `CareBand` mount is not a stop and has nothing for the
+  // lens to say.
   const indexRootAttrs = indexRoot
     ? {
         'data-index-region': 'care' as const,

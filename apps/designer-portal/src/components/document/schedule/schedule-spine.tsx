@@ -1108,9 +1108,11 @@ export function ScheduleSpine({
     <section
       id="document-decision-controls"
       data-index-region="schedule"
-      // W4 — RENDERED BY REACT from the fold's answer (OD-13), never written
-      // imperatively here; the reserve rides the same root at every density
-      // so a short body cannot shrink the region on mount (OD-12).
+      // W4 — this FILE renders `data-density` from the fold's answer (OD-13)
+      // and writes nothing imperatively; the density rAF also writes `'full'`
+      // on the same element, and both owners are deliberate (F6, §5's DOM
+      // table). The reserve rides the same root at every density so a short
+      // body cannot shrink the region on mount (OD-12).
       data-density={density}
       style={{ '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties}
       tabIndex={-1}
