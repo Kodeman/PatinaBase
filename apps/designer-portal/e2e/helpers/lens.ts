@@ -70,6 +70,49 @@ export async function assertLensBuild(page: Page): Promise<void> {
 }
 
 /**
+ * No FINITE animation is still running.
+ *
+ * W5-C3: the band measured 55.9854736328125 against a declared 56, and the
+ * failure message the W4 lane added named its own cause —
+ * `transforms DIV:matrix(0.99974, 0, 0, 0.99974, 0, 0)`, with `offsetHeight`
+ * 56 and `css` 56px beside it. 56 × 0.99974 = 55.98544. That scale is
+ * `@keyframes doc-raise` (`globals.css`, "D12 pick-up: raise-to-fill
+ * (~270ms)"), which animates `transform: scale(0.986)` → `none` on the block
+ * being raised; the read landed in the last ~2 % of it. The BOX was never
+ * wrong — the page was mid-animation, and `getBoundingClientRect()` reports
+ * the composited, scaled rect.
+ *
+ * `settle()` is "the document has stopped moving". A running transform
+ * animation is the document still moving, so it belongs here — the same shape
+ * as D-B28's network-quiet precondition, which exists because the scroll
+ * settle "says nothing about the network". This one says nothing about CSS.
+ *
+ * The breath is EXCLUDED by construction: `.doc-breath` is
+ * `animation: … infinite` (R15, the system's only ambient motion), so waiting
+ * for it would hang forever. Only animations with a finite iteration count are
+ * awaited.
+ */
+async function animationsQuiet(page: Page): Promise<void> {
+  try {
+    await page.waitForFunction(
+      () => {
+        const running = (document.getAnimations?.() ?? []).filter((a) => {
+          if (a.playState !== 'running') return false;
+          const iterations = a.effect?.getTiming?.().iterations;
+          return iterations !== Infinity;
+        });
+        return running.length === 0;
+      },
+      undefined,
+      { timeout: 5_000 },
+    );
+  } catch {
+    // A finite animation that outlasts five seconds is not the transient this
+    // guards against; let the caller measure and say what it finds.
+  }
+}
+
+/**
  * The document has stopped moving, as far as it is able to say so.
  *
  * Two tiers, tried in order:
@@ -96,6 +139,7 @@ export async function settle(page: Page): Promise<void> {
       SHELL,
       { timeout: 15_000 },
     );
+    await animationsQuiet(page);
     await twoFrames(page);
     return;
   }
@@ -104,6 +148,7 @@ export async function settle(page: Page): Promise<void> {
   await page.evaluate(() =>
     (window as unknown as { __lensSettled: () => Promise<true> }).__lensSettled(),
   );
+  await animationsQuiet(page);
   await twoFrames(page);
 }
 

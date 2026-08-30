@@ -67,7 +67,7 @@ export interface MobileActiveDoc {
    *  scrolled. `page.tsx` is the only publisher and always supplies it. */
   onJumpRegion: (key: DocumentIndexKey) => void;
   /** D-B30 · the letterhead- and section-anchored margin count (the same set
-   *  `useLetterheadMargin` lists), so the bar's `Margin · N` door and the
+   *  `useMarginSheet` lists — W5-R1's whole margin), so the bar's `Margin · N` door and the
    *  Margin sheet's head can print it without their own subscription.
    *  Optional so a caller that predates D-B30 still type-checks. */
   marginCount?: number | null;

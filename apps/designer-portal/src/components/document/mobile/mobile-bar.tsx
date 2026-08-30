@@ -127,14 +127,23 @@ export function MobileBar() {
   // The boards now have a page of their own (B1-L4), so the row that used to
   // be missing here is the fourth door, in the ticket's own order.
   const documentProjectId = inDocument ? (activeDoc?.projectId ?? null) : null;
-  // D-B30 — the margin door leads the list, above Plan room; it names the
-  // letterhead- and section-anchored margin (`useLetterheadMargin`), the same
-  // set the Margin sheet lists, and stands whether or not a project is
-  // behind the document (unlike the four doors below, which are project-keyed
-  // — OD-8).
+  // D-B30 — the margin door leads the list, above Plan room. It names the
+  // WHOLE margin: W5-R1 widened D-B30's letterhead-only set to everything the
+  // sheet lists, so the count is `useMarginSheet`'s, not the retired
+  // `useLetterheadMargin`'s (D-B45). It stands whether or not a project is
+  // behind the document, unlike the four doors below, which are project-keyed
+  // (OD-8).
+  //
+  // W5-C9 — a door is a way to something. `Margin · 0` opened a sheet that
+  // said only "The margin — decisions, messages, and money gather here", and
+  // the label churned `Margin · 0` → `Margin · 7` when the query landed,
+  // because `page.tsx` publishes 0 while `useMarginItems` is in flight. W5-R1
+  // writes the door as `Margin · N`; at N = 0 there is no N to print and
+  // nothing behind it, so the door is ABSENT — it appears when the margin
+  // does, and never renames itself in front of the reader.
   const marginCount = inDocument ? (activeDoc?.marginCount ?? null) : null;
   const inThisDocument: DocumentDoor[] = [
-    ...(marginCount !== null
+    ...(marginCount
       ? [{ key: 'margin', label: `Margin · ${marginCount}`, open: openMargin }]
       : []),
     ...(documentProjectId

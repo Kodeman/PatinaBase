@@ -300,7 +300,6 @@ jest.mock('@/components/document/proposal-blocks-readonly', () => ({
 }));
 jest.mock('@/components/document/proposal-instruments', () => ({ ProposalInstruments: () => null }));
 jest.mock('@/components/document/folio-strip', () => ({ FolioLetterhead: () => null, ProposalFolioStrip: () => null }));
-jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({ MobileMarginChips: () => null }));
 // W3 — the instruments are handed to the letterhead as a node now, so the
 // stub prints a marker rather than nothing: where it lands, and how many of
 // it there are, is the assertion.

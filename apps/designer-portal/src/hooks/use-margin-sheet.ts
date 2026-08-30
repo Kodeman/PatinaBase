@@ -14,10 +14,13 @@
  * (room · item name) so a row lifted into a bottom sheet still says what it
  * sits beside.
  *
- * `useLetterheadMargin` is the original, narrower derivation (letterhead +
- * section anchors only, no grouping) — unchanged, kept for the desktop
- * (>=980) margin chips, which retire below 980 now that the sheet carries
- * the whole margin (mobile-margin-chips.tsx).
+ * D-B45 — `useLetterheadMargin` and `MobileMarginChips` are DELETED. The chips
+ * were mobile-only from the start (the component's own docstring: "the desktop
+ * margin rail owns these above 980px", `min-[980px]:hidden` since `1b93def1a`),
+ * so "they stay >=980" was a misreading: they never printed at desktop widths,
+ * and printing them there would double every line item beside the rail. Below
+ * 980 this sheet carries the whole margin, line-anchored rows included. One
+ * derivation, one surface.
  */
 
 import { useMemo } from 'react';
@@ -36,90 +39,6 @@ import {
 } from '@/lib/document/document-index';
 import { useHandoffGates } from '@/components/document/margin-handoff-item';
 import type { WorkflowGate } from '@/lib/document/workflow-gate';
-
-export interface LetterheadMargin {
-  /** Non-time items anchored to the letterhead or a section — what the
-   *  deleted chips block printed as buttons. */
-  items: MarginItemRow[];
-  /** Handoff gates — anchored to the document, not a line; the block's
-   *  read-only rows. */
-  gates: WorkflowGate[];
-  decisionState: MarginDecisionClassificationState;
-  showDecisionNotice: boolean;
-  /** items.length + gates.length — everything the block (and now the door
-   *  and the sheet head) count. */
-  count: number;
-  /** Items whose own state names them overdue, plus overdue gates. */
-  overdueCount: number;
-}
-
-export function useLetterheadMargin({
-  projectId,
-  proposalId,
-  clientName = '',
-}: {
-  projectId: string | null;
-  proposalId: string | null;
-  clientName?: string;
-}): LetterheadMargin {
-  const { data: items } = useMarginItems(projectId, proposalId);
-  const coordinationQuery = useCoordinationItems(projectId);
-  const coordinationItems = coordinationQuery.data;
-
-  const anchoredItems = useMemo(
-    () =>
-      (items ?? []).filter(
-        (item) =>
-          item.anchor_kind === 'letterhead' || item.anchor_kind === 'section',
-      ),
-    [items],
-  );
-
-  const classificationState = marginDecisionClassificationState({
-    projectId,
-    coordinationItems,
-    isLoading:
-      coordinationQuery.isLoading === true ||
-      coordinationQuery.isPending === true,
-    isError: coordinationQuery.isError === true,
-  });
-
-  const classifiedMargin = useMemo(
-    () =>
-      classifyMarginItems(
-        anchoredItems,
-        coordinationItems ?? [],
-        classificationState,
-      ),
-    [anchoredItems, classificationState, coordinationItems],
-  );
-
-  const items_ = useMemo(
-    () => classifiedMargin.items.filter((item) => item.kind !== 'time'),
-    [classifiedMargin.items],
-  );
-
-  // Handoffs anchor to the document, not to a line, so they ride beside the
-  // other letterhead-anchored items (mirrors the old chips block).
-  const handoffNow = useMemo(() => new Date(), []);
-  const { gates } = useHandoffGates({ projectId, clientName, now: handoffNow });
-
-  const overdueCount = useMemo(
-    () =>
-      items_.filter((row) => row.state === 'overdue').length +
-      gates.filter((gate) => gate.overdue.isOverdue).length,
-    [items_, gates],
-  );
-
-  return {
-    items: items_,
-    gates,
-    decisionState: classifiedMargin.decisionState,
-    showDecisionNotice: classifiedMargin.withheldDecisionCount > 0,
-    count: items_.length + gates.length,
-    overdueCount,
-  };
-}
 
 export interface MarginSheetRow {
   row: MarginItemRow;

@@ -433,7 +433,12 @@ describe('deriveLadderSegments · the pre-work stops', () => {
     expect(segments.proposal.value).toBe('SENT AUG 19 · UNOPENED 6D');
     expect(segments.proposal.countLine).toBe('Sent Aug 19 · unopened 6d');
     expect(segments.scope.name).toBe('Scope & engagement');
-    expect(segments.scope.value).toBe('4 ROOMS');
+    // W5-R2 §2 rules the rail's value AND counts it: `4 ROOMS IN SCOPE`,
+    // 16 chars ≤ 30 — the same fact the head's count line states, one way.
+    expect(segments.scope.value).toBe('4 ROOMS IN SCOPE');
+    expect(segments.scope.value!.length).toBeLessThanOrEqual(30);
+    expect(segments.scope.narrowValue).toBe('4 ROOMS IN SCOPE');
+    expect(segments.scope.countLine).toBe('4 rooms in scope');
     expect(segments.investment.name).toBe('The investment');
     expect(segments.investment.value).toBe('$184,500');
   });

@@ -50,9 +50,10 @@ describe('designer Stage-2 cutover source contract', () => {
     expect(read(file)).toContain('excludeProjectArtifactApprovals');
   });
 
+  // D-B45 — `mobile-margin-chips.tsx` is deleted; the two margin surfaces
+  // that remain are the desktop rail and the mobile sheet, one per width.
   it.each([
     'components/document/margin-rail.tsx',
-    'components/document/mobile/mobile-margin-chips.tsx',
     'components/document/mobile/mobile-sheets.tsx',
   ])('filters Stage-2 from generic desktop/mobile margin in %s', (file) => {
     const source = read(file);

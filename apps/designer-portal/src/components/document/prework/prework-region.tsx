@@ -8,6 +8,9 @@
  *
  * The head, the rule and the quiet form are the paper's existing region
  * grammar; the only thing this component adds is the root that carries the key.
+ * The quiet form is W4-R1's, unchanged for a pre-work stop: the head, its own
+ * status line, its leader act (there is none yet — `allowNoActs`), and one
+ * sr-only sentence.
  *
  * DENSITY (C-8). A pre-work key is not a `RegionFoldKey` and therefore not a
  * `STOP_FOLD_KEY`: `use-region-fold.ts` declares a closed union of eight
@@ -26,6 +29,7 @@ import { RegionHead } from '../region/region-head';
 import { RegionRule } from '../region/region-rule';
 import type { RegionDensity } from '../region/use-region-fold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
+import { quietStateSentence } from '@/lib/document/lens-quiet-status';
 import {
   DOCUMENT_INDEX_LABELS,
   regionHeadingId,
@@ -82,18 +86,18 @@ export function PreworkRegion({
         surfaceKey="prework"
         regionKey={region}
         actions={[]}
+        actsAtQuiet={quiet ? 'leader' : 'all'}
         allowNoActs
       />
       {quiet ? (
-        <>
-          <p
-            data-region-count-line
-            className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
-          >
-            {status.toUpperCase()}
-          </p>
-          <p className="sr-only">Quiet — opens as you read</p>
-        </>
+        // W4-R1 — a quiet stop prints its `RegionHead` AND NOTHING ELSE. The
+        // count line IS the head's own status line, which `RegionHead` printed
+        // above from the same `status` string; a second uppercase paragraph
+        // beside it states one fact twice, and `data-region-count-line` is an
+        // attribute the DOM contract (technical-design §5, F5) says does not
+        // exist. Both were deleted from the six project stops by name, and the
+        // sr-only line is the ruled per-region sentence, not a stock string.
+        <p className="sr-only">{quietStateSentence(status, name)}</p>
       ) : (
         children
       )}

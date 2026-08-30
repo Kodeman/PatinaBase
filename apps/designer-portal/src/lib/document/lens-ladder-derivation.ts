@@ -503,9 +503,16 @@ function scopeRegister(facts: LadderPreworkFacts | undefined): Register {
   if (!facts.settled) return reading();
   if (facts.scopeRooms <= 0) return empty('Nothing yet');
   const word = facts.scopeRooms === 1 ? 'ROOM' : 'ROOMS';
+  // W5-C6/F3 — W5-R2 §2 rules the rail's own value as `4 ROOMS IN SCOPE` and
+  // counts it (16 chars ≤ 30). Dropping `IN SCOPE` left the rail and the paper
+  // stating one stop two ways, which is the thing one derivation exists to
+  // prevent.
   return {
-    value: cap(`${facts.scopeRooms} ${word}`, LENS_VALUE_MAX_CHARS),
-    narrowValue: cap(`${facts.scopeRooms} ${word}`, LENS_VALUE_MAX_CHARS),
+    value: cap(`${facts.scopeRooms} ${word} IN SCOPE`, LENS_VALUE_MAX_CHARS),
+    narrowValue: cap(
+      `${facts.scopeRooms} ${word} IN SCOPE`,
+      LENS_VALUE_MAX_CHARS,
+    ),
     countLine: cap(
       `${facts.scopeRooms} ${word.toLowerCase()} in scope`,
       LENS_COUNT_MAX_CHARS,

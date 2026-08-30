@@ -93,9 +93,6 @@ jest.mock('@/components/portal/ffe/stages', () => ({
 jest.mock('../../accounts/invoice-overlays', () => ({
   openInvoiceComposer: jest.fn(),
 }));
-jest.mock('../../mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
-}));
 jest.mock('../../work-block', () => ({ WorkBlock: () => null }));
 jest.mock('../../folio-strip', () => ({ FolioStrip: () => null }));
 jest.mock('../../strata-mark', () => ({ StrataMark: () => null }));
