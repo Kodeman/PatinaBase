@@ -45,7 +45,7 @@ jest.mock('@/components/document/date', () => ({
   ),
 }));
 
-import { LetterheadVitals } from './letterhead-vitals';
+import { LetterheadTitle, LetterheadVitals } from './letterhead-vitals';
 
 beforeEach(() => {
   mockMutateAsync = jest.fn().mockResolvedValue(undefined);
@@ -278,5 +278,91 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     // The display must now show what the server actually has — not stay
     // stuck at the value the popover opened with.
     expect(screen.getByLabelText('Start')).toHaveTextContent('May 1');
+  });
+});
+
+// ── D-B48 — the paper's name wraps, and never clips ──────────────────────
+describe('LetterheadTitle (D-B48)', () => {
+  const NAME = 'Aspen Loft — the long paper';
+
+  beforeEach(() => {
+    mockMutateAsync = jest.fn().mockResolvedValue(undefined);
+    mockProject = { id: 'project-1', name: NAME };
+  });
+
+  const renderTitle = () =>
+    render(<LetterheadTitle projectId="project-1" serverTitle={NAME} />);
+
+  it('prints the WHOLE name at rest, as text, with no input in the DOM', () => {
+    renderTitle();
+    // An `<input>` cannot wrap: at 390 this name printed
+    // `Aspen Loft — the long p`, and the spec's `scrollWidth === clientWidth`
+    // witness was satisfied BY the overflow.
+    const button = screen.getByRole('button', { name: 'Rename the project' });
+    expect(button).toHaveTextContent(NAME);
+    expect(screen.queryByLabelText('Project title')).not.toBeInTheDocument();
+    expect(button.className).toContain('break-words');
+  });
+
+  it('swaps the input in on a press, carrying the server title, and focuses it', async () => {
+    renderTitle();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Rename the project' }),
+    );
+    const input = screen.getByLabelText('Project title') as HTMLInputElement;
+    expect(input.value).toBe(NAME);
+    await waitFor(() => expect(input).toHaveFocus());
+    expect(
+      screen.queryByRole('button', { name: 'Rename the project' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('Enter saves once and swaps back, with focus on the button', async () => {
+    renderTitle();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename the project' }));
+    const input = screen.getByLabelText('Project title');
+    fireEvent.change(input, { target: { value: 'Aspen Loft' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+    expect(mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Aspen Loft' }),
+    );
+    const button = await screen.findByRole('button', {
+      name: 'Rename the project',
+    });
+    await waitFor(() => expect(button).toHaveFocus());
+  });
+
+  it('Escape restores the server title and saves NOTHING', async () => {
+    renderTitle();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename the project' }));
+    const input = screen.getByLabelText('Project title');
+    fireEvent.change(input, { target: { value: 'something else' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    // It used to BLUR, and blur commits — so the one key that means "leave it
+    // alone" saved.
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole('button', { name: 'Rename the project' }),
+    ).toHaveTextContent(NAME);
+  });
+
+  it('never saves a blank name', () => {
+    renderTitle();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename the project' }));
+    const input = screen.getByLabelText('Project title');
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('keeps the heading an <h1> across the swap', () => {
+    const { container } = renderTitle();
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Rename the project' }));
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
   });
 });

@@ -72,6 +72,18 @@ DECLARE
   v_prework_id  UUID := 'b0000000-0000-0000-0000-0000000000d6';
   v_lineage_id  UUID := 'b0000000-0000-0000-0005-000000001401'; -- historical, already-signed proposal that activated d5 (gives "The Record" a non-zero settled count)
 
+  -- ── D-B48 · the ONE-LINE-name paper ─────────────────────────────────────
+  -- `…d5`'s name (`Aspen Loft — the long paper`) wraps to two lines at 390.
+  -- The 390 gates are chosen by MEASURED line count, so the spec needs a
+  -- one-line paper to exercise the other arm: `Aspen Loft` is 10 characters,
+  -- inside the ~11 a 32px Playfair spends on a 327px measure. Same project
+  -- SHAPE as …d5 in everything the LETTERHEAD reads (status, phase, the four
+  -- money figures, the dates, the same client and designer, an activating
+  -- lineage proposal) — it does not carry …d5's 62 FF&E lines, POs, decisions
+  -- or margin, none of which the letterhead's own height depends on.
+  v_oneline_id  UUID := 'b0000000-0000-0000-0000-0000000000d4';
+  v_oneline_lineage UUID := 'b0000000-0000-0000-0005-000000001402';
+
   -- ── Rooms ────────────────────────────────────────────────────────────────
   v_room_living UUID := 'b0000000-0000-0000-0005-000000000101';
   v_room_dining UUID := 'b0000000-0000-0000-0005-000000000102';
@@ -802,8 +814,53 @@ BEGIN
     );
   END IF;
 
-  RAISE NOTICE 'the-document-lens-seed.sql: seeded project %, 5 rooms, 62 FF&E lines, 4 POs, 2 receiving inspections, 4 decisions, 2 margin threads, 1 invoice, 5 phases, 4 milestones, pre-work doc %',
-    v_project_id, v_prework_id;
+  ------------------------------------------------------------------------
+  -- D-B48. The one-line-name paper (…d4). Created ONCE and never deleted,
+  -- for the same reason …d5 is: 00390/00399 reject every later change to
+  -- projects.proposal_id, a cascading ON DELETE SET NULL included. A re-run
+  -- finds it and only UPDATEs the mutable fields.
+  ------------------------------------------------------------------------
+  IF EXISTS (SELECT 1 FROM public.projects WHERE id = v_oneline_id) THEN
+    UPDATE public.projects SET
+      name = 'Aspen Loft', status = 'active', current_phase = 'procurement',
+      budget_cents = 18450000, committed_cents = 17124000, actual_cents = 14160000,
+      design_fee_cents = 2500000, client_visibility_tier = 'milestone',
+      start_date = NOW() - INTERVAL '80 days', target_end_date = (v_install_date + 32)
+     WHERE id = v_oneline_id;
+  ELSE
+    INSERT INTO public.proposals (
+      id, project_id, designer_id, client_id, designer_client_id, title, status, version,
+      subtotal, total_amount, deposit_percent,
+      created_at, sent_at, viewed_at, accepted_at, signed_at, signed_by_name
+    ) VALUES (
+      v_oneline_lineage, NULL, uid_designer, uid_client, v_dc_id,
+      'Aspen Loft', 'accepted', 1,
+      18450000, 18450000, 50.00,
+      NOW() - INTERVAL '90 days', NOW() - INTERVAL '85 days',
+      NOW() - INTERVAL '84 days', NOW() - INTERVAL '80 days',
+      NOW() - INTERVAL '80 days', 'Client User'
+    );
+
+    PERFORM set_config('app.proposal_activation_id', v_oneline_lineage::text, true);
+
+    INSERT INTO public.projects (
+      id, name, status, client_id, designer_id, created_by,
+      proposal_id, current_phase,
+      budget_cents, committed_cents, actual_cents, design_fee_cents,
+      client_visibility_tier, start_date, target_end_date
+    ) VALUES (
+      v_oneline_id, 'Aspen Loft', 'active', uid_client, uid_designer, uid_designer,
+      v_oneline_lineage, 'procurement',
+      18450000, 17124000, 14160000, 2500000,
+      'milestone', NOW() - INTERVAL '80 days', (v_install_date + 32)
+    );
+
+    UPDATE public.proposals SET project_id = v_oneline_id WHERE id = v_oneline_lineage;
+    PERFORM set_config('app.proposal_activation_id', '', true);
+  END IF;
+
+  RAISE NOTICE 'the-document-lens-seed.sql: seeded project %, 5 rooms, 62 FF&E lines, 4 POs, 2 receiving inspections, 4 decisions, 2 margin threads, 1 invoice, 5 phases, 4 milestones, pre-work doc %, one-line-name paper %',
+    v_project_id, v_prework_id, v_oneline_id;
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
