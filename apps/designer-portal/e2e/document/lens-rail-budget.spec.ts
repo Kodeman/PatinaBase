@@ -129,4 +129,70 @@ test.describe('the rail budget', () => {
       `labels: ${JSON.stringify([...distinct])}`,
     ).toBeLessThanOrEqual(ceiling);
   });
+
+  /**
+   * D-B37 — the rail holds its own layout while the reader moves.
+   *
+   * THE FALSIFIABLE SENTENCE: over the same 30-step settled scroll the CLS spec
+   * walks, every ladder segment's height is constant except on a step where the
+   * reading index changed — because the only thing that may re-deal the track is
+   * the index moving, never the L-6 yield. The yield used to UNRENDER the value
+   * line, which took its box with it: the segment fell back toward its
+   * `flex-basis` floor and `flex-grow: extent` re-dealt the freed height across
+   * every sibling, so one head crossing the frame reflowed the whole rail.
+   */
+  test('D-B37 — every segment height is constant across a 30-step scroll except on an index change', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page, LONG_PAPER_ID);
+    await scrollTo(page, 0);
+
+    const read = () =>
+      page.evaluate(() => ({
+        index:
+          document
+            .querySelector('[data-document-shell]')
+            ?.getAttribute('data-reading-index') ?? null,
+        heights: Object.fromEntries(
+          Array.from(
+            document.querySelectorAll<HTMLElement>('[data-ladder-segment]'),
+          ).map((el) => [
+            el.getAttribute('data-ladder-segment') ?? '?',
+            Math.round(el.getBoundingClientRect().height * 100) / 100,
+          ]),
+        ),
+      }));
+
+    const STEPS = 30;
+    const TOTAL = 2400;
+    let previous = await read();
+    const offenders: string[] = [];
+    let indexChanges = 0;
+
+    for (let i = 1; i <= STEPS; i += 1) {
+      await scrollTo(page, Math.round((TOTAL / STEPS) * i));
+      const now = await read();
+      const indexChanged = now.index !== previous.index;
+      if (indexChanged) indexChanges += 1;
+      if (!indexChanged) {
+        for (const [key, height] of Object.entries(now.heights)) {
+          const before = previous.heights[key];
+          if (before !== undefined && before !== height) {
+            offenders.push(
+              `step ${i} · ${key}: ${before} -> ${height} (index held at ${String(now.index)})`,
+            );
+          }
+        }
+      }
+      previous = now;
+    }
+
+    console.log(
+      `D-B37 · 30 steps, ${indexChanges} index change(s), ${offenders.length} unexplained segment resize(s)`,
+    );
+    expect(
+      offenders,
+      'a ladder segment changed height on a step where the reading index held',
+    ).toEqual([]);
+  });
 });

@@ -129,6 +129,55 @@ test.describe('the lens band’s declared height', () => {
     }
   }
 
+  /**
+   * D-B38 — line 2 sits at the same y whether line 1 prints or not.
+   *
+   * At s0 the letterhead 60px above is saying the household, the stage and the
+   * date, so both of line 1's halves yield; on a spread with no money figure
+   * the `<p>` then holds nothing at all. Without a declared minimum it collapses
+   * to zero height, and the band — a 56px `flex-col justify-center` — lifts line
+   * 2 by half the lost line (7.7px) as the reader pins it. That is the band's
+   * own text moving with nothing behind it, which is what D-B34's cause gate
+   * reported. `min-h-[15.4px]` is one line of 11px mono at `leading-[1.4]`.
+   */
+  for (const size of WIDTHS) {
+    test(`D-B38 — line 2 holds its y across the pin at ${size.label}`, async ({
+      authenticatedPage: page,
+    }) => {
+      await openPaper(page, LONG_PAPER_ID, size.width, size.height);
+      await scrollTo(page, 0);
+
+      const line2 = page.locator('[data-lens-line="2"]');
+      await expect(line2).toBeVisible({ timeout: 20_000 });
+      const band = page.locator('[data-lens-band]');
+
+      // Measured against the band's own top, not the viewport: the band is
+      // sticky, so its viewport y is the scroll's business and not this claim's.
+      const offsetInBand = async () =>
+        page.evaluate(() => {
+          const b = document
+            .querySelector('[data-lens-band]')!
+            .getBoundingClientRect();
+          const l = document
+            .querySelector('[data-lens-line="2"]')!
+            .getBoundingClientRect();
+          return Math.round((l.top - b.top) * 100) / 100;
+        });
+
+      await expect(band).toHaveAttribute('data-lens-open', 'true');
+      const atRest = await offsetInBand();
+
+      await scrollTo(page, 800);
+      await expect(band).toHaveAttribute('data-lens-open', 'false');
+      const pinned = await offsetInBand();
+
+      console.log(
+        `D-B38 · line 2 offset inside the band at ${size.label}: s0 ${atRest}px, pinned ${pinned}px`,
+      );
+      expect(pinned).toBe(atRest);
+    });
+  }
+
   test('SC1 — the first region head stands at or above 405px at rest, at 1440', async ({
     authenticatedPage: page,
   }) => {
