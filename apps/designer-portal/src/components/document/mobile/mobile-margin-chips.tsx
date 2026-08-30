@@ -86,7 +86,12 @@ export function MobileMarginChips({
     return null;
 
   return (
-    <div className="flex flex-wrap gap-1.5 px-[0.15rem] pb-2 min-[980px]:hidden">
+    // W3-R5 §4 — the 390 header budget is measured net of this block, and
+    // D-B27 (the mockup's 390 Margin sheet) will move it; both need a handle.
+    <div
+      data-mobile-margin-chips
+      className="flex flex-wrap gap-1.5 px-[0.15rem] pb-2 min-[980px]:hidden"
+    >
       {showDecisionNotice && (
         <MarginDecisionClassificationNotice
           state={classifiedMargin.decisionState}
