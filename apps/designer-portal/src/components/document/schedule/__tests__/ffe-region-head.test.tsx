@@ -6,6 +6,7 @@ let mockInstruments: Record<string, unknown>[] = [];
 let mockTradeScopes: Record<string, unknown>[] = [];
 let mockAuthority: { data: unknown } = { data: null };
 let mockCoverage: Record<string, { coverage: string }> = {};
+let mockReadinessLoading = false;
 
 /* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
    attaches it) a stop renders QUIET, so every claim below about the region's
@@ -50,7 +51,7 @@ jest.mock('@patina/supabase', () => ({
       ready: true,
       missingFields: [],
     })),
-    isLoading: false,
+    isLoading: mockReadinessLoading,
     isError: false,
   }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
@@ -148,6 +149,7 @@ describe('FF&E project-mode region head', () => {
     mockTradeScopes = [];
     mockAuthority = { data: null };
     mockCoverage = {};
+    mockReadinessLoading = false;
   });
 
   /** A line with a piece behind it, already on an invoice — no exception. */
@@ -305,6 +307,7 @@ describe('FF&E room heading — the room lens press target', () => {
     mockTradeScopes = [];
     mockAuthority = { data: null };
     mockCoverage = {};
+    mockReadinessLoading = false;
   });
 
   const renderProjectInLens = (projectId = 'project-1') =>
@@ -365,6 +368,9 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     mockTradeScopes = [];
     mockAuthority = { data: null };
     mockCoverage = {};
+    mockReadinessLoading = false;
+    // W4 close replaced the lane's `mockLensDensity` variable with the real
+    // store; `null` is still "the lens has nothing to say".
     act(() => {
       __setDensityForTest(null);
     });
@@ -538,5 +544,48 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     ).toHaveAttribute('data-density', 'full');
     expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
     expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+  });
+
+  // D-B39/W5-R3 — the readiness pulse prints as the last inline child of the
+  // head's own status line (`ffeStatus`), never as a separate row that would
+  // move `money` when it unmounts (the original defect: FF&E's readiness
+  // fan-out resolving collapsed the region 24px, moving every root below it).
+  it('prints the readiness pulse inline in the head\'s status line — the count line\'s text and the head\'s box are unchanged (D-B39/W5-R3)', () => {
+    mockReadinessLoading = true;
+    const { rerender } = renderProject();
+
+    const head = document.querySelector('[data-region-head="ffe"]') as HTMLElement;
+    expect(head).not.toBeNull();
+    const statusLine = () => head.querySelector('h2 + p') as HTMLElement;
+    const visibleText = (p: HTMLElement) => {
+      const clone = p.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('.sr-only, [aria-hidden]').forEach((el) => el.remove());
+      return clone.textContent?.trim();
+    };
+
+    const classesLoading = head.className;
+    const textLoading = visibleText(statusLine());
+    // The sr-only label is present while it loads — the a11y half of the bar.
+    expect(screen.getByText('Checking readiness')).toBeInTheDocument();
+    // No separate loading row exists anywhere else on the region — it is
+    // exactly one inline pulse, inside the head.
+    expect(document.querySelectorAll('[role="status"]')).toHaveLength(1);
+
+    mockReadinessLoading = false;
+    rerender(
+      <FFESection projectId="project-1" projectName="Ellsworth" mode="project" />,
+    );
+
+    const classesLoaded = head.className;
+    const textLoaded = visibleText(statusLine());
+
+    // The count line's own text never changes across the transition — only
+    // the pulse (and its sr-only label) mounts and unmounts.
+    expect(textLoaded).toBe(textLoading);
+    // The head's own box (its class list — no `region-box-signature` helper
+    // exists on this base, so class-list equality is the fallback the
+    // coordinator named) is identical whether the bar is mounted or not.
+    expect(classesLoaded).toBe(classesLoading);
+    expect(screen.queryByText('Checking readiness')).not.toBeInTheDocument();
   });
 });

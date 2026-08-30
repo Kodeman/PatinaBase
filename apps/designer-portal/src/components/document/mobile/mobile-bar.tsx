@@ -91,6 +91,7 @@ export function MobileBar() {
     openSpine,
     openTimer,
     openDrawer,
+    openMargin,
   } = useMobileShell();
   const { inHandToday, running, paused, elapsedSeconds, offer } =
     useDocumentTime();
@@ -126,28 +127,39 @@ export function MobileBar() {
   // The boards now have a page of their own (B1-L4), so the row that used to
   // be missing here is the fourth door, in the ticket's own order.
   const documentProjectId = inDocument ? (activeDoc?.projectId ?? null) : null;
-  const inThisDocument: DocumentDoor[] = documentProjectId
-    ? [
-        {
-          key: 'planroom',
-          label: 'Plan room',
-          href: `/doc/${documentProjectId}/plans`,
-        },
-        {
-          key: 'specbook',
-          label: 'Spec book',
-          href: `/doc/${documentProjectId}/spec-book`,
-        },
-        {
-          key: 'boards',
-          label: 'Boards',
-          href: boardsRoutePath(documentProjectId),
-        },
-        ...(callSheetOn
-          ? [{ key: 'callsheet', label: 'Call sheet', open: openCallSheet }]
-          : []),
-      ]
-    : [];
+  // D-B30 — the margin door leads the list, above Plan room; it names the
+  // letterhead- and section-anchored margin (`useLetterheadMargin`), the same
+  // set the Margin sheet lists, and stands whether or not a project is
+  // behind the document (unlike the four doors below, which are project-keyed
+  // — OD-8).
+  const marginCount = inDocument ? (activeDoc?.marginCount ?? null) : null;
+  const inThisDocument: DocumentDoor[] = [
+    ...(marginCount !== null
+      ? [{ key: 'margin', label: `Margin · ${marginCount}`, open: openMargin }]
+      : []),
+    ...(documentProjectId
+      ? [
+          {
+            key: 'planroom',
+            label: 'Plan room',
+            href: `/doc/${documentProjectId}/plans`,
+          },
+          {
+            key: 'specbook',
+            label: 'Spec book',
+            href: `/doc/${documentProjectId}/spec-book`,
+          },
+          {
+            key: 'boards',
+            label: 'Boards',
+            href: boardsRoutePath(documentProjectId),
+          },
+          ...(callSheetOn
+            ? [{ key: 'callsheet', label: 'Call sheet', open: openCallSheet }]
+            : []),
+        ]
+      : []),
+  ];
 
   useEffect(() => {
     if (!moreOpen) return;

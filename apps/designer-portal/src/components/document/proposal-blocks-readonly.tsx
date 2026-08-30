@@ -52,9 +52,23 @@ function BlockLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * W5-R2 item 1 — the proposal spread re-parents these blocks by region
+ * instead of standing them all under one stop: `vision` takes the
+ * `description` prose, `scope` takes the per-room budgets and the
+ * engagement's terms (Payments · Timeline · Exclusions, when the Offer
+ * movement below has not already claimed them), `investment` takes the
+ * totals ledger alone (the Offer folds open at its foot, mounted by the
+ * caller — `page.tsx` — not by this component). `undefined` (the direction
+ * spread's one stop) renders all three groups in their original order,
+ * byte-identical to the pre-W5-R2 render.
+ */
+export type ProposalBlockGroup = 'vision' | 'scope' | 'investment';
+
 export function ProposalBlocksReadOnly({
   proposalId,
   omitOfferBlocks = false,
+  only,
 }: {
   proposalId: string;
   /** W4a — on the Finalize table the Offer movement (Timeline · Payments ·
@@ -63,6 +77,9 @@ export function ProposalBlocksReadOnly({
    *  settled unfold, the version-history sheet and every flag-off render take
    *  the spread exactly as it has always been. */
   omitOfferBlocks?: boolean;
+  /** W5-R2 item 1 — render only this block's group. Omitted for the
+   *  direction spread's single stop, which still takes everything. */
+  only?: ProposalBlockGroup;
 }) {
   // Choose the renderer before any legacy room, FF&E, palette, or board query mounts.
   const { data: proposal, isLoading } = useProposal(proposalId) as {
@@ -70,11 +87,21 @@ export function ProposalBlocksReadOnly({
     isLoading: boolean;
   };
   if (isLoading) {
-    return <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Unfolding…</p>;
+    // A filtered call (the proposal spread's three regions) stays quiet while
+    // loading — the region head's own status line already carries the
+    // stop's state, and three "Unfolding…" lines would say the same thing
+    // three times. The unfiltered call (the direction spread) keeps it.
+    return only ? null : (
+      <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Unfolding…</p>
+    );
   }
 
   const experience = commercialDocumentExperience(proposal?.document_kind);
   if (experience === 'design_services') {
+    // A commercial experience has no region seams of its own — it is one
+    // narrative body. It stands under `vision` (or wholly, when unfiltered)
+    // and prints nothing on the other two calls, so it never triples.
+    if (only && only !== 'vision') return null;
     return (
       <ServiceAgreementDocumentBody
         proposalId={proposalId}
@@ -83,6 +110,7 @@ export function ProposalBlocksReadOnly({
     );
   }
   if (experience === 'commercial_readonly') {
+    if (only && only !== 'vision') return null;
     return (
       <p className="py-3 text-[11.5px] text-[var(--text-muted)]">
         This furnishings authorization opens from the Authorizations Ledger —
@@ -94,6 +122,7 @@ export function ProposalBlocksReadOnly({
     <LegacyProposalBlocksReadOnly
       proposalId={proposalId}
       omitOfferBlocks={omitOfferBlocks}
+      only={only}
     />
   );
 }
@@ -101,9 +130,11 @@ export function ProposalBlocksReadOnly({
 function LegacyProposalBlocksReadOnly({
   proposalId,
   omitOfferBlocks,
+  only,
 }: {
   proposalId: string;
   omitOfferBlocks: boolean;
+  only?: ProposalBlockGroup;
 }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading } = useProposal(proposalId) as {
@@ -131,16 +162,23 @@ function LegacyProposalBlocksReadOnly({
   };
 
   if (isLoading) {
-    return <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Unfolding…</p>;
+    return only ? null : (
+      <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Unfolding…</p>
+    );
   }
   if (!proposal) {
-    return <p className="py-3 text-[11.5px] text-[var(--text-muted)]">Proposal unavailable.</p>;
+    return only ? null : (
+      <p className="py-3 text-[11.5px] text-[var(--text-muted)]">Proposal unavailable.</p>
+    );
   }
 
   // A freshly-seeded draft has nothing written yet — render a quiet line rather
   // than an empty "$0" husk that visually dominates the prominent work band
   // above it (R68). A settled/signed proposal always has content, so this never
-  // fires in settled review.
+  // fires in settled review. Filtered calls skip this line entirely (OD-1,
+  // W5-R2 item 1): each region's own head already states `Nothing yet` /
+  // `Not written yet`, and a filtered group returns null below regardless —
+  // this whole-proposal message belongs to the direction spread's one stop.
   const isEmpty =
     (proposal.items ?? []).length === 0 &&
     (scopeRooms ?? []).length === 0 &&
@@ -148,7 +186,7 @@ function LegacyProposalBlocksReadOnly({
     (exclusions ?? []).length === 0 &&
     (milestones ?? []).length === 0 &&
     !proposal.description;
-  if (isEmpty) {
+  if (isEmpty && !only) {
     return <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Nothing drafted yet.</p>;
   }
 
@@ -164,15 +202,33 @@ function LegacyProposalBlocksReadOnly({
   const hasKeyDates =
     (phases ?? []).length > 0 && (scheduleMilestones ?? []).length > 0;
 
+  // Three groups, one region each (W5-R2 item 1). `only` undefined (the
+  // direction spread) shows all three, in this same order, byte-identical to
+  // the pre-W5-R2 render.
+  const showVision = !only || only === 'vision';
+  const showScope = !only || only === 'scope';
+  const showInvestment = !only || only === 'investment';
+
+  const visionEmpty = !proposal.description;
+  const scopeEmpty =
+    (scopeRooms ?? []).length === 0 && !hasPayments && !hasPhases && !hasKeyDates && !hasExclusions;
+  const investmentEmpty = !hasInvestment;
+  // A filtered group with nothing of its own prints nothing — the region
+  // head above it already carries `Nothing yet` / `Not written yet`
+  // (OD-1: a fact prints, or nothing does — never a stand-in).
+  if (only === 'vision' && visionEmpty) return null;
+  if (only === 'scope' && scopeEmpty) return null;
+  if (only === 'investment' && investmentEmpty) return null;
+
   return (
     <div className="space-y-6">
-      {proposal.description && (
+      {showVision && proposal.description && (
         <p className="max-w-[640px] whitespace-pre-wrap text-[12px] leading-[1.7] text-[var(--text-body)]">
           {proposal.description}
         </p>
       )}
 
-      {hasInvestment && (
+      {showInvestment && hasInvestment && (
       <div>
         <BlockLabel>Investment</BlockLabel>
         <LineItemsBlock
@@ -206,7 +262,7 @@ function LegacyProposalBlocksReadOnly({
       </div>
       )}
 
-      {(scopeRooms ?? []).length > 0 && (
+      {showScope && (scopeRooms ?? []).length > 0 && (
         <div>
           <BlockLabel>Per-room budgets</BlockLabel>
           <ScopeRoomsBlock
@@ -220,7 +276,7 @@ function LegacyProposalBlocksReadOnly({
       )}
 
       {/* PaymentScheduleBlock renders its own heading — no BlockLabel here. */}
-      {hasPayments && (
+      {showScope && hasPayments && (
       <div>
         <PaymentScheduleBlock
           milestones={(milestones ?? []).map((m) => ({
@@ -234,7 +290,7 @@ function LegacyProposalBlocksReadOnly({
       </div>
       )}
 
-      {(hasPhases || hasKeyDates) && (
+      {showScope && (hasPhases || hasKeyDates) && (
         <div>
           {hasPhases && (
             <>
@@ -280,7 +336,7 @@ function LegacyProposalBlocksReadOnly({
         </div>
       )}
 
-      {hasExclusions && (
+      {showScope && hasExclusions && (
         <div>
           <BlockLabel>Not included</BlockLabel>
           <ExclusionsBlock

@@ -131,6 +131,7 @@ export function DiscoverySection({
   clientProfileId,
   clientName,
   projectId = null,
+  onEyebrow,
 }: {
   engagementId: string; // the designer_clients.id (Shape D)
   designerId: string;
@@ -140,6 +141,12 @@ export function DiscoverySection({
    *  the scan picker is filtered to. Null on a pre-project engagement, which
    *  means the picker offers the client's scans only. */
   projectId?: string | null;
+  /** W5-R2 item 4 — the section's own inline `<h2>` and its `ready` /
+   *  `in progress` mono tag are retired; the region's single head
+   *  (`PreworkRegion` → `RegionHead`) is the only head. The tag is a state
+   *  stamp, not a restatement of the region's name, so it moves up into the
+   *  head's eyebrow slot via this report-up. */
+  onEyebrow?: (text: string | null) => void;
 }) {
   const router = useRouter();
   const { data: read } = useDiscovery(engagementId);
@@ -261,6 +268,10 @@ export function DiscoverySection({
     toFacts(draft),
   );
   const alreadySeeded = Boolean(read?.row?.seeded_proposal_id);
+  const eyebrow = ready ? 'Ready' : 'In progress';
+  useEffect(() => {
+    onEyebrow?.(eyebrow);
+  }, [eyebrow, onEyebrow]);
 
   const styleOptions: Option[] = (styles ?? []).map((s) => ({
     value: s.id,
@@ -384,15 +395,6 @@ export function DiscoverySection({
         void flush();
       }}
     >
-      <div className="mb-1.5 mt-5 flex items-baseline justify-between">
-        <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-          Discovery
-        </h2>
-        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-          {ready ? 'ready' : 'in progress'}
-        </span>
-      </div>
-
       {/* Arrival Arc (R106 §5 / build-plan 2.5): the arc-born engagement's
           first honest fact — what was offered, or what was booked — plus the
           intro-thread reference. Renders nothing for a non-arc engagement. */}

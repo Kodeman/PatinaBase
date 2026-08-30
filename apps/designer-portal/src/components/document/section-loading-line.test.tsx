@@ -46,4 +46,64 @@ describe('SectionLoadingLine', () => {
 
     expect(container.firstElementChild).toHaveClass('mt-3');
   });
+
+  // D-B39/W5-R3 — the second form: a bar meant to ride inside another line
+  // (a head's count line, or the nearest printed line above a sub-block),
+  // never to stand as a line box of its own.
+  describe('the inline variant (D-B39/W5-R3)', () => {
+    it('renders a <span>, never a <p> — it is a passenger inside another line', () => {
+      const { container } = render(
+        <SectionLoadingLine label="Checking readiness" variant="inline" />,
+      );
+
+      expect(container.querySelector('p')).toBeNull();
+      const status = screen.getByRole('status');
+      expect(status.tagName).toBe('SPAN');
+      expect(status).toHaveAttribute('aria-live', 'polite');
+    });
+
+    it('still announces the label to assistive tech, sr-only', () => {
+      render(<SectionLoadingLine label="Checking readiness" variant="inline" />);
+
+      const label = screen.getByText('Checking readiness');
+      expect(label).toHaveClass('sr-only');
+    });
+
+    it('sizes the pulse to the line it rides in, not the block form\'s 24-wide bar', () => {
+      const { container } = render(
+        <SectionLoadingLine label="Checking readiness" variant="inline" />,
+      );
+
+      const pulse = container.querySelector('[aria-hidden]');
+      expect(pulse).not.toBeNull();
+      expect(pulse).toHaveClass('h-[0.85em]');
+      expect(pulse).toHaveClass('animate-pulse');
+      expect(pulse).toHaveClass('motion-reduce:animate-none');
+      // The block form's width (`w-24 max-w-[45%]`) belongs to a line of its
+      // own; the inline form takes a character-width instead, and never the
+      // block width — the two forms print at different sizes on purpose.
+      expect(pulse).toHaveClass('w-[3ch]');
+      expect(pulse?.className).not.toMatch(/w-24/);
+      expect(pulse?.className).not.toMatch(/max-w-\[45%\]/);
+    });
+
+    it('stands still under reduced motion and disappears on resolve — its printed reduced form', () => {
+      const { container, rerender } = render(
+        <SectionLoadingLine label="Checking readiness" variant="inline" />,
+      );
+      const pulse = container.querySelector('[aria-hidden]');
+      expect(pulse).toHaveClass('motion-reduce:animate-none');
+
+      rerender(<div />);
+      expect(screen.queryByText('Checking readiness')).not.toBeInTheDocument();
+    });
+
+    it('defaults to the block form when no variant is given — the eight block sites are untouched', () => {
+      const { container } = render(<SectionLoadingLine label="Opening the brief" />);
+
+      expect(container.firstElementChild?.tagName).toBe('P');
+      const pulse = container.querySelector('[aria-hidden]');
+      expect(pulse).toHaveClass('w-24');
+    });
+  });
 });

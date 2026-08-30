@@ -27,6 +27,12 @@ const chips = code(
 const spine = code('components', 'document', 'mobile', 'mobile-sheets.tsx');
 const handoffItem = code('components', 'document', 'margin-handoff-item.tsx');
 /**
+ * D-B30/W5-R1: the mobile chips' and the Margin sheet's derivation (handoff
+ * gates included) both moved into this one hook — `chips`/`spine` now just
+ * call it, so the "counts and lists them" contract reads here.
+ */
+const marginSheetHook = code('hooks', 'use-margin-sheet.ts');
+/**
  * R1 deleted `workflow-stage-document-mount.tsx` and put
  * `section-stage-line-mount.tsx` at the same mount point; the "nothing mounts
  * the band" contract follows the successor mount.
@@ -90,10 +96,13 @@ describe('the margin carries the handoffs instead', () => {
 
   it('counts and lists them on the mobile surfaces too', () => {
     // Mobile must not under-report the highest-ranked thing in the margin.
-    for (const source of [chips, spine]) {
-      expect(source).toContain('useHandoffGates');
-    }
-    expect(spine).toContain('raised.length + handoffGates.length');
+    // D-B30/W5-R1: the derivation moved off these two components and into
+    // one hook both call, so the intent (gates counted, gates listed) now
+    // reads on the hook; the components just call it.
+    expect(chips).toContain('useLetterheadMargin');
+    expect(spine).toContain('useMarginSheet');
+    expect(marginSheetHook).toContain('useHandoffGates');
+    expect(marginSheetHook).toContain('gates.length');
   });
 
   it('threads one clock rather than reading its own', () => {

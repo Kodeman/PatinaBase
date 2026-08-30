@@ -147,3 +147,36 @@ describe('DiscoverySection — Begin the Direction (J1)', () => {
     expect(screen.getByRole('button', { name: 'Begin the Direction' })).toBeEnabled();
   });
 });
+
+// W5-R2 item 4 — the section's own inline `<h2>Discovery</h2>` and its
+// `ready`/`in progress` mono tag are retired: `PreworkRegion`'s `RegionHead`
+// is the paper's one head for this stop now, and the readiness stamp reports
+// up into that head's eyebrow instead of standing beside a second heading.
+describe('DiscoverySection — one head, not two (W5-R2 item 4)', () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+    mockReplace.mockClear();
+    mockBeginDirectionMutateAsync.mockReset();
+    mockUpsertMutateAsync.mockClear();
+  });
+
+  it('prints no inline "Discovery" heading of its own', () => {
+    render(<DiscoverySection {...PROPS} />);
+    expect(screen.queryByRole('heading', { name: 'Discovery' })).toBeNull();
+    expect(screen.queryByText('Discovery')).toBeNull();
+  });
+
+  it('reports its readiness stamp to the caller instead of printing a second head', () => {
+    const onEyebrow = jest.fn();
+    render(<DiscoverySection {...PROPS} onEyebrow={onEyebrow} />);
+    // READY_ROW carries all five essentials — the region is ready.
+    expect(onEyebrow).toHaveBeenLastCalledWith('Ready');
+    // The stamp no longer prints inline as `ready` / `in progress` text.
+    expect(screen.queryByText('ready')).toBeNull();
+    expect(screen.queryByText('in progress')).toBeNull();
+  });
+
+  it('renders with no `onEyebrow` at all — the prop is optional', () => {
+    expect(() => render(<DiscoverySection {...PROPS} />)).not.toThrow();
+  });
+});

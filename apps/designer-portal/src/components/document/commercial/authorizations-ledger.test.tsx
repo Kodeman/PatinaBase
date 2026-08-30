@@ -259,4 +259,36 @@ describe("AuthorizationsLedger", () => {
       "Authorizations are unavailable.",
     );
   });
+
+  // D-B39/W5-R3 — the loading pulse prints inline, as the last child of the
+  // ledger's own title line ("Authorizations & trade scopes"), never as a
+  // separate row beneath it: the title's text is unchanged whether the
+  // ledger is loading or loaded, and no second loading row exists.
+  it("prints the loading pulse inline in the ledger's title line, never as a separate row (D-B39/W5-R3)", () => {
+    mockInstruments = { isLoading: true, error: null, data: [] };
+    mockTradeScopes = { isLoading: false, error: null, data: [] };
+    const { rerender } = render(<AuthorizationsLedger projectId="project-1" />);
+
+    const titleLine = () =>
+      screen.getByText("Authorizations & trade scopes", { exact: false });
+    const visibleText = (el: HTMLElement) => {
+      const clone = el.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll(".sr-only, [aria-hidden]").forEach((n) => n.remove());
+      return clone.textContent?.trim();
+    };
+
+    const titleLoading = titleLine();
+    const classesLoading = titleLoading.className;
+    const textLoading = visibleText(titleLoading);
+    expect(screen.getByText("Loading authorizations")).toBeInTheDocument();
+    expect(document.querySelectorAll('[role="status"]')).toHaveLength(1);
+
+    mockInstruments = { isLoading: false, error: null, data: [] };
+    rerender(<AuthorizationsLedger projectId="project-1" />);
+
+    const titleLoaded = titleLine();
+    expect(visibleText(titleLoaded)).toBe(textLoading);
+    expect(titleLoaded.className).toBe(classesLoading);
+    expect(screen.queryByText("Loading authorizations")).not.toBeInTheDocument();
+  });
 });
