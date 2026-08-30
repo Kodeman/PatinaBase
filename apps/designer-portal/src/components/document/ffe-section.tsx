@@ -39,7 +39,6 @@ import {
   type FfeItemCoverage,
 } from '@patina/supabase';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
-import { MobileMarginChips } from './mobile/mobile-margin-chips';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
 import {
@@ -515,13 +514,6 @@ function FFELine({
           {body}
         </button>
       )}
-      {/* D13: this line's margin items as chips beneath it (mobile). */}
-      <MobileMarginChips
-        projectId={projectId}
-        proposalId={null}
-        anchorKind="line"
-        anchorId={item.id}
-      />
       {unfolded && !selecting && (
         <>
           <LineUnfold

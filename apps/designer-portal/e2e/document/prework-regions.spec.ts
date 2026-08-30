@@ -28,7 +28,7 @@
  * skipped with its reason, the repo's own idiom.
  */
 import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
-import { scrollTo, settle } from "../helpers/lens";
+import { quiet, scrollTo, settle } from "../helpers/lens";
 import { PRE_WORK_ID } from "./lens-fixtures";
 
 test.describe.configure({ mode: "serial" });
@@ -60,13 +60,18 @@ async function openPaper(page: AuthenticatedPage): Promise<void> {
     timeout: 30_000,
   });
   await settle(page);
-  // The ladder's own count line — which every pre-work head's status line is
-  // (`page.tsx` `preworkStatus` reads `ladderSegments[].countLine`) — prints
-  // the literal `Reading…` placeholder while its query is in flight.
-  // `settle()` waits on scroll velocity, not on data, so on a warm webkit
-  // worker (this file runs SECOND in its shard, after mobile-margin-sheet)
-  // a status read can land on the placeholder. Waiting for it to clear is
-  // the precondition every case here already assumes; it asserts nothing.
+  // Every claim in this file is about a PRINTED STRING, and every one of them
+  // is derived from a query: `settle()` answers only for the lens, so a read
+  // taken on its own catches `Reading…` where the proposal's own fetch has not
+  // landed. D-B28's ruled precondition.
+  await quiet(page);
+  // And the symptom itself, named: the ladder's own count line — which every
+  // pre-work head's status line IS (`page.tsx` `preworkStatus` reads
+  // `ladderSegments[].countLine`) — prints the literal `Reading…` placeholder
+  // while its query is in flight. Kept beside `quiet()` rather than instead of
+  // it because it says what went wrong when it goes wrong, and because this
+  // file runs SECOND in its webkit shard, after `mobile-margin-sheet`, against
+  // a warm worker. It asserts nothing.
   await expect(
     page
       .locator(
@@ -119,12 +124,17 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
     expect(status).toBe("Not written yet");
   });
 
-  test('scope prints "Nothing yet" — no rooms, payments, phases or exclusions on this document', async ({
+  test('scope prints the section stage line — the fact its own body prints (W5-R5 §2)', async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page);
     const status = (await statusOf(page, "scope").textContent())?.trim();
-    expect(status).toBe("Nothing yet");
+    // W5-R5 §2 supersedes W5-R2 §2's `4 ROOMS IN SCOPE` (and W5-C6/F3): the
+    // stop's fact HAS a source — the stage-line strip, which is now this
+    // stop's body (N2) — so the head states it rather than `Nothing yet`.
+    // The stop's own name is not repeated: the head prints it one line above.
+    expect(status).toBe("Core · stage 03");
+    expect(status).not.toContain("Scope & Engagement");
   });
 
   test('the proposal stop prints "Sent <date> · unopened <n>d"', async ({
@@ -156,7 +166,11 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
         `"${key}" printed an empty status line`,
       ).toBeGreaterThan(0);
       expect(status, `"${key}" printed "${status}"`).not.toMatch(/—|--|\$0\b/);
-      const isKnownFact = /^sent |^\$|complete$/i.test(status);
+      // W5-R5 §2 — `scope` prints the section stage line's own phrase
+      // (`Core · stage 03`), a fact with a printed source in the stop's own
+      // body, so it joins the known-fact shapes beside `Sent …`, `$…` and
+      // `… complete`.
+      const isKnownFact = /^sent |^\$|complete$|^core · stage /i.test(status);
       if (!isKnownFact) {
         expect(
           EMPTY_ROW_SENTENCES,
@@ -173,8 +187,10 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
     await expect(page.locator('[data-ladder-segment="vision"]')).toContainText(
       "NOTHING YET",
     );
+    // W5-R5 §2 — `scope` is no longer a stop with no number: its value is the
+    // section stage line's own phrase, the fact its body prints (N2).
     await expect(page.locator('[data-ladder-segment="scope"]')).toContainText(
-      "NOTHING YET",
+      "CORE · STAGE 03",
     );
   });
 
@@ -209,5 +225,102 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
       railStage,
       `rail stage phrase carried an ordinal: "${railStage}"`,
     ).not.toMatch(/\d+\s*OF\s*\d+/i);
+
+    // F2 / W5-R4 — ONE line. `stageWord` is derived from the ticket's phase,
+    // which no pre-work spread has, so the head used to fall through to
+    // `activeSection.sub` and print a second span (`Awaiting signature`, `In
+    // discovery`, `Respond by Aug 12`) — a sentence never meant as a rail
+    // line, and the half of W5-R2 §3's "the two agree" that the ordinal check
+    // above cannot see.
+    await expect(page.locator('[data-spine-stage-count]')).toHaveCount(0);
+    expect(railStage.split('\n').filter((l) => l.trim()).length).toBe(1);
+  });
+
+  test('W5F-04 — scope says the same thing at quiet and at full', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page);
+
+    // The stage phrase used to be reported UP by the strip, which after N2 is
+    // a child of `PreworkRegion` — and `PreworkRegion` unmounts its children
+    // at quiet. So the head's status line and the rail's value changed on
+    // promotion, which W5-R3 forbids; D-B37 cannot see it because it runs on
+    // `…d5`, where no pre-work stop exists. The fact is derived from the
+    // section key now, so the strip's mount state cannot reach it.
+    const read = async () => ({
+      status: (await statusOf(page, 'scope').textContent())?.trim() ?? '',
+      rail:
+        (
+          await page
+            .locator('[data-ladder-segment="scope"]')
+            .textContent()
+        )?.trim() ?? '',
+      density: await page
+        .locator('[data-document-paper] [data-index-region="scope"]')
+        .getAttribute('data-density'),
+    });
+
+    // At s0 `scope` sits below the lookahead on this paper: quiet.
+    const atRest = await read();
+    expect(atRest.status).toContain('Core · stage 03');
+    expect(atRest.rail).toContain('CORE · STAGE 03');
+
+    // Walk to it, so the lens promotes it.
+    await page.evaluate(() => {
+      document
+        .querySelector('[data-document-paper] [data-index-region="scope"]')
+        ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    });
+    await settle(page);
+    const promoted = await read();
+
+    expect(
+      promoted.density,
+      'scope never promoted — the walk proved nothing',
+    ).toBe('full');
+    expect(promoted.status).toBe(atRest.status);
+    expect(promoted.rail).toBe(atRest.rail);
+  });
+
+  test('W5-R5 §2 (N2) — the stage-line strip is the scope stop\'s body, so the first thing after the band is a region head', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page);
+
+    // The strip printed `SCOPE & ENGAGEMENT · CORE · STAGE 03` between the
+    // band and the first head — a free-standing band under the letterhead,
+    // which is what OD-2 gives every stop a head to avoid.
+    const firstAfterBand = await page.evaluate(() => {
+      const band = document.querySelector('[data-lens-band]');
+      if (!band) return null;
+      let node = band.nextElementSibling as HTMLElement | null;
+      while (node && node.getBoundingClientRect().height === 0) {
+        node = node.nextElementSibling as HTMLElement | null;
+      }
+      if (!node) return null;
+      const region = node.matches('[data-index-region]')
+        ? node
+        : node.querySelector('[data-index-region]');
+      return {
+        tag: node.tagName,
+        stageLineInside: Boolean(node.querySelector('[data-section-stage-line]')),
+        isStageLine: node.matches('[data-section-stage-line]'),
+        firstRegion: region?.getAttribute('data-index-region') ?? null,
+      };
+    });
+
+    expect(firstAfterBand, 'nothing follows the band').not.toBeNull();
+    expect(
+      firstAfterBand!.isStageLine,
+      'the stage-line strip still stands between the band and the first head',
+    ).toBe(false);
+    expect(firstAfterBand!.firstRegion).toBe('proposal');
+
+    // And it prints INSIDE `scope`, which is the fact its head now states.
+    await expect(
+      page.locator(
+        '[data-index-region="scope"] [data-section-stage-line]',
+      ),
+    ).toHaveCount(1);
   });
 });

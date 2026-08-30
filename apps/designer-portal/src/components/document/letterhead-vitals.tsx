@@ -479,30 +479,97 @@ export function LetterheadTitle({
     if (next !== serverTitle) void save({ name: next });
   };
 
+  // D-B48 — the name WRAPS. An `<input>` cannot, so at 390 (a 327px measure,
+  // 32px Playfair ≈ 11 characters) `Aspen Loft — the long paper` printed
+  // `Aspen Loft — the long p`, and the 390 spec's `scrollWidth === clientWidth`
+  // witness was satisfied BY the overflow. At rest the name is `<h1>` text; the
+  // input appears only in edit mode, in the same box.
+  const [editing, setEditing] = useState(false);
+  const editButton = useRef<HTMLButtonElement | null>(null);
+  const leaveEdit = (restoreFocus = true) => {
+    setEditing(false);
+    if (restoreFocus)
+      window.requestAnimationFrame(() =>
+        editButton.current?.focus({ preventScroll: true }),
+      );
+  };
+
+  // One class set for both forms, so the rect does not move on the swap.
+  const TYPE =
+    'font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] min-[1180px]:text-[40px]';
+
   return (
     /* 32px below 1180, 40px from 1180 up (W3-R4, corrected by NF-02: the
        SHELL's own tier, never Tailwind's `sm`): 40px of Playfair spends ~46
-       characters of a 1440 measure but only ~11 of a 390 one. */
-    <h1 className="flex items-baseline gap-2 font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] min-[1180px]:text-[40px]">
-      <input
-        type="text"
-        aria-label="Project title"
-        value={value}
-        onFocus={() => (focused.current = true)}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            e.currentTarget.blur();
-          } else if (e.key === 'Escape') {
-            e.stopPropagation();
-            e.currentTarget.blur();
-          }
-        }}
-        disabled={state === 'saving'}
-        className="min-w-0 flex-1 border-b border-transparent bg-transparent font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60 min-[1180px]:text-[40px]"
-      />
+       characters of a 1440 measure but only ~11 of a 390 one. The `<h1>` never
+       changes element type, so the heading outline is stable across the swap.
+       `break-words` wraps at WORD boundaries only — no `overflow-wrap:
+       anywhere`, no `text-wrap: balance`: the em-dash form breaks after the
+       dash as the mockup does, and balancing would move that break. */
+    <h1
+      // NOT `flex-wrap`: the two flex ITEMS are the name and the SaveDot, and
+      // they do not wrap — the NAME wraps, inside its own box, which is what
+      // `break-words` on the button does. Adding it here moved the baseline by
+      // 0.08px and D-B38's "line 2 holds its y across the pin" caught it.
+      className={`flex items-baseline gap-2 min-w-0 ${TYPE}`}
+    >
+      {editing ? (
+        <input
+          type="text"
+          aria-label="Project title"
+          autoFocus
+          value={value}
+          onFocus={(e) => {
+            focused.current = true;
+            // Caret at the end, not a select-all: she pressed to amend a name,
+            // not to replace it.
+            const end = e.currentTarget.value.length;
+            e.currentTarget.setSelectionRange(end, end);
+          }}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={() => {
+            commit();
+            leaveEdit(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+              leaveEdit();
+            } else if (e.key === 'Escape') {
+              // W5-R6 / 1b — three things, in this order, and the third
+              // matters as much as the first two: the shell puts the paper
+              // down on Escape (D1), so without stopping here the reader
+              // restored the name and lost the document underneath her
+              // (`/doc/…` → `/desk`). `nativeEvent.stopImmediatePropagation`
+              // as well as React's own, because the shell's listener is on
+              // `document` and outside React's tree.
+              e.stopPropagation();
+              e.nativeEvent.stopImmediatePropagation();
+              e.preventDefault();
+              // D-B48: Escape RESTORES. It used to blur, and blur commits — so
+              // the one key that means "leave it alone" saved.
+              focused.current = false;
+              setValue(serverTitle);
+              leaveEdit();
+            }
+          }}
+          disabled={state === 'saving'}
+          className={`min-w-0 w-full flex-1 border-b border-transparent bg-transparent hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60 ${TYPE}`}
+        />
+      ) : (
+        /* The visible name IS the control — no second glyph, no pencil. */
+        <button
+          ref={editButton}
+          type="button"
+          aria-label="Rename the project"
+          data-letterhead-title-edit
+          onClick={() => setEditing(true)}
+          className={`min-w-0 cursor-text break-words text-left ${TYPE}`}
+        >
+          {value}
+        </button>
+      )}
       <SaveDot state={state} errorMsg={errorMsg} />
     </h1>
   );

@@ -421,6 +421,7 @@ describe('deriveLadderSegments · the pre-work stops', () => {
           sentOn: '2026-08-19',
           openedOn: null,
           scopeRooms: 4,
+          stageLine: 'Core · stage 03',
           investmentCents: 18_450_000,
           ...overrides,
         },
@@ -433,9 +434,32 @@ describe('deriveLadderSegments · the pre-work stops', () => {
     expect(segments.proposal.value).toBe('SENT AUG 19 · UNOPENED 6D');
     expect(segments.proposal.countLine).toBe('Sent Aug 19 · unopened 6d');
     expect(segments.scope.name).toBe('Scope & engagement');
-    expect(segments.scope.value).toBe('4 ROOMS');
+    // W5-R5 §2 — the stage line's own phrase, which is what the stop's body
+    // prints (N2), with the room count behind it. Supersedes `4 ROOMS IN
+    // SCOPE` (W5-R2 §2 / W5-C6 / F3): that named a count with no printed
+    // source beside it.
+    expect(segments.scope.value).toBe('CORE · STAGE 03 · 4 ROOMS');
+    expect(segments.scope.value!.length).toBeLessThanOrEqual(30);
+    expect(segments.scope.narrowValue).toBe('CORE · STAGE 03 · 4 ROOMS');
+    expect(segments.scope.countLine).toBe('Core · stage 03 · 4 rooms');
     expect(segments.investment.name).toBe('The investment');
     expect(segments.investment.value).toBe('$184,500');
+  });
+
+  it('W5F-04 — scope states the same thing at quiet and at full', () => {
+    // The stage phrase used to be reported up by the strip, which after N2 is
+    // a child of `PreworkRegion` — and `PreworkRegion` UNMOUNTS its children
+    // at quiet. So the head's status line and the rail's value changed on
+    // promotion, which W5-R3 forbids, and D-B37 could not see it because it
+    // runs on `…d5`, where no pre-work stop exists. The fact is derived from
+    // the section key now, so the segment cannot know or care whether the
+    // strip is mounted: the same facts in, the same strings out.
+    const quiet = prework();
+    const full = prework();
+    expect(full.scope.value).toBe(quiet.scope.value);
+    expect(full.scope.narrowValue).toBe(quiet.scope.narrowValue);
+    expect(full.scope.countLine).toBe(quiet.scope.countLine);
+    expect(quiet.scope.value).toBe('CORE · STAGE 03 · 4 ROOMS');
   });
 
   it('prints the sentence, never a dash, where the stop has no number', () => {
@@ -452,6 +476,7 @@ describe('deriveLadderSegments · the pre-work stops', () => {
     const segments = prework({
       sentOn: null,
       scopeRooms: 0,
+      stageLine: null,
       investmentCents: null,
     });
     expect(segments.proposal.value).toBeNull();

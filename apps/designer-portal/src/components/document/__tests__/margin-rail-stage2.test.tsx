@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MarginRail, ResponsiveMarginRail } from '../margin-rail';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 
@@ -165,6 +165,54 @@ describe('the margin, grouped by anchor (RF-03)', () => {
     // Every raised card sits in exactly one group.
     expect(within(pieces as HTMLElement).getByText('Console note')).toBeVisible();
     expect(within(wholeJob as HTMLElement).getByText('Scope change')).toBeVisible();
+  });
+
+  it('W5-R5 §3 (N3) — a heading counts EVERY item in its group, settled included', () => {
+    // The rail counted `raised` only and printed `BESIDE PIECES · 1` where the
+    // 390 Margin sheet, counting the whole group, printed `· 3`: one margin,
+    // two numbers, and the desktop one under-reporting what was there.
+    mockMarginRows = [
+      item({ item_id: 'l1', anchor_kind: 'line', anchor_id: 'ffe-1', title: 'Console note' }),
+      item({
+        item_id: 'l2',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-2',
+        title: 'COM note settled',
+        // `isResolved`: a decision the client has answered is settled.
+        kind: 'decision',
+        state: 'responded',
+      }),
+      item({
+        item_id: 'l3',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-3',
+        title: 'PO note settled',
+        kind: 'decision',
+        state: 'responded',
+      }),
+      item({ item_id: 'w1', title: 'Invoice 2026-114' }),
+    ];
+    renderRail();
+
+    const pieces = document.querySelector('[data-margin-group="ffe"]') as HTMLElement;
+    expect(pieces).toHaveTextContent('BESIDE PIECES · 3');
+
+    // R12 still holds: the settled two are folded, INSIDE the group, and the
+    // fold names its own number — folding never moves the heading's count.
+    expect(within(pieces).getByText('Console note')).toBeVisible();
+    expect(within(pieces).queryByText('COM note settled')).toBeNull();
+    const fold = within(pieces).getByRole('button', { name: /2 settled/i });
+    expect(fold).toBeVisible();
+
+    fireEvent.click(fold);
+    expect(within(pieces).getByText('COM note settled')).toBeVisible();
+    expect(pieces).toHaveTextContent('BESIDE PIECES · 3');
+
+    // And the fold is the GROUP's, not the rail's: the whole-job group is
+    // untouched by it.
+    expect(
+      document.querySelector('[data-margin-group="whole-job"]'),
+    ).toHaveTextContent('THE WHOLE JOB · 1');
   });
 
   it('lifts the count to charcoal for the stop she is standing in — and moves no card', () => {

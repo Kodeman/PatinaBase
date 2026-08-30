@@ -226,9 +226,6 @@ jest.mock('@/components/document/folio-strip', () => ({
   FolioLetterhead: () => null,
   ProposalFolioStrip: () => null,
 }));
-jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
-}));
 jest.mock('@/components/document/section-stage-line-mount', () => ({
   SectionStageLineMount: () => null,
 }));

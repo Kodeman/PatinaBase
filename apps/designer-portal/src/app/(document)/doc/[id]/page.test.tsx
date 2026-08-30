@@ -352,7 +352,6 @@ jest.mock('@/components/document/proposal-blocks-readonly', () => ({
 }));
 jest.mock('@/components/document/proposal-instruments', () => ({ ProposalInstruments: () => null }));
 jest.mock('@/components/document/folio-strip', () => ({ FolioLetterhead: () => null, ProposalFolioStrip: () => null }));
-jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({ MobileMarginChips: () => null }));
 // W3 — the instruments are handed to the letterhead as a node now, so the
 // stub prints a marker rather than nothing: where it lands, and how many of
 // it there are, is the assertion.
@@ -2213,6 +2212,33 @@ describe('DocumentPage guide activation', () => {
       ],
     ] as const;
 
+    // W5F-02 — after N2 the strip is re-hosted inside `scope`, and `scope`
+    // mounts on the PROPOSAL spread only. Suppressing it for all four pre-work
+    // stages therefore took it off brief, discovery and direction entirely —
+    // `section-stage-line-mount.tsx`'s section-mode branch exists for exactly
+    // those three.
+    it.each(SPREADS)(
+      'the %s spread prints its stage strip exactly once, in the right place',
+      (label, row) => {
+        openSpread(row as Record<string, unknown>);
+
+        const strips = document.querySelectorAll('[data-section-stage-line]');
+        // One strip, on every pre-work spread — never zero (W5F-02), never two.
+        expect(strips).toHaveLength(1);
+
+        const insideScope = document.querySelector(
+          '[data-index-region="scope"] [data-section-stage-line]',
+        );
+        if (label === 'proposal') {
+          // Its body — so the first thing after the band is a region head.
+          expect(insideScope).not.toBeNull();
+        } else {
+          // Where R1/I114 put it: the open section's own sub-label.
+          expect(insideScope).toBeNull();
+        }
+      },
+    );
+
     it.each(SPREADS)(
       'the %s spread mounts exactly the stops the index declares, in order',
       (section, row) => {
@@ -2263,7 +2289,12 @@ describe('DocumentPage guide activation', () => {
       // `mockProposalData` is undefined here — nothing has gone out — and the
       // row says so in words rather than with a dash or a $0 husk.
       expect(statusOf('proposal')).toContain('Not sent yet');
-      expect(statusOf('scope')).toContain('Nothing yet');
+      // W5-R5 §2 — `scope`'s fact HAS a source: the section stage line, which
+      // is now this stop's own body (N2). So it prints the stage phrase, not
+      // `Nothing yet` — and not the stop's name again, which the head prints
+      // one line above.
+      expect(statusOf('scope')).toContain('Core · stage 03');
+      expect(statusOf('scope')).not.toContain('Scope & Engagement · Core');
       expect(statusOf('investment')).toContain('Nothing yet');
       expect(statusOf('vision')).not.toMatch(/—|--|\$0/);
     });
@@ -2457,5 +2488,57 @@ describe('furnishings authorization doorway', () => {
         documentKind: 'furnishings_authorization',
       }),
     ).toBeNull();
+  });
+});
+
+// W5-R6 / 1b — the shell's Put-down (D1) and text entry share one key. A
+// reader amending the letterhead's name pressed Escape to mean "leave it
+// alone" and the shell put the paper down underneath her: `/doc/…` → `/desk`.
+describe('Escape puts the paper down — unless a field is using the key', () => {
+  // The Put-down listener is registered by the shell itself, above whatever
+  // the paper is doing — so a still-resolving document is enough to read it.
+  beforeEach(() => {
+    mockHydrated = true;
+    mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
+    mockDraftingState = { gaps: [], isLoading: false, error: null };
+    mockProposalData = undefined;
+    mockProposalError = false;
+    mockProjectQuery = { data: undefined, isLoading: false, isError: false };
+    mockResolvedSchedule = NO_RESOLVED_SCHEDULE;
+    mockContextualHandoffsQuery = { data: [], isError: false };
+    mockDeskData = { folders: [], chips: [], composed: {} };
+    mockDeskLoading = false;
+    mockDeskError = false;
+    mockRecentDocumentsInHand = [];
+    mockDocumentQuery = {
+      data: undefined,
+      isLoading: true,
+      isFetching: true,
+      isError: false,
+      refetch: mockRetryDocumentResolution,
+    };
+    setViewport({ width: 1440, reducedMotion: true });
+  });
+
+  it('puts a bare document down', () => {
+    render(<DocumentPage params={fulfilledParams} />);
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/desk');
+  });
+
+  it('leaves the paper alone when the key came from text entry', () => {
+    render(<DocumentPage params={fulfilledParams} />);
+    // Fired straight at the shell's own listener, outside React's tree: the
+    // guard has to hold on its own, not because the field stopped the event.
+    const field = document.createElement('input');
+    document.body.appendChild(field);
+    try {
+      fireEvent.keyDown(field, { key: 'Escape' });
+      expect(mockRouter.push).not.toHaveBeenCalled();
+    } finally {
+      field.remove();
+    }
   });
 });

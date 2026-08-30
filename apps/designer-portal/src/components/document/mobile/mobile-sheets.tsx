@@ -12,7 +12,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMarginItems } from '@/hooks/use-margin-items';
-import { useCoordinationItems } from '@patina/supabase';
+import { useCoordinationItems, useSendDecisionReminder } from '@patina/supabase';
+import { useQueryClient } from '@tanstack/react-query';
+// W5-C2 — the SAME act implementations the margin-item sheet's own body runs
+// (`margin-bodies.tsx`), so the inline act and the sheet's act are one act.
+import { invalidateMarginSurfaces } from '@/hooks/use-margin-items';
+import { openInvoiceFolio } from '../accounts/invoice-overlays';
+import { useCreateMarginNote } from '@/hooks/use-margin-notes';
+import { todayYmd } from '@/lib/document/format';
+import { DateTextInput } from '../date-text-input';
 import {
   classifyMarginItems,
   marginDecisionClassificationState,
@@ -131,7 +139,7 @@ const MOBILE_MORE_DOORWAY =
   '[data-mobile-edge-owner="document-bar"] [aria-label="More studio actions"]';
 
 const SHEET_RETURN_FALLBACKS: Record<
-  'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin',
+  'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin' | 'note',
   readonly string[]
 > = {
   drawer: ['[data-studio-books-doorway]', MOBILE_MORE_DOORWAY],
@@ -151,6 +159,12 @@ const SHEET_RETURN_FALLBACKS: Record<
   ],
   // D-B30: the door is the first row of More's "In this document" list.
   margin: ['[data-mobile-document-door="margin"]', MOBILE_MORE_DOORWAY],
+  // W5-R4(a): Discard and Escape both land back on the act that opened it.
+  note: [
+    '[data-margin-capture-note]',
+    '[data-mobile-document-door="margin"]',
+    MOBILE_MORE_DOORWAY,
+  ],
 };
 
 function focusMobileMoreDoorway() {
@@ -184,7 +198,7 @@ function restoreSheetFocus(
 /** One accessible name per sheet kind — every `role="dialog"` this file opens
  *  names itself, the sections sheet included (it carried none before). */
 const SHEET_ARIA_LABEL: Record<
-  'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin',
+  'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin' | 'note',
   string
 > = {
   drawer: 'Studio actions',
@@ -192,6 +206,7 @@ const SHEET_ARIA_LABEL: Record<
   spine: 'Sections of this document',
   'margin-item': 'Margin item',
   margin: 'The margin',
+  note: 'Note to the margin',
 };
 
 function Sheet({
@@ -201,7 +216,7 @@ function Sheet({
   children,
 }: {
   tone: 'paper' | 'dark';
-  kind: 'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin';
+  kind: 'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin' | 'note';
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -344,29 +359,50 @@ function marginRowOwner(row: MarginItemRow): string {
   }
 }
 
-/** D-B30 — the row's one inline act label, sharing the wording the
- *  margin-item sheet's own body renders (`margin-bodies.tsx`) rather than a
- *  second table. See the comment above the `'margin'` sheet branch for why
- *  the button opens that sheet instead of firing the act from here. */
-function marginRowActLabel(row: MarginItemRow): string {
+/**
+ * D-B30 — the row's ONE inline act: its label and what pressing it does.
+ *
+ * W5-C2: both controls in a row used to call `openMarginItem`, so a button
+ * named `Send a nudge` opened a dialog and sent nothing. A control's
+ * accessible name must describe what it does, and two controls in one row
+ * cannot carry different names and identical behaviour.
+ *
+ * So an act either PERFORMS or is named `Open`. `perform` names the act the
+ * `margin-item` sheet's own body would run — the same act table
+ * (`margin-bodies.tsx`), not a second one — and it is populated only where the
+ * act needs nothing this compact row does not hold. Everything that needs the
+ * item's own fetched detail (a date to extend to, a body to reply with, the
+ * invoice to review, a pulse draft, a decision form, the thread) keeps the
+ * sheet as its door and says so in one word.
+ */
+type MarginRowAct = {
+  label: string;
+  /** `null` — the act needs the item sheet; the button opens it and is named
+   *  for that. */
+  perform: 'nudge' | 'folio' | null;
+};
+
+function marginRowAct(row: MarginItemRow): MarginRowAct {
   switch (row.kind) {
     case 'decision':
-      if (row.state === 'expired') return 'Extend & reopen';
-      if (row.state === 'responded') return 'Open the record';
-      return row.payload.reminder_sent_at ? 'Nudge again' : 'Send a nudge';
-    case 'message':
-      return 'Reply';
+      // Extending needs a date and the record is the sheet itself.
+      if (row.state === 'expired' || row.state === 'responded')
+        return { label: 'Open', perform: null };
+      return {
+        label: row.payload.reminder_sent_at ? 'Nudge again' : 'Send a nudge',
+        perform: 'nudge',
+      };
     case 'invoice':
-      if (row.payload.po_payment) return 'Open the folio';
-      return row.state === 'draft' ? 'Review & send invoice' : 'Open the folio';
+      // The folio is a window event — it needs the invoice id and nothing else.
+      if (row.payload.po_payment || row.state !== 'draft')
+        return { label: 'Open the folio', perform: 'folio' };
+      return { label: 'Open', perform: null };
+    case 'message':
     case 'pulse':
-      return row.state === 'sent' ? 'Open' : 'Send Pulse';
     case 'note':
-      return row.state === 'escalated' ? 'Open' : 'Client decision';
     case 'field_sms':
-      return row.state === 'needs_review' ? 'Review on the desk' : 'Open the thread';
     case 'time':
-      return 'Open';
+      return { label: 'Open', perform: null };
   }
 }
 
@@ -379,8 +415,17 @@ export function MobileSheets({
    *  take. */
   ladderValues?: Partial<Record<DocumentIndexKey, string>>;
 } = {}) {
-  const { sheet, activeDoc, closeSheet, openMarginItem, openSpine } =
+  const { sheet, activeDoc, closeSheet, openMarginItem, openMargin, openNote, openSpine } =
     useMobileShell();
+  const queryClient = useQueryClient();
+  const decisionReminder = useSendDecisionReminder();
+  // W5-R4(a) — the note composer's own state, hoisted with the other hooks so
+  // it sits above every early return in this component.
+  const createNote = useCreateMarginNote();
+  const [noteBody, setNoteBody] = useState('');
+  // Dates default to today, as the rail's composer does: a kept default makes
+  // the note due today and it joins needs-action at 5pm (R12/R14).
+  const [noteDue, setNoteDue] = useState(todayYmd());
   const ladderValues = ladderValuesProp ?? activeDoc?.ladderValues ?? {};
   const router = useRouter();
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
@@ -726,13 +771,12 @@ export function MobileSheets({
   //    per region with a line-anchored member, as the desktop rail groups
   //    them (margin-rail.tsx `anchorGroups`; W5-R1 prints WHOLE JOB first).
   //    Moved out of the spine sheet above, which keeps only sections and the
-  //    doors. Each item's own act lives in the margin-item sheet
-  //    (openMarginItem, below) — the inline act here shares that act's label
-  //    rather than re-deriving or firing it blind from a compact row; the
-  //    real act needs the item's own fetched detail (decision options,
-  //    invoice lines, a thread) this list does not hold, so duplicating a
-  //    live mutation here would risk a second, divergent path (§5's one-act
-  //    invariant). ──
+  //    doors. Each row's inline act PERFORMS (W5-C2) where the act needs
+  //    nothing the row does not hold — the nudge and the folio, run through
+  //    the same hooks `margin-bodies.tsx` runs them through, not a second
+  //    table. Where the act needs the item's own fetched detail it is named
+  //    `Open` and opens the margin-item sheet, which is where that act lives
+  //    (§5's one-act invariant: one implementation, two doors). ──
   if (sheet.kind === 'margin') {
     const { groups, gates, decisionState, showDecisionNotice, count, overdueCount } =
       marginSheet;
@@ -746,23 +790,64 @@ export function MobileSheets({
         // Every `ffe-selection-*` id lives in the FF&E region's body, and a
         // region that is quiet (or that the reader closed herself) has no
         // body, so a scroll issued from here had nothing to land on.
+        //
+        // W5-C14 asked for exactly this order from inside the sheet
+        // (`onJumpRegion('ffe')` then a two-frame `scrollIntoView`); D-B46,
+        // ruled after it, moves the whole composition to the page so there is
+        // ONE implementation of it and no sheet calls `scrollIntoView`.
+        // `landOnFfeAnchor` is that composition, and `page.test.tsx` pins its
+        // order (P2-07).
         activeDoc?.onJumpToLine?.(row.anchor_id);
       }
       openMarginItem(row.item_id);
     };
+    /** The row's own act. `perform: null` falls back to the row's door. */
+    const runRowAct = (row: MarginItemRow) => {
+      const act = marginRowAct(row);
+      if (act.perform === 'nudge') {
+        decisionReminder.mutate(
+          { decisionId: row.item_id },
+          { onSuccess: () => invalidateMarginSurfaces(queryClient, projectId) },
+        );
+        return;
+      }
+      if (act.perform === 'folio') {
+        openInvoiceFolio(row.item_id);
+        return;
+      }
+      openRow(row);
+    };
     return (
       <Sheet tone="paper" kind="margin" onClose={closeSheet}>
-        <h2 className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
-          Margin{' '}
-          <span className="font-mono text-[13px] font-normal text-[var(--color-aged-oak)]">
-            · {count}
-          </span>
-        </h2>
-        {overdueCount > 0 && (
-          <p className="mt-0.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
-            {overdueCount} overdue
-          </p>
-        )}
+        {/* W5-R4(a)/D-B44 — the head row: the count, the lead act, and CLOSE.
+            `CAPTURE A NOTE` is the mockup's own lead act, shipped TEXT ONLY;
+            `NOTE · PHOTO · VOICE` and the prose line stay unshipped because
+            the web has no photo or voice capture path — the Field app is the
+            capture path for those, and a door that promised them would be a
+            door onto nothing. */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
+              Margin{' '}
+              <span className="font-mono text-[13px] font-normal text-[var(--color-aged-oak)]">
+                · {count}
+              </span>
+            </h2>
+            {overdueCount > 0 && (
+              <p className="mt-0.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
+                {overdueCount} overdue
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            data-margin-capture-note
+            onClick={openNote}
+            className="shrink-0 self-center whitespace-nowrap px-1 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
+          >
+            Capture a note
+          </button>
+        </div>
         {showDecisionNotice && (
           <MarginDecisionClassificationNotice state={decisionState} />
         )}
@@ -814,6 +899,23 @@ export function MobileSheets({
                       onClick={() => openRow(row)}
                       className="min-w-0 flex-1 px-2.5 py-2 text-left"
                     >
+                      {/* W5-C12 — D-B30's row form leads with a STAMP, and
+                          the row printed none while this suite's own title
+                          claimed one. It prints the fact the row HOLDS:
+                          `state === 'overdue'`, the same fact the head counts
+                          two lines above. NOT `overdueStampLabel`, whose
+                          `Overdue · 6 days` needs an `OverdueCondition` with a
+                          due date — `MarginItemRow` carries no date field and
+                          no row→condition derivation exists, so a day count
+                          here would be invented rather than read. */}
+                      {row.state === 'overdue' && (
+                        <span
+                          data-margin-row-stamp
+                          className="block font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]"
+                        >
+                          Overdue
+                        </span>
+                      )}
                       <span
                         className="block font-mono text-[12px] font-semibold uppercase tracking-[0.06em]"
                         style={{ color: marginAccent(row.kind).label }}
@@ -838,10 +940,14 @@ export function MobileSheets({
                     <button
                       type="button"
                       data-margin-row-act
-                      onClick={() => openRow(row)}
-                      className="shrink-0 self-center px-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)]"
+                      disabled={
+                        marginRowAct(row).perform === 'nudge' &&
+                        decisionReminder.isPending
+                      }
+                      onClick={() => runRowAct(row)}
+                      className="shrink-0 self-center px-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)] disabled:opacity-50"
                     >
-                      {marginRowActLabel(row)}
+                      {marginRowAct(row).label}
                     </button>
                   </li>
                 ))}
@@ -849,6 +955,129 @@ export function MobileSheets({
             </div>
           ))
         )}
+      </Sheet>
+    );
+  }
+
+  // ── Note to the margin (paper): W5-R4(a) / D-B44. The mockup's
+  //    `CAPTURE A NOTE`, shipped TEXT ONLY. `NOTE · PHOTO · VOICE` and the
+  //    prose line are not here: photo and voice capture exist only in Patina
+  //    Field, and printing their words on a surface that cannot honour them
+  //    would be a promise the web cannot keep. The composer is the RAIL's own
+  //    (`margin-rail.tsx`) — same `useCreateMarginNote`, same default due
+  //    date, same `Note body` label — re-hosted, not forked, so a note filed
+  //    at 390 and a note filed at 1440 are one note written one way. ──
+  if (sheet.kind === 'note') {
+    /** W5-R4(a) — Save, Discard and Escape all land back on `CAPTURE A NOTE`.
+     *  `restoreSheetFocus` cannot do it: the composer returns to the MARGIN
+     *  sheet rather than closing, and its "never pull focus back to shell
+     *  chrome while a modal owns it" rule (rightly) stands down for the sheet
+     *  that is replacing this one. So the act takes its own focus, one frame
+     *  after the margin sheet has printed it. */
+    const backToMargin = () => {
+      openMargin();
+      // TWO frames, not one: after a SAVE the margin sheet re-renders with the
+      // new row AND a changed head, and the act is not in the document when
+      // the first frame runs. One frame was enough for Discard, which changes
+      // nothing, and that is exactly why it looked right.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          document
+            .querySelector<HTMLButtonElement>('[data-margin-capture-note]')
+            ?.focus({ preventScroll: true });
+        });
+      });
+    };
+    // D-B44 (amended) — for I152 a note captured from the sheet anchors THE
+    // WHOLE JOB, at every stop. The `BESIDE <STOP>` line promised an
+    // attachment the row could not keep: `margin_notes.anchor_id` is a `uuid`
+    // (`00196_per_item_claims_and_margin_notes.sql`) and a stop key is `'ffe'`,
+    // so a section anchor can only ever be recorded WITHOUT the stop — the
+    // note then files under THE WHOLE JOB anyway (`useMarginSheet` groups
+    // BESIDE only on `'line'`), and the reader was told otherwise. One line,
+    // one truth: `About the whole job`, and that is where it lands.
+    const saveNote = () => {
+      const body = noteBody.trim();
+      if (!body) return;
+      createNote.mutate(
+        {
+          projectId,
+          proposalId,
+          body,
+          // D-B44 (amended): always the whole job, whatever she is reading.
+          anchorKind: 'letterhead',
+          anchorId: null,
+          dueDate: noteDue
+            ? new Date(`${noteDue}T17:00:00`).toISOString()
+            : null,
+        },
+        {
+          onSuccess: () => {
+            setNoteBody('');
+            setNoteDue(todayYmd());
+            // Back to the margin, which now prints the row in its group and
+            // the head at +1.
+            backToMargin();
+          },
+        },
+      );
+    };
+    return (
+      <Sheet tone="paper" kind="note" onClose={backToMargin}>
+        <h2 className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
+          Note to the margin
+        </h2>
+        <p
+          data-margin-note-anchor
+          className="mt-0.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]"
+        >
+          About the whole job
+        </p>
+        <textarea
+          rows={3}
+          autoFocus
+          placeholder="Note to the margin…"
+          aria-label="Note body"
+          className="mt-2 w-full resize-none rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-[16px] leading-relaxed text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+          value={noteBody}
+          onChange={(e) => setNoteBody(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNote();
+          }}
+        />
+        <DocumentActionRow
+          surfaceKey="open-document"
+          regionKey="margin-note"
+          className="mt-1.5"
+          aria-label="Margin note actions"
+        >
+          <DateTextInput
+            ariaLabel="Note due date (optional)"
+            className="rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1 text-[16px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            value={noteDue || null}
+            onChange={(value) => setNoteDue(value ?? '')}
+          />
+          <DocumentAction
+            actionKey="save-margin-note"
+            disabled={!noteBody.trim() || createNote.isPending}
+            loading={createNote.isPending}
+            loadingLabel="Saving…"
+            onClick={saveNote}
+          >
+            Save
+          </DocumentAction>
+          <DocumentAction
+            actionKey="discard-margin-note"
+            variant="tertiary"
+            onClick={() => {
+              setNoteBody('');
+              setNoteDue(todayYmd());
+              backToMargin();
+            }}
+          >
+            Discard
+          </DocumentAction>
+        </DocumentActionRow>
       </Sheet>
     );
   }

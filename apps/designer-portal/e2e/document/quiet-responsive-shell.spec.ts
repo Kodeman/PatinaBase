@@ -1,6 +1,6 @@
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 import { adminDb } from '../helpers/supabase-admin';
-import { scrollTo, settle } from '../helpers/lens';
+import { quiet, scrollTo, settle } from '../helpers/lens';
 
 const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
 /**
@@ -215,6 +215,12 @@ test.describe('Quiet Work responsive document shell', () => {
     authenticatedPage: page,
   }) => {
     await openProject(page, 1280);
+    // The 390 half of this case reaches the mobile bar's sections door, which
+    // renders only once the page has PUBLISHED its active document. `settle()`
+    // answers for the lens, not for that: run late in a long basket the door
+    // was not there yet, and the same code passes alone every time. D-B28's
+    // ruled precondition.
+    await quiet(page);
     const band = page.locator('[data-lens-band]');
     await expect(band).toBeVisible();
     await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);
@@ -363,6 +369,12 @@ test.describe('Quiet Work responsive document shell', () => {
     // Client approvals + Pieces, its active_section is not the project
     // spread — jumping to "Money" would time out finding the button.
     await openProject(page, 1440);
+    // The QUIET s0 (D-B28's ruled precondition, and the origin `lens-density`,
+    // `lens-cls` and `lens-rail-budget` already take). The landing is polled
+    // against a smooth scroll, so a paper still growing under it lands the
+    // Money root somewhere else: run late in a long basket this read 153.98
+    // off the declared 72, and passes alone every time.
+    await quiet(page);
 
     const band = page.locator('[data-lens-band]');
     await expect(band).toBeVisible();

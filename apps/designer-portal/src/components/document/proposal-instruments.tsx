@@ -182,9 +182,15 @@ function SendWallLine({
         className="mt-1"
         aria-label="Proposal state"
       >
-        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-          {line.sentText} —
-        </span>
+        {/* W5-R5 §4 (N4) — the lead sentence is GONE. `SENT 7 DAYS AGO —`
+            restates the proposal head's own status line and the band's line 2,
+            which SP-12 forbids: one fact, one printing.
+
+            The ROW and its `#proposal-send-wall` anchor stay, and so does the
+            act: `document-guide.ts`'s `SEND_WALL_ANCHOR_ID` sends the reader
+            here for exactly this act, so removing the row outright would land
+            the guide on nothing. The restatement is what the ruling objects
+            to; the destination is not. Flagged for the design lead. */}
         {!standDown && line.verb === 'nudge' && (
           <DocumentAction
             actionKey="nudge-client"
@@ -196,6 +202,9 @@ function SendWallLine({
             Nudge {family}
           </DocumentAction>
         )}
+        {/* NOT a restatement: this prints only when the act has STOOD DOWN
+            because the table's head took it (`standDown`), and it is then the
+            only thing in the row. Removing it left an empty row. */}
         {stateWord && (
           <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             {stateWord}

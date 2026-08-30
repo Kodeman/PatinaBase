@@ -190,3 +190,32 @@ describe("SectionStageLine", () => {
     expect(container.innerHTML).not.toMatch(/shadow/);
   });
 });
+
+// W5 follow-up — hosted inside `scope`, whose own head already prints the
+// stop's name and status. The strip printed its label under it: `Core · stage
+// 03` three times down one column.
+describe("SectionStageLine hosted inside a stop", () => {
+  it("drops its label line and its `Workflow stage` eyebrow — the bars are the body", () => {
+    const model = modelFor([phase()]);
+    const { container } = render(<SectionStageLine model={model} hosted />);
+
+    expect(model.subLabel).not.toBeNull();
+    expect(screen.queryByText(model.subLabel!)).toBeNull();
+    expect(screen.queryByText("Workflow stage")).toBeNull();
+    expect(container.querySelector("section")).toBeNull();
+
+    // What it still prints: the bar and its track register.
+    expect(
+      container.querySelector("[data-workflow-track='core']"),
+    ).not.toBeNull();
+    expect(screen.getByText(/Core · 06/)).toBeInTheDocument();
+  });
+
+  it("free-standing, it keeps both", () => {
+    const model = modelFor([phase()]);
+    render(<SectionStageLine model={model} />);
+
+    expect(screen.getByText(model.subLabel!)).toBeInTheDocument();
+    expect(screen.getByText("Workflow stage")).toBeInTheDocument();
+  });
+});

@@ -198,6 +198,20 @@ export function paperRegionsForSection(
   return SECTION_PAPER_REGIONS[section] ?? [];
 }
 
+/** The four spreads that stand before a project does (OD-2). They carry no
+ *  phase and no ordinal, so the band and the rail head both print the spread's
+ *  own name and nothing under it (W5-R2 §3, W5-R4 F2). */
+const PREWORK_SECTIONS: readonly SectionKey[] = [
+  'brief',
+  'discovery',
+  'direction',
+  'proposal',
+];
+
+export function isPreWorkSection(section: SectionKey | null): boolean {
+  return section != null && PREWORK_SECTIONS.includes(section);
+}
+
 /** Reading order down the paper — derived, never declared twice. */
 export const DOCUMENT_INDEX_KEYS: readonly DocumentIndexKey[] =
   PROJECT_PAPER_ORDER.map((region) => region.key);

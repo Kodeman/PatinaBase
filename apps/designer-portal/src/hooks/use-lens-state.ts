@@ -69,9 +69,21 @@ export interface LensStateApi {
   onPinChange: (pinned: boolean) => void;
 }
 
+/**
+ * Text entry, ANYWHERE — the same selector, without the paper requirement.
+ *
+ * Exported because the document shell's own Escape needs it: `Esc` puts the
+ * paper down (D1), and a reader amending the letterhead's name pressed the one
+ * key that means "leave it alone" and lost the document (`/doc/…` → `/desk`).
+ * A key that a field is using is not a shell shortcut. One selector, so the
+ * two guards can never drift.
+ */
+export function isEditableTarget(node: EventTarget | null): node is HTMLElement {
+  return node instanceof Element && node.matches(EDITABLE_SELECTOR);
+}
+
 function isEditable(node: EventTarget | null): node is HTMLElement {
-  if (!node || !(node instanceof Element)) return false;
-  return node.matches(EDITABLE_SELECTOR) && Boolean(node.closest(PAPER_SELECTOR));
+  return isEditableTarget(node) && Boolean(node.closest(PAPER_SELECTOR));
 }
 
 export function useLensState({ freeze }: UseLensStateOptions = {}): LensStateApi {

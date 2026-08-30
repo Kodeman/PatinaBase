@@ -78,7 +78,7 @@ export interface MobileActiveDoc {
    *  lives inside the FF&E body and was unreachable for the same reason. */
   onJumpToRoom?: (roomId: string) => void;
   /** D-B30 · the letterhead- and section-anchored margin count (the same set
-   *  `useLetterheadMargin` lists), so the bar's `Margin · N` door and the
+   *  `useMarginSheet` lists — W5-R1's whole margin), so the bar's `Margin · N` door and the
    *  Margin sheet's head can print it without their own subscription.
    *  Optional so a caller that predates D-B30 still type-checks. */
   marginCount?: number | null;
@@ -89,7 +89,10 @@ type Sheet =
   | { kind: 'timer' }
   | { kind: 'drawer' }
   | { kind: 'margin-item'; itemId: string }
-  | { kind: 'margin' };
+  | { kind: 'margin' }
+  /** W5-R4(a)/D-B44 — the margin's own note composer, text only. The Field
+   *  app keeps photo and voice; the web has no capture path for either. */
+  | { kind: 'note' };
 
 export type MobilePrimaryAction = {
   actionKey: string;
@@ -122,6 +125,8 @@ interface MobileShellValue {
   openDrawer: () => void;
   openMarginItem: (itemId: string) => void;
   openMargin: () => void;
+  /** W5-R4(a) — `CAPTURE A NOTE`, the Margin sheet's lead act. */
+  openNote: () => void;
   closeSheet: () => void;
   primaryAction: MobilePrimaryAction | null;
   registerPrimaryAction: (
@@ -227,6 +232,7 @@ export function MobileShellProvider({
       openMarginItem: (itemId: string) =>
         setSheet({ kind: 'margin-item', itemId }),
       openMargin: () => setSheet({ kind: 'margin' }),
+      openNote: () => setSheet({ kind: 'note' }),
       closeSheet: () => setSheet(null),
       primaryAction,
       registerPrimaryAction,

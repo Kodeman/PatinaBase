@@ -18,7 +18,7 @@
  * UNBUDGETED label (one the formula does not account for at all) fails it.
  */
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
-import { scrollTo, settle, railCensus } from '../helpers/lens';
+import { quiet, scrollTo, settle, railCensus } from '../helpers/lens';
 import { LONG_PAPER_ID, PRE_WORK_ID, assertLongPaper } from './lens-fixtures';
 
 test.describe.configure({ mode: 'serial' });
@@ -154,6 +154,17 @@ test.describe('the rail budget', () => {
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID);
+    // The origin is the SETTLED, QUIET s0 — D-B28's ruled precondition, and
+    // the same origin `lens-density`'s two region-top invariants and
+    // `lens-cls` already take. A ladder segment's floor is DERIVED from its
+    // value's wrapped line count (OD-14), so until the ladder's own data has
+    // landed every segment sits at the 40px minimum and step 1 reads the real
+    // floors as a change: `schedule: 40 -> 53.75`, `ffe: 40 -> 138.63`,
+    // `care: 173 -> 44.92`. That is the initial load finishing, not a segment
+    // resizing under the reader — which is what this test is about. It shows
+    // up only when the spec runs late in a long basket, where the paper opens
+    // against a warm server and `settle()` returns before the values do.
+    await quiet(page);
     await scrollTo(page, 0);
 
     const read = () =>

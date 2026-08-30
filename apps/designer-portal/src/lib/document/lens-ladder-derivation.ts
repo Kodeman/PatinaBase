@@ -124,6 +124,10 @@ export interface LadderPreworkFacts {
   openedOn: string | null;
   /** Rooms in the proposal's scope — `Scope & engagement`'s extent. */
   scopeRooms: number;
+  /** W5-R5 §2 — the stage phrase the section stage line prints (`Core ·
+   *  stage 03`), reported up by `SectionStageLineMount` so the stop's head,
+   *  its ladder value and the strip inside it are one fact. */
+  stageLine: string | null;
   /** The proposal's own total, in cents (`proposals.total_amount`). */
   investmentCents: number | null;
 }
@@ -498,18 +502,56 @@ function proposalRegister(facts: LadderPreworkFacts | undefined, now: Date): Reg
   };
 }
 
+/**
+ * W5-R5 §2 — `Scope & engagement` prints the SECTION STAGE LINE's own phrase,
+ * because that is where the fact comes from: the strip that prints
+ * `CORE · STAGE 03` is now this stop's body (N2), so the head, the rail and
+ * the body state one thing. The room count rides behind it when the paper has
+ * rooms (`CORE · STAGE 03 · 4 ROOMS`, ≤ 30). This supersedes W5-R2 §2's
+ * `4 ROOMS IN SCOPE` (and with it W5-C6/F3), which named a count with no
+ * printed source beside it.
+ *
+ * W5-C10 — `Not written yet` (vision) and `Not sent yet` (proposal) sit beside
+ * OD-2's `NOTHING YET` / `NOT KNOWN YET` pair, and they are RULED, not stray:
+ * W5-R2 §1 writes `Not written yet` for an empty description, and W5-R4's F3
+ * restates it ("its own count line or `Not written yet` when the description
+ * is empty"). OD-2's pair governs the RAIL's caps fallback, which both of
+ * these still take (`empty()`'s default is `NOTHING YET`); the paper's own
+ * count line may say the more exact thing. Kept, with the ruling named.
+ */
 function scopeRegister(facts: LadderPreworkFacts | undefined): Register {
   if (!facts) return empty('Nothing yet');
-  if (!facts.settled) return reading();
-  if (facts.scopeRooms <= 0) return empty('Nothing yet');
-  const word = facts.scopeRooms === 1 ? 'ROOM' : 'ROOMS';
+  // W5-C17 — NOT gated on `facts.settled`. That flag is a fact about the
+  // PROPOSAL query (`page.tsx`: `!proposalId || liveProposal !== undefined ||
+  // proposalIsError`), and `scopeRooms` comes from the ticket's own room list,
+  // not from the proposal. Gating on it made the head print `Reading…` and
+  // then swap to `4 rooms in scope` — a count-line text change under the
+  // reader for a number the stop already held, which is what W5-R3 rules the
+  // loading register out of doing.
+  const word = facts.scopeRooms === 1 ? 'room' : 'rooms';
+  const rooms = facts.scopeRooms > 0 ? `${facts.scopeRooms} ${word}` : null;
+  // The strip's own sub-label leads with the section's name
+  // (`Scope & Engagement · Core · stage 03`). The head prints that name one
+  // line above and the rail prints it as the segment's name, so the stop would
+  // say it three times: drop the leading segment when it IS the stop's name.
+  const stopName = DOCUMENT_INDEX_LABELS.scope.toLowerCase();
+  const stage =
+    facts.stageLine
+      ?.split(' · ')
+      .filter(
+        (part, index) => !(index === 0 && part.trim().toLowerCase() === stopName),
+      )
+      .join(' · ')
+      .trim() || null;
+  if (!stage && !rooms) return empty('Nothing yet');
+  const value = [stage?.toUpperCase(), rooms?.toUpperCase()]
+    .filter(Boolean)
+    .join(' · ');
+  const words = [stage, rooms].filter(Boolean).join(' · ');
   return {
-    value: cap(`${facts.scopeRooms} ${word}`, LENS_VALUE_MAX_CHARS),
-    narrowValue: cap(`${facts.scopeRooms} ${word}`, LENS_VALUE_MAX_CHARS),
-    countLine: cap(
-      `${facts.scopeRooms} ${word.toLowerCase()} in scope`,
-      LENS_COUNT_MAX_CHARS,
-    ),
+    value: cap(value, LENS_VALUE_MAX_CHARS),
+    narrowValue: cap(value, LENS_VALUE_MAX_CHARS),
+    countLine: cap(words, LENS_COUNT_MAX_CHARS),
     fallback: null,
     extent: facts.scopeRooms,
   };
@@ -572,9 +614,15 @@ export function deriveLadderSegments(input: LadderInput): LadderSegment[] {
   // builds them from `paperRegionsForSection`), and a pre-work spread's order
   // is not `PROJECT_PAPER_ORDER`'s — so the list is resolved key by key rather
   // than filtered through the Project array.
+  // W5-C16 — de-duped. Filtering through `PROJECT_PAPER_ORDER` used to give
+  // this for free; resolving key by key does not, and a repeated key would
+  // yield two segments under one `key` — duplicate React keys and two
+  // `aria-current` candidates in the rail. No caller can produce one today
+  // (`paperRegionsForSection`'s rows are all distinct), so this is a guard,
+  // not a live defect.
   const declared =
     input.ticket.paperRegions != null
-      ? input.ticket.paperRegions.map(paperRegionFor)
+      ? Array.from(new Set(input.ticket.paperRegions)).map(paperRegionFor)
       : paperRegionsForSection(input.ticket.section);
   const mounted = input.mountedKeys
     ? new Set(input.mountedKeys)

@@ -64,6 +64,7 @@ import {
   paperRegionsForSection,
   requestRegionUnfold,
   type DocumentIndexKey,
+  isPreWorkSection,
 } from '@/lib/document/document-index';
 import {
   scrollToRegion,
@@ -71,7 +72,7 @@ import {
 } from '@/hooks/use-document-running-index';
 import { approvalsQuietLeader } from '@/lib/document/lens-quiet-status';
 import { useLensDensity } from '@/hooks/use-lens-density';
-import { useLensState } from '@/hooks/use-lens-state';
+import { isEditableTarget, useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
 import {
   deriveProposalWatch,
@@ -215,6 +216,8 @@ import {
   type ShelfKey,
   type ShelfLeafKey,
 } from '@/lib/document/shelves';
+import { deriveSectionStageLine } from '@/lib/document/section-stage-line';
+import { deriveSectionWorkflowStageDocument } from '@/lib/document/workflow-stage-derivation';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -819,15 +822,6 @@ function TicketFacts({
 /** The subset of the ticket's input the ladder's registers are read from
  *  (`lens-ladder-derivation.ts`). Two inputs with the same signature print the
  *  same rail, whatever their object identity. */
-/** The four stages before the work starts. Their spreads carry no project, so
- *  they are gated by section rather than by engagement kind (OD-2). */
-const PREWORK_SECTIONS: readonly SectionKey[] = [
-  'brief',
-  'discovery',
-  'direction',
-  'proposal',
-];
-
 function ladderFactsSignature(input: TicketInput): string {
   return JSON.stringify({
     section: input.section,
@@ -1203,6 +1197,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      // W5-R6 / 1b — a key a FIELD is using is not a shell shortcut. Amending
+      // the letterhead's name and pressing Escape restored the name and then
+      // put the paper down underneath her: `/doc/…` → `/desk`. `isEditable
+      // Target` is `use-lens-state.ts`'s own selector, so the guard that
+      // decides `editing` and the guard that decides Put-down cannot drift.
+      if (isEditableTarget(e.target)) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (openShelf) return;
       router.push('/desk');
@@ -1593,7 +1593,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         ? row.project_id
           ? paperRegionsForSection(row.active_section)
           : []
-        : PREWORK_SECTIONS.includes(row.active_section)
+        : isPreWorkSection(row.active_section)
           ? paperRegionsForSection(row.active_section)
           : [];
   const {
@@ -1710,6 +1710,42 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const ladderMountedKeys = declaredLadderKeys.filter(
     (key) => !indexedKeys.has(key) || mountedKeys.includes(key),
   );
+  // W5-R5 §2 (N2) — the section stage line's phrase, reported up from the
+  // strip that now stands inside the `scope` stop as its body.
+  // W5F-04 — derived from the SOURCE, never from the strip.
+  //
+  // `scopeRegister` reads this to build `CORE · STAGE 03 (· N ROOMS)`. It used
+  // to be reported up by `SectionStageLineMount`, which after N2 is a child of
+  // `PreworkRegion` — and `PreworkRegion` unmounts its children at quiet. So
+  // the `scope` head's status line and its rail value CHANGED on promotion,
+  // which is exactly what W5-R3 forbids, and D-B37 could not see it because it
+  // runs on `…d5` where no pre-work stop exists.
+  //
+  // The strip's own pre-work derivation is PURE — `deriveSectionWorkflowStage
+  // Document(section)` is a table lookup, with no selection, no fidelity and
+  // no position — so the same fact is computed here from the same source, and
+  // the strip's mount state cannot touch it.
+  const preworkStageLine = useMemo(
+    () =>
+      row?.active_section
+        ? (deriveSectionStageLine(
+            deriveSectionWorkflowStageDocument(row.active_section),
+            { activePhaseId: null, reason: 'none' },
+            null,
+            null,
+          )?.subLabel ?? null)
+        : null,
+    [row?.active_section],
+  );
+  // W5F-03 — ONE section source for both of the stage strip's gates: the
+  // suppression above the spread and the re-host inside `scope`. They read the
+  // same value, so they cannot disagree about which spread this is.
+  // (`row.active_section` at both mounts, which sit below the row guard — the
+  // value is the same, the null-safe read is only for this derivation.)
+  const stageStripSpread = row?.active_section ?? null;
+  // W5F-02 — `scope` mounts on the PROPOSAL spread only, so only the proposal
+  // spread re-hosts the strip. brief/discovery/direction keep it where it was.
+  const stageStripInScope = stageStripSpread === 'proposal';
   const ladderSegments = ticketInput
     ? deriveLadderSegments({
         ticket: ticketInput,
@@ -1759,6 +1795,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // The paper's own rooms: on a projectless proposal these ARE the
           // proposal's scope rooms (`ProjectlessTicketFacts`).
           scopeRooms: ticketInput.rooms.list.length,
+          // W5-R5 §2 — the stage phrase the `scope` stop's own body prints,
+          // reported up by `SectionStageLineMount` (N2).
+          stageLine: preworkStageLine,
           investmentCents: liveProposal?.total_amount ?? null,
         },
       })
@@ -2423,6 +2462,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         // ORDERS` over `4 OF 6` (reconciliation §7 / W1 walk differs #1) —
         // from the same derivation the letterhead's vitals and the ticket's
         // identity line read. With no phase placed it keeps the section label.
+        // W5-R4 (F2) — one line on the four pre-work spreads.
+        preWork={isPreWorkSection(bandSpread)}
         stageWord={ticketPhase ? ticketPhase.name.toUpperCase() : null}
         stageIndex={
           ticketPhase ? `${ticketPhase.position} OF ${ticketPhase.of}` : null
@@ -2594,12 +2635,26 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 letterhead. They ride inside <div data-active-section> so they
                 read as the section's own sub-label, exactly as the deck draws
                 the open Project row. */}
-            <SectionStageLineMount
-              projectId={
-                row.engagement_kind === 'project' ? row.project_id : null
-              }
-              activeSection={row.active_section}
-            />
+            {/* W5-R5 §2 (N2) — on the PROPOSAL spread this strip is the
+                `scope` stop's body and prints inside it, so the first element
+                after the band is the spread's first region head, not a
+                free-standing band. Everywhere else it stays where R1/I114 put
+                it: the open section's own sub-label.
+                W5F-02: the suppression was `isPreWorkSection`, all four
+                stages — but `scope` mounts on the PROPOSAL spread only, so
+                brief, discovery and direction lost the strip entirely rather
+                than re-hosting it. `section-stage-line-mount.tsx`'s
+                section-mode branch exists precisely for those three.
+                W5F-03: both gates read `stageStripSpread`, so they cannot
+                disagree about which spread this is. */}
+            {!stageStripInScope && (
+              <SectionStageLineMount
+                projectId={
+                  row.engagement_kind === 'project' ? row.project_id : null
+                }
+                activeSection={row.active_section}
+              />
+            )}
             <TableFrame
               composition={table}
               pending={worktableOn ? tablePin.pending : null}
@@ -2684,6 +2739,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   {proposalLifecycle}
                 </PreworkRegion>
                 <PreworkRegion region="scope" status={preworkStatus('scope')}>
+                  {/* W5-R5 §2 (N2) — the stage line IS this stop's body, and
+                      `stageStripInScope` above is the same fact read once. */}
+                  {stageStripInScope && (
+                    <SectionStageLineMount
+                      projectId={
+                        row.engagement_kind === 'project'
+                          ? row.project_id
+                          : null
+                      }
+                      activeSection={row.active_section}
+                      hosted
+                    />
+                  )}
                   {row.proposal_id ? (
                     <ProposalBlocksReadOnly
                       proposalId={row.proposal_id}

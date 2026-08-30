@@ -63,12 +63,11 @@ export function DocLetterhead({
         <StrataMark state="active" size="lg" fill={fill} label={fill ? 'Document progress' : undefined} />
       </div>
       <div className="grid grid-cols-1 items-start gap-x-[1.5rem] gap-y-[0.5rem] min-[1180px]:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
-        {/* Row 1 — the title, across BOTH tracks. On a project document the
-            heading IS an <input>, and an input cannot wrap: a starved track
-            does not stack it, it amputates it ("Aspen Lo"). Spanning the grid
-            hands it the whole measure. A title longer than the WHOLE measure
-            still clips — pre-existing; a wrapping title needs a <textarea>,
-            which is not this wave's work. */}
+        {/* Row 1 — the title, across BOTH tracks. D-B48: the heading is TEXT
+            at rest and WRAPS at word boundaries, so a starved track stacks it
+            rather than amputating it ("Aspen Lo"); the `<input>` appears only
+            in edit mode, in the same box. Spanning the grid still hands it the
+            whole measure. */}
         <div className="min-w-0 min-[1180px]:col-span-2">
           {projectId ? (
             <LetterheadTitle projectId={projectId} serverTitle={title} />
@@ -76,7 +75,7 @@ export function DocLetterhead({
             /* 32px below 1180, 40px from 1180 up (NF-02: the SHELL's own tier,
                never Tailwind's `sm`): 40px of Playfair spends ~46 characters of a
                1440 measure but only ~11 of a 390 one. */
-            <h1 className="font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] min-[1180px]:text-[40px]">
+            <h1 className="min-w-0 break-words font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] min-[1180px]:text-[40px]">
               {title}
             </h1>
           )}
