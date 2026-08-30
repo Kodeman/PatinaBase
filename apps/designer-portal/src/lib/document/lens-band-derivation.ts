@@ -125,6 +125,10 @@ export interface LensStandingItem {
   /** D-B26 — this item's sentence names the money figure line 1 would print,
    *  so line 1 drops its money half while line 2 is naming it. */
   namesMoney: boolean;
+  /** W6-R1/F1 — the desk kind this item came from, where it came from a need.
+   *  Null for a ticket exception, which has no kind. The short form's subject
+   *  is chosen by it: a conflict's object is its DATE, an invoice's its code. */
+  needKind: NeedKind | null;
   /** D-B24 — the item's short form, for the 390 measure. */
   short: LensShortForm;
 }
@@ -275,9 +279,63 @@ const SUBJECT_QUALIFIERS = new Set([
 const CODE_TOKEN = /\b[A-Za-z]{2,4}-\d[\w-]*\b/;
 const MONEY_TOKEN = /\$[\d,]+(?:\.\d+)?/;
 
+/** A stated calendar day inside a sentence — `Sep 21`, `21 Sep`, `Sep 21, 2026`.
+ *  W6-R1/F1: this is the OBJECT of a schedule conflict; the sentence's first
+ *  word is its subject only by accident of grammar. */
+const DATE_TOKEN =
+  /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}\b|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\b/i;
+
+/**
+ * W6-R1 · F1 — the short form's subject is the need's OBJECT, chosen by KIND.
+ *
+ * The design lead's final walk found `…d7` at 390 printing `CONFLICT · TWO`
+ * `RESOLVE`: a schedule conflict reads "Two milestones land on Sep 21", and
+ * the generic rule took the first word long enough to qualify. "TWO" is a
+ * quantity, not a subject — it names nothing the reader can act on, and the
+ * one half of the short form she cannot reconstruct from the state word beside
+ * it is exactly the subject.
+ *
+ * So each kind states where its object lives, and the generic scan is the
+ * fallback for the kinds that have no better answer:
+ *
+ *   conflict / proposed date → the DATE (`SEP 21`)
+ *   invoice, PO silence      → the CODE (`INV-2026-114`, `PO-0912`)
+ *   damage                   → the PIECE (its code, else the head noun)
+ *   decision                 → the room or subject noun
+ *
+ * Kept as `(sentence, kind)` rather than `(item)` so the ten existing call
+ * sites that only have a sentence keep working and keep asserting the generic
+ * rule, which is still what every unlisted kind gets.
+ */
+const SUBJECT_BY_KIND: Partial<Record<NeedKind, readonly ('date' | 'code' | 'money')[]>> = {
+  schedule_conflict: ['date'],
+  schedule_proposal: ['date'],
+  overdue_invoice: ['code', 'money'],
+  po_unacknowledged: ['code'],
+  po_unsent: ['code'],
+  damage_claim: ['code'],
+};
+
 /** D-B24 — the head noun of the item's object, capped at 12 characters: the
  *  room, the invoice number, the piece. Never the act's verb, never the owner. */
-export function shortSubject(sentence: string): string {
+export function shortSubject(sentence: string, kind?: NeedKind): string {
+  const preferred = kind ? SUBJECT_BY_KIND[kind] : undefined;
+  if (preferred) {
+    for (const source of preferred) {
+      const found =
+        source === 'date'
+          ? DATE_TOKEN.exec(sentence)?.[0]
+          : source === 'code'
+            ? CODE_TOKEN.exec(sentence)?.[0]
+            : MONEY_TOKEN.exec(sentence)?.[0];
+      // A date prints as its own two tokens (`SEP 21`), never cut at 12 —
+      // it is already shorter than the cap.
+      if (found) return found.replace(/\s+/g, ' ').trim().toUpperCase();
+    }
+    // The kind named a source the sentence does not carry. Fall through to the
+    // generic scan rather than print nothing — a missing subject is worse than
+    // an imperfect one.
+  }
   // The clause the object stands in. A comma inside a figure is not a clause
   // break, so the split only takes one that starts a new word.
   const lead = sentence.split(/\s+[·—]\s+|,\s+(?=[A-Za-z])/)[0] ?? sentence;
@@ -468,7 +526,8 @@ export function rankStanding(
       short: {
         state: shortState(parts.eyebrow, sense),
         days,
-        subject: shortSubject(parts.sentence),
+        // W6-R1/F1 — by KIND where the kind knows where its object lives.
+        subject: shortSubject(parts.sentence, parts.needKind ?? undefined),
       },
     };
   };
@@ -492,6 +551,7 @@ export function rankStanding(
         deadline: need.dueOn ?? null,
         standingSince: null,
         namesMoney: need.kind === 'overdue_invoice',
+        needKind: need.kind,
       }),
     });
   });
@@ -513,6 +573,9 @@ export function rankStanding(
         // A-11: this lane may not mint an act. A ticket exception the desk did
         // not also raise prints its sentence and opens nothing.
         act: null,
+        // W6-R1/F1 — no desk kind, so the generic head-noun scan is its
+        // subject, exactly as before.
+        needKind: null,
         tier: TICKET_TIER[exception.rank],
         days: statedDays(exception.phrase),
         // OD-8 keeps `ticket-derivation.ts` byte-untouched, and a ticket

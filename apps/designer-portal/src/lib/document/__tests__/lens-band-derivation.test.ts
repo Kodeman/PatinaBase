@@ -549,6 +549,71 @@ describe('the short form and the act’s verb (D-B24, C-07)', () => {
     expect(shortSubject('$17,500 owed you')).toBe('$17,500');
   });
 
+  /**
+   * W6-R1 · F1 — the design lead's final walk found `…d7` at 390 printing
+   * `CONFLICT · TWO` `RESOLVE`. "Two milestones land on Sep 21" starts with a
+   * quantity, and the generic head-noun scan took it. The subject is the need's
+   * OBJECT, and each kind knows where its own object lives.
+   */
+  describe('the short subject is the need\'s OBJECT, chosen by kind (W6-R1/F1)', () => {
+    it('a schedule conflict names its DATE, never the sentence\'s first word', () => {
+      // The walked shape, verbatim.
+      expect(
+        shortSubject('Two milestones land on Sep 21', 'schedule_conflict'),
+      ).toBe('SEP 21');
+      // …and the generic rule, which is what produced the defect, still reads
+      // the first word — so this case fails the moment the kind stops being
+      // consulted.
+      expect(shortSubject('Two milestones land on Sep 21')).toBe('TWO');
+    });
+
+    it('a proposed date names its date too', () => {
+      expect(
+        shortSubject('A new date is proposed for Oct 3', 'schedule_proposal'),
+      ).toBe('OCT 3');
+    });
+
+    it('an invoice names its code, and falls to the figure when it carries none', () => {
+      expect(
+        shortSubject(
+          'Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22',
+          'overdue_invoice',
+        ),
+      ).toBe('INV-2026-114');
+      expect(shortSubject('$17,500 overdue', 'overdue_invoice')).toBe('$17,500');
+    });
+
+    it('a PO silence names the purchase order', () => {
+      expect(
+        shortSubject('PO-0912 has not been acknowledged in 14 days', 'po_unacknowledged'),
+      ).toBe('PO-0912');
+      expect(shortSubject('PO-0913 has not been sent', 'po_unsent')).toBe('PO-0913');
+    });
+
+    it('a damage claim names the piece', () => {
+      expect(shortSubject('FDL-0912 has an open damage claim', 'damage_claim')).toBe(
+        'FDL-0912',
+      );
+    });
+
+    it('a decision keeps the room / subject noun — the generic rule is right for it', () => {
+      expect(
+        shortSubject(
+          'Primary bedroom approval, with the client since Aug 13',
+          'overdue_decision',
+        ),
+      ).toBe('BEDROOM');
+    });
+
+    it('falls back to the generic scan when the kind names a source the sentence lacks', () => {
+      // A conflict with no stated day must still print SOMETHING: a missing
+      // subject is worse than an imperfect one.
+      expect(
+        shortSubject('Two milestones collide', 'schedule_conflict'),
+      ).toBe('TWO');
+    });
+  });
+
   it('cuts a long subject at a word boundary, never mid-word (N-08)', () => {
     // `UNSPECIFIED LI` names nothing; the subject is the half a reader cannot
     // reconstruct from the state word beside it.
