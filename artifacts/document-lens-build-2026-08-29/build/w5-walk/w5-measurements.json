@@ -1,0 +1,927 @@
+{
+  "1440-s0-project": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "line1": "",
+      "line2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminderSend reminder+9 MORE",
+      "identity": "",
+      "rightFlush": ""
+    }
+  },
+  "1440-s2-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+      "line2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminderSend reminder+9 MORENow at Schedule · Install Sat, Sep 19 · 3 weeks out",
+      "identity": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5",
+      "rightFlush": "INSTALL SEP 19"
+    }
+  },
+  "1440-s3-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+      "line2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminderSend reminder+9 MORENow at Pieces · 62 lines · 5 rooms · 1 damaged",
+      "identity": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5",
+      "rightFlush": "INSTALL SEP 19"
+    }
+  },
+  "1440-foot-project": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+      "line2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminderSend reminder+9 MORENow at Closing the book · 0 of 6 closed out",
+      "identity": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5",
+      "rightFlush": "INSTALL SEP 19"
+    }
+  },
+  "1280-s0-project": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "line1": "",
+      "line2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminderSend reminder+9 MORE",
+      "identity": "",
+      "rightFlush": ""
+    }
+  },
+  "1280-s2-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+      "line2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminderSend reminder+9 MORENow at Schedule · Install Sat, Sep 19 · 3 weeks out",
+      "identity": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5",
+      "rightFlush": "INSTALL SEP 19"
+    }
+  },
+  "1280-s3-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+      "line2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminderSend reminder+9 MORENow at Pieces · 62 lines · 5 rooms · 1 damaged",
+      "identity": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5",
+      "rightFlush": "INSTALL SEP 19"
+    }
+  },
+  "1280-foot-project": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+      "line2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminderSend reminder+9 MORENow at Closing the book · 0 of 6 closed out",
+      "identity": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5",
+      "rightFlush": "INSTALL SEP 19"
+    }
+  },
+  "390-s0-project": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "line1": "",
+      "line2": "OVERDUE 8D · INV-2026-114Send+9 MORE",
+      "identity": "",
+      "rightFlush": ""
+    }
+  },
+  "390-s2-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+      "line2": "OVERDUE 8D · INV-2026-114Send+9 MORENow at Schedule · Install Sat, Sep 19 · 3 weeks out",
+      "identity": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5",
+      "rightFlush": "INSTALL SEP 19"
+    }
+  },
+  "390-s3-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+      "line2": "OVERDUE 8D · INV-2026-114Send+9 MORENow at Pieces · 62 lines · 5 rooms · 1 damaged",
+      "identity": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5",
+      "rightFlush": "INSTALL SEP 19"
+    }
+  },
+  "390-foot-project": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+      "line2": "OVERDUE 8D · INV-2026-114Send+9 MORENow at Closing the book · 0 of 6 closed out",
+      "identity": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5",
+      "rightFlush": "INSTALL SEP 19"
+    }
+  },
+  "1440-s0-prework": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "line1": "$9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORE",
+      "identity": "",
+      "rightFlush": "$9,400"
+    }
+  },
+  "1440-s2-prework": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23 · $9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORENow at The investment · $9,400",
+      "identity": "CLIENT USER · PROPOSAL",
+      "rightFlush": "SENT AUG 23 · $9,400"
+    }
+  },
+  "1440-s3-prework": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23 · $9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORENow at The investment · $9,400",
+      "identity": "CLIENT USER · PROPOSAL",
+      "rightFlush": "SENT AUG 23 · $9,400"
+    }
+  },
+  "1440-foot-prework": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23 · $9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORENow at The record · 3 complete",
+      "identity": "CLIENT USER · PROPOSAL",
+      "rightFlush": "SENT AUG 23 · $9,400"
+    }
+  },
+  "1280-s0-prework": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "line1": "$9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORE",
+      "identity": "",
+      "rightFlush": "$9,400"
+    }
+  },
+  "1280-s2-prework": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23 · $9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORENow at The investment · $9,400",
+      "identity": "CLIENT USER · PROPOSAL",
+      "rightFlush": "SENT AUG 23 · $9,400"
+    }
+  },
+  "1280-s3-prework": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23 · $9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORENow at The investment · $9,400",
+      "identity": "CLIENT USER · PROPOSAL",
+      "rightFlush": "SENT AUG 23 · $9,400"
+    }
+  },
+  "1280-foot-prework": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23 · $9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORENow at The record · 3 complete",
+      "identity": "CLIENT USER · PROPOSAL",
+      "rightFlush": "SENT AUG 23 · $9,400"
+    }
+  },
+  "390-s0-prework": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "line1": "$9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORE",
+      "identity": "",
+      "rightFlush": "$9,400"
+    }
+  },
+  "390-s2-prework": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23 · $9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORENow at The investment · $9,400",
+      "identity": "CLIENT USER · PROPOSAL",
+      "rightFlush": "SENT AUG 23 · $9,400"
+    }
+  },
+  "390-s3-prework": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23 · $9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORENow at The investment · $9,400",
+      "identity": "CLIENT USER · PROPOSAL",
+      "rightFlush": "SENT AUG 23 · $9,400"
+    }
+  },
+  "390-foot-prework": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23 · $9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORENow at The record · 3 complete",
+      "identity": "CLIENT USER · PROPOSAL",
+      "rightFlush": "SENT AUG 23 · $9,400"
+    }
+  },
+  "preworkSpreads": {
+    "brief": {
+      "docId": "23bdb027-7c0d-4c67-b8c2-cdc345276ffc",
+      "regions": [
+        {
+          "key": "brief",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": "Respond by Sep 1",
+          "name": "The brief",
+          "status": "Nothing yet",
+          "extraH2": [],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        },
+        {
+          "key": "record",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": null,
+          "name": "The record",
+          "status": "Nothing yet",
+          "extraH2": [],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        }
+      ],
+      "band": {
+        "height": 56,
+        "open": "true",
+        "line1": "",
+        "line2": "New lead — respond by Sep 1Respond to the inquiryNow at The brief · Nothing yet",
+        "identity": "",
+        "rightFlush": ""
+      },
+      "stagePhrase": "BriefRespond by Sep 1",
+      "ladder": [
+        {
+          "key": "brief",
+          "mounted": true,
+          "name": "The brief",
+          "value": "NOTHING YET"
+        },
+        {
+          "key": "record",
+          "mounted": true,
+          "name": "The record",
+          "value": "NOTHING YET"
+        }
+      ],
+      "zeroProjectRootsPresent": [
+        "record"
+      ],
+      "rail390": {
+        "labels": [
+          "Marcus Wright",
+          "Brief",
+          "Respond by Sep 1",
+          "The brief",
+          "The record"
+        ],
+        "stops": 2,
+        "doors": 0,
+        "distinctCount": 5
+      }
+    },
+    "discovery": {
+      "docId": "d0c10000-0000-0000-0000-0000000000a2",
+      "regions": [
+        {
+          "key": "discovery",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": "In progress",
+          "name": "Discovery",
+          "status": "Nothing yet",
+          "extraH2": [],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        },
+        {
+          "key": "record",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": null,
+          "name": "The record",
+          "status": "1 complete",
+          "extraH2": [],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        }
+      ],
+      "band": {
+        "height": 56,
+        "open": "true",
+        "line1": "",
+        "line2": "Finish what you need to knowAdd Project type and named rooms+5 MORE",
+        "identity": "",
+        "rightFlush": ""
+      },
+      "stagePhrase": "DiscoveryIn discovery",
+      "ladder": [
+        {
+          "key": "discovery",
+          "mounted": true,
+          "name": "Discovery",
+          "value": "NOTHING YET"
+        },
+        {
+          "key": "record",
+          "mounted": true,
+          "name": "The record",
+          "value": "1 COMPLETE"
+        }
+      ],
+      "zeroProjectRootsPresent": [
+        "record"
+      ],
+      "rail390": {
+        "labels": [
+          "The Ashfords (no-login household)",
+          "Discovery",
+          "In discovery",
+          "Discovery",
+          "The record"
+        ],
+        "stops": 2,
+        "doors": 0,
+        "distinctCount": 4
+      }
+    },
+    "direction": {
+      "docId": "d0c10000-0000-0000-0000-0000000000b2",
+      "regions": [
+        {
+          "key": "direction",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": "v1 · Drafting",
+          "name": "Direction",
+          "status": "Nothing yet",
+          "extraH2": [],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        },
+        {
+          "key": "record",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": null,
+          "name": "The record",
+          "status": "2 complete",
+          "extraH2": [],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        }
+      ],
+      "band": {
+        "height": 56,
+        "open": "true",
+        "line1": "",
+        "line2": "Draw up the directionOpen the Drafting Room+8 MORE",
+        "identity": "",
+        "rightFlush": ""
+      },
+      "stagePhrase": "DirectionDrafting",
+      "ladder": [
+        {
+          "key": "direction",
+          "mounted": true,
+          "name": "Direction",
+          "value": "NOTHING YET"
+        },
+        {
+          "key": "record",
+          "mounted": true,
+          "name": "The record",
+          "value": "2 COMPLETE"
+        }
+      ],
+      "zeroProjectRootsPresent": [
+        "record"
+      ],
+      "rail390": {
+        "labels": [
+          "Elena Marlowe (no-login household)",
+          "Direction",
+          "Drafting",
+          "Direction",
+          "The record"
+        ],
+        "stops": 2,
+        "doors": 0,
+        "distinctCount": 4
+      }
+    },
+    "proposal": {
+      "docId": "b0000000-0000-0000-0000-0000000000d6",
+      "regions": [
+        {
+          "key": "proposal",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": "v1 · Awaiting signature",
+          "name": "The proposal",
+          "status": "Sent Aug 23 · unopened 7d",
+          "extraH2": [
+            "Investment"
+          ],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        },
+        {
+          "key": "scope",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": null,
+          "name": "Scope & engagement",
+          "status": "Nothing yet",
+          "extraH2": [],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        },
+        {
+          "key": "vision",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": null,
+          "name": "Design vision",
+          "status": "Not written yet",
+          "extraH2": [],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        },
+        {
+          "key": "investment",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": null,
+          "name": "The investment",
+          "status": "$9,400",
+          "extraH2": [],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        },
+        {
+          "key": "record",
+          "density": "full",
+          "headCount": 1,
+          "eyebrow": null,
+          "name": "The record",
+          "status": "3 complete",
+          "extraH2": [],
+          "countLineDoubled": false,
+          "srOnlyLines": []
+        }
+      ],
+      "band": {
+        "height": 56,
+        "open": "true",
+        "line1": "$9,400",
+        "line2": "Sent Aug 23 — not yet openedFollow up+1 MORE",
+        "identity": "",
+        "rightFlush": "$9,400"
+      },
+      "stagePhrase": "ProposalAwaiting signature",
+      "ladder": [
+        {
+          "key": "proposal",
+          "mounted": true,
+          "name": "The proposal",
+          "value": "SENT AUG 23 · UNOPENED 7D"
+        },
+        {
+          "key": "scope",
+          "mounted": true,
+          "name": "Scope & engagement",
+          "value": "NOTHING YET"
+        },
+        {
+          "key": "vision",
+          "mounted": true,
+          "name": "Design vision",
+          "value": "NOTHING YET"
+        },
+        {
+          "key": "investment",
+          "mounted": true,
+          "name": "The investment",
+          "value": "$9,400"
+        },
+        {
+          "key": "record",
+          "mounted": true,
+          "name": "The record",
+          "value": "3 COMPLETE"
+        }
+      ],
+      "zeroProjectRootsPresent": [
+        "record"
+      ],
+      "rail390": {
+        "labels": [
+          "Client User",
+          "Proposal",
+          "Awaiting signature",
+          "The proposal",
+          "Scope & engagement",
+          "Design vision",
+          "The investment",
+          "The record"
+        ],
+        "stops": 5,
+        "doors": 0,
+        "distinctCount": 8
+      }
+    }
+  },
+  "proposalSpreadDetail": {
+    "domOrder": [
+      "proposal",
+      "scope",
+      "vision",
+      "investment",
+      "record"
+    ],
+    "visionText": "Design visionNot written yet",
+    "scopeText": "Scope & engagementNothing yet",
+    "investmentText": "The investment$9,400InvestmentTotal$9,400",
+    "offerInsideInvestment": false,
+    "bandAtS0": {
+      "height": 56,
+      "open": "true",
+      "line1": "$9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORE",
+      "identity": "",
+      "rightFlush": "$9,400"
+    },
+    "bandPinned": {
+      "height": 56,
+      "open": "false",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23 · $9,400",
+      "line2": "Sent Aug 23 — not yet openedFollow up+1 MORE",
+      "identity": "CLIENT USER · PROPOSAL",
+      "rightFlush": "SENT AUG 23 · $9,400"
+    }
+  },
+  "marginSheet390": {
+    "ariaLabel": "The margin",
+    "doorPressed": "→Margin · 7",
+    "headText": "Margin · 7",
+    "overdueText": "2 overdue",
+    "groups": [
+      {
+        "heading": "THE WHOLE JOB · 4",
+        "rowCount": 4,
+        "rows": [
+          {
+            "kindLine": "Decision · overdue",
+            "title": "Primary bedroom — rug and nightstands",
+            "owner": "Client",
+            "lineLabel": null,
+            "act": "Send a nudge"
+          },
+          {
+            "kindLine": "Decision · responded",
+            "title": "Dining room — finish sample",
+            "owner": "Client",
+            "lineLabel": null,
+            "act": "Open the record"
+          },
+          {
+            "kindLine": "Decision · responded",
+            "title": "Whole-house hardware",
+            "owner": "Client",
+            "lineLabel": null,
+            "act": "Open the record"
+          },
+          {
+            "kindLine": "Money · sent",
+            "title": "INV-2026-114",
+            "owner": "Client",
+            "lineLabel": null,
+            "act": "Open the folio"
+          }
+        ]
+      },
+      {
+        "heading": "BESIDE PIECES · 3",
+        "rowCount": 3,
+        "rows": [
+          {
+            "kindLine": "Decision · overdue",
+            "title": "Living room — fabric for the reading chair",
+            "owner": "Client",
+            "lineLabel": "Living Room · Reading Chair — COM Fabric Pending",
+            "act": "Send a nudge"
+          },
+          {
+            "kindLine": "Message · Leah Hartwell",
+            "title": "Console — damage photos",
+            "owner": "Leah Hartwell",
+            "lineLabel": "Living Room · Brass-and-Oak Console",
+            "act": "Reply"
+          },
+          {
+            "kindLine": "Message · Leah Hartwell",
+            "title": "PO-2026-0418 follow-up",
+            "owner": "Leah Hartwell",
+            "lineLabel": "Dining Room · Dining Table — Sturdy Oak",
+            "act": "Reply"
+          }
+        ]
+      }
+    ],
+    "afterRowActPress": {
+      "ariaLabel": "Margin item",
+      "kind": "margin-item"
+    },
+    "lineRowJump": {
+      "lineRowExists": false
+    },
+    "focusAfterEscape": {
+      "tag": "BODY",
+      "ariaLabel": null,
+      "text": "(self.__next_s=self.__next_s||[]).push(["
+    },
+    "chipsCountAt390": 0,
+    "chipsCountAt1280": 3
+  },
+  "sectionsSheet390": {
+    "ariaLabel": "Sections of this document"
+  },
+  "loadingRegisterFFE": {
+    "rootFound": false
+  },
+  "moneyOffsetTop": {
+    "moneyTopBeforeSettle": null,
+    "moneyTopAfterSettle": null,
+    "moneyTopAfterQuiet": 457.375
+  },
+  "quietHeadsS0": [
+    {
+      "key": "approvals",
+      "mounted": true,
+      "density": "full"
+    },
+    {
+      "key": "schedule",
+      "mounted": true,
+      "density": "full"
+    },
+    {
+      "key": "ffe",
+      "mounted": true,
+      "density": "full"
+    },
+    {
+      "key": "money",
+      "mounted": true,
+      "density": "full"
+    },
+    {
+      "key": "care",
+      "mounted": true,
+      "density": "quiet"
+    },
+    {
+      "key": "record",
+      "mounted": true,
+      "density": "full"
+    }
+  ],
+  "letterheadHeight1440": 192.0625,
+  "letterheadHeight390": 255.171875,
+  "firstHeadGross390": 423.171875,
+  "railLabelsD5": {
+    "labels": [
+      "Client User",
+      "PROCUREMENT & ORDERS",
+      "3 OF 5",
+      "Client approvals",
+      "Schedule",
+      "Pieces",
+      "Money",
+      "Closing the book",
+      "The record",
+      "Filed with this job",
+      "Plan room",
+      "Spec book",
+      "Boards"
+    ],
+    "stops": 6,
+    "doors": 3,
+    "distinctCount": 13
+  },
+  "reducedMotionRunningAfter1s": 0,
+  "loadingPulseUnderReduce": {
+    "found": false
+  },
+  "consoleErrorsByLabel": {
+    "warm-d4": [
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22all%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED",
+      "[console error @warm-d4] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @warm-d4] Failed to load resource: net::ERR_FAILED"
+    ],
+    "warm-d5": [
+      "[console error @warm-d5] Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[console error @warm-d5] TypeError: Failed to fetch\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/helpers.js:120:25)\n    at _handleRequest (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:106:24)\n    at _request (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:96:24)\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1303:82)\n    at SupabaseAuthClient._useSession (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1189:26)\n    at async SupabaseAuthClient._getUser (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1293:20)\n    at async eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1277:20)",
+      "[console error @warm-d5] Error: AppError: Not authenticated\n    at handleApiError (webpack-internal:///(app-pages-browser)/./src/lib/error-handler.ts:587:12)\n    at Object.onError (webpack-internal:///(app-pages-browser)/./src/lib/react-query.ts:15:88)\n    at Query.fetch (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@tanstack+query-core@5.90.20/node_modules/@tanstack/query-core/build/modern/query.js:304:35) {queryKey: Array(1), meta: undefined}",
+      "[console error @warm-d5] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @warm-d5] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @warm-d5] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "warm-d6": [
+      "[console error @warm-d6] Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[console error @warm-d6] TypeError: Failed to fetch\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/helpers.js:120:25)\n    at _handleRequest (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:106:24)\n    at _request (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:96:24)\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1303:82)\n    at SupabaseAuthClient._useSession (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1189:26)\n    at async SupabaseAuthClient._getUser (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1293:20)\n    at async eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1277:20)",
+      "[console error @warm-d6] Error: AppError: Not authenticated\n    at handleApiError (webpack-internal:///(app-pages-browser)/./src/lib/error-handler.ts:587:12)\n    at Object.onError (webpack-internal:///(app-pages-browser)/./src/lib/react-query.ts:15:88)\n    at Query.fetch (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@tanstack+query-core@5.90.20/node_modules/@tanstack/query-core/build/modern/query.js:304:35) {queryKey: Array(1), meta: undefined}"
+    ],
+    "1440-project": [
+      "[console error @1440-project] Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[console error @1440-project] TypeError: Failed to fetch\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/helpers.js:120:25)\n    at _handleRequest (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:106:24)\n    at _request (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:96:24)\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1303:82)\n    at SupabaseAuthClient._useSession (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1189:26)\n    at async SupabaseAuthClient._getUser (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1293:20)\n    at async eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1277:20)",
+      "[console error @1440-project] Error: AppError: Not authenticated\n    at handleApiError (webpack-internal:///(app-pages-browser)/./src/lib/error-handler.ts:587:12)\n    at Object.onError (webpack-internal:///(app-pages-browser)/./src/lib/react-query.ts:15:88)\n    at Query.fetch (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@tanstack+query-core@5.90.20/node_modules/@tanstack/query-core/build/modern/query.js:304:35) {queryKey: Array(1), meta: undefined}",
+      "[console error @1440-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "1280-project": [
+      "[console error @1280-project] Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[console error @1280-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1280-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1280-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "390-project": [
+      "[console error @390-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @390-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @390-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "1440-prework": [
+      "[console error @1440-prework] Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ],
+    "1280-prework": [
+      "[console error @1280-prework] Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ],
+    "390-prework": [],
+    "prework-brief-1440": [
+      "[console error @prework-brief-1440] Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ],
+    "prework-brief-390": [],
+    "prework-discovery-1440": [],
+    "prework-discovery-390": [
+      "[console error @prework-discovery-390] TypeError: Failed to fetch\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/helpers.js:120:25)\n    at _handleRequest (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:106:24)\n    at _request (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:96:24)\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1303:82)\n    at SupabaseAuthClient._useSession (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1189:26)\n    at async SupabaseAuthClient._getUser (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1293:20)\n    at async eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1277:20)",
+      "[console error @prework-discovery-390] Error: AppError: Not authenticated\n    at handleApiError (webpack-internal:///(app-pages-browser)/./src/lib/error-handler.ts:587:12)\n    at Object.onError (webpack-internal:///(app-pages-browser)/./src/lib/react-query.ts:15:88)\n    at Query.fetch (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@tanstack+query-core@5.90.20/node_modules/@tanstack/query-core/build/modern/query.js:304:35) {queryKey: Array(1), meta: undefined}"
+    ],
+    "prework-direction-1440": [
+      "[console error @prework-direction-1440] Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ],
+    "prework-direction-390": [],
+    "prework-proposal-1440": [
+      "[console error @prework-proposal-1440] Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ],
+    "prework-proposal-390": [],
+    "1440-proposal-detail": [
+      "[console error @1440-proposal-detail] Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ],
+    "390-margin-sheet": [
+      "[console error @390-margin-sheet] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Fdocument%2Fwelcome%22&%24ct=%22welcomeModal%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @390-margin-sheet] Failed to load resource: net::ERR_FAILED",
+      "[console error @390-margin-sheet] Access to XMLHttpRequest at 'https://kv3qrinl.apicdn.sanity.io/v2026-05-18/data/query/production?query=*%5B_type+%3D%3D+%22helpContent%22+%26%26+surfaceKey+%3D%3D+%24sk+%26%26+contentType+%3D%3D+%24ct+%26%26+persona+%3D%3D+%24p%5D%5B0%5D%7B%0A++++_id%2C+surfaceKey%2C+contentType%2C+persona%2C%0A++++%22eyebrow%22%3A+coalesce%28eyebrow%2C+tooltipContent.eyebrow%2C+helpArticleContent.eyebrow%29%2C%0A++++%22body%22%3A+coalesce%28body%2C+tooltipContent.body%2C+coachmarkContent.body%29%2C%0A++++%22heading%22%3A+coalesce%28heading%2C+emptyStateContent.heading%2C+coachmarkContent.heading%29%2C%0A++++%22description%22%3A+coalesce%28description%2C+emptyStateContent.description%29%2C%0A++++%22icon%22%3A+coalesce%28icon%2C+emptyStateContent.icon%29%2C%0A++++%22primaryActionLabel%22%3A+coalesce%28primaryActionLabel%2C+emptyStateContent.primaryActionLabel%29%2C%0A++++%22secondaryActionLabel%22%3A+coalesce%28secondaryActionLabel%2C+emptyStateContent.secondaryActionLabel%29%2C%0A++++%22secondaryActionArticleKey%22%3A+coalesce%28secondaryActionArticleKey%2C+emptyStateContent.secondaryActionArticleKey%29%2C%0A++++%22ctaLabel%22%3A+coalesce%28ctaLabel%2C+coachmarkContent.ctaLabel%29%0A++%7D&%24sk=%22designer-portal%2Ftours%2Fdesk-walkthrough%2Fstep-1-the-desk%22&%24ct=%22coachmark%22&%24p=%22designer%22&returnQuery=false&perspective=published' from origin 'http://localhost:3021' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "[console error @390-margin-sheet] Failed to load resource: net::ERR_FAILED"
+    ],
+    "1280-chips": [
+      "[console error @1280-chips] Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[console error @1280-chips] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1280-chips] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1280-chips] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "390-sections-sheet": [],
+    "1440-loading-register": [
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "1440-quiet-heads": [
+      "[console error @1440-quiet-heads] Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[console error @1440-quiet-heads] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-quiet-heads] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-quiet-heads] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "1440-letterhead": [
+      "[console error @1440-letterhead] Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[console error @1440-letterhead] TypeError: Failed to fetch\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/helpers.js:120:25)\n    at _handleRequest (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:106:24)\n    at _request (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:96:24)\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1303:82)\n    at SupabaseAuthClient._useSession (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1189:26)\n    at async SupabaseAuthClient._getUser (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1293:20)\n    at async eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1277:20)",
+      "[console error @1440-letterhead] Error: AppError: Not authenticated\n    at handleApiError (webpack-internal:///(app-pages-browser)/./src/lib/error-handler.ts:587:12)\n    at Object.onError (webpack-internal:///(app-pages-browser)/./src/lib/react-query.ts:15:88)\n    at Query.fetch (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@tanstack+query-core@5.90.20/node_modules/@tanstack/query-core/build/modern/query.js:304:35) {queryKey: Array(1), meta: undefined}",
+      "[console error @1440-letterhead] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-letterhead] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-letterhead] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "390-letterhead": [],
+    "1440-rail-labels-d5": [
+      "[console error @1440-rail-labels-d5] Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[console error @1440-rail-labels-d5] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-rail-labels-d5] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-rail-labels-d5] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "1440-reduced-motion": [
+      "[console error @1440-reduced-motion] Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[console error @1440-reduced-motion] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-reduced-motion] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-reduced-motion] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ]
+  }
+}

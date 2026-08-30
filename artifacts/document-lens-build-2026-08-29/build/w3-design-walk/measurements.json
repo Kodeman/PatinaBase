@@ -1,0 +1,1365 @@
+{
+  "project-1440-s0": {
+    "scrollY": 0,
+    "band": {
+      "rect": {
+        "x": 254,
+        "y": 296.1,
+        "w": 900,
+        "h": 56
+      },
+      "open": "true",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "$17,500 OWED YOU, 7 DAYS",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "$17,500 owed you +7 MORE Now at Client approvals · Reading…",
+      "fs": "15px",
+      "kind": "standing",
+      "clip": false,
+      "w": 900
+    },
+    "letterhead": {
+      "rect": {
+        "x": 254,
+        "y": 36,
+        "w": 900,
+        "h": 242.1
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 254,
+        "y": 103,
+        "w": 149.9,
+        "h": 44.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "approvals-head",
+      "y": 383.1
+    },
+    "gaps": [
+      {
+        "from": "approvals",
+        "to": "schedule",
+        "gap": 290.9
+      },
+      {
+        "from": "schedule",
+        "to": "ffe",
+        "gap": 24
+      },
+      {
+        "from": "ffe",
+        "to": "money",
+        "gap": 24
+      },
+      {
+        "from": "money",
+        "to": "care",
+        "gap": 24
+      },
+      {
+        "from": "care",
+        "to": "record",
+        "gap": 108.5
+      }
+    ],
+    "spineHead": "Client | User | PROCUREMENT | & | ORDERS | 3 | OF | 5",
+    "railValues": [
+      "Client approvals NOTHING YET",
+      "Schedule INSTALL SEP 19 · 3 WEEKS",
+      "Pieces 62 LINES · 1 DAMAGED AUG 29",
+      "Money $17,500 OUT · $28,080 UNDRAWN",
+      "Closing the book 0 OF 6 CLOSED OUT",
+      "The record 4 COMPLETE"
+    ],
+    "seams": [
+      {
+        "region": "schedule-rule-title",
+        "text": "Schedule dates WEEK 11 · INSTALL SEPTEMBER 2026 UNFOLD ↓"
+      }
+    ],
+    "more": "+7 MORE",
+    "vh": 900
+  },
+  "project-1440-s2": {
+    "scrollY": 1834,
+    "band": {
+      "rect": {
+        "x": 254,
+        "y": 0,
+        "w": 900,
+        "h": 56
+      },
+      "open": "false",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "$17,500 owed you +7 MORE Now at Pieces · 62 lines · 5 rooms · 1 damaged",
+      "fs": "15px",
+      "kind": "standing",
+      "clip": false,
+      "w": 900
+    },
+    "letterhead": {
+      "rect": {
+        "x": 254,
+        "y": -1798,
+        "w": 900,
+        "h": 242.1
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 254,
+        "y": -1731,
+        "w": 149.9,
+        "h": 44.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "approvals-head",
+      "y": -1450.9
+    },
+    "gaps": [
+      {
+        "from": "approvals",
+        "to": "schedule",
+        "gap": 290.9
+      },
+      {
+        "from": "schedule",
+        "to": "ffe",
+        "gap": 24
+      },
+      {
+        "from": "ffe",
+        "to": "money",
+        "gap": 24
+      },
+      {
+        "from": "money",
+        "to": "care",
+        "gap": 24
+      },
+      {
+        "from": "care",
+        "to": "record",
+        "gap": 108.5
+      }
+    ],
+    "spineHead": "Client | User | PROCUREMENT | & | ORDERS | 3 | OF | 5",
+    "railValues": [
+      "Client approvals NOTHING YET",
+      "Schedule INSTALL SEP 19 · 3 WEEKS",
+      "Pieces",
+      "Money $17,500 OUT · $28,080 UNDRAWN",
+      "Closing the book 0 OF 6 CLOSED OUT",
+      "The record 4 COMPLETE"
+    ],
+    "seams": [
+      {
+        "region": "schedule-rule-title",
+        "text": "Schedule dates WEEK 11 · INSTALL SEPTEMBER 2026 UNFOLD ↓"
+      }
+    ],
+    "more": "+7 MORE",
+    "vh": 900
+  },
+  "project-1440-s3": {
+    "scrollY": 9276,
+    "band": {
+      "rect": {
+        "x": 254,
+        "y": 0,
+        "w": 900,
+        "h": 56
+      },
+      "open": "false",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "$17,500 owed you +7 MORE Now at The record · 4 complete",
+      "fs": "15px",
+      "kind": "standing",
+      "clip": false,
+      "w": 900
+    },
+    "letterhead": {
+      "rect": {
+        "x": 254,
+        "y": -9240,
+        "w": 900,
+        "h": 242.1
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 254,
+        "y": -9173,
+        "w": 149.9,
+        "h": 44.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "approvals-head",
+      "y": -8892.9
+    },
+    "gaps": [
+      {
+        "from": "approvals",
+        "to": "schedule",
+        "gap": 290.9
+      },
+      {
+        "from": "schedule",
+        "to": "ffe",
+        "gap": 24
+      },
+      {
+        "from": "ffe",
+        "to": "money",
+        "gap": 24
+      },
+      {
+        "from": "money",
+        "to": "care",
+        "gap": 24
+      },
+      {
+        "from": "care",
+        "to": "record",
+        "gap": 108.5
+      }
+    ],
+    "spineHead": "Client | User | PROCUREMENT | & | ORDERS | 3 | OF | 5",
+    "railValues": [
+      "Client approvals NOTHING YET",
+      "Schedule INSTALL SEP 19 · 3 WEEKS",
+      "Pieces 62 LINES · 1 DAMAGED AUG 29",
+      "Money $17,500 OUT · $28,080 UNDRAWN",
+      "Closing the book 0 OF 6 CLOSED OUT",
+      "The record 4 COMPLETE"
+    ],
+    "seams": [
+      {
+        "region": "schedule-rule-title",
+        "text": "Schedule dates WEEK 11 · INSTALL SEPTEMBER 2026 UNFOLD ↓"
+      }
+    ],
+    "more": "+7 MORE",
+    "vh": 900
+  },
+  "sheet-1440": {
+    "title": "STANDING · 8",
+    "text": "STANDING · 8 PUT BACK · ESC PAST DUE $17,500 owed you PAST DUE Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminder SEND REMINDER DECISION DUE 2 decisions overdue — oldest due Aug 23 CHASE THE APPROVAL AWAITING INSPECTION 1 piece delivered — awaiting inspection INSPECT THE DELIVERY CLAIM OPEN FDL-0912 has an open damage claim FILE THE CLAIM NOT SENT PO-2026-0418 drafted — not yet sent SEND THE PURCHASE ORDER STUCK 1 damaged STUCK 2 unspecified"
+  },
+  "money-folded": {
+    "text": "Money NO BUDGET YET · $0 AUTHORIZED UNFOLD ↓",
+    "ruleClass": "doc-rule-mid",
+    "height": 50.5
+  },
+  "project-1280-s0": {
+    "scrollY": 0,
+    "band": {
+      "rect": {
+        "x": 233,
+        "y": 216.8,
+        "w": 950,
+        "h": 56
+      },
+      "open": "true",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminder SEND REMINDER +4 MORE Now at Client approvals · Reading…",
+      "fs": "15px",
+      "kind": "standing",
+      "clip": false,
+      "w": 950
+    },
+    "letterhead": {
+      "rect": {
+        "x": 233,
+        "y": 36,
+        "w": 950,
+        "h": 162.8
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 233,
+        "y": 103,
+        "w": 199.9,
+        "h": 44.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "approvals-head",
+      "y": 303.8
+    },
+    "gaps": [
+      {
+        "from": "approvals",
+        "to": "schedule",
+        "gap": 120.3
+      },
+      {
+        "from": "schedule",
+        "to": "ffe",
+        "gap": 24
+      },
+      {
+        "from": "ffe",
+        "to": "money",
+        "gap": 24
+      },
+      {
+        "from": "money",
+        "to": "record",
+        "gap": 108.5
+      }
+    ],
+    "spineHead": "Client | User | PROJECT | ACTIVE",
+    "railValues": [
+      "Client approvals READING…",
+      "Schedule READING…",
+      "Pieces READING…",
+      "Money READING…",
+      "Closing the book 0 OF 6 CLOSED OUT",
+      "The record NOTHING YET"
+    ],
+    "seams": [
+      {
+        "region": "schedule-rule-title",
+        "text": "Schedule dates PHASE DATES UNFOLD ↓"
+      }
+    ],
+    "more": "+4 MORE",
+    "vh": 800
+  },
+  "project-1280-s2": {
+    "scrollY": 1816,
+    "band": {
+      "rect": {
+        "x": 233,
+        "y": 0,
+        "w": 950,
+        "h": 56
+      },
+      "open": "false",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "$17,500 owed you +7 MORE Now at Pieces · 62 lines · 5 rooms · 1 damaged",
+      "fs": "15px",
+      "kind": "standing",
+      "clip": false,
+      "w": 950
+    },
+    "letterhead": {
+      "rect": {
+        "x": 233,
+        "y": -1780,
+        "w": 950,
+        "h": 223.3
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 233,
+        "y": -1713,
+        "w": 199.9,
+        "h": 44.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "approvals-head",
+      "y": -1451.7
+    },
+    "gaps": [
+      {
+        "from": "approvals",
+        "to": "schedule",
+        "gap": 290.9
+      },
+      {
+        "from": "schedule",
+        "to": "ffe",
+        "gap": 24
+      },
+      {
+        "from": "ffe",
+        "to": "money",
+        "gap": 24
+      },
+      {
+        "from": "money",
+        "to": "care",
+        "gap": 24
+      },
+      {
+        "from": "care",
+        "to": "record",
+        "gap": 108.5
+      }
+    ],
+    "spineHead": "Client | User | PROCUREMENT | & | ORDERS | 3 | OF | 5",
+    "railValues": [
+      "Client approvals NOTHING YET",
+      "Schedule INSTALL SEP 19 · 3 WEEKS",
+      "Pieces",
+      "Money $17,500 OUT · $28,080 UNDRAWN",
+      "Closing the book 0 OF 6 CLOSED OUT",
+      "The record 4 COMPLETE"
+    ],
+    "seams": [
+      {
+        "region": "schedule-rule-title",
+        "text": "Schedule dates WEEK 11 · INSTALL SEPTEMBER 2026 UNFOLD ↓"
+      }
+    ],
+    "more": "+7 MORE",
+    "vh": 800
+  },
+  "project-1280-s3": {
+    "scrollY": 9282,
+    "band": {
+      "rect": {
+        "x": 233,
+        "y": 0,
+        "w": 950,
+        "h": 56
+      },
+      "open": "false",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "$17,500 owed you +7 MORE Now at The record · 4 complete",
+      "fs": "15px",
+      "kind": "standing",
+      "clip": false,
+      "w": 950
+    },
+    "letterhead": {
+      "rect": {
+        "x": 233,
+        "y": -9246,
+        "w": 950,
+        "h": 223.3
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 233,
+        "y": -9179,
+        "w": 199.9,
+        "h": 44.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "approvals-head",
+      "y": -8917.7
+    },
+    "gaps": [
+      {
+        "from": "approvals",
+        "to": "schedule",
+        "gap": 290.9
+      },
+      {
+        "from": "schedule",
+        "to": "ffe",
+        "gap": 24
+      },
+      {
+        "from": "ffe",
+        "to": "money",
+        "gap": 24
+      },
+      {
+        "from": "money",
+        "to": "care",
+        "gap": 24
+      },
+      {
+        "from": "care",
+        "to": "record",
+        "gap": 108.5
+      }
+    ],
+    "spineHead": "Client | User | PROCUREMENT | & | ORDERS | 3 | OF | 5",
+    "railValues": [
+      "Client approvals NOTHING YET",
+      "Schedule INSTALL SEP 19 · 3 WEEKS",
+      "Pieces 62 LINES · 5 ROOMS · 1 DAMAGED",
+      "Money $17,500 OUT · $28,080 UNDRAWN",
+      "Closing the book 0 OF 6 CLOSED OUT",
+      "The record 4 COMPLETE"
+    ],
+    "seams": [
+      {
+        "region": "schedule-rule-title",
+        "text": "Schedule dates WEEK 11 · INSTALL SEPTEMBER 2026 UNFOLD ↓"
+      }
+    ],
+    "more": "+7 MORE",
+    "vh": 800
+  },
+  "project-390-s0": {
+    "scrollY": 0,
+    "band": {
+      "rect": {
+        "x": 31.5,
+        "y": 421.1,
+        "w": 327,
+        "h": 56
+      },
+      "open": "true",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "$17,500 OWED YOU, 7 DAYS",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "$17,500 owed you +7 MORE Now at Client approvals · Reading…",
+      "fs": "15px",
+      "kind": "standing",
+      "clip": false,
+      "w": 327
+    },
+    "letterhead": {
+      "rect": {
+        "x": 31.5,
+        "y": 36,
+        "w": 327,
+        "h": 367.1
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 31.5,
+        "y": 103,
+        "w": 327,
+        "h": 44.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "approvals-head",
+      "y": 665.3
+    },
+    "gaps": [
+      {
+        "from": "approvals",
+        "to": "schedule",
+        "gap": 380.5
+      },
+      {
+        "from": "schedule",
+        "to": "ffe",
+        "gap": 24
+      },
+      {
+        "from": "ffe",
+        "to": "money",
+        "gap": 24
+      },
+      {
+        "from": "money",
+        "to": "care",
+        "gap": 24
+      },
+      {
+        "from": "care",
+        "to": "record",
+        "gap": 213.7
+      }
+    ],
+    "spineHead": "Client | UserPROCUREMENT | & | ORDERS3 | OF | 5",
+    "railValues": [
+      "Client approvalsNOTHING YET",
+      "ScheduleINSTALL SEP 19 · 3 WEEKS",
+      "Pieces62 LINES · 5 ROOMS · 1 DAMAGED62 LINES · 1 DAMAGED AUG 29",
+      "Money$17,500 OUT · $28,080 UNDRAWN",
+      "Closing the book0 OF 6 CLOSED OUT",
+      "The record4 COMPLETE"
+    ],
+    "seams": [
+      {
+        "region": "schedule-rule-title",
+        "text": "Schedule dates WEEK 11 · INSTALL SEPTEMBER 2026 UNFOLD ↓"
+      }
+    ],
+    "more": "+7 MORE",
+    "vh": 844
+  },
+  "project-390-s2": {
+    "scrollY": 2579,
+    "band": {
+      "rect": {
+        "x": 31.5,
+        "y": 0,
+        "w": 327,
+        "h": 56
+      },
+      "open": "false",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "$17,500 owed you +7 MORE Now at Pieces · 62 lines · 5 rooms · 1 damaged",
+      "fs": "15px",
+      "kind": "standing",
+      "clip": false,
+      "w": 327
+    },
+    "letterhead": {
+      "rect": {
+        "x": 31.5,
+        "y": -2543,
+        "w": 327,
+        "h": 367.1
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 31.5,
+        "y": -2476,
+        "w": 327,
+        "h": 44.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "approvals-head",
+      "y": -1913.7
+    },
+    "gaps": [
+      {
+        "from": "approvals",
+        "to": "schedule",
+        "gap": 380.5
+      },
+      {
+        "from": "schedule",
+        "to": "ffe",
+        "gap": 24
+      },
+      {
+        "from": "ffe",
+        "to": "money",
+        "gap": 24
+      },
+      {
+        "from": "money",
+        "to": "care",
+        "gap": 24
+      },
+      {
+        "from": "care",
+        "to": "record",
+        "gap": 213.7
+      }
+    ],
+    "spineHead": "Client | UserPROCUREMENT | & | ORDERS3 | OF | 5",
+    "railValues": [
+      "Client approvalsNOTHING YET",
+      "ScheduleINSTALL SEP 19 · 3 WEEKS",
+      "Pieces",
+      "Money$17,500 OUT · $28,080 UNDRAWN",
+      "Closing the book0 OF 6 CLOSED OUT",
+      "The record4 COMPLETE"
+    ],
+    "seams": [
+      {
+        "region": "schedule-rule-title",
+        "text": "Schedule dates WEEK 11 · INSTALL SEPTEMBER 2026 UNFOLD ↓"
+      }
+    ],
+    "more": "+7 MORE",
+    "vh": 844
+  },
+  "project-390-s3": {
+    "scrollY": 11582,
+    "band": {
+      "rect": {
+        "x": 31.5,
+        "y": 0,
+        "w": 327,
+        "h": 56
+      },
+      "open": "false",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "$17,500 owed you +7 MORE Now at The record · 4 complete",
+      "fs": "15px",
+      "kind": "standing",
+      "clip": false,
+      "w": 327
+    },
+    "letterhead": {
+      "rect": {
+        "x": 31.5,
+        "y": -11546,
+        "w": 327,
+        "h": 367.1
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 31.5,
+        "y": -11479,
+        "w": 327,
+        "h": 44.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "approvals-head",
+      "y": -10916.7
+    },
+    "gaps": [
+      {
+        "from": "approvals",
+        "to": "schedule",
+        "gap": 380.5
+      },
+      {
+        "from": "schedule",
+        "to": "ffe",
+        "gap": 24
+      },
+      {
+        "from": "ffe",
+        "to": "money",
+        "gap": 24
+      },
+      {
+        "from": "money",
+        "to": "care",
+        "gap": 24
+      },
+      {
+        "from": "care",
+        "to": "record",
+        "gap": 213.7
+      }
+    ],
+    "spineHead": "Client | UserPROCUREMENT | & | ORDERS3 | OF | 5",
+    "railValues": [
+      "Client approvalsNOTHING YET",
+      "ScheduleINSTALL SEP 19 · 3 WEEKS",
+      "Pieces62 LINES · 5 ROOMS · 1 DAMAGED62 LINES · 1 DAMAGED AUG 29",
+      "Money$17,500 OUT · $28,080 UNDRAWN",
+      "Closing the book0 OF 6 CLOSED OUT",
+      "The record4 COMPLETE"
+    ],
+    "seams": [
+      {
+        "region": "schedule-rule-title",
+        "text": "Schedule dates WEEK 11 · INSTALL SEPTEMBER 2026 UNFOLD ↓"
+      }
+    ],
+    "more": "+7 MORE",
+    "vh": 844
+  },
+  "prework-1440-s0": {
+    "scrollY": 0,
+    "band": {
+      "rect": {
+        "x": 254,
+        "y": 236.8,
+        "w": 900,
+        "h": 56
+      },
+      "open": "true",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "Sent Aug 23 — not yet opened FOLLOW UP",
+      "fs": "15px",
+      "kind": "guide",
+      "clip": false,
+      "w": 900
+    },
+    "letterhead": {
+      "rect": {
+        "x": 254,
+        "y": 36,
+        "w": 900,
+        "h": 182.8
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "Aspen Loft — Guest Wing",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 254,
+        "y": 103,
+        "w": 696.8,
+        "h": 43.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "record",
+      "y": 1150.5
+    },
+    "gaps": [],
+    "spineHead": "Client | User | PROPOSAL | AWAITING | SIGNATURE",
+    "railValues": [],
+    "seams": [],
+    "vh": 900
+  },
+  "prework-1440-s2": {
+    "scrollY": 0,
+    "band": {
+      "rect": {
+        "x": 254,
+        "y": 236.8,
+        "w": 900,
+        "h": 56
+      },
+      "open": "true",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "Sent Aug 23 — not yet opened FOLLOW UP",
+      "fs": "15px",
+      "kind": "guide",
+      "clip": false,
+      "w": 900
+    },
+    "letterhead": {
+      "rect": {
+        "x": 254,
+        "y": 36,
+        "w": 900,
+        "h": 182.8
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "Aspen Loft — Guest Wing",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 254,
+        "y": 103,
+        "w": 696.8,
+        "h": 43.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "record",
+      "y": 1150.5
+    },
+    "gaps": [],
+    "spineHead": "Client | User | PROPOSAL | AWAITING | SIGNATURE",
+    "railValues": [],
+    "seams": [],
+    "vh": 900
+  },
+  "prework-1440-s3": {
+    "scrollY": 442,
+    "band": {
+      "rect": {
+        "x": 254,
+        "y": 0,
+        "w": 900,
+        "h": 56
+      },
+      "open": "false",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "CLIENT USER · PROPOSAL SENT AUG 23",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "Sent Aug 23 — not yet opened FOLLOW UP",
+      "fs": "15px",
+      "kind": "guide",
+      "clip": false,
+      "w": 900
+    },
+    "letterhead": {
+      "rect": {
+        "x": 254,
+        "y": -406,
+        "w": 900,
+        "h": 182.8
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "Aspen Loft — Guest Wing",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 254,
+        "y": -339,
+        "w": 696.8,
+        "h": 43.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "record",
+      "y": 708.5
+    },
+    "gaps": [],
+    "spineHead": "Client | User | PROPOSAL | AWAITING | SIGNATURE",
+    "railValues": [],
+    "seams": [],
+    "vh": 900
+  },
+  "prework-1280-s0": {
+    "scrollY": 0,
+    "band": {
+      "rect": {
+        "x": 233,
+        "y": 236.8,
+        "w": 950,
+        "h": 56
+      },
+      "open": "true",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "Sent Aug 23 — not yet opened FOLLOW UP",
+      "fs": "15px",
+      "kind": "guide",
+      "clip": false,
+      "w": 950
+    },
+    "letterhead": {
+      "rect": {
+        "x": 233,
+        "y": 36,
+        "w": 950,
+        "h": 182.8
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "Aspen Loft — Guest Wing",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 233,
+        "y": 103,
+        "w": 746.8,
+        "h": 43.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "record",
+      "y": 1150.5
+    },
+    "gaps": [],
+    "spineHead": "Client | User | PROPOSAL | AWAITING | SIGNATURE",
+    "railValues": [],
+    "seams": [],
+    "vh": 800
+  },
+  "prework-1280-s2": {
+    "scrollY": 0,
+    "band": {
+      "rect": {
+        "x": 233,
+        "y": 236.8,
+        "w": 950,
+        "h": 56
+      },
+      "open": "true",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "Sent Aug 23 — not yet opened FOLLOW UP",
+      "fs": "15px",
+      "kind": "guide",
+      "clip": false,
+      "w": 950
+    },
+    "letterhead": {
+      "rect": {
+        "x": 233,
+        "y": 36,
+        "w": 950,
+        "h": 182.8
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "Aspen Loft — Guest Wing",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 233,
+        "y": 103,
+        "w": 746.8,
+        "h": 43.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "record",
+      "y": 1150.5
+    },
+    "gaps": [],
+    "spineHead": "Client | User | PROPOSAL | AWAITING | SIGNATURE",
+    "railValues": [],
+    "seams": [],
+    "vh": 800
+  },
+  "prework-1280-s3": {
+    "scrollY": 542,
+    "band": {
+      "rect": {
+        "x": 233,
+        "y": 0,
+        "w": 950,
+        "h": 56
+      },
+      "open": "false",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "CLIENT USER · PROPOSAL SENT AUG 23",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "Sent Aug 23 — not yet opened FOLLOW UP",
+      "fs": "15px",
+      "kind": "guide",
+      "clip": false,
+      "w": 950
+    },
+    "letterhead": {
+      "rect": {
+        "x": 233,
+        "y": -506,
+        "w": 950,
+        "h": 182.8
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "Aspen Loft — Guest Wing",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 233,
+        "y": -439,
+        "w": 746.8,
+        "h": 43.2
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "record",
+      "y": 608.5
+    },
+    "gaps": [],
+    "spineHead": "Client | User | PROPOSAL | AWAITING | SIGNATURE",
+    "railValues": [],
+    "seams": [],
+    "vh": 800
+  },
+  "prework-390-s0": {
+    "scrollY": 0,
+    "band": {
+      "rect": {
+        "x": 31.5,
+        "y": 337.5,
+        "w": 327,
+        "h": 56
+      },
+      "open": "true",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "Sent Aug 23 — not yet opened FOLLOW UP",
+      "fs": "15px",
+      "kind": "guide",
+      "clip": false,
+      "w": 327
+    },
+    "letterhead": {
+      "rect": {
+        "x": 31.5,
+        "y": 36,
+        "w": 327,
+        "h": 283.5
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "Aspen Loft — Guest Wing",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 31.5,
+        "y": 103,
+        "w": 327,
+        "h": 86.4
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "record",
+      "y": 1373.2
+    },
+    "gaps": [],
+    "spineHead": "Client | UserProposalAwaiting | signature",
+    "railValues": [],
+    "seams": [],
+    "vh": 844
+  },
+  "prework-390-s2": {
+    "scrollY": 0,
+    "band": {
+      "rect": {
+        "x": 31.5,
+        "y": 337.5,
+        "w": 327,
+        "h": 56
+      },
+      "open": "true",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "Sent Aug 23 — not yet opened FOLLOW UP",
+      "fs": "15px",
+      "kind": "guide",
+      "clip": false,
+      "w": 327
+    },
+    "letterhead": {
+      "rect": {
+        "x": 31.5,
+        "y": 36,
+        "w": 327,
+        "h": 283.5
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "Aspen Loft — Guest Wing",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 31.5,
+        "y": 103,
+        "w": 327,
+        "h": 86.4
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "record",
+      "y": 1373.2
+    },
+    "gaps": [],
+    "spineHead": "Client | UserProposalAwaiting | signature",
+    "railValues": [],
+    "seams": [],
+    "vh": 844
+  },
+  "prework-390-s3": {
+    "scrollY": 774,
+    "band": {
+      "rect": {
+        "x": 31.5,
+        "y": 0,
+        "w": 327,
+        "h": 56
+      },
+      "open": "false",
+      "state": null,
+      "h": "56px"
+    },
+    "line1": {
+      "text": "CLIENT USER · PROPOSAL SENT AUG 23",
+      "fs": "11px",
+      "clip": false
+    },
+    "line2": {
+      "text": "Sent Aug 23 — not yet opened FOLLOW UP",
+      "fs": "15px",
+      "kind": "guide",
+      "clip": false,
+      "w": 327
+    },
+    "letterhead": {
+      "rect": {
+        "x": 31.5,
+        "y": -738,
+        "w": 327,
+        "h": 283.5
+      },
+      "pb": "18px"
+    },
+    "h1": {
+      "text": "Aspen Loft — Guest Wing",
+      "fs": "40px",
+      "clipped": false,
+      "rect": {
+        "x": 31.5,
+        "y": -671,
+        "w": 327,
+        "h": 86.4
+      },
+      "ws": "normal"
+    },
+    "firstHead": {
+      "key": "record",
+      "y": 599.2
+    },
+    "gaps": [],
+    "spineHead": "Client | UserProposalAwaiting | signature",
+    "railValues": [],
+    "seams": [],
+    "vh": 844
+  }
+}

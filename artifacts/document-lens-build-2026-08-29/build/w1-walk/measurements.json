@@ -1,0 +1,26 @@
+{
+  "1280": {
+    "spineWidth": 136,
+    "headHeight": 139.5
+  },
+  "1440": {
+    "spineWidth": 200,
+    "headHeight": 116.75,
+    "railLabels": [
+      "←",
+      "PUT DOWN",
+      "Client User",
+      "PROJECT",
+      "ACTIVE · WEEK 11",
+      "ON THIS PAPER",
+      "Client approvals",
+      "0 IN THE LOG",
+      "Schedule",
+      "WEEK 11",
+      "Pieces",
+      "62 PIECES · 5 ROOMS",
+      "Money",
+      "$17,500 OWED"
+    ]
+  }
+}

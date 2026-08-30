@@ -1,0 +1,205 @@
+{
+  "loadingPoll": {
+    "samples": [
+      {
+        "tMs": 8149,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 8305,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 8412,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 8523,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 8633,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 8739,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 8847,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 8976,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 9108,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 9220,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 9325,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 9439,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 9559,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 9674,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 9794,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 9917,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 10020,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 10148,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 10264,
+        "shellPresent": false,
+        "pickingUp": true,
+        "ffeRootPresent": false,
+        "moneyTop": null,
+        "ffePulse": null
+      },
+      {
+        "tMs": 10377,
+        "shellPresent": true,
+        "pickingUp": false,
+        "ffeRootPresent": true,
+        "moneyTop": 360.2698669433594,
+        "ffePulse": {
+          "statusText": null,
+          "hasStatusRole": false,
+          "hasPulse": false
+        }
+      }
+    ],
+    "sawFFEPulse": false,
+    "sawPickingUp": true,
+    "firstMoneyTop": {
+      "tMs": 10377,
+      "top": 360.2698669433594
+    },
+    "moneyTopValuesSeen": [
+      360.2698669433594
+    ],
+    "moneyStableAcrossPoll": true
+  },
+  "loadingPulseUnderReduce": {
+    "found": true,
+    "style": {
+      "animationName": "none",
+      "animationPlayState": "running",
+      "animationDuration": "0s"
+    }
+  },
+  "escapeFromMarginSheet": {
+    "openedKind": "margin",
+    "focusAfterEscape": {
+      "tag": "BUTTON",
+      "ariaLabel": "More studio actions",
+      "dataDoor": null,
+      "text": "More"
+    },
+    "sheetStillOpen": false
+  },
+  "lineRowBodyPress": {
+    "lineRowCount": 1,
+    "scrollYBefore": 0,
+    "scrollYAfter": 2883,
+    "moved": true,
+    "afterKind": "margin-item"
+  }
+}
