@@ -14,10 +14,15 @@
  * then, only where the shell actually carries the attribute, wait for it to
  * read `true`.
  *
- * There is no `waitForTimeout` in this module, deliberately: a fixed sleep
- * either makes the suite slow or makes it lie, and both were how the earlier
- * document specs went flaky (`e2e-baseline.md` §4).
+ * `settle`/`scrollTo`/`scrollSteps` never use `waitForTimeout`, deliberately:
+ * a fixed sleep either makes the suite slow or makes it lie, and both were
+ * how the earlier document specs went flaky (`e2e-baseline.md` §4). `quiet`
+ * (D-B28, added W4-L4) is the one exception, and it is not a fixed sleep: it
+ * polls a 100ms tick only to re-check "has a NEW Supabase request arrived",
+ * debouncing until a full quiet window has passed with none — the wait
+ * length is decided by the network, not guessed by the test.
  */
+import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 const SHELL = '[data-document-shell]';
@@ -34,19 +39,70 @@ export async function twoFrames(page: Page): Promise<void> {
   );
 }
 
-/** The document has stopped moving, as far as it is able to say so. */
+/**
+ * D-B28(5) — a server that is not serving the Wave-4 build fails LOUDLY.
+ *
+ * W4-C18: `settle()` used to carry a third tier that silently returned after
+ * two frames when neither publisher existed. A server serving W3 code, or a
+ * W4 build whose hook throws on mount, demoted every spec routed through here
+ * to a two-frame wait and they all went green measuring nothing. The hook
+ * installs `window.__lensSettled` unconditionally, so its absence is a broken
+ * build and nothing else.
+ */
+export async function assertLensBuild(page: Page): Promise<void> {
+  // WAITS rather than reads once: the hook installs the publisher in a layout
+  // effect, so a caller that settles immediately after `goto` can be ahead of
+  // hydration. An absence that OUTLASTS the wait is the broken build.
+  try {
+    await page.waitForFunction(
+      () =>
+        typeof (window as unknown as { __lensSettled?: unknown })
+          .__lensSettled === 'function',
+      undefined,
+      { timeout: 15_000 },
+    );
+  } catch {
+    expect(
+      false,
+      'window.__lensSettled never appeared — this server is not serving the Wave-4 lens build (D-B28.5)',
+    ).toBe(true);
+  }
+}
+
+/**
+ * The document has stopped moving, as far as it is able to say so.
+ *
+ * Two tiers, tried in order:
+ *   1. `[data-document-shell][data-lens-settled="true"]` — the DOM's own
+ *      attribute (OD-3, §3), cheapest to read.
+ *   2. `window.__lensSettled()` — the Promise form §3 says is "exposed
+ *      unconditionally" once the observer attaches; the path for a caller
+ *      that reads the window before the shell exists, or for a build where
+ *      the attribute write and the promise resolution race.
+ *
+ * There is no third tier: see `assertLensBuild`.
+ */
 export async function settle(page: Page): Promise<void> {
   await twoFrames(page);
-  const publishes = await page.evaluate(
+
+  const publishesAttr = await page.evaluate(
     (sel) => Boolean(document.querySelector(sel)?.hasAttribute('data-lens-settled')),
     SHELL,
   );
-  if (!publishes) return;
-  await page.waitForFunction(
-    (sel) =>
-      document.querySelector(sel)?.getAttribute('data-lens-settled') === 'true',
-    SHELL,
-    { timeout: 15_000 },
+  if (publishesAttr) {
+    await page.waitForFunction(
+      (sel) =>
+        document.querySelector(sel)?.getAttribute('data-lens-settled') === 'true',
+      SHELL,
+      { timeout: 15_000 },
+    );
+    await twoFrames(page);
+    return;
+  }
+
+  await assertLensBuild(page);
+  await page.evaluate(() =>
+    (window as unknown as { __lensSettled: () => Promise<true> }).__lensSettled(),
   );
   await twoFrames(page);
 }
@@ -74,4 +130,397 @@ export async function scrollSteps(
     await scrollTo(page, from + direction * step * i);
   }
   await scrollTo(page, target);
+}
+
+/**
+ * The rail's own budget instrument (W4-L4, `lens-rail-budget.spec.ts`).
+ *
+ * `labels` is every distinct VISIBLE label on `[data-document-spine]` —
+ * never a value or count line beside it — so the gate ("3 fixed head labels
+ * + one per stop + one 'Filed with this job' + one per door") can compare an
+ * EMPIRICAL count against its own formula rather than trust a hand-typed
+ * ceiling a later wave could silently grow past. `stops` and `doors` are
+ * read from the same DOM the labels came from, so the formula and the
+ * measurement can never drift apart.
+ *
+ * Deliberately excluded: the "Put down document" exit link (studio chrome,
+ * not a map of the paper), every ladder VALUE span (the fact beside a
+ * stop's name — `region-head.tsx`'s own printed figures are the paper's,
+ * not the rail's, per SP-08), and room sub-rungs (`[data-room-chip]`,
+ * Override 2) — the rail budget's own formula is "stops + doors", never
+ * rooms, and a room held open must not move this gate.
+ */
+export interface RailCensus {
+  labels: string[];
+  stops: number;
+  doors: number;
+}
+
+export async function railCensus(page: Page): Promise<RailCensus> {
+  return page.evaluate(() => {
+    const spine = document.querySelector('[data-document-spine]');
+    if (!spine) return { labels: [], stops: 0, doors: 0 };
+
+    const labels: string[] = [];
+    const push = (el: Element | null | undefined) => {
+      const text = el?.textContent?.replace(/\s+/g, ' ').trim();
+      if (text) labels.push(text);
+    };
+
+    // Head furniture: the household line, then the stage phrase's own
+    // top/bottom spans (doc-spine.tsx) — one to three labels, never a value.
+    const head = spine.querySelector('[data-spine-head]');
+    push(
+      head?.querySelector(
+        ':scope > p:first-of-type:not([data-spine-stage-phrase]):not([data-spine-room-in-hand])',
+      ),
+    );
+    head
+      ?.querySelectorAll('[data-spine-stage-phrase] > span')
+      .forEach((span) => push(span));
+
+    // The ladder: one label per stop — the NAME span only (`lens-ladder.tsx`'s
+    // `body` fragment always renders the name as its first child, mounted or
+    // not), never the value/count line beside it.
+    const ladder = spine.querySelector('[data-lens-ladder]');
+    ladder
+      ?.querySelectorAll('[data-index-region] > span:first-child')
+      .forEach((span) => push(span));
+    const stops = ladder?.querySelectorAll('[data-index-region]').length ?? 0;
+
+    // "Filed with this job" — the doors' own head line, always rendered
+    // (even with zero doors, OD-8): the first `<p>` of the ladder's OTHER
+    // top-level div (the track carries `[data-lens-track]`).
+    push(ladder?.querySelector(':scope > div:not([data-lens-track]) > p:first-child'));
+
+    // The doors themselves, one label each.
+    ladder?.querySelectorAll('[data-ladder-door]').forEach((door) => push(door));
+    const doors = ladder?.querySelectorAll('[data-ladder-door]').length ?? 0;
+
+    return { labels, stops, doors };
+  });
+}
+
+/**
+ * D-B21's instrument for falsifiable sentence (d): every distinct text
+ * string whose nearest painted ancestor has computed `opacity > 0`,
+ * `visibility: visible` and `display !== 'none'` — never a check of opacity
+ * itself, because the yielded phrase is `opacity: 0` under EITHER motion
+ * register and must stay excluded from the set under both (deviations.md
+ * D-B21: "opacity itself is never the assertion").
+ *
+ * Scoped to `root` (default `[data-document-shell]`) so a caller can compare
+ * just the band, just the rail, or the whole shell between motion registers
+ * at the same scroll offset.
+ */
+export async function visibleWordSet(
+  page: Page,
+  root = '[data-document-shell]',
+): Promise<string[]> {
+  return page.evaluate((rootSelector) => {
+    const rootEl = document.querySelector(rootSelector);
+    if (!rootEl) return [];
+
+    const isPainted = (el: Element): boolean => {
+      let node: Element | null = el;
+      while (node) {
+        const style = getComputedStyle(node);
+        if (
+          style.display === 'none' ||
+          style.visibility === 'hidden' ||
+          parseFloat(style.opacity) <= 0
+        ) {
+          return false;
+        }
+        node = node.parentElement;
+      }
+      return true;
+    };
+
+    const words: string[] = [];
+    const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT);
+    let node: Node | null = walker.nextNode();
+    while (node) {
+      const text = node.textContent?.replace(/\s+/g, ' ').trim();
+      const parent = node.parentElement;
+      if (text && parent && isPainted(parent)) {
+        words.push(text);
+      }
+      node = walker.nextNode();
+    }
+    return words;
+  }, root);
+}
+
+/**
+ * D-B28's network-quiet precondition — required before any "the lens fetches
+ * nothing" claim (`lens-contrast.spec.ts`'s network-request assertion,
+ * `lens-cls.spec.ts`'s CLS instrument).
+ *
+ * The paper's own initial load is a dependent-query TAIL, not a lens fetch:
+ * `useProjectFfeReadiness` fires one `rpc('get_project_ffe_readiness', …)`
+ * per FF&E line, at concurrency 8, only after `useProjectFFEItems` resolves
+ * — 42–84 round-trips on the seeded long paper, all after `openPaper`
+ * returns (D-B28's CDP probe: 0 readiness requests before the scroll, 63 at
+ * steps 17–25, `scrollHeight` still climbing at the same steps). A network
+ * assertion taken before that tail finishes is not measuring the lens.
+ *
+ * `quiet` waits for the browser's own `networkidle` state, then holds for a
+ * further window with ZERO requests to the Supabase origin — the origin is
+ * what the readiness fan-out (and everything else app-driven) actually hits,
+ * where `networkidle` alone can be fooled by an open realtime/keepalive
+ * connection. A 30s cap turns "the load never ends" into a loud failure
+ * rather than a silent hang.
+ */
+const DEFAULT_SUPABASE_ORIGIN = 'http://127.0.0.1:54321';
+
+function supabaseOrigin(): string {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? DEFAULT_SUPABASE_ORIGIN).origin;
+  } catch {
+    return DEFAULT_SUPABASE_ORIGIN;
+  }
+}
+
+export interface QuietResult {
+  /** Every request to the Supabase origin seen while waiting for quiet. */
+  supabaseRequestsSeen: number;
+  /** The `get_project_ffe_readiness` fan-out specifically (D-B28's own
+   *  finding) — logged by callers, never asserted against. */
+  readinessRequestsSeen: number;
+}
+
+export async function quiet(
+  page: Page,
+  opts: { timeoutMs?: number; quietWindowMs?: number } = {},
+): Promise<QuietResult> {
+  const timeoutMs = opts.timeoutMs ?? 30_000;
+  const quietWindowMs = opts.quietWindowMs ?? 1_000;
+  const origin = supabaseOrigin();
+
+  await page.waitForLoadState('networkidle');
+
+  let supabaseRequestsSeen = 0;
+  let readinessRequestsSeen = 0;
+  let lastSupabaseRequestAt = Date.now();
+
+  const onRequest = (req: { url(): string }) => {
+    const url = req.url();
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return;
+    }
+    if (parsed.origin !== origin) return;
+    supabaseRequestsSeen += 1;
+    lastSupabaseRequestAt = Date.now();
+    if (url.includes('get_project_ffe_readiness')) readinessRequestsSeen += 1;
+  };
+
+  page.on('request', onRequest);
+  try {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (Date.now() - lastSupabaseRequestAt >= quietWindowMs) {
+        return { supabaseRequestsSeen, readinessRequestsSeen };
+      }
+      if (Date.now() > deadline) {
+        throw new Error(
+          `the paper never reached network quiet — the initial load has no end ` +
+            `(${supabaseRequestsSeen} Supabase-origin requests seen, ${readinessRequestsSeen} of them readiness fan-out, in ${timeoutMs}ms)`,
+        );
+      }
+      await page.waitForTimeout(100);
+    }
+  } finally {
+    page.off('request', onRequest);
+  }
+}
+
+/**
+ * D-B31's fling census — the falsifier for L-4/R4 that `scrollTo` cannot be:
+ * a real fling delivers dozens of wheel deltas across many frames while the
+ * lens is still catching up, which a single JS-driven jump never exercises.
+ *
+ * Samples every rAF from the FIRST frame where `scrollY` has changed (the
+ * two pre-motion frames are not the fling) until 120ms after the LAST
+ * observed movement, and at each sampled frame classifies
+ * `document.elementFromPoint(innerWidth/2, innerHeight/2)`:
+ *
+ *   - `content`     — inside a `[data-index-region]` root that is either
+ *                     `data-density="full"`, OR quiet but the point is at or
+ *                     above its `[data-region-head]`'s bottom (the head+
+ *                     count line print at every density, OD-13);
+ *   - `blank`       — inside a quiet root BELOW its printed head (the 68/
+ *                     112px reserve with nothing painted there yet), or the
+ *                     point has no root ancestor, sits between two roots,
+ *                     and no `[data-region-head]` on the page intersects the
+ *                     viewport at all;
+ *   - `pre-region`  — no root ancestor and the point is above the first
+ *                     root's top (the letterhead/band paper — this prints at
+ *                     every state and velocity, so it is never "blank" no
+ *                     matter what the lens has or hasn't promoted, D-B31);
+ *   - `post-region` — no root ancestor and the point is at or below the
+ *                     last root's bottom (the colophon/foot reserve).
+ *
+ * `landing` reports the region key (if any) under the centre point at the
+ * LAST sampled frame, and that region's `data-density` at that same moment —
+ * D-B31's "the landing frame must read full `<key>`".
+ */
+export type BlankPaperClass = 'content' | 'blank' | 'pre-region' | 'post-region';
+
+export interface BlankPaperSample {
+  tMs: number;
+  scrollY: number;
+  classification: BlankPaperClass;
+  regionKey: string | null;
+}
+
+export interface BlankPaperCensus {
+  samples: BlankPaperSample[];
+  counts: Record<BlankPaperClass, number>;
+  landing: { regionKey: string | null; density: string | null };
+}
+
+type RawFlingSample = { t: number; scrollY: number; cls: BlankPaperClass; key: string | null };
+type WindowWithFling = Window & {
+  __flingSamples?: RawFlingSample[];
+  __flingDone?: boolean;
+};
+
+export async function blankPaperCensus(
+  page: Page,
+  opts: { deltaY?: number; ticks?: number } = {},
+): Promise<BlankPaperCensus> {
+  const deltaY = opts.deltaY ?? 3200;
+  const ticks = opts.ticks ?? 16;
+
+  await page.evaluate(() => {
+    const win = window as WindowWithFling;
+    win.__flingSamples = [];
+    win.__flingDone = false;
+
+    const classify = (): { cls: string; key: string | null } => {
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      const el = document.elementFromPoint(cx, cy);
+      const roots = Array.from(
+        document.querySelectorAll('[data-document-paper] [data-index-region]'),
+      ) as HTMLElement[];
+      if (roots.length === 0) return { cls: 'pre-region', key: null };
+
+      // W4-C2: a `closest()` from the frame's centre can land on a rail
+      // ladder stop (same attribute, C-4) whenever the sticky rail overlaps
+      // the centre point; require the paper.
+      const ownRootRaw = el ? (el.closest('[data-index-region]') as HTMLElement | null) : null;
+      const ownRoot =
+        ownRootRaw && ownRootRaw.closest('[data-document-paper]') ? ownRootRaw : null;
+      if (ownRoot) {
+        const key = ownRoot.getAttribute('data-index-region');
+        const density = ownRoot.getAttribute('data-density');
+        if (density === 'full') return { cls: 'content', key };
+        const head = ownRoot.querySelector('[data-region-head]') as HTMLElement | null;
+        // W4-C21: a quiet root with NO printed head — care's four
+        // whole-paragraph branches, FF&E's install/selecting posture — has no
+        // head bottom to be below. Falling back to the root's own top made
+        // every point inside it read as `blank`, which is a lookahead miss the
+        // lens never made. Whatever it prints, it is printing something.
+        if (!head) return { cls: 'content', key };
+        const headBottom = head.getBoundingClientRect().bottom;
+        return { cls: cy <= headBottom ? 'content' : 'blank', key };
+      }
+
+      const firstRoot = roots[0]!;
+      const lastRoot = roots[roots.length - 1]!;
+      const firstTop = firstRoot.getBoundingClientRect().top;
+      const lastBottom = lastRoot.getBoundingClientRect().bottom;
+      if (cy < firstTop) return { cls: 'pre-region', key: null };
+      if (cy >= lastBottom) return { cls: 'post-region', key: null };
+
+      const headInFrame = roots.some((root) => {
+        const head = root.querySelector('[data-region-head]');
+        if (!head) return false;
+        const rect = (head as HTMLElement).getBoundingClientRect();
+        return rect.bottom > 0 && rect.top < window.innerHeight;
+      });
+      return { cls: headInFrame ? 'content' : 'blank', key: null };
+    };
+
+    let lastMoveAt = performance.now();
+    let lastScrollY = window.scrollY;
+    let started = false;
+    const start = performance.now();
+
+    const tick = () => {
+      const now = performance.now();
+      const y = window.scrollY;
+      if (y !== lastScrollY) {
+        lastScrollY = y;
+        lastMoveAt = now;
+        started = true;
+      }
+      if (started) {
+        const { cls, key } = classify();
+        win.__flingSamples!.push({ t: now - start, scrollY: y, cls: cls as BlankPaperClass, key });
+      }
+      if (started && now - lastMoveAt > 120) {
+        win.__flingDone = true;
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+
+  // The fling itself — many wheel ticks in a tight loop, ≥3000px in <300ms
+  // wall-clock, which is the actual falsifier: one `scrollTo` jump is a
+  // single frame of layout and never touches the lookahead line frame by
+  // frame the way a real fling does.
+  const perTick = Math.round(deltaY / ticks);
+  for (let i = 0; i < ticks; i += 1) {
+    await page.mouse.wheel(0, perTick);
+  }
+
+  await page.waitForFunction(
+    () => (window as WindowWithFling).__flingDone === true,
+    undefined,
+    { timeout: 15_000 },
+  );
+
+  const raw = await page.evaluate(() => (window as WindowWithFling).__flingSamples ?? []);
+
+  const counts: Record<BlankPaperClass, number> = {
+    content: 0,
+    blank: 0,
+    'pre-region': 0,
+    'post-region': 0,
+  };
+  for (const sample of raw) counts[sample.cls] += 1;
+
+  const last = raw[raw.length - 1];
+  const landingDensity = last?.key
+    ? await page.evaluate(
+        (key) =>
+          // W4-C2: PAPER-scoped. The rail ladder's stops carry the same
+          // `data-index-region` (C-4) and come first in document order, so an
+          // unscoped read returns the ladder button — which never carries
+          // `data-density`, so D-B31's landing gate could never pass.
+          document
+            .querySelector(`[data-document-paper] [data-index-region="${key}"]`)
+            ?.getAttribute('data-density') ?? null,
+        last.key,
+      )
+    : null;
+
+  return {
+    samples: raw.map((s) => ({
+      tMs: s.t,
+      scrollY: s.scrollY,
+      classification: s.cls,
+      regionKey: s.key,
+    })),
+    counts,
+    landing: { regionKey: last?.key ?? null, density: landingDensity },
+  };
 }

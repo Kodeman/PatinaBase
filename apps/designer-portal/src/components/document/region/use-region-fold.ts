@@ -12,12 +12,13 @@
  *
  * R127 splits those two answers by key. On a STOP key — a region with a
  * `[data-index-region]` root, one of the paper's named stops — a derived
- * default no longer FOLDS the region: it opens it `quiet`, printing head,
- * count line and one leader. Only the designer can shut a stop. The three
- * remaining keys (`schedule-rule`, `money-table`, `boards`) have no root for
- * the lens to observe, so they keep I136's derived-default fold — an editor
- * that opens itself on every visit is a claim that dates need adjusting — and
- * their density is always `full`.
+ * default no longer FOLDS the region, and no longer speaks to density either:
+ * every stop she has not shut herself opens `quiet`, printing head, count line
+ * and one leader, until the lens reaches it. Only the designer can shut a stop.
+ * The three remaining keys (`schedule-rule`, `money-table`, `boards`) have no
+ * root for the lens to observe, so they keep I136's derived-default fold — an
+ * editor that opens itself on every visit is a claim that dates need adjusting
+ * — and their density is always `full`.
  *
  * OD-10: nothing migrates. An `patina:doc-fold:<docId>:<region>` key written
  * before R127 is still read the same way, so a designer who had explicitly
@@ -175,9 +176,12 @@ export function useRegionFold({
 
   let density: RegionDensity = 'full';
   if (stop && !forceOpen && explicit === null) {
-    // The derived default that used to fold this stop now only quiets it; the
-    // lens may then say otherwise, and nothing it says is written down.
-    density = positionDensity ?? (latchedDefault === true ? 'quiet' : 'full');
+    // A stop she has not shut is quiet until the lens says otherwise, whatever
+    // its data derived: the derived default was only ever a fold answer, and
+    // under OD-10 a stop can only be folded explicitly. A stop that printed
+    // itself full 2,000px below the frame would be the render cost L-4 exists
+    // to remove. Nothing the lens says is written down.
+    density = positionDensity ?? 'quiet';
   }
 
   const cause = explicit === true ? ('CLOSED BY YOU' as const) : null;

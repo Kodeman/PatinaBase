@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 let mockRooms: Record<string, unknown>[] = [];
@@ -6,6 +6,21 @@ let mockInstruments: Record<string, unknown>[] = [];
 let mockTradeScopes: Record<string, unknown>[] = [];
 let mockAuthority: { data: unknown } = { data: null };
 let mockCoverage: Record<string, { coverage: string }> = {};
+
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -95,6 +110,8 @@ jest.mock('../../line-unfold', () => ({ LineUnfold: () => null }));
 
 import { FFESection } from '../../ffe-section';
 import { RoomLensProvider } from '../../room-lens-context';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { regionBoxSignature } from '../../region/region-box-signature';
 
 /** A furnishing the studio still has to release. */
 const line = (over: Record<string, unknown> = {}) => ({
@@ -330,5 +347,196 @@ describe('FF&E room heading — the room lens press target', () => {
     // the room lens — "Primary bedroom" prints as plain text, not a button.
     const heading = screen.getByText('Primary bedroom');
     expect(heading.closest('button')).toBeNull();
+  });
+});
+
+/**
+ * R127 W4 (L-4, OD-12, OD-13) — the quiet body. Until the lens reaches this
+ * stop, Pieces prints its head, one count line, one leader and one state line;
+ * the schedule itself is not on the paper. `__setDensityForTest(null)` is the lens
+ * with nothing to say, which is exactly what the page renders 2,000px ahead.
+ */
+describe('FF&E quiet body — the lens has not reached this stop', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    mockRooms = [{ id: 'room-1', name: 'Primary bedroom', budget_cents: 0 }];
+    mockItems = [line()];
+    mockInstruments = [];
+    mockTradeScopes = [];
+    mockAuthority = { data: null };
+    mockCoverage = {};
+    act(() => {
+      __setDensityForTest(null);
+    });
+  });
+
+  it('prints the head, one count line and the state line — and no lines', () => {
+    mockItems = [
+      line({ id: 'ffe-1' }),
+      line({ id: 'ffe-2', project_room_id: null, room: null }),
+    ];
+    renderProject();
+
+    expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
+    // W4-R1: the count line IS the head's status line.
+    const head = document.querySelector('[data-region-head="ffe"]')!;
+    expect(head).toHaveTextContent('2 lines · 1 room');
+    expect(
+      document.querySelectorAll('[data-region-count-line]'),
+    ).toHaveLength(0);
+    // The head's own acts are the only acts (mockup governs what prints).
+    expect(
+      screen.queryByRole('button', { name: /See the lines/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '2 lines · not yet on the paper · press Pieces on the index to open',
+      ),
+    ).toHaveClass('sr-only');
+
+    // The schedule is not on the paper: no line, no room head, no Throughout.
+    expect(screen.queryByText('Walnut bed, king')).not.toBeInTheDocument();
+    expect(screen.queryByText('Primary bedroom')).not.toBeInTheDocument();
+    expect(screen.queryByText('Throughout')).not.toBeInTheDocument();
+  });
+
+  it('F3 — prints its leader alone: every overflow act is NOT rendered at quiet', () => {
+    mockItems = [line({ id: 'ffe-1' })];
+    renderProject();
+
+    const head = document.querySelector('[data-region-head="ffe"]')!;
+    // One unspecified line, no claim and no PO: the election returns `spec`,
+    // so entry 0 is the spec-book act and `add-line` / `bill` are overflow.
+    expect(head).toContainElement(
+      screen.getByRole('link', { name: /Spec the 1 unspecified/ }),
+    );
+    // Not rendered, not hidden: `DocumentActionGroup`'s one-leader guard and
+    // `action-visibility.spec.ts` both COUNT `[data-action-key]` nodes, so an
+    // `aria-hidden` copy would still be one of them.
+    for (const key of [
+      'open-add-to-project',
+      'release-for-authorization',
+      'file-ffe-claim',
+      'chase-ffe-po',
+    ]) {
+      expect(
+        document.querySelectorAll(`[data-action-key="${key}"]`),
+      ).toHaveLength(0);
+    }
+    // The ledger prints ONE act beside the head's own Fold control.
+    const acts = Array.from(
+      head.querySelectorAll('[data-action-key]'),
+    ).map((el) => el.getAttribute('data-action-key'));
+    expect(acts.filter((key) => key !== 'ffe-fold')).toEqual([
+      'open-spec-book',
+    ]);
+  });
+
+  it('names the damage the paper holds, and prints nothing where it holds none', () => {
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Ellsworth"
+        mode="project"
+        needs={[
+          {
+            kind: 'damage_claim',
+            text: 'PO-2026-0418 has an open damage claim',
+            actionLabel: 'Review the claim',
+            stamp: { label: 'CLAIM OPEN', color: 'var(--color-terracotta)' },
+            urgent: false,
+          },
+        ]}
+      />,
+    );
+    expect(
+      document.querySelector('[data-region-head="ffe"]'),
+    ).toHaveTextContent('1 line · 1 room · 1 damaged');
+
+    renderProject();
+    const heads = document.querySelectorAll('[data-region-head="ffe"]');
+    expect(heads[heads.length - 1]).toHaveTextContent('1 line · 1 room');
+    expect(heads[heads.length - 1]).not.toHaveTextContent('damaged');
+  });
+
+  it('publishes its density and its reserve on the index root (OD-12)', () => {
+    // The fixture line carries neither a piece nor an invoice, so the head
+    // prints standing exceptions and takes the taller reserve.
+    renderProject();
+    const root = document.querySelector<HTMLElement>('[data-index-region="ffe"]');
+    expect(root).toHaveAttribute('data-density', 'quiet');
+    expect(root!.style.getPropertyValue('--doc-quiet-reserve')).toBe(
+      'var(--doc-quiet-reserve-exc)',
+    );
+  });
+
+  it('takes the short reserve when the head prints no standing exception', () => {
+    mockItems = [line({ product_id: 'product-1' })];
+    mockCoverage = { 'line-1': { coverage: 'invoiced' } };
+    renderProject();
+    const root = document.querySelector<HTMLElement>('[data-index-region="ffe"]');
+    expect(root!.style.getPropertyValue('--doc-quiet-reserve')).toBe(
+      'var(--doc-quiet-reserve-min)',
+    );
+  });
+
+  it('keeps the same head element when the lens promotes it to full', () => {
+    const { rerender } = renderProject();
+    const head = document.querySelector('[data-region-head="ffe"]');
+    // H5 — the root's OUTER box may not depend on its density.
+    const quietBox = regionBoxSignature(
+      document.querySelector('[data-index-region="ffe"]'),
+    );
+    const heading = screen.getByRole('heading', { name: 'Pieces' });
+
+    act(() => {
+      __setDensityForTest('full');
+    });
+    rerender(
+      <FFESection projectId="project-1" projectName="Ellsworth" mode="project" />,
+    );
+
+    expect(document.querySelector('[data-region-head="ffe"]')).toBe(head);
+    expect(screen.getByRole('heading', { name: 'Pieces' })).toBe(heading);
+    expect(
+      document.querySelector('[data-index-region="ffe"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(
+      screen.queryByText(/not yet on the paper/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
+    // The same outer box on the other side of the promotion: same
+    // margins, same border, same reserve, same rules. A stop that grew a
+    // top margin on promotion would move every root below it.
+    expect(
+      regionBoxSignature(
+        document.querySelector('[data-index-region="ffe"]'),
+      ),
+    ).toBe(quietBox);
+  });
+
+  it('lets the fold she made outrank the lens, whatever the lens says', () => {
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
+    act(() => {
+      __setDensityForTest('full');
+    });
+    renderProject();
+
+    expect(document.querySelector('[data-fold-seam]')).not.toBeNull();
+    expect(
+      screen.queryByRole('heading', { name: 'Pieces' }),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-index-region="ffe"]'),
+    ).toHaveAttribute('data-density', 'full');
+  });
+
+  it('leaves install mode full — its head has no quiet form to stand in', () => {
+    renderInstall();
+    expect(
+      document.querySelector('[data-index-region="ffe"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
+    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
   });
 });

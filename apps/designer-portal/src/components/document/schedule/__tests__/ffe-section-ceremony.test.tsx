@@ -12,6 +12,21 @@ let mockReadinessLoading = false;
 let mockReadinessError = false;
 const mockReadinessRefetch = jest.fn();
 
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
@@ -102,6 +117,7 @@ jest.mock('../../line-unfold', () => ({
 }));
 
 import { FFESection } from '../../ffe-section';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 const item = (over: Record<string, unknown> = {}) => ({
   id: 'line-1',

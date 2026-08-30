@@ -21,7 +21,7 @@
  * toast (D2), zero shadows (D4).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   useCoordinationItems,
   useFfeInvoiceCoverage,
@@ -47,9 +47,14 @@ import {
 import { StrataMark } from './strata-mark';
 import { DocumentAction } from './document-action';
 import { RegionHead, type RegionLedgerEntry } from './region/region-head';
-import { useRegionFold } from './region/use-region-fold';
+import { useRegionFold, type RegionDensity } from './region/use-region-fold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
 import { FoldSeam, focusRegionHeading } from './region/fold-seam';
 import { RegionRule } from './region/region-rule';
+import {
+  careQuietStatus,
+  quietStateSentence,
+} from '@/lib/document/lens-quiet-status';
 
 const HEADING_ID = 'care-band-heading';
 const BODY_ID = 'care-band-body';
@@ -62,6 +67,13 @@ const CHECKLIST_ID = 'closing-the-book';
  * those keys), so this is the literal fallback named by the build plan.
  */
 const CARE_INDEX_HEADING_ID = 'care-region-heading';
+/**
+ * OD-12 — the quiet height, held at EVERY density so a body shorter than its
+ * reserve cannot shrink the region on mount. W3-L3 declares both floors as
+ * tokens; `-exc` is for a head that prints standing exceptions, and this head
+ * prints none, so the care root takes the minimum.
+ */
+const QUIET_RESERVE = 'var(--doc-quiet-reserve-min)';
 
 type AnyRecord = any;
 
@@ -214,12 +226,34 @@ export function CareBand({
     onCloseoutReady?.({ ready, closed: done, total });
   }, [onCloseoutReady, ready, done, total]);
 
+  // W4 (C-8) — the lens's fourth voice. The body never reads the DOM: it
+  // subscribes to the store the page-level observer writes, and the fold hook
+  // resolves that against the three voices that outrank it.
+  const positionDensity = useLensDensityStore('care');
+  // W4-C17 — the four branches below print a COMPLETE paragraph and no
+  // `RegionHead`, so a `quiet` density on their root would be an untruthful
+  // attribute: the same defect D-B27 ruled `forceOpen` for on FF&E's
+  // install/care postures. It also mis-feeds the fling census, which falls
+  // back to the root's own top when there is no `[data-region-head]` and
+  // counts every frame inside such a root as blank.
+  const projectClosedOut =
+    project != null && project.status === 'completed';
+  const bandIsProjectOwner =
+    typeof project?.designer_id === 'string' && project.designer_id === user?.id;
+  // Only the three branches that print a complete paragraph AND spread
+  // `indexRootAttrs`. The folded branch prints a `FoldSeam`, which is a
+  // legitimate quiet form, and a non-index mount spreads no attributes at all.
+  const printsWholeParagraph =
+    projectClosedOut || closed || !bandIsProjectOwner;
   const fold = useRegionFold({
     docId: projectId,
     region: 'care',
     defaultFolded: ready === undefined ? null : !nearClose,
-    forceOpen: nearClose,
+    forceOpen: nearClose || printsWholeParagraph,
+    positionDensity,
   });
+  const density: RegionDensity = fold.density;
+
   const unfoldFocusRef = useRef(false);
 
   useEffect(() => {
@@ -236,11 +270,23 @@ export function CareBand({
   // jump focuses `regionHeadingId('care')`, and `.focus()` on an element that
   // cannot take focus is a silent no-op — the reader lands on the region with
   // focus still in the rail.
+  // W4 — this FILE renders `data-density` from the fold's answer (OD-13) and
+  // writes nothing imperatively; the density rAF also writes `'full'` on the
+  // same element, and both owners are deliberate (F6, §5's DOM table): the
+  // imperative write is what makes a deep landing's first paint correct before
+  // React has committed, and React's is what a re-created root mounts with.
+  // They cannot disagree — the store snapshot is read at render time and the
+  // hook only ever writes `'full'` earlier than React would. The reserve rides
+  // the same root at every density (OD-12). Both belong to the index root
+  // only: the second `CareBand` mount is not a stop and has nothing for the
+  // lens to say.
   const indexRootAttrs = indexRoot
     ? {
         'data-index-region': 'care' as const,
         id: CARE_INDEX_HEADING_ID,
         tabIndex: -1,
+        'data-density': density,
+        style: { '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties,
       }
     : {};
 
@@ -385,7 +431,12 @@ export function CareBand({
             name="Closing the book"
             eyebrow="Care · closing the book"
             status={
-              ready ? (
+              // W4-R1 — at quiet the head's own status line IS the count line,
+              // in the ratified form (`0 of 6 closed out`), with no second
+              // paragraph under it.
+              density === 'quiet' ? (
+                careQuietStatus({ closed: done, total: items.length })
+              ) : ready ? (
                 <>
                   <b>Everything is settled</b> — close the book when
                   you&rsquo;re ready
@@ -402,10 +453,19 @@ export function CareBand({
             surfaceKey="care"
             regionKey="closure"
             actions={headLedger}
+            actsAtQuiet={density === 'quiet' ? 'leader' : 'all'}
           />
         </div>
       </div>
 
+      {density === 'quiet' ? (
+        <p className="sr-only">
+          {quietStateSentence(
+            careQuietStatus({ closed: done, total: items.length }),
+            'Closing the book',
+          )}
+        </p>
+      ) : (
       <div id={BODY_ID}>
       {/* The closure checklist — square ticks that fill sage (the Work
           block's stamp grammar, not a SaaS checkbox). */}
@@ -566,6 +626,7 @@ export function CareBand({
         </div>
       )}
       </div>
+      )}
     </div>
   );
 }

@@ -327,7 +327,12 @@ export function LetterheadInstruments({
         // No top margin of its own: the letterhead grid's `gap-y` already
         // separates row 2 from the title at ≥1180, and stacks it under the
         // vitals with the same gap below it.
-        className="[&_.da-act]:text-[11px] min-[1180px]:[&_.da-act]:text-[12px]"
+        // W3-R6 §2 — and the gap between the acts drops from `gap-x-3` (13.5px
+        // at the 18px root) to the band's own 9px below 1180, the last 13.5px
+        // the row needed to fit 327. An attribute-qualified selector, (0,2,0),
+        // so it beats `ActionRegionFrame`'s own single-class `gap-x-3` on
+        // specificity rather than on stylesheet order.
+        className="[&_.da-act]:text-[11px] min-[1180px]:[&_.da-act]:text-[12px] max-[1179px]:[&[data-action-region]]:gap-x-[9px]"
         aria-label="Document letterhead actions"
       >
         {/* W3-R4: the family word is dropped from the PRINT at every width —
@@ -472,8 +477,15 @@ function CallSheetInstrument({ projectId }: { projectId: string }) {
           <span className="text-[var(--color-terracotta-ink)]">{onPaperSuffix}</span>
         ) : undefined
       }
+      // W3-R6 §1 — the count is dropped from the PRINT below 1180, so the
+      // accessible name has to carry it: the four characters ` · N` are what a
+      // 327px run cannot afford, and the ledger's second row cost 44px of the
+      // 390 letterhead. CSS, not a viewport read — nothing in this letterhead
+      // measures the window in JS (N-03).
+      aria-label={`Call sheet · ${roster.length}`}
     >
-      Call sheet · {roster.length}
+      Call sheet
+      <span className="max-[1179px]:hidden"> · {roster.length}</span>
     </DocumentAction>
   );
 }

@@ -76,6 +76,20 @@ jest.mock('@patina/supabase', () => ({
   mapMilestoneRowToScheduleInput: () => ({}),
 }));
 
+// W4 — the lens is a page-level observer and never runs in jsdom, so a stop
+// would arrive quiet here and print no body. Every claim in this suite is about
+// today's FULL body, which is what the lens says once it has reached the root.
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
+
 jest.mock('@/hooks/use-section-work', () => ({
   useSectionTasks: () => ({ data: [] }),
 }));
@@ -170,6 +184,7 @@ jest.mock('../add-line-sheet', () => ({
 }));
 
 import { ScheduleSpine } from '../schedule-spine';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 describe('ScheduleSpine add item action', () => {
   it('opens the existing line sheet without requiring a designer-client record', () => {

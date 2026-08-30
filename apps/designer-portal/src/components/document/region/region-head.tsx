@@ -78,6 +78,20 @@ export interface RegionHeadProps {
    * act, no body). Default `false`: the guard stays on everywhere else.
    */
   allowNoActs?: boolean;
+  /**
+   * W4-R1 — which of the ledger's acts print while the lens has not reached
+   * this region. `'leader'` prints entry 0 alone: proposal §4 R2 says the one
+   * inked leader prints at quiet and "the overflow group does not; it returns
+   * when the region opens". The entries are not rendered rather than rendered
+   * inert, because `DocumentActionGroup`'s one-leader guard and
+   * `action-visibility.spec.ts` both COUNT `[data-action-key]` nodes — an
+   * `aria-hidden` copy would still be one of them.
+   *
+   * The Fold toggle is not one of these: it is the region's own disclosure
+   * control, rendered by this head rather than passed in `actions`, and it
+   * carries the `aria-controls` that must keep naming a mounted body (W4-C7).
+   */
+  actsAtQuiet?: 'all' | 'leader';
 }
 
 export function RegionHead({
@@ -92,8 +106,11 @@ export function RegionHead({
   bodyId,
   onFold,
   allowNoActs = false,
+  actsAtQuiet = 'all',
 }: RegionHeadProps) {
   const showFold = Boolean(bodyId && onFold);
+  const printedActions =
+    actsAtQuiet === 'leader' ? actions.slice(0, 1) : actions;
   const printedExceptions = exceptions.slice(0, 2);
   // The ledger is a NAMED action region, not an anonymous box. The Room heads
   // that predate this primitive name theirs by hand ("Library actions",
@@ -165,14 +182,14 @@ export function RegionHead({
         )}
       </div>
 
-      {(actions.length > 0 || showFold) && (
+      {(printedActions.length > 0 || showFold) && (
         <DocumentActionGroup
           surfaceKey={surfaceKey}
           regionKey={regionKey}
           aria-label={ledgerLabel}
           className="justify-start min-[1180px]:justify-end"
         >
-          {actions.map((entry, index) => {
+          {printedActions.map((entry, index) => {
             const variant: DocumentActionVariant =
               index === 0 ? 'inked' : (entry.variant ?? 'secondary');
             const shared = {

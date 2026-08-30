@@ -44,10 +44,8 @@ import { boardsRoutePath } from '@/lib/document/registry';
 import {
   paperRegionsForSection,
   DOCUMENT_INDEX_LABELS,
-  requestRegionUnfold,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
-import { scrollToRegion } from '@/hooks/use-document-running-index';
 
 const SHEET_FOCUSABLE = [
   'a[href]:not([tabindex="-1"])',
@@ -509,8 +507,12 @@ export function MobileSheets({
                   aria-current={current ? 'true' : undefined}
                   onClick={() => {
                     closeSheet();
-                    requestRegionUnfold(region.key);
-                    scrollToRegion(region.key, projectId ?? '');
+                    // D-B18 — the page's handler, and only it: unfold, force
+                    // every region through the target to full in one flushed
+                    // commit, THEN scroll. This sheet used to run the first and
+                    // third steps itself, landing on a stop the lens had never
+                    // been asked to promote.
+                    activeDoc?.onJumpRegion(region.key);
                   }}
                   className={`flex min-h-11 w-full flex-col justify-center gap-0.5 py-1.5 text-left ${
                     current ? 'doc-room-lifted' : ''

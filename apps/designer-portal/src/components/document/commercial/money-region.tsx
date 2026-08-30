@@ -23,9 +23,10 @@
  * region head now carries it.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { useAccountPage } from '@/hooks/use-account-page';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { type MoneyRung } from '@/lib/document/money-ladder';
 import { money } from '@/lib/document/project-commerce';
@@ -39,12 +40,24 @@ import { useRegionFold, type RegionFoldKey } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { ProjectAuthorityBandForProject } from './project-authority-band';
 import { ProjectCommerceSection } from './project-commerce-section';
+import {
+  moneyQuietStatus,
+  quietStateSentence,
+} from '@/lib/document/lens-quiet-status';
 
 /** The band's Money row is this region's index: it unfolds the region and
  *  scrolls to it. The band rides the top of the paper, so a landing at
  *  `block: 'start'` would put the money under the map that sent the reader
  *  here. The band's height is declared, so the clearance is a constant. */
 const SEAM_CLEARANCE = { scrollMarginTop: 'var(--doc-landing-clear)' };
+
+/** OD-12 — the reserve a quiet region holds. This head prints no standing
+ *  exceptions (`RegionHead` takes no `exceptions` here), so it is the short
+ *  one at every density. */
+const QUIET_RESERVE = {
+  ...SEAM_CLEARANCE,
+  '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+} as CSSProperties;
 
 const HEADING_ID = 'money-region-heading';
 const BODY_ID = 'money-region-body';
@@ -154,10 +167,14 @@ export function MoneyRegion({
   //     chasing the designer — and the table suppresses the AccountBand's own
   //     home, so a folded seam would state it nowhere at all.
   const tableFolded = allSettled ? accountQuiet : null;
-  const { folded, setFolded, cause } = useRegionFold({
+  // R127 L-4 — the lens's reading of this stop. The table seam is not a stop
+  // (`money-table` has no `[data-index-region]` root), so it is never quiet.
+  const positionDensity = useLensDensityStore('money');
+  const { folded, density, setFolded, cause } = useRegionFold({
     docId: projectId,
     region: (tableSeam ? 'money-table' : 'money') satisfies RegionFoldKey,
     defaultFolded: tableSeam ? tableFolded : defaultFolded,
+    positionDensity,
   });
 
   // The running index jumps to readable content, never to a seam.
@@ -190,6 +207,16 @@ export function MoneyRegion({
     : authority
       ? `${money(authority.authorizedCents)} budget · ${money(committedCents)} authorized`
       : `no budget yet · ${money(committedCents)} authorized`;
+
+  // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else.
+  // The two figures are the same two the rail's value line prints (`$X out ·
+  // $Y not drawn`); the PO count belongs to the ledger, not to this line.
+  const quiet = density === 'quiet';
+  const quietStatus = moneyQuietStatus({
+    outCents: ladder.owed.cents,
+    notDrawnCents: ladder.notDrawn.cents,
+    money,
+  });
 
   const ledger: RegionLedgerEntry[] = [
     // R74b — draw an invoice for THIS engagement: the anti-wizard composer,
@@ -226,8 +253,9 @@ export function MoneyRegion({
       <section
         aria-label="Money"
         data-index-region="money"
+        data-density={density}
         className="mt-[var(--doc-region-gap)]"
-        style={SEAM_CLEARANCE}
+        style={QUIET_RESERVE}
       >
         <RegionRule weight="mid" />
         <FoldSeam
@@ -248,22 +276,29 @@ export function MoneyRegion({
     <section
       aria-label="Money"
       data-index-region="money"
+      data-density={density}
       className="mt-[var(--doc-region-gap)]"
-      style={SEAM_CLEARANCE}
+      style={QUIET_RESERVE}
     >
       <RegionRule />
       <RegionHead
         headingId={HEADING_ID}
         name="Money"
-        status={headStatus}
+        status={quiet ? quietStatus : headStatus}
         eyebrow="The money · one region"
         surfaceKey="accounts"
         regionKey="money-head"
         actions={ledger}
+        actsAtQuiet={quiet ? 'leader' : 'all'}
         bodyId={BODY_ID}
         onFold={() => setFolded(true)}
       />
 
+      {quiet ? (
+        <div id={BODY_ID}>
+          <p className="sr-only">{quietStateSentence(quietStatus, 'Money')}</p>
+        </div>
+      ) : (
       <div id={BODY_ID}>
         <ol className="mt-3 space-y-2">
           <Rung
@@ -317,6 +352,7 @@ export function MoneyRegion({
           />
         </div>
       </div>
+      )}
     </section>
   );
 }

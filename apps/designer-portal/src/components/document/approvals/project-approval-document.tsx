@@ -6,11 +6,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type FormEvent,
 } from 'react';
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { useRegionFold } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
 import {
@@ -51,8 +53,19 @@ import {
   type FocusProjectApprovalDetail,
 } from './project-approval-navigation';
 import { SectionLoadingLine } from '../section-loading-line';
+import {
+  approvalsQuietStatus,
+  quietStateSentence,
+} from '@/lib/document/lens-quiet-status';
 
 const APPROVALS_BODY_ID = 'project-approvals-body';
+
+/** OD-12 — the reserve a quiet region holds. This head prints no standing
+ *  exceptions (`RegionHead` takes no `exceptions` here), so it is the short
+ *  one at every density. */
+const QUIET_RESERVE = {
+  '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+} as CSSProperties;
 
 export interface ProjectApprovalPhase {
   id: string;
@@ -181,11 +194,16 @@ export function ProjectApprovalDocument({
   clientProfileId,
   clientName,
   phases,
+  quietLeader = null,
 }: {
   projectId: string;
   clientProfileId: string | null;
   clientName?: string | null;
   phases: readonly ProjectApprovalPhase[];
+  /** NF4-01 / W4-R1 col 3 — the ranked need's act, when a need names this
+   *  region. Elected by the page, which owns the one act table (the same
+   *  destination the band's line 2 presses); null leaves `New approval`. */
+  quietLeader?: { label: string; onAct: () => void } | null;
 }) {
   const approvalsQuery = useProjectApprovals(projectId);
   const candidatesQuery = useProjectApprovalArtifactCandidates(projectId);
@@ -531,10 +549,14 @@ export function ProjectApprovalDocument({
     ? (approvals.length === 0 && !decisionLeadId) ||
       (approvals.length > 0 && approvals.every(isSealed))
     : null;
+  // R127 L-4 — the lens's reading of this stop; null while it has nothing to
+  // say, which is what leaves the region quiet until she is nearly here.
+  const positionDensity = useLensDensityStore('approvals');
   const fold = useRegionFold({
     docId: projectId,
     region: 'approvals',
     defaultFolded,
+    positionDensity,
   });
   const unfoldFocusRef = useRef(false);
   const foldSetFolded = fold.setFolded;
@@ -545,6 +567,53 @@ export function ProjectApprovalDocument({
     [foldSetFolded],
   );
   useRegionUnfoldRequest('approvals', openApprovalsRegion);
+
+  // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else:
+  // the name, the head's own status line (the count line IS that line — there
+  // is no second paragraph), the one inked leader, and one sr-only sentence.
+  const quiet = fold.density === 'quiet';
+  const overdueReviews = approvals.filter(
+    (review) => !isSealed(review) && review.isOverdue,
+  );
+  const overdueCount = overdueReviews.length;
+  // The oldest overdue item's age, derived as the rail derives its own
+  // (`page.tsx`'s ladder facts): the day-count only prints when exactly one
+  // item is overdue.
+  const oldestOverdueDueAt = overdueReviews.reduce<string | null>(
+    (oldest, review) =>
+      oldest === null || review.dueAt < oldest ? review.dueAt : oldest,
+    null,
+  );
+  const overdueDays = oldestOverdueDueAt
+    ? Math.max(
+        0,
+        Math.floor(
+          (Date.now() - new Date(oldestOverdueDueAt).getTime()) / 86_400_000,
+        ),
+      )
+    : null;
+  // NF4-01 — at quiet the head prints ONE act, and it is the sharpest standing
+  // need's when a need names approvals. `actsAtQuiet='leader'` takes entry 0,
+  // so the election is a prepend and the full ledger is untouched: nothing
+  // about the open region's acts changes.
+  const quietLedger: RegionLedgerEntry[] =
+    quiet && quietLeader
+      ? [
+          {
+            key: 'approvals-quiet-leader',
+            label: quietLeader.label,
+            onClick: quietLeader.onAct,
+          },
+          ...headLedger,
+        ]
+      : headLedger;
+
+  const quietStatus = approvalsQuietStatus({
+    // The rail's two counts are disjoint; `openCount` holds the overdue ones.
+    awaiting: Math.max(0, openCount - overdueCount),
+    overdue: overdueCount,
+    overdueDays,
+  });
 
   useEffect(() => {
     if (!fold.folded && unfoldFocusRef.current) {
@@ -562,7 +631,12 @@ export function ProjectApprovalDocument({
         ? 'no approvals authored'
         : `${approvals.length} approval${approvals.length === 1 ? '' : 's'} authored`;
     return (
-      <div data-index-region="approvals" className="mt-[var(--doc-region-gap)]">
+      <div
+        data-index-region="approvals"
+        data-density={fold.density}
+        style={QUIET_RESERVE}
+        className="mt-[var(--doc-region-gap)]"
+      >
         <RegionRule weight="mid" />
         <FoldSeam
           headingId="project-approvals-title"
@@ -585,7 +659,9 @@ export function ProjectApprovalDocument({
     <section
       aria-labelledby="project-approvals-title"
       data-index-region="approvals"
+      data-density={fold.density}
       data-project-approval-document
+      style={QUIET_RESERVE}
       // FID-07 — `py-6` is the region's own breathing room inside its `border-y`,
       // not a gap between roots; it was collateral of the `mt-6 … py-6` →
       // `mt-[var(--doc-region-gap)]` replacement, and without it the head and
@@ -596,14 +672,22 @@ export function ProjectApprovalDocument({
       <RegionHead
         headingId="project-approvals-title"
         name="Client approvals"
-        status={headStatus}
+        status={quiet ? quietStatus : headStatus}
         eyebrow="Exact artifact · named authority"
         surfaceKey="open-document"
         regionKey="approvals-head"
-        actions={headLedger}
+        actions={quietLedger}
+        actsAtQuiet={quiet ? 'leader' : 'all'}
         bodyId={APPROVALS_BODY_ID}
         onFold={() => fold.setFolded(true)}
       />
+      {quiet ? (
+        <div id={APPROVALS_BODY_ID}>
+          <p className="sr-only">
+            {quietStateSentence(quietStatus, 'Client approvals')}
+          </p>
+        </div>
+      ) : (
       <div id={APPROVALS_BODY_ID}>
       <p className="mt-2 max-w-[66ch] text-[14px] leading-relaxed text-[var(--text-muted)]">
         Bind each request to one issued plan, client-ready specification, or
@@ -1367,6 +1451,7 @@ export function ProjectApprovalDocument({
         </ol>
       </div>
       </div>
+      )}
     </section>
   );
 }

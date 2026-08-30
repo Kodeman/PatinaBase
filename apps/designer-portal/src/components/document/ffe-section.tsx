@@ -48,6 +48,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from 'react';
 import {
   deriveLineStamp,
@@ -116,6 +117,11 @@ import {
 } from '@/lib/document/room-state';
 import { useRoomLens } from './room-lens-context';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
+import {
+  piecesQuietStatus,
+  quietStateSentence,
+} from '@/lib/document/lens-quiet-status';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -1073,10 +1079,19 @@ function FFESectionBody({
   const ffeItemsSettled = !isLoading && !isError;
   const ffeDefaultFolded =
     mode === 'project' && ffeItemsSettled ? total === 0 : null;
+  // R127 L-4 — the lens's reading of this stop. `null` while it has nothing to
+  // say, which is what leaves the region quiet until she is nearly here.
+  const ffePositionDensity = useLensDensityStore('ffe');
   const ffeFold = useRegionFold({
     docId: projectId,
     region: 'ffe',
     defaultFolded: ffeDefaultFolded,
+    // Install/care and the release ceremony print heads that are not a
+    // `RegionHead`, so they have no quiet form to stand in; forcing them open
+    // keeps `data-density` honest about what the root actually prints, and
+    // matches the fold they already refuse (`ffeFolded` below).
+    forceOpen: mode !== 'project' || selecting,
+    positionDensity: ffePositionDensity,
   });
   const ffeSetFolded = ffeFold.setFolded;
   const openFfeRegion = useCallback(() => {
@@ -1234,6 +1249,18 @@ function FFESectionBody({
     ...(ffeAwaiting ? [ffeAwaiting] : []),
   ];
 
+  // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else:
+  // its own status line, the one inked leader, one sr-only sentence.
+  const ffeQuiet = ffeFold.density === 'quiet';
+  const ffeDamagedCount = needs.filter(
+    (need) => need.kind === 'damage_claim',
+  ).length;
+  const ffeQuietStatus = piecesQuietStatus({
+    total,
+    rooms: roomGroups.length,
+    damaged: ffeDamagedCount,
+  });
+
   return (
     <section
       id="project-ffe"
@@ -1241,6 +1268,15 @@ function FFESectionBody({
       // install and care spreads pass mode="install", so gating it on
       // `groupByRoom` left their index row pointing at nothing.
       data-index-region="ffe"
+      data-density={ffeFold.density}
+      style={
+        {
+          '--doc-quiet-reserve':
+            ffeExceptions.length > 0
+              ? 'var(--doc-quiet-reserve-exc)'
+              : 'var(--doc-quiet-reserve-min)',
+        } as CSSProperties
+      }
       className="mt-[var(--doc-region-gap)] scroll-mt-16"
     >
       {mode === 'install' || selecting ? (
@@ -1338,11 +1374,12 @@ function FFESectionBody({
               <RegionHead
                 headingId={ffeHeadingId}
                 name="Pieces"
-                status={ffeStatus}
+                status={ffeQuiet ? ffeQuietStatus : ffeStatus}
                 exceptions={ffeExceptions}
                 surfaceKey="project"
                 regionKey="ffe"
                 actions={ffeLedger}
+                actsAtQuiet={ffeQuiet ? 'leader' : 'all'}
                 bodyId={ffeBodyId}
                 onFold={() => ffeFold.setFolded(true)}
               />
@@ -1351,7 +1388,15 @@ function FFESectionBody({
         </>
       )}
 
-      {!ffeFolded && (
+      {!ffeFolded && ffeQuiet && (
+        <div id={ffeBodyId}>
+          <p className="sr-only">
+            {quietStateSentence(ffeQuietStatus, 'Pieces')}
+          </p>
+        </div>
+      )}
+
+      {!ffeFolded && !ffeQuiet && (
       <div id={ffeBodyId}>
       {/* The release gate reads authoritative readiness and stays closed
           without it — so a pending or failed read has to say so, or the act

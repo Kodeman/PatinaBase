@@ -102,8 +102,25 @@ jest.mock('../../strata-mark', () => ({ StrataMark: () => null }));
 jest.mock('../../strata-mini-rule', () => ({ StrataMiniRule: () => null }));
 jest.mock('../../line-unfold', () => ({ LineUnfold: () => null }));
 
+// R127/W4 — this suite mounts a region on its own, with no page to attach the
+// lens (OD-15 attaches `useLensDensity` in `page.tsx`), so nothing ever
+// promotes and every stop would render its quiet form: a head, a count line
+// and one leader, with the body these cases are about absent. The mock is the
+// lens saying `full`, which is what a reader who has reached this region sees.
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
+
 import { FFESection } from '../../ffe-section';
 import { ReleaseLift } from '../../worktable/release-lift';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 const line = (over: Record<string, unknown> = {}) => ({
   id: 'line-1',

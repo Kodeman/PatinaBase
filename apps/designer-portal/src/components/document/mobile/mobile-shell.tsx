@@ -55,6 +55,17 @@ export interface MobileActiveDoc {
   /** DL-04 · this spread carries a client's copy, so the sections sheet prints
    *  the fifth door under `Filed with this job`. */
   clientCopy?: boolean;
+  /** D-B18 · the page's region-jump handler: `requestRegionUnfold` →
+   *  `forceFullThrough` → `scrollToRegion`. The sections sheet mounts in
+   *  `(document)/layout.tsx`, above the page that owns the lens, so the press
+   *  order rides the published document. Without it the sheet scrolls to a
+   *  stop whose body the lens has not been asked to promote, and the landing
+   *  reads a y that the promotion then moves.
+   *
+   *  REQUIRED. It was optional, which made a sections-sheet press a silent
+   *  no-op if a publisher ever forgot it — where the pre-D-B18 code at least
+   *  scrolled. `page.tsx` is the only publisher and always supplies it. */
+  onJumpRegion: (key: DocumentIndexKey) => void;
 }
 
 type Sheet =

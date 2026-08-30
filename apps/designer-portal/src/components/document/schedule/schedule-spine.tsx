@@ -34,6 +34,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from 'react';
 import {
   useCoordinationItems,
@@ -78,13 +79,19 @@ import {
   sortItemsBlockingFirst,
 } from '@/lib/document/coordination-derivation';
 import { phaseAnchorId } from '@/lib/document/phase-anchor';
+import { LENS_COUNT_MAX_CHARS } from '@/lib/document/lens-constants';
 import {
   useScheduleNav,
   type ScheduleRevealTarget,
 } from './schedule-nav-context';
 import { useRippleSession } from './schedule-ripple-context';
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
-import { useRegionFold, type RegionFold } from '../region/use-region-fold';
+import {
+  useRegionFold,
+  type RegionDensity,
+  type RegionFold,
+} from '../region/use-region-fold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
@@ -112,6 +119,18 @@ import {
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { SectionLoadingLine } from '../section-loading-line';
+import {
+  quietStateSentence,
+  scheduleQuietStatus,
+} from '@/lib/document/lens-quiet-status';
+
+/**
+ * OD-12 — the quiet height, held at EVERY density so a body shorter than its
+ * reserve cannot shrink the region on mount. W3-L3 declares both floors as
+ * tokens; `-exc` is for a head that prints standing exceptions, and this head
+ * prints none, so the schedule root takes the minimum.
+ */
+const QUIET_RESERVE = 'var(--doc-quiet-reserve-min)';
 
 /** Best-effort phase_key from a free-typed name (phase_key is nullable + not
  *  unique on project_phases, so a plain slug is safe — no dedupe needed). */
@@ -816,11 +835,51 @@ export function ScheduleSpine({
       pendingProposalCount === 0 &&
       openItemCount === 0;
 
+  // W4 (C-8) — the lens's fourth voice. The body never reads the DOM: it
+  // subscribes to the store the page-level observer writes, and the fold hook
+  // resolves that against the three voices that outrank it.
+  const positionDensity = useLensDensityStore('schedule');
   const scheduleFold = useRegionFold({
     docId: projectId,
     region: 'schedule',
     defaultFolded: scheduleDefaultFolded,
+    positionDensity,
   });
+  const density: RegionDensity = scheduleFold.density;
+
+  // NF4-02 / W4-R1 col 3 — the leader that prints while the schedule stop is
+  // quiet is `Adjust dates`, not `+ New open item`: a reader who has not
+  // reached the schedule is being told when the install stands, and the one
+  // act that answers that line is the dates it names. It arms the same phase
+  // the drafting strip's own `Adjust dates` arms, through the ScheduleNav wire
+  // that already runs Spine → Rule, so there is no second act. `actsAtQuiet`
+  // takes entry 0, so the election is a prepend and the open region's ledger
+  // is untouched.
+  const scheduleHeadLedger: readonly RegionLedgerEntry[] =
+    density === 'quiet' && activePhaseId
+      ? [
+          {
+            key: 'adjust-phase-dates',
+            label: 'Adjust dates',
+            onClick: () => armEdit(activePhaseId),
+          },
+          ...scheduleLedger,
+        ]
+      : scheduleLedger;
+
+  // W4-R1 — the quiet head's own status line: the install day and how far out
+  // it stands. Phases never print here (the rail carries the count), and a
+  // fact that is not known prints NOTHING rather than a placeholder.
+  const scheduleQuietLine = useMemo(
+    () =>
+      scheduleQuietStatus({
+        installStart:
+          mainLane.find((phase) => phase.id === installEntryPhaseId)?.start ??
+          null,
+      }),
+    [mainLane, installEntryPhaseId],
+  );
+
   useEffect(() => {
     scheduleFoldRef.current = scheduleFold;
   });
@@ -1057,6 +1116,13 @@ export function ScheduleSpine({
     <section
       id="document-decision-controls"
       data-index-region="schedule"
+      // W4 — this FILE renders `data-density` from the fold's answer (OD-13)
+      // and writes nothing imperatively; the density rAF also writes `'full'`
+      // on the same element, and both owners are deliberate (F6, §5's DOM
+      // table). The reserve rides the same root at every density so a short
+      // body cannot shrink the region on mount (OD-12).
+      data-density={density}
+      style={{ '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties}
       tabIndex={-1}
       aria-label="Project schedule"
       className="mt-[var(--doc-region-gap)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
@@ -1081,14 +1147,29 @@ export function ScheduleSpine({
           <RegionHead
             headingId={scheduleHeadingId}
             name="Schedule"
-            status={scheduleStatus}
+            status={density === 'quiet' ? scheduleQuietLine : scheduleStatus}
             surfaceKey="open-document"
             regionKey="schedule"
-            actions={scheduleLedger}
+            actions={scheduleHeadLedger}
+            actsAtQuiet={density === 'quiet' ? 'leader' : 'all'}
             bodyId={scheduleBodyId}
             onFold={() => scheduleFold.setFolded(true)}
           />
-          <div id={scheduleBodyId}>{scheduleBody}</div>
+          {density === 'quiet' ? (
+            // W4-C7: the id rides the quiet wrapper too, as approvals, money
+            // and FF&E already do. `RegionHead` renders `aria-controls=
+            // {bodyId}` on the Fold button unconditionally, so a quiet branch
+            // that dropped the id left the button naming a node that is not on
+            // the page — axe `aria-valid-attr-value`, and a screen reader
+            // announcing a region that cannot be reached.
+            <div id={scheduleBodyId}>
+              <p className="sr-only">
+                {quietStateSentence(scheduleQuietLine, 'Schedule')}
+              </p>
+            </div>
+          ) : (
+            <div id={scheduleBodyId}>{scheduleBody}</div>
+          )}
         </>
       )}
 

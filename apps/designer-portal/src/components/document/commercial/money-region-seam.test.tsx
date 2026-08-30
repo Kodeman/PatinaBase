@@ -17,6 +17,21 @@ let mockAccount: Record<string, unknown>;
 let mockPurchaseOrders: Record<string, unknown>;
 let mockInvoices: Record<string, unknown>;
 
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
+
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
   usePurchaseOrders: () => mockPurchaseOrders,
@@ -56,6 +71,7 @@ jest.mock('../account-band', () => ({ AccountBand: () => <div>Account band</div>
 
 import { MoneyRegion } from './money-region';
 import { requestRegionUnfold } from '@/lib/document/document-index';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 /** A project busy enough that the region's OWN default would stand it open —
  *  so a folded seam here is the table's posture and not the sparse default. */

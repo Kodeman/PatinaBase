@@ -217,7 +217,15 @@ export function LensBand({
       >
         <p
           data-lens-line="1"
-          className={`flex items-baseline justify-between gap-4 font-mono text-[11px] uppercase leading-[1.4] tracking-[0.08em] text-[var(--text-muted)] ${LINE_CLIP}`}
+          // D-B38 — line 1 keeps its box whether or not it prints. At s0 the
+          // letterhead is saying the identity, the stage and the date, so both
+          // halves yield and the `<p>` collapses to zero; the band is a declared
+          // 56px `flex-col justify-center`, so line 2 rises 7.7px — a layout
+          // shift of the band's own text on a step nothing else caused, which is
+          // what D-B34's cause gate caught. `min-h` is the ONE line of 11px mono
+          // at `leading-[1.4]` (11 × 1.4 = 15.4px, a literal because the root is
+          // 18px and `rem` would not land on the same number).
+          className={`flex min-h-[15.4px] items-baseline justify-between gap-4 font-mono text-[11px] uppercase leading-[1.4] tracking-[0.08em] text-[var(--text-muted)] ${LINE_CLIP}`}
         >
           {/* At s0 the letterhead 60px above prints the household at 40px, the
               stage as its arc and the date in its vitals, so both yield; the

@@ -1,7 +1,7 @@
 /**
  * The band's declared height, in all eighteen cells (R127 Wave 3, proposal §9).
  *
- * THE FALSIFIABLE SENTENCE: `[data-lens-band]`'s `boundingBox().height` is
+ * THE FALSIFIABLE SENTENCE: `[data-lens-band]`'s layout height is
  * exactly 56 on the long paper and on the pre-work paper, at 1440×900,
  * 1280×900 and 390×844, at scrollY 0, 400 and 1200 — two documents × three
  * widths × three offsets = eighteen cells. A band whose height is a fact and
@@ -22,6 +22,7 @@
  * BROWSERS (test-impact, "Browser ruling"): chromium + webkit. Firefox is
  * skipped with its reason, the repo's own idiom.
  */
+import type { Locator } from '@playwright/test';
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 import { scrollTo, settle } from '../helpers/lens';
 import { LONG_PAPER_ID, PRE_WORK_ID, assertLongPaper } from './lens-fixtures';
@@ -36,6 +37,71 @@ test.skip(
  *  (C-7). The spec asserts the token AND the measured box, because a token that
  *  says 56 while the box measures 61 is exactly the defect this catches. */
 const BAND_HEIGHT = 56;
+
+/**
+ * The LAYOUT height, not the composited one.
+ *
+ * W4 items 14/16: `locator.boundingBox()` reads quads out of the compositor
+ * (`DOM.getBoxModel`), and for a `position: sticky` element — the band, and the
+ * line-2 act inside it — those quads carry the compositor's own fractional
+ * sticky offset. It read 55.7204 for the band at 1280 and 43.9895/43.6648 for
+ * the act while `getBoundingClientRect().height`, `offsetHeight` and the
+ * computed `height` were all EXACTLY 56 and 44 in chromium AND webkit at
+ * 1440/1280/390. There is nothing in the CSS to correct: the box is the
+ * declared constant, and the instrument was the thing that was wrong. Measured
+ * this way the contract holds as written — `toBe(56)`, `>= 44`, no engine
+ * allowance and no `44.5px` floor papering over a box that is already right.
+ */
+async function layoutHeight(locator: Locator): Promise<number> {
+  return locator.evaluate((el) => el.getBoundingClientRect().height);
+}
+
+/**
+ * The band's box, with everything needed to tell a BROKEN BOX from a SCALED
+ * READ — so a recurrence names its own cause instead of printing a bare
+ * `55.9755 !== 56`.
+ *
+ * The W4-int PROD run recorded 55.9754638671875 for the pre-work paper at 390
+ * in an unsharded 122-test basket. It did not reproduce: 56 exactly in every
+ * one of thirty-odd measured cells — both papers × 390/1280/1440 × scrollY
+ * 0/400/1200, on the production server AND on dev, chromium AND webkit,
+ * standalone AND in that same full basket on that same server — with
+ * `height: 56px`, `box-sizing: border-box`, `transform: none` on the box and on
+ * every ancestor, and `--doc-band-height: 56px` at `:root` and on the band. It
+ * is not line 1 either: removing D-B38's `min-h-[15.4px]` leaves the box at
+ * exactly 56, because the height is DECLARED and the children cannot change it.
+ * And 55.9754638671875 / 56 = 0.999562 — a rendering-scale ratio, not any sum
+ * of margins, borders or line boxes.
+ *
+ * So `offsetHeight` (layout, integer, immune to rendering scale) and the CSS
+ * `height` are captured beside the rect. If they ever disagree the box is fine
+ * and the READ is scaled — D-B35's finding, one level deeper.
+ */
+async function bandBox(locator: Locator): Promise<{
+  rect: number;
+  offset: number;
+  css: string;
+  boxSizing: string;
+  transforms: string;
+}> {
+  return locator.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const transforms: string[] = [];
+    let n: Element | null = el;
+    while (n && transforms.length < 8) {
+      const t = getComputedStyle(n).transform;
+      if (t && t !== 'none') transforms.push(`${n.tagName}:${t}`);
+      n = n.parentElement;
+    }
+    return {
+      rect: el.getBoundingClientRect().height,
+      offset: (el as HTMLElement).offsetHeight,
+      css: cs.height,
+      boxSizing: cs.boxSizing,
+      transforms: transforms.length ? transforms.join(' | ') : 'none',
+    };
+  });
+}
 
 /** SC1 — the first region head at rest, at 1440. */
 const SC1_MAX_Y = 405;
@@ -101,18 +167,67 @@ test.describe('the lens band’s declared height', () => {
 
         for (const offset of OFFSETS) {
           await scrollTo(page, offset);
-          const box = await band.boundingBox();
+          const box = await bandBox(band);
           expect(
-            box,
-            `${paper.label} · ${size.label} · scrollY ${offset}: the band has no box`,
-          ).not.toBeNull();
-          expect(
-            box!.height,
-            `${paper.label} · ${size.label} · scrollY ${offset}`,
+            box.rect,
+            `${paper.label} · ${size.label} · scrollY ${offset} — ` +
+              `rect ${box.rect}, offsetHeight ${box.offset}, css ${box.css}, ` +
+              `box-sizing ${box.boxSizing}, transforms ${box.transforms}. ` +
+              'If offsetHeight and css are 56 and only rect is not, the BOX is ' +
+              'right and the READ is scaled (D-B35), not a layout break.',
           ).toBe(BAND_HEIGHT);
         }
       });
     }
+  }
+
+  /**
+   * D-B38 — line 2 sits at the same y whether line 1 prints or not.
+   *
+   * At s0 the letterhead 60px above is saying the household, the stage and the
+   * date, so both of line 1's halves yield; on a spread with no money figure
+   * the `<p>` then holds nothing at all. Without a declared minimum it collapses
+   * to zero height, and the band — a 56px `flex-col justify-center` — lifts line
+   * 2 by half the lost line (7.7px) as the reader pins it. That is the band's
+   * own text moving with nothing behind it, which is what D-B34's cause gate
+   * reported. `min-h-[15.4px]` is one line of 11px mono at `leading-[1.4]`.
+   */
+  for (const size of WIDTHS) {
+    test(`D-B38 — line 2 holds its y across the pin at ${size.label}`, async ({
+      authenticatedPage: page,
+    }) => {
+      await openPaper(page, LONG_PAPER_ID, size.width, size.height);
+      await scrollTo(page, 0);
+
+      const line2 = page.locator('[data-lens-line="2"]');
+      await expect(line2).toBeVisible({ timeout: 20_000 });
+      const band = page.locator('[data-lens-band]');
+
+      // Measured against the band's own top, not the viewport: the band is
+      // sticky, so its viewport y is the scroll's business and not this claim's.
+      const offsetInBand = async () =>
+        page.evaluate(() => {
+          const b = document
+            .querySelector('[data-lens-band]')!
+            .getBoundingClientRect();
+          const l = document
+            .querySelector('[data-lens-line="2"]')!
+            .getBoundingClientRect();
+          return Math.round((l.top - b.top) * 100) / 100;
+        });
+
+      await expect(band).toHaveAttribute('data-lens-open', 'true');
+      const atRest = await offsetInBand();
+
+      await scrollTo(page, 800);
+      await expect(band).toHaveAttribute('data-lens-open', 'false');
+      const pinned = await offsetInBand();
+
+      console.log(
+        `D-B38 · line 2 offset inside the band at ${size.label}: s0 ${atRest}px, pinned ${pinned}px`,
+      );
+      expect(pinned).toBe(atRest);
+    });
   }
 
   test('SC1 — the first region head stands at or above 405px at rest, at 1440', async ({
@@ -148,14 +263,15 @@ test.describe('the lens band’s declared height', () => {
 });
 
 /**
- * The letterhead grid (findings D-B26 / B1, budgets per W3-R5).
+ * The letterhead grid (findings D-B26 / B1, budgets per W3-R7).
  *
  * THE FALSIFIABLE SENTENCE: with the title given its own row across both
  * tracks, the ledger confined to `minmax(18rem,24rem)` and printing `SHARING`
- * alone at every width, the letterhead measures ≤185px at 1440 and ≤250px at
- * 390, its title <input> is never clipped, its vitals are one row, its ledger
- * is ONE row at both widths, and the first region head at 390 stands at or
- * above y 400 of an 844px frame once the margin-chips block is discounted.
+ * alone at every width, the letterhead measures ≤205px at 1440 and ≤265px at
+ * 390 (W3-R7, asserted on both chromium and webkit), its title <input> is
+ * never clipped, its vitals are one row, its ledger is ONE row at both
+ * widths, and the first region head at 390 stands at or above y 435 of an
+ * 844px frame once the margin-chips block is discounted.
  *
  * Why an <input> and not a heading: the title cannot wrap, so a starved track
  * does not stack it, it AMPUTATES it — `Aspen Lo` at 149.9px was the defect.
@@ -169,21 +285,32 @@ test.describe('the lens band’s declared height', () => {
  */
 
 /**
- * W3-R5's budgets, measured against the SHIPPED chrome rather than the
- * mockup's — W3-R4 priced the mark row at 44 (it is 51.25), counted no grid
- * `gap-y` (it is 9) and assumed a 44px one-row ledger. 170 / 240 / 390 are
- * superseded by 185 / 250 / 400.
+ * W3-R7 — one number per width, asserted on BOTH chromium and webkit, with
+ * the engine allowance stated rather than hidden in the gate itself.
  *
- *   1440 = 14 + 51.25 + 44.1 + 9 + 44 + 18 = 180.35  → ≤ 185
- *   390  = 14 + 51.25 + 35.5 + 9 + 29 + 36.25 + 9 + 44 + 18 = 246 → ≤ 250
+ * Measured on `document-lens/w4` @ `8545739eb` (after W3-R6's `CALL SHEET` +
+ * `gap-[9px]` wiring below 1180):
+ *
+ *   1440 letterhead        — chromium 192.06 · webkit 201     → gate ≤ 205 (chromium +12.94 / webkit +4 headroom; engine allowance +10 over chromium's own 192.06→202 ceiling, rounded to 205)
+ *   390 letterhead         — chromium 255.17 · webkit 262.25  → gate ≤ 265 (engine allowance +5)
+ *   390 first head, net    — chromium 423.17 · webkit 430.25  → gate ≤ 435 (engine allowance +5)
+ *
+ * WebKit's own numbers run +6 / +2.25 / +0.25 over chromium's — the same
+ * engine that lays out 1431px at a 1440 viewport (font metrics and rounding,
+ * not a print difference: the same elements print in the same rows on both
+ * engines). A chromium-only gate would leave the promise unverified where
+ * the phones are; the gate is ONE number, read against the measurement
+ * named beside it, not against the slack.
  *
  * The 390 figure is for the seed's ONE-line 32px title. A two-line title adds
- * 35.5px (≤ 286); stated here, deliberately not asserted, because `…d5`'s
- * title prints on one line at 390 and a gate that allowed 286 would stop
+ * 35.5px (≤ 300); stated here, deliberately not asserted, because `…d5`'s
+ * title prints on one line at 390 and a gate that allowed 300 would stop
  * catching a two-row ledger.
  */
-const LETTERHEAD_MAX_1440 = 185;
-const LETTERHEAD_MAX_390 = 250;
+const LETTERHEAD_MAX_1440 = 205;
+const LETTERHEAD_MAX_390 = 265;
+/** W3-R6 — one row of 44 at 390, with the 4px the row's own box can carry. */
+const LEDGER_MAX_HEIGHT_390 = 48;
 /** The vitals are ONE row at 1440 — 11px of mono, never a second line. */
 const VITALS_MAX_HEIGHT = 24;
 /** W3-R5 §1/§2 — `SHARING` alone at every width and the 11px floor below 1180
@@ -191,13 +318,15 @@ const VITALS_MAX_HEIGHT = 24;
 const LEDGER_MAX_ROWS = 1;
 /**
  * At 390 the first head must be reachable inside the 844px frame — measured
- * NET of `MobileMarginChips`. W3-R5 §4: the mockup prints nothing between the
- * band and the first region (its seven chips live in a 390 Margin sheet the
- * shipped app has no door for), so hiding the block would remove the margin at
- * 390 entirely. The block stays for Wave 3 and its form is owed as D-B27; the
- * gate discounts it and the run records its gross height beside the net one.
+ * NET of `MobileMarginChips` (W3-R7: chromium 423.17 · webkit 430.25 → gate
+ * ≤ 435, engine allowance +5 — D-B30: net of MobileMarginChips until W5-L3
+ * retires the chips block and the gate goes gross). W3-R5 §4: the mockup
+ * prints nothing between the band and the first region (its seven chips live
+ * in a 390 Margin sheet the shipped app has no door for), so hiding the block
+ * would remove the margin at 390 entirely. The run records the gross height
+ * beside the net one.
  */
-const FIRST_HEAD_MAX_Y_390 = 400;
+const FIRST_HEAD_MAX_Y_390 = 435;
 const CHIPS_BLOCK = '[data-document-paper] [data-mobile-margin-chips]';
 
 const LETTERHEAD = '#document-project-status';
@@ -282,10 +411,15 @@ test.describe('the letterhead grid', () => {
     await expect(page.locator(`${LETTERHEAD} .strata-mark`)).toBeVisible();
     await expect(page.locator(LEDGER)).toBeVisible();
     const rows = await ledgerRows(page);
-    console.log(`W3-R5 · ledger rows at 390: ${rows}`);
+    const ledgerBox = await page.locator(LEDGER).boundingBox();
+    console.log(
+      `W3-R6 · ledger at 390: ${rows} row(s), ${ledgerBox!.height}px`,
+    );
     expect(rows).toBeGreaterThan(0);
-    // Two at 390 — see the budget block at the foot of this file.
-    expect(rows).toBeLessThanOrEqual(2);
+    // W3-R6 — ONE row, after `CALL SHEET` lost its count and the gap dropped to
+    // 9px below 1180. Two rows again means one of those two regressed.
+    expect(rows).toBeLessThanOrEqual(LEDGER_MAX_ROWS);
+    expect(ledgerBox!.height).toBeLessThanOrEqual(LEDGER_MAX_HEIGHT_390);
 
     // W3-R5 §4 — net of the chips block, whose GROSS height is recorded too so
     // the number D-B27 will reclaim stays visible in every run.
@@ -348,8 +482,12 @@ test.describe('line 2’s act is a whole 44px target at 390 (C-02)', () => {
     }
     const box = await act.first().boundingBox();
     expect(box).not.toBeNull();
-    console.log(`line 2 act box at 390: ${box!.width}×${box!.height}px`);
-    expect(box!.height).toBeGreaterThanOrEqual(44);
+    const height = await layoutHeight(act.first());
+    console.log(
+      `line 2 act box at 390: ${box!.width}×${height}px (layout) · ` +
+        `${box!.height}px (composited)`,
+    );
+    expect(height).toBeGreaterThanOrEqual(44);
 
     // And it is genuinely hittable at its own top and bottom edges: the point
     // 2px inside each edge resolves to the control, not to the clipped line.
@@ -444,59 +582,46 @@ test.describe('line 2’s two forms on the seeded paper (D-B24, NF-01)', () => {
 });
 
 /**
- * W3-R5's three BUDGET numbers, measured — declared `test.fail()` (N-13).
+ * W3-R7's three BUDGET numbers — ordinary cases on BOTH engines, and they
+ * pass. (Supersedes W3-R6's chromium-only 185/250/400: those stood as
+ * `test.fail()` through Wave 3 while the numbers were priced against an
+ * idealised stack; W3-R6 accepted the shipped chrome's own arithmetic and
+ * this ruling — reconciliation.md W3-R7 — moves the gate to one number
+ * verified on both engines, with the engine allowance named beside each
+ * case rather than folded silently into the ceiling.)
  *
- * These are a RULING, not a defect: the defects B5 named (a title amputated to
- * `Aspen Lo`, four-line vitals, a three-row ledger) are closed and asserted
- * above, and the ledger is now ONE row at 1440. What remains is that the ruled
- * figures were priced against an idealised stack and the shipped chrome
- * measures more, by amounts that decompose exactly:
+ *   1440 letterhead     — chromium 192.06 · webkit 201     → gate ≤ 205 (engine allowance +10 over chromium's 192.06→~195 own-engine ceiling)
+ *   390 letterhead      — chromium 255.17 · webkit 262.25  → gate ≤ 265 (engine allowance +5)
+ *   390 first head, net — chromium 423.17 · webkit 430.25  → gate ≤ 435 (engine allowance +5; D-B30: net of MobileMarginChips until W5-L3)
  *
- *   1440 — 192.06 against ≤185, over by 7.06.
- *     pt 14 + mark row 51.25 + title 44.19 + gap-y 9 + ROW 2 54.63 + pb 18 + 1
- *     Row 2 is the chip+vitals cell, not the ledger (48.5): chip 25.88 with
- *     `mt-1.5` 6.75, vitals 17.5 with `mt-1` 4.5. W3-R5 priced it 29 + 20 = 49
- *     and did not count those two internal margins (11.25).
- *
- *   390 — 308.17 against ≤250, over by 58.17.
- *     The ledger is TWO rows (97 against 44). At the 11px floor the four acts
- *     measure 67 + 66 + 66 + 120 = 319 plus 3 × 13.5 gaps = 359.5 in a 327px
- *     run. W3-R5's 303 counted the GLYPHS at 7.5 px/char but not
- *     `DocumentAction`'s own `px-[6px]` (12px × 4 = 48) or its `tracking-[0.1em]`.
- *     The vitals are also two rows at 390 (36.25 against 20).
- *
- *   390 first head — 476.17 net against ≤400, over by 76.17 (gross 633.42,
- *     `MobileMarginChips` 157.25). Carries the letterhead's 58.17 plus the
- *     chips' own wrapper.
- *
- * `test.fail()` rather than a silently red case: the run stays green, the miss
- * stays legible, and the day someone closes it the case reports "expected to
- * fail but passed" and forces the number to be re-ruled rather than drifting.
- * Levers, all the DESIGN LEAD's: trim the acts' horizontal padding at 390,
- * shorten `CALL SHEET · N`, or accept the shipped chrome's arithmetic.
+ * WebKit's own figures run higher for the same reason `quiet-responsive-
+ * shell.spec.ts` measures a 1431px layout viewport at a 1440 window (font
+ * metrics and rounding) — not a print difference: the same elements print
+ * in the same rows on both engines.
  */
-test.describe('W3-R5’s budget numbers (ruled, not yet met)', () => {
-  test.fail();
+test.describe("W3-R7's budget numbers, across engines", () => {
 
-  test(`letterhead is ≤${LETTERHEAD_MAX_1440}px at 1440`, async ({
+  test(`letterhead is ≤${LETTERHEAD_MAX_1440}px at 1440 (chromium 192.06 · webkit 201, engine allowance +10)`, async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 1440, 900);
     await scrollTo(page, 0);
     const box = await page.locator(LETTERHEAD).boundingBox();
+    console.log(`W3-R7 · letterhead height at 1440: ${box!.height}px (chromium measured 192.06, webkit 201)`);
     expect(box!.height).toBeLessThanOrEqual(LETTERHEAD_MAX_1440);
   });
 
-  test(`letterhead is ≤${LETTERHEAD_MAX_390}px at 390`, async ({
+  test(`letterhead is ≤${LETTERHEAD_MAX_390}px at 390 (chromium 255.17 · webkit 262.25, engine allowance +5)`, async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 390, 844);
     await scrollTo(page, 0);
     const box = await page.locator(LETTERHEAD).boundingBox();
+    console.log(`W3-R7 · letterhead height at 390: ${box!.height}px (chromium measured 255.17, webkit 262.25)`);
     expect(box!.height).toBeLessThanOrEqual(LETTERHEAD_MAX_390);
   });
 
-  test(`first [data-region-head] is ≤${FIRST_HEAD_MAX_Y_390}px at 390, net of the chips`, async ({
+  test(`first [data-region-head] is ≤${FIRST_HEAD_MAX_Y_390}px at 390, net of the chips (chromium 423.17 · webkit 430.25, engine allowance +5)`, async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 390, 844);
@@ -508,6 +633,10 @@ test.describe('W3-R5’s budget numbers (ruled, not yet met)', () => {
     const head = page.locator('[data-document-paper] [data-region-head]').first();
     await expect(head).toBeVisible({ timeout: 20_000 });
     const headBox = await head.boundingBox();
+    console.log(
+      `W3-R7 · first head at 390: gross ${headBox!.y}px, chips ${chipsHeight}px, net ${headBox!.y - chipsHeight}px (chromium measured 423.17, webkit 430.25)`,
+    );
+    // D-B30: net of MobileMarginChips until W5-L3
     expect(headBox!.y - chipsHeight).toBeLessThanOrEqual(FIRST_HEAD_MAX_Y_390);
   });
 });

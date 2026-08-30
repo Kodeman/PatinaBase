@@ -56,6 +56,16 @@ async function expectNoHorizontalOverflow(page: AuthenticatedPage) {
 const BULK_FIXTURE_MARK = 'quiet-responsive-shell fixture';
 
 test.describe('Quiet Work responsive document shell', () => {
+  // `mode: 'serial'` shares ONE page across every case, so a case began at
+  // whatever width the previous one left behind — `:204` inherited 1440 from
+  // `:174` and then resized twice inside itself. Every case sets its own width
+  // as its first act (`openProject` / `openDocument` / an explicit
+  // `setViewportSize`), so resetting to the narrow baseline here costs nothing
+  // and makes each case's own first resize the only one it depends on.
+  test.beforeEach(async ({ authenticatedPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+  });
+
   test.beforeAll(async () => {
     const { error } = await adminDb.from('proposal_items').insert([
       {
@@ -94,7 +104,22 @@ test.describe('Quiet Work responsive document shell', () => {
 
   test('keeps drafting bulk actions above persistent bottom chrome', async ({
     authenticatedPage: page,
+    browserName,
   }) => {
+    // W4-L4 webkit allowance (e2e-baseline.md W3-int, triage (b)): WebKit
+    // lays out with a 9px classic scrollbar and evaluates media queries
+    // against the LAYOUT viewport — measured live at a 1440 viewport,
+    // `docClientWidth` reads 1431 in webkit against 1440 in chromium. At the
+    // 1024 viewport this test switches to below, the same 9px puts the
+    // client width at 1015, so `bulkBox.x + bulkBox.width <= 1009` is a
+    // coin-toss on the scrollbar gutter, not a claim this wave's lens
+    // touches (neither the band, the ladder nor the paper). Reproduced on
+    // `document-lens/integration@e6da8bd76` with its own dev server before
+    // this wave existed — pre-existing and environmental.
+    test.skip(
+      browserName === 'webkit',
+      'WebKit scrollbar gutter: 1024 viewport measures a 1015px client width in webkit (9px scrollbar) vs 1024 in chromium, so bulkBox.x+width<=1009 is a coin toss unrelated to the lens (e2e-baseline.md W3-int)',
+    );
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/drafting/${DRAFT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',
@@ -210,20 +235,34 @@ test.describe('Quiet Work responsive document shell', () => {
       band.getByRole('button', { name: /Unfold/i }),
     ).toHaveCount(0);
     await expect(band).not.toHaveAttribute('data-unfolded', 'true');
-    await expect
-      .poll(async () => (await band.boundingBox())?.height ?? 0)
-      .toBe(56);
+    // W4-N-05 / D-B35 — the LAYOUT box, not `boundingBox()`. The band is
+    // `position: sticky`, and Playwright's quads come out of the compositor
+    // carrying its fractional sticky offset (55.7204 at 1280) while
+    // `getBoundingClientRect().height` is exactly 56 in both engines at every
+    // width. `lens-band-height.spec.ts` measures the same way, for the same
+    // reason: the box was right and the instrument was not.
+    const bandLayoutHeight = () =>
+      band.evaluate((el) => el.getBoundingClientRect().height);
+    await expect.poll(bandLayoutHeight).toBe(56);
 
     // Scrolled, the band is still 56px and still un-unfoldable.
     await scrollTo(page, 800);
-    await expect
-      .poll(async () => (await band.boundingBox())?.height ?? 0)
-      .toBe(56);
+    await expect.poll(bandLayoutHeight).toBe(56);
 
+    // The bar is re-laid out by the 1440 -> 390 resize AND by the scroll that
+    // follows it, and on webkit inside the full basket the second of those was
+    // still in flight when the door was first looked for (it passed alone and
+    // failed in the basket, 2 runs of 3). One more settle, and a timeout that
+    // is a wait rather than a race.
+    await settle(page);
+
+    // By its stable hook, not by its name: OD-11/A-01 puts the current stop
+    // INTO the accessible name, so the name changes on every crossing and a
+    // name-based locator races the scroll it is measuring.
     const sectionsDoor = page
       .getByRole('navigation', { name: 'Document bar' })
-      .getByRole('button', { name: /^Open sections/ });
-    await expect(sectionsDoor).toBeVisible();
+      .locator('[data-sections-door]');
+    await expect(sectionsDoor).toBeVisible({ timeout: 15_000 });
     await sectionsDoor.click();
     await expect(
       page.getByRole('dialog', { name: /Sections of this document/i }),
@@ -277,7 +316,19 @@ test.describe('Quiet Work responsive document shell', () => {
 
   test('1440px restores the full labelled spine and settled margin rail', async ({
     authenticatedPage: page,
+    browserName,
   }) => {
+    // W4-L4 webkit allowance (e2e-baseline.md W3-int, triage (b)): the same
+    // 9px classic scrollbar puts webkit's layout viewport at a measured
+    // 1431px against a 1440 viewport, so `min-[1440px]` never matches in
+    // webkit — the shell stays on the 1180-1439 tier and the spine measures
+    // 136px where this test wants >= 199. Reproduced on
+    // `document-lens/integration@e6da8bd76` before this wave existed;
+    // neither the band, the ladder nor the paper are implicated.
+    test.skip(
+      browserName === 'webkit',
+      'WebKit scrollbar gutter: a 1440 viewport measures a 1431px layout viewport in webkit (9px scrollbar), so min-[1440px] never matches and the spine stays at the 136px tier (e2e-baseline.md W3-int)',
+    );
     await openDocument(page, 1440);
 
     await expect(page.getByTestId('mobile-bar')).toBeHidden();
@@ -376,5 +427,67 @@ test.describe('Quiet Work responsive document shell', () => {
         { timeout: 15_000 },
       )
       .toBeLessThanOrEqual(4);
+  });
+
+  // ── OD-4 — find-in-page under `content-visibility: auto` (W4-L4) ──
+  // `[data-passed]` roots get `content-visibility: auto` behind an
+  // `@supports` gate (globals.css, this wave); the browser's own
+  // find-in-page/`window.find()` must still reach that content and scroll it
+  // into view — that is the ENTIRE reason OD-4 spends `contain-intrinsic-
+  // size` rather than something cheaper like `display: none` on a passed
+  // region. Runs chromium + webkit (task-impact, "the find-in-page gate").
+  //
+  // EXPECTED RED until W4-L1/L2/L3 attach the density observer: no
+  // `[data-index-region]` carries `data-passed` yet, so the first assertion
+  // below fails for that reason alone — not yet a content-visibility/find-
+  // in-page defect. The pre-agreed fallback (record as an "OD-4 fallback
+  // candidate" in `e2e-baseline.md` and `test.fixme` this case) applies ONLY
+  // once `data-passed` exists and THIS test still fails on webkit for a
+  // content-visibility reason — that has not happened yet, so it is not
+  // applied here; see `e2e-baseline.md` for the note owed to whoever wires
+  // Wave 4's density observer next.
+  test('find-in-page reaches a passed region’s content (OD-4)', async ({
+    authenticatedPage: page,
+  }) => {
+    await openProject(page, 1440);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await settle(page);
+
+    const passedCount = await page
+      .locator('[data-document-paper] [data-index-region][data-passed]')
+      .count();
+    expect(
+      passedCount,
+      'OD-4: no [data-index-region] carries data-passed after scrolling to the foot — ' +
+        'expected until the density observer (W4-L1/L2/L3) attaches it',
+    ).toBeGreaterThan(0);
+
+    const approvalsPassed = await page
+      .locator('[data-document-paper] [data-index-region="approvals"]')
+      .first()
+      .getAttribute('data-passed');
+    expect(
+      approvalsPassed,
+      'the approvals region (mounted first, scrolled well past) never gains data-passed',
+    ).not.toBeNull();
+
+    // The needle lives once, in the approvals region's full body
+    // (`project-approval-document.tsx`), on every project-kind document.
+    const NEEDLE = 'published budget checkpoint';
+    const found = await page.evaluate((needle) => window.find(needle), NEEDLE);
+    expect(
+      found,
+      `window.find("${NEEDLE}") returned false — content skipped by content-visibility:auto must still be reachable by find-in-page (OD-4)`,
+    ).toBe(true);
+
+    const inView = await page.evaluate(() => {
+      const el = document.querySelector(
+        '[data-document-paper] [data-index-region="approvals"]',
+      );
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.bottom > 0 && rect.top < window.innerHeight;
+    });
+    expect(inView, 'window.find matched but the match did not scroll into view').toBe(true);
   });
 });

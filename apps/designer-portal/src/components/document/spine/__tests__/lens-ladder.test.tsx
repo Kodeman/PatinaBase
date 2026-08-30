@@ -7,7 +7,14 @@
  * Playwright's, and is asserted there.
  */
 
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import { LensLadder } from '../lens-ladder';
 import { DocSpine } from '../../doc-spine';
 import {
@@ -215,14 +222,69 @@ describe('the ladder’s stops', () => {
     ) as HTMLElement;
     expect(pieces).toHaveAttribute('data-region-head-in-frame', 'true');
     expect(within(pieces).getByText('Pieces')).toBeInTheDocument();
-    expect(pieces).not.toHaveTextContent('36 LINES');
 
-    // Every other stop still prints its figure.
+    // D-B37 — was `expect(pieces).not.toHaveTextContent('36 LINES')`. The yield
+    // is a PAINT state now, so the line is still THERE: what changed is that it
+    // is `visibility: hidden` and out of the accessibility tree, not gone.
+    const value = pieces.querySelector<HTMLElement>('[data-ladder-value]')!;
+    expect(value).toHaveTextContent('36 LINES');
+    expect(value).toHaveClass('invisible');
+    expect(value).toHaveAttribute('aria-hidden', 'true');
+    expect(value).toHaveAttribute('data-ladder-value-yielded', 'true');
+
+    // Every other stop still prints its figure, visibly.
     const money = segmentRows().find(
       (row) => row.getAttribute('data-index-region') === 'money',
     ) as HTMLElement;
     expect(money).not.toHaveAttribute('data-region-head-in-frame');
     expect(money).toHaveTextContent('$17,500 OUT · $12,300 UNDRAWN');
+    const moneyValue = money.querySelector<HTMLElement>('[data-ladder-value]')!;
+    expect(moneyValue).not.toHaveClass('invisible');
+    expect(moneyValue).not.toHaveAttribute('aria-hidden');
+  });
+
+  it('D-B37 — a head crossing the frame adds and removes NO row: every value line keeps its box', () => {
+    const valueLines = () =>
+      segmentRows().map(
+        (row) =>
+          row.querySelector('[data-ladder-value]')?.textContent?.trim() ?? null,
+      );
+
+    mount({ activeKey: 'ffe', headInFrame: null });
+    const before = valueLines();
+    expect(before.filter(Boolean).length).toBeGreaterThan(0);
+
+    cleanup();
+    mount({ activeKey: 'ffe', headInFrame: 'ffe' });
+
+    // Same count, same strings — the only difference is paint. An unrendered
+    // line would take its box with it, the segment would fall back toward its
+    // `flex-basis` floor, and `flex-grow: extent` would re-deal the freed height
+    // across every sibling: a rail-wide reflow on a step the reader never
+    // caused (the shift D-B34's cause gate reported).
+    expect(valueLines()).toEqual(before);
+    expect(ladderNav().querySelectorAll('[data-ladder-value]')).toHaveLength(
+      before.length,
+    );
+  });
+
+  it('D-B37 — the room rungs follow the reading index, never the head-in-frame flip', () => {
+    // Pieces is the reading stop: its rungs print.
+    mount({ activeKey: 'ffe', headInFrame: null });
+    const withIndex = ladderNav().querySelectorAll('[data-room-chip]').length;
+    expect(withIndex).toBeGreaterThan(0);
+
+    // The same stop's head crossing the frame changes nothing about the rungs.
+    cleanup();
+    mount({ activeKey: 'ffe', headInFrame: 'ffe' });
+    expect(ladderNav().querySelectorAll('[data-room-chip]')).toHaveLength(
+      withIndex,
+    );
+
+    // And a head in frame on a stop that is NOT the index grows no rungs.
+    cleanup();
+    mount({ activeKey: 'money', headInFrame: 'ffe' });
+    expect(ladderNav().querySelectorAll('[data-room-chip]')).toHaveLength(0);
   });
 
   it('publishes the reading stop on the rail (C-4)', () => {
