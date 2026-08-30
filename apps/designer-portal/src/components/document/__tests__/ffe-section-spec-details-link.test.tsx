@@ -75,6 +75,22 @@ jest.mock('../strata-mini-rule', () => ({ StrataMiniRule: () => null }));
 // exercises only what ffe-section.tsx renders around it.
 jest.mock('../line-unfold', () => ({ LineUnfold: () => null }));
 
+// R127/W4 — this suite mounts a region on its own, with no page to attach the
+// lens (OD-15 attaches `useLensDensity` in `page.tsx`), so nothing ever
+// promotes and every stop would render its quiet form: a head, a count line
+// and one leader, with the body these cases are about absent. The mock is the
+// lens saying `full`, which is what a reader who has reached this region sees.
+jest.mock('@/hooks/use-lens-density', () => ({
+  useLensDensityStore: () => 'full',
+  useLensDensity: () => ({
+    forceFullThrough: () => {},
+    settled: () => Promise.resolve(true),
+    subscribe: () => () => {},
+    getDensity: () => 'full',
+    freeze: () => {},
+  }),
+}));
+
 import { FFESection } from '../ffe-section';
 
 const renderSection = () =>

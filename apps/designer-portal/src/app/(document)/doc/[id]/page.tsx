@@ -62,9 +62,15 @@ import {
 import { type DocumentStateRow, type SectionKey } from '@/lib/document/desk-derivation';
 import {
   paperRegionsForSection,
+  requestRegionUnfold,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
-import { useDocumentRunningIndex } from '@/hooks/use-document-running-index';
+import {
+  scrollToRegion,
+  useDocumentRunningIndex,
+} from '@/hooks/use-document-running-index';
+import { useLensDensity } from '@/hooks/use-lens-density';
+import { useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
 import {
   deriveProposalWatch,
@@ -352,9 +358,18 @@ const NO_BAND_NEEDS: readonly RedLetterRow[] = [];
  * viewport, so it renders the widest form and the effect corrects on the first
  * client frame — the same shape `shelf-panel.tsx` uses for its tier.
  */
-function useLensTier(): LensTier {
+function useLensTier(): { tier: LensTier; read: boolean } {
   const [tier, setTier] = useState<LensTier>('full');
+  // N2-02 — whether the viewport has been read at all. On a client-side
+  // navigation `hydrated` is already true, so without this the impression
+  // fires in the first commit — while the tier is still the server's widest
+  // form — and the correction lands in a re-render the effect's deps ignore,
+  // logging every 390 and 1280 arrival as `full`.
+  const [read, setRead] = useState(false);
   useEffect(() => {
+    // Set in the same commit as the first `read()` below, so the impression
+    // sees one settled tier rather than a correction it cannot record.
+    setRead(true);
     if (typeof window.matchMedia !== 'function') return;
     const full = window.matchMedia('(min-width: 1440px)');
     const desktop = window.matchMedia('(min-width: 1180px)');
@@ -368,7 +383,7 @@ function useLensTier(): LensTier {
       desktop.removeEventListener('change', read);
     };
   }, []);
-  return tier;
+  return { tier, read };
 }
 
 function sameTicketRows(
@@ -1031,6 +1046,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const [folioDrop, setFolioDrop] = useState<File[] | null>(null);
   const mainRef = useRef<HTMLElement>(null);
 
+  // W4 · THE LENS. Attached unconditionally (OD-15): there is no gate to be
+  // off, and the hook must run above the early returns below or its position in
+  // the hook order would change with the resolution state. `mainRef` is the
+  // `[data-document-paper]` element itself.
+  const lens = useLensDensity(mainRef);
+  // D-B19 — the one owner of `data-lens-state`. It writes imperatively, so the
+  // band's pin and a focus landing in a field cost no re-render of the page.
+  const { shellRef: lensShellRef, onPinChange: onLensPinChange } = useLensState({
+    freeze: lens.freeze,
+  });
+
   // Click a spine marker (or a settled bar): unfold that phase and scroll to it.
   // The active phase has no settled bar — the scroll just lands on its section.
   const jumpToSection = useCallback((key: SectionKey, focusId?: string, activate = false) => {
@@ -1538,11 +1564,25 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       : [];
   const {
     activeKey,
-    jump: jumpToRegion,
     mountedKeys,
   } = useDocumentRunningIndex(
     runningIndexRegions.map((region) => region.key),
     row?.project_id ?? '',
+  );
+  const runningIndexProjectId = row?.project_id ?? '';
+  // D-B18 — the press order, in one place. The unfold sets the index's 700ms
+  // lock; `forceFullThrough` commits every region from the top of the paper
+  // through the target in one flushed write, so the heights exist before
+  // `scrollToRegion` reads the target's y two frames later. `jump` from the
+  // running index does the first and third steps only, so the composition is
+  // here rather than there — the hook has no lens.
+  const jumpToRegion = useCallback(
+    (key: DocumentIndexKey) => {
+      requestRegionUnfold(key);
+      lens.forceFullThrough(key);
+      scrollToRegion(key, runningIndexProjectId);
+    },
+    [lens, runningIndexProjectId],
   );
 
   // W3 · the two yields the lens line needs: whether the letterhead is still in
@@ -1761,7 +1801,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   //
   // The deps below are values, not the objects that carry them, because the
   // arrays and models above are rebuilt on every render from the same reads.
-  const lensTier = useLensTier();
+  const { tier: lensTier, read: lensTierRead } = useLensTier();
   const bandTable = worktableOn ? tablePin.composition : null;
   const bandSpread = bandTable ? bandTable.section : (row?.active_section ?? null);
   // The band's stage word where no phase is placed — the same fallback the
@@ -1880,7 +1920,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // N-11 — the loading and error trees print no band, so they must fire no
   // `shown`: an event from a tree with no lens line is a phantom impression.
   const lensLineSettled =
-    hydrated && resolutionState !== 'loading' && resolutionState !== 'error';
+    hydrated &&
+    resolutionState !== 'loading' &&
+    resolutionState !== 'error' &&
+    // N2-02 — and the tier has been read once, so `tier` on the impression is
+    // the viewport's, not the server's.
+    lensTierRead;
   const lensLineProps =
     bandModel && lensLineSettled
       ? {
@@ -2157,8 +2202,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <div
+      ref={lensShellRef}
       data-document-shell
       data-shell-regime="single-below-1180-narrow-to-1439-full-from-1440"
+      // W3 · the reading stop, published where the rail and the mobile bar
+      // already publish it. Absent rather than `"null"` when nothing reads.
+      data-reading-index={activeKey ?? undefined}
       className="relative grid min-h-screen grid-cols-1 overflow-x-clip bg-[var(--doc-paper)] [grid-template-rows:auto_1fr] min-[1180px]:grid-cols-[136px_minmax(0,1fr)] min-[1180px]:[grid-template-rows:none] min-[1440px]:grid-cols-[200px_minmax(0,1fr)_232px] motion-safe:animate-[doc-raise_270ms_ease-out] motion-reduce:animate-[doc-fade_200ms_ease-out]"
     >
       {/* Paper grain at the threshold of perception */}
@@ -2271,6 +2320,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             readingStop={bandStop}
             docId={id}
             onToTop={toTop}
+            onPinChange={onLensPinChange}
             onActed={onLensActed}
             onStandingOpened={onLensStandingOpened}
           />

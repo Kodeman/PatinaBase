@@ -152,10 +152,10 @@ test.describe('the lens band’s declared height', () => {
  *
  * THE FALSIFIABLE SENTENCE: with the title given its own row across both
  * tracks, the ledger confined to `minmax(18rem,24rem)` and printing `SHARING`
- * alone at every width, the letterhead measures ≤185px at 1440 and ≤250px at
- * 390, its title <input> is never clipped, its vitals are one row, its ledger
- * is ONE row at both widths, and the first region head at 390 stands at or
- * above y 400 of an 844px frame once the margin-chips block is discounted.
+ * alone at every width, the letterhead measures ≤195px at 1440 and ≤260px at
+ * 390 (W3-R6), its title <input> is never clipped, its vitals are one row, its
+ * ledger is ONE row at both widths, and the first region head at 390 stands at
+ * or above y 430 of an 844px frame once the margin-chips block is discounted.
  *
  * Why an <input> and not a heading: the title cannot wrap, so a starved track
  * does not stack it, it AMPUTATES it — `Aspen Lo` at 149.9px was the defect.
@@ -171,19 +171,30 @@ test.describe('the lens band’s declared height', () => {
 /**
  * W3-R5's budgets, measured against the SHIPPED chrome rather than the
  * mockup's — W3-R4 priced the mark row at 44 (it is 51.25), counted no grid
- * `gap-y` (it is 9) and assumed a 44px one-row ledger. 170 / 240 / 390 are
- * superseded by 185 / 250 / 400.
+ * `gap-y` (it is 9) and assumed a 44px one-row ledger. 170 / 240 / 390 were
+ * superseded by 185 / 250 / 400, and those by W3-R6's 195 / 260 / 430 — ruled
+ * from the SHIPPED chrome measured on `document-lens/w3-fix` (pass 2), which
+ * carries 11.25px of internal margin inside row 2 (chip `mt-1.5` 6.75, vitals
+ * `mt-1` 4.5) that no earlier pricing counted.
  *
- *   1440 = 14 + 51.25 + 44.1 + 9 + 44 + 18 = 180.35  → ≤ 185
- *   390  = 14 + 51.25 + 35.5 + 9 + 29 + 36.25 + 9 + 44 + 18 = 246 → ≤ 250
+ *   1440 = 14 + 51.25 + 44.19 + 9 + 54.63 + 18 + 1 = 192.06  → ≤ 195
+ *   390  = 308.17 today − 53 (W3-R6's two ledger changes) ≈ 255       → ≤ 260
+ *   390 first head, net of the chips = 476.17 − 53 ≈ 423           → ≤ 430
+ *
+ * The two changes are in this wave's wiring commit: `CALL SHEET · N` prints
+ * `CALL SHEET` below 1180 (the count moves to the `aria-label`, saving ≈31px)
+ * and the ledger's gap drops 13.5 → 9px below 1180 (saving 13.5px), which puts
+ * the four acts at 315px inside a 327px run — one row of 44 by construction.
  *
  * The 390 figure is for the seed's ONE-line 32px title. A two-line title adds
  * 35.5px (≤ 286); stated here, deliberately not asserted, because `…d5`'s
  * title prints on one line at 390 and a gate that allowed 286 would stop
  * catching a two-row ledger.
  */
-const LETTERHEAD_MAX_1440 = 185;
-const LETTERHEAD_MAX_390 = 250;
+const LETTERHEAD_MAX_1440 = 195;
+const LETTERHEAD_MAX_390 = 260;
+/** W3-R6 — one row of 44 at 390, with the 4px the row's own box can carry. */
+const LEDGER_MAX_HEIGHT_390 = 48;
 /** The vitals are ONE row at 1440 — 11px of mono, never a second line. */
 const VITALS_MAX_HEIGHT = 24;
 /** W3-R5 §1/§2 — `SHARING` alone at every width and the 11px floor below 1180
@@ -197,7 +208,7 @@ const LEDGER_MAX_ROWS = 1;
  * 390 entirely. The block stays for Wave 3 and its form is owed as D-B27; the
  * gate discounts it and the run records its gross height beside the net one.
  */
-const FIRST_HEAD_MAX_Y_390 = 400;
+const FIRST_HEAD_MAX_Y_390 = 430;
 const CHIPS_BLOCK = '[data-document-paper] [data-mobile-margin-chips]';
 
 const LETTERHEAD = '#document-project-status';
@@ -282,10 +293,15 @@ test.describe('the letterhead grid', () => {
     await expect(page.locator(`${LETTERHEAD} .strata-mark`)).toBeVisible();
     await expect(page.locator(LEDGER)).toBeVisible();
     const rows = await ledgerRows(page);
-    console.log(`W3-R5 · ledger rows at 390: ${rows}`);
+    const ledgerBox = await page.locator(LEDGER).boundingBox();
+    console.log(
+      `W3-R6 · ledger at 390: ${rows} row(s), ${ledgerBox!.height}px`,
+    );
     expect(rows).toBeGreaterThan(0);
-    // Two at 390 — see the budget block at the foot of this file.
-    expect(rows).toBeLessThanOrEqual(2);
+    // W3-R6 — ONE row, after `CALL SHEET` lost its count and the gap dropped to
+    // 9px below 1180. Two rows again means one of those two regressed.
+    expect(rows).toBeLessThanOrEqual(LEDGER_MAX_ROWS);
+    expect(ledgerBox!.height).toBeLessThanOrEqual(LEDGER_MAX_HEIGHT_390);
 
     // W3-R5 §4 — net of the chips block, whose GROSS height is recorded too so
     // the number D-B27 will reclaim stays visible in every run.
@@ -444,7 +460,7 @@ test.describe('line 2’s two forms on the seeded paper (D-B24, NF-01)', () => {
 });
 
 /**
- * W3-R5's three BUDGET numbers, measured — declared `test.fail()` (N-13).
+ * W3-R6's three BUDGET numbers — ordinary cases, and they pass.
  *
  * These are a RULING, not a defect: the defects B5 named (a title amputated to
  * `Aspen Lo`, four-line vitals, a three-row ledger) are closed and asserted
@@ -469,14 +485,13 @@ test.describe('line 2’s two forms on the seeded paper (D-B24, NF-01)', () => {
  *     `MobileMarginChips` 157.25). Carries the letterhead's 58.17 plus the
  *     chips' own wrapper.
  *
- * `test.fail()` rather than a silently red case: the run stays green, the miss
- * stays legible, and the day someone closes it the case reports "expected to
- * fail but passed" and forces the number to be re-ruled rather than drifting.
- * Levers, all the DESIGN LEAD's: trim the acts' horizontal padding at 390,
- * shorten `CALL SHEET · N`, or accept the shipped chrome's arithmetic.
+ * They stood as `test.fail()` through Wave 3 (N-13) while the numbers were
+ * ruled from an idealised stack. W3-R6 accepted the shipped chrome's own
+ * arithmetic and took the two print levers the design lead named, so the block
+ * is an ordinary describe again: a regression here is now red, not "expected
+ * to fail but passed".
  */
-test.describe('W3-R5’s budget numbers (ruled, not yet met)', () => {
-  test.fail();
+test.describe('W3-R6’s budget numbers', () => {
 
   test(`letterhead is ≤${LETTERHEAD_MAX_1440}px at 1440`, async ({
     authenticatedPage: page,
@@ -508,6 +523,10 @@ test.describe('W3-R5’s budget numbers (ruled, not yet met)', () => {
     const head = page.locator('[data-document-paper] [data-region-head]').first();
     await expect(head).toBeVisible({ timeout: 20_000 });
     const headBox = await head.boundingBox();
+    console.log(
+      `W3-R6 · first head at 390: gross ${headBox!.y}px, chips ${chipsHeight}px, net ${headBox!.y - chipsHeight}px`,
+    );
+    // D-B30: net of MobileMarginChips until W5-L3
     expect(headBox!.y - chipsHeight).toBeLessThanOrEqual(FIRST_HEAD_MAX_Y_390);
   });
 });
