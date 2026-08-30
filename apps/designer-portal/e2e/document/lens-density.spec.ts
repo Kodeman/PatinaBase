@@ -166,6 +166,34 @@ test.describe('the lens density — one direction (D-B16)', () => {
   }) => {
     await openPaper(page);
     await scrollTo(page, 0);
+    // The origin is the SETTLED, QUIET s0 — D-B28's own ruled precondition
+    // (`openPaper → settle → scrollTo(0) → settle → quiet`), and the same
+    // origin the forward-walk invariant below and `lens-cls.spec.ts` already
+    // take.
+    //
+    // WHY, measured against the production build on :3000 (`48758d597`),
+    // chromium, 1440×900, `…d5`: `money`'s offsetTop reads 7739 immediately
+    // after `settle()` and 7715 after `quiet()` — the whole −24px, WITH NO
+    // SCROLLING BETWEEN THE TWO READS. From the quiet origin the round trip is
+    // 7715 → 7715. So the lens is not what moves it.
+    //
+    // What moves it is one element: `<SectionLoadingLine label="Checking
+    // readiness" className="mb-2" />` (`ffe-section.tsx`), a `role="status"`
+    // skeleton gated on `readinessQuery.isLoading`, sitting inside
+    // `#project-ffe`. Its box is 17.25px of content + a 4.5px top margin
+    // (`my-1` at this route's 18px root), its 9px bottom margin collapsing
+    // into the next sibling's 18px; it unmounts when the dependent readiness
+    // fan-out resolves, and `#ffe-region-body` → `#project-ffe` →
+    // `#doc-section-project` → `main` each lose exactly 24.000px. FF&E reads
+    // `data-density="full"` at BOTH ends, so no promotion is involved — and
+    // `region-box-signature.ts` holds the quiet-vs-full box in jest besides.
+    //
+    // D-B28 already ruled this exact query: the fan-out is "the last thing the
+    // initial load does", `__lensSettled()` "is a scroll-velocity settle … it
+    // says nothing about the network", and the remedy it ships is `quiet()`.
+    // The 24px is a coincidence of arithmetic, not `--doc-region-gap`.
+    await quiet(page);
+    await settle(page);
     const before = await regionRects(page);
 
     await scrollSteps(page, 2400);

@@ -184,6 +184,32 @@ describe('LensBand · line 1 yields to the letterhead (OD-1, L-6)', () => {
     expect(line('1')).toHaveTextContent('INSTALL SEP 15 · $17,500 OUT');
   });
 
+  it('D-B38 — line 1 keeps its box at every state, so line 2 never rises under it', () => {
+    // The brief spread is the emptiest line 1 the band can print at s0: no
+    // money, no install, and both left-hand halves yielded to the letterhead.
+    render(
+      <LensBand
+        model={model({
+          spreadKind: 'brief',
+          household: 'Reinhardt lake house',
+          stageWord: 'Brief',
+          stageIndex: null,
+        })}
+        docId="doc-1"
+      />,
+    );
+    expect(line('1')).toHaveTextContent('');
+    // 11px mono at leading-[1.4] = 15.4px, one line, declared. Without it the
+    // `<p>` collapses to 0 and the band's `justify-center` lifts line 2 by
+    // 7.7px — a layout shift of the band's own text with no cause behind it.
+    expect(line('1')).toHaveClass('min-h-[15.4px]');
+
+    // And it is the SAME class once the sentinel is passed and line 1 fills.
+    passSentinel();
+    expect(line('1')).toHaveTextContent('REINHARDT LAKE HOUSE · BRIEF');
+    expect(line('1')).toHaveClass('min-h-[15.4px]');
+  });
+
   it('reports the pin upward so the shell can write its own state (D-B19)', () => {
     const onPinChange = jest.fn();
     render(

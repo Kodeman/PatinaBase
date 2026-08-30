@@ -85,6 +85,10 @@ export function LensLadder({
   // Override 2 — the rooms print while the bracket touches Pieces or a room is
   // in hand, and never at the narrow measure (OD-14), where Pieces carries the
   // room count in its own value instead.
+  // D-B37 — the rungs follow the INDEX (`aria-current`, the reading stop) and
+  // the room in hand, never `headInFrame`: the L-6 yield is a paint state, and
+  // hanging rungs off it would add and remove whole 27px rows as a head crossed
+  // the frame's top band — the same rail reflow the value line's yield caused.
   const printRooms = activeKey === 'ffe' || heldRoom;
 
   // How many rungs the track can hold out of what is left once every stop has
@@ -322,9 +326,24 @@ export function LensLadder({
                 </span>
                 {/* RF-02 — while the stop's own head is in frame the paper is
                     saying the figure at 24px Playfair, so the rail yields the
-                    value and keeps the name. */}
-                {!yielded &&
-                  (segment.value === null ? (
+                    value and keeps the name.
+
+                    D-B37 — the yield is a PAINT change and never a layout one.
+                    Unrendering the line took its box away too: the segment fell
+                    back toward its `flex-basis` floor and `flex-grow: extent`
+                    re-dealt the freed height across every sibling, so one stop's
+                    head crossing the frame reflowed the whole rail — chrome
+                    moving on a step whose reading index never changed, which is
+                    what D-B34's cause gate caught. The line now always renders
+                    and always takes its box; yielded, it is `visibility: hidden`
+                    and out of the accessibility tree. */}
+                <span
+                  className={`block ${yielded ? 'invisible' : ''}`}
+                  aria-hidden={yielded ? 'true' : undefined}
+                  data-ladder-value={segment.key}
+                  data-ladder-value-yielded={yielded ? 'true' : undefined}
+                >
+                  {segment.value === null ? (
                     <span className={`${VALUE_CLASS} text-[var(--text-muted)]`}>
                       {segment.fallback ?? 'Nothing yet'}
                     </span>
@@ -361,7 +380,8 @@ export function LensLadder({
                         {segment.value}
                       </span>
                     </>
-                  ))}
+                  )}
+                </span>
               </>
             );
             return (

@@ -56,6 +56,16 @@ async function expectNoHorizontalOverflow(page: AuthenticatedPage) {
 const BULK_FIXTURE_MARK = 'quiet-responsive-shell fixture';
 
 test.describe('Quiet Work responsive document shell', () => {
+  // `mode: 'serial'` shares ONE page across every case, so a case began at
+  // whatever width the previous one left behind — `:204` inherited 1440 from
+  // `:174` and then resized twice inside itself. Every case sets its own width
+  // as its first act (`openProject` / `openDocument` / an explicit
+  // `setViewportSize`), so resetting to the narrow baseline here costs nothing
+  // and makes each case's own first resize the only one it depends on.
+  test.beforeEach(async ({ authenticatedPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+  });
+
   test.beforeAll(async () => {
     const { error } = await adminDb.from('proposal_items').insert([
       {
@@ -239,13 +249,20 @@ test.describe('Quiet Work responsive document shell', () => {
     await scrollTo(page, 800);
     await expect.poll(bandLayoutHeight).toBe(56);
 
+    // The bar is re-laid out by the 1440 -> 390 resize AND by the scroll that
+    // follows it, and on webkit inside the full basket the second of those was
+    // still in flight when the door was first looked for (it passed alone and
+    // failed in the basket, 2 runs of 3). One more settle, and a timeout that
+    // is a wait rather than a race.
+    await settle(page);
+
     // By its stable hook, not by its name: OD-11/A-01 puts the current stop
     // INTO the accessible name, so the name changes on every crossing and a
     // name-based locator races the scroll it is measuring.
     const sectionsDoor = page
       .getByRole('navigation', { name: 'Document bar' })
       .locator('[data-sections-door]');
-    await expect(sectionsDoor).toBeVisible();
+    await expect(sectionsDoor).toBeVisible({ timeout: 15_000 });
     await sectionsDoor.click();
     await expect(
       page.getByRole('dialog', { name: /Sections of this document/i }),
