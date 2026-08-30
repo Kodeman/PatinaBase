@@ -20,7 +20,7 @@
  * yield) with a different geometry, and is not a substitute for this one.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   LENS_ANNOUNCE_DEDUPE_MS,
   LENS_TURN_OUT_MS,
@@ -37,10 +37,19 @@ import { StandingSheet } from './standing-sheet';
  *  chosen the form that fits (D-B24). */
 const LINE_CLIP = 'overflow-hidden text-ellipsis whitespace-nowrap';
 
-const sameWords = (a: LensBandLine2, b: LensBandLine2) =>
-  a.sentence === b.sentence &&
-  a.act?.label === b.act?.label &&
-  a.standingCount === b.standingCount &&
+/**
+ * The same STANDING ITEM, whatever form it is printed in.
+ *
+ * Compared on the LONG form (N-03): the tier arrives one frame after
+ * hydration, so at 390 the model's first correction swaps `long` for `short`
+ * — the same fact, different words. Comparing the PRINTED sentence would read
+ * that as news and turn the line, blanking the phone's one sentence for 90ms
+ * on every single load.
+ */
+const sameItem = (a: LensBandLine2, b: LensBandLine2) =>
+  a.long.sentence === b.long.sentence &&
+  a.long.act?.label === b.long.act?.label &&
+  a.withheld === b.withheld &&
   a.kind === b.kind;
 
 const prefersReducedMotion = () =>
@@ -74,6 +83,28 @@ export function LensBand({
   const [sheetOpen, setSheetOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const bandRef = useRef<HTMLElement | null>(null);
+  const actRef = useRef<HTMLButtonElement | HTMLAnchorElement | null>(null);
+
+  // C-12 — OD-6 names the `+N MORE` button as BOTH the sheet's trigger and its
+  // fallback, so when the door unmounts while the sheet stands open (an act
+  // inside it resolves a need and the standing set drops to one) the two point
+  // at the same dead node and focus falls to `<body>` — the drop the fallback
+  // exists to prevent. The fallback is a chain instead, resolved at close time
+  // because `DocSheet` reads `.current` in its cleanup, not at open: the door
+  // if it is still standing, else the act line 2 is printing, else the band.
+  const fallbackFocusRef = useMemo(
+    () => ({
+      get current(): HTMLElement | null {
+        const door = moreRef.current;
+        if (door?.isConnected) return door;
+        const act = actRef.current;
+        if (act?.isConnected) return act;
+        return bandRef.current;
+      },
+    }),
+    [],
+  );
 
   // The sentinel is in frame until it is scrolled past: the band is in flow at
   // s0, so it opens by default and on any engine without the observer.
@@ -95,10 +126,19 @@ export function LensBand({
     onPinChange?.(!open);
   }, [onPinChange, open]);
 
+  // N-03 — the first model this band ever holds is not a turn: nothing was
+  // printed before it, and at 390 the pre-hydration model is the wide tier's,
+  // corrected one frame later. A turn there is a 90ms blank on every load.
+  const hasPrinted = useRef(false);
   useEffect(() => {
-    if (model.line2 === printed) return;
-    // Same words, new handler identities: adopt without turning the line.
-    if (sameWords(model.line2, printed)) {
+    if (model.line2 === printed) {
+      hasPrinted.current = true;
+      return;
+    }
+    // Same item — new handler identities, or the tier settling under it.
+    // Adopt in place, with no turn.
+    if (!hasPrinted.current || sameItem(model.line2, printed)) {
+      hasPrinted.current = true;
       setPrinted(model.line2);
       return;
     }
@@ -123,6 +163,21 @@ export function LensBand({
   const stopKey = readingStop?.key ?? null;
   const stopLine = model.announcement;
 
+  // C-11 — line 2 is `aria-atomic`, so every later change to it re-reads the
+  // WHOLE region. Left in place, the stop line is re-announced by a sentence
+  // turn, a new act label or a changed `+N MORE` count — a stop the reader
+  // arrived at minutes ago, read out again. Cleared the moment the printed
+  // line turns; declared before the write below so a commit that changes both
+  // still announces. The write-side dedupe (OD-7) is untouched.
+  //
+  // Keyed on the WORDS, not on `printed`: the page rebuilds the model object
+  // on every settling read, and keying on identity would wipe the stop line
+  // the announce effect had just written, one commit later.
+  const printedWords = `${printed.kind}|${printed.sentence}|${printed.act?.label ?? ''}|${printed.standingCount}`;
+  useEffect(() => {
+    setAnnouncement('');
+  }, [printedWords]);
+
   useEffect(() => {
     if (!stopKey || !stopLine) return;
     const now = Date.now();
@@ -138,7 +193,7 @@ export function LensBand({
   }, [stopKey, stopLine]);
 
   const standing = printed.kind === 'standing';
-  const withheld = printed.standingCount - 1;
+  const withheld = printed.withheld;
   const moreId = `lens-band-more-${docId}`;
 
   return (
@@ -151,7 +206,11 @@ export function LensBand({
         aria-hidden
       />
       <section
+        ref={bandRef}
         aria-label="The job"
+        // C-12 — the last rung of the focus chain. Programmatic only: it never
+        // enters the tab order.
+        tabIndex={-1}
         data-lens-band=""
         data-lens-open={open ? 'true' : 'false'}
         className="doc-rule-mid sticky top-0 z-[4] box-border flex h-[var(--doc-band-height,56px)] flex-col justify-center gap-[2px] bg-[var(--doc-paper)]"
@@ -215,6 +274,7 @@ export function LensBand({
           </span>
           {printed.act && (
             <DocumentAction
+              ref={actRef}
               actionKey={`lens-band-${printed.kind}`}
               surfaceKey="open-document"
               regionKey="lens-band"
@@ -258,7 +318,7 @@ export function LensBand({
         onClose={() => setSheetOpen(false)}
         items={model.standing}
         inputs={model.inputs}
-        triggerRef={moreRef}
+        triggerRef={fallbackFocusRef}
       />
     </>
   );

@@ -40,8 +40,9 @@ export function StandingSheet({
   items: readonly LensStandingItem[];
   /** W3-R2 — the stage's open inputs, their own section under the exceptions. */
   inputs?: readonly LensInputItem[];
-  /** The band's `+N MORE` button — where focus goes when the sheet is put
-   *  back, if the button itself was replaced while the sheet stood open. */
+  /** Where focus goes when the sheet is put back and the door it was opened
+   *  from is gone. The band hands over a CHAIN resolved at close time (C-12):
+   *  the `+N MORE` button, else the act line 2 is printing, else the band. */
   triggerRef?: RefObject<HTMLElement | null>;
 }) {
   return (
@@ -89,7 +90,12 @@ export function StandingSheet({
                 the same register rather than mixing into the list above. */}
             <p
               data-standing-input-heading
-              className={`mt-4 border-t border-[var(--rule-mid)] pt-3 ${EYEBROW}`}
+              // N-06 — a COLOUR token, not `--rule-mid`: that one is the
+              // shorthand `1.5px solid #2C2926`, and `border-<arbitrary>` sets
+              // `border-color` only, so the declaration was invalid and the
+              // rule fell back to `currentColor` — a terracotta hairline
+              // inherited from the eyebrow class on the same element.
+              className={`mt-4 border-t border-[var(--doc-ink-border)] pt-3 ${EYEBROW}`}
             >
               INPUT NEEDED · {inputs.length}
             </p>

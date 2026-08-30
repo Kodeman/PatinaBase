@@ -441,9 +441,91 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
     );
   });
 
+  it('never announces a stop the sentence has since turned past (C-11)', async () => {
+    const readingStop = {
+      key: 'ffe' as const,
+      label: 'Pieces',
+      countLine: '36 lines · 4 rooms · 1 damaged',
+    };
+    const announce = () => line('2').querySelector('[data-lens-announce]');
+    const { rerender } = render(
+      <LensBand
+        model={model({ needs: NEEDS, readingStop })}
+        readingStop={readingStop}
+        docId="doc-1"
+      />,
+    );
+    expect(announce()).toHaveTextContent(
+      'Now at Pieces · 36 lines · 4 rooms · 1 damaged',
+    );
+
+    // Line 2 turns while the stop is unchanged. Line 2 is `aria-atomic`, so
+    // leaving the stop line in place would re-read it with the new sentence —
+    // a stop the reader arrived at minutes ago, announced again.
+    rerender(
+      <LensBand
+        model={model({ needs: NEEDS.slice(2), readingStop })}
+        readingStop={readingStop}
+        docId="doc-1"
+      />,
+    );
+    // The line turns over 90ms; the stop line goes when the new words land.
+    await waitFor(() => expect(announce()).toHaveTextContent(''));
+  });
+
   it('prints no door while only one thing stands', () => {
     render(<LensBand model={model({ needs: NEEDS.slice(0, 1) })} docId="doc-1" />);
     expect(screen.queryByText(/MORE$/)).toBeNull();
+  });
+
+  // C-12 — OD-6 names the `+N MORE` button as BOTH the sheet's trigger and its
+  // fallback, so the one case the fallback exists for is the one it cannot
+  // answer: the door unmounting while the sheet stands open.
+  it('falls back to line 2’s act when the door unmounts under the open sheet', async () => {
+    const { rerender } = render(
+      <LensBand model={model({ needs: NEEDS })} docId="doc-1" />,
+    );
+    const more = screen.getByRole('button', { name: '+3 MORE' });
+    more.focus();
+    fireEvent.click(more);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    // An act inside the sheet resolves three of the four needs; the door goes.
+    rerender(
+      <LensBand model={model({ needs: NEEDS.slice(0, 1) })} docId="doc-1" />,
+    );
+    await waitFor(() => expect(screen.queryByText(/MORE$/)).toBeNull());
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Send a reminder' })).toHaveFocus(),
+    );
+    expect(document.body).not.toHaveFocus();
+  });
+
+  it('falls back to the band itself when neither door nor act is left', async () => {
+    const actless: RedLetterRow[] = [
+      { ...NEEDS[0], actionLabel: null },
+      { ...NEEDS[1], actionLabel: null },
+    ];
+    const { rerender } = render(
+      <LensBand model={model({ needs: actless })} docId="doc-1" />,
+    );
+    const more = screen.getByRole('button', { name: '+1 MORE' });
+    more.focus();
+    fireEvent.click(more);
+
+    rerender(
+      <LensBand model={model({ needs: actless.slice(0, 1) })} docId="doc-1" />,
+    );
+    await waitFor(() => expect(screen.queryByText(/MORE$/)).toBeNull());
+    expect(line('2').querySelector('[data-action-key]')).toBeNull();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(band()).toHaveFocus());
+    expect(document.body).not.toHaveFocus();
   });
 });
 
