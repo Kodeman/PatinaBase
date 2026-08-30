@@ -155,8 +155,18 @@ describe('the ladder’s stops', () => {
     }
   });
 
-  it('says so in words on a spread with nothing on the paper yet (OD-2)', () => {
+  // W5 (OD-2) — the proposal spread now DECLARES five stops, so the empty
+  // track is reached only where a spread puts no region on the paper at all.
+  it('prints the pre-work stops on the proposal spread (OD-2)', () => {
     mount({}, 'proposal');
+    expect(
+      segmentRows().map((row) => row.getAttribute('data-index-region')),
+    ).toEqual(['proposal', 'scope', 'vision', 'investment', 'record']);
+    expect(screen.queryByText('Nothing on this paper yet')).toBeNull();
+  });
+
+  it('says so in words on a spread with nothing on the paper yet (OD-2)', () => {
+    mount({ segments: [] });
     expect(segmentRows()).toHaveLength(0);
     expect(screen.getByText('Nothing on this paper yet')).toBeInTheDocument();
   });
@@ -166,7 +176,7 @@ describe('the ladder’s stops', () => {
   // grow into laid it out at zero height under `overflow-y-auto`. jsdom cannot
   // measure that, so the flex the browser is handed is asserted instead.
   it('gives the empty track the height of the one line it prints, and prints it once, unpressable', () => {
-    mount({}, 'proposal');
+    mount({ segments: [] });
     const track = ladderNav().querySelector('[data-lens-track]') as HTMLElement;
     expect(track.style.flexBasis).toBe('auto');
     expect(track.style.flexGrow).toBe('0');
@@ -379,7 +389,10 @@ describe('the doors', () => {
     );
     expect(doorRows()).toHaveLength(0);
     expect(screen.queryByText('Filed with this job')).toBeNull();
-    expect(screen.getByText('Nothing on this paper yet')).toBeInTheDocument();
+    // W5 — the stops it does carry are its own (OD-2), not the project's.
+    expect(
+      segmentRows().map((row) => row.getAttribute('data-index-region')),
+    ).toEqual(['proposal', 'scope', 'vision', 'investment', 'record']);
   });
 
   it('gives every door a 44px target', () => {

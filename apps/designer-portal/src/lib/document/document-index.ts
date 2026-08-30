@@ -15,12 +15,22 @@
 import type { SectionKey } from './desk-derivation';
 
 export type DocumentIndexKey =
+  // The six Project stops.
   | 'approvals'
   | 'schedule'
   | 'ffe'
   | 'money'
   | 'care'
-  | 'record';
+  | 'record'
+  // The pre-work stops (Wave 5, OD-2). `record` is shared: `PreviousWork`
+  // mounts at the foot of EVERY spread, pre-work included.
+  | 'brief'
+  | 'discovery'
+  | 'direction'
+  | 'proposal'
+  | 'scope'
+  | 'vision'
+  | 'investment';
 
 export interface ProjectPaperRegion {
   key: DocumentIndexKey;
@@ -74,6 +84,66 @@ export const PROJECT_PAPER_ORDER: readonly ProjectPaperRegion[] = [
 ];
 
 /**
+ * The pre-work stops (OD-2/DL-02). Declared BESIDE `PROJECT_PAPER_ORDER`, never
+ * inside it: that array is the Project section's own mount order, and a
+ * pre-work stop never appears on it. The two together are every region the
+ * paper can name.
+ *
+ * The heading ids take no project id — a brief, a discovery and a proposal all
+ * exist before a project does, so an id keyed on one would be keyed on ''.
+ */
+export const PREWORK_PAPER_REGIONS: readonly ProjectPaperRegion[] = [
+  {
+    key: 'brief',
+    label: 'The brief',
+    headingId: () => 'brief-region-heading',
+  },
+  {
+    key: 'discovery',
+    label: 'Discovery',
+    headingId: () => 'discovery-region-heading',
+  },
+  {
+    key: 'direction',
+    label: 'Direction',
+    headingId: () => 'direction-region-heading',
+  },
+  {
+    key: 'proposal',
+    label: 'The proposal',
+    headingId: () => 'proposal-region-heading',
+  },
+  {
+    key: 'scope',
+    label: 'Scope & engagement',
+    headingId: () => 'scope-region-heading',
+  },
+  {
+    key: 'vision',
+    label: 'Design vision',
+    headingId: () => 'vision-region-heading',
+  },
+  {
+    key: 'investment',
+    label: 'The investment',
+    headingId: () => 'investment-region-heading',
+  },
+];
+
+const ALL_PAPER_REGIONS: readonly ProjectPaperRegion[] = [
+  ...PROJECT_PAPER_ORDER,
+  ...PREWORK_PAPER_REGIONS,
+];
+
+/** The declaration for one key. Throws for the same reason `regionHeadingId`
+ *  does: a key in the union with no region declared is a hole, not a default. */
+export function paperRegionFor(key: DocumentIndexKey): ProjectPaperRegion {
+  const region = ALL_PAPER_REGIONS.find((entry) => entry.key === key);
+  if (!region) throw new Error(`no paper region declared for "${key}"`);
+  return region;
+}
+
+/**
  * The regions a given spread actually puts on the paper (C11) — one table, one
  * row per section, so a spread's order is stated once and read everywhere.
  *
@@ -82,11 +152,13 @@ export const PROJECT_PAPER_ORDER: readonly ProjectPaperRegion[] = [
  * (`MoneyRegion` mounts only under `spreadSection === 'project'`,
  * page.tsx:1448) nor Schedule (`ScheduleSpine` — the only
  * `data-index-region="schedule"` root — mounts only under the same branch,
- * page.tsx:1399). The four stages before the work starts put no Project region
- * on the paper at all; Wave 5 gives them their own rows.
+ * page.tsx:1399).
  *
- * Each row is BUILT from `PROJECT_PAPER_ORDER` rather than written out, so a
- * subset can never state an order the paper does not print.
+ * Wave 5 (OD-2) gives the four pre-work spreads their own rows. They mount
+ * their regions in page.tsx's own order rather than in `PROJECT_PAPER_ORDER`,
+ * so those rows are written as key lists and resolved through
+ * `paperRegionFor`; the Project subsets stay BUILT from `PROJECT_PAPER_ORDER`,
+ * so a subset can never state an order the paper does not print.
  */
 function regionsInPaperOrder(
   keys: readonly DocumentIndexKey[],
@@ -95,14 +167,26 @@ function regionsInPaperOrder(
   return PROJECT_PAPER_ORDER.filter((region) => wanted.has(region.key));
 }
 
+function regionsInMountOrder(
+  keys: readonly DocumentIndexKey[],
+): readonly ProjectPaperRegion[] {
+  return keys.map(paperRegionFor);
+}
+
 const SECTION_PAPER_REGIONS: Record<
   SectionKey,
   readonly ProjectPaperRegion[]
 > = {
-  brief: [],
-  discovery: [],
-  direction: [],
-  proposal: [],
+  brief: regionsInMountOrder(['brief', 'record']),
+  discovery: regionsInMountOrder(['discovery', 'record']),
+  direction: regionsInMountOrder(['direction', 'record']),
+  proposal: regionsInMountOrder([
+    'proposal',
+    'scope',
+    'vision',
+    'investment',
+    'record',
+  ]),
   project: PROJECT_PAPER_ORDER,
   install: regionsInPaperOrder(['approvals', 'ffe', 'care', 'record']),
   care: regionsInPaperOrder(['approvals', 'ffe', 'care', 'record']),
@@ -118,20 +202,20 @@ export function paperRegionsForSection(
 export const DOCUMENT_INDEX_KEYS: readonly DocumentIndexKey[] =
   PROJECT_PAPER_ORDER.map((region) => region.key);
 
+/** Every key the union carries, project and pre-work alike — the rail and the
+ *  paper's own head can never name a stop two ways. */
 export const DOCUMENT_INDEX_LABELS: Record<DocumentIndexKey, string> =
   Object.fromEntries(
-    PROJECT_PAPER_ORDER.map((region) => [region.key, region.label]),
+    ALL_PAPER_REGIONS.map((region) => [region.key, region.label]),
   ) as Record<DocumentIndexKey, string>;
 
 export function regionHeadingId(
   key: DocumentIndexKey,
   projectId: string,
 ): string {
-  const region = PROJECT_PAPER_ORDER.find((entry) => entry.key === key);
-  // Unreachable while DocumentIndexKey is exactly the array's keys; the throw
+  // Unreachable while DocumentIndexKey is exactly the declared keys; the throw
   // is what keeps that true if a key is ever added to the union alone.
-  if (!region) throw new Error(`no paper region declared for "${key}"`);
-  return region.headingId(projectId);
+  return paperRegionFor(key).headingId(projectId);
 }
 
 export function regionAnchorSelector(key: DocumentIndexKey): string {

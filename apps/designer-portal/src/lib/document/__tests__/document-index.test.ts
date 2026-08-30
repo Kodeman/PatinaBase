@@ -1,7 +1,9 @@
 import {
   DOCUMENT_INDEX_KEYS,
   DOCUMENT_INDEX_LABELS,
+  PREWORK_PAPER_REGIONS,
   PROJECT_PAPER_ORDER,
+  paperRegionFor,
   paperRegionsForSection,
   regionAnchorSelector,
   regionHeadingId,
@@ -31,13 +33,31 @@ describe('the paper order', () => {
     expect(regionHeadingId('record', 'proj-1')).toBe('previous-work-heading');
   });
 
-  it('labels every key exactly once — the union and the array cannot drift', () => {
+  it('labels every key exactly once — the union and the arrays cannot drift', () => {
     expect(DOCUMENT_INDEX_KEYS).toEqual(
       PROJECT_PAPER_ORDER.map((region) => region.key),
     );
+    // Every key the union carries is declared in exactly one of the two
+    // arrays, and every declared key is labelled.
+    const declared = [
+      ...PROJECT_PAPER_ORDER.map((region) => region.key),
+      ...PREWORK_PAPER_REGIONS.map((region) => region.key),
+    ];
+    expect(new Set(declared).size).toBe(declared.length);
     expect(Object.keys(DOCUMENT_INDEX_LABELS).sort()).toEqual(
-      [...DOCUMENT_INDEX_KEYS].sort(),
+      [...declared].sort(),
     );
+  });
+
+  // OD-2/DL-02 — the pre-work stops' printed names, ruled by the design lead.
+  it('names the pre-work stops', () => {
+    expect(DOCUMENT_INDEX_LABELS.brief).toBe('The brief');
+    expect(DOCUMENT_INDEX_LABELS.discovery).toBe('Discovery');
+    expect(DOCUMENT_INDEX_LABELS.direction).toBe('Direction');
+    expect(DOCUMENT_INDEX_LABELS.proposal).toBe('The proposal');
+    expect(DOCUMENT_INDEX_LABELS.scope).toBe('Scope & engagement');
+    expect(DOCUMENT_INDEX_LABELS.vision).toBe('Design vision');
+    expect(DOCUMENT_INDEX_LABELS.investment).toBe('The investment');
   });
 });
 
@@ -63,14 +83,18 @@ describe('paperRegionsForSection', () => {
     },
   );
 
-  // Wave 5 gives these spreads their own stops; until then the paper carries
-  // no Project region at all and the ladder prints its empty track.
-  it.each(['brief', 'discovery', 'direction', 'proposal'] as const)(
-    'prints nothing on the %s spread',
-    (section) => {
-      expect(paperRegionsForSection(section)).toEqual([]);
-    },
-  );
+  // Wave 5 (OD-2) — the four spreads before the work starts now mount their
+  // own stops, so the ladder has something to index and the lens something to
+  // observe. `record` closes every one of them: `PreviousWork` mounts at the
+  // foot of every spread.
+  it.each([
+    ['brief', ['brief', 'record']],
+    ['discovery', ['discovery', 'record']],
+    ['direction', ['direction', 'record']],
+    ['proposal', ['proposal', 'scope', 'vision', 'investment', 'record']],
+  ] as const)('prints the pre-work stops on the %s spread', (section, keys) => {
+    expect(keysOf(section)).toEqual([...keys]);
+  });
 
   it('never states an order the project spread does not print', () => {
     const paperOrder = PROJECT_PAPER_ORDER.map((region) => region.key);
@@ -83,10 +107,24 @@ describe('paperRegionsForSection', () => {
 
 describe('regionHeadingId', () => {
   it('answers for every declared key', () => {
-    for (const key of DOCUMENT_INDEX_KEYS) {
+    for (const key of [
+      ...PROJECT_PAPER_ORDER,
+      ...PREWORK_PAPER_REGIONS,
+    ].map((region) => region.key)) {
       expect(regionHeadingId(key, 'proj-1')).toBeTruthy();
     }
     expect(regionHeadingId('ffe', 'proj-1')).toBe('ffe-region-heading-proj-1');
+  });
+
+  // A brief, a discovery and a proposal all exist before a project does, so a
+  // pre-work heading keyed on one would be keyed on ''.
+  it('keys no pre-work heading on a project id', () => {
+    for (const region of PREWORK_PAPER_REGIONS) {
+      expect(regionHeadingId(region.key, 'proj-1')).toBe(
+        regionHeadingId(region.key, ''),
+      );
+    }
+    expect(regionHeadingId('proposal', '')).toBe('proposal-region-heading');
   });
 
   // The guard that keeps the union and the array one declaration: widen
@@ -95,6 +133,9 @@ describe('regionHeadingId', () => {
     expect(() =>
       regionHeadingId('accounts' as DocumentIndexKey, 'proj-1'),
     ).toThrow('no paper region declared for "accounts"');
+    expect(() => paperRegionFor('accounts' as DocumentIndexKey)).toThrow(
+      'no paper region declared for "accounts"',
+    );
   });
 });
 
