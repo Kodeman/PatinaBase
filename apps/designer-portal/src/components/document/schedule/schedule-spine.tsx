@@ -926,10 +926,7 @@ export function ScheduleSpine({
         />
       )}
 
-      {loading ? (
-        // Nothing heavy while the resolver's sources load — one quiet line.
-        <SectionLoadingLine label="resolving the schedule" className="mt-4" />
-      ) : (
+      {loading ? null : (
         <>
           {resolvedPhases.length === 0 ? (
             // ── Birth — a schedule with no phases yet (R100). Three quiet
@@ -1147,7 +1144,14 @@ export function ScheduleSpine({
           <RegionHead
             headingId={scheduleHeadingId}
             name="Schedule"
-            status={density === 'quiet' ? scheduleQuietLine : scheduleStatus}
+            status={
+              <>
+                {density === 'quiet' ? scheduleQuietLine : scheduleStatus}
+                {loading && (
+                  <SectionLoadingLine variant="inline" label="resolving the schedule" />
+                )}
+              </>
+            }
             surfaceKey="open-document"
             regionKey="schedule"
             actions={scheduleHeadLedger}
