@@ -117,6 +117,7 @@ jest.mock('@patina/supabase', () => ({
   useProjectRoster: () => ({ data: [] }),
   useDiscovery: () => ({ data: undefined, isLoading: false, isError: false }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  useCoordinationItems: () => ({ data: [] }),
   useResolvedSchedule: () => ({
     phases: [],
     milestones: [],
@@ -158,6 +159,13 @@ jest.mock('@patina/supabase', () => ({
       }),
     }),
   }),
+}));
+
+// W5-R1: the Margin sheet's whole-margin derivation lives in this local
+// hook, not `@patina/supabase` — mocking it keeps the fix top-of-file only
+// (no QueryClientProvider needed: the real `useQuery` inside it never runs).
+jest.mock('@/hooks/use-margin-items', () => ({
+  useMarginItems: () => ({ data: [] }),
 }));
 
 /* The money ladder under the ticket's Money row: four commercial reads that
