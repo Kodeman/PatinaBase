@@ -124,6 +124,10 @@ export interface LadderPreworkFacts {
   openedOn: string | null;
   /** Rooms in the proposal's scope — `Scope & engagement`'s extent. */
   scopeRooms: number;
+  /** W5-R5 §2 — the stage phrase the section stage line prints (`Core ·
+   *  stage 03`), reported up by `SectionStageLineMount` so the stop's head,
+   *  its ladder value and the strip inside it are one fact. */
+  stageLine: string | null;
   /** The proposal's own total, in cents (`proposals.total_amount`). */
   investmentCents: number | null;
 }
@@ -499,6 +503,14 @@ function proposalRegister(facts: LadderPreworkFacts | undefined, now: Date): Reg
 }
 
 /**
+ * W5-R5 §2 — `Scope & engagement` prints the SECTION STAGE LINE's own phrase,
+ * because that is where the fact comes from: the strip that prints
+ * `CORE · STAGE 03` is now this stop's body (N2), so the head, the rail and
+ * the body state one thing. The room count rides behind it when the paper has
+ * rooms (`CORE · STAGE 03 · 4 ROOMS`, ≤ 30). This supersedes W5-R2 §2's
+ * `4 ROOMS IN SCOPE` (and with it W5-C6/F3), which named a count with no
+ * printed source beside it.
+ *
  * W5-C10 — `Not written yet` (vision) and `Not sent yet` (proposal) sit beside
  * OD-2's `NOTHING YET` / `NOT KNOWN YET` pair, and they are RULED, not stray:
  * W5-R2 §1 writes `Not written yet` for an empty description, and W5-R4's F3
@@ -516,22 +528,30 @@ function scopeRegister(facts: LadderPreworkFacts | undefined): Register {
   // then swap to `4 rooms in scope` — a count-line text change under the
   // reader for a number the stop already held, which is what W5-R3 rules the
   // loading register out of doing.
-  if (facts.scopeRooms <= 0) return empty('Nothing yet');
-  const word = facts.scopeRooms === 1 ? 'ROOM' : 'ROOMS';
-  // W5-C6/F3 — W5-R2 §2 rules the rail's own value as `4 ROOMS IN SCOPE` and
-  // counts it (16 chars ≤ 30). Dropping `IN SCOPE` left the rail and the paper
-  // stating one stop two ways, which is the thing one derivation exists to
-  // prevent.
+  const word = facts.scopeRooms === 1 ? 'room' : 'rooms';
+  const rooms = facts.scopeRooms > 0 ? `${facts.scopeRooms} ${word}` : null;
+  // The strip's own sub-label leads with the section's name
+  // (`Scope & Engagement · Core · stage 03`). The head prints that name one
+  // line above and the rail prints it as the segment's name, so the stop would
+  // say it three times: drop the leading segment when it IS the stop's name.
+  const stopName = DOCUMENT_INDEX_LABELS.scope.toLowerCase();
+  const stage =
+    facts.stageLine
+      ?.split(' · ')
+      .filter(
+        (part, index) => !(index === 0 && part.trim().toLowerCase() === stopName),
+      )
+      .join(' · ')
+      .trim() || null;
+  if (!stage && !rooms) return empty('Nothing yet');
+  const value = [stage?.toUpperCase(), rooms?.toUpperCase()]
+    .filter(Boolean)
+    .join(' · ');
+  const words = [stage, rooms].filter(Boolean).join(' · ');
   return {
-    value: cap(`${facts.scopeRooms} ${word} IN SCOPE`, LENS_VALUE_MAX_CHARS),
-    narrowValue: cap(
-      `${facts.scopeRooms} ${word} IN SCOPE`,
-      LENS_VALUE_MAX_CHARS,
-    ),
-    countLine: cap(
-      `${facts.scopeRooms} ${word.toLowerCase()} in scope`,
-      LENS_COUNT_MAX_CHARS,
-    ),
+    value: cap(value, LENS_VALUE_MAX_CHARS),
+    narrowValue: cap(value, LENS_VALUE_MAX_CHARS),
+    countLine: cap(words, LENS_COUNT_MAX_CHARS),
     fallback: null,
     extent: facts.scopeRooms,
   };

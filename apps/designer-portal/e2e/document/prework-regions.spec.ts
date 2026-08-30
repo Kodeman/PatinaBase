@@ -28,7 +28,7 @@
  * skipped with its reason, the repo's own idiom.
  */
 import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
-import { scrollTo, settle } from "../helpers/lens";
+import { quiet, scrollTo, settle } from "../helpers/lens";
 import { PRE_WORK_ID } from "./lens-fixtures";
 
 test.describe.configure({ mode: "serial" });
@@ -60,6 +60,11 @@ async function openPaper(page: AuthenticatedPage): Promise<void> {
     timeout: 30_000,
   });
   await settle(page);
+  // Every claim in this file is about a PRINTED STRING, and every one of them
+  // is derived from a query: `settle()` answers only for the lens, so a read
+  // taken on its own catches `Reading…` where the proposal's own fetch has
+  // not landed. D-B28's ruled precondition.
+  await quiet(page);
 }
 
 /** The head's own status line — the first `<p>` immediately after its
@@ -105,12 +110,17 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
     expect(status).toBe("Not written yet");
   });
 
-  test('scope prints "Nothing yet" — no rooms, payments, phases or exclusions on this document', async ({
+  test('scope prints the section stage line — the fact its own body prints (W5-R5 §2)', async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page);
     const status = (await statusOf(page, "scope").textContent())?.trim();
-    expect(status).toBe("Nothing yet");
+    // W5-R5 §2 supersedes W5-R2 §2's `4 ROOMS IN SCOPE` (and W5-C6/F3): the
+    // stop's fact HAS a source — the stage-line strip, which is now this
+    // stop's body (N2) — so the head states it rather than `Nothing yet`.
+    // The stop's own name is not repeated: the head prints it one line above.
+    expect(status).toBe("Core · stage 03");
+    expect(status).not.toContain("Scope & Engagement");
   });
 
   test('the proposal stop prints "Sent <date> · unopened <n>d"', async ({
@@ -142,7 +152,11 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
         `"${key}" printed an empty status line`,
       ).toBeGreaterThan(0);
       expect(status, `"${key}" printed "${status}"`).not.toMatch(/—|--|\$0\b/);
-      const isKnownFact = /^sent |^\$|complete$/i.test(status);
+      // W5-R5 §2 — `scope` prints the section stage line's own phrase
+      // (`Core · stage 03`), a fact with a printed source in the stop's own
+      // body, so it joins the known-fact shapes beside `Sent …`, `$…` and
+      // `… complete`.
+      const isKnownFact = /^sent |^\$|complete$|^core · stage /i.test(status);
       if (!isKnownFact) {
         expect(
           EMPTY_ROW_SENTENCES,
@@ -159,8 +173,10 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
     await expect(page.locator('[data-ladder-segment="vision"]')).toContainText(
       "NOTHING YET",
     );
+    // W5-R5 §2 — `scope` is no longer a stop with no number: its value is the
+    // section stage line's own phrase, the fact its body prints (N2).
     await expect(page.locator('[data-ladder-segment="scope"]')).toContainText(
-      "NOTHING YET",
+      "CORE · STAGE 03",
     );
   });
 
@@ -195,5 +211,56 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
       railStage,
       `rail stage phrase carried an ordinal: "${railStage}"`,
     ).not.toMatch(/\d+\s*OF\s*\d+/i);
+
+    // F2 / W5-R4 — ONE line. `stageWord` is derived from the ticket's phase,
+    // which no pre-work spread has, so the head used to fall through to
+    // `activeSection.sub` and print a second span (`Awaiting signature`, `In
+    // discovery`, `Respond by Aug 12`) — a sentence never meant as a rail
+    // line, and the half of W5-R2 §3's "the two agree" that the ordinal check
+    // above cannot see.
+    await expect(page.locator('[data-spine-stage-count]')).toHaveCount(0);
+    expect(railStage.split('\n').filter((l) => l.trim()).length).toBe(1);
+  });
+
+  test('W5-R5 §2 (N2) — the stage-line strip is the scope stop\'s body, so the first thing after the band is a region head', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page);
+
+    // The strip printed `SCOPE & ENGAGEMENT · CORE · STAGE 03` between the
+    // band and the first head — a free-standing band under the letterhead,
+    // which is what OD-2 gives every stop a head to avoid.
+    const firstAfterBand = await page.evaluate(() => {
+      const band = document.querySelector('[data-lens-band]');
+      if (!band) return null;
+      let node = band.nextElementSibling as HTMLElement | null;
+      while (node && node.getBoundingClientRect().height === 0) {
+        node = node.nextElementSibling as HTMLElement | null;
+      }
+      if (!node) return null;
+      const region = node.matches('[data-index-region]')
+        ? node
+        : node.querySelector('[data-index-region]');
+      return {
+        tag: node.tagName,
+        stageLineInside: Boolean(node.querySelector('[data-section-stage-line]')),
+        isStageLine: node.matches('[data-section-stage-line]'),
+        firstRegion: region?.getAttribute('data-index-region') ?? null,
+      };
+    });
+
+    expect(firstAfterBand, 'nothing follows the band').not.toBeNull();
+    expect(
+      firstAfterBand!.isStageLine,
+      'the stage-line strip still stands between the band and the first head',
+    ).toBe(false);
+    expect(firstAfterBand!.firstRegion).toBe('proposal');
+
+    // And it prints INSIDE `scope`, which is the fact its head now states.
+    await expect(
+      page.locator(
+        '[data-index-region="scope"] [data-section-stage-line]',
+      ),
+    ).toHaveCount(1);
   });
 });

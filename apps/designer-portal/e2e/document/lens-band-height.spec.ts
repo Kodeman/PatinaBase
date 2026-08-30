@@ -167,6 +167,25 @@ test.describe('the lens band’s declared height', () => {
 
         for (const offset of OFFSETS) {
           await scrollTo(page, offset);
+          // W5-C3 — measure a STILL box. The read landed mid-`doc-raise`
+          // (globals.css, "D12 pick-up: raise-to-fill (~270ms)", `transform:
+          // scale(0.986)` → `none`) and reported 55.9854736328125 for a box
+          // whose `offsetHeight` and computed `height` were both exactly 56;
+          // 56 × 0.99974 = 55.98544, and the failure message printed the
+          // matrix. `getBoundingClientRect()` is the COMPOSITED rect, so a
+          // scaled ancestor scales the read.
+          //
+          // Waiting here rather than in `settle()`: a global "no finite
+          // animation is running" precondition slowed every settle in the
+          // basket (8.3m → 11.2m) and moved the ladder-budget baseline into
+          // the data-arrival window, turning D-B37 red. This is the one
+          // measurement that needs the page to be geometrically still, so it
+          // is the one place that waits for it.
+          await expect
+            .poll(async () => (await bandBox(band)).transforms, {
+              timeout: 5_000,
+            })
+            .toBe('none');
           const box = await bandBox(band);
           expect(
             box.rect,

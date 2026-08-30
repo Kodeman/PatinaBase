@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useProjectWorkflow, useResolvedSchedule } from "@patina/supabase";
 import {
   phaseFidelity,
@@ -25,11 +25,19 @@ const NO_SELECTION: ScheduleSelection = { activePhaseId: null, reason: "none" };
 export interface SectionStageLineMountProps {
   projectId: string | null;
   activeSection: SectionKey;
+  /**
+   * W5-R5 §2 (N2) — the stage phrase this strip prints, reported up so the
+   * `scope` stop's head and its ladder segment can state the SAME fact
+   * (`Core · stage 03`) rather than a second derivation of it. The same
+   * report-up shape `onEyebrow`/`onDamagedOn` already use.
+   */
+  onStageLine?: (subLabel: string | null) => void;
 }
 
 export function SectionStageLineMount({
   projectId,
   activeSection,
+  onStageLine,
 }: SectionStageLineMountProps) {
   const workflow = useProjectWorkflow(projectId);
   const schedule = useResolvedSchedule(projectId ?? undefined);
@@ -74,6 +82,11 @@ export function SectionStageLineMount({
       ),
     [activeSection, projectId, workflow.data, resolverFacts],
   );
+
+  const reportStageLine = onStageLine;
+  useEffect(() => {
+    reportStageLine?.(model?.subLabel ?? null);
+  }, [reportStageLine, model?.subLabel]);
 
   // The schedule query joins the loading gate so no half-derived label flashes
   // — a stage named before its position resolves would be the same lie in a

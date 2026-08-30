@@ -2106,7 +2106,12 @@ describe('DocumentPage guide activation', () => {
       // `mockProposalData` is undefined here — nothing has gone out — and the
       // row says so in words rather than with a dash or a $0 husk.
       expect(statusOf('proposal')).toContain('Not sent yet');
-      expect(statusOf('scope')).toContain('Nothing yet');
+      // W5-R5 §2 — `scope`'s fact HAS a source: the section stage line, which
+      // is now this stop's own body (N2). So it prints the stage phrase, not
+      // `Nothing yet` — and not the stop's name again, which the head prints
+      // one line above.
+      expect(statusOf('scope')).toContain('Core · stage 03');
+      expect(statusOf('scope')).not.toContain('Scope & Engagement · Core');
       expect(statusOf('investment')).toContain('Nothing yet');
       expect(statusOf('vision')).not.toMatch(/—|--|\$0/);
     });

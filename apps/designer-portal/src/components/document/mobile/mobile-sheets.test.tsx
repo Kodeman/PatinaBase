@@ -542,7 +542,8 @@ describe('the Sections sheet no longer carries the margin (D-B30)', () => {
         expect.objectContaining({
           body: 'the console arrives Tuesday',
           anchorKind: 'section',
-          anchorId: 'ffe',
+          // `margin_notes.anchor_id` is a uuid; a stop key is not one.
+          anchorId: null,
         }),
         expect.objectContaining({ onSuccess: expect.any(Function) }),
       );

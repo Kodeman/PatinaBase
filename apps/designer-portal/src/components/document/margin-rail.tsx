@@ -406,7 +406,11 @@ export function MarginRail({
   const { data: fileChanges } = useProjectFileChangeNotifications(projectId);
   const markFileChangeRead = useMarkProjectFileChangeRead();
   const [openId, setOpenId] = useState<string | null>(null);
-  const [settledOpen, setSettledOpen] = useState(false);
+  // W5-R5 §3 — one fold per group, keyed by the group's own key, so folding
+  // `THE WHOLE JOB` never folds `BESIDE PIECES` with it.
+  const [settledOpenByGroup, setSettledOpenByGroup] = useState<
+    Record<string, boolean>
+  >({});
 
   // R12 ordering: needs-action floats → anchor order → "Settled · N" fold.
   // Line anchors rank by the document's rendered FF&E order (shared cache
@@ -424,35 +428,53 @@ export function MarginRail({
   // RF-03: one group per anchor that has members, in the paper's own region
   // order with the whole job last. The order is stable by construction, so a
   // card never moves between groups (or up the rail) as the reading stop moves.
+  // W5-R5 §3 (N3) — a group's heading counts EVERY item in the group, at every
+  // width. The rail counted `raised` only and printed `BESIDE PIECES · 1`
+  // where the 390 sheet, counting the whole group, printed `· 3`: one margin,
+  // two numbers, and the desktop one under-reported what was there. Settled
+  // items stay folded — that is R12 — but the fold now lives INSIDE its own
+  // group rather than as a separate section below every group, so folding
+  // never changes a heading's count.
   const anchorGroups = useMemo(() => {
-    const byKey = new Map<DocumentIndexKey | null, MarginItemRow[]>();
-    for (const row of raised) {
+    const bucketFor = (
+      map: Map<DocumentIndexKey | null, MarginItemRow[]>,
+      row: MarginItemRow,
+    ) => {
       const key = marginAnchorRegion(row);
-      const bucket = byKey.get(key);
+      const bucket = map.get(key);
       if (bucket) bucket.push(row);
-      else byKey.set(key, [row]);
-    }
+      else map.set(key, [row]);
+    };
+    const raisedBy = new Map<DocumentIndexKey | null, MarginItemRow[]>();
+    const settledBy = new Map<DocumentIndexKey | null, MarginItemRow[]>();
+    for (const row of raised) bucketFor(raisedBy, row);
+    for (const row of settled) bucketFor(settledBy, row);
+
     const ordered: Array<{
       key: DocumentIndexKey | null;
       heading: string;
       rows: MarginItemRow[];
+      settledRows: MarginItemRow[];
+      count: number;
     }> = [];
+    const push = (key: DocumentIndexKey | null, heading: string) => {
+      const rows = raisedBy.get(key) ?? [];
+      const settledRows = settledBy.get(key) ?? [];
+      if (rows.length + settledRows.length === 0) return;
+      ordered.push({
+        key,
+        heading,
+        rows,
+        settledRows,
+        count: rows.length + settledRows.length,
+      });
+    };
     for (const region of PROJECT_PAPER_ORDER) {
-      const rows = byKey.get(region.key);
-      if (rows?.length) {
-        ordered.push({
-          key: region.key,
-          heading: `BESIDE ${marginRegionName(region.key)}`,
-          rows,
-        });
-      }
+      push(region.key, `BESIDE ${marginRegionName(region.key)}`);
     }
-    const wholeJob = byKey.get(null);
-    if (wholeJob?.length) {
-      ordered.push({ key: null, heading: 'THE WHOLE JOB', rows: wholeJob });
-    }
+    push(null, 'THE WHOLE JOB');
     return ordered;
-  }, [raised]);
+  }, [raised, settled]);
 
   const publishSummary = useContext(MarginSummaryContext);
   const worst = useMemo(() => worstMarginKind(raised), [raised]);
@@ -756,31 +778,37 @@ export function MarginRail({
                     : 'text-[var(--text-muted)]'
                 }
               >
-                · {group.rows.length}
+                · {group.count}
               </span>
             </p>
             {group.rows.map(renderItem)}
+            {/* R12 — resolved items fold away, inside the group they belong
+                to, so the heading's number never moves when she folds. */}
+            {group.settledRows.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  aria-expanded={Boolean(settledOpenByGroup[group.key ?? 'whole-job'])}
+                  onClick={() =>
+                    setSettledOpenByGroup((open) => ({
+                      ...open,
+                      [group.key ?? 'whole-job']: !open[group.key ?? 'whole-job'],
+                    }))
+                  }
+                  className="group mb-1.5 inline-flex min-h-11 min-w-11 items-center font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+                >
+                  <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+                    {group.settledRows.length} settled{' '}
+                    {settledOpenByGroup[group.key ?? 'whole-job'] ? '↑' : '↓'}
+                  </span>
+                </button>
+                {settledOpenByGroup[group.key ?? 'whole-job'] &&
+                  group.settledRows.map(renderItem)}
+              </>
+            )}
           </div>
         );
       })}
-
-      {/* R12: resolved items fold away — the fold label is the only number
-          anywhere in the margin. */}
-      {settled.length > 0 && (
-        <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2">
-          <button
-            type="button"
-            aria-expanded={settledOpen}
-            onClick={() => setSettledOpen((v) => !v)}
-            className="group mb-1.5 inline-flex min-h-11 min-w-11 items-center font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
-          >
-            <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
-              Settled · {settled.length} {settledOpen ? '↑' : '↓'}
-            </span>
-          </button>
-          {settledOpen && settled.map(renderItem)}
-        </div>
-      )}
 
       {/* R55: the decision composer — a DocSheet overlay; the document stays
           mounted beneath (D1). Keyed so switching new↔draft remounts fresh. */}

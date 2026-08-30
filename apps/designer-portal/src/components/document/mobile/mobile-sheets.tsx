@@ -1007,11 +1007,20 @@ export function MobileSheets({
           projectId,
           proposalId,
           body,
-          // The reading stop is a SECTION anchor (the rail's own line anchor
-          // needs an FF&E line id, which a sheet opened from the bar has not
-          // got); with no stop, the note is about the whole job.
+          // The reading stop makes this a SECTION anchor, as W5-R4(a) rules.
+          //
+          // `anchorId` stays NULL, and it has to: `margin_notes.anchor_id` is
+          // a `uuid` (`00196_per_item_claims_and_margin_notes.sql`), and a
+          // stop key is `'ffe'`, not a uuid — writing one is a 400
+          // (`22P02 invalid input syntax for type uuid`), which is how this
+          // was found. A section-anchored note therefore files under THE
+          // WHOLE JOB, exactly where every other section-anchored margin item
+          // already files (`useMarginSheet` groups BESIDE only on `'line'`).
+          // The anchor line still tells her where she was standing when she
+          // wrote it. Recording WHICH stop would need a column the table has
+          // not got — flagged for a ruling, not invented here.
           anchorKind: anchorStop ? 'section' : 'letterhead',
-          anchorId: anchorStop ?? null,
+          anchorId: null,
           dueDate: noteDue
             ? new Date(`${noteDue}T17:00:00`).toISOString()
             : null,

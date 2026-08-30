@@ -1669,6 +1669,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const ladderMountedKeys = declaredLadderKeys.filter(
     (key) => !indexedKeys.has(key) || mountedKeys.includes(key),
   );
+  // W5-R5 §2 (N2) — the section stage line's phrase, reported up from the
+  // strip that now stands inside the `scope` stop as its body.
+  const [preworkStageLine, setPreworkStageLine] = useState<string | null>(null);
   const ladderSegments = ticketInput
     ? deriveLadderSegments({
         ticket: ticketInput,
@@ -1718,6 +1721,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // The paper's own rooms: on a projectless proposal these ARE the
           // proposal's scope rooms (`ProjectlessTicketFacts`).
           scopeRooms: ticketInput.rooms.list.length,
+          // W5-R5 §2 — the stage phrase the `scope` stop's own body prints,
+          // reported up by `SectionStageLineMount` (N2).
+          stageLine: preworkStageLine,
           investmentCents: liveProposal?.total_amount ?? null,
         },
       })
@@ -2553,12 +2559,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 letterhead. They ride inside <div data-active-section> so they
                 read as the section's own sub-label, exactly as the deck draws
                 the open Project row. */}
-            <SectionStageLineMount
-              projectId={
-                row.engagement_kind === 'project' ? row.project_id : null
-              }
-              activeSection={row.active_section}
-            />
+            {/* W5-R5 §2 (N2) — on a PRE-WORK spread this strip is the `scope`
+                stop's body and prints inside it, so the first element after
+                the band is the spread's first region head, not a free-standing
+                band. On a project spread it stays where R1/I114 put it: the
+                open section's own sub-label. */}
+            {!isPreWorkSection(row.active_section) && (
+              <SectionStageLineMount
+                projectId={
+                  row.engagement_kind === 'project' ? row.project_id : null
+                }
+                activeSection={row.active_section}
+                onStageLine={setPreworkStageLine}
+              />
+            )}
             <TableFrame
               composition={table}
               pending={worktableOn ? tablePin.pending : null}
@@ -2643,6 +2657,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   {proposalLifecycle}
                 </PreworkRegion>
                 <PreworkRegion region="scope" status={preworkStatus('scope')}>
+                  {/* W5-R5 §2 (N2) — the stage line IS this stop's body. */}
+                  <SectionStageLineMount
+                    projectId={
+                      row.engagement_kind === 'project' ? row.project_id : null
+                    }
+                    activeSection={row.active_section}
+                    onStageLine={setPreworkStageLine}
+                  />
                   {row.proposal_id ? (
                     <ProposalBlocksReadOnly
                       proposalId={row.proposal_id}

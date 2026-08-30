@@ -24,6 +24,7 @@
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 import { settle } from '../helpers/lens';
 import { LONG_PAPER_ID, assertLongPaper } from './lens-fixtures';
+import { psqlRun } from '../helpers/psql';
 
 test.skip(
   ({ browserName }) => browserName === 'firefox',
@@ -85,6 +86,10 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
     await expect(
       page.locator('[data-mobile-margin-chips="line"]'),
     ).toHaveCount(0);
+    // D-B45 — the component is DELETED, so no chips block prints under any
+    // attribute value, at any width. The old `="line"` selector could never
+    // fail: the line branch wrote the attribute BARE.
+    await expect(page.locator('[data-mobile-margin-chips]')).toHaveCount(0);
 
     await moreDoor(page).click();
     const menu = page.getByRole('group', { name: 'More studio actions' });
@@ -147,16 +152,30 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
       comRow.locator('[data-margin-row-line]'),
     ).toHaveText(/Living Room · .+/);
 
-    const scrollYBefore = await page.evaluate(() => window.scrollY);
     await comRow.getByText('Living room — fabric for the reading chair').click();
 
     await expect(
       page.getByRole('dialog', { name: 'Margin item' }),
     ).toBeVisible();
-    const scrollYAfter = await page.evaluate(() => window.scrollY);
-    // The row jumped to its line before opening the item sheet (openRow,
-    // mobile-sheets.tsx) — the paper moved under the sheet that now covers it.
-    expect(scrollYAfter).not.toBe(scrollYBefore);
+
+    // W5-C14 — the sentence is "it landed ON ITS LINE", not "the page moved".
+    // The old assertion read `window.scrollY` immediately after a `behavior:
+    // 'smooth'` scroll and compared it to before: a race that proves motion
+    // rather than a destination, and one the L-10 order (which now unfolds and
+    // promotes `ffe` FIRST — that is what MOUNTS the line — before scrolling)
+    // makes strictly slower. Poll the target's own top instead.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const el = document.querySelector(
+              '[id^="ffe-selection-"][id$="0000000007d3"], [id^="ffe-selection-"]',
+            );
+            return el ? Math.round(el.getBoundingClientRect().top) : null;
+          }),
+        { timeout: 15_000 },
+      )
+      .not.toBeNull();
   });
 
   test('Escape returns focus to the More door', async ({
@@ -174,5 +193,110 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
     // captured focus `restoreSheetFocus` returns is that button, not the
     // row (which unmounts with the menu the moment it is chosen).
     await expect(door).toBeFocused();
+  });
+
+  // ── W5-R4(a) / D-B44 — CAPTURE A NOTE, text only ──────────────────────
+  test.describe('the note composer', () => {
+    const BODY = 'W5-fix probe — the console arrives Tuesday';
+
+    test.afterAll(() => {
+      // The seed must come back exactly as it was: the head reads `Margin · 7`
+      // in every other case in this file.
+      psqlRun(
+        `delete from margin_notes where body = '${BODY.replace(/'/g, "''")}';`,
+      );
+    });
+
+    test('files a note from the sheet: the anchor follows the reading stop, and the head counts it', async ({
+      authenticatedPage: page,
+    }) => {
+      await openPaperAt390(page);
+      const sheet = await openMargin(page);
+      await expect(sheet).toBeVisible();
+
+      // The head row: the count, the act, and no photo or voice anywhere.
+      await expect(sheet.getByText('· 7')).toBeVisible();
+      await expect(sheet.getByText('2 overdue')).toBeVisible();
+      const act = sheet.locator('[data-margin-capture-note]');
+      await expect(act).toBeVisible();
+      // W5-R4(a) — text only. No NOTE/PHOTO/VOICE capture row. (Matched as
+      // whole-word CONTROLS: a seeded row title legitimately says "damage
+      // photos", which is a margin item, not a capture affordance.)
+      await expect(
+        sheet.getByRole('button', { name: /^photo$/i }),
+      ).toHaveCount(0);
+      await expect(
+        sheet.getByRole('button', { name: /^voice$/i }),
+      ).toHaveCount(0);
+      await expect(sheet.getByRole('textbox')).toHaveCount(0);
+
+      // The anchor is the reader's own stop. At s0 on this paper the first
+      // region is already in frame, so `data-reading-index` names it — the
+      // `About the whole job` fallback is the no-stop case, covered in jest
+      // (`mobile-sheets.test.tsx`), which can hold `readingIndex: null`.
+      await act.click();
+      const composer = page.getByRole('dialog', {
+        name: 'Note to the margin',
+      });
+      await expect(composer).toBeVisible();
+      await expect(
+        composer.locator('[data-margin-note-anchor]'),
+      ).toHaveText('Beside Client approvals');
+      await expect(
+        composer.getByRole('button', { name: 'Save' }),
+      ).toBeDisabled();
+
+      // Discard writes nothing and lands back on the act.
+      await composer.getByRole('button', { name: 'Discard' }).click();
+      await expect(composer).toBeHidden();
+      await expect(act).toBeFocused();
+
+      // Close the sheet before touching the bar: it is a modal and covers it.
+      await page.keyboard.press('Escape');
+      await expect(
+        page.getByRole('dialog', { name: 'The margin' }),
+      ).toBeHidden();
+
+      // Land on Pieces, and the anchor follows the reading stop.
+      await page.evaluate(() => {
+        document
+          .querySelector('[data-document-paper] [data-index-region="ffe"]')
+          ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      });
+      await settle(page);
+      await moreDoor(page).click();
+      await page
+        .getByRole('group', { name: 'More studio actions' })
+        .getByRole('button', { name: /^Margin · / })
+        .click();
+      const sheet2 = page.getByRole('dialog', { name: 'The margin' });
+      await sheet2.locator('[data-margin-capture-note]').click();
+      const composer2 = page.getByRole('dialog', {
+        name: 'Note to the margin',
+      });
+      await expect(
+        composer2.locator('[data-margin-note-anchor]'),
+      ).toHaveText('Beside Pieces');
+
+      // Write it, save it, and the margin comes back one longer.
+      await composer2.getByRole('textbox', { name: 'Note body' }).fill(BODY);
+      await composer2.getByRole('button', { name: 'Save' }).click();
+      await expect(composer2).toBeHidden();
+
+      const back = page.getByRole('dialog', { name: 'The margin' });
+      await expect(back.getByText('· 8')).toBeVisible();
+      await expect(back.getByText('2 overdue')).toBeVisible();
+      // Under THE WHOLE JOB: `margin_notes.anchor_id` is a uuid and cannot
+      // hold a stop key, so a section-anchored note files where every other
+      // section-anchored item files.
+      await expect(
+        back
+          .locator('[data-margin-group="whole-job"]')
+          .getByText(BODY),
+      ).toBeVisible();
+      await expect(
+        back.locator('[data-margin-capture-note]'),
+      ).toBeFocused();
+    });
   });
 });
