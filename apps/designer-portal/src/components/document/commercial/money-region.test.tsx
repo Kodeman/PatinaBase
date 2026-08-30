@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 let mockAuthority: Record<string, unknown>;
 let mockBudget: Record<string, unknown>;
@@ -7,6 +7,21 @@ let mockTradeScopes: Record<string, unknown>;
 let mockAccount: Record<string, unknown>;
 let mockPurchaseOrders: Record<string, unknown>;
 let mockInvoices: Record<string, unknown>;
+
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
 
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
@@ -52,6 +67,8 @@ jest.mock('./project-commerce-section', () => ({
 jest.mock('../account-band', () => ({ AccountBand: () => <div>Account band</div> }));
 
 import { MoneyRegion } from './money-region';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { regionBoxSignature } from '../region/region-box-signature';
 
 const settledEmpty = {
   authority: { data: null, isLoading: false, error: null },
@@ -339,7 +356,22 @@ describe('MoneyRegion', () => {
     );
   });
 
-  it('folds a sparse project by default, stating the seam summary', () => {
+  it('arrives OPEN on a sparse project — the default quiets a stop, it never folds it', () => {
+    // R127 OD-10 (W3-L5). This case read "folds a sparse project by default,
+    // stating the seam summary". `money` is a STOP key, so a derived default
+    // is DENSITY now, not a fold: a sparse project arrives open and quiet,
+    // with its head on the paper instead of a seam.
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(document.querySelector('[data-fold-seam]')).toBeNull();
+    expect(document.querySelector('[data-region-head]')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+  });
+
+  it('states the seam summary on a sparse project she folded herself', () => {
+    // The seam's own claim — its summary line — kept whole under the one cause
+    // a stop can still have (OD-10).
+    window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
     render(<MoneyRegion projectId="project-1" />);
 
     expect(
@@ -375,7 +407,13 @@ describe('MoneyRegion', () => {
     expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
   });
 
-  it('still folds when every milestone is planned but none is receivable', () => {
+  it('still refuses to fold itself when every milestone is planned but none is receivable', () => {
+    // The data still says "nothing is chasing her here" — the derived default
+    // that used to fold this region. After OD-10 that answer quiets the stop
+    // rather than folding it (the `quiet` half becomes visible in W4, and is
+    // proved at the hook in `region/__tests__/use-region-fold.test.tsx`), so
+    // what this case can hold is the half that is visible now: the region does
+    // not fold ITSELF on this data, and it still folds when she says so.
     mockAccount = {
       data: {
         committedCents: 0,
@@ -393,6 +431,13 @@ describe('MoneyRegion', () => {
       isError: false,
     };
 
+    const { unmount } = render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+
+    unmount();
+    window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
     render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
@@ -412,6 +457,8 @@ describe('MoneyRegion', () => {
   });
 
   it('opens on the seam and round-trips back through it', () => {
+    // The fold she made herself is the only seam a stop can wear (OD-10).
+    window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
     render(<MoneyRegion projectId="project-1" />);
 
     fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
@@ -468,5 +515,174 @@ describe('MoneyRegion', () => {
 
     expect(heard).toHaveBeenCalledTimes(1);
     window.removeEventListener('document:compose-amendment', heard);
+  });
+});
+
+/**
+ * R127 W4 (L-4, OD-12, OD-13) — the quiet body. Until the lens reaches it,
+ * Money prints its head, one count line, one leader and one state line; the
+ * six-rung ladder is not on the paper.
+ */
+describe('MoneyRegion quiet body — the lens has not reached this stop', () => {
+  /** One open invoice ($1,750 out) against one PO — the two facts the count
+   *  line states. */
+  const liveMoney = () => {
+    mockInvoices = {
+      data: [
+        {
+          id: 'invoice-1',
+          invoice_number: '2026-114',
+          status: 'sent',
+          due_date: '2026-08-03',
+          total_cents: 175_000,
+          amount_paid_cents: 0,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    };
+    mockPurchaseOrders = {
+      data: [{ id: 'po-1', po_number: 'PO-2026-0418', payments: [] }],
+      isLoading: false,
+      error: null,
+    };
+  };
+
+  beforeEach(() => {
+    act(() => {
+      __setDensityForTest(null);
+    });
+  });
+
+  it('prints the head, its own status line and the state line — and no rungs', () => {
+    liveMoney();
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
+    // W4-R1: the two figures the rail's value line prints, on the head's own
+    // status line. The PO count belongs to the ledger, not to this line.
+    const head = document.querySelector('[data-region-head="money-head"]')!;
+    expect(head).toHaveTextContent('$1,750 out');
+    expect(head).not.toHaveTextContent(/PO/);
+    expect(
+      document.querySelectorAll('[data-region-count-line]'),
+    ).toHaveLength(0);
+    // The head's own acts are the only acts (mockup governs what prints).
+    expect(
+      screen.queryByRole('button', { name: /See the money/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '$1,750 out · not yet on the paper · press Money on the index to open',
+      ),
+    ).toHaveClass('sr-only');
+
+    expect(document.querySelectorAll('ol > li')).toHaveLength(0);
+    expect(screen.queryByText(/^Budget · /)).not.toBeInTheDocument();
+    expect(screen.queryByText('Account band')).not.toBeInTheDocument();
+  });
+
+  it('F3 — prints its leader alone: the two overflow acts are NOT rendered at quiet', () => {
+    liveMoney();
+    render(<MoneyRegion projectId="project-1" />);
+
+    const head = document.querySelector('[data-region-head="money-head"]')!;
+    // Entry 0 of a three-act ledger.
+    expect(head).toContainElement(
+      screen.getByRole('button', { name: 'Draw an invoice' }),
+    );
+    // Entries 1 and 2 are not rendered — not rendered inert, not aria-hidden:
+    // `DocumentActionGroup`'s one-leader guard and `action-visibility.spec.ts`
+    // both COUNT `[data-action-key]` nodes, so a hidden copy is still one of
+    // them (region-head.tsx, `actsAtQuiet`).
+    expect(
+      screen.queryByRole('button', { name: /Amendment|Add a change/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Hours · this project/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      head.querySelectorAll('[data-action-key="compose-project-amendment"]'),
+    ).toHaveLength(0);
+    expect(
+      head.querySelectorAll('[data-action-key="open-project-hours"]'),
+    ).toHaveLength(0);
+  });
+
+  it('says Nothing yet when it holds neither figure', () => {
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
+    const head = document.querySelector('[data-region-head="money-head"]')!;
+    expect(head).toHaveTextContent('Nothing yet');
+    expect(head).not.toHaveTextContent(/out|not drawn/);
+    expect(screen.getByText('Nothing yet', { selector: '.sr-only' })).toBeInTheDocument();
+  });
+
+  it('publishes its density and its short reserve on the index root (OD-12)', () => {
+    liveMoney();
+    render(<MoneyRegion projectId="project-1" />);
+    const root = document.querySelector<HTMLElement>('[data-index-region="money"]');
+    expect(root).toHaveAttribute('data-density', 'quiet');
+    expect(root!.style.getPropertyValue('--doc-quiet-reserve')).toBe(
+      'var(--doc-quiet-reserve-min)',
+    );
+  });
+
+  it('keeps the same head element when the lens promotes it to full', () => {
+    liveMoney();
+    const { rerender } = render(<MoneyRegion projectId="project-1" />);
+    const head = document.querySelector('[data-region-head="money-head"]');
+    // H5 — the root's OUTER box may not depend on its density.
+    const quietBox = regionBoxSignature(
+      document.querySelector('[data-index-region="money"]'),
+    );
+    const heading = screen.getByRole('heading', { name: 'Money' });
+
+    act(() => {
+      __setDensityForTest('full');
+    });
+    rerender(<MoneyRegion projectId="project-1" />);
+
+    expect(document.querySelector('[data-region-head="money-head"]')).toBe(head);
+    expect(screen.getByRole('heading', { name: 'Money' })).toBe(heading);
+    expect(
+      document.querySelector('[data-index-region="money"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+    expect(screen.getByText(/^Owed · /)).toBeInTheDocument();
+    // The same outer box on the other side of the promotion: same
+    // margins, same border, same reserve, same rules. A stop that grew a
+    // top margin on promotion would move every root below it.
+    expect(
+      regionBoxSignature(
+        document.querySelector('[data-index-region="money"]'),
+      ),
+    ).toBe(quietBox);
+  });
+
+  it('lets the fold she made outrank the lens, whatever the lens says', () => {
+    liveMoney();
+    window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
+    act(() => {
+      __setDensityForTest('full');
+    });
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(document.querySelector('[data-fold-seam]')).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Money' })).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-index-region="money"]'),
+    ).toHaveAttribute('data-density', 'full');
+  });
+
+  it('leaves the Delivery table seam full — `money-table` is not a stop', () => {
+    liveMoney();
+    render(<MoneyRegion projectId="project-1" tableSeam />);
+
+    expect(
+      document.querySelector('[data-index-region="money"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
   });
 });

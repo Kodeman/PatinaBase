@@ -23,11 +23,13 @@ export function ProjectApprovalDocumentMount({
   clientProfileId,
   clientName,
   phases,
+  quietLeader = null,
 }: {
   projectId: string | null;
   clientProfileId: string | null;
   clientName?: string | null;
   phases: unknown;
+  quietLeader?: { label: string; onAct: () => void } | null;
 }) {
   if (!projectId) return null;
   return (
@@ -36,6 +38,7 @@ export function ProjectApprovalDocumentMount({
       clientProfileId={clientProfileId}
       clientName={clientName}
       phases={toProjectApprovalPhases(phases)}
+      quietLeader={quietLeader}
     />
   );
 }

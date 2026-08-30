@@ -9,11 +9,26 @@ import { StudioDrawer } from './studio-drawer';
 import { openFeedbackSheet } from './feedback/feedback-sheet';
 
 const mockPush = jest.fn();
+const mockOpenTimer = jest.fn();
 let mockUnseenFeedback: Array<{ id: string }> = [];
+let mockPathname = '/desk';
+let mockInHandToday = 0;
+// W2 (F-3 route 1): the drawer takes the presence channel's key off the held
+// document and calls `useDocumentPresence` itself — there is no `others` prop
+// any more, so the hook is what these three cases drive.
+let mockPresenceOthers: string[] = [];
 
 jest.mock('next/navigation', () => ({
-  usePathname: () => '/desk',
+  usePathname: () => mockPathname,
   useRouter: () => ({ push: mockPush }),
+}));
+
+// The drawer's clock is the timer's doorway from W1 (`spine-timer.tsx` is
+// deleted), so `StudioDrawer` reads `useMobileShell`. In the app it is always
+// inside `MobileShellProvider` (app/(document)/layout.tsx); here the hook is
+// mocked so the drawer can be rendered on its own, as every case below does.
+jest.mock('./mobile/mobile-shell', () => ({
+  useMobileShell: () => ({ openTimer: mockOpenTimer }),
 }));
 
 jest.mock('@patina/supabase', () => ({
@@ -27,7 +42,14 @@ jest.mock('@/hooks/use-hydrated', () => ({
 }));
 
 jest.mock('@/hooks/document-time-provider', () => ({
-  useDocumentTime: () => ({ inHandToday: 0 }),
+  useDocumentTime: () => ({
+    inHandToday: mockInHandToday,
+    heldEngagementId: 'engagement-1',
+  }),
+}));
+
+jest.mock('@/hooks/use-document-presence', () => ({
+  useDocumentPresence: () => mockPresenceOthers,
 }));
 
 jest.mock('@/lib/help-system/use-sheet-surface-key', () => ({
@@ -83,6 +105,10 @@ jest.mock('./account/account-nameplate', () => ({
 describe('StudioDrawer', () => {
   beforeEach(() => {
     mockPush.mockClear();
+    mockOpenTimer.mockClear();
+    mockPathname = '/desk';
+    mockInHandToday = 0;
+    mockPresenceOthers = [];
     mockUnseenFeedback = [];
     jest.mocked(openFeedbackSheet).mockClear();
     window.localStorage.clear();
@@ -199,6 +225,59 @@ describe('StudioDrawer', () => {
     fireEvent.click(door);
     expect(opened).toHaveBeenCalledTimes(1);
     window.removeEventListener('document:open-command-bar', opened);
+  });
+
+  it('W1 — the in-hand clock is the timer doorway, at every width', () => {
+    mockPathname = '/doc/doc-1';
+    mockInHandToday = 47;
+    render(<StudioDrawer />);
+
+    const doorway = screen.getByRole('button', {
+      name: 'Open time controls, in hand 47 min',
+    });
+    expect(doorway).toHaveAttribute('data-drawer-timer-doorway');
+    expect(doorway).toHaveTextContent('In hand today');
+    expect(doorway).toHaveTextContent('47 min');
+    expect(doorway).toHaveClass('min-h-11');
+
+    fireEvent.click(doorway);
+    expect(mockOpenTimer).toHaveBeenCalledTimes(1);
+  });
+
+  it('W1 — hands free prints no doorway: there is no clock to open', () => {
+    render(<StudioDrawer />);
+
+    expect(screen.getByText('Hands free')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Open time controls/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('W1/F-3 — prints nothing about presence while she is alone in the document', () => {
+    render(<StudioDrawer />);
+
+    expect(document.querySelector('[data-drawer-presence]')).toBeNull();
+    expect(screen.queryByText(/^You and/)).not.toBeInTheDocument();
+    // The rail's old line said so out loud; the drawer does not.
+    expect(screen.queryByText(/Just you/)).not.toBeInTheDocument();
+  });
+
+  it('W1/F-3 — names the other person in the account zone, once there is one', () => {
+    mockPresenceOthers = ['Marit'];
+    render(<StudioDrawer />);
+
+    expect(
+      document.querySelector('[data-drawer-presence]'),
+    ).toHaveTextContent('You and Marit');
+  });
+
+  it('W1/F-3 — counts the others past one rather than listing them', () => {
+    mockPresenceOthers = ['Marit', 'Tomas'];
+    render(<StudioDrawer />);
+
+    expect(
+      document.querySelector('[data-drawer-presence]'),
+    ).toHaveTextContent('You and 2 others');
   });
 
   it('carries the shipped-feedback signal into the single feedback entrance', () => {

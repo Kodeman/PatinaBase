@@ -13,6 +13,7 @@ test.describe("spec-book workspace", () => {
 
   let projectId = "";
   let specId = "";
+  let ffeItemId = "";
   let originalFinish: string | null = null;
   let originalRowVersion = 0;
 
@@ -25,10 +26,20 @@ test.describe("spec-book workspace", () => {
        ORDER BY p.created_at
        LIMIT 1
     `);
+    // The seeded fixture's three FF&E items share an identical (sort_order,
+    // created_at) — the same tie the app's own query (use-spec-books.ts's
+    // .order("sort_order").order("created_at"), no further tiebreak) resolves
+    // by incidental physical row order, which drifts once any of the tied
+    // rows is written (a non-HOT UPDATE moves its heap tuple). Rather than
+    // guess which of the three the app will auto-select as data.items[0], the
+    // test below clicks this exact ffe_item_id explicitly
+    // (#spec-book-item-{ffeItemId}) so it always edits the same row this
+    // query pinned, regardless of which item the app would have defaulted to.
     const spec = JSON.parse(
       psqlScalar(`
         SELECT json_build_object(
                  'id', s.id,
+                 'ffe_item_id', f.id,
                  'finish', s.finish,
                  'row_version', s.row_version
                )::text
@@ -38,8 +49,9 @@ test.describe("spec-book workspace", () => {
          ORDER BY f.sort_order ASC NULLS LAST, f.created_at ASC
          LIMIT 1
       `),
-    ) as { id: string; finish: string | null; row_version: number };
+    ) as { id: string; ffe_item_id: string; finish: string | null; row_version: number };
     specId = spec.id;
+    ffeItemId = spec.ffe_item_id;
     originalFinish = spec.finish;
     originalRowVersion = spec.row_version;
   });
@@ -66,6 +78,12 @@ test.describe("spec-book workspace", () => {
     await expect(
       page.getByRole("button", { name: "Workbench" }),
     ).toHaveAttribute("aria-current", "page");
+
+    // Force the workbench onto the exact item beforeAll pinned above — the
+    // three seeded items tie on (sort_order, created_at), so data.items[0]
+    // (the app's own default-selection fallback) is not guaranteed to be
+    // this item once any of the tied rows has been written to.
+    await page.locator(`#spec-book-item-${ffeItemId}`).click();
 
     const savedFinish = `E2E saved finish ${Date.now()}`;
     await page.getByLabel("Finish", { exact: true }).fill(savedFinish);
@@ -95,11 +113,17 @@ test.describe("spec-book workspace", () => {
       .getByLabel("Finish", { exact: true })
       .fill(`Stale browser finish ${Date.now()}`);
     await page.getByRole("button", { name: "Save selection" }).press("Enter");
+    // Scoped to `main`: the conflict also raises a global toast (a second,
+    // assertive `role="status"` element with the same text) — this assertion
+    // is about the workbench's own inline feedback, not the toast.
     await expect(
-      page.getByRole("status").filter({
-        hasText:
-          "This selection changed in another session. Refresh before saving.",
-      }),
+      page
+        .getByRole("main")
+        .getByRole("status")
+        .filter({
+          hasText:
+            "This selection changed in another session. Refresh before saving.",
+        }),
     ).toBeVisible();
     await expect
       .poll(() =>

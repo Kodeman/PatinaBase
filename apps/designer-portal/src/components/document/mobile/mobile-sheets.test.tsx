@@ -1,0 +1,609 @@
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { MarginItemRow } from '@/lib/document/margin-derivation';
+import type { WorkflowGate } from '@/lib/document/workflow-gate';
+import { MobileBar } from './mobile-bar';
+import { MobileSheets } from './mobile-sheets';
+import {
+  MobileShellProvider,
+  useMobileActiveDoc,
+  type MobileActiveDoc,
+} from './mobile-shell';
+
+let mockItems: MarginItemRow[] = [];
+let mockGates: WorkflowGate[] = [];
+let mockFfeItems: Array<{
+  id: string;
+  name: string;
+  room?: { name?: string | null } | null;
+}> = [];
+const mockRouterPush = jest.fn();
+
+jest.mock('next/navigation', () => ({
+  usePathname: () => '/doc/proj-1',
+  useRouter: () => ({ push: mockRouterPush }),
+}));
+
+// W5-R4(a) — the composer's mutation, spied. `useCreateMarginNote` reaches
+// `useAuth` → `useSupabaseSession`, which this suite's `@patina/supabase`
+// factory does not carry; the hook is the seam the falsifier reads anyway.
+jest.mock('@/hooks/use-margin-notes', () => ({
+  useCreateMarginNote: () => ({ mutate: mockCreateNote, isPending: false }),
+}));
+const mockCreateNote = jest.fn();
+jest.mock('@patina/supabase', () => ({
+  useUnreadInboxCount: () => ({ data: 0 }),
+  useProcurementUnreadCount: () => ({ data: 0 }),
+  useUnseenShipped: () => ({ data: [] }),
+  useCoordinationItems: () => ({
+    data: [],
+    isLoading: false,
+    isPending: false,
+    isError: false,
+  }),
+  useProjectFFEItems: () => ({ data: mockFfeItems }),
+  isProjectArtifactApproval: () => false,
+  // W5-C2 — the row's inline nudge runs the SAME mutation `margin-bodies.tsx`
+  // runs. The spy is what the falsifier reads.
+  useSendDecisionReminder: () => ({
+    mutate: mockSendReminder,
+    isPending: false,
+  }),
+}));
+const mockSendReminder = jest.fn();
+
+jest.mock('@/components/document/margin-handoff-item', () => ({
+  useHandoffGates: () => ({
+    gates: mockGates,
+    handoffsById: new Map(),
+    isError: false,
+  }),
+}));
+
+jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: true }),
+}));
+jest.mock('@/hooks/document-time-provider', () => ({
+  useDocumentTime: () => ({
+    inHandToday: 0,
+    running: false,
+    paused: false,
+    elapsedSeconds: 0,
+    offer: null,
+  }),
+}));
+jest.mock('@/hooks/use-margin-items', () => ({
+  useMarginItems: () => ({ data: mockItems }),
+}));
+jest.mock('../overlays/post-sheet', () => ({ openPost: jest.fn() }));
+jest.mock('../feedback/feedback-sheet', () => ({ openFeedbackSheet: jest.fn() }));
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
+}));
+jest.mock('../account/mobile-account-header', () => ({
+  MobileAccountHeader: () => null,
+}));
+jest.mock('../account/account-sheet', () => ({ openAccount: jest.fn() }));
+jest.mock('../command-bar', () => ({ openLedger: jest.fn() }));
+jest.mock('../margin-bodies', () => ({ MarginItemBody: () => null }));
+
+const heldDocument: MobileActiveDoc = {
+  projectId: 'proj-1',
+  proposalId: null,
+  clientName: 'Vandersteen',
+  title: 'Vandersteen residence',
+  sections: [
+    { key: 'project', label: 'Project', state: 'active', sub: 'In the project' },
+  ],
+};
+
+function row(overrides: Partial<MarginItemRow>): MarginItemRow {
+  return {
+    kind: 'decision',
+    item_id: 'item-1',
+    project_id: 'proj-1',
+    proposal_id: null,
+    anchor_kind: 'letterhead',
+    anchor_id: null,
+    state: 'pending',
+    title: 'A decision',
+    detail: '',
+    ts: '2026-08-01T00:00:00Z',
+    payload: {},
+    ...overrides,
+  };
+}
+
+function gate(overrides: Partial<WorkflowGate>): WorkflowGate {
+  return {
+    id: 'gate-1',
+    sourceKind: 'project_approval',
+    sourceId: 'src-1',
+    sourceState: 'pending',
+    projectId: 'proj-1',
+    canonicalStageKey: null,
+    lane: 'With Marta',
+    studioLane: false,
+    terms: 'Awaiting a pick',
+    provenance: '',
+    dueAt: null,
+    overdue: { isOverdue: false, days: 0 },
+    act: null,
+    ...overrides,
+  };
+}
+
+function HoldDocument({ doc }: { doc: MobileActiveDoc | null }) {
+  useMobileActiveDoc(doc);
+  return null;
+}
+
+beforeEach(() => {
+  mockSendReminder.mockClear();
+  mockCreateNote.mockClear();
+});
+
+function mountBarAndSheets({
+  doc = heldDocument,
+  marginCount = null,
+}: {
+  doc?: MobileActiveDoc | null;
+  marginCount?: number | null;
+} = {}) {
+  // W5-C2 — the sheet's inline acts run the same mutations `margin-bodies.tsx`
+  // runs, so the tree needs a query client the way every other act surface does.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MobileShellProvider>
+        <HoldDocument doc={doc ? { ...doc, marginCount } : null} />
+        <MobileBar />
+        <MobileSheets />
+      </MobileShellProvider>
+    </QueryClientProvider>,
+  );
+}
+
+function openMore() {
+  fireEvent.click(screen.getByRole('button', { name: 'More studio actions' }));
+  return within(screen.getByRole('group', { name: 'More studio actions' }));
+}
+
+function openSections() {
+  fireEvent.click(screen.getByRole('button', { name: /^Open sections/ }));
+}
+
+function sectionsPanel() {
+  const dialog = screen.getByRole('dialog', {
+    name: 'Sections of this document',
+  });
+  return dialog.querySelector('[data-mobile-sheet-panel]') as HTMLElement;
+}
+
+function marginPanel() {
+  const dialog = screen.getByRole('dialog', { name: 'The margin' });
+  return dialog.querySelector('[data-mobile-sheet-panel]') as HTMLElement;
+}
+
+beforeEach(() => {
+  mockItems = [];
+  mockGates = [];
+  mockFfeItems = [];
+  mockRouterPush.mockClear();
+  window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+    matches: true,
+    media: query,
+    onchange: null,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  })) as unknown as typeof window.matchMedia;
+});
+
+describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
+  it('the door prints "Margin · N" as the first row of More, above Plan room', () => {
+    mockItems = [row({ item_id: 'a' }), row({ item_id: 'b', anchor_kind: 'section' })];
+    mountBarAndSheets({ marginCount: 2 });
+    const menu = openMore();
+    const group = menu.getByRole('group', { name: 'In this document' });
+    const labels = Array.from(group.querySelectorAll('a, button')).map((el) =>
+      el.textContent?.replace('→', ''),
+    );
+    expect(labels[0]).toBe('Margin · 2');
+    expect(labels.indexOf('Margin · 2')).toBeLessThan(labels.indexOf('Plan room'));
+  });
+
+  it('opens the Margin sheet and names itself "The margin"', () => {
+    mockItems = [row({ item_id: 'a' })];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    expect(screen.getByRole('dialog', { name: 'The margin' })).toBeInTheDocument();
+  });
+
+  it('lists every item the hook yields, each with a stamp, title, owner, and one inline act', () => {
+    mockItems = [
+      row({ item_id: 'a', title: 'Primary bedroom approval', state: 'overdue' }),
+      row({
+        item_id: 'b',
+        kind: 'invoice',
+        anchor_kind: 'section',
+        title: 'Invoice 2026-114',
+        state: 'draft',
+      }),
+    ];
+    mountBarAndSheets({ marginCount: 2 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 2' }));
+    const panel = marginPanel();
+    const rows = panel.querySelectorAll('[data-margin-row]');
+    expect(rows).toHaveLength(2);
+    rows.forEach((r) => {
+      expect(r.querySelector('[data-margin-row-act]')).not.toBeNull();
+    });
+    expect(within(panel).getByText('Primary bedroom approval')).toBeInTheDocument();
+    expect(within(panel).getByText('Invoice 2026-114')).toBeInTheDocument();
+    // W5-C12 — the stamp the title claims, on the row that is overdue.
+    expect(rows[0].querySelector('[data-margin-row-stamp]')).toHaveTextContent(
+      'Overdue',
+    );
+    expect(rows[1].querySelector('[data-margin-row-stamp]')).toBeNull();
+    // W5-C2 — an act either performs or is named for the door it opens. The
+    // nudge performs; a DRAFT invoice must be reviewed, which needs the
+    // invoice, so its act opens and says so.
+    expect(within(panel).getByText('Send a nudge')).toBeInTheDocument();
+    expect(within(panel).queryByText('Review & send invoice')).toBeNull();
+    expect(
+      rows[1].querySelector('[data-margin-row-act]'),
+    ).toHaveTextContent('Open');
+  });
+
+  it('W5-C2 — the inline act PERFORMS: the nudge nudges, and does not open the sheet', () => {
+    mockItems = [row({ item_id: 'a', title: 'Primary bedroom approval' })];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    const panel = marginPanel();
+
+    fireEvent.click(within(panel).getByText('Send a nudge'));
+
+    expect(mockSendReminder).toHaveBeenCalledWith(
+      { decisionId: 'a' },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+    // It acted in place: the margin sheet is still the open dialog.
+    expect(
+      screen.getByRole('dialog', { name: 'The margin' }),
+    ).toBeInTheDocument();
+  });
+
+  it('W5-C2 — the row BODY does the reverse: it opens the item sheet and sends nothing', () => {
+    mockItems = [row({ item_id: 'a', title: 'Primary bedroom approval' })];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+
+    fireEvent.click(
+      within(marginPanel()).getByText('Primary bedroom approval'),
+    );
+
+    expect(mockSendReminder).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('dialog', { name: 'The margin' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('prints the overdue count in the head when at least one item or gate is overdue', () => {
+    mockItems = [row({ item_id: 'a', state: 'overdue' })];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    expect(within(marginPanel()).getByText('1 overdue')).toBeInTheDocument();
+  });
+
+  it('lists handoff gates as read-only rows beside the items', () => {
+    mockGates = [gate({ id: 'g1', lane: 'With Marta', terms: 'Awaiting a pick' })];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    expect(
+      within(marginPanel()).getByText('With Marta · Awaiting a pick'),
+    ).toBeInTheDocument();
+  });
+
+  it('tapping the row opens the margin-item sheet', () => {
+    mockItems = [row({ item_id: 'a', title: 'Primary bedroom approval' })];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    fireEvent.click(screen.getByText('Primary bedroom approval'));
+    expect(screen.getByRole('dialog', { name: 'Margin item' })).toBeInTheDocument();
+  });
+
+  it('W5-R1 — groups THE WHOLE JOB above BESIDE PIECES, counting the whole margin (7 on the seed’s shape)', () => {
+    mockItems = [
+      row({ item_id: 'overdue6', title: 'Primary bedroom', state: 'overdue' }),
+      row({ item_id: 'dining', title: 'Dining finish', state: 'responded' }),
+      row({ item_id: 'hardware', title: 'Hardware', state: 'responded' }),
+      row({ item_id: 'invoice', kind: 'invoice', title: 'INV-2026-114', state: 'sent' }),
+      row({
+        item_id: 'com',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-2',
+        title: 'Living room fabric',
+        state: 'overdue',
+      }),
+      row({
+        item_id: 'console',
+        kind: 'message',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-1',
+        title: 'Console thread',
+        state: 'unread',
+      }),
+      row({
+        item_id: 'po',
+        kind: 'message',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-19',
+        title: 'PO thread',
+        state: 'unread',
+      }),
+    ];
+    mountBarAndSheets({ marginCount: 7 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 7' }));
+    const panel = marginPanel();
+
+    expect(within(panel).getByText('THE WHOLE JOB · 4')).toBeInTheDocument();
+    expect(within(panel).getByText('BESIDE PIECES · 3')).toBeInTheDocument();
+    expect(panel.querySelectorAll('[data-margin-row]')).toHaveLength(7);
+    // "2 overdue" — the rug/nightstands decision (whole job) and the COM
+    // decision (beside Pieces); the invoice is money and never counts.
+    expect(within(panel).getByText('2 overdue')).toBeInTheDocument();
+  });
+
+  it('D-B46 — a room row asks the page too; its heading lives in the same body', () => {
+    const onJumpToRoom = jest.fn();
+    mountBarAndSheets({
+      doc: {
+        ...heldDocument,
+        rooms: [{ id: 'room-7', name: 'Primary bedroom' }],
+        onJumpToRoom,
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Open sections/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Primary bedroom' }));
+
+    expect(onJumpToRoom).toHaveBeenCalledWith('room-7');
+  });
+
+  it('W5-R1 — a line-anchored row names its line on a second line', () => {
+    mockItems = [
+      row({
+        item_id: 'com',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-2',
+        title: 'Living room fabric',
+      }),
+    ];
+    mockFfeItems = [
+      { id: 'ffe-2', name: 'Reading Chair — COM Fabric Pending', room: { name: 'Living Room' } },
+    ];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    expect(
+      within(marginPanel()).getByText('Living Room · Reading Chair — COM Fabric Pending'),
+    ).toBeInTheDocument();
+  });
+
+  it('W5-R1/D-B46 — tapping a line-anchored row asks the PAGE to land, and opens the margin-item sheet', () => {
+    // D-B46 — was: the sheet called `scrollIntoView` on `#ffe-selection-<id>`
+    // itself, asserted through a stub target appended to the body. That target
+    // does not exist on a real cold load: the id lives inside the FF&E body,
+    // and a body that is quiet — or that the reader closed herself, which no
+    // density can reopen (C-8) — is not mounted. The press order belongs to
+    // the page (unfold → promote → land), so the assertion moves from "the
+    // sheet scrolled" to "the sheet asked, with the line's own id".
+    const onJumpToLine = jest.fn();
+    mockItems = [
+      row({
+        item_id: 'com',
+        anchor_kind: 'line',
+        anchor_id: 'ffe-2',
+        title: 'Living room fabric',
+      }),
+    ];
+    mountBarAndSheets({
+      doc: { ...heldDocument, onJumpToLine },
+      marginCount: 1,
+    });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    fireEvent.click(screen.getByText('Living room fabric'));
+
+    expect(onJumpToLine).toHaveBeenCalledWith('ffe-2');
+    expect(screen.getByRole('dialog', { name: 'Margin item' })).toBeInTheDocument();
+  });
+
+  it('prints no BESIDE group when nothing is line-anchored', () => {
+    mockItems = [row({ item_id: 'a', title: 'Primary bedroom approval' })];
+    mountBarAndSheets({ marginCount: 1 });
+    fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+    const panel = marginPanel();
+    expect(within(panel).getByText('THE WHOLE JOB · 1')).toBeInTheDocument();
+    expect(within(panel).queryByText(/^BESIDE/)).toBeNull();
+  });
+
+  it('Escape returns focus to the door', async () => {
+    // Selecting any More row focuses the More button before its action runs
+    // (`closeThen`, mobile-bar.tsx) — the same mechanic the drawer/timer/
+    // spine/margin-item sheets already rely on — so the captured focus
+    // `restoreSheetFocus` restores to is that button, not the row (which
+    // unmounts with the menu the moment it is chosen).
+    mockItems = [row({ item_id: 'a' })];
+    mountBarAndSheets({ marginCount: 1 });
+    const door = openMore().getByRole('button', { name: 'Margin · 1' });
+    fireEvent.click(door);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(
+      screen.queryByRole('dialog', { name: 'The margin' }),
+    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'More studio actions' }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it('prints no door and no count off a document', () => {
+    mountBarAndSheets({ doc: null });
+    fireEvent.click(screen.getByRole('button', { name: 'More studio actions' }));
+    expect(screen.queryByText(/^Margin ·/)).toBeNull();
+  });
+});
+
+describe('the Sections sheet no longer carries the margin (D-B30)', () => {
+  it('the spine sheet prints no "In the margin" section', () => {
+    mockItems = [row({ item_id: 'a' })];
+    mockGates = [gate({ id: 'g1' })];
+    mountBarAndSheets({ marginCount: 2 });
+    openSections();
+    const panel = sectionsPanel();
+    expect(within(panel).queryByText(/In the margin/)).toBeNull();
+    expect(within(panel).queryByText('With Marta · Awaiting a pick')).toBeNull();
+  });
+  // ── W5-R4(a) / D-B44 — CAPTURE A NOTE, text only ──────────────────────
+  describe('the note composer', () => {
+    const openMargin = (marginCount = 1, doc = heldDocument) => {
+      mountBarAndSheets({ doc, marginCount });
+      fireEvent.click(
+        openMore().getByRole('button', { name: `Margin · ${marginCount}` }),
+      );
+    };
+
+    it('leads the head row with CAPTURE A NOTE, beside the count', () => {
+      mockItems = [row({ item_id: 'a' })];
+      openMargin();
+      const act = within(marginPanel()).getByRole('button', {
+        name: /capture a note/i,
+      });
+      expect(act).toHaveAttribute('data-margin-capture-note');
+    });
+
+    it('prints NO photo or voice affordance — the web has no capture path for either', () => {
+      mockItems = [row({ item_id: 'a' })];
+      openMargin();
+      const panel = marginPanel();
+      expect(within(panel).queryByText(/photo/i)).toBeNull();
+      expect(within(panel).queryByText(/voice/i)).toBeNull();
+    });
+
+    it('opens a paper sheet named "Note to the margin", anchored ABOUT THE WHOLE JOB at rest', () => {
+      mockItems = [row({ item_id: 'a' })];
+      openMargin();
+      fireEvent.click(
+        within(marginPanel()).getByRole('button', { name: /capture a note/i }),
+      );
+
+      const dialog = screen.getByRole('dialog', {
+        name: 'Note to the margin',
+      });
+      expect(
+        dialog.querySelector('[data-margin-note-anchor]'),
+      ).toHaveTextContent('About the whole job');
+      expect(
+        within(dialog).getByRole('textbox', { name: 'Note body' }),
+      ).toHaveAttribute('placeholder', 'Note to the margin…');
+      expect(
+        within(dialog).getByRole('button', { name: 'Save' }),
+      ).toBeDisabled();
+    });
+
+    it('D-B44 — says ABOUT THE WHOLE JOB even while she is reading a stop', () => {
+      mockItems = [row({ item_id: 'a' })];
+      openMargin(1, { ...heldDocument, readingIndex: 'ffe' });
+      fireEvent.click(
+        within(marginPanel()).getByRole('button', { name: /capture a note/i }),
+      );
+
+      // The `Beside Pieces` line promised an attachment the row could not
+      // keep: `margin_notes.anchor_id` is a uuid, a stop key is not, so a
+      // section anchor is only ever recorded WITHOUT the stop and the note
+      // files under THE WHOLE JOB regardless. One line, one truth.
+      const anchor = screen
+        .getByRole('dialog', { name: 'Note to the margin' })
+        .querySelector('[data-margin-note-anchor]');
+      expect(anchor).toHaveTextContent('About the whole job');
+      expect(anchor).not.toHaveTextContent('Beside');
+    });
+
+    it('D-B44 — saves the whole-job anchor the sheet printed, from a stop', () => {
+      mockItems = [row({ item_id: 'a' })];
+      openMargin(1, { ...heldDocument, readingIndex: 'ffe' });
+      fireEvent.click(
+        within(marginPanel()).getByRole('button', { name: /capture a note/i }),
+      );
+      const dialog = screen.getByRole('dialog', {
+        name: 'Note to the margin',
+      });
+      // The sheet printed it; the write must match it.
+      expect(
+        dialog.querySelector('[data-margin-note-anchor]'),
+      ).toHaveTextContent('About the whole job');
+      fireEvent.change(
+        within(dialog).getByRole('textbox', { name: 'Note body' }),
+        { target: { value: '  the console arrives Tuesday  ' } },
+      );
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+      expect(mockCreateNote).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: 'the console arrives Tuesday',
+          anchorKind: 'letterhead',
+          anchorId: null,
+        }),
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+    });
+
+    it('Discard writes nothing and returns to the margin, focus on the act', async () => {
+      mockItems = [row({ item_id: 'a' })];
+      openMargin();
+      fireEvent.click(
+        within(marginPanel()).getByRole('button', { name: /capture a note/i }),
+      );
+      fireEvent.click(
+        within(
+          screen.getByRole('dialog', { name: 'Note to the margin' }),
+        ).getByRole('button', { name: 'Discard' }),
+      );
+
+      expect(mockCreateNote).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole('dialog', { name: 'The margin' }),
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(document.activeElement).toHaveAttribute(
+          'data-margin-capture-note',
+        ),
+      );
+    });
+
+    it('Escape does the same', async () => {
+      mockItems = [row({ item_id: 'a' })];
+      openMargin();
+      fireEvent.click(
+        within(marginPanel()).getByRole('button', { name: /capture a note/i }),
+      );
+      fireEvent.keyDown(
+        screen.getByRole('dialog', { name: 'Note to the margin' }),
+        { key: 'Escape' },
+      );
+
+      expect(mockCreateNote).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(
+          screen.getByRole('dialog', { name: 'The margin' }),
+        ).toBeInTheDocument(),
+      );
+    });
+  });
+
+});

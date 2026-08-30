@@ -22,12 +22,16 @@
  */
 
 import { useState } from 'react';
-import { useScheduleRevisions } from '@patina/supabase';
+import type { ScheduleRevisionRow } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { fmtDay } from '@/lib/document/format';
 
 export interface RevisionLedgerProps {
   projectId: string;
+  /** D-B49 — read at the schedule region's ROOT, which is mounted at every
+   *  density. The ledger stands in the region's full body, so reading it here
+   *  made a promotion fetch. */
+  revisions: ScheduleRevisionRow[] | undefined;
 }
 
 /** The boring, honest fallback name for a non-you actor — the uid's head. */
@@ -35,8 +39,7 @@ function shortActor(actorId: string): string {
   return actorId.slice(0, 8);
 }
 
-export function RevisionLedger({ projectId }: RevisionLedgerProps) {
-  const { data: revisions } = useScheduleRevisions(projectId);
+export function RevisionLedger({ projectId, revisions }: RevisionLedgerProps) {
   const { user } = useAuth();
   const myId = user?.id ?? null;
   const [open, setOpen] = useState(false);

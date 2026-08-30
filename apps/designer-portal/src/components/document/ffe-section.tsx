@@ -39,7 +39,6 @@ import {
   type FfeItemCoverage,
 } from '@patina/supabase';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
-import { MobileMarginChips } from './mobile/mobile-margin-chips';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
 import {
@@ -48,6 +47,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from 'react';
 import {
   deriveLineStamp,
@@ -78,6 +78,11 @@ import { LineUnfold } from './line-unfold';
 import { StrataMark } from './strata-mark';
 import { StrataMiniRule } from './strata-mini-rule';
 import { WorkBlock } from './work-block';
+import {
+  useSectionGates,
+  useSectionLoggedMinutes,
+  useSectionTasks,
+} from '@/hooks/use-section-work';
 import { FolioStrip } from './folio-strip';
 import {
   useAddDocumentRoom,
@@ -116,6 +121,11 @@ import {
 } from '@/lib/document/room-state';
 import { useRoomLens } from './room-lens-context';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
+import {
+  piecesQuietStatus,
+  quietStateSentence,
+} from '@/lib/document/lens-quiet-status';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -509,13 +519,6 @@ function FFELine({
           {body}
         </button>
       )}
-      {/* D13: this line's margin items as chips beneath it (mobile). */}
-      <MobileMarginChips
-        projectId={projectId}
-        proposalId={null}
-        anchorKind="line"
-        anchorId={item.id}
-      />
       {unfolded && !selecting && (
         <>
           <LineUnfold
@@ -570,6 +573,8 @@ function RoomHeading({
   eligibleCount,
   selectedCount,
   onAddLine,
+  heldRoomId,
+  toggleRoom,
 }: {
   name: string;
   roomId?: string;
@@ -582,6 +587,8 @@ function RoomHeading({
   eligibleCount: number;
   selectedCount: number;
   onAddLine?: () => void;
+  heldRoomId: string | null;
+  toggleRoom: (roomId: string) => void;
 }) {
   const committed = rows
     .filter((r) => COMMITTED.has(r.stamp.kind))
@@ -614,28 +621,56 @@ function RoomHeading({
         .filter(Boolean)
         .join(' · ');
 
+  // R25+lens — outside bulk-selection, the heading itself is the room's
+  // press target: pressing it takes the room in hand (the ticket's chip
+  // carries the identical contract). "Throughout" and unassigned lines carry
+  // no roomId, so there is no room to hold — they stay a plain heading.
+  const held = roomId != null && roomId === heldRoomId;
+  const pressable = !selecting && roomId != null;
+  const headingChildren = (
+    <>
+      {selecting ? (
+        <TriStateTick
+          state={roomState}
+          label={`Include every eligible line in ${name}`}
+          onChange={onRoomToggle}
+        />
+      ) : (
+        <StrataMark size="sm" state={state} />
+      )}
+      <h3
+        className={`font-heading text-[13.5px] font-medium italic text-[var(--color-charcoal)] ${
+          held ? 'font-semibold' : ''
+        }`}
+      >
+        {name}
+      </h3>
+      <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        {meta}
+      </span>
+    </>
+  );
+
   return (
     <div
       id={roomId ? `doc-room-${roomId}` : undefined}
-      className="mt-4 scroll-mt-16"
+      className="mt-[12px] scroll-mt-16"
     >
-      <div className="flex items-baseline gap-2.5 pb-1">
-        {selecting ? (
-          <TriStateTick
-            state={roomState}
-            label={`Include every eligible line in ${name}`}
-            onChange={onRoomToggle}
-          />
-        ) : (
-          <StrataMark size="sm" state={state} />
-        )}
-        <h3 className="font-heading text-[13.5px] font-medium italic text-[var(--color-charcoal)]">
-          {name}
-        </h3>
-        <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-          {meta}
-        </span>
-      </div>
+      {pressable ? (
+        <button
+          type="button"
+          data-room-chip={roomId}
+          aria-pressed={held}
+          onClick={() => toggleRoom(roomId as string)}
+          className="flex min-h-11 w-full items-baseline gap-2.5 pb-1 text-left underline-offset-4 hover:underline hover:decoration-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        >
+          {headingChildren}
+        </button>
+      ) : (
+        <div className="flex min-h-11 items-baseline gap-2.5 pb-1">
+          {headingChildren}
+        </div>
+      )}
       {/* The Strata mini-rule divides the room from its lines (HTML §3). */}
       <StrataMiniRule className="mb-0.5 ml-[3px]" />
       {onAddLine && !selecting && (
@@ -796,7 +831,7 @@ function FFESectionBody({
   onReleaseOffered,
   instruments,
 }: FFESectionProps & { instruments: InstrumentLike[] }) {
-  const { heldRoomId } = useRoomLens();
+  const { heldRoomId, toggleRoom } = useRoomLens();
   const [openLineId, setOpenLineId] = useState<string | null>(null);
   const [addLineRoom, setAddLineRoom] = useState<{
     id: string | null;
@@ -836,6 +871,20 @@ function FFESectionBody({
   const { data: tradeScopes, isPending: tradeScopesPending } = useTradeScopes(
     projectId,
     mode === 'project',
+  );
+  // D-B49 — the work block's three reads live HERE, at the region root, which
+  // is mounted at every density. Called from inside the block (which mounts
+  // only in the full body) they fired on the lens's own promotion: all three
+  // carry the default `staleTime: 0`, so a fresh observer refetches on mount
+  // even against a warm cache, and a promotion that fetches is what
+  // `lens-contrast.spec.ts:183` forbids. The block reads them as props.
+  const sectionTasksQuery = useSectionTasks(sectionKey ? projectId : null);
+  const sectionGatesQuery = useSectionGates(sectionKey ? projectId : null);
+  const sectionTasks = sectionTasksQuery.data;
+  const sectionGates = sectionGatesQuery.data;
+  const { data: sectionLoggedMinutes } = useSectionLoggedMinutes(
+    sectionKey ? projectId : null,
+    sectionKey ?? 'project',
   );
   // Whether a trade line's REAL progress is actually known right now.
   // `isPending` (not `isLoading`) also covers install mode, where the query
@@ -1003,6 +1052,8 @@ function FFESectionBody({
       onRoomToggle: (next: boolean) => ceremony?.setRoom(ids, next),
       eligibleCount: ids.length,
       selectedCount: ids.filter((id) => ceremony?.isSelected(id)).length,
+      heldRoomId,
+      toggleRoom,
     };
   };
 
@@ -1039,10 +1090,19 @@ function FFESectionBody({
   const ffeItemsSettled = !isLoading && !isError;
   const ffeDefaultFolded =
     mode === 'project' && ffeItemsSettled ? total === 0 : null;
+  // R127 L-4 — the lens's reading of this stop. `null` while it has nothing to
+  // say, which is what leaves the region quiet until she is nearly here.
+  const ffePositionDensity = useLensDensityStore('ffe');
   const ffeFold = useRegionFold({
     docId: projectId,
     region: 'ffe',
     defaultFolded: ffeDefaultFolded,
+    // Install/care and the release ceremony print heads that are not a
+    // `RegionHead`, so they have no quiet form to stand in; forcing them open
+    // keeps `data-density` honest about what the root actually prints, and
+    // matches the fold they already refuse (`ffeFolded` below).
+    forceOpen: mode !== 'project' || selecting,
+    positionDensity: ffePositionDensity,
   });
   const ffeSetFolded = ffeFold.setFolded;
   const openFfeRegion = useCallback(() => {
@@ -1200,6 +1260,18 @@ function FFESectionBody({
     ...(ffeAwaiting ? [ffeAwaiting] : []),
   ];
 
+  // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else:
+  // its own status line, the one inked leader, one sr-only sentence.
+  const ffeQuiet = ffeFold.density === 'quiet';
+  const ffeDamagedCount = needs.filter(
+    (need) => need.kind === 'damage_claim',
+  ).length;
+  const ffeQuietStatus = piecesQuietStatus({
+    total,
+    rooms: roomGroups.length,
+    damaged: ffeDamagedCount,
+  });
+
   return (
     <section
       id="project-ffe"
@@ -1207,7 +1279,16 @@ function FFESectionBody({
       // install and care spreads pass mode="install", so gating it on
       // `groupByRoom` left their index row pointing at nothing.
       data-index-region="ffe"
-      className="scroll-mt-16"
+      data-density={ffeFold.density}
+      style={
+        {
+          '--doc-quiet-reserve':
+            ffeExceptions.length > 0
+              ? 'var(--doc-quiet-reserve-exc)'
+              : 'var(--doc-quiet-reserve-min)',
+        } as CSSProperties
+      }
+      className="mt-[var(--doc-region-gap)] scroll-mt-16"
     >
       {mode === 'install' || selecting ? (
         <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
@@ -1227,6 +1308,9 @@ function FFESectionBody({
                 : 'Pieces'}
           </h2>
           <span className="flex items-baseline gap-3">
+            {isLoading && (
+              <SectionLoadingLine variant="inline" label="Reading the schedule" />
+            )}
             {!selecting && meta && (
               <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                 {meta}
@@ -1287,13 +1371,14 @@ function FFESectionBody({
         </div>
       ) : (
         <>
-          <RegionRule className="mt-5" weight="strong" />
+          <RegionRule className="mt-0" weight="strong" />
           {ffeFold.folded ? (
             <FoldSeam
               headingId={ffeHeadingId}
               bodyId={ffeBodyId}
               name="Pieces"
               summary={ffeSeamSummary}
+              cause={ffeFold.cause}
               onUnfold={() => ffeFold.setFolded(false)}
               surfaceKey="project"
               regionKey="ffe"
@@ -1303,11 +1388,26 @@ function FFESectionBody({
               <RegionHead
                 headingId={ffeHeadingId}
                 name="Pieces"
-                status={ffeStatus}
+                // W4-R1 governs WHICH line prints (the quiet form is the
+                // head's own status line); D-B39/W5-R3 governs HOW the
+                // readiness pulse rides it — inline, inside the same <p>, so
+                // its exit moves no box. Both hold at either density.
+                status={
+                  <>
+                    {ffeQuiet ? ffeQuietStatus : ffeStatus}
+                    {!readinessQuery.isError && readinessQuery.isLoading && (
+                      <SectionLoadingLine variant="inline" label="Checking readiness" />
+                    )}
+                    {isLoading && (
+                      <SectionLoadingLine variant="inline" label="Reading the schedule" />
+                    )}
+                  </>
+                }
                 exceptions={ffeExceptions}
                 surfaceKey="project"
                 regionKey="ffe"
                 actions={ffeLedger}
+                actsAtQuiet={ffeQuiet ? 'leader' : 'all'}
                 bodyId={ffeBodyId}
                 onFold={() => ffeFold.setFolded(true)}
               />
@@ -1316,7 +1416,15 @@ function FFESectionBody({
         </>
       )}
 
-      {!ffeFolded && (
+      {!ffeFolded && ffeQuiet && (
+        <div id={ffeBodyId}>
+          <p className="sr-only">
+            {quietStateSentence(ffeQuietStatus, 'Pieces')}
+          </p>
+        </div>
+      )}
+
+      {!ffeFolded && !ffeQuiet && (
       <div id={ffeBodyId}>
       {/* The release gate reads authoritative readiness and stays closed
           without it — so a pending or failed read has to say so, or the act
@@ -1336,10 +1444,6 @@ function FFESectionBody({
             Try again
           </DocumentAction>
         </div>
-      )}
-
-      {mode === 'project' && !readinessQuery.isError && readinessQuery.isLoading && (
-        <SectionLoadingLine label="Checking readiness" className="mb-2" />
       )}
 
       {/* The head button stays visible (never vanishes on the designer) but
@@ -1371,6 +1475,19 @@ function FFESectionBody({
         <WorkBlock
           projectId={projectId}
           sectionKey={sectionKey}
+          tasks={sectionTasks}
+          gates={sectionGates}
+          loggedMinutes={sectionLoggedMinutes}
+          workLoading={
+            sectionTasksQuery.isLoading || sectionGatesQuery.isLoading
+          }
+          workError={sectionTasksQuery.isError || sectionGatesQuery.isError}
+          onRetryWork={() => {
+            void Promise.all([
+              sectionTasksQuery.refetch(),
+              sectionGatesQuery.refetch(),
+            ]);
+          }}
           sectionLabel={sectionLabel}
           clientUserId={clientUserId}
           clientName={clientName}
@@ -1387,8 +1504,6 @@ function FFESectionBody({
           sectionDragOver={sectionDragOver}
         />
       )}
-
-      {isLoading && <SectionLoadingLine label="Reading the schedule" className="py-3" />}
 
       {!isLoading && isError && (
         <div className="border-t border-[var(--color-pearl)] py-3">

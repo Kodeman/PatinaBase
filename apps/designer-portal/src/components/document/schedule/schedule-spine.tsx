@@ -34,6 +34,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from 'react';
 import {
   useCoordinationItems,
@@ -55,6 +56,7 @@ import {
   mapPhaseRowToScheduleInput,
   mapMilestoneRowToScheduleInput,
   useScheduleProposals,
+  useScheduleRevisions,
 } from '@patina/supabase';
 import type {
   ResolvedPhase,
@@ -78,13 +80,19 @@ import {
   sortItemsBlockingFirst,
 } from '@/lib/document/coordination-derivation';
 import { phaseAnchorId } from '@/lib/document/phase-anchor';
+import { LENS_COUNT_MAX_CHARS } from '@/lib/document/lens-constants';
 import {
   useScheduleNav,
   type ScheduleRevealTarget,
 } from './schedule-nav-context';
 import { useRippleSession } from './schedule-ripple-context';
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
-import { useRegionFold, type RegionFold } from '../region/use-region-fold';
+import {
+  useRegionFold,
+  type RegionDensity,
+  type RegionFold,
+} from '../region/use-region-fold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
@@ -112,6 +120,18 @@ import {
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { SectionLoadingLine } from '../section-loading-line';
+import {
+  quietStateSentence,
+  scheduleQuietStatus,
+} from '@/lib/document/lens-quiet-status';
+
+/**
+ * OD-12 — the quiet height, held at EVERY density so a body shorter than its
+ * reserve cannot shrink the region on mount. W3-L3 declares both floors as
+ * tokens; `-exc` is for a head that prints standing exceptions, and this head
+ * prints none, so the schedule root takes the minimum.
+ */
+const QUIET_RESERVE = 'var(--doc-quiet-reserve-min)';
 
 /** Best-effort phase_key from a free-typed name (phase_key is nullable + not
  *  unique on project_phases, so a plain slug is safe — no dedupe needed). */
@@ -170,6 +190,9 @@ export function ScheduleSpine({
   const { data: items } = useCoordinationItems(projectId);
   const { data: parties } = useProjectParties(projectId);
   const { data: tasks } = useSectionTasks(projectId);
+  // D-B49 — the revision ledger stands in this region's full body; its read
+  // belongs here, at the root, which is mounted at every density.
+  const { data: scheduleRevisions } = useScheduleRevisions(projectId);
   const { data: ffeRows } = useProjectFFEItems(projectId);
   const schedule = useResolvedSchedule(projectId);
   // Subscribe ONCE for the whole spine — the rows above re-read on invalidation.
@@ -704,6 +727,8 @@ export function ScheduleSpine({
   // so it reads the fold through a ref kept current after every render.
   const scheduleFoldRef = useRef<RegionFold>({
     folded: false,
+    density: 'full',
+    cause: null,
     toggle: () => {},
     setFolded: () => {},
   });
@@ -814,11 +839,51 @@ export function ScheduleSpine({
       pendingProposalCount === 0 &&
       openItemCount === 0;
 
+  // W4 (C-8) — the lens's fourth voice. The body never reads the DOM: it
+  // subscribes to the store the page-level observer writes, and the fold hook
+  // resolves that against the three voices that outrank it.
+  const positionDensity = useLensDensityStore('schedule');
   const scheduleFold = useRegionFold({
     docId: projectId,
     region: 'schedule',
     defaultFolded: scheduleDefaultFolded,
+    positionDensity,
   });
+  const density: RegionDensity = scheduleFold.density;
+
+  // NF4-02 / W4-R1 col 3 — the leader that prints while the schedule stop is
+  // quiet is `Adjust dates`, not `+ New open item`: a reader who has not
+  // reached the schedule is being told when the install stands, and the one
+  // act that answers that line is the dates it names. It arms the same phase
+  // the drafting strip's own `Adjust dates` arms, through the ScheduleNav wire
+  // that already runs Spine → Rule, so there is no second act. `actsAtQuiet`
+  // takes entry 0, so the election is a prepend and the open region's ledger
+  // is untouched.
+  const scheduleHeadLedger: readonly RegionLedgerEntry[] =
+    density === 'quiet' && activePhaseId
+      ? [
+          {
+            key: 'adjust-phase-dates',
+            label: 'Adjust dates',
+            onClick: () => armEdit(activePhaseId),
+          },
+          ...scheduleLedger,
+        ]
+      : scheduleLedger;
+
+  // W4-R1 — the quiet head's own status line: the install day and how far out
+  // it stands. Phases never print here (the rail carries the count), and a
+  // fact that is not known prints NOTHING rather than a placeholder.
+  const scheduleQuietLine = useMemo(
+    () =>
+      scheduleQuietStatus({
+        installStart:
+          mainLane.find((phase) => phase.id === installEntryPhaseId)?.start ??
+          null,
+      }),
+    [mainLane, installEntryPhaseId],
+  );
+
   useEffect(() => {
     scheduleFoldRef.current = scheduleFold;
   });
@@ -865,10 +930,7 @@ export function ScheduleSpine({
         />
       )}
 
-      {loading ? (
-        // Nothing heavy while the resolver's sources load — one quiet line.
-        <SectionLoadingLine label="resolving the schedule" className="mt-4" />
-      ) : (
+      {loading ? null : (
         <>
           {resolvedPhases.length === 0 ? (
             // ── Birth — a schedule with no phases yet (R100). Three quiet
@@ -1039,13 +1101,17 @@ export function ScheduleSpine({
             projectId={projectId}
             items={allItems}
             onOpenItem={openItem}
+            // D-B49 — read at this region's root (`:191`, `:190`), never
+            // inside the body that only mounts on a promotion.
+            tasks={tasks}
+            parties={parties}
           />
 
           {/* R100 "Memory" — the schedule's own append-only ledger at the
               spine's foot: v · reason · who · when, newest first, no actions.
               Studio-only by construction (inside the gated spine); renders
               nothing until a baseline is cut. */}
-          <RevisionLedger projectId={projectId} />
+          <RevisionLedger projectId={projectId} revisions={scheduleRevisions} />
         </>
       )}
     </>
@@ -1055,9 +1121,16 @@ export function ScheduleSpine({
     <section
       id="document-decision-controls"
       data-index-region="schedule"
+      // W4 — this FILE renders `data-density` from the fold's answer (OD-13)
+      // and writes nothing imperatively; the density rAF also writes `'full'`
+      // on the same element, and both owners are deliberate (F6, §5's DOM
+      // table). The reserve rides the same root at every density so a short
+      // body cannot shrink the region on mount (OD-12).
+      data-density={density}
+      style={{ '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties}
       tabIndex={-1}
       aria-label="Project schedule"
-      className="mt-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      className="mt-[var(--doc-region-gap)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
       {/* The region's rule opens it whether folded or open — a printed device,
           not a divider with meaning (region-rule.tsx). */}
@@ -1069,6 +1142,7 @@ export function ScheduleSpine({
           bodyId={scheduleBodyId}
           name="Schedule"
           summary={scheduleStatus}
+          cause={scheduleFold.cause}
           onUnfold={handleScheduleUnfold}
           surfaceKey="open-document"
           regionKey="schedule"
@@ -1078,14 +1152,36 @@ export function ScheduleSpine({
           <RegionHead
             headingId={scheduleHeadingId}
             name="Schedule"
-            status={scheduleStatus}
+            status={
+              <>
+                {density === 'quiet' ? scheduleQuietLine : scheduleStatus}
+                {loading && (
+                  <SectionLoadingLine variant="inline" label="resolving the schedule" />
+                )}
+              </>
+            }
             surfaceKey="open-document"
             regionKey="schedule"
-            actions={scheduleLedger}
+            actions={scheduleHeadLedger}
+            actsAtQuiet={density === 'quiet' ? 'leader' : 'all'}
             bodyId={scheduleBodyId}
             onFold={() => scheduleFold.setFolded(true)}
           />
-          <div id={scheduleBodyId}>{scheduleBody}</div>
+          {density === 'quiet' ? (
+            // W4-C7: the id rides the quiet wrapper too, as approvals, money
+            // and FF&E already do. `RegionHead` renders `aria-controls=
+            // {bodyId}` on the Fold button unconditionally, so a quiet branch
+            // that dropped the id left the button naming a node that is not on
+            // the page — axe `aria-valid-attr-value`, and a screen reader
+            // announcing a region that cannot be reached.
+            <div id={scheduleBodyId}>
+              <p className="sr-only">
+                {quietStateSentence(scheduleQuietLine, 'Schedule')}
+              </p>
+            </div>
+          ) : (
+            <div id={scheduleBodyId}>{scheduleBody}</div>
+          )}
         </>
       )}
 

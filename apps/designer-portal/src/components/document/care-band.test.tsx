@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 const useAuth = jest.fn();
 const useCloseProject = jest.fn();
@@ -26,6 +26,14 @@ jest.mock('@patina/supabase', () => ({
   useProjectPaymentMilestones: (id: string) => useProjectPaymentMilestones(id),
   useProjectInvoices: (id: string) => useProjectInvoices(id),
 }));
+// W4 — the lens is a page-level observer and never runs in jsdom, so the store
+// is mocked per suite. `null` is the shipped truth here (the lens is silent) and
+// every claim below was written against it; the quiet→full cases drive `'full'`,
+// which is the lens having reached this root.
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
 jest.mock('./strata-mark', () => ({
   StrataMark: () => <span data-testid="strata-mark" />,
 }));
@@ -48,10 +56,13 @@ jest.mock('./document-action', () => ({
 }));
 
 import { CareBand } from './care-band';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { regionBoxSignature } from './region/region-box-signature';
 
 const settled = (data: unknown) => ({ data, isError: false });
 
 beforeEach(() => {
+  __setDensityForTest(null);
   closeMutate.mockReset();
   useAuth.mockReturnValue({
     user: { id: 'owner-1' },
@@ -115,12 +126,30 @@ describe('CareBand closeout authority', () => {
   // A3-L7 — the care rest state ("Everything is settled." / CLOSE THE BOOK) is
   // gated on this band's own closure answer; without this wire the page can
   // never pass `closureReady` and one of the seven rest states is unreachable.
-  it("publishes its closure answer to the page", () => {
+  // D-B9 — and the CHECKLIST with it: the ladder's care stop prints
+  // `N OF M CLOSED OUT` off this one report, because nothing else on the page
+  // can state the pair without repeating the eight closeout reads.
+  it("publishes its closure answer, and its count, to the page", () => {
     const onCloseoutReady = jest.fn();
 
     render(<CareBand projectId="project-1" onCloseoutReady={onCloseoutReady} />);
 
-    expect(onCloseoutReady).toHaveBeenCalledWith(false);
+    expect(onCloseoutReady).toHaveBeenCalledWith({
+      ready: false,
+      closed: 1,
+      total: 6,
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Final walkthrough completed with client',
+      }),
+    );
+    expect(onCloseoutReady).toHaveBeenLastCalledWith({
+      ready: false,
+      closed: 2,
+      total: 6,
+    });
   });
 
   it('prints the checklist anchor the guide\'s care act names', () => {
@@ -202,7 +231,11 @@ describe('CareBand fold', () => {
     expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
   });
 
-  it('defaults folded to a quiet seam on a non-install phase with no remembered choice', () => {
+  it('arrives OPEN on a non-install phase with no remembered choice — the default quiets a stop, it never folds it', () => {
+    // R127 OD-10 (W3-L5). This case read "defaults folded to a quiet seam on a
+    // non-install phase with no remembered choice". `care` is a STOP key, so a
+    // derived default is DENSITY now, not a fold: with no remembered choice the
+    // band arrives open and quiet, its head and its leader on the paper.
     useProjectV2.mockReturnValue(
       settled({
         id: 'project-1',
@@ -218,11 +251,430 @@ describe('CareBand fold', () => {
 
     render(<CareBand projectId="project-1" />);
 
+    expect(document.querySelector('[data-fold-seam]')).toBeNull();
+    expect(document.querySelector('[data-region-head]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+  });
+
+  it('folds to a quiet seam on a non-install phase when she folded it herself, and round-trips', () => {
+    // The seam's claims, kept whole under the one cause a stop can still have:
+    // her own remembered choice (OD-10). The round trip back to the body is
+    // unchanged.
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'active',
+        current_phase: 'design_development',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+    window.localStorage.setItem('patina:doc-fold:project-1:care', '1');
+
+    render(<CareBand projectId="project-1" />);
+
     expect(screen.queryByRole('button', { name: 'Close the book' })).not.toBeInTheDocument();
     const seam = screen.getByRole('button', { name: /closing the book/i });
     expect(seam).toBeInTheDocument();
 
     fireEvent.click(seam);
     expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+  });
+});
+
+describe('CareBand running index root (W2 C-2)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('is absent from the non-owner branch when indexRoot is not set', () => {
+    useAuth.mockReturnValue({
+      user: { id: 'collaborator-1' },
+      isLoading: false,
+    });
+
+    const { container } = render(<CareBand projectId="project-1" />);
+
+    expect(container.querySelector('[data-index-region="care"]')).toBeNull();
+  });
+
+  it('marks the non-owner branch as the care root when indexRoot is set', () => {
+    useAuth.mockReturnValue({
+      user: { id: 'collaborator-1' },
+      isLoading: false,
+    });
+
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute('id', 'care-region-heading');
+    // W3-L4 — one region-spacing token, owned by the root, in every branch.
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
+    expect(
+      screen.getByRole('region', { name: 'Project closeout ownership' }),
+    ).toBe(root);
+  });
+
+  it('is absent from the open branch when indexRoot is not set', () => {
+    const { container } = render(<CareBand projectId="project-1" />);
+
+    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    expect(container.querySelector('[data-index-region="care"]')).toBeNull();
+  });
+
+  it('marks the open branch as the care root when indexRoot is set', () => {
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute('id', 'care-region-heading');
+    // W3-L4 — one region-spacing token, owned by the root, in every branch.
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
+  });
+
+  it('marks the folded (quiet seam) branch as the care root when indexRoot is set', () => {
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'active',
+        current_phase: 'design_development',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+    // After OD-10 a stop reaches the seam branch only through her own fold; the
+    // branch itself, and the root it must still carry, are unchanged.
+    window.localStorage.setItem('patina:doc-fold:project-1:care', '1');
+
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    expect(screen.getByRole('button', { name: /closing the book/i })).toBeInTheDocument();
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute('id', 'care-region-heading');
+    // W3-L4 — one region-spacing token, owned by the root, in every branch.
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
+  });
+
+  // C-04 — the `care` stop is declared on every project spread. A completed
+  // project used to render nothing at all, so the ladder printed a stop with
+  // no root: no scroll, no heading, a press onto nothing.
+  it('marks the completed branch as the care root when indexRoot is set', () => {
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'completed',
+        current_phase: 'installation',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute('id', 'care-region-heading');
+    // W3-L4 — one region-spacing token, owned by the root, in every branch.
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
+    expect(screen.getByText(/The book is closed\./)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Close the book' }),
+    ).not.toBeInTheDocument();
+  });
+
+  // C-07 / L-10 — `scrollToRegion` focuses `regionHeadingId('care')`, and
+  // `.focus()` on an element that cannot take focus is a silent no-op: the
+  // reader lands on the region with focus still in the rail.
+  it('gives the care root a focus destination the jump can land on', () => {
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    const root = container.querySelector<HTMLElement>(
+      '[data-index-region="care"]',
+    ) as HTMLElement;
+    expect(root).toHaveAttribute('tabindex', '-1');
+    root.focus();
+    expect(document.activeElement).toBe(root);
+  });
+
+  it('marks the closed (post-close confirmation) branch as the care root when indexRoot is set', () => {
+    closeMutate.mockImplementation(
+      (
+        _input: unknown,
+        callbacks: { onSuccess: () => void },
+      ) => {
+        callbacks.onSuccess();
+      },
+    );
+
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    for (const label of [
+      'Final walkthrough completed with client',
+      'All punch list items resolved',
+      'Professional photography scheduled',
+      'Final project photos on file (for portfolio)',
+      'Project case study written for portfolio',
+    ]) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Close the book' }));
+
+    expect(screen.getByText(/The book is closed\./)).toBeInTheDocument();
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute('id', 'care-region-heading');
+    // W3-L4 — one region-spacing token, owned by the root, in every branch.
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
+  });
+});
+
+// W4 (L-4, OD-12, OD-13) — the quiet body: the same head, one count line, one
+// leader that presses the region open, the sr-only state line, and none of the
+// checklist. `data-density` and the reserve ride the index root in EVERY branch.
+describe('CareBand quiet body (W4)', () => {
+  const nonInstall = () =>
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'active',
+        current_phase: 'design_development',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('prints head, count line, leader and the sr-only state line — and no checklist', () => {
+    nonInstall();
+
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    const root = container.querySelector('[data-index-region="care"]');
+    expect(root).toHaveAttribute('data-density', 'quiet');
+    expect(root).toHaveStyle({
+      '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+    });
+
+    expect(screen.getByRole('heading', { name: 'Closing the book' })).toBeInTheDocument();
+    // W4-R1: the count line IS the head's status line.
+    const head = container.querySelector('[data-region-head="closure"]')!;
+    expect(head).toHaveTextContent('1 of 6 closed out');
+    expect(
+      container.querySelectorAll('[data-region-count-line]'),
+    ).toHaveLength(0);
+    expect(
+      screen.getByText(
+        '1 of 6 closed out · not yet on the paper · press Closing the book on the index to open',
+      ),
+    ).toHaveClass('sr-only');
+
+    // The checklist, the snapshot fields and the fold-away act are not on the
+    // paper until the lens reaches this root.
+    expect(
+      screen.queryByRole('button', {
+        name: 'Final walkthrough completed with client',
+      }),
+    ).not.toBeInTheDocument();
+    expect(document.getElementById('closing-the-book')).toBeNull();
+    expect(screen.queryByText('The portfolio snapshot')).not.toBeInTheDocument();
+    // The head keeps every act it has at full — the leader included.
+    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+  });
+
+  it('keeps the SAME head element across quiet → full', () => {
+    nonInstall();
+
+    const { container, rerender } = render(
+      <CareBand projectId="project-1" indexRoot />,
+    );
+    const quietHead = container.querySelector('[data-region-head="closure"]');
+    // H5 — the root's OUTER box may not depend on its density.
+    const quietBox = regionBoxSignature(
+      container.querySelector('[data-index-region="care"]'),
+    );
+    const quietHeading = document.getElementById('care-band-heading');
+    expect(quietHead).not.toBeNull();
+    expect(container.querySelector('[data-index-region="care"]')).toHaveAttribute(
+      'data-density',
+      'quiet',
+    );
+
+    act(() => {
+      __setDensityForTest('full');
+    });
+    rerender(<CareBand projectId="project-1" indexRoot />);
+
+    expect(container.querySelector('[data-index-region="care"]')).toHaveAttribute(
+      'data-density',
+      'full',
+    );
+    expect(container.querySelector('[data-region-head="closure"]')).toBe(quietHead);
+    expect(document.getElementById('care-band-heading')).toBe(quietHeading);
+    expect(document.getElementById('closing-the-book')).not.toBeNull();
+    expect(screen.queryByText('1 OF 6 CLOSED OUT')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Quiet — opens as you read'),
+    ).not.toBeInTheDocument();
+    // The same outer box on the other side of the promotion: same
+    // margins, same border, same reserve, same rules. A stop that grew a
+    // top margin on promotion would move every root below it.
+    expect(
+      regionBoxSignature(
+        container.querySelector('[data-index-region="care"]'),
+      ),
+    ).toBe(quietBox);
+  });
+
+  it('lets her own fold outrank the lens — CLOSED BY YOU is the only cause a stop has', () => {
+    nonInstall();
+    window.localStorage.setItem('patina:doc-fold:project-1:care', '1');
+    act(() => {
+      __setDensityForTest('full');
+    });
+
+    const { container } = render(<CareBand projectId="project-1" indexRoot />);
+
+    expect(screen.getByRole('button', { name: /closing the book/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close the book' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Quiet — opens as you read'),
+    ).not.toBeInTheDocument();
+    // An explicit choice is `full` by construction (C-8): the lens cannot make
+    // a region she has shut quieter, and it never unfolds one.
+    expect(container.querySelector('[data-index-region="care"]')).toHaveAttribute(
+      'data-density',
+      'full',
+    );
+  });
+
+  it('carries the density and the reserve on the root in every branch', () => {
+    // 1 — the settled read (completed).
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'completed',
+        current_phase: 'installation',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+    const completed = render(<CareBand projectId="project-1" indexRoot />);
+    let root = completed.container.querySelector('[data-index-region="care"]');
+    expect(root).toHaveAttribute('data-density');
+    expect(root).toHaveStyle({
+      '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+    });
+    completed.unmount();
+
+    // 2 — the ownership notice.
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'active',
+        current_phase: 'installation',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+    useAuth.mockReturnValue({ user: { id: 'collaborator-1' }, isLoading: false });
+    const nonOwner = render(<CareBand projectId="project-1" indexRoot />);
+    root = nonOwner.container.querySelector('[data-index-region="care"]');
+    expect(root).toHaveAttribute('data-density');
+    expect(root).toHaveStyle({
+      '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+    });
+    nonOwner.unmount();
+    useAuth.mockReturnValue({ user: { id: 'owner-1' }, isLoading: false });
+
+    // 3 — her own fold, the seam.
+    nonInstall();
+    window.localStorage.setItem('patina:doc-fold:project-1:care', '1');
+    const seam = render(<CareBand projectId="project-1" indexRoot />);
+    root = seam.container.querySelector('[data-index-region="care"]');
+    expect(root).toHaveAttribute('data-density', 'full');
+    expect(root).toHaveStyle({
+      '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+    });
+    seam.unmount();
+    window.localStorage.clear();
+
+    // 4 — the band itself.
+    const band = render(<CareBand projectId="project-1" indexRoot />);
+    root = band.container.querySelector('[data-index-region="care"]');
+    expect(root).toHaveAttribute('data-density', 'quiet');
+    expect(root).toHaveStyle({
+      '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+    });
+
+    // 5 — the post-close confirmation.
+    closeMutate.mockImplementation(
+      (_input: unknown, callbacks: { onSuccess: () => void }) => {
+        callbacks.onSuccess();
+      },
+    );
+    act(() => {
+      __setDensityForTest('full');
+    });
+    band.rerender(<CareBand projectId="project-1" indexRoot />);
+    for (const label of [
+      'Final walkthrough completed with client',
+      'All punch list items resolved',
+      'Professional photography scheduled',
+      'Final project photos on file (for portfolio)',
+      'Project case study written for portfolio',
+    ]) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Close the book' }));
+    expect(screen.getByText(/The book is closed\./)).toBeInTheDocument();
+    root = band.container.querySelector('[data-index-region="care"]');
+    expect(root).toHaveAttribute('data-density', 'full');
+    expect(root).toHaveStyle({
+      '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
+    });
   });
 });

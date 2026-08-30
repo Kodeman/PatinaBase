@@ -158,20 +158,31 @@ const wayfinding = {
   }) => track('document_walkthrough_started', props),
 };
 
-export const documentEvents = {
-  guideShown: (props: {
-    stage: string;
-    state: string;
-    action_key: string | null;
-    input_count: number;
-  }) => track('document_guide_shown', props),
+/**
+ * D-B22 — the lens line's payload. `guideShown`/`guideSelected` are retired
+ * with the strip that fired them: `DocumentGuide` no longer mounts, so those
+ * two event names went dark at this deploy and a dashboard reading
+ * `document_guide_shown`/`_selected` should read these three instead (I152).
+ */
+// A type alias, not an interface: `track` takes `Record<string, unknown>` and
+// only an alias carries the implicit index signature that assignment needs.
+export type LensLineProps = {
+  stage: string;
+  state: 'standing' | 'guide' | 'none';
+  action_key: string | null;
+  standing_count: number;
+  tier: 'full' | 'narrow' | 'mobile';
+};
 
-  guideSelected: (props: {
-    stage: string;
-    state: string;
-    action_key: string;
-    input_count: number;
-  }) => track('document_guide_selected', props),
+export const documentEvents = {
+  lensLineShown: (props: LensLineProps) =>
+    track('document_lens_line_shown', props),
+
+  lensLineActed: (props: LensLineProps) =>
+    track('document_lens_line_acted', props),
+
+  lensStandingSheetOpened: (props: Omit<LensLineProps, 'action_key'>) =>
+    track('document_lens_standing_opened', props),
 
   historyToggled: (props: { expanded: boolean; completed_count: number }) =>
     track('document_previous_work_toggled', props),

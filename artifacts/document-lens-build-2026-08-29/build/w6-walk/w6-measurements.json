@@ -1,0 +1,2536 @@
+{
+ "console": {
+  "d5_1440": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+   "TypeError: Failed to fetch\n    at http://127.0.0.1:3024/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO ",
+   "Error logged: AppError: Not authenticated\n    at R (http://127.0.0.1:3024/_next/static/chunks/581-c33ddcf2b4577250.js:1:",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "d5_1280": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+   "TypeError: Failed to fetch\n    at http://127.0.0.1:3024/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO ",
+   "Error logged: AppError: Not authenticated\n    at R (http://127.0.0.1:3024/_next/static/chunks/581-c33ddcf2b4577250.js:1:",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "d5_390": [
+   "TypeError: Failed to fetch\n    at http://127.0.0.1:3024/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO ",
+   "Error logged: AppError: Not authenticated\n    at R (http://127.0.0.1:3024/_next/static/chunks/581-c33ddcf2b4577250.js:1:",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "prework_1440": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+   "TypeError: Failed to fetch\n    at http://127.0.0.1:3024/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO ",
+   "Error logged: AppError: Not authenticated\n    at R (http://127.0.0.1:3024/_next/static/chunks/581-c33ddcf2b4577250.js:1:"
+  ],
+  "prework_390": [
+   "TypeError: Failed to fetch\n    at http://127.0.0.1:3024/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO ",
+   "Error logged: AppError: Not authenticated\n    at R (http://127.0.0.1:3024/_next/static/chunks/581-c33ddcf2b4577250.js:1:"
+  ],
+  "oneline_1440": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+   "TypeError: Failed to fetch\n    at http://127.0.0.1:3024/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO ",
+   "Error logged: AppError: Not authenticated\n    at R (http://127.0.0.1:3024/_next/static/chunks/581-c33ddcf2b4577250.js:1:"
+  ],
+  "oneline_390": [
+   "TypeError: Failed to fetch\n    at http://127.0.0.1:3024/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO ",
+   "Error logged: AppError: Not authenticated\n    at R (http://127.0.0.1:3024/_next/static/chunks/581-c33ddcf2b4577250.js:1:"
+  ]
+ },
+ "shots": [
+  "w6-1440-s0-project",
+  "w6-1440-s2-project",
+  "w6-1440-s3-project",
+  "w6-1440-foot-project",
+  "w6-1440-sheet-project",
+  "w6-1280-s0-project",
+  "w6-1280-s2-project",
+  "w6-1280-s3-project",
+  "w6-1280-foot-project",
+  "w6-1280-sheet-project",
+  "w6-390-s0-project",
+  "w6-390-s2-project",
+  "w6-390-s3-project",
+  "w6-390-foot-project",
+  "w6-390-sheet-project",
+  "w6-390-margin-project",
+  "w6-1440-s2-reduce-project",
+  "w6-1440-s0-prework",
+  "w6-1440-s2-prework",
+  "w6-390-s0-prework",
+  "w6-1440-s0-oneline",
+  "w6-390-s0-oneline"
+ ],
+ "d5_1440": {
+  "s0": {
+   "y": 0,
+   "ih": 900,
+   "lensState": "rest",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 245.06,
+    "bottom": 301.06,
+    "open": "true",
+    "l1": "",
+    "l2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder SEND REMINDER +10 MORE",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": 359.06,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": false,
+     "top": 325,
+     "h": 347
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": false,
+     "top": 963,
+     "h": 923
+    },
+    {
+     "k": "ffe",
+     "d": "quiet",
+     "p": false,
+     "top": 1909,
+     "h": 112
+    },
+    {
+     "k": "money",
+     "d": "quiet",
+     "p": false,
+     "top": 2045,
+     "h": 70
+    },
+    {
+     "k": "care",
+     "d": "quiet",
+     "p": false,
+     "top": 2139,
+     "h": 102
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 2355,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    290.88,
+    24,
+    24,
+    24,
+    114.5
+   ],
+   "railLabelsN": 13,
+   "railLabels": [
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "Client approvals",
+    "Schedule",
+    "Pieces",
+    "Money",
+    "Closing the book",
+    "The record",
+    "FILED WITH THIS JOB",
+    "Plan room",
+    "Spec book",
+    "Boards",
+    "Call sheet"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "3 OF 5"
+   ],
+   "window": {
+    "top": 225,
+    "h": 40
+   },
+   "letterhead": 191.06,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft — the long paper",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [],
+   "lhInFrame": true,
+   "quietHeads": [
+    {
+     "k": "ffe",
+     "name": "Pieces",
+     "status": "1 open damage claim · 4 unspecified",
+     "acts": [
+      "File the claim",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "money",
+     "name": "Money",
+     "status": "The money · one region",
+     "acts": [
+      "Draw an invoice",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "care",
+     "name": "Closing the book",
+     "status": "Care · closing the book",
+     "acts": [
+      "Close the book"
+     ]
+    },
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "4 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": {
+    "h": 0,
+    "lines": [
+     "In this documentClient UserAt Client approvalsMessage Client UserMore"
+    ],
+    "spb": "72px",
+    "varH": ""
+   },
+   "hoverOnly": 0,
+   "closedByYou": []
+  },
+  "s2": {
+   "y": 897,
+   "ih": 900,
+   "lensState": "reading",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 0,
+    "bottom": 56,
+    "open": "false",
+    "l1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 20",
+    "l2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder SEND REMINDER +10 MORE Now at Schedule · Install Sun, Sep 20 · 3 weeks out",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": -537.94,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": true,
+     "top": -572,
+     "h": 347
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": false,
+     "top": 66,
+     "h": 923
+    },
+    {
+     "k": "ffe",
+     "d": "full",
+     "p": false,
+     "top": 1012,
+     "h": 5780
+    },
+    {
+     "k": "money",
+     "d": "quiet",
+     "p": false,
+     "top": 6817,
+     "h": 70
+    },
+    {
+     "k": "care",
+     "d": "quiet",
+     "p": false,
+     "top": 6911,
+     "h": 102
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 7127,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    290.88,
+    24,
+    24,
+    24,
+    114.5
+   ],
+   "railLabelsN": 13,
+   "railLabels": [
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "Client approvals",
+    "Schedule",
+    "Pieces",
+    "Money",
+    "Closing the book",
+    "The record",
+    "FILED WITH THIS JOB",
+    "Plan room",
+    "Spec book",
+    "Boards",
+    "Call sheet"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "3 OF 5"
+   ],
+   "window": {
+    "top": 265,
+    "h": 54
+   },
+   "letterhead": 191.06,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft — the long paper",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [
+    "schedule"
+   ],
+   "lhInFrame": false,
+   "quietHeads": [
+    {
+     "k": "money",
+     "name": "Money",
+     "status": "The money · one region",
+     "acts": [
+      "Draw an invoice",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "care",
+     "name": "Closing the book",
+     "status": "Care · closing the book",
+     "acts": [
+      "Close the book"
+     ]
+    },
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "4 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": {
+    "h": 0,
+    "lines": [
+     "In this documentClient UserAt ScheduleMessage Client UserMore"
+    ],
+    "spb": "72px",
+    "varH": ""
+   },
+   "hoverOnly": 0,
+   "closedByYou": []
+  },
+  "s3": {
+   "y": 1843,
+   "ih": 900,
+   "lensState": "reading",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 0,
+    "bottom": 56,
+    "open": "false",
+    "l1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 20",
+    "l2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder SEND REMINDER +10 MORE Now at Pieces · 62 lines · 5 rooms · 1 damaged",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": -1483.94,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": true,
+     "top": -1518,
+     "h": 347
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": false,
+     "top": -880,
+     "h": 923
+    },
+    {
+     "k": "ffe",
+     "d": "full",
+     "p": false,
+     "top": 66,
+     "h": 5780
+    },
+    {
+     "k": "money",
+     "d": "quiet",
+     "p": false,
+     "top": 5871,
+     "h": 70
+    },
+    {
+     "k": "care",
+     "d": "quiet",
+     "p": false,
+     "top": 5965,
+     "h": 102
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 6181,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    290.88,
+    24,
+    24,
+    24,
+    114.5
+   ],
+   "railLabelsN": 13,
+   "railLabels": [
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "Client approvals",
+    "Schedule",
+    "Pieces",
+    "Money",
+    "Closing the book",
+    "The record",
+    "FILED WITH THIS JOB",
+    "Plan room",
+    "Spec book",
+    "Boards",
+    "Call sheet"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "3 OF 5"
+   ],
+   "window": {
+    "top": 319,
+    "h": 54
+   },
+   "letterhead": 191.06,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft — the long paper",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [
+    "ffe"
+   ],
+   "lhInFrame": false,
+   "quietHeads": [
+    {
+     "k": "money",
+     "name": "Money",
+     "status": "The money · one region",
+     "acts": [
+      "Draw an invoice",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "care",
+     "name": "Closing the book",
+     "status": "Care · closing the book",
+     "acts": [
+      "Close the book"
+     ]
+    },
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "4 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": {
+    "h": 0,
+    "lines": [
+     "In this documentClient UserAt PiecesMessage Client UserMore"
+    ],
+    "spb": "72px",
+    "varH": ""
+   },
+   "hoverOnly": 0,
+   "closedByYou": []
+  },
+  "y400": {
+   "bottom": 56,
+   "h": 56
+  },
+  "fling": {
+   "blank": 0,
+   "frames": 73
+  },
+  "foot": {
+   "y": 9850,
+   "ih": 900,
+   "lensState": "reading",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 0,
+    "bottom": 56,
+    "open": "false",
+    "l1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 20",
+    "l2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder SEND REMINDER +10 MORE Now at The record · 4 complete",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": -9490.94,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": true,
+     "top": -9525,
+     "h": 347
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": true,
+     "top": -8887,
+     "h": 923
+    },
+    {
+     "k": "ffe",
+     "d": "full",
+     "p": true,
+     "top": -7941,
+     "h": 5780
+    },
+    {
+     "k": "money",
+     "d": "full",
+     "p": true,
+     "top": -2136,
+     "h": 1079
+    },
+    {
+     "k": "care",
+     "d": "full",
+     "p": true,
+     "top": -1034,
+     "h": 846
+    },
+    {
+     "k": "record",
+     "d": "full",
+     "p": true,
+     "top": -73,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    290.88,
+    24,
+    24,
+    24,
+    114.5
+   ],
+   "railLabelsN": 13,
+   "railLabels": [
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "Client approvals",
+    "Schedule",
+    "Pieces",
+    "Money",
+    "Closing the book",
+    "The record",
+    "FILED WITH THIS JOB",
+    "Plan room",
+    "Spec book",
+    "Boards",
+    "Call sheet"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "3 OF 5"
+   ],
+   "window": {
+    "top": 508.66,
+    "h": 40
+   },
+   "letterhead": 191.06,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft — the long paper",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [],
+   "lhInFrame": false,
+   "quietHeads": [],
+   "bar": {
+    "h": 0,
+    "lines": [
+     "In this documentClient UserAt The recordMessage Client UserMore"
+    ],
+    "spb": "72px",
+    "varH": ""
+   },
+   "hoverOnly": 0,
+   "closedByYou": [],
+   "find": true
+  },
+  "cls": {
+   "paperCls": 0,
+   "chromeCls": 0,
+   "segChangeSteps": 0,
+   "line2Ys": [
+    26.19
+   ]
+  },
+  "l10": {
+   "top": 77.55,
+   "active": "Money",
+   "density": "full"
+  },
+  "l7": {
+   "cause": "CLOSED BY YOU",
+   "seam": "Money · NO BUDGET YET · $0 AUTHORIZED · CLOSED BY YOU · UNFOLD ↓"
+  },
+  "l7reload": "CLOSED BY YOU",
+  "sheet": {
+   "label": null,
+   "rows": 9,
+   "inputs": "INPUT NEEDED · 2",
+   "firstRow": "PAST DUE ·  · Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder ·  · SEND REMINDER"
+  },
+  "sheetFocusBack": "+10 MORE"
+ },
+ "d5_1280": {
+  "s0": {
+   "y": 0,
+   "ih": 800,
+   "lensState": "rest",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 245.06,
+    "bottom": 301.06,
+    "open": "true",
+    "l1": "",
+    "l2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder SEND REMINDER +10 MORE",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": 359.06,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": false,
+     "top": 325,
+     "h": 347
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": false,
+     "top": 963,
+     "h": 923
+    },
+    {
+     "k": "ffe",
+     "d": "quiet",
+     "p": false,
+     "top": 1909,
+     "h": 112
+    },
+    {
+     "k": "money",
+     "d": "quiet",
+     "p": false,
+     "top": 2045,
+     "h": 70
+    },
+    {
+     "k": "care",
+     "d": "quiet",
+     "p": false,
+     "top": 2139,
+     "h": 102
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 2355,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    290.88,
+    24,
+    24,
+    24,
+    114.5
+   ],
+   "railLabelsN": 13,
+   "railLabels": [
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "Client approvals",
+    "Schedule",
+    "Pieces",
+    "Money",
+    "Closing the book",
+    "The record",
+    "FILED WITH THIS JOB",
+    "Plan room",
+    "Spec book",
+    "Boards",
+    "Call sheet"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "3 OF 5"
+   ],
+   "window": {
+    "top": 234,
+    "h": 56
+   },
+   "letterhead": 191.06,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft — the long paper",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [],
+   "lhInFrame": true,
+   "quietHeads": [
+    {
+     "k": "ffe",
+     "name": "Pieces",
+     "status": "1 open damage claim · 4 unspecified",
+     "acts": [
+      "File the claim",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "money",
+     "name": "Money",
+     "status": "The money · one region",
+     "acts": [
+      "Draw an invoice",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "care",
+     "name": "Closing the book",
+     "status": "Care · closing the book",
+     "acts": [
+      "Close the book"
+     ]
+    },
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "4 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": {
+    "h": 0,
+    "lines": [
+     "In this documentClient UserAt Client approvalsMessage Client UserMore"
+    ],
+    "spb": "72px",
+    "varH": ""
+   },
+   "hoverOnly": 0,
+   "closedByYou": []
+  },
+  "s2": {
+   "y": 897,
+   "ih": 800,
+   "lensState": "reading",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 0,
+    "bottom": 56,
+    "open": "false",
+    "l1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 20",
+    "l2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder SEND REMINDER +10 MORE Now at Schedule · Install Sun, Sep 20 · 3 weeks out",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": -537.94,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": true,
+     "top": -572,
+     "h": 347
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": false,
+     "top": 66,
+     "h": 923
+    },
+    {
+     "k": "ffe",
+     "d": "full",
+     "p": false,
+     "top": 1012,
+     "h": 5780
+    },
+    {
+     "k": "money",
+     "d": "quiet",
+     "p": false,
+     "top": 6817,
+     "h": 70
+    },
+    {
+     "k": "care",
+     "d": "quiet",
+     "p": false,
+     "top": 6911,
+     "h": 102
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 7127,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    290.88,
+    24,
+    24,
+    24,
+    114.5
+   ],
+   "railLabelsN": 13,
+   "railLabels": [
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "Client approvals",
+    "Schedule",
+    "Pieces",
+    "Money",
+    "Closing the book",
+    "The record",
+    "FILED WITH THIS JOB",
+    "Plan room",
+    "Spec book",
+    "Boards",
+    "Call sheet"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "3 OF 5"
+   ],
+   "window": {
+    "top": 290,
+    "h": 54
+   },
+   "letterhead": 191.06,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft — the long paper",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [
+    "schedule"
+   ],
+   "lhInFrame": false,
+   "quietHeads": [
+    {
+     "k": "money",
+     "name": "Money",
+     "status": "The money · one region",
+     "acts": [
+      "Draw an invoice",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "care",
+     "name": "Closing the book",
+     "status": "Care · closing the book",
+     "acts": [
+      "Close the book"
+     ]
+    },
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "4 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": {
+    "h": 0,
+    "lines": [
+     "In this documentClient UserAt ScheduleMessage Client UserMore"
+    ],
+    "spb": "72px",
+    "varH": ""
+   },
+   "hoverOnly": 0,
+   "closedByYou": []
+  },
+  "s3": {
+   "y": 1843,
+   "ih": 800,
+   "lensState": "reading",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 0,
+    "bottom": 56,
+    "open": "false",
+    "l1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 20",
+    "l2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder SEND REMINDER +10 MORE Now at Pieces · 62 lines · 5 rooms · 1 damaged",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": -1483.94,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": true,
+     "top": -1518,
+     "h": 347
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": false,
+     "top": -880,
+     "h": 923
+    },
+    {
+     "k": "ffe",
+     "d": "full",
+     "p": false,
+     "top": 66,
+     "h": 5780
+    },
+    {
+     "k": "money",
+     "d": "quiet",
+     "p": false,
+     "top": 5871,
+     "h": 70
+    },
+    {
+     "k": "care",
+     "d": "quiet",
+     "p": false,
+     "top": 5965,
+     "h": 102
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 6181,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    290.88,
+    24,
+    24,
+    24,
+    114.5
+   ],
+   "railLabelsN": 13,
+   "railLabels": [
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "Client approvals",
+    "Schedule",
+    "Pieces",
+    "Money",
+    "Closing the book",
+    "The record",
+    "FILED WITH THIS JOB",
+    "Plan room",
+    "Spec book",
+    "Boards",
+    "Call sheet"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "3 OF 5"
+   ],
+   "window": {
+    "top": 344,
+    "h": 68
+   },
+   "letterhead": 191.06,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft — the long paper",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [
+    "ffe"
+   ],
+   "lhInFrame": false,
+   "quietHeads": [
+    {
+     "k": "money",
+     "name": "Money",
+     "status": "The money · one region",
+     "acts": [
+      "Draw an invoice",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "care",
+     "name": "Closing the book",
+     "status": "Care · closing the book",
+     "acts": [
+      "Close the book"
+     ]
+    },
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "4 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": {
+    "h": 0,
+    "lines": [
+     "In this documentClient UserAt PiecesMessage Client UserMore"
+    ],
+    "spb": "72px",
+    "varH": ""
+   },
+   "hoverOnly": 0,
+   "closedByYou": []
+  },
+  "y400": {
+   "bottom": 56,
+   "h": 56
+  },
+  "fling": {
+   "blank": 0,
+   "frames": 73
+  },
+  "foot": {
+   "y": 9817,
+   "ih": 800,
+   "lensState": "reading",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 0,
+    "bottom": 56,
+    "open": "false",
+    "l1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 20",
+    "l2": "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder SEND REMINDER +10 MORE Now at The record · 4 complete",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": -9457.94,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": true,
+     "top": -9492,
+     "h": 347
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": true,
+     "top": -8854,
+     "h": 923
+    },
+    {
+     "k": "ffe",
+     "d": "full",
+     "p": true,
+     "top": -7908,
+     "h": 5780
+    },
+    {
+     "k": "money",
+     "d": "full",
+     "p": true,
+     "top": -2103,
+     "h": 1046
+    },
+    {
+     "k": "care",
+     "d": "full",
+     "p": true,
+     "top": -1034,
+     "h": 846
+    },
+    {
+     "k": "record",
+     "d": "full",
+     "p": true,
+     "top": -73,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    290.88,
+    24,
+    24,
+    24,
+    114.5
+   ],
+   "railLabelsN": 13,
+   "railLabels": [
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "Client approvals",
+    "Schedule",
+    "Pieces",
+    "Money",
+    "Closing the book",
+    "The record",
+    "FILED WITH THIS JOB",
+    "Plan room",
+    "Spec book",
+    "Boards",
+    "Call sheet"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "3 OF 5"
+   ],
+   "window": {
+    "top": 548.7,
+    "h": 40
+   },
+   "letterhead": 191.06,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft — the long paper",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [],
+   "lhInFrame": false,
+   "quietHeads": [],
+   "bar": {
+    "h": 0,
+    "lines": [
+     "In this documentClient UserAt The recordMessage Client UserMore"
+    ],
+    "spb": "72px",
+    "varH": ""
+   },
+   "hoverOnly": 0,
+   "closedByYou": [],
+   "find": true
+  },
+  "cls": {
+   "paperCls": 0,
+   "chromeCls": 0,
+   "segChangeSteps": 0,
+   "line2Ys": [
+    26.19
+   ]
+  },
+  "l10": {
+   "top": 77.55,
+   "active": "Money",
+   "density": "full"
+  },
+  "l7": {
+   "cause": "CLOSED BY YOU",
+   "seam": "Money · NO BUDGET YET · $0 AUTHORIZED · CLOSED BY YOU · UNFOLD ↓"
+  },
+  "l7reload": "CLOSED BY YOU",
+  "sheet": {
+   "label": null,
+   "rows": 9,
+   "inputs": "INPUT NEEDED · 2",
+   "firstRow": "PAST DUE ·  · Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder ·  · SEND REMINDER"
+  },
+  "sheetFocusBack": "+10 MORE"
+ },
+ "d5_390": {
+  "s0": {
+   "y": 0,
+   "ih": 844,
+   "lensState": "mobile",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 342.72,
+    "bottom": 398.72,
+    "open": "true",
+    "l1": "",
+    "l2": "OVERDUE 7D · INV-2026-114 SEND +10 MORE",
+    "l2form": "short",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": 456.72,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": false,
+     "top": 423,
+     "h": 465
+    },
+    {
+     "k": "schedule",
+     "d": "quiet",
+     "p": false,
+     "top": 1268,
+     "h": 107
+    },
+    {
+     "k": "ffe",
+     "d": "quiet",
+     "p": false,
+     "top": 1399,
+     "h": 125
+    },
+    {
+     "k": "money",
+     "d": "quiet",
+     "p": false,
+     "top": 1548,
+     "h": 123
+    },
+    {
+     "k": "care",
+     "d": "quiet",
+     "p": false,
+     "top": 1695,
+     "h": 200
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 2114,
+     "h": 101
+    }
+   ],
+   "gaps": [
+    380.5,
+    24,
+    24,
+    24,
+    219.72
+   ],
+   "railLabelsN": 0,
+   "railLabels": [],
+   "railHead": [
+    "←Put downClient UserPROCUREMENT & ORDERS3 OF 5Client approvalsNOTHING YETScheduleINSTALL SEP 20 · 3 WEEKSPieces62 LINES · 5 ROOMS · 1 DAMAGED62 LINES · 1 DAMAGED AUG 30Money$17,500 OUT · $28,080 UNDRAWNClosing the book0 OF 6 CLOSED OUTThe record4 COMPLETEFiled with this jobPlan roomSpec bookBoardsCall sheet"
+   ],
+   "window": {
+    "top": 0,
+    "h": 0
+   },
+   "letterhead": 288.72,
+   "titleLines": {
+    "lines": 3,
+    "text": "Aspen Loft — the long paper",
+    "fs": "32px",
+    "clip": false
+   },
+   "yielded": [],
+   "lhInFrame": true,
+   "quietHeads": [
+    {
+     "k": "schedule",
+     "name": "Schedule",
+     "status": "Install Sep 20 · 3 weeks out",
+     "acts": [
+      "Adjust dates",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "ffe",
+     "name": "Pieces",
+     "status": "1 open damage claim · 4 unspecified",
+     "acts": [
+      "File the claim",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "money",
+     "name": "Money",
+     "status": "The money · one region",
+     "acts": [
+      "Draw an invoice",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "care",
+     "name": "Closing the book",
+     "status": "Care · closing the book",
+     "acts": [
+      "Close the book"
+     ]
+    },
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "4 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": {
+    "h": 93.39,
+    "lines": [
+     "IN THIS DOCUMENT",
+     "Client User",
+     "AT CLIENT APPROVALS",
+     "MESSAGE CLIENT USER",
+     "MORE"
+    ],
+    "spb": "93px",
+    "varH": "93px"
+   },
+   "hoverOnly": 0,
+   "closedByYou": []
+  },
+  "s2": {
+   "y": 1202,
+   "ih": 844,
+   "lensState": "mobile",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 0,
+    "bottom": 56,
+    "open": "false",
+    "l1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 20",
+    "l2": "OVERDUE 7D · INV-2026-114 SEND +10 MORE Now at Schedule · Install Sun, Sep 20 · 3 weeks out",
+    "l2form": "short",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": -745.28,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": true,
+     "top": -779,
+     "h": 465
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": false,
+     "top": 66,
+     "h": 1178
+    },
+    {
+     "k": "ffe",
+     "d": "full",
+     "p": false,
+     "top": 1268,
+     "h": 6486
+    },
+    {
+     "k": "money",
+     "d": "full",
+     "p": false,
+     "top": 7777,
+     "h": 1386
+    },
+    {
+     "k": "care",
+     "d": "full",
+     "p": false,
+     "top": 9187,
+     "h": 1050
+    },
+    {
+     "k": "record",
+     "d": "full",
+     "p": false,
+     "top": 10456,
+     "h": 101
+    }
+   ],
+   "gaps": [
+    380.5,
+    24,
+    24,
+    24,
+    219.72
+   ],
+   "railLabelsN": 0,
+   "railLabels": [],
+   "railHead": [
+    "←Put downClient UserPROCUREMENT & ORDERS3 OF 5Client approvalsNOTHING YETScheduleINSTALL SEP 20 · 3 WEEKSPieces62 LINES · 5 ROOMS · 1 DAMAGED62 LINES · 1 DAMAGED AUG 30Money$17,500 OUT · $28,080 UNDRAWNClosing the book0 OF 6 CLOSED OUTThe record4 COMPLETEFiled with this jobPlan roomSpec bookBoardsCall sheet"
+   ],
+   "window": {
+    "top": 0,
+    "h": 0
+   },
+   "letterhead": 288.72,
+   "titleLines": {
+    "lines": 3,
+    "text": "Aspen Loft — the long paper",
+    "fs": "32px",
+    "clip": false
+   },
+   "yielded": [
+    "schedule"
+   ],
+   "lhInFrame": false,
+   "quietHeads": [],
+   "bar": {
+    "h": 93.39,
+    "lines": [
+     "IN THIS DOCUMENT",
+     "Client User",
+     "AT SCHEDULE",
+     "MESSAGE CLIENT USER",
+     "MORE"
+    ],
+    "spb": "93px",
+    "varH": "93px"
+   },
+   "hoverOnly": 0,
+   "closedByYou": []
+  },
+  "s3": {
+   "y": 2404,
+   "ih": 844,
+   "lensState": "mobile",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 0,
+    "bottom": 56,
+    "open": "false",
+    "l1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 20",
+    "l2": "OVERDUE 7D · INV-2026-114 SEND +10 MORE Now at Pieces · 62 lines · 5 rooms · 1 damaged",
+    "l2form": "short",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": -1947.28,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": true,
+     "top": -1981,
+     "h": 465
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": false,
+     "top": -1136,
+     "h": 1178
+    },
+    {
+     "k": "ffe",
+     "d": "full",
+     "p": false,
+     "top": 66,
+     "h": 6486
+    },
+    {
+     "k": "money",
+     "d": "full",
+     "p": false,
+     "top": 6575,
+     "h": 1386
+    },
+    {
+     "k": "care",
+     "d": "full",
+     "p": false,
+     "top": 7985,
+     "h": 1050
+    },
+    {
+     "k": "record",
+     "d": "full",
+     "p": false,
+     "top": 9254,
+     "h": 101
+    }
+   ],
+   "gaps": [
+    380.5,
+    24,
+    24,
+    24,
+    219.72
+   ],
+   "railLabelsN": 0,
+   "railLabels": [],
+   "railHead": [
+    "←Put downClient UserPROCUREMENT & ORDERS3 OF 5Client approvalsNOTHING YETScheduleINSTALL SEP 20 · 3 WEEKSPieces62 LINES · 5 ROOMS · 1 DAMAGED62 LINES · 1 DAMAGED AUG 30Living RoomDining RoomPrimary BedroomMudroomKitchenMoney$17,500 OUT · $28,080 UNDRAWNClosing the book0 OF 6 CLOSED OUTThe record4 COMPLETEFiled with this jobPlan roomSpec bookBoardsCall sheet"
+   ],
+   "window": {
+    "top": 0,
+    "h": 0
+   },
+   "letterhead": 288.72,
+   "titleLines": {
+    "lines": 3,
+    "text": "Aspen Loft — the long paper",
+    "fs": "32px",
+    "clip": false
+   },
+   "yielded": [
+    "ffe"
+   ],
+   "lhInFrame": false,
+   "quietHeads": [],
+   "bar": {
+    "h": 93.39,
+    "lines": [
+     "IN THIS DOCUMENT",
+     "Client User",
+     "AT PIECES",
+     "MESSAGE CLIENT USER",
+     "MORE"
+    ],
+    "spb": "93px",
+    "varH": "93px"
+   },
+   "hoverOnly": 0,
+   "closedByYou": []
+  },
+  "y400": {
+   "bottom": 56,
+   "h": 56
+  },
+  "fling": {
+   "blank": 0,
+   "frames": 73
+  },
+  "foot": {
+   "y": 11840,
+   "ih": 844,
+   "lensState": "mobile",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 0,
+    "bottom": 56,
+    "open": "false",
+    "l1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5 INSTALL SEP 20",
+    "l2": "OVERDUE 7D · INV-2026-114 SEND +10 MORE Now at The record · 4 complete",
+    "l2form": "short",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": -11383.28,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": true,
+     "top": -11417,
+     "h": 465
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": true,
+     "top": -10572,
+     "h": 1178
+    },
+    {
+     "k": "ffe",
+     "d": "full",
+     "p": true,
+     "top": -9370,
+     "h": 6486
+    },
+    {
+     "k": "money",
+     "d": "full",
+     "p": true,
+     "top": -2861,
+     "h": 1386
+    },
+    {
+     "k": "care",
+     "d": "full",
+     "p": true,
+     "top": -1451,
+     "h": 1050
+    },
+    {
+     "k": "record",
+     "d": "full",
+     "p": true,
+     "top": -182,
+     "h": 101
+    }
+   ],
+   "gaps": [
+    380.5,
+    24,
+    24,
+    24,
+    219.72
+   ],
+   "railLabelsN": 0,
+   "railLabels": [],
+   "railHead": [
+    "←Put downClient UserPROCUREMENT & ORDERS3 OF 5Client approvalsNOTHING YETScheduleINSTALL SEP 20 · 3 WEEKSPieces62 LINES · 5 ROOMS · 1 DAMAGED62 LINES · 1 DAMAGED AUG 30Money$17,500 OUT · $28,080 UNDRAWNClosing the book0 OF 6 CLOSED OUTThe record4 COMPLETEFiled with this jobPlan roomSpec bookBoardsCall sheet"
+   ],
+   "window": {
+    "top": 0,
+    "h": 0
+   },
+   "letterhead": 288.72,
+   "titleLines": {
+    "lines": 3,
+    "text": "Aspen Loft — the long paper",
+    "fs": "32px",
+    "clip": false
+   },
+   "yielded": [],
+   "lhInFrame": false,
+   "quietHeads": [],
+   "bar": {
+    "h": 93.39,
+    "lines": [
+     "IN THIS DOCUMENT",
+     "Client User",
+     "AT THE RECORD",
+     "MESSAGE CLIENT USER",
+     "MORE"
+    ],
+    "spb": "93px",
+    "varH": "93px"
+   },
+   "hoverOnly": 0,
+   "closedByYou": [],
+   "find": true
+  },
+  "cls": {
+   "paperCls": 0,
+   "chromeCls": 0,
+   "segChangeSteps": 0,
+   "line2Ys": [
+    26.19
+   ]
+  },
+  "sheet": {
+   "label": null,
+   "rows": 9,
+   "inputs": "INPUT NEEDED · 2",
+   "firstRow": "PAST DUE ·  · Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 23 — send a reminder ·  · SEND REMINDER"
+  },
+  "sheetFocusBack": "+10 MORE",
+  "margin": {
+   "label": "The margin",
+   "head": [
+    "Margin · 7",
+    "2 OVERDUE",
+    "CAPTURE A NOTE",
+    "THE WHOLE JOB · 4"
+   ],
+   "groups": [
+    "THE WHOLE JOB · 4",
+    "BESIDE PIECES · 3"
+   ],
+   "rows": 7
+  },
+  "composer": {
+   "label": "Note to the margin",
+   "placeholder": "Note to the margin…",
+   "focused": true,
+   "anchor": "ABOUT THE WHOLE JOB",
+   "acts": [
+    "Save",
+    "Discard"
+   ]
+  }
+ },
+ "reduce": {
+  "normal": {
+   "s0": {
+    "words": 310,
+    "anims": 1
+   },
+   "s2": {
+    "words": 512,
+    "anims": 1,
+    "breath": "3s"
+   }
+  },
+  "reduce": {
+   "s0": {
+    "words": 310,
+    "anims": 0
+   },
+   "s2": {
+    "words": 512,
+    "anims": 0,
+    "breath": "0s"
+   }
+  }
+ },
+ "prework_1440": {
+  "s0": {
+   "y": 0,
+   "ih": 900,
+   "lensState": "rest",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 244.06,
+    "bottom": 300.06,
+    "open": "true",
+    "l1": "$9,400",
+    "l2": "Sent Aug 23 — not yet opened FOLLOW UP +1 MORE",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": 330.06,
+   "map": [
+    {
+     "k": "proposal",
+     "d": "full",
+     "p": false,
+     "top": 324,
+     "h": 754
+    },
+    {
+     "k": "scope",
+     "d": "full",
+     "p": false,
+     "top": 1103,
+     "h": 100
+    },
+    {
+     "k": "vision",
+     "d": "full",
+     "p": false,
+     "top": 1227,
+     "h": 69
+    },
+    {
+     "k": "investment",
+     "d": "full",
+     "p": false,
+     "top": 1320,
+     "h": 141
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 1485,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    24,
+    24,
+    24,
+    24
+   ],
+   "railLabelsN": 7,
+   "railLabels": [
+    "Client User",
+    "PROPOSAL",
+    "The proposal",
+    "Scope & engagement",
+    "Design vision",
+    "The investment",
+    "The record"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROPOSAL",
+    "The proposal"
+   ],
+   "window": {
+    "top": 225,
+    "h": 54
+   },
+   "letterhead": 190.06,
+   "titleLines": {
+    "lines": 1,
+    "text": "Aspen Loft — Guest Wing",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [],
+   "lhInFrame": true,
+   "quietHeads": [
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "3 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": {
+    "h": 0,
+    "lines": [
+     "In this documentClient UserAt The proposalMark signedMore"
+    ],
+    "spb": "72px",
+    "varH": ""
+   },
+   "hoverOnly": 0,
+   "closedByYou": [],
+   "afterBand": "proposal",
+   "heads": [
+    {
+     "name": "The proposal",
+     "status": "v1 · Awaiting signature"
+    },
+    {
+     "name": "Scope & engagement",
+     "status": "Core · stage 03"
+    },
+    {
+     "name": "Design vision",
+     "status": "Not written yet"
+    },
+    {
+     "name": "The investment",
+     "status": "$9,400"
+    },
+    {
+     "name": "The record",
+     "status": "3 complete"
+    }
+   ]
+  },
+  "s2": {
+   "y": 1037,
+   "ih": 900,
+   "lensState": "reading",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 0,
+    "bottom": 56,
+    "open": "false",
+    "l1": "CLIENT USER · PROPOSAL SENT AUG 23 · $9,400",
+    "l2": "Sent Aug 23 — not yet opened FOLLOW UP +1 MORE Now at Design vision · Not written yet",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": -706.94,
+   "map": [
+    {
+     "k": "proposal",
+     "d": "full",
+     "p": false,
+     "top": -713,
+     "h": 754
+    },
+    {
+     "k": "scope",
+     "d": "full",
+     "p": false,
+     "top": 66,
+     "h": 100
+    },
+    {
+     "k": "vision",
+     "d": "full",
+     "p": false,
+     "top": 190,
+     "h": 69
+    },
+    {
+     "k": "investment",
+     "d": "full",
+     "p": false,
+     "top": 283,
+     "h": 141
+    },
+    {
+     "k": "record",
+     "d": "full",
+     "p": false,
+     "top": 448,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    24,
+    24,
+    24,
+    24
+   ],
+   "railLabelsN": 7,
+   "railLabels": [
+    "Client User",
+    "PROPOSAL",
+    "The proposal",
+    "Scope & engagement",
+    "Design vision",
+    "The investment",
+    "The record"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROPOSAL",
+    "The proposal"
+   ],
+   "window": {
+    "top": 383,
+    "h": 40
+   },
+   "letterhead": 190.06,
+   "titleLines": {
+    "lines": 1,
+    "text": "Aspen Loft — Guest Wing",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [
+    "scope"
+   ],
+   "lhInFrame": false,
+   "quietHeads": [],
+   "bar": {
+    "h": 0,
+    "lines": [
+     "In this documentClient UserAt Design visionMark signedMore"
+    ],
+    "spb": "72px",
+    "varH": ""
+   },
+   "hoverOnly": 0,
+   "closedByYou": []
+  }
+ },
+ "prework_390": {
+  "s0": {
+   "y": 0,
+   "ih": 844,
+   "lensState": "mobile",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 322.97,
+    "bottom": 378.97,
+    "open": "true",
+    "l1": "$9,400",
+    "l2": "Sent Aug 23 — not yet opened FOLLOW UP +1 MORE",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": 408.97,
+   "map": [
+    {
+     "k": "proposal",
+     "d": "full",
+     "p": false,
+     "top": 403,
+     "h": 876
+    },
+    {
+     "k": "scope",
+     "d": "quiet",
+     "p": false,
+     "top": 1303,
+     "h": 69
+    },
+    {
+     "k": "vision",
+     "d": "quiet",
+     "p": false,
+     "top": 1396,
+     "h": 69
+    },
+    {
+     "k": "investment",
+     "d": "quiet",
+     "p": false,
+     "top": 1489,
+     "h": 69
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 1582,
+     "h": 101
+    }
+   ],
+   "gaps": [
+    24,
+    24,
+    24,
+    24
+   ],
+   "railLabelsN": 0,
+   "railLabels": [],
+   "railHead": [
+    "←Put downClient UserProposalThe proposalSENT AUG 23 · UNOPENED 7DScope & engagementCORE · STAGE 03Design visionNOTHING YETThe investment$9,400The record3 COMPLETE"
+   ],
+   "window": {
+    "top": 0,
+    "h": 0
+   },
+   "letterhead": 268.97,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft — Guest Wing",
+    "fs": "32px",
+    "clip": false
+   },
+   "yielded": [],
+   "lhInFrame": true,
+   "quietHeads": [
+    {
+     "k": "scope",
+     "name": "Scope & engagement",
+     "status": "Core · stage 03",
+     "acts": []
+    },
+    {
+     "k": "vision",
+     "name": "Design vision",
+     "status": "Not written yet",
+     "acts": []
+    },
+    {
+     "k": "investment",
+     "name": "The investment",
+     "status": "$9,400",
+     "acts": []
+    },
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "3 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": {
+    "h": 93.39,
+    "lines": [
+     "IN THIS DOCUMENT",
+     "Client User",
+     "AT THE PROPOSAL",
+     "MARK SIGNED",
+     "MORE"
+    ],
+    "spb": "93px",
+    "varH": "93px"
+   },
+   "hoverOnly": 0,
+   "closedByYou": [],
+   "afterBand": "proposal",
+   "heads": [
+    {
+     "name": "The proposal",
+     "status": "v1 · Awaiting signature"
+    },
+    {
+     "name": "Scope & engagement",
+     "status": "Core · stage 03"
+    },
+    {
+     "name": "Design vision",
+     "status": "Not written yet"
+    },
+    {
+     "name": "The investment",
+     "status": "$9,400"
+    },
+    {
+     "name": "The record",
+     "status": "3 complete"
+    }
+   ]
+  }
+ },
+ "oneline_1440": {
+  "s0": {
+   "y": 0,
+   "ih": 900,
+   "lensState": "rest",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 245.06,
+    "bottom": 301.06,
+    "open": "true",
+    "l1": "",
+    "l2": "Two installs collide — week of Sep 21 RESOLVE THE SCHEDULE",
+    "l2form": "long",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": 359.06,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": false,
+     "top": 325,
+     "h": 347
+    },
+    {
+     "k": "schedule",
+     "d": "full",
+     "p": false,
+     "top": 963,
+     "h": 778
+    },
+    {
+     "k": "ffe",
+     "d": "quiet",
+     "p": false,
+     "top": 1765,
+     "h": 68
+    },
+    {
+     "k": "money",
+     "d": "quiet",
+     "p": false,
+     "top": 1857,
+     "h": 70
+    },
+    {
+     "k": "care",
+     "d": "quiet",
+     "p": false,
+     "top": 1951,
+     "h": 102
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 2167,
+     "h": 68
+    }
+   ],
+   "gaps": [
+    290.88,
+    24,
+    24,
+    24,
+    114.5
+   ],
+   "railLabelsN": 13,
+   "railLabels": [
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "Client approvals",
+    "Schedule",
+    "Pieces",
+    "Money",
+    "Closing the book",
+    "The record",
+    "FILED WITH THIS JOB",
+    "Plan room",
+    "Spec book",
+    "Boards",
+    "Call sheet"
+   ],
+   "railHead": [
+    "←",
+    "PUT DOWN",
+    "Client User",
+    "PROCUREMENT & ORDERS",
+    "3 OF 5"
+   ],
+   "window": {
+    "top": 225,
+    "h": 40
+   },
+   "letterhead": 191.06,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft",
+    "fs": "40px",
+    "clip": false
+   },
+   "yielded": [],
+   "lhInFrame": true,
+   "quietHeads": [
+    {
+     "k": "ffe",
+     "name": "Pieces",
+     "status": "Nothing yet",
+     "acts": [
+      "Add a line",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "money",
+     "name": "Money",
+     "status": "The money · one region",
+     "acts": [
+      "Draw an invoice",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "care",
+     "name": "Closing the book",
+     "status": "Care · closing the book",
+     "acts": [
+      "Close the book"
+     ]
+    },
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "4 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": null,
+   "hoverOnly": 0,
+   "closedByYou": [],
+   "afterBand": "approvals",
+   "heads": [
+    {
+     "name": "Client approvals",
+     "status": "Exact artifact · named authority"
+    },
+    {
+     "name": "Schedule",
+     "status": "5 phases · Procurement & Orders · next milestone —"
+    },
+    {
+     "name": "Pieces",
+     "status": "Nothing yet"
+    },
+    {
+     "name": "Money",
+     "status": "The money · one region"
+    },
+    {
+     "name": "Closing the book",
+     "status": "Care · closing the book"
+    },
+    {
+     "name": "The record",
+     "status": "4 complete"
+    }
+   ]
+  }
+ },
+ "oneline_390": {
+  "s0": {
+   "y": 0,
+   "ih": 844,
+   "lensState": "mobile",
+   "resolvedAttr": "true",
+   "band": {
+    "h": 56,
+    "top": 308.17,
+    "bottom": 364.17,
+    "open": "true",
+    "l1": "",
+    "l2": "CONFLICT · TWO RESOLVE",
+    "l2form": "short",
+    "l2y": 26.19,
+    "l2fs": "15px"
+   },
+   "landingClear": 72,
+   "firstHead": 422.17,
+   "map": [
+    {
+     "k": "approvals",
+     "d": "full",
+     "p": false,
+     "top": 388,
+     "h": 465
+    },
+    {
+     "k": "schedule",
+     "d": "quiet",
+     "p": false,
+     "top": 1233,
+     "h": 107
+    },
+    {
+     "k": "ffe",
+     "d": "quiet",
+     "p": false,
+     "top": 1364,
+     "h": 107
+    },
+    {
+     "k": "money",
+     "d": "quiet",
+     "p": false,
+     "top": 1495,
+     "h": 123
+    },
+    {
+     "k": "care",
+     "d": "quiet",
+     "p": false,
+     "top": 1642,
+     "h": 200
+    },
+    {
+     "k": "record",
+     "d": "quiet",
+     "p": false,
+     "top": 2061,
+     "h": 101
+    }
+   ],
+   "gaps": [
+    380.5,
+    24,
+    24,
+    24,
+    219.72
+   ],
+   "railLabelsN": 0,
+   "railLabels": [],
+   "railHead": [
+    "←Put downClient UserPROCUREMENT & ORDERS3 OF 5Client approvalsNOTHING YETScheduleINSTALL SEP 20 · 3 WEEKSPiecesNOTHING YETMoneyNOTHING YETClosing the book1 OF 6 CLOSED OUTThe record4 COMPLETEFiled with this jobPlan roomSpec bookBoardsCall sheet"
+   ],
+   "window": {
+    "top": 0,
+    "h": 0
+   },
+   "letterhead": 254.17,
+   "titleLines": {
+    "lines": 2,
+    "text": "Aspen Loft",
+    "fs": "32px",
+    "clip": false
+   },
+   "yielded": [],
+   "lhInFrame": true,
+   "quietHeads": [
+    {
+     "k": "schedule",
+     "name": "Schedule",
+     "status": "Install Sep 20 · 3 weeks out",
+     "acts": [
+      "Adjust dates",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "ffe",
+     "name": "Pieces",
+     "status": "Nothing yet",
+     "acts": [
+      "Add a line",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "money",
+     "name": "Money",
+     "status": "The money · one region",
+     "acts": [
+      "Draw an invoice",
+      "Fold ↑"
+     ]
+    },
+    {
+     "k": "care",
+     "name": "Closing the book",
+     "status": "Care · closing the book",
+     "acts": [
+      "Close the book"
+     ]
+    },
+    {
+     "k": "record",
+     "name": "The record",
+     "status": "4 complete",
+     "acts": [
+      "Open the record"
+     ]
+    }
+   ],
+   "bar": {
+    "h": 93.39,
+    "lines": [
+     "IN THIS DOCUMENT",
+     "Client User",
+     "AT CLIENT APPROVALS",
+     "MESSAGE CLIENT USER",
+     "MORE"
+    ],
+    "spb": "93px",
+    "varH": "93px"
+   },
+   "hoverOnly": 0,
+   "closedByYou": [],
+   "afterBand": "approvals",
+   "heads": [
+    {
+     "name": "Client approvals",
+     "status": "Exact artifact · named authority"
+    },
+    {
+     "name": "Schedule",
+     "status": "Install Sep 20 · 3 weeks out"
+    },
+    {
+     "name": "Pieces",
+     "status": "Nothing yet"
+    },
+    {
+     "name": "Money",
+     "status": "The money · one region"
+    },
+    {
+     "name": "Closing the book",
+     "status": "Care · closing the book"
+    },
+    {
+     "name": "The record",
+     "status": "4 complete"
+    }
+   ]
+  }
+ }
+}

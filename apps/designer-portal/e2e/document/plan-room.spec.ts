@@ -46,12 +46,34 @@ test.beforeAll(async () => {
     "select id from auth.users where email = 'designer@patina.dev'",
   );
   if (!designerId) throw new Error('designer@patina.dev is not seeded locally');
+  // designer@patina.dev belongs to two active design_studio orgs locally
+  // (seeded fixtures) — set_project_studio_id (00511) only auto-derives
+  // studio_id when the lead designer has EXACTLY one candidate studio, and a
+  // PostgREST/service-role insert (unlike the raw migration/seed replay that
+  // created the other 5 seeded projects for this designer, all studio_id
+  // NULL) does not get that trigger's postgres-session bypass. Pin one
+  // explicitly — any studio the designer actively owns/non-guest-belongs to
+  // satisfies the trigger's validation.
+  const studioId = psqlScalar(`
+    select om.organization_id
+      from public.organization_members om
+      join public.organizations o on o.id = om.organization_id
+     where om.user_id = '${designerId}'
+       and om.status = 'active'
+       and om.role <> 'guest'
+       and o.type = 'design_studio'
+       and o.status = 'active'
+     order by om.organization_id
+     limit 1
+  `);
+  if (!studioId) throw new Error('designer@patina.dev has no active design_studio membership locally');
   const { data, error } = await adminDb
     .from('projects')
     .insert({
       name: `Whitlock residence (plan room e2e ${Date.now()})`,
       designer_id: designerId,
       created_by: designerId,
+      studio_id: studioId,
       status: 'active',
       current_phase: 'design',
     })
@@ -83,13 +105,26 @@ async function openPlanRoom(page: AuthenticatedPage): Promise<void> {
   });
 }
 
+// RE-POINTED 2026-08-29, W0-fix (was QUARANTINED, Smart Lens W0). The empty
+// state's drag-and-drop framing ("Drop a PDF set — the table splits it") was
+// replaced by a chooser: plan-room-set.tsx:150-152 prints "Choose a PDF set;
+// the light table splits it…" beside a "Choose a PDF" button. Product drift,
+// not environment — the flow the rest of this test walks is unchanged, so the
+// assertion is re-pointed at the copy and the control that actually print
+// rather than dropped.
 test('files a dropped set, then shares a sheet with the client', async ({
   authenticatedPage: page,
 }) => {
   // ── The empty room invites a set ────────────────────────────────────────
   await openPlanRoom(page);
   await expect(
-    page.getByText(/Drop a PDF set — the table splits it/),
+    page.getByText(/Choose a PDF set; the light table splits it/),
+  ).toBeVisible();
+  // Scoped by action key: the intake strip carries a second "Choose a PDF"
+  // (`choose-plan-pdf`), and the empty state's own primary act is the one the
+  // invitation offers.
+  await expect(
+    page.locator('[data-action-key="choose-plan-pdf-empty"]'),
   ).toBeVisible();
 
   // ── Stage the fixture on the Light Table ────────────────────────────────

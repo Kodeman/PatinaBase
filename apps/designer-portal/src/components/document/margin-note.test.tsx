@@ -100,3 +100,62 @@ describe('markMarginNoteSeen', () => {
     expect(window.localStorage.getItem(storageKey('k-mark'))).not.toBeNull();
   });
 });
+
+describe('MarginNote — the two-line cap (RF-03), scoped to the caller', () => {
+  const LONG =
+    'The margin on the right is where decisions and money gather. Esc puts the document down — and the hours log themselves while it is in your hand.';
+
+  it('does not clamp by default — the primitive is shared, the cap is not', () => {
+    render(<MarginNote noteKey="k-unclamped">{LONG}</MarginNote>);
+
+    const body = screen.getByText(/where decisions and money gather/);
+    expect(body).not.toHaveClass('line-clamp-2');
+    expect(screen.queryByRole('button', { name: 'More' })).toBeNull();
+    // The pointer-only recovery is gone with the blanket cap.
+    expect(body).not.toHaveAttribute('title');
+  });
+
+  it('clamps to two lines when the caller asks, and `More` expands it in place', () => {
+    render(
+      <MarginNote noteKey="k-clamp" clamp>
+        {LONG}
+      </MarginNote>,
+    );
+
+    const body = screen.getByText(/where decisions and money gather/);
+    expect(body).toHaveClass('line-clamp-2');
+    expect(body).toHaveTextContent(LONG);
+    // The mono footnote is its own block below the clamp, never inside it.
+    expect(body).not.toHaveTextContent('Appears once');
+
+    const more = screen.getByRole('button', { name: 'More' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(more).toHaveAttribute('aria-controls', body.id);
+
+    fireEvent.click(more);
+
+    expect(body).not.toHaveClass('line-clamp-2');
+    expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('never clips a focusable child at the call sites that carry one', () => {
+    render(
+      <MarginNote noteKey="k-clamp-node">
+        Start here — <button type="button">start the walkthrough</button>
+      </MarginNote>,
+    );
+
+    const inner = screen.getByRole('button', { name: 'start the walkthrough' });
+    // A `-webkit-box` clamp paints an overflowing child out of view while it
+    // stays in the tab order (SC 2.4.11) — no ancestor of a focusable child
+    // may carry the cap.
+    let node: HTMLElement | null = inner;
+    while (node) {
+      expect(node).not.toHaveClass('line-clamp-2');
+      node = node.parentElement;
+    }
+  });
+});

@@ -75,6 +75,13 @@ jest.mock('@patina/supabase', () => ({
   }),
 }));
 
+// W5-R1: the Margin sheet's whole-margin derivation lives in this local
+// hook, not `@patina/supabase` — mocking it keeps the fix top-of-file only
+// (no QueryClientProvider needed: the real `useQuery` inside it never runs).
+jest.mock('@/hooks/use-margin-items', () => ({
+  useMarginItems: () => ({ data: [] }),
+}));
+
 /* The money ladder under the ticket's Money row: four commercial reads that
    now run on every project document. */
 jest.mock('@/hooks/use-commercial-documents', () => ({
@@ -129,9 +136,6 @@ jest.mock('@/components/document/account-band', () => ({
   AccountBand: () => <div data-accounts-surface="band" />,
 }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: () => null,
-}));
 jest.mock('@/components/document/shelves/document-shelves', () => ({
   DocumentShelves: () => null,
 }));
@@ -163,9 +167,6 @@ jest.mock('@/components/document/folio-strip', () => ({
   FolioLetterhead: () => null,
   ProposalFolioStrip: () => null,
 }));
-jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
-}));
 jest.mock('@/components/document/letterhead-instruments', () => ({
   LetterheadInstruments: () => null,
 }));
@@ -190,7 +191,15 @@ jest.mock('@/components/document/margin-rail', () => ({
   openMarginRail: jest.fn(),
 }));
 jest.mock('@/components/document/household-chip', () => ({ HouseholdChip: () => null }));
-jest.mock('@/components/document/document-guide', () => ({ DocumentGuide: () => null }));
+// W3 (C-6) — the guide is a MODEL provider now: the page reads
+// `deriveGuideModel` for the band's line 2 and never renders the strip.
+jest.mock('@/components/document/document-guide', () => ({
+  DocumentGuide: () => null,
+  deriveGuideModel: (model: { headline: string }) => ({
+    text: model.headline,
+    act: null,
+  }),
+}));
 jest.mock('@/components/document/red-letter-zone', () => ({ RedLetterZone: () => null }));
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
@@ -233,9 +242,10 @@ jest.mock('@/lib/analytics/document-events', () => ({
   rememberDocumentInHand: jest.fn(),
   readRecentDocumentsInHand: () => [],
   documentEvents: {
+    lensLineShown: jest.fn(),
+    lensLineActed: jest.fn(),
+    lensStandingSheetOpened: jest.fn(),
     historyToggled: jest.fn(),
-    guideShown: jest.fn(),
-    guideSelected: jest.fn(),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     wayfinding: { marginNote: jest.fn() },
@@ -339,25 +349,26 @@ describe('the Delivery table, tooled', () => {
       );
     });
 
-    it('stands the ticket above the table, and the lift still leads it', () => {
-      // B2-L4's acceptance on the PAGE's own composition: the ticket heads the
-      // table, the release lift still leads the table's body, and the money
-      // seam still stands — the Money row is the seam's index, not its
-      // replacement.
+    it('stands the band above the table, and the lift still leads it', () => {
+      // B2-L4's acceptance on the PAGE's own composition, carried onto R127's
+      // band (W3-L5): the band heads the table, the release lift still leads
+      // the table's body, and the money seam still stands — the band's line 1
+      // is the seam's index, not its replacement. Only the selector moved; the
+      // three ordering claims and the one-map claim are unchanged.
       mockReleaseOffered = true;
       const { container } = render(<DocumentPage params={params} />);
 
-      const ticket = container.querySelector('[data-job-ticket]')!;
+      const band = container.querySelector('[data-lens-band]')!;
       const table = container.querySelector('[data-table="delivery"]')!;
       const lift = container.querySelector('[data-release-lift]')!;
       const money = container.querySelector('[data-index-region="money"]')!;
-      expect(ticket).not.toBeNull();
+      expect(band).not.toBeNull();
       const order = (el: Element) =>
         Array.from(container.querySelectorAll('*')).indexOf(el);
-      expect(order(ticket)).toBeLessThan(order(table));
-      expect(order(ticket)).toBeLessThan(order(lift));
+      expect(order(band)).toBeLessThan(order(table));
+      expect(order(band)).toBeLessThan(order(lift));
       expect(order(lift)).toBeLessThan(order(money));
-      expect(container.querySelectorAll('[data-job-ticket]')).toHaveLength(1);
+      expect(container.querySelectorAll('[data-lens-band]')).toHaveLength(1);
     });
 
     it('inks exactly one release leader on the page — never two', () => {

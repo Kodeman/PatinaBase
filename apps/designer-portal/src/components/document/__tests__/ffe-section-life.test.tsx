@@ -9,6 +9,21 @@ import { render, screen } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
@@ -39,7 +54,9 @@ jest.mock('../schedule/add-to-project-sheet', () => ({
 }));
 
 jest.mock('@/hooks/use-document-rooms', () => ({
-  useDocumentRooms: () => ({ data: [] }),
+  useDocumentRooms: () => ({
+    data: [{ id: 'room-1', name: 'Primary bedroom', budget_cents: null }],
+  }),
   useAddDocumentRoom: () => ({ mutate: jest.fn() }),
 }));
 
@@ -71,9 +88,6 @@ jest.mock('@/components/portal/ffe/stages', () => ({
 jest.mock('../accounts/invoice-overlays', () => ({
   openInvoiceComposer: jest.fn(),
 }));
-jest.mock('../mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
-}));
 jest.mock('../work-block', () => ({ WorkBlock: () => null }));
 jest.mock('../folio-strip', () => ({ FolioStrip: () => null }));
 jest.mock('../strata-mark', () => ({ StrataMark: () => null }));
@@ -99,6 +113,7 @@ jest.mock('../stamp', () => ({
 }));
 
 import { FFESection } from '../ffe-section';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 const renderSection = (highlightId?: string | null) =>
   render(
@@ -121,6 +136,26 @@ const baseFurnishing = {
 
 beforeEach(() => {
   stampCalls.length = 0;
+});
+
+
+// D-B49 — the FF&E/schedule region ROOTS now own the work reads (they moved out
+// of `WorkBlock`/`CoordinationWork`, which mount only in a promoted body, so a
+// promotion no longer fetches). This suite mounts the region with no
+// QueryClientProvider — every other data hook it uses is mocked the same way —
+// so these three have to be mocked too or the root throws "No QueryClient set".
+jest.mock('@/hooks/use-section-work', () => {
+  const actual = jest.requireActual('@/hooks/use-section-work');
+  const idle = { mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false };
+  return {
+    ...actual,
+    useSectionTasks: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useSectionGates: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useSectionLoggedMinutes: () => ({ data: 0 }),
+    useCreateSectionTask: () => idle,
+    useToggleSectionTask: () => idle,
+    useRequestSectionGate: () => idle,
+  };
 });
 
 describe('FF&E thumbnails', () => {
@@ -220,6 +255,34 @@ describe('FF&E region rule', () => {
     const rule = document.querySelector('[data-rule-weight]');
     expect(rule).toHaveAttribute('data-rule-weight', 'strong');
     expect(rule).toHaveClass('doc-rule-strong');
+  });
+
+  it('carries the region-gap token on the region root, and no other mt-*/mb-*', () => {
+    mockItems = [{ ...baseFurnishing }];
+    const { container } = renderSection();
+    const root = container.querySelector('[data-index-region="ffe"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
+  });
+
+  it('leaves the rule itself with no top margin — the region root owns the gap', () => {
+    mockItems = [{ ...baseFurnishing }];
+    renderSection();
+    const rule = document.querySelector('[data-rule-weight]');
+    expect(rule).toHaveClass('mt-0');
+  });
+
+  it('gives a room head half the region gap (12px), not the full token', () => {
+    mockItems = [{ ...baseFurnishing }];
+    const { container } = renderSection();
+    const roomHead = container.querySelector('#doc-room-room-1');
+    expect(roomHead).not.toBeNull();
+    expect(roomHead).toHaveClass('mt-[12px]');
+    expect(roomHead!.className).not.toMatch(/\bmt-4\b/);
   });
 });
 

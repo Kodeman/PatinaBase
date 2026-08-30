@@ -9,8 +9,11 @@ const phaseStateMock = jest.fn();
 const useScheduleProposalsMock = jest.fn();
 const useCoordinationItemsMock = jest.fn();
 const registerRevealHandlerMock = jest.fn();
+const armEditMock = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
+  // D-B49 — the revision ledger's read moved to the schedule region ROOT.
+  useScheduleRevisions: () => ({ data: [] }),
   excludeProjectArtifactApprovals: (items: unknown[]) => items,
   useScheduleProposals: () => useScheduleProposalsMock(),
   useCommitScheduleProposal: () => ({
@@ -66,6 +69,15 @@ jest.mock("@patina/supabase", () => ({
   mapMilestoneRowToScheduleInput: () => ({}),
 }));
 
+// W4 — the lens is a page-level observer and never runs in jsdom, so the store
+// is mocked per suite. `'full'` is the reading every claim below was written
+// against (today's body, on the paper); the quiet cases at the foot drive
+// `null`, the lens being silent, which is where an unpromoted stop starts.
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+
 jest.mock("@/hooks/use-section-work", () => ({
   useSectionTasks: () => ({ data: [] }),
 }));
@@ -110,7 +122,7 @@ jest.mock("../schedule-nav-context", () => ({
   useScheduleNav: () => ({
     registerRevealHandler: (...args: unknown[]) =>
       registerRevealHandlerMock(...args),
-    armEdit: jest.fn(),
+    armEdit: (...args: unknown[]) => armEditMock(...args),
   }),
 }));
 
@@ -170,6 +182,8 @@ jest.mock("../add-line-sheet", () => ({
 }));
 
 import { ScheduleSpine } from "../schedule-spine";
+import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { regionBoxSignature } from '../../region/region-box-signature';
 
 const onePhaseSchedule = (status: string) => ({
   isLoading: false,
@@ -219,10 +233,12 @@ function renderSpine() {
 
 beforeEach(() => {
   window.localStorage.clear();
+  __setDensityForTest("full");
   useDesignerClientForClientUserMock.mockReturnValue({ data: { id: "dc-1" } });
   useScheduleProposalsMock.mockReturnValue({ data: [], isError: false });
   useCoordinationItemsMock.mockReturnValue({ data: [] });
   registerRevealHandlerMock.mockClear();
+  armEditMock.mockClear();
   phaseStateMock.mockReset();
 });
 
@@ -264,9 +280,32 @@ describe("ScheduleSpine region head", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the seam by default when every phase is closed", () => {
+  it("arrives OPEN when every phase is closed — a derived default quiets a stop, it never folds it", () => {
+    // R127 OD-10 (W3-L5). This case read "renders the seam by default when
+    // every phase is closed". `schedule` is a STOP key — it owns a
+    // `[data-index-region]` root — so its derived default no longer produces a
+    // fold: it produces DENSITY. The region arrives open and quiet, with its
+    // head on the paper; only the designer can shut a stop, and the case that
+    // proves she still can is directly below.
     useResolvedScheduleMock.mockReturnValue(onePhaseSchedule("completed"));
     phaseStateMock.mockReturnValue("closed");
+
+    renderSpine();
+
+    expect(document.querySelector("[data-fold-seam]")).toBeNull();
+    expect(document.querySelector("[data-region-head]")).not.toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Schedule" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the seam when she folded it herself, with an unmounted body", () => {
+    // The seam's own claims, kept whole — only their CAUSE changed. A stop can
+    // still stand folded; it can only ever stand folded because she said so
+    // (OD-10), and a remembered choice from before R127 still reads the same.
+    useResolvedScheduleMock.mockReturnValue(onePhaseSchedule("completed"));
+    phaseStateMock.mockReturnValue("closed");
+    window.localStorage.setItem("patina:doc-fold:project-1:schedule", "1");
 
     renderSpine();
 
@@ -285,6 +324,8 @@ describe("ScheduleSpine region head", () => {
   it("unfolds the seam back to the head and body on click", () => {
     useResolvedScheduleMock.mockReturnValue(onePhaseSchedule("completed"));
     phaseStateMock.mockReturnValue("closed");
+    // The fold she made herself is the only seam a stop can wear (OD-10).
+    window.localStorage.setItem("patina:doc-fold:project-1:schedule", "1");
 
     renderSpine();
 
@@ -340,6 +381,9 @@ describe("ScheduleSpine region head", () => {
         return 0;
       });
 
+    // Folded by her, which after OD-10 is the only way a stop is folded at all.
+    window.localStorage.setItem("patina:doc-fold:project-1:schedule", "1");
+
     renderSpine();
     expect(document.querySelector("[data-fold-seam]")).not.toBeNull();
 
@@ -350,5 +394,233 @@ describe("ScheduleSpine region head", () => {
     expect(scrollIntoView).toHaveBeenCalled();
 
     raf.mockRestore();
+  });
+});
+
+// W4 (L-4, OD-12, OD-13) — the quiet body: the same head, one count line, one
+// quiet leader that presses the region open, the sr-only state line, and none
+// of the phases.
+describe("ScheduleSpine quiet body (W4)", () => {
+  /** A one-phase schedule whose phase IS the install window, so the count line
+   *  has both halves to state. */
+  const installSchedule = () => ({
+    isLoading: false,
+    phases: [
+      {
+        id: "phase-1",
+        name: "Installation",
+        status: "in_progress",
+        phase_key: "installation",
+        lane: "main",
+        sort_order: 0,
+        follows_phase_id: null,
+        duration_days: 14,
+        duration_weeks: null,
+      },
+    ],
+    milestones: [],
+    resolved: {
+      phases: [
+        {
+          id: "phase-1",
+          lane: "main",
+          start: "2026-09-15",
+          end: "2026-09-29",
+          anchored: true,
+          slackDays: 0,
+        },
+      ],
+      milestones: [],
+      conflicts: [],
+    },
+  });
+
+  beforeEach(() => {
+    act(() => {
+      __setDensityForTest(null);
+    });
+    phaseStateMock.mockReturnValue("active");
+  });
+
+  it("prints head, count line, leader and the sr-only state line — and no phases", () => {
+    useResolvedScheduleMock.mockReturnValue(installSchedule());
+
+    const { container } = renderSpine();
+
+    const root = container.querySelector('[data-index-region="schedule"]');
+    expect(root).toHaveAttribute("data-density", "quiet");
+    expect(root).toHaveStyle({
+      "--doc-quiet-reserve": "var(--doc-quiet-reserve-min)",
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "Schedule" }),
+    ).toBeInTheDocument();
+    // W4-R1: the count line IS the head's status line, and PHASES NEVER PRINT
+    // here — the rail carries the count. The install day and how far out it
+    // stands are the whole line.
+    const head = container.querySelector('[data-region-head="schedule"]')!;
+    expect(head).toHaveTextContent(/Install Sep 15/);
+    expect(head).not.toHaveTextContent(/phase/i);
+    expect(
+      container.querySelectorAll("[data-region-count-line]"),
+    ).toHaveLength(0);
+    expect(
+      screen.getByText(
+        "Install Sep 15 · not yet on the paper · press Schedule on the index to open",
+      ),
+    ).toHaveClass("sr-only");
+
+    // The phases, the ghost line and the proposals are not on the paper until
+    // the lens reaches this root.
+    expect(screen.queryByTestId("phase-section")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ghost-add-line")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("schedule-proposals")).not.toBeInTheDocument();
+    // W4-C7: the body WRAPPER stays — the head's Fold button names it through
+    // `aria-controls`, and an id that is not on the page is an axe
+    // `aria-valid-attr-value` failure and a region a screen reader is told
+    // about but cannot reach. What is gone is what is INSIDE it.
+    const quietBody = document.getElementById("project-schedule-body");
+    expect(quietBody).not.toBeNull();
+    expect(quietBody).toContainElement(
+      screen.getByText(/not yet on the paper/),
+    );
+    // The quiet body grows NO act of its own: the mockup's condensed head
+    // prints the head's own leader and nothing beside it, so the region still
+    // inks exactly one word.
+    expect(
+      container.querySelectorAll('[data-action-variant="inked"]'),
+    ).toHaveLength(1);
+  });
+
+  it("NF4-02 — the quiet leader is Adjust dates, not + New open item, and it arms the active phase", () => {
+    useResolvedScheduleMock.mockReturnValue(installSchedule());
+    const { container } = renderSpine();
+
+    const head = container.querySelector('[data-region-head="schedule"]')!;
+    const leader = screen.getByRole("button", { name: "Adjust dates" });
+    expect(head).toContainElement(leader);
+    // W4-R1 col 3: `Adjust dates` REPLACES the composer as entry 0 — a reader
+    // who has not reached the schedule is being told when the install stands,
+    // and the act that answers that line is the dates it names.
+    expect(
+      screen.queryByRole("button", { name: "+ New open item" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(leader);
+    // The same wire the drafting strip's own `Adjust dates` uses — one act,
+    // not a second copy of it.
+    expect(armEditMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves no aria-controls pointing at nothing while quiet (W4-C7)", () => {
+    useResolvedScheduleMock.mockReturnValue(installSchedule());
+    const { container } = renderSpine();
+
+    const referring = Array.from(
+      container.querySelectorAll<HTMLElement>("[aria-controls]"),
+    );
+    expect(referring.length).toBeGreaterThan(0);
+    for (const el of referring) {
+      for (const id of el.getAttribute("aria-controls")!.split(/\s+/)) {
+        expect(document.getElementById(id)).not.toBeNull();
+      }
+    }
+  });
+
+  it("says Nothing yet when no install date resolves — phased or not", () => {
+    // W4-R1: the schedule's quiet line is the install day alone, so a paper
+    // with phases but no install window has no fact to state and prints
+    // `Nothing yet` — never a placeholder, and never the phase count, which
+    // belongs to the rail.
+    useResolvedScheduleMock.mockReturnValue(onePhaseSchedule("in_progress"));
+    const withPhases = renderSpine();
+    expect(
+      withPhases.container.querySelector('[data-region-head="schedule"]'),
+    ).toHaveTextContent("Nothing yet");
+    expect(screen.queryByText(/Install/)).not.toBeInTheDocument();
+    withPhases.unmount();
+
+    useResolvedScheduleMock.mockReturnValue(zeroPhaseSchedule);
+    const bare = renderSpine();
+    expect(
+      bare.container.querySelector("[data-region-count-line]"),
+    ).toBeNull();
+    // Never zero text: the head and the sr-only state line still print.
+    expect(screen.getByRole("heading", { name: "Schedule" })).toBeInTheDocument();
+    expect(
+      bare.container.querySelector('[data-region-head="schedule"]'),
+    ).toHaveTextContent("Nothing yet");
+    expect(
+      screen.getByText("Nothing yet", { selector: ".sr-only" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the SAME head element across quiet → full", () => {
+    useResolvedScheduleMock.mockReturnValue(installSchedule());
+
+    const { container, rerender } = renderSpine();
+    const quietHead = container.querySelector('[data-region-head="schedule"]');
+    // H5 — the root's OUTER box may not depend on its density.
+    const quietBox = regionBoxSignature(
+      container.querySelector('[data-index-region="schedule"]'),
+    );
+    const quietHeading = document.getElementById("project-schedule-title");
+    expect(quietHead).not.toBeNull();
+
+    act(() => {
+      __setDensityForTest("full");
+    });
+    rerender(
+      <ScheduleSpine
+        projectId="project-1"
+        clientUserId="user-1"
+        clientName="Winky Loft"
+      />,
+    );
+
+    expect(container.querySelector('[data-index-region="schedule"]')).toHaveAttribute(
+      "data-density",
+      "full",
+    );
+    expect(container.querySelector('[data-region-head="schedule"]')).toBe(quietHead);
+    expect(document.getElementById("project-schedule-title")).toBe(quietHeading);
+    expect(document.getElementById("project-schedule-body")).not.toBeNull();
+    expect(screen.queryByText("INSTALL SEP 15 · 1 PHASE")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Quiet — opens as you read"),
+    ).not.toBeInTheDocument();
+    // The same outer box on the other side of the promotion: same
+    // margins, same border, same reserve, same rules. A stop that grew a
+    // top margin on promotion would move every root below it.
+    expect(
+      regionBoxSignature(
+        container.querySelector('[data-index-region="schedule"]'),
+      ),
+    ).toBe(quietBox);
+  });
+
+  it("lets her own fold outrank the lens", () => {
+    useResolvedScheduleMock.mockReturnValue(installSchedule());
+    window.localStorage.setItem("patina:doc-fold:project-1:schedule", "1");
+    act(() => {
+      __setDensityForTest("full");
+    });
+
+    const { container } = renderSpine();
+
+    expect(document.querySelector("[data-fold-seam]")).not.toBeNull();
+    expect(
+      screen.queryByText("Quiet — opens as you read"),
+    ).not.toBeInTheDocument();
+    // An explicit choice is `full` by construction (C-8) — the lens can neither
+    // quiet a region she has shut nor unfold one.
+    expect(container.querySelector('[data-index-region="schedule"]')).toHaveAttribute(
+      "data-density",
+      "full",
+    );
+    expect(
+      container.querySelector('[data-index-region="schedule"]'),
+    ).toHaveStyle({ "--doc-quiet-reserve": "var(--doc-quiet-reserve-min)" });
   });
 });

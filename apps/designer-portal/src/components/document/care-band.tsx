@@ -13,14 +13,15 @@
  *     unfolded — closing out IS the work of this stage.
  *   · earlier: one quiet mono line ("Close the book…") that unfolds on click,
  *     so a handshake project that never stages install can still settle.
- *   · completed: renders nothing (the Care section owns the settled read).
+ *   · completed: one settled line (the Care section owns the settled read; the
+ *     line exists so the running index's `care` stop has a root to land on).
  *
  * After close: a quiet inline confirmation (R51), then the document re-derives
  * — active section flips to Care and the sections settle. No route change, no
  * toast (D2), zero shadows (D4).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   useCoordinationItems,
   useFfeInvoiceCoverage,
@@ -46,16 +47,42 @@ import {
 import { StrataMark } from './strata-mark';
 import { DocumentAction } from './document-action';
 import { RegionHead, type RegionLedgerEntry } from './region/region-head';
-import { useRegionFold } from './region/use-region-fold';
+import { useRegionFold, type RegionDensity } from './region/use-region-fold';
+import { useLensDensityStore } from '@/hooks/use-lens-density';
 import { FoldSeam, focusRegionHeading } from './region/fold-seam';
 import { RegionRule } from './region/region-rule';
+import {
+  careQuietStatus,
+  quietStateSentence,
+} from '@/lib/document/lens-quiet-status';
 
 const HEADING_ID = 'care-band-heading';
 const BODY_ID = 'care-band-body';
 /** The guide's care act names this checklist (`document-guide.ts`). */
 const CHECKLIST_ID = 'closing-the-book';
+/**
+ * W2 (C-2, `document-index.ts`) — the running index's stable id for this
+ * region root. Not fixed in `document-index.ts` on this branch yet
+ * (`DocumentIndexKey` does not carry `'care' | 'record'` here — W2-L2 adds
+ * those keys), so this is the literal fallback named by the build plan.
+ */
+const CARE_INDEX_HEADING_ID = 'care-region-heading';
+/**
+ * OD-12 — the quiet height, held at EVERY density so a body shorter than its
+ * reserve cannot shrink the region on mount. W3-L3 declares both floors as
+ * tokens; `-exc` is for a head that prints standing exceptions, and this head
+ * prints none, so the care root takes the minimum.
+ */
+const QUIET_RESERVE = 'var(--doc-quiet-reserve-min)';
 
 type AnyRecord = any;
+
+/** What the band knows about closing out, stated once for every reader. */
+export interface CloseoutState {
+  ready: boolean;
+  closed: number;
+  total: number;
+}
 
 const FIELD_CLS =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-1.5 text-[11.5px] text-[var(--color-charcoal)] placeholder:italic placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)] focus:outline-none';
@@ -78,13 +105,27 @@ function closeErrorMessage(error: unknown): string {
 export function CareBand({
   projectId,
   onCloseoutReady,
+  indexRoot = false,
 }: {
   projectId: string;
   /** A3-L7 — the closure gate, published to the page so the guide's care rest
    *  state can be gated on it. This band is the only reader of both halves
    *  (the eight closeout queries and the checklist's own state), so it states
-   *  the answer once rather than the page deriving a second one. */
-  onCloseoutReady?: (ready: boolean) => void;
+   *  the answer once rather than the page deriving a second one.
+   *
+   *  W2 fix (D-B9) — it reports the CHECKLIST too, not only the gate: the
+   *  ladder's care stop prints `N OF M CLOSED OUT`, and nothing else on the
+   *  page can state that pair without repeating the eight reads. */
+  onCloseoutReady?: (state: CloseoutState) => void;
+  /**
+   * W2 (C-2) — marks this mount as the running index's `care` region root.
+   * `CareBand` mounts twice (the Project section here, and again on the
+   * Install section per `page.tsx:2158`); only ONE of those two may claim
+   * the `care` key, or the index has two roots answering to one key. Default
+   * `false` so an unmigrated caller changes nothing; the project mount
+   * (`page.tsx:2134`) is the one that should pass `true`.
+   */
+  indexRoot?: boolean;
 }) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
   const { user, isLoading: authLoading } = useAuth();
@@ -180,16 +221,39 @@ export function CareBand({
   const ready = closureReady(effectiveItems, operational);
   const done = effectiveItems.filter((i) => i.completed).length;
 
+  const total = effectiveItems.length;
   useEffect(() => {
-    onCloseoutReady?.(ready);
-  }, [onCloseoutReady, ready]);
+    onCloseoutReady?.({ ready, closed: done, total });
+  }, [onCloseoutReady, ready, done, total]);
 
+  // W4 (C-8) — the lens's fourth voice. The body never reads the DOM: it
+  // subscribes to the store the page-level observer writes, and the fold hook
+  // resolves that against the three voices that outrank it.
+  const positionDensity = useLensDensityStore('care');
+  // W4-C17 — the four branches below print a COMPLETE paragraph and no
+  // `RegionHead`, so a `quiet` density on their root would be an untruthful
+  // attribute: the same defect D-B27 ruled `forceOpen` for on FF&E's
+  // install/care postures. It also mis-feeds the fling census, which falls
+  // back to the root's own top when there is no `[data-region-head]` and
+  // counts every frame inside such a root as blank.
+  const projectClosedOut =
+    project != null && project.status === 'completed';
+  const bandIsProjectOwner =
+    typeof project?.designer_id === 'string' && project.designer_id === user?.id;
+  // Only the three branches that print a complete paragraph AND spread
+  // `indexRootAttrs`. The folded branch prints a `FoldSeam`, which is a
+  // legitimate quiet form, and a non-index mount spreads no attributes at all.
+  const printsWholeParagraph =
+    projectClosedOut || closed || !bandIsProjectOwner;
   const fold = useRegionFold({
     docId: projectId,
     region: 'care',
     defaultFolded: ready === undefined ? null : !nearClose,
-    forceOpen: nearClose,
+    forceOpen: nearClose || printsWholeParagraph,
+    positionDensity,
   });
+  const density: RegionDensity = fold.density;
+
   const unfoldFocusRef = useRef(false);
 
   useEffect(() => {
@@ -199,7 +263,55 @@ export function CareBand({
     }
   }, [fold.folded]);
 
-  if (!project || project.status === 'completed') return null;
+  // W2 (C-2) — the attributes that make this mount the running index's `care`
+  // root, applied identically across every return branch below (never on
+  // `RegionHead` or `FoldSeam`, which only exist in one branch each and would
+  // leave the other branches unmarked). `tabIndex` is part of the pair: L-10's
+  // jump focuses `regionHeadingId('care')`, and `.focus()` on an element that
+  // cannot take focus is a silent no-op — the reader lands on the region with
+  // focus still in the rail.
+  // W4 — this FILE renders `data-density` from the fold's answer (OD-13) and
+  // writes nothing imperatively; the density rAF also writes `'full'` on the
+  // same element, and both owners are deliberate (F6, §5's DOM table): the
+  // imperative write is what makes a deep landing's first paint correct before
+  // React has committed, and React's is what a re-created root mounts with.
+  // They cannot disagree — the store snapshot is read at render time and the
+  // hook only ever writes `'full'` earlier than React would. The reserve rides
+  // the same root at every density (OD-12). Both belong to the index root
+  // only: the second `CareBand` mount is not a stop and has nothing for the
+  // lens to say.
+  const indexRootAttrs = indexRoot
+    ? {
+        'data-index-region': 'care' as const,
+        id: CARE_INDEX_HEADING_ID,
+        tabIndex: -1,
+        'data-density': density,
+        style: { '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties,
+      }
+    : {};
+
+  if (!project) return null;
+  // The settled read belongs to the Care section, so the band prints no
+  // checklist here — but a spread that DECLARES the care stop must give it a
+  // root to land on, or the ladder prints a stop with nothing behind it.
+  if (project.status === 'completed') {
+    return (
+      <div
+        {...indexRootAttrs}
+        className="mt-[var(--doc-region-gap)] rounded-[3px] bg-[rgba(168,181,160,0.16)] px-4 py-3.5"
+      >
+        <p className="text-[13px] text-[var(--color-charcoal)]">
+          <b>The book is closed.</b>{' '}
+          <span className="text-[var(--text-muted)]">
+            Care holds the settled read of this project.
+          </span>
+        </p>
+      </div>
+    );
+  }
+  // Auth has not answered yet: no root, and the ladder says so — `mountedKeys`
+  // reports the stop unmounted and it prints its name over its fallback rather
+  // than a press onto nothing.
   if (authLoading) return null;
 
   const isProjectOwner =
@@ -213,8 +325,9 @@ export function CareBand({
 
     return (
       <section
+        {...indexRootAttrs}
         aria-label="Project closeout ownership"
-        className="mt-8 border-l-2 border-[var(--color-sage)] px-3.5 py-2.5"
+        className="mt-[var(--doc-region-gap)] border-l-2 border-[var(--color-sage)] px-3.5 py-2.5"
       >
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
           Project closeout · owner action
@@ -232,7 +345,10 @@ export function CareBand({
   // R51 — the quiet inline confirmation while the read models re-derive.
   if (closed) {
     return (
-      <div className="mt-8 rounded-[3px] bg-[rgba(168,181,160,0.16)] px-4 py-3.5">
+      <div
+        {...indexRootAttrs}
+        className="mt-[var(--doc-region-gap)] rounded-[3px] bg-[rgba(168,181,160,0.16)] px-4 py-3.5"
+      >
         <p className="text-[13px] text-[var(--color-charcoal)]">
           <b>The book is closed.</b>{' '}
           <span className="text-[var(--text-muted)]">
@@ -246,13 +362,14 @@ export function CareBand({
   // The folded quiet line — closure stays reachable without wearing a band.
   if (fold.folded) {
     return (
-      <div className="mt-8">
+      <div {...indexRootAttrs} className="mt-[var(--doc-region-gap)]">
         <RegionRule />
         <FoldSeam
           headingId={HEADING_ID}
           bodyId={BODY_ID}
           name="Closing the book"
           summary={`${done} of ${items.length} closed out`}
+          cause={fold.cause}
           onUnfold={() => {
             unfoldFocusRef.current = true;
             fold.setFolded(false);
@@ -300,7 +417,10 @@ export function CareBand({
   ];
 
   return (
-    <div className="mt-8 rounded-[3px] bg-[rgba(229,221,208,0.5)] px-4 py-3.5">
+    <div
+      {...indexRootAttrs}
+      className="mt-[var(--doc-region-gap)] rounded-[3px] bg-[rgba(229,221,208,0.5)] px-4 py-3.5"
+    >
       <RegionRule />
       {/* The band head — R68.1: mark · mono label · reading · the solid act. */}
       <div className="flex items-center gap-4">
@@ -311,7 +431,12 @@ export function CareBand({
             name="Closing the book"
             eyebrow="Care · closing the book"
             status={
-              ready ? (
+              // W4-R1 — at quiet the head's own status line IS the count line,
+              // in the ratified form (`0 of 6 closed out`), with no second
+              // paragraph under it.
+              density === 'quiet' ? (
+                careQuietStatus({ closed: done, total: items.length })
+              ) : ready ? (
                 <>
                   <b>Everything is settled</b> — close the book when
                   you&rsquo;re ready
@@ -328,10 +453,19 @@ export function CareBand({
             surfaceKey="care"
             regionKey="closure"
             actions={headLedger}
+            actsAtQuiet={density === 'quiet' ? 'leader' : 'all'}
           />
         </div>
       </div>
 
+      {density === 'quiet' ? (
+        <p className="sr-only">
+          {quietStateSentence(
+            careQuietStatus({ closed: done, total: items.length }),
+            'Closing the book',
+          )}
+        </p>
+      ) : (
       <div id={BODY_ID}>
       {/* The closure checklist — square ticks that fill sage (the Work
           block's stamp grammar, not a SaaS checkbox). */}
@@ -492,6 +626,7 @@ export function CareBand({
         </div>
       )}
       </div>
+      )}
     </div>
   );
 }

@@ -189,6 +189,10 @@ export function AccountBand({
   headless?: boolean;
 }) {
   const { data, isLoading, isError, refetch } = useAccountPage(projectId);
+  // Standalone, the band is an organ standing BETWEEN two stops on the paper
+  // (care → record), so its top edge is the one region gap. Headless it is a
+  // sub-seam inside the money region and keeps that region's own rhythm.
+  const rootGap = headless ? 'mt-4' : 'mt-[var(--doc-region-gap)]';
   const [open, setOpen] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
   const [amendmentOpen, setAmendmentOpen] = useState(false);
@@ -211,7 +215,26 @@ export function AccountBand({
   }, []);
 
   if (isLoading) {
-    return <SectionLoadingLine label="opening the ledger" className="mt-4" />;
+    // D-B39/W5-R3 — the same title row the loaded band prints
+    // ("The accounts · this project"), so the box this band occupies is the
+    // same shape whether it is loading or loaded; the pulse is the only
+    // thing that mounts and unmounts inside it, and the title text never
+    // changes across that transition.
+    return (
+      <div className={`${rootGap} rounded-[5px] bg-[rgba(229,226,221,0.32)]`}>
+        <div className="grid w-full grid-cols-[auto_1fr_auto_auto] items-baseline gap-3 px-3 py-2 text-left">
+          <span className="font-heading text-[12.5px] font-medium italic text-[var(--color-charcoal)]">
+            The accounts · this project
+            <SectionLoadingLine variant="inline" label="opening the ledger" />
+          </span>
+          <span aria-hidden />
+          <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak,#8B7355)]">
+            Studio eyes only
+          </span>
+          <span aria-hidden />
+        </div>
+      </div>
+    );
   }
 
   if (isError) {
@@ -226,7 +249,9 @@ export function AccountBand({
 
   if (!data) {
     return (
-      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      <p
+        className={`${rootGap} font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]`}
+      >
         No account record is available for this project.
       </p>
     );
@@ -241,7 +266,7 @@ export function AccountBand({
     .join(' · ');
 
   return (
-    <div className="mt-4 rounded-[5px] bg-[rgba(229,226,221,0.32)]">
+    <div className={`${rootGap} rounded-[5px] bg-[rgba(229,226,221,0.32)]`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

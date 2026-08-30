@@ -15,7 +15,7 @@
  *     shows (full / milestone / curated) is set where the mirror is opened.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -317,25 +317,46 @@ export function LetterheadInstruments({
       <DocumentActionGroup
         surfaceKey="open-document"
         regionKey="letterhead-actions"
-        className="mt-1"
+        // W3-R5 §2 — the ledger's own register. Below 1180 the four acts at
+        // 12px/0.1em measure 385px in a 327px run and can never be one row, so
+        // the ledger drops to the paper's 11px mono floor (7.5 px/char → 303px,
+        // one row inside 327). A descendant selector because `DocumentAction`'s
+        // own `text-[12px]` is a single class: `.parent .da-act` (0,2,0) beats
+        // it, where a `text-[11px]` passed down as `className` would race it in
+        // the stylesheet. The 44px target is `min-h`, untouched by either.
+        // No top margin of its own: the letterhead grid's `gap-y` already
+        // separates row 2 from the title at ≥1180, and stacks it under the
+        // vitals with the same gap below it.
+        // W3-R6 §2 — and the gap between the acts drops from `gap-x-3` (13.5px
+        // at the 18px root) to the band's own 9px below 1180, the last 13.5px
+        // the row needed to fit 327. An attribute-qualified selector, (0,2,0),
+        // so it beats `ActionRegionFrame`'s own single-class `gap-x-3` on
+        // specificity rather than on stylesheet order.
+        className="[&_.da-act]:text-[11px] min-[1180px]:[&_.da-act]:text-[12px] max-[1179px]:[&[data-action-region]]:gap-x-[9px]"
         aria-label="Document letterhead actions"
       >
+        {/* W3-R4: the family word is dropped from the PRINT at every width —
+            the household chip says it 20px above, and repeating it cost the
+            ledger ~200px it was taking out of the title's measure. The
+            accessible name keeps the whole sentence. */}
         {canSendNote && (
           <DocumentAction
             actionKey="message-family"
             variant="primary"
+            aria-label={`Message ${family}`}
             onClick={() => setComposing((v) => !v)}
           >
-            Message {family}
+            Message
           </DocumentAction>
         )}
         {canMirror && (
           <DocumentAction
             actionKey="preview-as-client"
             variant="secondary"
+            aria-label={`Preview as ${family}`}
             onClick={() => setMirrorOpen(true)}
           >
-            Preview as {family}
+            Preview
           </DocumentAction>
         )}
         {scan && (
@@ -456,8 +477,15 @@ function CallSheetInstrument({ projectId }: { projectId: string }) {
           <span className="text-[var(--color-terracotta-ink)]">{onPaperSuffix}</span>
         ) : undefined
       }
+      // W3-R6 §1 — the count is dropped from the PRINT below 1180, so the
+      // accessible name has to carry it: the four characters ` · N` are what a
+      // 327px run cannot afford, and the ledger's second row cost 44px of the
+      // 390 letterhead. CSS, not a viewport read — nothing in this letterhead
+      // measures the window in JS (N-03).
+      aria-label={`Call sheet · ${roster.length}`}
     >
-      Call sheet · {roster.length}
+      Call sheet
+      <span className="max-[1179px]:hidden"> · {roster.length}</span>
     </DocumentAction>
   );
 }
@@ -500,13 +528,19 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
 
   return (
     <span className="relative">
+      {/* W3-R5 §1: this ONE act is both "sharing" and its tier — there is no
+          separate MILESTONES instrument to fold. It prints the bare word at
+          EVERY width: the tier is state the panel below prints one press away,
+          and on the letterhead it is the only label that costs a second row.
+          The accessible name states it at every width. */}
       <DocumentAction
         actionKey="sharing-settings"
         variant="tertiary"
         aria-expanded={open}
+        aria-label={`Sharing · ${currentLabel}`}
         onClick={() => setOpen((v) => !v)}
       >
-        Sharing · {currentLabel}
+        Sharing
       </DocumentAction>
       {open && (
         <span

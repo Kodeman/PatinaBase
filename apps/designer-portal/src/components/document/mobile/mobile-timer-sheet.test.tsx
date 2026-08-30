@@ -6,9 +6,24 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MobileShellProvider, useMobileShell } from './mobile-shell';
 import { MobileSheets } from './mobile-sheets';
-import { CompactSpineTimerDoorway } from '../spine-timer';
+import { useDocumentTime } from '@/hooks/document-time-provider';
+
+/** W5-R4(a) — `MobileSheets` now hosts the margin's note composer, so the tree
+ *  needs a query client the way every other act surface does. */
+const testQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+});
+function TestProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <QueryClientProvider client={testQueryClient}>
+      <MobileShellProvider>{children}</MobileShellProvider>
+    </QueryClientProvider>
+  );
+}
+
 
 const mockPause = jest.fn();
 const mockResume = jest.fn();
@@ -100,10 +115,18 @@ jest.mock('@/hooks/use-margin-items', () => ({
   useMarginItems: () => mockMarginQuery,
 }));
 
+jest.mock('@/hooks/use-margin-notes', () => ({
+  useCreateMarginNote: () => ({ mutate: jest.fn(), isPending: false }),
+}));
 jest.mock('@patina/supabase', () => ({
+  // W5-C2 — the Margin sheet's inline nudge.
+  useSendDecisionReminder: () => ({ mutate: jest.fn(), isPending: false }),
   useCoordinationItems: () => mockCoordinationQuery,
   // The mobile spine summary counts handoffs alongside margin items (I114).
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  // W5-R1: useMarginSheet's line-label lookup — this file seeds no
+  // line-anchored margin items, so an empty list is enough.
+  useProjectFFEItems: () => ({ data: [] }),
   isProjectArtifactApproval: (item: { approval_contract?: string | null }) =>
     item.approval_contract === 'project_artifact_v1',
 }));
@@ -184,6 +207,52 @@ function OpenProjectSpine() {
   );
 }
 
+// D-B30/W5-R1: the classification notice and the item list moved out of the
+// spine sheet into the Margin sheet — this stub opens that one instead.
+function OpenProjectMargin() {
+  const { setActiveDoc, openMargin } = useMobileShell();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setActiveDoc({
+          projectId: 'project-1',
+          proposalId: null,
+          clientName: 'Client',
+          title: 'Project',
+          sections: [],
+        });
+        openMargin();
+      }}
+    >
+      Open project margin
+    </button>
+  );
+}
+
+// W1 — `spine-timer.tsx` and its `CompactSpineTimerDoorway` are deleted
+// (OD-16). The studio drawer's `In hand today` clock is the timer's doorway at
+// EVERY width now, so this stub carries that button's shipped shape — its
+// `data-drawer-timer-doorway` hook and its accessible name — and the sheet's
+// focus-return contract is still proved against the selector the product
+// actually publishes. It is guarded on a held project, as the drawer's own
+// `holding && inHandToday > 0` is.
+function DrawerTimerDoorway() {
+  const { openTimer } = useMobileShell();
+  const { heldProjectId } = useDocumentTime();
+  if (!heldProjectId) return null;
+  return (
+    <button
+      type="button"
+      data-drawer-timer-doorway
+      aria-label="Open time controls, in hand 1h05"
+      onClick={openTimer}
+    >
+      In hand today
+    </button>
+  );
+}
+
 function MobileTimerFallbackDoorway() {
   const { openTimer } = useMobileShell();
   return (
@@ -201,16 +270,9 @@ function MobileTimerFallbackDoorway() {
 
 function DesktopFocusFallbacks() {
   return (
-    <>
-      <button type="button" data-studio-books-doorway>
-        Studio books doorway
-      </button>
-      <div data-full-spine-timer>
-        <button type="button" data-action-key="open-manual-time-entry">
-          Full timer log
-        </button>
-      </div>
-    </>
+    <button type="button" data-studio-books-doorway>
+      Studio books doorway
+    </button>
   );
 }
 
@@ -235,29 +297,23 @@ describe('compact-spine timer doorway', () => {
     };
   });
 
-  it('opens a focus-contained, scroll-locked sheet and restores its doorway on Escape', async () => {
+  // W1-L1 evicts the compact spine timer doorway (`spine-timer.tsx` is
+  // deleted this wave); below 1180 the mobile bar owns the only timer
+  // doorway — `MobileTimerFallbackDoorway` below already stands in for it
+  // elsewhere in this file (see the responsive-handoff tests further down).
+  it('opens a focus-contained, scroll-locked sheet from the mobile bar doorway, restoring focus on Escape, with no spine-timer regime anywhere', async () => {
     render(
-      <MobileShellProvider>
-        <CompactSpineTimerDoorway />
+      <TestProviders>
+        <MobileTimerFallbackDoorway />
         <SheetState />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const doorway = screen.getByRole('button', {
-      name: 'Open time controls, In hand, 1h05 elapsed',
+      name: 'More studio actions',
     });
-    expect(doorway).toHaveAttribute(
-      'data-spine-timer-regime',
-      'compact-only-1180-1439',
-    );
-    expect(doorway).toHaveClass(
-      'hidden',
-      'min-[1180px]:flex',
-      'min-[1440px]:hidden',
-      'min-h-11',
-    );
-    expect(doorway).toHaveTextContent('1h05');
+    expect(document.querySelector('[data-spine-timer-regime]')).toBeNull();
     expect(screen.getByTestId('sheet-state')).toHaveTextContent('closed');
 
     fireEvent.click(doorway);
@@ -267,9 +323,9 @@ describe('compact-spine timer doorway', () => {
     expect(timerSheet).toHaveAttribute('id', 'mobile-timer-sheet');
     expect(timerSheet).toHaveAttribute(
       'data-mobile-sheet-regime',
-      'through-1439',
+      'every-width',
     );
-    expect(timerSheet).toHaveClass('min-[1440px]:hidden');
+    expect(timerSheet).not.toHaveClass('min-[1440px]:hidden');
     expect(timerSheet).not.toHaveClass('min-[1180px]:hidden');
     expect(document.body.style.overflow).toBe('hidden');
 
@@ -313,10 +369,10 @@ describe('compact-spine timer doorway', () => {
   it('keeps every non-timer sheet below 1180', () => {
     setViewportWidth(390);
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <OpenDrawer />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open drawer' }));
@@ -336,7 +392,7 @@ describe('compact-spine timer doorway', () => {
     ['loading', { isLoading: true }, 'status'],
     ['error', { isError: true }, 'alert'],
   ] as const)(
-    'withholds decision bodies and announces %s classification in the mobile spine',
+    'withholds decision bodies and announces %s classification in the Margin sheet (D-B30/W5-R1)',
     (_state, queryState, role) => {
       setViewportWidth(320);
       mockMarginQuery = {
@@ -372,14 +428,14 @@ describe('compact-spine timer doorway', () => {
       mockCoordinationQuery = { data: undefined, ...queryState };
 
       render(
-        <MobileShellProvider>
-          <OpenProjectSpine />
+        <TestProviders>
+          <OpenProjectMargin />
           <MobileSheets />
-        </MobileShellProvider>,
+        </TestProviders>,
       );
 
       fireEvent.click(
-        screen.getByRole('button', { name: 'Open project spine' }),
+        screen.getByRole('button', { name: 'Open project margin' }),
       );
 
       expect(screen.getByRole(role)).toBeVisible();
@@ -391,12 +447,12 @@ describe('compact-spine timer doorway', () => {
   it('closes a drawer when 1180px ends its regime without restoring hidden focus', async () => {
     setViewportWidth(1179);
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <OpenDrawer />
         <DesktopFocusFallbacks />
         <SheetState />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const opener = screen.getByRole('button', { name: 'Open drawer' });
@@ -428,24 +484,26 @@ describe('compact-spine timer doorway', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('closes the compact timer at 1440px and does not resurrect it on return', async () => {
+  // W1 rewrite. This case used to assert the reverse — "closes the compact
+  // timer at 1440px and does not resurrect it on return" — because
+  // `spine-timer.tsx` owned Pause and `+ Log` above 1439. That file is deleted
+  // (OD-16) and the sheet is now the ONLY home of those two acts, opened by the
+  // studio drawer's clock at every width. So the assertion inverts: crossing
+  // 1440 must NOT close it, and Escape must still return focus to the doorway.
+  it('keeps the timer open across 1440px — the sheet has no width regime left', async () => {
     setViewportWidth(1439);
     render(
-      <MobileShellProvider>
-        <CompactSpineTimerDoorway />
+      <TestProviders>
+        <DrawerTimerDoorway />
         <DesktopFocusFallbacks />
         <SheetState />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const doorway = screen.getByRole('button', {
-      name: 'Open time controls, In hand, 1h05 elapsed',
+      name: 'Open time controls, in hand 1h05',
     });
-    const fullTimerLog = screen.getByRole('button', {
-      name: 'Full timer log',
-    });
-    fullTimerLog.style.display = 'none';
     doorway.focus();
     fireEvent.click(doorway);
     const timerDialog = screen.getByRole('dialog', { name: 'Time in hand' });
@@ -456,37 +514,42 @@ describe('compact-spine timer doorway', () => {
     );
     expect(document.body.style.overflow).toBe('hidden');
 
-    doorway.style.display = 'none';
-    fullTimerLog.style.display = '';
     act(() => setViewportWidth(1440));
 
+    expect(
+      screen.getByRole('dialog', { name: 'Time in hand' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('sheet-state')).toHaveTextContent('timer');
+    expect(document.body.style.overflow).toBe('hidden');
+
+    // Pause and the manual-log door are reachable at 1440 — the whole reason
+    // the ceiling came off.
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '+ Log manually' }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() =>
       expect(
         screen.queryByRole('dialog', { name: 'Time in hand' }),
       ).not.toBeInTheDocument(),
     );
-    expect(screen.getByTestId('sheet-state')).toHaveTextContent('closed');
     expect(document.body.style.overflow).toBe('');
-    expect(doorway).not.toHaveFocus();
-    await waitFor(() => expect(fullTimerLog).toHaveFocus());
-
-    act(() => setViewportWidth(1439));
-    expect(
-      screen.queryByRole('dialog', { name: 'Time in hand' }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => expect(doorway).toHaveFocus());
   });
 
   it('keeps the timer open when compact chrome gives way to the mobile edge', async () => {
     render(
-      <MobileShellProvider>
-        <CompactSpineTimerDoorway />
+      <TestProviders>
+        <DrawerTimerDoorway />
         <MobileTimerFallbackDoorway />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const compactDoorway = screen.getByRole('button', {
-      name: 'Open time controls, In hand, 1h05 elapsed',
+      name: 'Open time controls, in hand 1h05',
     });
     const mobileMore = screen.getByRole('button', {
       name: 'More studio actions',
@@ -513,15 +576,15 @@ describe('compact-spine timer doorway', () => {
   it('hands a mobile-opened timer to the compact doorway after crossing 1180px', async () => {
     setViewportWidth(1179);
     render(
-      <MobileShellProvider>
-        <CompactSpineTimerDoorway />
+      <TestProviders>
+        <DrawerTimerDoorway />
         <MobileTimerFallbackDoorway />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const compactDoorway = screen.getByRole('button', {
-      name: 'Open time controls, In hand, 1h05 elapsed',
+      name: 'Open time controls, in hand 1h05',
     });
     const mobileMore = screen.getByRole('button', {
       name: 'More studio actions',
@@ -548,11 +611,11 @@ describe('compact-spine timer doorway', () => {
   it('does not steal focus from a replacement modal during responsive cleanup', async () => {
     setViewportWidth(1179);
     render(
-      <MobileShellProvider>
+      <TestProviders>
         <OpenDrawer />
         <DesktopFocusFallbacks />
         <MobileSheets />
-      </MobileShellProvider>,
+      </TestProviders>,
     );
 
     const opener = screen.getByRole('button', { name: 'Open drawer' });
@@ -592,9 +655,9 @@ describe('compact-spine timer doorway', () => {
   it('publishes no compact timer doorway without a held project', () => {
     mockTimeState = { ...mockTimeState, heldProjectId: null };
     render(
-      <MobileShellProvider>
-        <CompactSpineTimerDoorway />
-      </MobileShellProvider>,
+      <TestProviders>
+        <DrawerTimerDoorway />
+      </TestProviders>,
     );
 
     expect(

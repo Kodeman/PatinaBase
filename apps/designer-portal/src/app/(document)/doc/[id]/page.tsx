@@ -46,7 +46,7 @@ import {
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
-import { MobileMarginChips } from '@/components/document/mobile/mobile-margin-chips';
+import { useMarginSheet } from '@/hooks/use-margin-sheet';
 import {
   documentEvents,
   rememberDocumentInHand,
@@ -64,8 +64,15 @@ import {
   paperRegionsForSection,
   requestRegionUnfold,
   type DocumentIndexKey,
+  isPreWorkSection,
 } from '@/lib/document/document-index';
-import { scrollToRegion } from '@/hooks/use-document-running-index';
+import {
+  scrollToRegion,
+  useDocumentRunningIndex,
+} from '@/hooks/use-document-running-index';
+import { approvalsQuietLeader } from '@/lib/document/lens-quiet-status';
+import { useLensDensity } from '@/hooks/use-lens-density';
+import { isEditableTarget, useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
 import {
   deriveProposalWatch,
@@ -78,7 +85,7 @@ import { DocSpine } from '@/components/document/doc-spine';
 import { DocLetterhead } from '@/components/document/doc-letterhead';
 import { SettledBar } from '@/components/document/settled-bar';
 import { PreviousWork } from '@/components/document/previous-work';
-import { DocumentGuide } from '@/components/document/document-guide';
+import { deriveGuideModel } from '@/components/document/document-guide';
 import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-readonly';
 import { FFESection } from '@/components/document/ffe-section';
 import { ScheduleSpine } from '@/components/document/schedule/schedule-spine';
@@ -86,7 +93,10 @@ import { RoomFilesSection } from '@/components/room-file/room-files-section';
 import { InstallWindowCeremony } from '@/components/document/schedule/install-window-ceremony';
 import { BriefSection } from '@/components/document/brief-section';
 import { BriefRecap } from '@/components/document/brief-recap';
-import { CareBand } from '@/components/document/care-band';
+import {
+  CareBand,
+  type CloseoutState,
+} from '@/components/document/care-band';
 import { CareSection } from '@/components/document/quiet-sections';
 import { DiscoverySection } from '@/components/document/discovery/discovery-section';
 import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
@@ -100,6 +110,7 @@ import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
 import { MoneyRegion } from '@/components/document/commercial/money-region';
+import { PreworkRegion } from '@/components/document/prework/prework-region';
 import { KickoffBand } from '@/components/document/roster/kickoff-band';
 import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
@@ -143,18 +154,22 @@ import {
   useDeskEngagements,
 } from '@/hooks/use-desk-engagements';
 import { callSheetPending, openLedger } from '@/components/document/command-bar';
-import { RedLetterZone, type RedLetterRow } from '@/components/document/red-letter-zone';
+import { type RedLetterRow } from '@/components/document/red-letter-zone';
 import {
   RoomLensProvider,
   useRoomLens,
 } from '@/components/document/room-lens-context';
-import { DocSpineShelvedBlocks } from '@/components/document/spine-shelved-blocks';
-import { JobTicket } from '@/components/document/job-ticket';
+import { LensBand } from '@/components/document/lens-band';
+import {
+  deriveLensBand,
+  type LensBandModel,
+  type LensInputItem,
+  type LensReadingStop,
+} from '@/lib/document/lens-band-derivation';
+import type { LensTier } from '@/lib/document/lens-constants';
+import { useLensFrame } from '@/hooks/use-lens-frame';
 import {
   deriveTicket,
-  deriveTicketHead,
-  deriveTicketIdentity,
-  deriveTicketSeam,
   type TicketClientCopy,
   type TicketInput,
   type TicketLine,
@@ -164,12 +179,17 @@ import {
   type TicketSlotKey,
   type TicketUnansweredPo,
 } from '@/lib/document/ticket-derivation';
-import { boardsRoutePath } from '@/lib/document/registry';
+import {
+  deriveLadderDoors,
+  deriveLadderSegments,
+} from '@/lib/document/lens-ladder-derivation';
 import { deriveMoneyLadder, type MoneyLadder } from '@/lib/document/money-ladder';
+import { money } from '@/lib/document/project-commerce';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
 import {
   deriveLineStamp,
+  OPEN_DAMAGE_CLAIM_STATES,
   type LineStampInput,
 } from '@/lib/document/stamp-derivation';
 import { deriveTableComposition } from '@/lib/document/table-derivation';
@@ -196,6 +216,8 @@ import {
   type ShelfKey,
   type ShelfLeafKey,
 } from '@/lib/document/shelves';
+import { deriveSectionStageLine } from '@/lib/document/section-stage-line';
+import { deriveSectionWorkflowStageDocument } from '@/lib/document/workflow-stage-derivation';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -228,6 +250,10 @@ interface TicketFFERow extends LineStampInput {
   project_room_id?: string | null;
   product_id?: string | null;
   removed_at?: string | null;
+  /** `damage_claims!ffe_item_id(id, state, created_at)` — the embed
+   *  `use-project-v2.ts:192` already selects. `LineStampInput` reads only the
+   *  state; the rail's Pieces value reads the date beside it. */
+  item_claims?: { state: string; created_at?: string | null }[] | null;
 }
 
 /**
@@ -328,6 +354,44 @@ function vitalsFor(
  * identity test would have the report re-render the mount that made it, and
  * that render report again, without end.
  */
+/** One array identity for "this spread raises nothing", so the band's memo is
+ *  not busted by a fresh `[]` on every render. */
+const NO_BAND_NEEDS: readonly RedLetterRow[] = [];
+
+/**
+ * D-B24 — which measure line 2 has to fit. The three tiers are the shell's own
+ * (`full` from 1440, `narrow` from 1180, `mobile` below it). The server has no
+ * viewport, so it renders the widest form and the effect corrects on the first
+ * client frame — the same shape `shelf-panel.tsx` uses for its tier.
+ */
+function useLensTier(): { tier: LensTier; read: boolean } {
+  const [tier, setTier] = useState<LensTier>('full');
+  // N2-02 — whether the viewport has been read at all. On a client-side
+  // navigation `hydrated` is already true, so without this the impression
+  // fires in the first commit — while the tier is still the server's widest
+  // form — and the correction lands in a re-render the effect's deps ignore,
+  // logging every 390 and 1280 arrival as `full`.
+  const [read, setRead] = useState(false);
+  useEffect(() => {
+    // Set in the same commit as the first `read()` below, so the impression
+    // sees one settled tier rather than a correction it cannot record.
+    setRead(true);
+    if (typeof window.matchMedia !== 'function') return;
+    const full = window.matchMedia('(min-width: 1440px)');
+    const desktop = window.matchMedia('(min-width: 1180px)');
+    const read = () =>
+      setTier(full.matches ? 'full' : desktop.matches ? 'narrow' : 'mobile');
+    read();
+    full.addEventListener('change', read);
+    desktop.addEventListener('change', read);
+    return () => {
+      full.removeEventListener('change', read);
+      desktop.removeEventListener('change', read);
+    };
+  }, []);
+  return { tier, read };
+}
+
 function sameTicketRows(
   previous: readonly TicketRow[] | null,
   next: readonly TicketRow[],
@@ -388,9 +452,8 @@ function noProjectLadder(): MoneyLadder {
  * the shelf leaves, the money region and the FF&E section make the same
  * calls — so the ticket costs cache hits, not round trips.
  */
-function JobTicketMount({
+function ProjectTicketFacts({
   projectId,
-  routeId,
   section,
   regionSection,
   project,
@@ -404,15 +467,12 @@ function JobTicketMount({
   callSheetEnabled,
   rosterCount,
   rosterSettled,
-  onOpenLeaf,
-  onUnfoldRegion,
   onRows,
+  onInput,
+  onDamagedOn,
   clientCopy,
 }: {
   projectId: string;
-  /** The `[id]` this document is mounted at — the address every leaf page and
-   *  the boards route resolve, project id or engagement id alike. */
-  routeId: string;
   section: SectionKey;
   /** Which spread's regions are actually on the paper. Off the `worktable`
    *  flag this IS `section`; with a table pinned the two differ, and a row
@@ -433,13 +493,17 @@ function JobTicketMount({
   callSheetEnabled: boolean;
   rosterCount: number;
   rosterSettled: boolean;
-  onOpenLeaf: (key: ShelfKey) => void;
-  onUnfoldRegion: (region: DocumentIndexKey) => void;
-  /** The eight rows, reported up for the guide's leader (B2-L3). The rows are
-   *  derived here because the reads are here; the guide is derived above this
-   *  mount, so the leader can only speak from what the ticket prints if the
-   *  rows travel back up. */
+  /** The eight rows, reported up for the guide's leader (B2-L3) and for the
+   *  band's standing set (OD-8). The rows are derived here because the reads
+   *  are here; both consumers stand above this mount, so the rows travel back
+   *  up. */
   onRows: (rows: readonly TicketRow[]) => void;
+  onInput: (input: TicketInput) => void;
+  /** W2 design review, item 11 — the carrier window on the damaged line. The
+   *  FF&E read below already embeds `damage_claims(id, state, created_at)` for
+   *  `deriveLineStamp`, so the date the rail's Pieces value adds costs no
+   *  query of its own; it is reported up rather than re-read. */
+  onDamagedOn: (isoDate: string | null) => void;
   /** The proposal's own copy — the ninth row, and only on the Finalize table. */
   clientCopy: TicketClientCopy | null;
 }) {
@@ -469,6 +533,23 @@ function JobTicketMount({
     [ffeQuery.data],
   );
 
+  // The oldest OPEN claim standing on any line — the same claim
+  // `deriveLineStamp` reads to stamp the line `damaged`, so the rail's date
+  // and the paper's stamp can never name different damage.
+  const damagedOn = useMemo(() => {
+    const dates = (ffeQuery.data ?? [])
+      .filter((item) => item.removed_at == null)
+      .flatMap((item) => item.item_claims ?? [])
+      .filter((claim) => OPEN_DAMAGE_CLAIM_STATES.has(claim.state))
+      .map((claim) => claim.created_at)
+      .filter((date): date is string => Boolean(date))
+      .sort();
+    return dates[0] ?? null;
+  }, [ffeQuery.data]);
+  useEffect(() => {
+    onDamagedOn(damagedOn);
+  }, [damagedOn, onDamagedOn]);
+
   const leadingOpenInvoice = useMemo(
     () => computeArAging(invoicesQuery.data ?? []).openInvoices[0] ?? null,
     [invoicesQuery.data],
@@ -483,7 +564,7 @@ function JobTicketMount({
     [regionSection],
   );
 
-  // See `ProjectlessTicketMount` — the facts, not the object identity. Both
+  // See `ProjectlessTicketFacts` — the facts, not the object identity. Both
   // props are rebuilt on every render of the page, which sits above an early
   // return no memo of theirs could be hoisted over.
   const copySettled = clientCopy?.settled ?? null;
@@ -567,19 +648,11 @@ function JobTicketMount({
     ],
   );
 
-  return (
-    <TicketFace
-      input={ticketInput}
-      routeId={routeId}
-      onOpenLeaf={onOpenLeaf}
-      onUnfoldRegion={onUnfoldRegion}
-      onRows={onRows}
-    />
-  );
+  return <TicketFacts input={ticketInput} onRows={onRows} onInput={onInput} />;
 }
 
 /**
- * The ticket on a document that has no project yet — the four stages before
+ * The facts on a document that has no project yet — the four stages before
  * the work starts (brief · discovery · direction · proposal).
  *
  * It reads the PROPOSAL's three populations, never the project's. A direction
@@ -590,32 +663,28 @@ function JobTicketMount({
  * room, the money ladder, the schedule, the roster) stays settled and empty:
  * an honest empty for a paper that genuinely has none.
  *
- * `JobTicketMount`'s own reads still may not run here. Its `enabled`-gated
+ * `ProjectTicketFacts`'s own reads still may not run here. Its `enabled`-gated
  * queries would never answer with no project id, pinning rows at `Reading…`
  * for the life of the document, and its two un-`enabled` ones would fetch the
  * studio's whole ledger.
  */
-function ProjectlessTicketMount({
-  routeId,
+function ProjectlessTicketFacts({
   proposalId,
   section,
   regionSection,
   tableSlots,
   clientCopy,
-  onOpenLeaf,
-  onUnfoldRegion,
   onRows,
+  onInput,
 }: {
-  routeId: string;
   /** The proposal this paper is composed from, where it has one. */
   proposalId: string | null;
   section: SectionKey;
   regionSection: SectionKey;
   tableSlots: readonly TicketSlotKey[] | undefined;
   clientCopy: TicketClientCopy | null;
-  onOpenLeaf: (key: ShelfKey) => void;
-  onUnfoldRegion: (region: DocumentIndexKey) => void;
   onRows: (rows: readonly TicketRow[]) => void;
+  onInput: (input: TicketInput) => void;
 }) {
   // The proposal's OWN three populations — the same reads the Speccing table's
   // rail, scheme and strip make from the same cache. All three are `enabled`
@@ -709,71 +778,68 @@ function ProjectlessTicketMount({
       proposalBoardsQuery.isLoading,
     ],
   );
-  return (
-    <TicketFace
-      input={ticketInput}
-      routeId={routeId}
-      onOpenLeaf={onOpenLeaf}
-      onUnfoldRegion={onUnfoldRegion}
-      onRows={onRows}
-    />
-  );
+  return <TicketFacts input={ticketInput} onRows={onRows} onInput={onInput} />;
 }
 
 /**
- * The ticket itself, once its facts are settled — one derivation and one
- * render, whether the facts came from a project's seven reads or from a paper
- * that has no project to read.
+ * The document's facts, once its reads are settled — one derivation, reported
+ * up, whether the facts came from a project's seven reads or from a paper that
+ * has no project to read.
+ *
+ * W3 · it renders nothing. The eight rows used to be printed by `JobTicket`
+ * between the letterhead and the guide; the lens band prints the worst of them
+ * on line 2 and the ladder prints the rest as the rail's own register, so this
+ * component is now only the place the reads are cheap.
  */
-function TicketFace({
+function TicketFacts({
   input,
-  routeId,
-  onOpenLeaf,
-  onUnfoldRegion,
   onRows,
+  onInput,
 }: {
   input: TicketInput;
-  routeId: string;
-  onOpenLeaf: (key: ShelfKey) => void;
-  onUnfoldRegion: (region: DocumentIndexKey) => void;
   onRows: (rows: readonly TicketRow[]) => void;
+  /** W2 · the ladder reads the SAME input the band does (OD-8): one source,
+   *  two registers, and no second query. The reads that compose it are here
+   *  because this is where they are cheap, so the input travels back up the
+   *  way the rows already do. */
+  onInput: (input: TicketInput) => void;
 }) {
-  // The top of the paper on every document: the derivation runs when a fact
-  // changes, not on every render one of the reads beneath it causes.
-  const ticket = useMemo(() => {
-    const rows = deriveTicket(input);
-    return {
-      rows,
-      seam: deriveTicketSeam(rows, deriveTicketIdentity(input)),
-      head: deriveTicketHead(input),
-    };
-  }, [input]);
+  // The derivation runs when a fact changes, not on every render one of the
+  // reads beneath it causes.
+  const rows = useMemo(() => deriveTicket(input), [input]);
 
   useEffect(() => {
-    onRows(ticket.rows);
-  }, [ticket.rows, onRows]);
+    onRows(rows);
+  }, [rows, onRows]);
 
-  return (
-    <JobTicket
-      rows={ticket.rows}
-      seam={ticket.seam}
-      head={ticket.head}
-      onOpenLeaf={onOpenLeaf}
-      routes={{
-        planroom: shelfRouteFor('planroom', routeId) ?? undefined,
-        specbook: shelfRouteFor('specbook', routeId) ?? undefined,
-        moodboards: boardsRoutePath(routeId),
-      }}
-      onUnfoldRegion={onUnfoldRegion}
-      onOpenCallSheet={() =>
-        window.dispatchEvent(
-          new CustomEvent('document:open-call-sheet', {
-            detail: { mode: 'sheet' },
-          }),
-        )
-      }
-    />
-  );
+  useEffect(() => {
+    onInput(input);
+  }, [input, onInput]);
+
+  return null;
+}
+
+/** The subset of the ticket's input the ladder's registers are read from
+ *  (`lens-ladder-derivation.ts`). Two inputs with the same signature print the
+ *  same rail, whatever their object identity. */
+function ladderFactsSignature(input: TicketInput): string {
+  return JSON.stringify({
+    section: input.section,
+    paperRegions: input.paperRegions ?? null,
+    project: input.project,
+    clientCopy: input.clientCopy,
+    rooms: input.rooms,
+    pieces: {
+      settled: input.pieces.settled,
+      lines: input.pieces.lines.map((line) => [line.stamp, line.roomId]),
+    },
+    dates: input.dates,
+    money: {
+      settled: input.money.settled,
+      failed: input.money.failed,
+      ladder: input.money.ladder,
+    },
+  });
 }
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -956,7 +1022,24 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // reader of the eight closeout queries AND of the checklist's own state. The
   // band publishes its answer here rather than the page paying for that read
   // twice and getting a second answer.
-  const [closureReady, setClosureReady] = useState(false);
+  // W2 fix (D-B9) — the pair, not only the gate: the ladder's care stop prints
+  // `N OF M CLOSED OUT` off the same report. Held by value so the band may
+  // publish on every render without moving the page.
+  const [closeout, setCloseout] = useState<CloseoutState>({
+    ready: false,
+    closed: 0,
+    total: 0,
+  });
+  const closureReady = closeout.ready;
+  const acceptCloseout = useCallback((next: CloseoutState) => {
+    setCloseout((previous) =>
+      previous.ready === next.ready &&
+      previous.closed === next.closed &&
+      previous.total === next.total
+        ? previous
+        : next,
+    );
+  }, []);
   // FIX 2 — the event's optional { mode } detail (default 'sheet'), read off
   // whichever dispatch opened it and forwarded straight through to CallSheet.
   const [callSheetMode, setCallSheetMode] = useState<CallSheetOpenMode>('sheet');
@@ -968,6 +1051,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const [sectionDrag, setSectionDrag] = useState(false);
   const [folioDrop, setFolioDrop] = useState<File[] | null>(null);
   const mainRef = useRef<HTMLElement>(null);
+
+  // W4 · THE LENS. Attached unconditionally (OD-15): there is no gate to be
+  // off, and the hook must run above the early returns below or its position in
+  // the hook order would change with the resolution state. `mainRef` is the
+  // `[data-document-paper]` element itself.
+  const lens = useLensDensity(mainRef);
+  // D-B19 — the one owner of `data-lens-state`. It writes imperatively, so the
+  // band's pin and a focus landing in a field cost no re-render of the page.
+  const { shellRef: lensShellRef, onPinChange: onLensPinChange } = useLensState({
+    freeze: lens.freeze,
+  });
 
   // Click a spine marker (or a settled bar): unfold that phase and scroll to it.
   // The active phase has no settled bar — the scroll just lands on its section.
@@ -1046,6 +1140,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
   }, []);
 
+  // DL-04 — the sections sheet's fifth door (`The client's copy`). The sheet
+  // mounts in `(document)/layout.tsx`, above the leaf's state, so it asks by
+  // the same wire the call sheet already uses and the page performs the same
+  // act the ticket's ninth row does.
+  useEffect(() => {
+    const onOpenLeaf = (e: Event) => {
+      const leaf = (e as CustomEvent<{ leaf?: ShelfLeafKey }>).detail?.leaf;
+      if (!leaf) return;
+      setOpenShelf((current) => (current === leaf ? null : leaf));
+    };
+    window.addEventListener('document:open-leaf', onOpenLeaf);
+    return () => window.removeEventListener('document:open-leaf', onOpenLeaf);
+  }, []);
+
   // R25 rooms (spine-sheet jump rows + headings) · R23 gates (settled stamps).
   const { data: docRooms, isLoading: docRoomsLoading } = useDocumentRooms(
     row?.project_id ?? null,
@@ -1089,6 +1197,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      // W5-R6 / 1b — a key a FIELD is using is not a shell shortcut. Amending
+      // the letterhead's name and pressing Escape restored the name and then
+      // put the paper down underneath her: `/doc/…` → `/desk`. `isEditable
+      // Target` is `use-lens-state.ts`'s own selector, so the guard that
+      // decides `editing` and the guard that decides Put-down cannot drift.
+      if (isEditableTarget(e.target)) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (openShelf) return;
       router.push('/desk');
@@ -1114,16 +1228,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // routes it to the shelf's own page instead, so the reader arrives at what
   // they opened rather than at nothing.
 
-  // The region a ticket row unfolds — the same request and the same landing the
-  // running index's own rows make, so a jump from the ticket and a jump from
-  // the index take the reading line to the same place by the same act.
-  const unfoldRegion = useCallback(
-    (key: DocumentIndexKey) => {
-      requestRegionUnfold(key);
-      scrollToRegion(key, row?.project_id ?? '');
-    },
-    [row?.project_id],
-  );
+  // H4 — the band's one reversing act: pressing the household on line 1 puts
+  // the reader back at the top of the paper, focus on the letterhead itself.
+  const toTop = useCallback(() => {
+    const head = document.getElementById('document-project-status');
+    if (!head) return;
+    const reduceMotion = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    head.scrollIntoView({
+      block: 'start',
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    });
+    head.focus({ preventScroll: true });
+  }, []);
 
   // "Start a board" from the Add-to-project sheet reaches a room that now lives
   // on a shelf. Catch the intent, open the shelf, and re-fire once the room is
@@ -1352,9 +1470,32 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // map on the same paper does not show. Null on a document with no ticket,
   // and null until the mount's first report.
   const [ticketRows, setTicketRows] = useState<readonly TicketRow[] | null>(null);
+  // W2 design review, item 11 — reported by the ticket mount, which is where
+  // the FF&E read (and its `damage_claims` embed) already stands.
+  const [damagedOn, setDamagedOn] = useState<string | null>(null);
+  const acceptDamagedOn = useCallback((isoDate: string | null) => {
+    setDamagedOn((previous) => (previous === isoDate ? previous : isoDate));
+  }, []);
   const acceptTicketRows = useCallback((rows: readonly TicketRow[]) => {
     setTicketRows((previous) =>
       sameTicketRows(previous, rows) ? previous : rows,
+    );
+  }, []);
+  // W2 · the ticket's own input, reported up by whichever mount stands on this
+  // paper. The ladder's values are the rail's register of the SAME counts
+  // (OD-8), so they are read off this rather than off a second set of queries.
+  // Null until the mount's first report — the rail then prints OD-2's empty
+  // track for that one paint.
+  const [ticketInput, setTicketInput] = useState<TicketInput | null>(null);
+  const acceptTicketInput = useCallback((input: TicketInput) => {
+    // The mount rebuilds its input object whenever any read beneath it
+    // re-renders, so identity is not news. Only the facts the LADDER reads
+    // are: adopting on identity alone is a render loop, the same trap
+    // `sameTicketRows` guards the rows against.
+    setTicketInput((previous) =>
+      previous && ladderFactsSignature(previous) === ladderFactsSignature(input)
+        ? previous
+        : input,
     );
   }, []);
   // The Desk composition enriches guidance; it never gates it. A cold deep-link
@@ -1389,8 +1530,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         jumpToSection(destination.section, destination.focusId, destination.activate);
       }
       if (destination.kind === 'ledger') openLedger(destination.name, destination.context);
+      // W3 — the guide's deep links used to be an `<a href>` the zone rendered
+      // itself. The band prints one act, as a press, so the switch has to carry
+      // the fourth destination or a deep-linked guide act would open nothing.
+      if (destination.kind === 'href') router.push(destination.href);
     },
-    [enrichedOperationalQuery, jumpToSection],
+    [enrichedOperationalQuery, jumpToSection, router],
   );
   const activateGuide = useCallback(() => {
     const destination = guideModel?.action?.destination;
@@ -1411,9 +1556,311 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         actionLabel: action.label,
         onAct: () => activateDestination(action.destination),
         urgent: need.urgent,
+        // N-01 — the deadline the band ranks on, structured. The need already
+        // holds it; the sentence it prints does not.
+        dueOn: need.dueOn ?? null,
       };
     });
   }, [row, rankedOperationalNeeds, activateDestination]);
+
+  // NF4-01 — the ranked need's act, elected from the rows that already carry
+  // each need's kind beside the destination the guide offers, so the approvals
+  // head's quiet leader presses exactly where the band's line 2 does. A need
+  // that states no act cannot be a leader; the head keeps `New approval`.
+  const approvalsLeaderRow = approvalsQuietLeader(redLetterRows);
+  const approvalsQuietLeaderAct =
+    approvalsLeaderRow && approvalsLeaderRow.actionLabel
+      ? {
+          label: approvalsLeaderRow.actionLabel,
+          onAct: approvalsLeaderRow.onAct,
+        }
+      : null;
+
+  // W1 · the reading stop, lifted. The running index observes the region roots
+  // (`data-index-region`); the margin rail's group counts and the mobile bar's
+  // `AT <STOP>` line both need the answer, so the page owns the call — above
+  // every early return, so the hook order cannot change between renders.
+  // W2 (D-B6, retired): this is now the ONE call on the document. The rail's
+  // own observer went with `spine-shelved-blocks.tsx`; the ladder is handed
+  // `activeKey` and `jump` as props.
+  // W5 (OD-2) — the four pre-work spreads mount their own roots now, so the
+  // index observes them too. A project engagement still needs its project id:
+  // every Project region's heading is keyed on it.
+  const runningIndexRegions =
+    !row
+      ? []
+      : row.engagement_kind === 'project'
+        ? row.project_id
+          ? paperRegionsForSection(row.active_section)
+          : []
+        : isPreWorkSection(row.active_section)
+          ? paperRegionsForSection(row.active_section)
+          : [];
+  const {
+    activeKey,
+    mountedKeys,
+  } = useDocumentRunningIndex(
+    runningIndexRegions.map((region) => region.key),
+    row?.project_id ?? '',
+  );
+  const runningIndexProjectId = row?.project_id ?? '';
+  // D-B18 — the press order, in one place. The unfold sets the index's 700ms
+  // lock; `forceFullThrough` commits every region from the top of the paper
+  // through the target in one flushed write, so the heights exist before
+  // `scrollToRegion` reads the target's y two frames later. `jump` from the
+  // running index does the first and third steps only, so the composition is
+  // here rather than there — the hook has no lens.
+  const jumpToRegion = useCallback(
+    (key: DocumentIndexKey) => {
+      requestRegionUnfold(key);
+      lens.forceFullThrough(key);
+      scrollToRegion(key, runningIndexProjectId);
+    },
+    [lens, runningIndexProjectId],
+  );
+
+  // D-B46 — the same press order for a target INSIDE a region: the Margin
+  // sheet's line rows and the sections sheet's room rows both land on ids that
+  // live in the FF&E body, and a body that is quiet (or that she closed
+  // herself — a stop's fold is explicit-only, C-8) is not mounted. So: ask for
+  // the unfold, flush the promotion, then land two frames later, when the
+  // paint that mounted the body has happened. The same two-frame idiom
+  // `scrollToRegion` uses, for the same reason.
+  const landOnFfeAnchor = useCallback(
+    (elementId: string) => {
+      requestRegionUnfold('ffe');
+      lens.forceFullThrough('ffe');
+      const reduceMotion = window.matchMedia?.(
+        '(prefers-reduced-motion: reduce)',
+      ).matches;
+      const land = () =>
+        document.getElementById(elementId)?.scrollIntoView({
+          block: 'start',
+          behavior: reduceMotion ? 'auto' : 'smooth',
+        });
+      // The promotion above is flushed, so a region that was merely quiet has
+      // its body already: land now, in the same turn as the press. Only an
+      // unfold — a React state change the event above asked for — needs the
+      // paint to happen first, and that is the one case that waits.
+      if (document.getElementById(elementId)) {
+        land();
+        return;
+      }
+      requestAnimationFrame(() => {
+        requestAnimationFrame(land);
+      });
+    },
+    [lens],
+  );
+  const jumpToLine = useCallback(
+    (lineId: string) => landOnFfeAnchor(`ffe-selection-${lineId}`),
+    [landOnFfeAnchor],
+  );
+  const jumpToRoom = useCallback(
+    (roomId: string) => landOnFfeAnchor(`doc-room-${roomId}`),
+    [landOnFfeAnchor],
+  );
+
+  // W3 · the two yields the lens line needs: whether the letterhead is still in
+  // frame (the band's s0 form, and L-6 on the rail head) and which stop's own
+  // head is crossing the frame's top band (L-3 on the ladder). Called above
+  // every early return, like the running index it stands beside.
+  const { letterheadInFrame, headInFrame } = useLensFrame();
+
+  // Call Sheet (Wave 3) — rules of hooks: called unconditionally above the
+  // early returns below, alongside the page's other hooks. The roster fetch is
+  // gated on the flag so a cohort without it doesn't pay for a query neither
+  // the kickoff band nor the instrument will render from.
+  const callSheetGate = useFeatureFlag('call-sheet');
+
+  // W2 · THE LADDER — one segment per stop the spread puts on the paper, and
+  // the doors filed beneath them. Derived once, here, and printed twice: by
+  // `LensLadder` at both desktop tiers and by the sections sheet at 390. Every
+  // value is the rail's ≤30-char register of a count the ticket already states
+  // in sentences (OD-8), read off the ticket's OWN input rather than from a
+  // second set of queries.
+  const approvalRecords = approvalsQuery.data ?? [];
+  // The approvals region's own figures — `deriveTicket` states no approvals
+  // row, so these are passed in. `isSealed`'s test, kept in step with
+  // `project-approval-document.tsx`: a question is open until it is answered
+  // for good.
+  const unsettledApprovals = approvalRecords.filter(
+    (approval) =>
+      approval.disposition === 'active' && approval.outcome !== 'approved',
+  );
+  const overdueApprovals = unsettledApprovals.filter(
+    (approval) => approval.isOverdue,
+  );
+  const oldestOverdueDueAt =
+    overdueApprovals
+      .map((approval) => approval.dueAt)
+      .filter((due): due is string => Boolean(due))
+      .sort()[0] ?? null;
+  // C-04 — a stop is a press target only where its root is actually on the
+  // paper. `mounted` is false ONLY where the index can answer for the key and
+  // says there is no root: a key the index was never given (a pinned spread
+  // declaring a region the live section does not index) is unknown, not
+  // absent, and stays pressable.
+  const indexedKeys = new Set(runningIndexRegions.map((region) => region.key));
+  const declaredLadderKeys =
+    ticketInput?.paperRegions ??
+    (ticketInput
+      ? paperRegionsForSection(ticketInput.section).map((region) => region.key)
+      : []);
+  const ladderMountedKeys = declaredLadderKeys.filter(
+    (key) => !indexedKeys.has(key) || mountedKeys.includes(key),
+  );
+  // W5-R5 §2 (N2) — the section stage line's phrase, reported up from the
+  // strip that now stands inside the `scope` stop as its body.
+  // W5F-04 — derived from the SOURCE, never from the strip.
+  //
+  // `scopeRegister` reads this to build `CORE · STAGE 03 (· N ROOMS)`. It used
+  // to be reported up by `SectionStageLineMount`, which after N2 is a child of
+  // `PreworkRegion` — and `PreworkRegion` unmounts its children at quiet. So
+  // the `scope` head's status line and its rail value CHANGED on promotion,
+  // which is exactly what W5-R3 forbids, and D-B37 could not see it because it
+  // runs on `…d5` where no pre-work stop exists.
+  //
+  // The strip's own pre-work derivation is PURE — `deriveSectionWorkflowStage
+  // Document(section)` is a table lookup, with no selection, no fidelity and
+  // no position — so the same fact is computed here from the same source, and
+  // the strip's mount state cannot touch it.
+  const preworkStageLine = useMemo(
+    () =>
+      row?.active_section
+        ? (deriveSectionStageLine(
+            deriveSectionWorkflowStageDocument(row.active_section),
+            { activePhaseId: null, reason: 'none' },
+            null,
+            null,
+          )?.subLabel ?? null)
+        : null,
+    [row?.active_section],
+  );
+  // W5F-03 — ONE section source for both of the stage strip's gates: the
+  // suppression above the spread and the re-host inside `scope`. They read the
+  // same value, so they cannot disagree about which spread this is.
+  //
+  // Residual, closed at W6: that value has to be the SPREAD's section, not the
+  // row's. The `scope` region that hosts one of the two mounts is gated on
+  // `spreadSection` (`= table ? table.section : row.active_section`), and a
+  // pinned worktable deliberately holds a stale composition — so an
+  // `active_section: 'proposal'` under a pinned `section: 'project'` suppressed
+  // the free-standing strip and never mounted `scope`, printing ZERO strips.
+  // `stageStripInScope` is therefore computed below, beside `spreadSection`,
+  // and both use sites sit under it.
+  // W5F-02 — `scope` mounts on the PROPOSAL spread only, so only the proposal
+  // spread re-hosts the strip. brief/discovery/direction keep it where it was.
+  const ladderSegments = ticketInput
+    ? deriveLadderSegments({
+        ticket: ticketInput,
+        mountedKeys: ladderMountedKeys,
+        approvals: {
+          settled: !approvalsQuery.isLoading,
+          awaiting: unsettledApprovals.length - overdueApprovals.length,
+          overdue: overdueApprovals.length,
+          overdueDays: oldestOverdueDueAt
+            ? Math.max(
+                0,
+                Math.floor(
+                  (gateNow.getTime() -
+                    new Date(oldestOverdueDueAt).getTime()) /
+                    86_400_000,
+                ),
+              )
+            : null,
+          records: approvalRecords.length,
+        },
+        // The closeout checklist's numerator is `CareBand`'s own — composed
+        // from eight reads and the band's local ticks. D-B9 is closed by the
+        // band reporting the pair rather than the gate alone; until it has
+        // reported, `total` is 0 and the stop takes its fallback.
+        care: {
+          settled: true,
+          closed: closeout.closed,
+          total: closeout.total,
+        },
+        record: {
+          settled: true,
+          complete: sections.filter((section) => section.state === 'settled')
+            .length,
+        },
+        // The carrier window on the damaged line: the oldest open damage
+        // claim, reported up by the ticket mount from the embed its FF&E read
+        // already carries (D-B9, closed).
+        damagedOn,
+        heldRoomId,
+        // W5 (OD-2) — the pre-work stops' own figures. Every one is read off
+        // `useProposal`, which this page already runs; no new query.
+        prework: {
+          settled:
+            !proposalId || liveProposal !== undefined || proposalIsError,
+          sentOn: liveProposal?.sent_at ?? null,
+          openedOn: liveProposal?.viewed_at ?? null,
+          // The paper's own rooms: on a projectless proposal these ARE the
+          // proposal's scope rooms (`ProjectlessTicketFacts`).
+          scopeRooms: ticketInput.rooms.list.length,
+          // W5-R5 §2 — the stage phrase the `scope` stop's own body prints,
+          // reported up by `SectionStageLineMount` (N2).
+          stageLine: preworkStageLine,
+          investmentCents: liveProposal?.total_amount ?? null,
+        },
+      })
+    : [];
+  const ladderDoors = ticketInput
+    ? deriveLadderDoors({
+        ticket: ticketInput,
+        held: Boolean(heldRoomId),
+        // F-13/C-09 — one rule, both tiers: the sections sheet gates its Call
+        // sheet row on this flag, and with it off nothing mounts the overlay
+        // the door opens.
+        callSheetEnabled: callSheetGate.value,
+        routes: {
+          planroom: shelfRouteFor('planroom', id),
+          specbook: shelfRouteFor('specbook', id),
+          moodboards: shelfRouteFor('moodboards', id),
+          // Null, both of them: the call sheet is an overlay and the client's
+          // copy is reached by the Preview act below 1440 (`shelves.ts`), so
+          // each stays a press rather than becoming a link to nowhere.
+          callsheet: shelfRouteFor('callsheet', id),
+          clientcopy: shelfRouteFor('clientcopy', id),
+        },
+        onOpenLeaf: toggleShelf,
+        onOpenCallSheet: () =>
+          window.dispatchEvent(
+            new CustomEvent('document:open-call-sheet', {
+              detail: { mode: 'sheet' },
+            }),
+          ),
+        onReleaseRoom: () => {
+          if (heldRoomId) toggleRoom(heldRoomId);
+        },
+      })
+    : [];
+  // The sections sheet mounts in `(document)/layout.tsx`, above this page, so
+  // the ladder's values ride the published document rather than a prop the
+  // layout has no way to fill.
+  const ladderValues = Object.fromEntries(
+    ladderSegments.map((segment) => [
+      segment.key,
+      segment.narrowValue ?? segment.fallback ?? undefined,
+    ]),
+  ) as Partial<Record<DocumentIndexKey, string>>;
+  // W5 — a pre-work region's head prints the SAME line its rail segment does,
+  // read off the one derivation, so the head and the ladder cannot state the
+  // stop two ways.
+  const preworkStatus = (key: DocumentIndexKey): string =>
+    ladderSegments.find((segment) => segment.key === key)?.countLine ??
+    'Nothing yet';
+
+  // W5-R1: the whole-margin count — the mobile bar's "Margin · N" door and
+  // the Margin sheet's head both read it off `MobileActiveDoc` rather than
+  // each re-deriving it.
+  const { count: marginSheetCount } = useMarginSheet({
+    projectId: row?.project_id ?? null,
+    proposalId: row?.proposal_id ?? null,
+    clientName: row?.client_name ?? '',
+  });
 
   // D13: publish the held document to the mobile shell (bar + spine sheet).
   useMobileActiveDoc(
@@ -1425,6 +1872,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           title: row.title,
           sections,
           rooms: (docRooms ?? []).map((r) => ({ id: r.id, name: r.name })),
+          readingIndex: activeKey,
+          ladderValues,
+          clientCopy: ticketInput?.clientCopy != null,
+          onJumpRegion: jumpToRegion,
+          onJumpToLine: jumpToLine,
+          onJumpToRoom: jumpToRoom,
+          marginCount: marginSheetCount,
         }
       : null,
   );
@@ -1438,12 +1892,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     rememberDocumentInHand(heldEngagementId, { title: heldTitle, subtitle: heldSubtitle });
   }, [heldEngagementId, heldTitle, heldSubtitle]);
-
-  // Call Sheet (Wave 3) — rules of hooks: called unconditionally above the
-  // early returns below, alongside the page's other hooks. The roster fetch is
-  // gated on the flag so a cohort without it doesn't pay for a query neither
-  // the kickoff band nor the instrument will render from.
-  const callSheetGate = useFeatureFlag('call-sheet');
 
   // W2 — which table the paper composes as, and the pin that holds it still.
   // Memoized on the two facts it reads so the pin's snapshot is taken once per
@@ -1468,6 +1916,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // deliberately NOT the project room lens (room-lens-context): different
   // store, different subject, and this one persists at every width (A7).
   const [roomInHand, setRoomInHand] = useState<string | null>(null);
+  // W5-R2 item 4 — the brief/discovery spreads' own inline heads are retired
+  // (one head per stop); the sub-label they used to print (a response
+  // deadline, a readiness stamp) is reported up here and printed in the
+  // `PreworkRegion` eyebrow instead, the same report-up shape `onDamagedOn`
+  // already uses on this page.
+  const [briefEyebrow, setBriefEyebrow] = useState<string | null>(null);
+  const [discoveryEyebrow, setDiscoveryEyebrow] = useState<string | null>(
+    null,
+  );
   // W4b — whether the schedule has a release to offer. Reported up by the FF&E
   // section, which is where `canRelease` and per-line eligibility are derived;
   // the Delivery table head only prints the leader it is told exists.
@@ -1496,6 +1953,176 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     isFetching,
     isError,
   });
+
+  // W3 · THE BAND'S MODEL, derived above the early returns so it can be
+  // memoised (C-03). The derivation runs when a FACT changes, not on every
+  // render one of the twenty reads beneath it causes: a new `line2` object
+  // inside the 90ms turn restarts the latch and holds the sentence blank.
+  //
+  // The deps below are values, not the objects that carry them, because the
+  // arrays and models above are rebuilt on every render from the same reads.
+  const { tier: lensTier, read: lensTierRead } = useLensTier();
+  const bandTable = worktableOn ? tablePin.composition : null;
+  const bandSpread = bandTable ? bandTable.section : (row?.active_section ?? null);
+  // The band's stage word where no phase is placed — the same fallback the
+  // rail head takes (`doc-spine.tsx`).
+  const bandStageWord =
+    ticketPhase?.name ?? sections.find((s) => s.state === 'active')?.label ?? '';
+  const bandSegment = activeKey
+    ? (ladderSegments.find((segment) => segment.key === activeKey) ?? null)
+    : null;
+  const bandStopKey = bandSegment?.key ?? null;
+  const bandStopLabel = bandSegment?.name ?? null;
+  const bandStopCount = bandSegment?.countLine ?? null;
+  // R107/R108 — only the committed and record registers carry a day the band
+  // may state, the same test `scheduleRegister` applies on the rail.
+  const bandInstall =
+    scheduleFacts?.install?.date &&
+    (scheduleFacts.install.fidelity === 'committed' ||
+      scheduleFacts.install.fidelity === 'record')
+      ? fmtDay(scheduleFacts.install.date).toUpperCase()
+      : null;
+  const bandMoney = ticketRows?.find((r) => r.key === 'money')?.emphasis ?? null;
+  const bandSent = liveProposal?.sent_at
+    ? fmtDay(liveProposal.sent_at).toUpperCase()
+    : null;
+  const bandInvestment =
+    (liveProposal?.total_amount ?? 0) > 0
+      ? money(liveProposal.total_amount)
+      : null;
+  // The standing set is the red letter's own rows under the same gate the
+  // guide-or-zone ternary used to apply: a composed Desk answer for THIS
+  // engagement, and not a failed read (whose retry rides the guide's act).
+  // With nothing standing, line 2 prints the guide's sentence instead (C-6).
+  const bandNeeds =
+    row?.engagement_kind === 'project' &&
+    enrichedOperationalNeeds &&
+    !deskGuidanceFailed
+      ? redLetterRows
+      : NO_BAND_NEEDS;
+  const guideHeadline = guideModel?.headline ?? null;
+  const guideActLabel = guideModel?.action?.label ?? null;
+  // N-05 — telemetry keys on the act's own key, never on its printed label.
+  const guideActKey = guideModel?.action?.key ?? null;
+  // W3-R2 — the guide's open inputs, the sheet's own second section. Their
+  // facts are rebuilt every render from the same reads; this string is what
+  // actually changes.
+  const inputSignature = guideInputs
+    .map((fact) => `${fact.label}|${fact.owner}|${fact.blocks}`)
+    .join(';');
+  const bandHousehold = row?.client_name ?? '';
+  const bandStageIndex = ticketPhase
+    ? `${ticketPhase.position}/${ticketPhase.of}`
+    : null;
+
+  const bandStop = useMemo<LensReadingStop | null>(
+    () =>
+      bandStopKey && bandStopLabel != null && bandStopCount != null
+        ? { key: bandStopKey, label: bandStopLabel, countLine: bandStopCount }
+        : null,
+    [bandStopKey, bandStopLabel, bandStopCount],
+  );
+
+  const bandModel = useMemo<LensBandModel | null>(() => {
+    if (!bandSpread) return null;
+    const guideAct = guideActLabel
+      ? { key: guideActKey ?? 'guide', label: guideActLabel, onAct: activateGuide }
+      : null;
+    const inputs: LensInputItem[] = guideInputs.map((fact, index) => ({
+      key: `${index}:${fact.label}`,
+      // The input's own kind word — `Client signature` stands under SIGNATURE.
+      eyebrow: (fact.label.split(/\s+/).pop() ?? fact.label).toUpperCase(),
+      sentence: `${fact.label} · ${fact.owner} · blocks ${fact.blocks}`,
+      act: guideAct,
+    }));
+    return deriveLensBand({
+      spreadKind: bandSpread,
+      ticket: ticketRows ?? [],
+      needs: bandNeeds,
+      inputs,
+      guide: guideHeadline ? { text: guideHeadline, act: guideAct } : null,
+      tier: lensTier,
+      household: bandHousehold,
+      stageWord: bandStageWord,
+      stageIndex: ticketPhase
+        ? { position: ticketPhase.position, of: ticketPhase.of }
+        : null,
+      installDate: bandInstall,
+      moneyFigure: bandMoney,
+      // W5 (W3-R4 discharged) — the `investment` stop exists, so the proposal
+      // spread's right slot prints `SENT AUG 19 · $9,400`. The figure is the
+      // proposal's OWN total (DL-01), never an FF&E budget.
+      proposalInvestment: bandInvestment,
+      sentDate: bandSent,
+      readingStop: bandStop,
+    });
+    // `guideInputs` and `ticketPhase` are re-created every render; the values
+    // that decide the model are `inputSignature` and `bandStageIndex`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    bandSpread,
+    ticketRows,
+    bandNeeds,
+    inputSignature,
+    guideHeadline,
+    guideActLabel,
+    guideActKey,
+    activateGuide,
+    lensTier,
+    bandHousehold,
+    bandStageWord,
+    bandStageIndex,
+    bandInstall,
+    bandMoney,
+    bandSent,
+    bandInvestment,
+    bandStop,
+  ]);
+
+  // D-B22 — the lens line's telemetry fires from the page, which owns the
+  // model; the band captures nothing. Once per distinct model shape, the same
+  // shape `guideShown` used before it retired.
+  // N-11 — the loading and error trees print no band, so they must fire no
+  // `shown`: an event from a tree with no lens line is a phantom impression.
+  const lensLineSettled =
+    hydrated &&
+    resolutionState !== 'loading' &&
+    resolutionState !== 'error' &&
+    // N2-02 — and the tier has been read once, so `tier` on the impression is
+    // the viewport's, not the server's.
+    lensTierRead;
+  const lensLineProps =
+    bandModel && lensLineSettled
+      ? {
+          stage: bandSpread ?? '',
+          state: bandModel.line2.kind,
+          // N-05 — the act's own key. The LABEL is copy: it changes with the
+          // short form, with a rewording, with the tier.
+          action_key: bandModel.line2.act?.key ?? null,
+          standing_count: bandModel.line2.standingCount,
+          tier: lensTier,
+        }
+      : null;
+  const lensLinePropsRef = useRef(lensLineProps);
+  lensLinePropsRef.current = lensLineProps;
+  const lensLineKind = bandModel?.line2.kind ?? null;
+  const lensLineActKey = bandModel?.line2.act?.key ?? null;
+  const lensStandingCount = bandModel?.line2.standingCount ?? null;
+  useEffect(() => {
+    const props = lensLinePropsRef.current;
+    if (!props) return;
+    documentEvents.lensLineShown(props);
+  }, [id, lensLineKind, lensLineActKey, lensStandingCount, lensLineSettled]);
+  const onLensActed = useCallback(() => {
+    const props = lensLinePropsRef.current;
+    if (props) documentEvents.lensLineActed(props);
+  }, []);
+  const onLensStandingOpened = useCallback(() => {
+    const props = lensLinePropsRef.current;
+    if (!props) return;
+    const { action_key: _actionKey, ...rest } = props;
+    documentEvents.lensStandingSheetOpened(rest);
+  }, []);
 
   // SSR always starts with an empty engagement cache, while client navigation
   // can arrive with a warm React Query cache. Hold the first client paint to
@@ -1550,32 +2177,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
   const settled = sections.filter((s) => s.state === 'settled');
   settledCountRef.current = settled.length;
+  // The band's stage word where no phase is placed — the same fallback the
+  // rail head takes (`doc-spine.tsx`).
+  const activeSectionLabel =
+    sections.find((s) => s.state === 'active')?.label ?? '';
   const heldRoomName =
     (docRooms ?? []).find((r) => r.id === heldRoomId)?.name ?? null;
-  // B1 — the rooms and the shelves left the spine for the ticket, so the
-  // widened section predicate goes with them: the one block left is the running
-  // index, and the only thing it needs is regions to name. `paperRegionsForSection`
-  // already answers empty for a spread that mounts none (C11), so the gate is
-  // read off the regions themselves rather than kept as a second list of
-  // section names that can drift from it.
-  const paperRegions =
-    row.engagement_kind === 'project' && row.project_id
-      ? paperRegionsForSection(row.active_section)
-      : [];
-  const shelvedSpine =
-    row.project_id && paperRegions.length > 0 ? (
-      <DocSpineShelvedBlocks
-        projectId={row.project_id}
-        regions={paperRegions}
-        rooms={docRooms ?? []}
-        scheduleValue={scheduleFacts?.positionText ?? 'Not scheduled'}
-        approvalsValue={
-          approvalsQuery.isLoading
-            ? 'Reading…'
-            : `${(approvalsQuery.data ?? []).length} in the log`
-        }
-      />
-    ) : null;
   // W1 — the letterhead's setup chip. deriveNeed returns at most one need per
   // document, so this list holds one entry or none; `undefined` (the Desk has
   // not answered) and `null` (it answered "nothing") both render nothing. The
@@ -1607,6 +2214,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // read on this page stays on the live row.
   const table = worktableOn ? tablePin.composition : null;
   const spreadSection = table ? table.section : row.active_section;
+  // W5F-03 (residual) — the gate both stage-strip mounts read, off the spread
+  // the page is actually printing.
+  const stageStripInScope = spreadSection === 'proposal';
   // W4a — the Finalize table: the LEGACY proposal in the client's hands. Its
   // head, its leader, its Offer facets and its one shelf stand only here.
   //
@@ -1650,6 +2260,71 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // already redirected off before the table composes. The frame mounts these
   // only on the Speccing table; building them here for other rows creates
   // elements, never mounts.
+  // W5 (OD-2) — the proposal body, cut into the stops the ladder declares. The
+  // pieces are built once and placed twice: the proposal spread distributes
+  // them across its four regions, the direction spread takes all four into its
+  // one. Each is null without a proposal, which is what a stop with a name and
+  // no body prints.
+  const preworkEyebrow =
+    [
+      liveProposal?.version ? `v${liveProposal.version}` : null,
+      sections.find((s) => s.key === spreadSection)?.sub ?? null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || undefined;
+  const proposalVerdictHead = !row.proposal_id ? null : finalizeTable ? (
+    // W4a — the Finalize table's head: the verdict roll-up as the headline
+    // sentence, and the one inked leader the lifecycle × verdicts × send-wall
+    // matrix allows.
+    <FinalizeHead proposalId={row.proposal_id} clientName={row.client_name} />
+  ) : row.engagement_kind === 'proposal' && verdictSummary ? (
+    // C3 — a quiet read of where the client's verdicts stand ("4 of 12
+    // approved · 1 flagged"). Nothing when the client hasn't weighed in yet.
+    // On the Finalize table this whisper stands down — the same sentence is
+    // that table's headline, and one fact prints at one weight.
+    <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      {verdictSummary}
+    </p>
+  ) : null;
+  const proposalLifecycle =
+    row.proposal_id && row.engagement_kind === 'proposal' ? (
+      <>
+        {/* The proposal instruments: the Drafting Room doorway for a draft, the
+            Send/Preview/Revise overlay row once it's in the client's hands, and
+            the version-history strip. Local-state overlays never unmount the
+            document beneath (D1). */}
+        <ProposalInstruments
+          proposalId={row.proposal_id}
+          clientName={row.client_name}
+          onFinalizeTable={finalizeTable}
+        />
+        {/* S18: name the model — what's below is a read-only preview of the
+            proposal; the editing happens in the Drafting Room. */}
+        {liveProposal?.status === 'draft' && (
+          <p className="mb-2 mt-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+            Read-only preview · edit in the Drafting Room
+          </p>
+        )}
+        {/* R85 — the Folio mounts on proposal-stage documents (space
+            plans/drawings clip here pre-project; flagged files reach the
+            client's proposal copy via 00252's client read leg). */}
+        <ProposalFolioStrip proposalId={row.proposal_id} />
+      </>
+    ) : null;
+  const proposalBlocks = row.proposal_id ? (
+    <ProposalBlocksReadOnly
+      proposalId={row.proposal_id}
+      omitOfferBlocks={finalizeTable}
+    />
+  ) : null;
+  // W4a — the Drafting Room's Offer movement (Phases · Exclusions · Payments ·
+  // Terms), folding open under the spread in the Room's own seam form. It is
+  // the engagement's own terms, so on the proposal spread it stands under
+  // `Scope & engagement`.
+  const proposalOffer =
+    row.proposal_id && finalizeTable ? (
+      <OfferFacets proposalId={row.proposal_id} />
+    ) : null;
   const speccingSlots: SpeccingTableSlots = row.proposal_id
     ? {
         'rooms-rail': (
@@ -1666,33 +2341,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         'reach-in': <LibraryReachIn proposalId={row.proposal_id} />,
       }
     : {};
-  // THE TICKET — the document's map, composed ONCE here and printed in exactly
-  // one of two positions (B2-L4, direction-b §9). With no table it stands
-  // between the letterhead and the guide, which is where B1 mounted it and
-  // where it stays on today's paper. With a table it stands above the table:
-  // the job's header over the job's middle (I138), the same rows, values,
-  // doors and seam either way — what differs is only what sits beneath it.
-  // `TableFrame` prints nothing when it has no composition, so handing the
-  // node to both positions cannot print two.
+  // THE FACTS — the document's own reads, mounted ONCE here and printing
+  // nothing (W3). Exactly one of the two stands on any document: a document
+  // that carries a project reads its seven facts; the four stages before the
+  // work starts have no project to read and take the honest empties
+  // `deriveTicket` holds for them. The rows and the input they report up are
+  // what the band's line 2 and the rail's ladder are BOTH derived from (OD-8),
+  // so the two registers can never state different numbers.
   //
-  // THE ORDER, RULED. direction-b §2.2 draws LETTERHEAD → TICKET → GUIDE on the
-  // paper with no table, and §9 asks for the ticket immediately above
-  // `TableFrame` where one stands — which puts the guide above the ticket on
-  // the four compositions. §9 wins, and deliberately: the guide's sentence is a
-  // quotation of a ticket row, and the reader who wants the whole map is one
-  // scroll from it either way, while a ticket divorced from the table it heads
-  // stops being the job's header over the job's middle (I138). Nothing about
-  // the guide's own position changes with the flag off.
-  //
-  // All seven spreads print it. A document that carries a project reads its
-  // seven facts; the four stages before the work starts have no project to
-  // read and print the honest empties `deriveTicket` holds for them. Exactly
-  // one of the two mounts stands on any document, so the rows the guide's
-  // leader is elected from are always the rows on this paper.
   // The three shelf leaves and the call sheet are project-keyed and mounted
   // only on a project document (see `DocumentShelves` / `CallSheetMount`
-  // below). The ticket reads the SAME predicate, so a row never prints a `→`
-  // for a leaf this document has not mounted.
+  // below). The derivation reads the SAME predicate, so a row never claims a
+  // door this document has not mounted.
   const ticketLeaves =
     row.engagement_kind === 'project' && Boolean(row.project_id);
   // The Speccing table already stands I139's rooms rail and Q1/C9's on-paper
@@ -1711,42 +2371,58 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           sentAt: row.oldest_unacked_sent_at,
         }
       : null;
-  const jobTicket =
-    row.project_id ? (
-      <JobTicketMount
+  const ticketFacts = row.project_id ? (
+    <ProjectTicketFacts
+      projectId={row.project_id}
+      section={row.active_section}
+      regionSection={spreadSection}
+      project={ticketLeaves}
+      tableSlots={ticketSlots}
+      unansweredPo={unansweredPo}
+      phase={ticketPhase}
+      rooms={docRooms ?? []}
+      roomsSettled={docRoomsSettled}
+      schedule={scheduleFacts}
+      scheduleSettled={!scheduleQuery.isLoading}
+      callSheetEnabled={callSheetGate.value}
+      rosterCount={(rosterRows ?? []).length}
+      rosterSettled={rosterSettled}
+      onRows={acceptTicketRows}
+      onInput={acceptTicketInput}
+      onDamagedOn={acceptDamagedOn}
+      clientCopy={clientCopy}
+    />
+  ) : (
+    <ProjectlessTicketFacts
+      proposalId={row.proposal_id}
+      section={row.active_section}
+      regionSection={spreadSection}
+      tableSlots={ticketSlots}
+      clientCopy={clientCopy}
+      onRows={acceptTicketRows}
+      onInput={acceptTicketInput}
+    />
+  );
+
+  // The letterhead instruments, mounted ONCE and handed to the letterhead's
+  // ledger column: at ≥1180 they print beside the title block, below it they
+  // fall under the vitals (the same `grid-cols-1` collapse `region-head.tsx`
+  // uses). Two mounts would register `useMobilePrimaryAction` twice.
+  const letterheadInstruments =
+    row.engagement_kind === 'project' && row.project_id ? (
+      <LetterheadInstruments
         projectId={row.project_id}
-        routeId={id}
-        section={row.active_section}
-        regionSection={spreadSection}
-        project={ticketLeaves}
-        tableSlots={ticketSlots}
-        unansweredPo={unansweredPo}
-        phase={ticketPhase}
-        rooms={docRooms ?? []}
-        roomsSettled={docRoomsSettled}
-        schedule={scheduleFacts}
-        scheduleSettled={!scheduleQuery.isLoading}
-        callSheetEnabled={callSheetGate.value}
-        rosterCount={(rosterRows ?? []).length}
-        rosterSettled={rosterSettled}
-        onOpenLeaf={toggleShelf}
-        onUnfoldRegion={unfoldRegion}
-        onRows={acceptTicketRows}
-        clientCopy={clientCopy}
+        clientProfileId={row.client_profile_id}
+        clientName={row.client_name}
+        engagementId={row.engagement_id}
       />
-    ) : (
-      <ProjectlessTicketMount
-        routeId={id}
-        proposalId={row.proposal_id}
-        section={row.active_section}
-        regionSection={spreadSection}
-        tableSlots={ticketSlots}
-        clientCopy={clientCopy}
-        onOpenLeaf={toggleShelf}
-        onUnfoldRegion={unfoldRegion}
-        onRows={acceptTicketRows}
+    ) : row.engagement_kind !== 'project' && row.client_profile_id ? (
+      <LetterheadInstruments
+        clientProfileId={row.client_profile_id}
+        clientName={row.client_name}
+        engagementId={row.engagement_id}
       />
-    );
+    ) : null;
   const seal = lineage?.signedAt
     ? {
         date: fmtDay(lineage.signedAt),
@@ -1759,9 +2435,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <div
+      ref={lensShellRef}
       data-document-shell
-      data-shell-regime="single-below-1180-compact-to-1439-full-from-1440"
-      className="relative grid min-h-screen grid-cols-1 overflow-x-clip bg-[var(--doc-paper)] [grid-template-rows:auto_1fr] min-[1180px]:grid-cols-[56px_minmax(0,1fr)] min-[1180px]:[grid-template-rows:none] min-[1440px]:grid-cols-[200px_minmax(0,1fr)_232px] motion-safe:animate-[doc-raise_270ms_ease-out] motion-reduce:animate-[doc-fade_200ms_ease-out]"
+      data-shell-regime="single-below-1180-narrow-to-1439-full-from-1440"
+      // W3 · the reading stop, published where the rail and the mobile bar
+      // already publish it. Absent rather than `"null"` when nothing reads.
+      data-reading-index={activeKey ?? undefined}
+      className="relative grid min-h-screen grid-cols-1 overflow-x-clip bg-[var(--doc-paper)] [grid-template-rows:auto_1fr] min-[1180px]:grid-cols-[136px_minmax(0,1fr)] min-[1180px]:[grid-template-rows:none] min-[1440px]:grid-cols-[200px_minmax(0,1fr)_232px] motion-safe:animate-[doc-raise_270ms_ease-out] motion-reduce:animate-[doc-fade_200ms_ease-out]"
     >
       {/* Paper grain at the threshold of perception */}
       <div
@@ -1775,9 +2455,34 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
       <DocSpine
         sections={sections}
-        others={others}
         onJump={jumpToSection}
-        shelved={shelvedSpine}
+        projectId={row.project_id}
+        segments={ladderSegments}
+        doors={ladderDoors}
+        activeKey={activeKey}
+        onJumpRegion={jumpToRegion}
+        onToggleRoom={toggleRoom}
+        headInFrame={headInFrame}
+        // L-6 — at s0 the head yields the stage phrase only; the household and
+        // the count stay printed and turn `--text-muted` (RF-02).
+        letterheadInFrame={letterheadInFrame}
+        // The head names the PHASE and where it stands — `PROCUREMENT &
+        // ORDERS` over `4 OF 6` (reconciliation §7 / W1 walk differs #1) —
+        // from the same derivation the letterhead's vitals and the ticket's
+        // identity line read. With no phase placed it keeps the section label.
+        // W5-R4 (F2) — one line on the four pre-work spreads.
+        preWork={isPreWorkSection(bandSpread)}
+        stageWord={ticketPhase ? ticketPhase.name.toUpperCase() : null}
+        stageIndex={
+          ticketPhase ? `${ticketPhase.position} OF ${ticketPhase.of}` : null
+        }
+        household={row.client_name}
+        roomInHand={
+          heldRoomId && heldRoomName
+            ? { id: heldRoomId, name: heldRoomName }
+            : null
+        }
+        onReleaseRoom={toggleRoom}
       />
 
       {/* No z-index here: a stacking context on main would trap the fixed
@@ -1817,78 +2522,55 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             ) : undefined
           }
           needsSetup={needsSetup}
-          inHandRoomName={heldRoomName}
-          onReleaseRoom={heldRoomId ? () => toggleRoom(heldRoomId) : null}
+          /* R27 / R63: the letterhead instruments — one quiet DM-mono row,
+             STAGE-CONSISTENT. Send-a-note (and, where there's something to
+             mirror, View-as) ride the letterhead across stages, not
+             project-only:
+               · project      — full client mirror + project group thread + folio
+               · proposal      — direct-thread follow-up at the letterhead; the
+                                 proposal-grain mirror stays in the Proposal
+                                 section's ProposalInstruments (no duplicate
+                                 "view as them" under one letterhead)
+               · relationship  — direct-thread follow-up (no artifact to mirror)
+               · brief (lead)  — only when the captured lead has an in-app profile
+             A profile-less captured lead has no counterpart, so the component
+             hides both affordances itself (no empty row). The folio unfold is a
+             project artifact and stays project-only, below. */
+          instruments={letterheadInstruments}
         />
 
-        {/* THE TICKET — the document's map, mounted by the DOCUMENT rather
-            than the section, so all seven spreads read identically (B1, B2).
-            Between the letterhead and the guide/red-letter zone on the paper
-            that has no table; above the table where one stands, which is the
-            position `TableFrame` prints it in below. */}
-        {!table && jobTicket}
+        {/* The document's own reads — mounted by the DOCUMENT rather than the
+            section, so all seven spreads read identically (B1, B2). Prints
+            nothing; it reports the rows and the input the band and the ladder
+            are derived from. */}
+        {ticketFacts}
 
-        {/* The red letter replaces the guide only where it can actually speak
-            for the document: a composed Desk answer for THIS engagement that
-            carries at least one row. With no composition, a failed Desk read
-            (whose retry lives on the guide), or a composition that answered
-            "nothing", the project document keeps the same guide every other
-            kind gets — the zone renders null on an empty list, so without the
-            row count this branch printed nothing at all, and silence is not a
-            state this page is allowed to render. */}
-        {guideModel &&
-          (row.engagement_kind === 'project' &&
-          enrichedOperationalNeeds &&
-          redLetterRows.length > 0 &&
-          !deskGuidanceFailed ? (
-            <RedLetterZone rows={redLetterRows} />
-          ) : (
-            <DocumentGuide model={guideModel} onActivate={activateGuide} />
-          ))}
-
-        {/* R27 / R63: the letterhead instruments — one quiet DM-mono row under
-            the subtitle, now STAGE-CONSISTENT. Send-a-note (and, where there's
-            something to mirror, View-as) ride the letterhead across stages,
-            not project-only:
-              · project      — full client mirror + project group thread + folio
-              · proposal      — direct-thread follow-up at the letterhead; the
-                                proposal-grain mirror stays in the Proposal
-                                section's ProposalInstruments (no duplicate
-                                "view as them" under one letterhead)
-              · relationship  — direct-thread follow-up (no artifact to mirror)
-              · brief (lead)  — only when the captured lead has an in-app profile
-            A profile-less captured lead has no counterpart, so the component
-            hides both affordances itself (no empty row). The folio unfold is a
-            project artifact and stays project-only. */}
-        {row.engagement_kind === 'project' && row.project_id && (
-          <>
-            <LetterheadInstruments
-              projectId={row.project_id}
-              clientProfileId={row.client_profile_id}
-              clientName={row.client_name}
-              engagementId={row.engagement_id}
-            />
-            <FolioLetterhead projectId={row.project_id} />
-          </>
-        )}
-        {row.engagement_kind !== 'project' && row.client_profile_id && (
-          <LetterheadInstruments
-            clientProfileId={row.client_profile_id}
-            clientName={row.client_name}
-            engagementId={row.engagement_id}
+        {/* THE BAND — where the ticket stood, and the one printing of the
+            worst standing exception (or the stage's guide sentence) at every
+            width. It carries `#doc-ticket-sentinel` as its own immediate
+            previous sibling. */}
+        {bandModel && (
+          <LensBand
+            model={bandModel}
+            readingStop={bandStop}
+            docId={id}
+            onToTop={toTop}
+            onPinChange={onLensPinChange}
+            onActed={onLensActed}
+            onStandingOpened={onLensStandingOpened}
           />
         )}
 
-        {/* D13: letterhead-anchored margin items (Pulse, section items) as
-            chips beneath the title — the desktop margin rail hides on mobile. */}
-        <MobileMarginChips
-          projectId={row.project_id}
-          proposalId={row.proposal_id}
-          anchorKind="letterhead"
-          clientName={row.client_name}
-        />
+        {row.engagement_kind === 'project' && row.project_id && (
+          <FolioLetterhead projectId={row.project_id} />
+        )}
+
+        {/* D-B30: the letterhead margin chips block is retired at 390 — the
+            Margin sheet (mobile-bar's "In this document" door) replaces it.
+            The `marginCount` it needs rides `useMobileActiveDoc` below. */}
 
         <ProjectApprovalDocumentMount
+          quietLeader={approvalsQuietLeaderAct}
           projectId={
             row.engagement_kind === 'project' ? row.project_id : null
           }
@@ -1961,19 +2643,33 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 letterhead. They ride inside <div data-active-section> so they
                 read as the section's own sub-label, exactly as the deck draws
                 the open Project row. */}
-            <SectionStageLineMount
-              projectId={
-                row.engagement_kind === 'project' ? row.project_id : null
-              }
-              activeSection={row.active_section}
-            />
+            {/* W5-R5 §2 (N2) — on the PROPOSAL spread this strip is the
+                `scope` stop's body and prints inside it, so the first element
+                after the band is the spread's first region head, not a
+                free-standing band. Everywhere else it stays where R1/I114 put
+                it: the open section's own sub-label.
+                W5F-02: the suppression was `isPreWorkSection`, all four
+                stages — but `scope` mounts on the PROPOSAL spread only, so
+                brief, discovery and direction lost the strip entirely rather
+                than re-hosting it. `section-stage-line-mount.tsx`'s
+                section-mode branch exists precisely for those three.
+                W5F-03: both gates read `spreadSection`, so they cannot
+                disagree about which spread this is — including under a pinned
+                worktable, where the row's own section is deliberately stale. */}
+            {!stageStripInScope && (
+              <SectionStageLineMount
+                projectId={
+                  row.engagement_kind === 'project' ? row.project_id : null
+                }
+                activeSection={row.active_section}
+              />
+            )}
             <TableFrame
               composition={table}
               pending={worktableOn ? tablePin.pending : null}
               onTurn={tablePin.turn}
               sealTurn={sealTurnNoted ? { signedDate: seal?.date ?? null } : null}
               slots={speccingSlots}
-              ticket={jobTicket}
             >
             {/* W4c — Table I's spread header: the household chip promoted into
                 the spread. Printed identity only (Q6). Mounted only on the
@@ -1990,84 +2686,120 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 clientName={row.client_name}
               />
             )}
-            {spreadSection === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
-            {spreadSection === 'discovery' && row.engagement_id && row.designer_id && (
-              <DiscoverySection
-                engagementId={row.engagement_id}
-                designerId={row.designer_id}
-                clientProfileId={row.client_profile_id}
-                clientName={row.client_name}
-                projectId={row.project_id ?? null}
-              />
+            {spreadSection === 'brief' && (
+              <PreworkRegion
+                region="brief"
+                status={preworkStatus('brief')}
+                eyebrow={briefEyebrow ?? undefined}
+              >
+                {row.lead_id ? (
+                  <BriefSection leadId={row.lead_id} onEyebrow={setBriefEyebrow} />
+                ) : null}
+              </PreworkRegion>
             )}
-            {(spreadSection === 'direction' || spreadSection === 'proposal') &&
-              row.proposal_id && (
-                <section>
-                  <div className="mb-1.5 mt-5 flex items-baseline justify-between">
-                    <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-                      {spreadSection === 'direction' ? 'Direction' : 'Proposal'}
-                      {liveProposal?.version ? ` · v${liveProposal.version}` : ''}
-                    </h2>
-                    <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {sections.find((s) => s.key === spreadSection)?.sub}
-                    </span>
-                  </div>
-                  {/* C3 — a quiet letterhead read of where the client's verdicts
-                      stand ("4 of 12 approved · 1 flagged"). Nothing when the
-                      client hasn't weighed in yet. W4a: on the Finalize table
-                      this whisper stands down — the same sentence is that
-                      table's headline, and one fact prints at one weight. */}
-                  {row.engagement_kind === 'proposal' &&
-                    verdictSummary &&
-                    !finalizeTable && (
-                      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                        {verdictSummary}
-                      </p>
-                    )}
-                  {/* W4a — the Finalize table's head: the verdict roll-up as the
-                      headline sentence, and the one inked leader the lifecycle ×
-                      verdicts × send-wall matrix allows. */}
-                  {finalizeTable && (
-                    <FinalizeHead
-                      proposalId={row.proposal_id}
-                      clientName={row.client_name}
-                    />
-                  )}
-                  {/* The proposal instruments (gated to engagement_kind
-                      ==='proposal'): the Drafting Room doorway for a draft, the
-                      Send/Preview/Revise overlay row once it's in the client's
-                      hands, and the version-history strip. Local-state overlays
-                      never unmount the document beneath (D1). */}
-                  {row.engagement_kind === 'proposal' && (
-                    <ProposalInstruments
-                      proposalId={row.proposal_id}
-                      clientName={row.client_name}
-                      onFinalizeTable={finalizeTable}
-                    />
-                  )}
-                  {/* S18: name the model — what's below is a read-only preview of
-                      the proposal; the editing happens in the Drafting Room. */}
-                  {row.engagement_kind === 'proposal' && liveProposal?.status === 'draft' && (
-                    <p className="mb-2 mt-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-                      Read-only preview · edit in the Drafting Room
-                    </p>
-                  )}
-                  {/* R85 — the Folio mounts on proposal-stage documents (space
-                      plans/drawings clip here pre-project; flagged files reach the
-                      client's proposal copy via 00252's client read leg). */}
-                  {row.engagement_kind === 'proposal' && (
-                    <ProposalFolioStrip proposalId={row.proposal_id} />
-                  )}
-                  <ProposalBlocksReadOnly
-                    proposalId={row.proposal_id}
-                    omitOfferBlocks={finalizeTable}
+            {spreadSection === 'discovery' && (
+              <PreworkRegion
+                region="discovery"
+                status={preworkStatus('discovery')}
+                eyebrow={discoveryEyebrow ?? undefined}
+              >
+                {row.engagement_id && row.designer_id ? (
+                  <DiscoverySection
+                    engagementId={row.engagement_id}
+                    designerId={row.designer_id}
+                    clientProfileId={row.client_profile_id}
+                    clientName={row.client_name}
+                    projectId={row.project_id ?? null}
+                    onEyebrow={setDiscoveryEyebrow}
                   />
-                  {/* W4a — the Drafting Room's Offer movement (Phases ·
-                      Exclusions · Payments · Terms), folding open under the
-                      spread in the Room's own seam form. */}
-                  {finalizeTable && <OfferFacets proposalId={row.proposal_id} />}
-                </section>
-              )}
+                ) : null}
+              </PreworkRegion>
+            )}
+            {/* The direction spread has ONE stop (OD-2), so it takes the four
+                pieces in the order they printed before Wave 5. */}
+            {spreadSection === 'direction' && (
+              <PreworkRegion
+                region="direction"
+                status={preworkStatus('direction')}
+                eyebrow={preworkEyebrow}
+              >
+                {proposalVerdictHead}
+                {proposalLifecycle}
+                {proposalBlocks}
+                {proposalOffer}
+              </PreworkRegion>
+            )}
+            {/* The proposal spread's four stops (OD-2, re-parented W5-R2 item
+                1): `scope` takes the per-room budgets and the engagement's
+                terms, `vision` takes the description, `investment` takes the
+                totals ledger with the Offer at its foot — the Offer must stay
+                UNDER the spread it folds open beneath
+                (`worktable-finalize.test.tsx`). A stop with nothing of its
+                own prints its name over its sentence (OD-1), which
+                `ProposalBlocksReadOnly`'s `only` filter returns null for. */}
+            {spreadSection === 'proposal' && (
+              <>
+                <PreworkRegion
+                  region="proposal"
+                  status={preworkStatus('proposal')}
+                  eyebrow={preworkEyebrow}
+                >
+                  {proposalVerdictHead}
+                  {proposalLifecycle}
+                </PreworkRegion>
+                <PreworkRegion region="scope" status={preworkStatus('scope')}>
+                  {/* W5-R5 §2 (N2) — the stage line IS this stop's body, and
+                      `stageStripInScope` above is the same fact read once. */}
+                  {stageStripInScope && (
+                    <SectionStageLineMount
+                      // W5F2-01 — NULL, always. N2 rules `scope`'s fact to be
+                      // the SECTION's, and the head and the rail segment both
+                      // derive it that way (`preworkStageLine` is a pure
+                      // `deriveSectionWorkflowStageDocument(active_section)`).
+                      // A non-null id sends the mount down the project branch
+                      // instead, so on a project engagement still sitting at
+                      // `active_section: 'proposal'` the head printed
+                      // `Core · stage 03` while the body beneath it printed the
+                      // project's real workflow stage — the one-fact-two-
+                      // derivations shape N2 exists to close, reintroduced
+                      // through the branch rather than through the mount.
+                      projectId={null}
+                      activeSection={row.active_section}
+                      hosted
+                    />
+                  )}
+                  {row.proposal_id ? (
+                    <ProposalBlocksReadOnly
+                      proposalId={row.proposal_id}
+                      omitOfferBlocks={finalizeTable}
+                      only="scope"
+                    />
+                  ) : null}
+                </PreworkRegion>
+                <PreworkRegion region="vision" status={preworkStatus('vision')}>
+                  {row.proposal_id ? (
+                    <ProposalBlocksReadOnly
+                      proposalId={row.proposal_id}
+                      omitOfferBlocks={finalizeTable}
+                      only="vision"
+                    />
+                  ) : null}
+                </PreworkRegion>
+                <PreworkRegion
+                  region="investment"
+                  status={preworkStatus('investment')}
+                >
+                  {row.proposal_id ? (
+                    <ProposalBlocksReadOnly
+                      proposalId={row.proposal_id}
+                      omitOfferBlocks={finalizeTable}
+                      only="investment"
+                    />
+                  ) : null}
+                  {proposalOffer}
+                </PreworkRegion>
+              </>
+            )}
               {spreadSection === 'project' && row.project_id && (
                 <>
                   {/* W4b — the release ceremony's leader, at the head of the
@@ -2130,8 +2862,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     />
                   )}
                   {/* R80: the Care band — closure stays reachable from an active
-                    project (a quiet folded line until install nears). */}
-                  <CareBand projectId={row.project_id} onCloseoutReady={setClosureReady} />
+                    project (a quiet folded line until install nears).
+                    W2 (C-2): the project spread's mount is the running index's
+                    `care` root — one root per stop, so the scrollspy cannot
+                    see two. */}
+                  <CareBand
+                    projectId={row.project_id}
+                    onCloseoutReady={acceptCloseout}
+                    indexRoot
+                  />
                 </>
               )}
             {spreadSection === 'install' && row.project_id && (
@@ -2155,7 +2894,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 <InstallWindowCeremony projectId={row.project_id} />
                 {/* R80: at install the band opens unfolded — closing out IS the
                     work of this stage. */}
-                <CareBand projectId={row.project_id} onCloseoutReady={setClosureReady} />
+                <CareBand projectId={row.project_id} onCloseoutReady={acceptCloseout} />
               </>
             )}
             {spreadSection === 'care' && (
@@ -2321,6 +3060,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             clientUserId={row.client_profile_id}
             now={gateNow}
             approvalSurfaceMounted={row.engagement_kind === 'project'}
+            currentStop={activeKey}
             onHoverLine={setHighlightLineId}
             pendingNoteAnchor={pendingNoteAnchor}
             onNoteAnchorConsumed={() => setPendingNoteAnchor(null)}

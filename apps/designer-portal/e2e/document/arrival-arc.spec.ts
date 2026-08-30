@@ -232,7 +232,21 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('Arrival Arc — the full arc (R106, Wave 2)', () => {
-  test('accept → ceremony (gate, put-down, resume) → send → discovery fold → client pick → nudge/stale/re-offer', async ({
+  // OBSOLETE 2026-08-29 (quarantined Smart Lens W0, reworded W0-fix): the
+  // component this spec drives is unmounted on every route since I150 —
+  // DELETE THIS TEST WITH THE COMPONENT. Step 2.1 expects the pool strip
+  // (`OpenRequestsStrip`, heading = pretty(project_type), exact-match "Accept"
+  // button) on /desk. Nothing is wrong with the data or the flag: the
+  // `open_design_requests` view returns the seeded row correctly under psql
+  // impersonation as the designer, and `design-request-pool:true` in
+  // NEXT_PUBLIC_FLAG_OVERRIDES resolves the flag. The strip and its only
+  // consumer, `StudioPulse`/`useOpenRequestsDeskPopulation`, are simply not
+  // imported anywhere under src/app — I150's Desk roster replaced the studio
+  // pulse, and `desk/page.test.tsx` now asserts `#studio-pulse` is null. This
+  // is dead code with no flag to revive it, so the fix is a deletion, not an
+  // un-fixme. Not a lens regression — failing the same way on main@dab057537.
+  // Tracked owner-owed in build/e2e-baseline.md. Owner: Desk / I150 cleanup.
+  test.fixme('accept → ceremony (gate, put-down, resume) → send → discovery fold → client pick → nudge/stale/re-offer', async ({
     authenticatedPage: page,
   }) => {
     test.setTimeout(300_000);

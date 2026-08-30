@@ -17,6 +17,21 @@ let mockAccount: Record<string, unknown>;
 let mockPurchaseOrders: Record<string, unknown>;
 let mockInvoices: Record<string, unknown>;
 
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
+
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
   usePurchaseOrders: () => mockPurchaseOrders,
@@ -56,6 +71,7 @@ jest.mock('../account-band', () => ({ AccountBand: () => <div>Account band</div>
 
 import { MoneyRegion } from './money-region';
 import { requestRegionUnfold } from '@/lib/document/document-index';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 /** A project busy enough that the region's OWN default would stand it open —
  *  so a folded seam here is the table's posture and not the sparse default. */
@@ -97,13 +113,37 @@ describe('the Money seam, on the Delivery table', () => {
 
   it('unfolds in place to exactly the region that stands on the paper today', () => {
     const { container } = render(<MoneyRegion projectId="project-1" tableSeam />);
-    const section = container.querySelector('[data-index-region="money"]')!;
+    const section = container.querySelector<HTMLElement>(
+      '[data-index-region="money"]',
+    )!;
+
+    // R127 — the landing clearance is a declared constant, not a height the
+    // seam publishes at runtime, and it is the same length in both postures:
+    // whichever one the index jumps to lands the money clear of the band.
+    expect(section.style.scrollMarginTop).toBe('var(--doc-landing-clear)');
+
+    // W3 integration — one region-spacing token, owned by the root, in both
+    // postures: no `mb-*` beside it (L4 audited the other six roots).
+    expect(section).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      section.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(section.className).not.toMatch(/\bmb-/);
 
     fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
 
     // Same section element, now carrying the whole region: head, six rungs,
     // and the detail surfaces the rungs summarise.
     expect(container.querySelector('[data-index-region="money"]')).toBe(section);
+    expect(section.style.scrollMarginTop).toBe('var(--doc-landing-clear)');
+
+    // W3 integration — one region-spacing token, owned by the root, in both
+    // postures: no `mb-*` beside it (L4 audited the other six roots).
+    expect(section).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      section.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(section.className).not.toMatch(/\bmb-/);
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.getByText('$17,600 remaining · $62,400 authorized')).toBeVisible();
     expect(screen.getByText('Budget · $80,000 approved')).toBeVisible();
@@ -136,6 +176,27 @@ describe('the Money seam, on the Delivery table', () => {
     expect(
       window.localStorage.getItem('patina:doc-fold:project-1:money-table'),
     ).toBe('0');
+  });
+
+  it('prints CLOSED BY YOU on a seam the designer shut, and nothing on a declared one', () => {
+    // L-7 threaded end to end: the region hands `useRegionFold`'s cause to the
+    // seam. `money-table` is a non-stop key, so its DECLARED fold is a derived
+    // default and carries no cause (DL-09) — only the remembered choice does.
+    const { container, unmount } = render(
+      <MoneyRegion projectId="project-1" tableSeam />,
+    );
+    expect(container.querySelector('[data-fold-cause]')).toBeNull();
+    expect(screen.getByRole('button', { name: /unfold/i })).not.toHaveTextContent(
+      'CLOSED BY YOU',
+    );
+    unmount();
+
+    window.localStorage.setItem('patina:doc-fold:project-1:money-table', '1');
+    render(<MoneyRegion projectId="project-1" tableSeam />);
+
+    expect(screen.getByRole('button', { name: /unfold/i })).toHaveTextContent(
+      'CLOSED BY YOU',
+    );
   });
 
   it('folds by declaration, not by data — a quiet project seams too', () => {

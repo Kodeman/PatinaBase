@@ -215,7 +215,7 @@ export function ProjectMoodBoards({
   }, [activeSelectionRows, attentionQuery.data, canCreate, liveBoards, pathname, readinessQuery.data, revealSelection]);
 
   const boardsEmpty = liveBoards.length === 0 && frozenBoards.length === 0;
-  const { folded: boardsFolded, setFolded: setBoardsFolded } = useRegionFold({
+  const { folded: boardsFolded, setFolded: setBoardsFolded, cause: boardsCause } = useRegionFold({
     docId: projectId,
     region: 'boards',
     defaultFolded: isLoading ? null : boardsEmpty,
@@ -240,7 +240,14 @@ export function ProjectMoodBoards({
   }, [canCreate, setBoardsFolded]);
   if (isLoading) {
     return (
-      <section aria-label="Boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
+      <section
+        aria-label="Boards"
+        aria-busy="true"
+        className="mt-9 border-t border-[var(--color-pearl)] pt-6"
+      >
+        {/* D-B46: this skeleton is the whole region until the boards land, so
+            the section that carries it declares itself busy — the lens must not
+            measure a paper whose bodies are still this. */}
         <div className="h-24 animate-pulse rounded-[5px] bg-[var(--bg-muted)] motion-reduce:animate-none" />
       </section>
     );
@@ -285,6 +292,7 @@ export function ProjectMoodBoards({
           bodyId={BODY_ID}
           name="Boards"
           summary={status}
+          cause={boardsCause}
           onUnfold={() => {
             unfoldFocusRef.current = true;
             setBoardsFolded(false);

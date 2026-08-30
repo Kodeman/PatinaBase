@@ -42,6 +42,8 @@ import { HoursLedger } from './hours-ledger';
 import { FeedbackLedger } from './feedback/feedback-ledger';
 import { openFeedbackSheet } from './feedback/feedback-sheet';
 import { useDocumentTime } from '@/hooks/document-time-provider';
+import { useDocumentPresence } from '@/hooks/use-document-presence';
+import { useMobileShell } from './mobile/mobile-shell';
 import { fmtMinutes } from '@/lib/document/time-derivation';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { AccountNameplate } from './account/account-nameplate';
@@ -129,6 +131,17 @@ function breadcrumbFor(pathname: string | null): string | null {
   return null;
 }
 
+/** F137 / proposal §4 — the presence line the rail evicted, in words, beside
+ *  the account: `You and Marit`, `You and 2 others`. It prints ONLY when
+ *  someone else is in the document; alone it prints nothing at all, because
+ *  "just you" is the resting state of every session and a line that is almost
+ *  always true is not news. */
+function presenceSentence(others: string[]): string | null {
+  if (others.length === 0) return null;
+  if (others.length === 1) return `You and ${others[0]}`;
+  return `You and ${others.length} others`;
+}
+
 export function StudioDrawer() {
   const router = useRouter();
   const pathname = usePathname();
@@ -150,7 +163,12 @@ export function StudioDrawer() {
   );
   const openDoor = LEDGERS.find((l) => l.key === openLedger) ?? null;
   const open = openLedger === FEEDBACK_SHEET.key ? FEEDBACK_SHEET : openDoor;
-  const { inHandToday } = useDocumentTime();
+  const { inHandToday, heldEngagementId } = useDocumentTime();
+  // F-3 route 1 — the drawer mounts in `(document)/layout.tsx`, above any
+  // engagement, so it takes the channel's key off the document in hand rather
+  // than off a prop the layout has no engagement to fill.
+  const presence = presenceSentence(useDocumentPresence(heldEngagementId));
+  const { openTimer } = useMobileShell();
   // The Post's Record merges the inbox + procurement feeds, so the bell's
   // awareness dot must read both unreads or it would lie about the sheet.
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
@@ -474,7 +492,11 @@ export function StudioDrawer() {
             className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
           >
             <Search className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} aria-hidden />
-            <span>Find anything</span>
+            {/* F03 — at 1280 the drawer's centre and right zones overprint.
+                The words go first: below 1440 the door is the glyph and the
+                chord, and the accessible name above still carries "Find
+                anything (⌘K)". */}
+            <span className="hidden min-[1440px]:inline">Find anything</span>
             <span className="rounded-[3px] border border-[var(--border-default)] px-1.5 py-px font-mono text-[12px] text-[var(--text-muted)]">
               ⌘K
             </span>
@@ -483,22 +505,35 @@ export function StudioDrawer() {
 
         {/* Right — in-hand state, notifications, identity. */}
         <div className="flex min-w-0 items-center justify-end gap-1">
-          <span className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap px-2 py-1.5">
-            {holding && inHandToday > 0 ? (
-              <>
-                <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                  In hand today
-                </span>
-                <span className="font-heading text-[14px] italic text-[var(--color-clay-ink)]">
-                  {fmtMinutes(inHandToday)}
-                </span>
-              </>
-            ) : (
+          {/* W1-L1 finding 1 — the readout is the DOORWAY. `spine-timer.tsx`
+              carried Pause and `+ Log` at 1180–1439 and is deleted (OD-16), so
+              without this the only way to pause or log by hand above 1180 was
+              a chord. The drawer's clock now opens the same timer sheet the
+              mobile bar opens, at every width; `mobile-sheets.tsx` drops the
+              1439px cap on the timer regime to let it. `Hands free` stays a
+              span — there is no clock to open. */}
+          {holding && inHandToday > 0 ? (
+            <button
+              type="button"
+              data-drawer-timer-doorway
+              onClick={() => openTimer()}
+              aria-label={`Open time controls, in hand ${fmtMinutes(inHandToday)}`}
+              className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-[3px] px-2 py-1.5 transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+            >
+              <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                In hand today
+              </span>
+              <span className="font-heading text-[14px] italic text-[var(--color-clay-ink)]">
+                {fmtMinutes(inHandToday)}
+              </span>
+            </button>
+          ) : (
+            <span className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap px-2 py-1.5">
               <span className="font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                 Hands free
               </span>
-            )}
-          </span>
+            </span>
+          )}
 
           {/* F6 — named, not just aria-labelled: a visible DM-mono uppercase
               tracked label matching the drawer's other readouts. D8 holds:
@@ -537,6 +572,17 @@ export function StudioDrawer() {
               {THE_POST.label}
             </span>
           </button>
+
+          {presence && (
+            <span
+              data-drawer-presence
+              /* Bounded so the right zone cannot grow into the centre the
+                 way F03's `Find anything` words did at 1280. */
+              className="max-w-[18ch] truncate whitespace-nowrap px-2 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
+            >
+              {presence}
+            </span>
+          )}
 
           <AccountNameplate />
         </div>

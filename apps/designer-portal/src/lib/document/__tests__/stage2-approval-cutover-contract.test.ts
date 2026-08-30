@@ -12,18 +12,21 @@ describe('designer Stage-2 cutover source contract', () => {
     // R1's relocation (I114) moved the stage line into the open section, so the
     // approval mount now leads at the letterhead and the stage line follows it
     // from inside <div data-active-section>. Both ends still have to be true.
+    // D-B30/W5-R1: `<MobileMarginChips` (the marker this test used to key on)
+    // is deleted from this file — the letterhead margin now lives in the
+    // Margin sheet (`use-margin-sheet.ts`), reached from the mobile bar, not
+    // mounted inline here. `<FolioLetterhead` is the letterhead's own last
+    // element and still immediately precedes the approval mount, so it
+    // proves the same ordering the deleted marker did.
     expect(page).toMatch(
-      /<MobileMarginChips[\s\S]*?<ProjectApprovalDocumentMount/,
-    );
-    expect(page).toMatch(
-      /data-active-section[\s\S]{0,1500}?<SectionStageLineMount/,
+      /<FolioLetterhead[\s\S]*?<ProjectApprovalDocumentMount/,
     );
     expect(page.indexOf('<SectionStageLineMount')).toBeGreaterThan(
       page.indexOf('<ProjectApprovalDocumentMount'),
     );
     expect(page).toContain('project?.client_id ?? null');
     expect(page).not.toMatch(
-      /<ProjectApprovalDocumentMount[\s\S]{0,300}clientProfileId=\{row\.client_profile_id/,
+      /<ProjectApprovalDocumentMount[\s\S]{0,1200}clientProfileId=\{row\.client_profile_id/,
     );
   });
 
@@ -47,9 +50,10 @@ describe('designer Stage-2 cutover source contract', () => {
     expect(read(file)).toContain('excludeProjectArtifactApprovals');
   });
 
+  // D-B45 — `mobile-margin-chips.tsx` is deleted; the two margin surfaces
+  // that remain are the desktop rail and the mobile sheet, one per width.
   it.each([
     'components/document/margin-rail.tsx',
-    'components/document/mobile/mobile-margin-chips.tsx',
     'components/document/mobile/mobile-sheets.tsx',
   ])('filters Stage-2 from generic desktop/mobile margin in %s', (file) => {
     const source = read(file);

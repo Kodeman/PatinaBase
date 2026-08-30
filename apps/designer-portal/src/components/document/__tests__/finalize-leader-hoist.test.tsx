@@ -91,11 +91,13 @@ describe('the wall stands down what the table’s head has taken', () => {
       screen.queryByRole('button', { name: /Nudge Avery Stone/ }),
     ).not.toBeInTheDocument();
     const line = screen.getByLabelText('Proposal state');
-    expect(line.textContent).toContain('Sent');
-    // The head took the verb, not the news: without the state word the wall
-    // read "Sent 5 days ago" over a row with nothing in it.
+    // W5-R5 §4 (N4) — the `SENT 5 DAYS AGO —` lead is GONE: it restated the
+    // proposal head's own status line and the band's line 2 (SP-12). The head
+    // took the verb, so what stands here is the STATE, alone — the row is
+    // never empty, and never a second printing of the news.
+    expect(line.textContent).not.toContain('Sent');
+    expect(line.textContent).not.toContain('—');
     expect(line.textContent).toContain('awaiting the client’s signature');
-    expect(line.textContent).toContain('—');
     expect(mockWatchProps).toHaveBeenCalledWith('nudge');
   });
 
@@ -104,7 +106,11 @@ describe('the wall stands down what the table’s head has taken', () => {
     expect(
       screen.getByRole('button', { name: /Nudge Avery Stone/ }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('Proposal state').textContent).toContain('—');
+    // W5-R5 §4 — off the table the row carries the ACT and nothing else; the
+    // `SENT … —` lead the em-dash belonged to is gone.
+    const line = screen.getByLabelText('Proposal state');
+    expect(line.textContent).not.toContain('—');
+    expect(line.textContent).toContain('Nudge Avery Stone');
     expect(mockWatchProps).toHaveBeenCalledWith(null);
   });
 

@@ -18,7 +18,7 @@
  * rather than an oversight.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const APP_ROOT = join(__dirname, '../../../..');
@@ -294,6 +294,63 @@ describe('R126 · the three muted steps are three, and all three are legible', (
   });
 });
 
+/** A file "on the rail" by name (any `spine*` file at the top of
+ *  components/document/, or anything under a components/document/spine/
+ *  subdirectory — OD-16 has that directory arriving in W3 while
+ *  spine-running-index.tsx/spine-shelved-blocks.tsx/spine-timer.tsx are
+ *  deleted piecemeal across Waves 1-2), plus margin-rail.tsx explicitly. A
+ *  hard-coded list goes stale the day any of those moves lands; this
+ *  resolves the set fresh on every run so the guard tracks whatever ships. */
+function resolveRailFiles(): string[] {
+  const documentDir = join(SRC_ROOT, 'components/document');
+  const topLevel = readdirSync(documentDir, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        /spine.*\.tsx$/i.test(entry.name) &&
+        !/\.test\.tsx$/i.test(entry.name),
+    )
+    .map((entry) => join(documentDir, entry.name));
+
+  const spineSubdir = join(documentDir, 'spine');
+  const nested = existsSync(spineSubdir)
+    ? readdirSync(spineSubdir, { withFileTypes: true })
+        .filter(
+          (entry) =>
+            entry.isFile() &&
+            entry.name.endsWith('.tsx') &&
+            !/\.test\.tsx$/i.test(entry.name),
+        )
+        .map((entry) => join(spineSubdir, entry.name))
+    : [];
+
+  const marginRail = join(documentDir, 'margin-rail.tsx');
+
+  return [...new Set([...topLevel, ...nested, marginRail])]
+    .filter((file) => existsSync(file))
+    .map((file) => file.slice(APP_ROOT.length + 1));
+}
+
+/** The rail's register is partial BY RULING — files painting ON the rail may
+ *  only spend inks the rail holds. Shared by the rail and (once it exists)
+ *  the paper-ground scan below, so both check the same three text forms:
+ *  the Tailwind arbitrary-value class, the Tailwind arbitrary-property
+ *  class, and the inline `style={{ color: … }}` form. */
+function pigmentOffenders(files: string[], pigments: readonly string[]): string[] {
+  return files.flatMap((file) => {
+    const source = readFileSync(join(APP_ROOT, file), 'utf8');
+    return pigments.flatMap((pigment) => {
+      const escaped = pigment.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const forms = [
+        new RegExp(`text-\\[var\\(${escaped}\\)\\]`),
+        new RegExp(`\\[color:var\\(${escaped}\\)\\]`),
+        new RegExp(`style=\\{\\{[^}]*?color:\\s*['"]?var\\(${escaped}\\)`, 's'),
+      ];
+      return forms.some((form) => form.test(source)) ? [`${file} → ${pigment}`] : [];
+    });
+  });
+}
+
 describe('R126 · --doc-rail-stock holds the register it prints', () => {
   it('is declared, and at the ruled value', () => {
     // The rail was ruled to #E8E3DB over A's own #EFE7DA — separation over
@@ -310,6 +367,18 @@ describe('R126 · --doc-rail-stock holds the register it prints', () => {
     expect(failuresBelowAA(pairs)).toEqual([]);
   });
 
+  it('resolves the rail file glob to at least the floor the ladder leaves standing', () => {
+    // A glob that silently resolves to zero (or too few) files would make
+    // every offender assertion below vacuously true — a renamed or moved
+    // rail file must fail this loudly, not go quiet.
+    // The floor is 3, not today's 5, because OD-16 deletes spine-timer.tsx in
+    // W1 and spine-running-index.tsx + spine-shelved-blocks.tsx in W2. What
+    // survives those rulings is doc-spine.tsx, spine/lens-ladder.tsx and
+    // margin-rail.tsx — three files. A correct deletion must not turn this
+    // tripwire red.
+    expect(resolveRailFiles().length).toBeGreaterThanOrEqual(3);
+  });
+
   it('prints no rail label in a pigment that fails on it', () => {
     // The walk measured "On this paper" at 3.51:1 — --color-aged-oak on the
     // rail — and the running index's inactive values with it. The rail's
@@ -324,20 +393,26 @@ describe('R126 · --doc-rail-stock holds the register it prints', () => {
       );
     }
 
-    const RAIL_FILES = [
-      'src/components/document/spine-running-index.tsx',
-      'src/components/document/spine-shelved-blocks.tsx',
-      'src/components/document/spine-timer.tsx',
-      'src/components/document/doc-spine.tsx',
-      'src/components/document/margin-rail.tsx',
-    ];
-    const offenders = RAIL_FILES.flatMap((file) => {
-      const source = readFileSync(join(APP_ROOT, file), 'utf8');
-      return OFF_REGISTER.flatMap((pigment) =>
-        source.includes(`text-[var(${pigment})]`) ? [`${file} → ${pigment}`] : [],
-      );
-    });
-    expect(offenders).toEqual([]);
+    expect(pigmentOffenders(resolveRailFiles(), OFF_REGISTER)).toEqual([]);
+  });
+
+  it('scans the paper-ground files (once they exist) against --doc-paper, not rail stock', () => {
+    // lens-band.tsx lands in W3 (OD-6/OD-8) sitting on the PAPER ground, not
+    // the rail — lumping it into RAIL_FILES above would measure it against
+    // the wrong stock. This list is separate so the day the file exists it
+    // is scanned against --doc-paper, with whichever base pigments actually
+    // fail there (computed fresh, not assumed identical to the rail's set).
+    const PAPER_FILES = ['src/components/document/lens-band.tsx'].filter(
+      (file) => existsSync(join(APP_ROOT, file)),
+    );
+    if (PAPER_FILES.length === 0) {
+      return;
+    }
+    const paper = resolveToken('--doc-paper');
+    const OFF_REGISTER_ON_PAPER = (['--color-aged-oak', '--color-clay'] as const).filter(
+      (pigment) => contrastRatio(resolveToken(pigment), paper) < AA_NORMAL_TEXT,
+    );
+    expect(pigmentOffenders(PAPER_FILES, OFF_REGISTER_ON_PAPER)).toEqual([]);
   });
 
   it('holds the inks the rail labels now take, at their measured ratios', () => {

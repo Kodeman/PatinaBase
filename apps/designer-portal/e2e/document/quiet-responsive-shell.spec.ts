@@ -1,5 +1,6 @@
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 import { adminDb } from '../helpers/supabase-admin';
+import { quiet, scrollTo, settle } from '../helpers/lens';
 
 const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
 /**
@@ -23,8 +24,8 @@ async function openDocument(page: AuthenticatedPage, width: number) {
   await expect(page.locator('[data-document-shell]')).toBeVisible();
 }
 
-/** A project-kind spread — the only documents that print the ticket, and the
- *  only ones whose spine ever carried the two blocks B1 subtracted. A FIXED
+/** A project-kind spread — the only documents whose spine ever carried the two
+ *  blocks B1 subtracted, and the ones the band's line 1 has facts for. A FIXED
  *  seed UUID, not one of the DB-generated project ids: those change on every
  *  `supabase:reset` and a spec pinned to one rots silently. */
 const PROJECT_ID = 'b0000000-0000-0000-0000-0000000000d4';
@@ -55,6 +56,16 @@ async function expectNoHorizontalOverflow(page: AuthenticatedPage) {
 const BULK_FIXTURE_MARK = 'quiet-responsive-shell fixture';
 
 test.describe('Quiet Work responsive document shell', () => {
+  // `mode: 'serial'` shares ONE page across every case, so a case began at
+  // whatever width the previous one left behind — `:204` inherited 1440 from
+  // `:174` and then resized twice inside itself. Every case sets its own width
+  // as its first act (`openProject` / `openDocument` / an explicit
+  // `setViewportSize`), so resetting to the narrow baseline here costs nothing
+  // and makes each case's own first resize the only one it depends on.
+  test.beforeEach(async ({ authenticatedPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+  });
+
   test.beforeAll(async () => {
     const { error } = await adminDb.from('proposal_items').insert([
       {
@@ -93,7 +104,22 @@ test.describe('Quiet Work responsive document shell', () => {
 
   test('keeps drafting bulk actions above persistent bottom chrome', async ({
     authenticatedPage: page,
+    browserName,
   }) => {
+    // W4-L4 webkit allowance (e2e-baseline.md W3-int, triage (b)): WebKit
+    // lays out with a 9px classic scrollbar and evaluates media queries
+    // against the LAYOUT viewport — measured live at a 1440 viewport,
+    // `docClientWidth` reads 1431 in webkit against 1440 in chromium. At the
+    // 1024 viewport this test switches to below, the same 9px puts the
+    // client width at 1015, so `bulkBox.x + bulkBox.width <= 1009` is a
+    // coin-toss on the scrollbar gutter, not a claim this wave's lens
+    // touches (neither the band, the ladder nor the paper). Reproduced on
+    // `document-lens/integration@e6da8bd76` with its own dev server before
+    // this wave existed — pre-existing and environmental.
+    test.skip(
+      browserName === 'webkit',
+      'WebKit scrollbar gutter: 1024 viewport measures a 1015px client width in webkit (9px scrollbar) vs 1024 in chromium, so bulkBox.x+width<=1009 is a coin toss unrelated to the lens (e2e-baseline.md W3-int)',
+    );
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/drafting/${DRAFT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',
@@ -151,9 +177,10 @@ test.describe('Quiet Work responsive document shell', () => {
       .toBe(true);
   });
 
-  // ── B1 — the spine's subtraction, and the ticket that replaced it. This is
-  // the canary for the wave: the rooms and the shelves left the rail and
-  // became the ticket's rows on the paper, at every width. ──
+  // ── B1 — the spine's subtraction, and what replaced it. This is the canary
+  // for the wave: the rooms and the shelves left the rail for the paper at
+  // every width, first as the ticket's rows and now (R127 Wave 3) as the
+  // band's two lines above the paper and the ladder's stops inside the rail. ──
   test('1440px leaves the spine one block and puts the map on the paper', async ({
     authenticatedPage: page,
   }) => {
@@ -161,8 +188,11 @@ test.describe('Quiet Work responsive document shell', () => {
 
     const spine = page.locator('[data-document-spine]');
     await expect(spine).toBeVisible();
-    // The running index survives as the spine's ONE block, under its own name.
-    await expect(spine.getByText(/On this paper/i)).toBeVisible({ timeout: 20_000 });
+    // W2 — the running index became the LADDER, and the ladder is the rail's
+    // one block under its own accessible name.
+    await expect(
+      spine.locator('nav[aria-label="This paper"]'),
+    ).toBeVisible({ timeout: 20_000 });
     // The two blocks B1 deleted are gone from the rail — headings first,
     // because those are what a reader would still see if either survived.
     await expect(spine.getByText(/^\s*Rooms\s*$/i)).toHaveCount(0);
@@ -170,29 +200,79 @@ test.describe('Quiet Work responsive document shell', () => {
     // ...and the old heading the index carried before it was renamed.
     await expect(spine.getByText(/In this document/i)).toHaveCount(0);
 
-    const ticket = page.locator('[data-job-ticket]');
-    await expect(ticket).toBeVisible();
-    await expect(ticket.locator('[data-ticket-row]')).toHaveCount(8);
+    // R127 Wave 3 (W3-L5): the ticket's eight rows are gone and the BAND took
+    // the position — two lines, one declared height, no rows. The claim this
+    // keeps is the wave's own: the map is on the PAPER, not in the rail.
+    const band = page.locator('[data-lens-band]');
+    await expect(band).toBeVisible();
+    await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);
+    await expect(band.locator('[data-lens-line="2"]')).toHaveCount(1);
+    await expect(page.locator('[data-ticket-row]')).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
   });
 
-  test('the ticket carries the map at 1280 and 390, where the spine never did', async ({
+  test('the band carries the map at 1280 and 390, where the spine never did', async ({
     authenticatedPage: page,
   }) => {
     await openProject(page, 1280);
-    const ticket = page.locator('[data-job-ticket]');
-    await expect(ticket).toBeVisible();
-    await expect(ticket.locator('[data-ticket-row]')).toHaveCount(8);
+    // The 390 half of this case reaches the mobile bar's sections door, which
+    // renders only once the page has PUBLISHED its active document. `settle()`
+    // answers for the lens, not for that: run late in a long basket the door
+    // was not there yet, and the same code passes alone every time. D-B28's
+    // ruled precondition.
+    await quiet(page);
+    const band = page.locator('[data-lens-band]');
+    await expect(band).toBeVisible();
+    await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);
+    await expect(band.locator('[data-lens-line="2"]')).toHaveCount(1);
     await expectNoHorizontalOverflow(page);
 
-    // 390 — the ticket opens at rest AS the seam, and unfolds to the eight
-    // rows on the reader's ask.
+    // 390 — the band NEVER unfolds. The ticket rested as a seam here and gave
+    // its eight rows back on an ask; the band has no fold, no seam and no ask
+    // at any width (§4), so its two lines and its declared 56px are what the
+    // reader gets. The document's index at this width is D13's sections sheet,
+    // reached from the mobile bar — the one door, and it still opens.
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(ticket).toBeVisible();
-    await expect(ticket).not.toHaveAttribute('data-unfolded', 'true');
-    await ticket.getByRole('button', { name: /Unfold/i }).click();
-    await expect(ticket).toHaveAttribute('data-unfolded', 'true');
-    await expect(ticket.locator('[data-ticket-row]')).toHaveCount(8);
+    await settle(page);
+    await expect(band).toBeVisible();
+    await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);
+    await expect(band.locator('[data-lens-line="2"]')).toHaveCount(1);
+    await expect(
+      band.getByRole('button', { name: /Unfold/i }),
+    ).toHaveCount(0);
+    await expect(band).not.toHaveAttribute('data-unfolded', 'true');
+    // W4-N-05 / D-B35 — the LAYOUT box, not `boundingBox()`. The band is
+    // `position: sticky`, and Playwright's quads come out of the compositor
+    // carrying its fractional sticky offset (55.7204 at 1280) while
+    // `getBoundingClientRect().height` is exactly 56 in both engines at every
+    // width. `lens-band-height.spec.ts` measures the same way, for the same
+    // reason: the box was right and the instrument was not.
+    const bandLayoutHeight = () =>
+      band.evaluate((el) => el.getBoundingClientRect().height);
+    await expect.poll(bandLayoutHeight).toBe(56);
+
+    // Scrolled, the band is still 56px and still un-unfoldable.
+    await scrollTo(page, 800);
+    await expect.poll(bandLayoutHeight).toBe(56);
+
+    // The bar is re-laid out by the 1440 -> 390 resize AND by the scroll that
+    // follows it, and on webkit inside the full basket the second of those was
+    // still in flight when the door was first looked for (it passed alone and
+    // failed in the basket, 2 runs of 3). One more settle, and a timeout that
+    // is a wait rather than a race.
+    await settle(page);
+
+    // By its stable hook, not by its name: OD-11/A-01 puts the current stop
+    // INTO the accessible name, so the name changes on every crossing and a
+    // name-based locator races the scroll it is measuring.
+    const sectionsDoor = page
+      .getByRole('navigation', { name: 'Document bar' })
+      .locator('[data-sections-door]');
+    await expect(sectionsDoor).toBeVisible({ timeout: 15_000 });
+    await sectionsDoor.click();
+    await expect(
+      page.getByRole('dialog', { name: /Sections of this document/i }),
+    ).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
@@ -222,10 +302,10 @@ test.describe('Quiet Work responsive document shell', () => {
     await expect(spine).toBeVisible();
     await expect
       .poll(async () => (await spine.boundingBox())?.width ?? 0)
-      .toBeGreaterThanOrEqual(55);
+      .toBeGreaterThanOrEqual(135);
     await expect
       .poll(async () => (await spine.boundingBox())?.width ?? 1000)
-      .toBeLessThanOrEqual(57);
+      .toBeLessThanOrEqual(137);
 
     const trigger = page.locator('[data-margin-trigger]');
     await expect(trigger).toBeVisible();
@@ -242,7 +322,19 @@ test.describe('Quiet Work responsive document shell', () => {
 
   test('1440px restores the full labelled spine and settled margin rail', async ({
     authenticatedPage: page,
+    browserName,
   }) => {
+    // W4-L4 webkit allowance (e2e-baseline.md W3-int, triage (b)): the same
+    // 9px classic scrollbar puts webkit's layout viewport at a measured
+    // 1431px against a 1440 viewport, so `min-[1440px]` never matches in
+    // webkit — the shell stays on the 1180-1439 tier and the spine measures
+    // 136px where this test wants >= 199. Reproduced on
+    // `document-lens/integration@e6da8bd76` before this wave existed;
+    // neither the band, the ladder nor the paper are implicated.
+    test.skip(
+      browserName === 'webkit',
+      'WebKit scrollbar gutter: a 1440 viewport measures a 1431px layout viewport in webkit (9px scrollbar), so min-[1440px] never matches and the spine stays at the 136px tier (e2e-baseline.md W3-int)',
+    );
     await openDocument(page, 1440);
 
     await expect(page.getByTestId('mobile-bar')).toBeHidden();
@@ -257,5 +349,235 @@ test.describe('Quiet Work responsive document shell', () => {
     await expect(margin).toHaveAttribute('data-margin-mode', 'rail');
     await expect(margin).toHaveAttribute('aria-hidden', 'false');
     await expectNoHorizontalOverflow(page);
+  });
+
+  // ── OD-12 / C-7 landing clearance — W0-L1's tripwire, retargeted (W3-L5) ──
+  // The ticket's PINNED seam used to MEASURE itself and publish
+  // `--doc-seam-height`, and every `[data-index-region]` root read that back as
+  // its own `scroll-margin-top`. R127 deletes the measurement: the band's
+  // height is DECLARED (`--doc-band-height: 56px`) and the landing clearance is
+  // declared with it (`--doc-landing-clear: calc(band + 1rem)`), so a jump
+  // lands at a constant rather than at whatever the seam happened to measure.
+  // Nothing publishes `--doc-seam-height` any more, and this case asserts that
+  // too: a stale publisher would put the old number back into the same rule.
+  test('at 1440, a running-index jump to Money lands clear of the band, at the declared 72px', async ({
+    authenticatedPage: page,
+  }) => {
+    // PROJECT_ID (b0000000-…-d4, the seeded project-kind spread already used
+    // above by openProject/the band tests in this file) is what actually
+    // prints the Money region: b0000000-…-d1 was checked and mounts only
+    // Client approvals + Pieces, its active_section is not the project
+    // spread — jumping to "Money" would time out finding the button.
+    await openProject(page, 1440);
+    // The QUIET s0 (D-B28's ruled precondition, and the origin `lens-density`,
+    // `lens-cls` and `lens-rail-budget` already take). The landing is polled
+    // against a smooth scroll, so a paper still growing under it lands the
+    // Money root somewhere else: run late in a long basket this read 153.98
+    // off the declared 72, and passes alone every time.
+    await quiet(page);
+
+    const band = page.locator('[data-lens-band]');
+    await expect(band).toBeVisible();
+
+    // The seam that measured itself is gone, and so is the property it wrote.
+    expect(
+      await page
+        .locator('[data-document-shell]')
+        .evaluate((el) =>
+          getComputedStyle(el).getPropertyValue('--doc-seam-height').trim(),
+        ),
+    ).toBe('');
+
+    // 56 + 16. The token is a `calc()`, and `getPropertyValue` on an
+    // unregistered custom property hands back the UNRESOLVED string
+    // ("calc(56px + 16px)"), which `parseFloat` reads as NaN — so the length
+    // is measured through a probe that actually lays the token out. (W3-L5
+    // wrote the `parseFloat` form against a band that did not exist yet in its
+    // lane, so this assertion had never run until integration.) The gap arm is
+    // an absolute 16px rather than `1rem` because this route's root is 18px
+    // (W1's measurement note): `1rem` computed to 74.
+    const landingClear = await page
+      .locator('[data-document-shell]')
+      .evaluate((el) => {
+        const probe = document.createElement('div');
+        probe.style.cssText =
+          'position:absolute;visibility:hidden;pointer-events:none;height:var(--doc-landing-clear)';
+        el.appendChild(probe);
+        const height = probe.getBoundingClientRect().height;
+        probe.remove();
+        return height;
+      });
+    expect(Math.abs(landingClear - 72)).toBeLessThanOrEqual(4);
+
+    // Scroll the letterhead and the band's sentinel out of view, so the band
+    // is pinned and the landing has something to clear.
+    await scrollTo(page, 2000);
+    await expect(band).toHaveAttribute('data-lens-open', 'false');
+
+    // W2 — the running index is the LADDER: a `nav` named `This paper`,
+    // one button per stop.
+    const ladder = page.getByRole('navigation', { name: 'This paper' });
+    await ladder.getByRole('button', { name: /^Money/i }).click();
+
+    // The Money region ROOT (`[data-index-region="money"]`) is what
+    // `globals.css`'s `scroll-margin-top: var(--doc-landing-clear)` targets.
+    // `RegionHead`'s own `regionKey` for Money is "money-head" (an inner
+    // element, past RegionRule's own ~6px) — the region root, not that inner
+    // head, is the paper's actual landing target and the one that carries this
+    // clearance contract.
+    await expect
+      .poll(
+        async () => {
+          // Scoped to the paper: the ladder's own row carries the same
+          // attribute (C-4), and the landing contract is the region root's.
+          const box = await page
+            .locator('[data-document-paper] [data-index-region="money"]')
+            .boundingBox();
+          if (!box) return Number.POSITIVE_INFINITY;
+          return Math.abs(box.y - 72);
+        },
+        { timeout: 15_000 },
+      )
+      .toBeLessThanOrEqual(4);
+  });
+
+  // ── OD-4 — find-in-page under `content-visibility: auto` (W4-L4) ──
+  // `[data-passed]` roots get `content-visibility: auto` behind an
+  // `@supports` gate (globals.css, this wave); the browser's own
+  // find-in-page/`window.find()` must still reach that content and scroll it
+  // into view — that is the ENTIRE reason OD-4 spends `contain-intrinsic-
+  // size` rather than something cheaper like `display: none` on a passed
+  // region. Runs chromium + webkit (task-impact, "the find-in-page gate").
+  //
+  // EXPECTED RED until W4-L1/L2/L3 attach the density observer: no
+  // `[data-index-region]` carries `data-passed` yet, so the first assertion
+  // below fails for that reason alone — not yet a content-visibility/find-
+  // in-page defect. The pre-agreed fallback (record as an "OD-4 fallback
+  // candidate" in `e2e-baseline.md` and `test.fixme` this case) applies ONLY
+  // once `data-passed` exists and THIS test still fails on webkit for a
+  // content-visibility reason — that has not happened yet, so it is not
+  // applied here; see `e2e-baseline.md` for the note owed to whoever wires
+  // Wave 4's density observer next.
+  test('find-in-page reaches a passed region’s content (OD-4)', async ({
+    authenticatedPage: page,
+  }) => {
+    await openProject(page, 1440);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await settle(page);
+
+    const passedCount = await page
+      .locator('[data-document-paper] [data-index-region][data-passed]')
+      .count();
+    expect(
+      passedCount,
+      'OD-4: no [data-index-region] carries data-passed after scrolling to the foot — ' +
+        'expected until the density observer (W4-L1/L2/L3) attaches it',
+    ).toBeGreaterThan(0);
+
+    const approvalsPassed = await page
+      .locator('[data-document-paper] [data-index-region="approvals"]')
+      .first()
+      .getAttribute('data-passed');
+    expect(
+      approvalsPassed,
+      'the approvals region (mounted first, scrolled well past) never gains data-passed',
+    ).not.toBeNull();
+
+    // The needle lives once, in the approvals region's full body
+    // (`project-approval-document.tsx`), on every project-kind document.
+    const NEEDLE = 'published budget checkpoint';
+    const found = await page.evaluate((needle) => window.find(needle), NEEDLE);
+    expect(
+      found,
+      `window.find("${NEEDLE}") returned false — content skipped by content-visibility:auto must still be reachable by find-in-page (OD-4)`,
+    ).toBe(true);
+
+    const inView = await page.evaluate(() => {
+      const el = document.querySelector(
+        '[data-document-paper] [data-index-region="approvals"]',
+      );
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.bottom > 0 && rect.top < window.innerHeight;
+    });
+    expect(inView, 'window.find matched but the match did not scroll into view').toBe(true);
+  });
+});
+
+/**
+ * D-B47 — the paper's foot clears the bar that is actually there.
+ *
+ * The lead measured the bar at 93px at 390 (three lines in the left zone plus
+ * an act whose label wraps by ruling) against a 72px inset, so the paper's last
+ * ~21px — and a landed foot control's focus ring — sat under it. The bar now
+ * publishes its own box on `html`, and both the shell's inset and the scroll
+ * padding read it.
+ */
+test.describe('the mobile bar publishes its height (D-B47)', () => {
+  test('at 390 the scroll padding is the bar\u2019s own box, and the last stop clears it', async ({
+    authenticatedPage: page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/doc/${PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-document-shell]')).toBeVisible({
+      timeout: 30_000,
+    });
+    await settle(page);
+
+    const bar = page.locator('[data-testid="mobile-bar"]');
+    await expect(bar).toBeVisible();
+    const barHeight = (await bar.boundingBox())?.height ?? 0;
+    expect(barHeight, 'the bar has no box at 390').toBeGreaterThanOrEqual(72);
+
+    const padding = await page.evaluate(() =>
+      parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom),
+    );
+    expect(
+      Math.abs(padding - barHeight),
+      `scroll-padding-bottom ${padding} vs the bar's ${barHeight}`,
+    ).toBeLessThanOrEqual(1);
+
+    // At the foot of the paper the last stop is not underneath the bar. The
+    // foot MOVES on the way there — every region the walk opens grows the
+    // paper below her (L-4) — so the end is chased until it stops receding.
+    let previousHeight = -1;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const height = await page.evaluate(() => {
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        return document.documentElement.scrollHeight;
+      });
+      await settle(page);
+      if (height === previousHeight) break;
+      previousHeight = height;
+    }
+    const clears = await page.evaluate(() => {
+      const roots = Array.from(
+        document.querySelectorAll('[data-document-paper] [data-index-region]'),
+      );
+      const last = roots[roots.length - 1] as HTMLElement | undefined;
+      if (!last) return null;
+      const barEl = document.querySelector('[data-testid="mobile-bar"]');
+      const barTop = barEl
+        ? barEl.getBoundingClientRect().top
+        : window.innerHeight;
+      return { bottom: last.getBoundingClientRect().bottom, barTop };
+    });
+    expect(clears, 'no region roots on this paper').not.toBeNull();
+    expect(
+      clears!.bottom,
+      `the last root ends at ${clears!.bottom}, the bar starts at ${clears!.barTop}`,
+    ).toBeLessThanOrEqual(clears!.barTop + 1);
+  });
+
+  test('at 1440 the bar publishes nothing and the inset is what it always was', async ({
+    authenticatedPage: page,
+  }) => {
+    await openProject(page, 1440);
+    await settle(page);
+
+    const published = await page.evaluate(() =>
+      document.documentElement.style.getPropertyValue('--doc-mobile-bar-height'),
+    );
+    expect(published, 'the desktop widths must not carry the bar token').toBe('');
   });
 });

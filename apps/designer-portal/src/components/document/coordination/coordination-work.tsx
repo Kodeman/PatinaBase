@@ -22,13 +22,12 @@
 import { useMemo, useState } from 'react';
 import { fmtDay } from '@/lib/document/format';
 import {
-  useSectionTasks,
   useToggleSectionTask,
   useCreateSectionTask,
 } from '@/hooks/use-section-work';
-import { useProjectParties } from '@patina/supabase';
+
 import { isBlocked } from '@/lib/document/coordination-derivation';
-import type { CoordinationItem } from '@patina/supabase';
+import type { CoordinationItem, ProjectParty } from '@patina/supabase';
 import type { SectionTask } from '@/hooks/use-section-work';
 import { OwnerChip, TaskDepLine } from './task-dep-line';
 import { DocumentAction } from '../document-action';
@@ -41,15 +40,22 @@ export interface CoordinationWorkProps {
   items: CoordinationItem[];
   /** Optional: clicking a ⊘ blocked tick opens that blocker's sheet (band wires it). */
   onOpenItem?: (id: string) => void;
+  /** D-B49 — read at the schedule region's ROOT (`schedule-spine.tsx`), which
+   *  is mounted at every density. This block stands inside the region's full
+   *  body, so calling the hooks here made the lens's own promotion refetch
+   *  them (both carry the default `staleTime: 0`). Mutations stay local — a
+   *  mutation hook issues no request until it is called. */
+  tasks: SectionTask[] | undefined;
+  parties: ProjectParty[] | undefined;
 }
 
 export function CoordinationWork({
   projectId,
   items,
   onOpenItem,
+  tasks,
+  parties,
 }: CoordinationWorkProps) {
-  const { data: tasks } = useSectionTasks(projectId);
-  const { data: parties } = useProjectParties(projectId);
   const toggleTask = useToggleSectionTask(projectId);
   const createTask = useCreateSectionTask(projectId);
 

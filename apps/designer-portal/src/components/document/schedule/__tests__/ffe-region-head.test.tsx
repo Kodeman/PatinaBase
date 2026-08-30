@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 let mockRooms: Record<string, unknown>[] = [];
@@ -6,6 +6,22 @@ let mockInstruments: Record<string, unknown>[] = [];
 let mockTradeScopes: Record<string, unknown>[] = [];
 let mockAuthority: { data: unknown } = { data: null };
 let mockCoverage: Record<string, { coverage: string }> = {};
+let mockReadinessLoading = false;
+
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -35,7 +51,7 @@ jest.mock('@patina/supabase', () => ({
       ready: true,
       missingFields: [],
     })),
-    isLoading: false,
+    isLoading: mockReadinessLoading,
     isError: false,
   }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
@@ -84,9 +100,6 @@ jest.mock('@/components/portal/ffe/stages', () => ({
 jest.mock('../../accounts/invoice-overlays', () => ({
   openInvoiceComposer: jest.fn(),
 }));
-jest.mock('../../mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
-}));
 jest.mock('../../work-block', () => ({ WorkBlock: () => null }));
 jest.mock('../../folio-strip', () => ({ FolioStrip: () => null }));
 jest.mock('../../strata-mark', () => ({ StrataMark: () => null }));
@@ -94,6 +107,9 @@ jest.mock('../../strata-mini-rule', () => ({ StrataMiniRule: () => null }));
 jest.mock('../../line-unfold', () => ({ LineUnfold: () => null }));
 
 import { FFESection } from '../../ffe-section';
+import { RoomLensProvider } from '../../room-lens-context';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { regionBoxSignature } from '../../region/region-box-signature';
 
 /** A furnishing the studio still has to release. */
 const line = (over: Record<string, unknown> = {}) => ({
@@ -121,6 +137,36 @@ const renderInstall = (projectId = 'project-1') =>
     <FFESection projectId={projectId} projectName="Ellsworth" mode="install" />,
   );
 
+
+// D-B49 — the FF&E/schedule region ROOTS now own the work reads (they moved out
+// of `WorkBlock`/`CoordinationWork`, which mount only in a promoted body, so a
+// promotion no longer fetches). This suite mounts the region with no
+// QueryClientProvider — every other data hook it uses is mocked the same way —
+// so these three have to be mocked too or the root throws "No QueryClient set".
+const sectionWorkCalls = { tasks: 0, gates: 0, logged: 0 };
+jest.mock('@/hooks/use-section-work', () => {
+  const actual = jest.requireActual('@/hooks/use-section-work');
+  const idle = { mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false };
+  return {
+    ...actual,
+    useSectionTasks: () => {
+      sectionWorkCalls.tasks += 1;
+      return { data: [], isLoading: false, isError: false, refetch: jest.fn() };
+    },
+    useSectionGates: () => {
+      sectionWorkCalls.gates += 1;
+      return { data: [], isLoading: false, isError: false, refetch: jest.fn() };
+    },
+    useSectionLoggedMinutes: () => {
+      sectionWorkCalls.logged += 1;
+      return { data: 0 };
+    },
+    useCreateSectionTask: () => idle,
+    useToggleSectionTask: () => idle,
+    useRequestSectionGate: () => idle,
+  };
+});
+
 describe('FF&E project-mode region head', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -130,6 +176,7 @@ describe('FF&E project-mode region head', () => {
     mockTradeScopes = [];
     mockAuthority = { data: null };
     mockCoverage = {};
+    mockReadinessLoading = false;
   });
 
   /** A line with a piece behind it, already on an invoice — no exception. */
@@ -207,8 +254,24 @@ describe('FF&E project-mode region head', () => {
     ).toHaveAttribute('data-action-variant', 'secondary');
   });
 
-  it('renders the fold seam by default when the schedule has settled empty', () => {
+  it('arrives OPEN when the schedule has settled empty — the default quiets a stop, it never folds it', () => {
+    // R127 OD-10 (W3-L5). This case read "renders the fold seam by default
+    // when the schedule has settled empty". `ffe` is a STOP key, so a derived
+    // default is DENSITY now, not a fold: an empty schedule arrives open and
+    // quiet, with its head and its count line on the paper rather than a seam.
     mockItems = [];
+    renderProject();
+
+    expect(document.querySelector('[data-fold-seam]')).toBeNull();
+    expect(document.querySelector('[data-region-head]')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
+  });
+
+  it('renders the fold seam with its summary when she folded it herself', () => {
+    // The seam's own claim — its summary line — kept whole under the one cause
+    // a stop can still have (OD-10).
+    mockItems = [];
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
     renderProject();
     expect(
       screen.getByText('1 group · no lines yet', { exact: false }),
@@ -231,6 +294,8 @@ describe('FF&E project-mode region head', () => {
 
   it('opens from the seam back to the full head, round-trip', () => {
     mockItems = [];
+    // The fold she made herself is the only seam a stop can wear (OD-10).
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
     renderProject();
     fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
     expect(
@@ -255,5 +320,359 @@ describe('FF&E project-mode region head', () => {
       screen.queryByRole('button', { name: 'Fold ↑' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/unfold/i)).not.toBeInTheDocument();
+  });
+});
+
+// W2 — the room heading itself is the room lens's press target (the same
+// contract job-ticket.tsx's room chip already carries).
+describe('FF&E room heading — the room lens press target', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    mockRooms = [{ id: 'room-1', name: 'Primary bedroom', budget_cents: 0 }];
+    mockItems = [line()];
+    mockInstruments = [];
+    mockTradeScopes = [];
+    mockAuthority = { data: null };
+    mockCoverage = {};
+    mockReadinessLoading = false;
+  });
+
+  const renderProjectInLens = (projectId = 'project-1') =>
+    render(
+      <RoomLensProvider>
+        <FFESection projectId={projectId} projectName="Ellsworth" mode="project" />
+      </RoomLensProvider>,
+    );
+
+  it('carries data-room-chip and flips aria-pressed on press, taking the room in hand', () => {
+    renderProjectInLens();
+    const heading = screen.getByRole('button', { name: /Primary bedroom/ });
+    expect(heading).toHaveAttribute('data-room-chip', 'room-1');
+    expect(heading).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(heading);
+    expect(heading).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(heading);
+    expect(heading).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('never turns "Throughout" — a heading with no room behind it — into a press target', () => {
+    mockItems = [line(), line({ id: 'line-2', project_room_id: null })];
+    renderProjectInLens();
+    const throughoutHeading = screen.getByText('Throughout');
+    expect(throughoutHeading.closest('button')).toBeNull();
+    expect(
+      document.querySelector('[data-room-chip="undefined"]'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not toggle the room lens while bulk-selecting — the tri-state tick owns the press instead', () => {
+    mockAuthority = { data: { state: 'active', agreementId: 'agreement-1' } };
+    renderProjectInLens();
+    fireEvent.click(
+      screen.getByRole('button', { name: /release for authorization/i }),
+    );
+    // In selecting mode the heading's press target is the tri-state tick, not
+    // the room lens — "Primary bedroom" prints as plain text, not a button.
+    const heading = screen.getByText('Primary bedroom');
+    expect(heading.closest('button')).toBeNull();
+  });
+});
+
+/**
+ * R127 W4 (L-4, OD-12, OD-13) — the quiet body. Until the lens reaches this
+ * stop, Pieces prints its head, one count line, one leader and one state line;
+ * the schedule itself is not on the paper. `__setDensityForTest(null)` is the lens
+ * with nothing to say, which is exactly what the page renders 2,000px ahead.
+ */
+describe('FF&E quiet body — the lens has not reached this stop', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    mockRooms = [{ id: 'room-1', name: 'Primary bedroom', budget_cents: 0 }];
+    mockItems = [line()];
+    mockInstruments = [];
+    mockTradeScopes = [];
+    mockAuthority = { data: null };
+    mockCoverage = {};
+    mockReadinessLoading = false;
+    // W4 close replaced the lane's `mockLensDensity` variable with the real
+    // store; `null` is still "the lens has nothing to say".
+    act(() => {
+      __setDensityForTest(null);
+    });
+  });
+
+  it('prints the head, one count line and the state line — and no lines', () => {
+    mockItems = [
+      line({ id: 'ffe-1' }),
+      line({ id: 'ffe-2', project_room_id: null, room: null }),
+    ];
+    renderProject();
+
+    expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
+    // W4-R1: the count line IS the head's status line.
+    const head = document.querySelector('[data-region-head="ffe"]')!;
+    expect(head).toHaveTextContent('2 lines · 1 room');
+    expect(
+      document.querySelectorAll('[data-region-count-line]'),
+    ).toHaveLength(0);
+    // The head's own acts are the only acts (mockup governs what prints).
+    expect(
+      screen.queryByRole('button', { name: /See the lines/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '2 lines · not yet on the paper · press Pieces on the index to open',
+      ),
+    ).toHaveClass('sr-only');
+
+    // The schedule is not on the paper: no line, no room head, no Throughout.
+    expect(screen.queryByText('Walnut bed, king')).not.toBeInTheDocument();
+    expect(screen.queryByText('Primary bedroom')).not.toBeInTheDocument();
+    expect(screen.queryByText('Throughout')).not.toBeInTheDocument();
+  });
+
+  it('F3 — prints its leader alone: every overflow act is NOT rendered at quiet', () => {
+    mockItems = [line({ id: 'ffe-1' })];
+    renderProject();
+
+    const head = document.querySelector('[data-region-head="ffe"]')!;
+    // One unspecified line, no claim and no PO: the election returns `spec`,
+    // so entry 0 is the spec-book act and `add-line` / `bill` are overflow.
+    expect(head).toContainElement(
+      screen.getByRole('link', { name: /Spec the 1 unspecified/ }),
+    );
+    // Not rendered, not hidden: `DocumentActionGroup`'s one-leader guard and
+    // `action-visibility.spec.ts` both COUNT `[data-action-key]` nodes, so an
+    // `aria-hidden` copy would still be one of them.
+    for (const key of [
+      'open-add-to-project',
+      'release-for-authorization',
+      'file-ffe-claim',
+      'chase-ffe-po',
+    ]) {
+      expect(
+        document.querySelectorAll(`[data-action-key="${key}"]`),
+      ).toHaveLength(0);
+    }
+    // The ledger prints ONE act beside the head's own Fold control.
+    const acts = Array.from(
+      head.querySelectorAll('[data-action-key]'),
+    ).map((el) => el.getAttribute('data-action-key'));
+    expect(acts.filter((key) => key !== 'ffe-fold')).toEqual([
+      'open-spec-book',
+    ]);
+  });
+
+  it('names the damage the paper holds, and prints nothing where it holds none', () => {
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Ellsworth"
+        mode="project"
+        needs={[
+          {
+            kind: 'damage_claim',
+            text: 'PO-2026-0418 has an open damage claim',
+            actionLabel: 'Review the claim',
+            stamp: { label: 'CLAIM OPEN', color: 'var(--color-terracotta)' },
+            urgent: false,
+          },
+        ]}
+      />,
+    );
+    expect(
+      document.querySelector('[data-region-head="ffe"]'),
+    ).toHaveTextContent('1 line · 1 room · 1 damaged');
+
+    renderProject();
+    const heads = document.querySelectorAll('[data-region-head="ffe"]');
+    expect(heads[heads.length - 1]).toHaveTextContent('1 line · 1 room');
+    expect(heads[heads.length - 1]).not.toHaveTextContent('damaged');
+  });
+
+  it('publishes its density and its reserve on the index root (OD-12)', () => {
+    // The fixture line carries neither a piece nor an invoice, so the head
+    // prints standing exceptions and takes the taller reserve.
+    renderProject();
+    const root = document.querySelector<HTMLElement>('[data-index-region="ffe"]');
+    expect(root).toHaveAttribute('data-density', 'quiet');
+    expect(root!.style.getPropertyValue('--doc-quiet-reserve')).toBe(
+      'var(--doc-quiet-reserve-exc)',
+    );
+  });
+
+  it('takes the short reserve when the head prints no standing exception', () => {
+    mockItems = [line({ product_id: 'product-1' })];
+    mockCoverage = { 'line-1': { coverage: 'invoiced' } };
+    renderProject();
+    const root = document.querySelector<HTMLElement>('[data-index-region="ffe"]');
+    expect(root!.style.getPropertyValue('--doc-quiet-reserve')).toBe(
+      'var(--doc-quiet-reserve-min)',
+    );
+  });
+
+  it('keeps the same head element when the lens promotes it to full', () => {
+    const { rerender } = renderProject();
+    const head = document.querySelector('[data-region-head="ffe"]');
+    // H5 — the root's OUTER box may not depend on its density.
+    const quietBox = regionBoxSignature(
+      document.querySelector('[data-index-region="ffe"]'),
+    );
+    const heading = screen.getByRole('heading', { name: 'Pieces' });
+
+    act(() => {
+      __setDensityForTest('full');
+    });
+    rerender(
+      <FFESection projectId="project-1" projectName="Ellsworth" mode="project" />,
+    );
+
+    expect(document.querySelector('[data-region-head="ffe"]')).toBe(head);
+    expect(screen.getByRole('heading', { name: 'Pieces' })).toBe(heading);
+    expect(
+      document.querySelector('[data-index-region="ffe"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(
+      screen.queryByText(/not yet on the paper/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
+    // The same outer box on the other side of the promotion: same
+    // margins, same border, same reserve, same rules. A stop that grew a
+    // top margin on promotion would move every root below it.
+    expect(
+      regionBoxSignature(
+        document.querySelector('[data-index-region="ffe"]'),
+      ),
+    ).toBe(quietBox);
+  });
+
+  it('lets the fold she made outrank the lens, whatever the lens says', () => {
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
+    act(() => {
+      __setDensityForTest('full');
+    });
+    renderProject();
+
+    expect(document.querySelector('[data-fold-seam]')).not.toBeNull();
+    expect(
+      screen.queryByRole('heading', { name: 'Pieces' }),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-index-region="ffe"]'),
+    ).toHaveAttribute('data-density', 'full');
+  });
+
+  it('leaves install mode full — its head has no quiet form to stand in', () => {
+    renderInstall();
+    expect(
+      document.querySelector('[data-index-region="ffe"]'),
+    ).toHaveAttribute('data-density', 'full');
+    expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
+    expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+  });
+
+  // D-B39/W5-R3 — the readiness pulse prints as the last inline child of the
+  // head's own status line (`ffeStatus`), never as a separate row that would
+  // move `money` when it unmounts (the original defect: FF&E's readiness
+  // fan-out resolving collapsed the region 24px, moving every root below it).
+  it('prints the readiness pulse inline in the head\'s status line — the count line\'s text and the head\'s box are unchanged (D-B39/W5-R3)', () => {
+    mockReadinessLoading = true;
+    const { rerender } = renderProject();
+
+    const head = document.querySelector('[data-region-head="ffe"]') as HTMLElement;
+    expect(head).not.toBeNull();
+    const statusLine = () => head.querySelector('h2 + p') as HTMLElement;
+    const visibleText = (p: HTMLElement) => {
+      const clone = p.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('.sr-only, [aria-hidden]').forEach((el) => el.remove());
+      return clone.textContent?.trim();
+    };
+
+    const classesLoading = head.className;
+    const textLoading = visibleText(statusLine());
+    // The sr-only label is present while it loads — the a11y half of the bar.
+    expect(screen.getByText('Checking readiness')).toBeInTheDocument();
+    // No separate loading row exists anywhere else on the region — it is
+    // exactly one inline pulse, inside the head.
+    expect(document.querySelectorAll('[role="status"]')).toHaveLength(1);
+
+    mockReadinessLoading = false;
+    rerender(
+      <FFESection projectId="project-1" projectName="Ellsworth" mode="project" />,
+    );
+
+    const classesLoaded = head.className;
+    const textLoaded = visibleText(statusLine());
+
+    // The count line's own text never changes across the transition — only
+    // the pulse (and its sr-only label) mounts and unmounts.
+    expect(textLoaded).toBe(textLoading);
+    // The head's own box (its class list — no `region-box-signature` helper
+    // exists on this base, so class-list equality is the fallback the
+    // coordinator named) is identical whether the bar is mounted or not.
+    expect(classesLoaded).toBe(classesLoading);
+    expect(screen.queryByText('Checking readiness')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * D-B49 — a region's data hooks live at its ROOT, and the root is mounted at
+ * every density. The FF&E work reads used to sit inside `WorkBlock`, which
+ * mounts only in the promoted body, so the lens's own promotion refetched them
+ * (all three carry the default `staleTime: 0`) — a promotion that fetches,
+ * which `lens-contrast.spec.ts:183` forbids.
+ *
+ * The falsifier is a COUNT, not a presence: the reads must happen at quiet as
+ * well as at full, and the same number of times, or the promotion is still
+ * what triggers them.
+ */
+describe('D-B49 — the FF&E region root owns the work reads at every density', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    mockRooms = [{ id: 'room-1', name: 'Primary bedroom', budget_cents: 0 }];
+    mockItems = [line()];
+    mockInstruments = [];
+    mockTradeScopes = [];
+    mockAuthority = { data: null };
+    mockCoverage = {};
+    mockReadinessLoading = false;
+    sectionWorkCalls.tasks = 0;
+    sectionWorkCalls.gates = 0;
+    sectionWorkCalls.logged = 0;
+  });
+
+  it('reads tasks, gates and logged minutes while the stop is QUIET — before any promotion', () => {
+    act(() => {
+      __setDensityForTest(null);
+    });
+    renderProject();
+
+    expect(sectionWorkCalls.tasks).toBeGreaterThan(0);
+    expect(sectionWorkCalls.gates).toBeGreaterThan(0);
+    expect(sectionWorkCalls.logged).toBeGreaterThan(0);
+  });
+
+  it('promoting the stop to FULL adds no further read — the body takes props', () => {
+    act(() => {
+      __setDensityForTest(null);
+    });
+    renderProject();
+    const atQuiet = { ...sectionWorkCalls };
+
+    act(() => {
+      __setDensityForTest('full');
+    });
+
+    // The root re-renders with the promotion, so its own hook calls tick with
+    // the render — what must NOT happen is the body adding a fresh observer of
+    // its own. One caller per read, at both densities.
+    expect(sectionWorkCalls.tasks - atQuiet.tasks).toBeLessThanOrEqual(
+      sectionWorkCalls.logged - atQuiet.logged,
+    );
+    expect(sectionWorkCalls.gates - atQuiet.gates).toBeLessThanOrEqual(
+      sectionWorkCalls.logged - atQuiet.logged,
+    );
   });
 });

@@ -12,7 +12,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMarginItems } from '@/hooks/use-margin-items';
-import { useCoordinationItems } from '@patina/supabase';
+import { useCoordinationItems, useSendDecisionReminder } from '@patina/supabase';
+import { useQueryClient } from '@tanstack/react-query';
+// W5-C2 — the SAME act implementations the margin-item sheet's own body runs
+// (`margin-bodies.tsx`), so the inline act and the sheet's act are one act.
+import { invalidateMarginSurfaces } from '@/hooks/use-margin-items';
+import { openInvoiceFolio } from '../accounts/invoice-overlays';
+import { useCreateMarginNote } from '@/hooks/use-margin-notes';
+import { todayYmd } from '@/lib/document/format';
+import { DateTextInput } from '../date-text-input';
 import {
   classifyMarginItems,
   marginDecisionClassificationState,
@@ -27,10 +35,8 @@ import {
 } from '@/lib/document/margin-derivation';
 import { ACTIVITIES, fmtElapsed } from '@/lib/document/time-derivation';
 import { MarginItemBody } from '../margin-bodies';
-import { useHandoffGates } from '../margin-handoff-item';
+import { useMarginSheet } from '@/hooks/use-margin-sheet';
 import { overdueStampLabel } from '@/lib/document/overdue-condition';
-import { StrataMark } from '../strata-mark';
-import { fillStateAtSection } from '@/lib/document/fill-state';
 import { openLedger } from '../command-bar';
 import { openAccount } from '../account/account-sheet';
 import { MobileAccountHeader } from '../account/mobile-account-header';
@@ -41,6 +47,13 @@ import {
   topActiveModalDialog,
 } from '../overlays/active-dialog';
 import { useMobileShell } from './mobile-shell';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { boardsRoutePath } from '@/lib/document/registry';
+import {
+  paperRegionsForSection,
+  DOCUMENT_INDEX_LABELS,
+  type DocumentIndexKey,
+} from '@/lib/document/document-index';
 
 const SHEET_FOCUSABLE = [
   'a[href]:not([tabindex="-1"])',
@@ -126,13 +139,15 @@ const MOBILE_MORE_DOORWAY =
   '[data-mobile-edge-owner="document-bar"] [aria-label="More studio actions"]';
 
 const SHEET_RETURN_FALLBACKS: Record<
-  'drawer' | 'timer' | 'spine' | 'margin-item',
+  'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin' | 'note',
   readonly string[]
 > = {
   drawer: ['[data-studio-books-doorway]', MOBILE_MORE_DOORWAY],
   timer: [
-    '[data-compact-spine-timer-doorway]',
-    '[data-full-spine-timer] [data-action-key="open-manual-time-entry"]',
+    // The studio drawer's `In hand today` clock is the timer's doorway at
+    // every width from W1; the spine's two (`[data-compact-spine-timer-doorway]`,
+    // `[data-full-spine-timer]`) went with `spine-timer.tsx` (OD-16).
+    '[data-drawer-timer-doorway]',
     MOBILE_MORE_DOORWAY,
     '[data-studio-books-doorway]',
   ],
@@ -140,6 +155,14 @@ const SHEET_RETURN_FALLBACKS: Record<
   'margin-item': [
     '[data-margin-trigger]',
     '[data-document-spine] button',
+    MOBILE_MORE_DOORWAY,
+  ],
+  // D-B30: the door is the first row of More's "In this document" list.
+  margin: ['[data-mobile-document-door="margin"]', MOBILE_MORE_DOORWAY],
+  // W5-R4(a): Discard and Escape both land back on the act that opened it.
+  note: [
+    '[data-margin-capture-note]',
+    '[data-mobile-document-door="margin"]',
     MOBILE_MORE_DOORWAY,
   ],
 };
@@ -172,6 +195,20 @@ function restoreSheetFocus(
   });
 }
 
+/** One accessible name per sheet kind — every `role="dialog"` this file opens
+ *  names itself, the sections sheet included (it carried none before). */
+const SHEET_ARIA_LABEL: Record<
+  'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin' | 'note',
+  string
+> = {
+  drawer: 'Studio actions',
+  timer: 'Time in hand',
+  spine: 'Sections of this document',
+  'margin-item': 'Margin item',
+  margin: 'The margin',
+  note: 'Note to the margin',
+};
+
 function Sheet({
   tone,
   kind,
@@ -179,7 +216,7 @@ function Sheet({
   children,
 }: {
   tone: 'paper' | 'dark';
-  kind: 'drawer' | 'timer' | 'spine' | 'margin-item';
+  kind: 'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin' | 'note';
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -250,14 +287,17 @@ function Sheet({
       ref={dialogRef}
       id={compactTimer ? 'mobile-timer-sheet' : undefined}
       data-mobile-sheet-kind={kind}
+      // W1 — the timer sheet lost its ceiling with `spine-timer.tsx`: the
+      // studio drawer's clock is its doorway at 1440 too, so it is the one
+      // sheet with no width regime at all.
       data-mobile-sheet-regime={
-        compactTimer ? 'through-1439' : 'below-1180-only'
+        compactTimer ? 'every-width' : 'below-1180-only'
       }
       className={`fixed inset-0 z-[58] ${
-        compactTimer ? 'min-[1440px]:hidden' : 'min-[1180px]:hidden'
+        compactTimer ? '' : 'min-[1180px]:hidden'
       }`}
       role="dialog"
-      aria-label={compactTimer ? 'Time in hand' : undefined}
+      aria-label={SHEET_ARIA_LABEL[kind]}
       aria-modal="true"
     >
       <button
@@ -294,10 +334,101 @@ function Sheet({
   );
 }
 
-export function MobileSheets() {
-  const { sheet, activeDoc, closeSheet, openMarginItem, openSpine } =
+/** D-B30 — a compact identity line for the margin sheet's row. Only the
+ *  fields already on `MarginItemRow` (no per-item detail fetch, which lives
+ *  in the margin-item sheet this row opens). */
+function marginRowOwner(row: MarginItemRow): string {
+  switch (row.kind) {
+    case 'decision':
+    case 'pulse':
+      return 'Client';
+    case 'message':
+      return (row.payload.sender_name as string | undefined) ?? 'Client';
+    case 'invoice':
+      return row.payload.po_payment
+        ? ((row.payload.vendor_name as string | undefined) ?? 'Vendor')
+        : 'Client';
+    case 'note':
+      return (row.payload.author_name as string | undefined) ?? 'You';
+    case 'field_sms':
+      return (row.payload.party_kind as string | undefined) === 'vendor'
+        ? 'Vendor'
+        : 'Field';
+    case 'time':
+      return '';
+  }
+}
+
+/**
+ * D-B30 — the row's ONE inline act: its label and what pressing it does.
+ *
+ * W5-C2: both controls in a row used to call `openMarginItem`, so a button
+ * named `Send a nudge` opened a dialog and sent nothing. A control's
+ * accessible name must describe what it does, and two controls in one row
+ * cannot carry different names and identical behaviour.
+ *
+ * So an act either PERFORMS or is named `Open`. `perform` names the act the
+ * `margin-item` sheet's own body would run — the same act table
+ * (`margin-bodies.tsx`), not a second one — and it is populated only where the
+ * act needs nothing this compact row does not hold. Everything that needs the
+ * item's own fetched detail (a date to extend to, a body to reply with, the
+ * invoice to review, a pulse draft, a decision form, the thread) keeps the
+ * sheet as its door and says so in one word.
+ */
+type MarginRowAct = {
+  label: string;
+  /** `null` — the act needs the item sheet; the button opens it and is named
+   *  for that. */
+  perform: 'nudge' | 'folio' | null;
+};
+
+function marginRowAct(row: MarginItemRow): MarginRowAct {
+  switch (row.kind) {
+    case 'decision':
+      // Extending needs a date and the record is the sheet itself.
+      if (row.state === 'expired' || row.state === 'responded')
+        return { label: 'Open', perform: null };
+      return {
+        label: row.payload.reminder_sent_at ? 'Nudge again' : 'Send a nudge',
+        perform: 'nudge',
+      };
+    case 'invoice':
+      // The folio is a window event — it needs the invoice id and nothing else.
+      if (row.payload.po_payment || row.state !== 'draft')
+        return { label: 'Open the folio', perform: 'folio' };
+      return { label: 'Open', perform: null };
+    case 'message':
+    case 'pulse':
+    case 'note':
+    case 'field_sms':
+    case 'time':
+      return { label: 'Open', perform: null };
+  }
+}
+
+export function MobileSheets({
+  ladderValues: ladderValuesProp,
+}: {
+  /** W2-L1's per-stop derivation. This sheet mounts in
+   *  `(document)/layout.tsx`, above the page that derives them, so in product
+   *  the values ride `MobileActiveDoc`; the prop is the direct route tests
+   *  take. */
+  ladderValues?: Partial<Record<DocumentIndexKey, string>>;
+} = {}) {
+  const { sheet, activeDoc, closeSheet, openMarginItem, openMargin, openNote, openSpine } =
     useMobileShell();
+  const queryClient = useQueryClient();
+  const decisionReminder = useSendDecisionReminder();
+  // W5-R4(a) — the note composer's own state, hoisted with the other hooks so
+  // it sits above every early return in this component.
+  const createNote = useCreateMarginNote();
+  const [noteBody, setNoteBody] = useState('');
+  // Dates default to today, as the rail's composer does: a kept default makes
+  // the note due today and it joins needs-action at 5pm (R12/R14).
+  const [noteDue, setNoteDue] = useState(todayYmd());
+  const ladderValues = ladderValuesProp ?? activeDoc?.ladderValues ?? {};
   const router = useRouter();
+  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const projectId = activeDoc?.projectId ?? null;
   const proposalId = activeDoc?.proposalId ?? null;
   const { data: items } = useMarginItems(projectId, proposalId);
@@ -326,24 +457,28 @@ export function MobileSheets() {
     () => partitionMargin(visibleItems, new Date()),
     [visibleItems],
   );
+  // Still the whole margin (every anchor kind) — the margin-item sheet below
+  // opens any item, line-anchored ones included.
   const allItems = useMemo(() => [...raised, ...settled], [raised, settled]);
-  // Ruling III: handoffs are margin items, so the mobile summary counts and
-  // lists them too — otherwise the highest-ranked thing in the margin is the
-  // one thing mobile never mentions.
-  const handoffNow = useMemo(() => new Date(), []);
-  const { gates: handoffGates } = useHandoffGates({
+  // W5-R1: the whole margin, grouped as the desktop rail groups it — the
+  // Margin sheet's list and the bar's door count both read this one hook.
+  const clientName = activeDoc?.clientName ?? '';
+  const marginSheet = useMarginSheet({
     projectId,
-    clientName: activeDoc?.clientName ?? '',
-    now: handoffNow,
+    proposalId,
+    clientName,
   });
   const sheetKind = sheet?.kind ?? null;
 
   useEffect(() => {
     if (!sheetKind) return;
+    // The timer sheet has no width regime any more: from W1 it is the only
+    // place Pause / Resume / `+ Log manually` live, and the studio drawer's
+    // clock opens it at 1440 as well as below. Every other sheet still closes
+    // when the compact regime ends.
+    if (sheetKind === 'timer') return;
 
-    const validRegime = window.matchMedia(
-      sheetKind === 'timer' ? '(max-width: 1439px)' : '(max-width: 1179px)',
-    );
+    const validRegime = window.matchMedia('(max-width: 1179px)');
     const closeOutsideRegime = () => {
       if (!validRegime.matches) closeSheet();
     };
@@ -437,9 +572,17 @@ export function MobileSheets() {
     );
   }
 
-  // ── Spine (paper): sections + "In the margin · N" (D3-3) ──
+  // ── Spine (paper): the ladder for the open spread + "In the margin · N"
+  //    (D3-3, W2 reconciliation §13/OD-14). The whole-document section
+  //    stepper this sheet used to print is retired: the ladder names the
+  //    six regions of the spread actually in hand, which is what the
+  //    desktop rail's LensLadder prints for the same spread. ──
   if (sheet.kind === 'spine') {
-    const open = allItems.filter((i) => i.kind !== 'time');
+    const activeSectionKey =
+      activeDoc?.sections.find((s) => s.state === 'active')?.key ?? null;
+    const ladderRegions = activeSectionKey
+      ? paperRegionsForSection(activeSectionKey)
+      : [];
     return (
       <Sheet tone="paper" kind="spine" onClose={closeSheet}>
         <button
@@ -453,58 +596,145 @@ export function MobileSheets() {
           ← Put down · back to the Desk
         </button>
         <ul className="mt-1">
-          {(activeDoc?.sections ?? []).map((s) => {
-            const inner = (
-              <>
-                <StrataMark
-                  size="sm"
-                  fill={fillStateAtSection(s.key)}
-                  breathing={s.state === 'active'}
-                />
-                <span className={s.state === 'future' ? 'opacity-45' : ''}>
+          {ladderRegions.map((region) => {
+            const current = activeDoc?.readingIndex === region.key;
+            const value = ladderValues[region.key];
+            return (
+              <li key={region.key}>
+                <button
+                  type="button"
+                  aria-current={current ? 'true' : undefined}
+                  onClick={() => {
+                    closeSheet();
+                    // D-B18 — the page's handler, and only it: unfold, force
+                    // every region through the target to full in one flushed
+                    // commit, THEN scroll. This sheet used to run the first and
+                    // third steps itself, landing on a stop the lens had never
+                    // been asked to promote.
+                    activeDoc?.onJumpRegion(region.key);
+                  }}
+                  className={`flex min-h-11 w-full flex-col justify-center gap-0.5 py-1.5 text-left ${
+                    current ? 'doc-room-lifted' : ''
+                  }`}
+                >
                   <span
                     className={`block text-[14px] ${
-                      s.state === 'active'
+                      current
                         ? 'font-semibold text-[var(--color-charcoal)]'
-                        : s.state === 'settled'
-                          ? 'text-[var(--color-aged-oak)]'
-                          : 'text-[var(--text-muted)]'
+                        : 'text-[var(--color-charcoal)]'
                     }`}
                   >
-                    {s.label}
+                    {DOCUMENT_INDEX_LABELS[region.key]}
                   </span>
-                  <span className="block font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                    {s.sub}
-                  </span>
-                </span>
-              </>
+                  {value && (
+                    <span className="block truncate font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      {value}
+                    </span>
+                  )}
+                </button>
+              </li>
             );
-            // Settled + active rows jump to (and unfold) their section via the
-            // page's open-section listener; future rows stay inert.
-            return (
-              <li key={s.key}>
-                {s.state === 'future' ? (
-                  <div className="flex items-center gap-2.5 py-2">{inner}</div>
-                ) : (
+          })}
+        </ul>
+
+        {/* Override 3 — the four doors every spread scoped to a project
+            opens; a pre-work document with no project behind it prints
+            none (OD-8). */}
+        {projectId && (
+          <>
+            <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+              Filed with this job
+            </p>
+            <ul className="mt-1">
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    router.push(`/doc/${projectId}/plans`);
+                  }}
+                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  Plan room
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    router.push(`/doc/${projectId}/spec-book`);
+                  }}
+                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  Spec book
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    router.push(boardsRoutePath(projectId));
+                  }}
+                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  Boards
+                </button>
+              </li>
+              {callSheetOn && (
+                <li>
                   <button
                     type="button"
                     onClick={() => {
                       closeSheet();
                       window.dispatchEvent(
-                        new CustomEvent('document:open-section', {
-                          detail: s.key,
+                        new CustomEvent('document:open-call-sheet', {
+                          detail: { mode: 'sheet' },
                         }),
                       );
                     }}
-                    className="flex w-full items-center gap-2.5 py-2 text-left"
+                    className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
                   >
-                    {inner}
+                    Call sheet
                   </button>
-                )}
+                </li>
+              )}
+            </ul>
+          </>
+        )}
+
+        {/* DL-04 — the fifth door, on the proposal spread that carries a
+            client's copy. The leaf is the page's state, so the sheet asks for
+            it by the same wire the call sheet uses rather than holding a
+            second copy of it. */}
+        {activeDoc?.clientCopy && (
+          <>
+            {!projectId && (
+              <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+                Filed with this job
+              </p>
+            )}
+            <ul className={projectId ? '' : 'mt-1'}>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    window.dispatchEvent(
+                      new CustomEvent('document:open-leaf', {
+                        detail: { leaf: 'clientcopy' },
+                      }),
+                    );
+                  }}
+                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  The client’s copy
+                </button>
               </li>
-            );
-          })}
-        </ul>
+            </ul>
+          </>
+        )}
 
         {/* R25: room headings as jump rows — tap lands on the heading. */}
         {(activeDoc?.rooms ?? []).length > 0 && (
@@ -519,12 +749,9 @@ export function MobileSheets() {
                     type="button"
                     onClick={() => {
                       closeSheet();
-                      document
-                        .getElementById(`doc-room-${r.id}`)
-                        ?.scrollIntoView({
-                          block: 'start',
-                          behavior: 'smooth',
-                        });
+                      // Room headings live inside the FF&E body too, so the
+                      // same press order and the same owner.
+                      activeDoc?.onJumpToRoom?.(r.id);
                     }}
                     className="block w-full py-1.5 text-left font-heading text-[13px] italic text-[var(--color-charcoal)]"
                   >
@@ -535,16 +762,98 @@ export function MobileSheets() {
             </ul>
           </>
         )}
+      </Sheet>
+    );
+  }
 
-        <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-          In the margin · {raised.length + handoffGates.length}
-        </p>
-        <MarginDecisionClassificationNotice
-          state={classifiedMargin.decisionState}
-        />
-        {handoffGates.length > 0 && (
-          <ul className="mt-1">
-            {handoffGates.map((gate) => (
+  // ── Margin (paper): the WHOLE margin (W5-R1) — every anchor kind, grouped
+  //    "THE WHOLE JOB" (letterhead/section) then one "BESIDE <region>" group
+  //    per region with a line-anchored member, as the desktop rail groups
+  //    them (margin-rail.tsx `anchorGroups`; W5-R1 prints WHOLE JOB first).
+  //    Moved out of the spine sheet above, which keeps only sections and the
+  //    doors. Each row's inline act PERFORMS (W5-C2) where the act needs
+  //    nothing the row does not hold — the nudge and the folio, run through
+  //    the same hooks `margin-bodies.tsx` runs them through, not a second
+  //    table. Where the act needs the item's own fetched detail it is named
+  //    `Open` and opens the margin-item sheet, which is where that act lives
+  //    (§5's one-act invariant: one implementation, two doors). ──
+  if (sheet.kind === 'margin') {
+    const { groups, gates, decisionState, showDecisionNotice, count, overdueCount } =
+      marginSheet;
+    const openRow = (row: MarginItemRow) => {
+      // A line-anchored row jumps to its line first (the sheet covers the
+      // paper; without this she would close it to a scroll position that
+      // never moved) and then opens the same margin-item sheet the line's
+      // own chip opened (D-B30's SHEET_RETURN_FALLBACKS still find it).
+      if (row.anchor_kind === 'line' && row.anchor_id) {
+        // D-B46: the page owns the landing — unfold, promote, then scroll.
+        // Every `ffe-selection-*` id lives in the FF&E region's body, and a
+        // region that is quiet (or that the reader closed herself) has no
+        // body, so a scroll issued from here had nothing to land on.
+        //
+        // W5-C14 asked for exactly this order from inside the sheet
+        // (`onJumpRegion('ffe')` then a two-frame `scrollIntoView`); D-B46,
+        // ruled after it, moves the whole composition to the page so there is
+        // ONE implementation of it and no sheet calls `scrollIntoView`.
+        // `landOnFfeAnchor` is that composition, and `page.test.tsx` pins its
+        // order (P2-07).
+        activeDoc?.onJumpToLine?.(row.anchor_id);
+      }
+      openMarginItem(row.item_id);
+    };
+    /** The row's own act. `perform: null` falls back to the row's door. */
+    const runRowAct = (row: MarginItemRow) => {
+      const act = marginRowAct(row);
+      if (act.perform === 'nudge') {
+        decisionReminder.mutate(
+          { decisionId: row.item_id },
+          { onSuccess: () => invalidateMarginSurfaces(queryClient, projectId) },
+        );
+        return;
+      }
+      if (act.perform === 'folio') {
+        openInvoiceFolio(row.item_id);
+        return;
+      }
+      openRow(row);
+    };
+    return (
+      <Sheet tone="paper" kind="margin" onClose={closeSheet}>
+        {/* W5-R4(a)/D-B44 — the head row: the count, the lead act, and CLOSE.
+            `CAPTURE A NOTE` is the mockup's own lead act, shipped TEXT ONLY;
+            `NOTE · PHOTO · VOICE` and the prose line stay unshipped because
+            the web has no photo or voice capture path — the Field app is the
+            capture path for those, and a door that promised them would be a
+            door onto nothing. */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
+              Margin{' '}
+              <span className="font-mono text-[13px] font-normal text-[var(--color-aged-oak)]">
+                · {count}
+              </span>
+            </h2>
+            {overdueCount > 0 && (
+              <p className="mt-0.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
+                {overdueCount} overdue
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            data-margin-capture-note
+            onClick={openNote}
+            className="shrink-0 self-center whitespace-nowrap px-1 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
+          >
+            Capture a note
+          </button>
+        </div>
+        {showDecisionNotice && (
+          <MarginDecisionClassificationNotice state={decisionState} />
+        )}
+        {gates.length > 0 && (
+          <ul className="mt-2">
+            {gates.map((gate) => (
               <li
                 key={gate.id}
                 className="mb-1.5 flex w-full items-start gap-2 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-2 text-left"
@@ -565,36 +874,210 @@ export function MobileSheets() {
             ))}
           </ul>
         )}
-        {open.length === 0 && handoffGates.length === 0 ? (
-          <p className="py-1.5 text-[14px] italic text-[var(--text-muted)]">
+        {groups.length === 0 && gates.length === 0 ? (
+          <p className="mt-2 py-1.5 text-[14px] italic text-[var(--text-muted)]">
             The margin — decisions, messages, and money gather here.
           </p>
-        ) : open.length === 0 ? null : (
-          <ul className="mt-1">
-            {open.map((row) => (
-              <li key={`${row.kind}-${row.item_id}`}>
-                <button
-                  type="button"
-                  onClick={() => openMarginItem(row.item_id)}
-                  className="mb-1.5 flex w-full items-start gap-2 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-2 text-left"
-                  style={{
-                    borderLeft: `2.5px solid ${marginAccent(row.kind).border}`,
-                  }}
-                >
-                  <span
-                    className="mt-px shrink-0 font-mono text-[12px] font-semibold uppercase tracking-[0.06em]"
-                    style={{ color: marginAccent(row.kind).label }}
+        ) : (
+          groups.map((group) => (
+            <div key={group.key ?? 'whole-job'} data-margin-group={group.key ?? 'whole-job'}>
+              <p className="mb-1.5 mt-3 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                {group.heading} · {group.rows.length}
+              </p>
+              <ul>
+                {group.rows.map(({ row, lineLabel }) => (
+                  <li
+                    key={`${row.kind}-${row.item_id}`}
+                    data-margin-row
+                    className="mb-1.5 flex items-stretch gap-2 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)]"
+                    style={{
+                      borderLeft: `2.5px solid ${marginAccent(row.kind).border}`,
+                    }}
                   >
-                    {deriveKindLine(row)}
-                  </span>
-                  <span className="text-[14px] leading-snug text-[var(--color-charcoal)]">
-                    {row.title}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                    <button
+                      type="button"
+                      onClick={() => openRow(row)}
+                      className="min-w-0 flex-1 px-2.5 py-2 text-left"
+                    >
+                      {/* W5-C12 — D-B30's row form leads with a STAMP, and
+                          the row printed none while this suite's own title
+                          claimed one. It prints the fact the row HOLDS:
+                          `state === 'overdue'`, the same fact the head counts
+                          two lines above. NOT `overdueStampLabel`, whose
+                          `Overdue · 6 days` needs an `OverdueCondition` with a
+                          due date — `MarginItemRow` carries no date field and
+                          no row→condition derivation exists, so a day count
+                          here would be invented rather than read. */}
+                      {row.state === 'overdue' && (
+                        <span
+                          data-margin-row-stamp
+                          className="block font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]"
+                        >
+                          Overdue
+                        </span>
+                      )}
+                      <span
+                        className="block font-mono text-[12px] font-semibold uppercase tracking-[0.06em]"
+                        style={{ color: marginAccent(row.kind).label }}
+                      >
+                        {deriveKindLine(row)}
+                      </span>
+                      <span className="mt-0.5 block text-[14px] leading-snug text-[var(--color-charcoal)]">
+                        {row.title}
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                        {marginRowOwner(row)}
+                      </span>
+                      {lineLabel && (
+                        <span
+                          data-margin-row-line
+                          className="mt-0.5 block text-[12px] italic text-[var(--color-aged-oak)]"
+                        >
+                          {lineLabel}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      data-margin-row-act
+                      disabled={
+                        marginRowAct(row).perform === 'nudge' &&
+                        decisionReminder.isPending
+                      }
+                      onClick={() => runRowAct(row)}
+                      className="shrink-0 self-center px-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)] disabled:opacity-50"
+                    >
+                      {marginRowAct(row).label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
         )}
+      </Sheet>
+    );
+  }
+
+  // ── Note to the margin (paper): W5-R4(a) / D-B44. The mockup's
+  //    `CAPTURE A NOTE`, shipped TEXT ONLY. `NOTE · PHOTO · VOICE` and the
+  //    prose line are not here: photo and voice capture exist only in Patina
+  //    Field, and printing their words on a surface that cannot honour them
+  //    would be a promise the web cannot keep. The composer is the RAIL's own
+  //    (`margin-rail.tsx`) — same `useCreateMarginNote`, same default due
+  //    date, same `Note body` label — re-hosted, not forked, so a note filed
+  //    at 390 and a note filed at 1440 are one note written one way. ──
+  if (sheet.kind === 'note') {
+    /** W5-R4(a) — Save, Discard and Escape all land back on `CAPTURE A NOTE`.
+     *  `restoreSheetFocus` cannot do it: the composer returns to the MARGIN
+     *  sheet rather than closing, and its "never pull focus back to shell
+     *  chrome while a modal owns it" rule (rightly) stands down for the sheet
+     *  that is replacing this one. So the act takes its own focus, one frame
+     *  after the margin sheet has printed it. */
+    const backToMargin = () => {
+      openMargin();
+      // TWO frames, not one: after a SAVE the margin sheet re-renders with the
+      // new row AND a changed head, and the act is not in the document when
+      // the first frame runs. One frame was enough for Discard, which changes
+      // nothing, and that is exactly why it looked right.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          document
+            .querySelector<HTMLButtonElement>('[data-margin-capture-note]')
+            ?.focus({ preventScroll: true });
+        });
+      });
+    };
+    // D-B44 (amended) — for I152 a note captured from the sheet anchors THE
+    // WHOLE JOB, at every stop. The `BESIDE <STOP>` line promised an
+    // attachment the row could not keep: `margin_notes.anchor_id` is a `uuid`
+    // (`00196_per_item_claims_and_margin_notes.sql`) and a stop key is `'ffe'`,
+    // so a section anchor can only ever be recorded WITHOUT the stop — the
+    // note then files under THE WHOLE JOB anyway (`useMarginSheet` groups
+    // BESIDE only on `'line'`), and the reader was told otherwise. One line,
+    // one truth: `About the whole job`, and that is where it lands.
+    const saveNote = () => {
+      const body = noteBody.trim();
+      if (!body) return;
+      createNote.mutate(
+        {
+          projectId,
+          proposalId,
+          body,
+          // D-B44 (amended): always the whole job, whatever she is reading.
+          anchorKind: 'letterhead',
+          anchorId: null,
+          dueDate: noteDue
+            ? new Date(`${noteDue}T17:00:00`).toISOString()
+            : null,
+        },
+        {
+          onSuccess: () => {
+            setNoteBody('');
+            setNoteDue(todayYmd());
+            // Back to the margin, which now prints the row in its group and
+            // the head at +1.
+            backToMargin();
+          },
+        },
+      );
+    };
+    return (
+      <Sheet tone="paper" kind="note" onClose={backToMargin}>
+        <h2 className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
+          Note to the margin
+        </h2>
+        <p
+          data-margin-note-anchor
+          className="mt-0.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]"
+        >
+          About the whole job
+        </p>
+        <textarea
+          rows={3}
+          autoFocus
+          placeholder="Note to the margin…"
+          aria-label="Note body"
+          className="mt-2 w-full resize-none rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-[16px] leading-relaxed text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+          value={noteBody}
+          onChange={(e) => setNoteBody(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNote();
+          }}
+        />
+        <DocumentActionRow
+          surfaceKey="open-document"
+          regionKey="margin-note"
+          className="mt-1.5"
+          aria-label="Margin note actions"
+        >
+          <DateTextInput
+            ariaLabel="Note due date (optional)"
+            className="rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1 text-[16px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            value={noteDue || null}
+            onChange={(value) => setNoteDue(value ?? '')}
+          />
+          <DocumentAction
+            actionKey="save-margin-note"
+            disabled={!noteBody.trim() || createNote.isPending}
+            loading={createNote.isPending}
+            loadingLabel="Saving…"
+            onClick={saveNote}
+          >
+            Save
+          </DocumentAction>
+          <DocumentAction
+            actionKey="discard-margin-note"
+            variant="tertiary"
+            onClick={() => {
+              setNoteBody('');
+              setNoteDue(todayYmd());
+              backToMargin();
+            }}
+          >
+            Discard
+          </DocumentAction>
+        </DocumentActionRow>
       </Sheet>
     );
   }

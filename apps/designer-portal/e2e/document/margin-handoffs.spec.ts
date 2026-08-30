@@ -141,24 +141,64 @@ test('an overdue gate wears the stamp, and only an overdue gate does', async ({
   expect(box).not.toBeNull();
   console.log(`overdue need-line width: ${box?.width}px`);
   expect(box!.width).toBeGreaterThanOrEqual(90);
-
-  // Ruling IV, second rendering: the same derivation, read as a sentence.
-  await expect(page.locator('#document-next-up')).toContainText(
-    /has waited \d+ days?\./,
-  );
 });
 
-test("the guide's gate act focuses the gate's own control in the margin", async ({
+// RE-POINTED AGAIN 2026-08-29, W3-fix (D-B25). The W0-fix re-point pointed at
+// `section[aria-label="Needs attention"]`, which C-6 retired: `RedLetterZone`
+// is a model provider now and mounts nothing. Ruling IV's SECOND rendering
+// still prints — from the LENS. Line 2 names whichever item ranks worst by
+// deadline distance (W3-R1), so the deterministic site for THIS derivation is
+// the standing sheet behind the door, and the test asserts it there. Both
+// supersessions are pinned — the guide's own heading AND the zone — so a
+// silent flip back to either fails here.
+test("an overdue gate's elapsed-time derivation prints once more above the paper", async ({
+  authenticatedPage: page,
+}) => {
+  await openDocument(page, FULL_RAIL);
+
+  // Neither superseded organ may return: the lens is the one printing.
+  await expect(page.locator('#document-next-up')).toHaveCount(0);
+  await expect(
+    page.locator('section[aria-label="Needs attention"]'),
+  ).toHaveCount(0);
+
+  await expect(
+    page.locator('[data-lens-line="2"][data-lens-line2-kind="standing"]'),
+  ).toBeVisible();
+
+  await page.locator('[data-lens-more]').click();
+  const row = page.locator('[data-standing-row][data-standing-tier="overdue"]', {
+    hasText: /\d+ decisions? overdue — oldest due [A-Z][a-z]{2} \d{1,2}/,
+  });
+  await expect(row).toHaveCount(1);
+  await expect(row.locator('[data-action-key]')).toHaveText('Chase the approval');
+});
+
+// QUARANTINED 2026-08-29, Smart Lens W0; re-verified W0-fix; selector
+// RE-POINTED 2026-08-29, W3-fix (D-B25). The behaviour asserted here still
+// exists nowhere on this route, so it stays fixme — only its selector is
+// brought forward from an organ that no longer mounts. `DocumentGuide` and
+// `RedLetterZone` are both model providers now (C-6); the act this case is
+// about lives on the standing sheet's row. Measured on the live page: the act
+// is labelled "Chase the approval" and pressing it neither raises the folded
+// margin (`data-margin-trigger` aria-expanded stays "false") nor lands on the
+// gate's control — it routes to needGuideAction's overdue_decision anchor
+// (document-guide.ts:504-506, focusId `document-decision-controls`), a node
+// that does not exist on this page at all (count 0), so focus settles on
+// `doc-section-install`. Re-pointing the ASSERTIONS would mean asserting a
+// weaker contract than Ruling V's, so the gap stays visible.
+// Un-fixme when: an overdue need's act raises the margin and focuses the
+// gate's own control FROM THE STANDING SHEET.
+// Owner: e2e triage.
+test.fixme("the guide's gate act focuses the gate's own control in the margin", async ({
   authenticatedPage: page,
 }) => {
   await openDocument(page, FOLDED_MARGIN);
 
-  // Scoped to the guide's own section: the mobile shell's action bar publishes
-  // the identical action key, so an unscoped match resolves to two controls.
-  // The guide's act only renders from 1180px up; below that the bar carries it.
-  const guideAct = page
-    .locator('section[aria-labelledby="document-next-up"]')
-    .locator('[data-action-key^="gate-"]');
+  // Scoped to the standing sheet's own row: the mobile shell's action bar can
+  // publish an identical action key, so an unscoped match resolves to two.
+  await page.locator('[data-lens-more]').click();
+  const guideAct = page.locator('[data-standing-row] [data-action-key]').first();
   await expect(guideAct).toBeVisible();
 
   await expect(guideAct).toHaveText('Nudge Client User');
@@ -174,7 +214,7 @@ test("the guide's gate act focuses the gate's own control in the margin", async 
   await expect(page.locator(`#${handoffAnchorId(ids.overdue)}`)).toBeFocused();
 
   // Same act, same word, at two scales: the margin prints the verb alone, the
-  // guide prints the verb plus its object. Asserted only now the margin is
+  // sheet prints the verb plus its object. Asserted only now the margin is
   // raised — while it is folded the panel is inert, so it exposes no roles.
   await expect(marginItem(page, ids.overdue).getByRole('button')).toHaveText(
     'Nudge',

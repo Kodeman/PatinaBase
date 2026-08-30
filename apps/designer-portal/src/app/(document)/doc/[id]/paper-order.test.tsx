@@ -67,6 +67,13 @@ jest.mock('@patina/supabase', () => ({
   }),
 }));
 
+// W5-R1: the Margin sheet's whole-margin derivation lives in this local
+// hook, not `@patina/supabase` — mocking it keeps the fix top-of-file only
+// (no QueryClientProvider needed: the real `useQuery` inside it never runs).
+jest.mock('@/hooks/use-margin-items', () => ({
+  useMarginItems: () => ({ data: [] }),
+}));
+
 /* The money ladder under the ticket's Money row: four commercial reads that
    now run on every project document. */
 jest.mock('@/hooks/use-commercial-documents', () => ({
@@ -96,12 +103,14 @@ jest.mock('@/components/document/commercial/money-region', () => ({
 }));
 
 /* Everything else the page mounts is another suite's subject. */
-jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
+// W2 (C-2): the project spread's Care band IS the running index's `care`
+// root; the install spread's second mount is not (one root per stop).
+jest.mock('@/components/document/care-band', () => ({
+  CareBand: ({ indexRoot }: { indexRoot?: boolean }) =>
+    indexRoot ? <div data-index-region="care" /> : null,
+}));
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: () => null,
-}));
 jest.mock('@/components/document/shelves/document-shelves', () => ({
   DocumentShelves: () => null,
 }));
@@ -109,8 +118,14 @@ jest.mock('@/components/document/roster/call-sheet-mount', () => ({ CallSheetMou
 jest.mock('@/components/document/doc-spine', () => ({ DocSpine: () => null }));
 jest.mock('@/components/document/doc-letterhead', () => ({ DocLetterhead: () => null }));
 jest.mock('@/components/document/doc-colophon', () => ({ DocColophon: () => null }));
+// W2 (C-2): the record root is emitted unconditionally now, empty body and
+// all, so the index has a foot to observe on a project with nothing settled.
 jest.mock('@/components/document/previous-work', () => ({
-  PreviousWork: () => <div data-the-record />,
+  PreviousWork: () => (
+    <section data-index-region="record">
+      <div data-the-record />
+    </section>
+  ),
 }));
 jest.mock('@/components/document/brief-section', () => ({ BriefSection: () => null }));
 jest.mock('@/components/document/brief-recap', () => ({ BriefRecap: () => null }));
@@ -132,9 +147,6 @@ jest.mock('@/components/document/proposal-instruments', () => ({
 jest.mock('@/components/document/folio-strip', () => ({
   FolioLetterhead: () => null,
   ProposalFolioStrip: () => null,
-}));
-jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
 }));
 jest.mock('@/components/document/letterhead-instruments', () => ({
   LetterheadInstruments: () => null,
@@ -160,7 +172,15 @@ jest.mock('@/components/document/margin-rail', () => ({
   openMarginRail: jest.fn(),
 }));
 jest.mock('@/components/document/household-chip', () => ({ HouseholdChip: () => null }));
-jest.mock('@/components/document/document-guide', () => ({ DocumentGuide: () => null }));
+// W3 (C-6) — the guide is a MODEL provider now: the page reads
+// `deriveGuideModel` for the band's line 2 and never renders the strip.
+jest.mock('@/components/document/document-guide', () => ({
+  DocumentGuide: () => null,
+  deriveGuideModel: (model: { headline: string }) => ({
+    text: model.headline,
+    act: null,
+  }),
+}));
 jest.mock('@/components/document/red-letter-zone', () => ({ RedLetterZone: () => null }));
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
@@ -202,9 +222,10 @@ jest.mock('@/lib/analytics/document-events', () => ({
   rememberDocumentInHand: jest.fn(),
   readRecentDocumentsInHand: () => [],
   documentEvents: {
+    lensLineShown: jest.fn(),
+    lensLineActed: jest.fn(),
+    lensStandingSheetOpened: jest.fn(),
     historyToggled: jest.fn(),
-    guideShown: jest.fn(),
-    guideSelected: jest.fn(),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     wayfinding: { marginNote: jest.fn() },
@@ -309,7 +330,10 @@ describe('the canonical paper order', () => {
     const { container } = render(<DocumentPage params={params} />);
 
     const nodes = Array.from(container.querySelectorAll('main *'));
-    const lastRegion = container.querySelector('[data-index-region="money"]')!;
+    // W2 — `record` is the last indexed region now: `PreviousWork` emits its
+    // root unconditionally and the Care band carries `care`, so the paper's
+    // own foot is what the Record must follow.
+    const lastRegion = container.querySelector('[data-index-region="record"]')!;
     const record = container.querySelector('[data-the-record]');
 
     // The Record mounts at all on a project document, and does so after the

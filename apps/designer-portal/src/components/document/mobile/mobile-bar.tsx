@@ -16,6 +16,7 @@ import {
   useUnseenShipped,
 } from '@patina/supabase';
 import { ALL_STUDIO_SURFACES, boardsRoutePath } from '@/lib/document/registry';
+import { DOCUMENT_INDEX_LABELS } from '@/lib/document/document-index';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
@@ -79,6 +80,10 @@ function openRegister() {
 const MENU_ITEM =
   'flex min-h-11 w-full items-center gap-3 border-b border-[rgba(250,247,242,0.1)] px-3 py-2 text-left text-[var(--color-pearl)] last:border-b-0 hover:bg-[rgba(250,247,242,0.06)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-50';
 
+/** OD-11's reserve, and the floor the published height can never go under —
+ *  the inset contract the paper was written against. */
+const MOBILE_BAR_FLOOR_PX = 72;
+
 export function MobileBar() {
   const pathname = usePathname();
   const hydrated = useHydrated();
@@ -90,6 +95,7 @@ export function MobileBar() {
     openSpine,
     openTimer,
     openDrawer,
+    openMargin,
   } = useMobileShell();
   const { inHandToday, running, paused, elapsedSeconds, offer } =
     useDocumentTime();
@@ -101,6 +107,7 @@ export function MobileBar() {
   const hasUnseenFeedback = hydrated && (unseenFeedback?.length ?? 0) > 0;
 
   const [moreOpen, setMoreOpen] = useState(false);
+  const barRef = useRef<HTMLElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   // A menu row is a button or a link, so the ref is taken by callback.
@@ -114,33 +121,59 @@ export function MobileBar() {
   const context = inDocument
     ? (activeSection?.label ?? 'Document')
     : surfaceLabel(pathname);
+  // OD-11/A-08: the left zone's second line names the household (not the
+  // active section, which `context` above still carries for the studio
+  // case); the third line names the current reading stop.
+  const household = activeDoc?.clientName || activeDoc?.title || 'Document';
+  const readingIndex = activeDoc?.readingIndex ?? null;
+  const stopLabel = readingIndex ? DOCUMENT_INDEX_LABELS[readingIndex] : null;
 
   // F49 — the shelves the spine prints at 1440, as doors a phone can reach.
   // The boards now have a page of their own (B1-L4), so the row that used to
   // be missing here is the fourth door, in the ticket's own order.
   const documentProjectId = inDocument ? (activeDoc?.projectId ?? null) : null;
-  const inThisDocument: DocumentDoor[] = documentProjectId
-    ? [
-        {
-          key: 'planroom',
-          label: 'Plan room',
-          href: `/doc/${documentProjectId}/plans`,
-        },
-        {
-          key: 'specbook',
-          label: 'Spec book',
-          href: `/doc/${documentProjectId}/spec-book`,
-        },
-        {
-          key: 'boards',
-          label: 'Boards',
-          href: boardsRoutePath(documentProjectId),
-        },
-        ...(callSheetOn
-          ? [{ key: 'callsheet', label: 'Call sheet', open: openCallSheet }]
-          : []),
-      ]
-    : [];
+  // D-B30 — the margin door leads the list, above Plan room. It names the
+  // WHOLE margin: W5-R1 widened D-B30's letterhead-only set to everything the
+  // sheet lists, so the count is `useMarginSheet`'s, not the retired
+  // `useLetterheadMargin`'s (D-B45). It stands whether or not a project is
+  // behind the document, unlike the four doors below, which are project-keyed
+  // (OD-8).
+  //
+  // W5-C9 — a door is a way to something. `Margin · 0` opened a sheet that
+  // said only "The margin — decisions, messages, and money gather here", and
+  // the label churned `Margin · 0` → `Margin · 7` when the query landed,
+  // because `page.tsx` publishes 0 while `useMarginItems` is in flight. W5-R1
+  // writes the door as `Margin · N`; at N = 0 there is no N to print and
+  // nothing behind it, so the door is ABSENT — it appears when the margin
+  // does, and never renames itself in front of the reader.
+  const marginCount = inDocument ? (activeDoc?.marginCount ?? null) : null;
+  const inThisDocument: DocumentDoor[] = [
+    ...(marginCount
+      ? [{ key: 'margin', label: `Margin · ${marginCount}`, open: openMargin }]
+      : []),
+    ...(documentProjectId
+      ? [
+          {
+            key: 'planroom',
+            label: 'Plan room',
+            href: `/doc/${documentProjectId}/plans`,
+          },
+          {
+            key: 'specbook',
+            label: 'Spec book',
+            href: `/doc/${documentProjectId}/spec-book`,
+          },
+          {
+            key: 'boards',
+            label: 'Boards',
+            href: boardsRoutePath(documentProjectId),
+          },
+          ...(callSheetOn
+            ? [{ key: 'callsheet', label: 'Call sheet', open: openCallSheet }]
+            : []),
+        ]
+      : []),
+  ];
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -173,6 +206,45 @@ export function MobileBar() {
   useEffect(() => {
     if (sheet || offer) setMoreOpen(false);
   }, [offer, sheet]);
+
+  // D-B47 — the paper's bottom inset is the bar's own box, not a number that
+  // hopes to match it. The bar measured 93px at 390 against a 72px inset (the
+  // three-line left zone plus an act whose label wraps by ruling), so the last
+  // ~21px of the paper and a landed foot control sat under it. Published on
+  // `html` because `--doc-shell-bottom-inset` lives on the shell and
+  // `scroll-padding-bottom` is on `html`, which cannot read it. A zero height
+  // is the bar not laid out at all — `min-[1180px]:hidden`, or the log offer
+  // owning the edge instead — and then the property comes off, so the desktop
+  // inset stays exactly what it was.
+  const barRendered = !offer;
+  useEffect(() => {
+    const root = document.documentElement;
+    const clear = () => root.style.removeProperty('--doc-mobile-bar-height');
+    const bar = barRef.current;
+    if (!bar) {
+      clear();
+      return clear;
+    }
+    const publish = () => {
+      const height = bar.getBoundingClientRect().height;
+      if (height <= 0) {
+        clear();
+        return;
+      }
+      root.style.setProperty(
+        '--doc-mobile-bar-height',
+        `${Math.max(MOBILE_BAR_FLOOR_PX, Math.round(height))}px`,
+      );
+    };
+    publish();
+    if (typeof ResizeObserver === 'undefined') return clear;
+    const observer = new ResizeObserver(publish);
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      clear();
+    };
+  }, [barRendered]);
 
   // The log offer becomes the edge owner while it is actionable.
   if (offer) return null;
@@ -208,18 +280,30 @@ export function MobileBar() {
     (action) => action.actionKey !== primaryAction?.actionKey,
   );
 
+  // OD-11: three lines in the left zone (overline, household, stop) need
+  // more than the old two-line 64px reserve — bumped to 72px.
   return (
     <nav
+      ref={barRef}
       aria-label="Document bar"
       data-testid="mobile-bar"
       data-mobile-edge-owner="document-bar"
-      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[64px] items-center gap-2 border-t border-[rgba(250,247,242,0.16)] bg-[var(--color-charcoal)] px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 min-[1180px]:hidden"
+      data-reading-index={readingIndex ?? ''}
+      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[72px] items-center gap-2 border-t border-[rgba(250,247,242,0.16)] bg-[var(--color-charcoal)] px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 min-[1180px]:hidden"
     >
       {inDocument ? (
         <button
           type="button"
           onClick={openSpine}
-          aria-label={`Open sections, current section ${context}`}
+          // A stable hook for the door, because its accessible NAME is not
+          // stable by design: OD-11/A-01 puts the current stop in it, so the
+          // name changes on every crossing. A spec that reached the door by
+          // name raced the scroll — chromium resolved it and then reported the
+          // element detached, webkit never found it at all.
+          data-sections-door=""
+          aria-label={
+            stopLabel ? `Open sections, at ${stopLabel}` : 'Open sections'
+          }
           className="flex min-h-11 min-w-0 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
           {STRATA}
@@ -228,7 +312,25 @@ export function MobileBar() {
               In this document
             </span>
             <span className="block truncate font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
-              {context}
+              {household}
+            </span>
+            {/* PRE-PRINTED and swapped by `visibility`, exactly as A-01 ruled
+                — never mounted and unmounted. A line that comes and goes as
+                the reading index arrives re-lays the bar under the reader's
+                thumb and churns the door's subtree on every crossing. The
+                72px reserve above is already sized for three lines.
+
+                F56/contrast.test.ts: mobile-bar.tsx is a charcoal ground —
+                `--color-clay-ink` reads 2.41:1 there and fails AA; the base
+                `--color-clay` pigment (6.21:1) is this file's established
+                dark-ground accent (see the elapsed-time text below). */}
+            <span
+              aria-hidden={stopLabel ? undefined : true}
+              className={`block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] ${
+                stopLabel ? '' : 'invisible'
+              }`}
+            >
+              At {stopLabel ?? '\u00a0'}
             </span>
           </span>
         </button>

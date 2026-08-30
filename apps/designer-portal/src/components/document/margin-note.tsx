@@ -87,6 +87,12 @@ export interface MarginNoteProps {
    *  transient hold (e.g. while the Desk Walkthrough modal or tour is on
    *  screen). Lifting it re-reveals the note unless it has since been seen. */
   suppressed?: boolean;
+  /** RF-03's two-line cap, scoped to the caller that asked for it (the
+   *  document margin's first-touch note). Off everywhere else: `line-clamp-2`
+   *  is `display:-webkit-box; overflow:hidden`, which paints a focusable child
+   *  outside the box while leaving it in the tab order (SC 2.4.11), and three
+   *  of this primitive's call sites put a <button> inside the body. */
+  clamp?: boolean;
   seen?: boolean;
   onSeen?: () => void;
   className?: string;
@@ -99,11 +105,13 @@ export function MarginNote({
   actionEvents,
   commandBar = false,
   suppressed = false,
+  clamp = false,
   seen,
   onSeen,
   className,
 }: MarginNoteProps) {
   const [visible, setVisible] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   // 'shown' fires at most once per mount even as `suppressed` toggles.
   const shownRef = useRef(false);
 
@@ -164,15 +172,39 @@ export function MarginNote({
     documentEvents.wayfinding.marginNote({ key: noteKey, action: 'dismissed' });
   };
 
+  // RF-03's cap, when the caller asks for it: two lines, with a focusable
+  // `More` that opens the rest in place. `title` was a pointer-only recovery
+  // on a non-focusable <span> — a keyboard reader could never fire it, and it
+  // was absent altogether on every body that wasn't a bare string.
+  const clamped = clamp && !expanded;
+
   return (
     <aside role="note" className={`flex max-w-[34ch] items-start gap-2 ${className ?? ''}`}>
       <p className="min-w-0 flex-1">
-        <span className="font-heading text-[15px] italic leading-[1.55] text-[var(--text-body)]">
+        <span
+          id={clamp ? `margin-note-body-${noteKey}` : undefined}
+          className={`font-heading text-[15px] italic leading-[1.55] text-[var(--text-body)] ${
+            clamped ? 'line-clamp-2' : ''
+          }`}
+        >
           <span aria-hidden className="mr-1 not-italic text-[var(--text-muted)]">
             –
           </span>
           {children}
         </span>
+        {clamp && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-controls={`margin-note-body-${noteKey}`}
+            className="group mt-1 inline-flex items-baseline text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          >
+            <span className="da-score-hover font-mono text-[11px] uppercase tracking-[0.11em] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+              More
+            </span>
+          </button>
+        )}
         <span className="mt-2 block font-mono text-[11px] uppercase tracking-[0.11em] text-[var(--text-faint)]">
           {caption}
         </span>

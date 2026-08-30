@@ -10,18 +10,14 @@
  * which is the composition this document has always printed.
  *
  * What the frame adds, per table:
- *   · the job ticket, above the table on every composition (B2, direction-b §9)
  *   · the turn line, when the derivation has moved off the pinned composition
  *   · the seal's note, arriving on the Delivery table
  *   · Intake's honest future seams
  *   · Speccing's four mount slots, which W3 fills and which print nothing empty
  *
- * THE TICKET'S ONE MOUNT. The page composes the ticket once and hands it here.
- * With a table the frame prints it above the table — the job's header over the
- * job's middle (I138) — and with no table it prints it nowhere at all, because
- * that is the composition where the page mounts it under the letterhead
- * instead. Passing the same node to both positions is what makes two tickets
- * on one paper unreachable rather than merely unlikely.
+ * The frame carried the job ticket's one mount until R127. The lens band stands
+ * at the document's own top on every composition, so the frame prints no header
+ * of its own and takes no node for one.
  */
 
 import type { ReactNode } from 'react';
@@ -38,7 +34,6 @@ export function TableFrame({
   onTurn,
   sealTurn,
   slots,
-  ticket,
   children,
 }: {
   /** null = the flag is off (or the row has not answered): no table. */
@@ -49,8 +44,6 @@ export function TableFrame({
   /** Present only on the one arrival that followed a seal. */
   sealTurn: { signedDate: string | null } | null;
   slots: SpeccingTableSlots;
-  /** The job ticket, composed by the page. Printed only where a table stands. */
-  ticket?: ReactNode;
   children: ReactNode;
 }) {
   if (!composition) return <>{children}</>;
@@ -58,7 +51,6 @@ export function TableFrame({
 
   return (
     <>
-      {ticket}
       {pending && <TableTurnLine onTurn={onTurn} />}
       {table === 'delivery' && sealTurn && (
         <SealTurnNote signedDate={sealTurn.signedDate} />

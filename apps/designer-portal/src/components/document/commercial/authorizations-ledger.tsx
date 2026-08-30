@@ -165,6 +165,7 @@ export function AuthorizationsLedger({
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Authorizations &amp; trade scopes
+          {isLoading && <SectionLoadingLine variant="inline" label="Loading authorizations" />}
         </p>
         {(rows.length > 0 || isLoading || Boolean(instrumentsQuery.error) || Boolean(tradeScopesQuery.error)) && (
           <DocumentAction
@@ -184,7 +185,6 @@ export function AuthorizationsLedger({
         signed by the client, then engaged.
       </p>
 
-      {isLoading && <SectionLoadingLine label="Loading authorizations" className="mt-3" />}
       {Boolean(instrumentsQuery.error) && (
         <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta-ink)]">
           Authorizations are unavailable.

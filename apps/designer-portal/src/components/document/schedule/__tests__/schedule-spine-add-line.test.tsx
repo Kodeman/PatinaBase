@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 
 jest.mock('@patina/supabase', () => ({
+  // D-B49 — the revision ledger's read moved to the schedule region ROOT.
+  useScheduleRevisions: () => ({ data: [] }),
   excludeProjectArtifactApprovals: (items: unknown[]) => items,
   // R109/R110 — the spine's proposed-anchor block.
   useScheduleProposals: () => ({ data: [], isError: false }),
@@ -75,6 +77,20 @@ jest.mock('@patina/supabase', () => ({
   mapPhaseRowToScheduleInput: () => ({}),
   mapMilestoneRowToScheduleInput: () => ({}),
 }));
+
+// W4 — the lens is a page-level observer and never runs in jsdom, so a stop
+// would arrive quiet here and print no body. Every claim in this suite is about
+// today's FULL body, which is what the lens says once it has reached the root.
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
 
 jest.mock('@/hooks/use-section-work', () => ({
   useSectionTasks: () => ({ data: [] }),
@@ -170,6 +186,7 @@ jest.mock('../add-line-sheet', () => ({
 }));
 
 import { ScheduleSpine } from '../schedule-spine';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 describe('ScheduleSpine add item action', () => {
   it('opens the existing line sheet without requiring a designer-client record', () => {
@@ -209,5 +226,21 @@ describe('ScheduleSpine ongoing add-a-phase line', () => {
     );
 
     expect(screen.queryByTestId('ghost-add-line')).not.toBeInTheDocument();
+  });
+});
+
+describe('ScheduleSpine region gap (W3-L4)', () => {
+  it('carries the region-gap token as its own top margin, and no other mt-/mb-', () => {
+    const { container } = render(
+      <ScheduleSpine projectId="project-1" clientUserId={null} clientName="Winky Loft" />,
+    );
+
+    const root = container.querySelector('[data-index-region="schedule"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
   });
 });

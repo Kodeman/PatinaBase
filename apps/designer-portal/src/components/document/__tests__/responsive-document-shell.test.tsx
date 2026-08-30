@@ -17,19 +17,22 @@ import {
 } from '../mobile/mobile-shell';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocLetterhead } from '../doc-letterhead';
-import { JobTicket } from '../job-ticket';
+import { LensBand } from '../lens-band';
 import { RoomLensProvider, useRoomLens } from '../room-lens-context';
 import type { SpineSection } from '@/lib/document/section-derivation';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import type { MoneyLadder, MoneyRung } from '@/lib/document/money-ladder';
 import {
   deriveTicket,
-  deriveTicketHead,
-  deriveTicketIdentity,
-  deriveTicketSeam,
   type TicketInput,
   type TicketLine,
 } from '@/lib/document/ticket-derivation';
+import {
+  deriveLensBand,
+  type LensBandModel,
+  type LensSpreadKind,
+} from '@/lib/document/lens-band-derivation';
+import type { LadderSegment } from '@/lib/document/lens-ladder-derivation';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/doc/proj-1',
@@ -77,19 +80,6 @@ jest.mock('next/link', () => ({
 jest.mock('../strata-mark', () => ({
   StrataMark: ({ label }: { label?: string }) => (
     <span data-testid="strata-mark" aria-label={label} />
-  ),
-}));
-
-jest.mock('../spine-timer', () => ({
-  SpineTimer: () => <div data-testid="spine-timer">Timer</div>,
-  CompactSpineTimerDoorway: () => (
-    <button
-      type="button"
-      data-testid="compact-spine-timer"
-      className="hidden min-[1180px]:flex min-[1440px]:hidden"
-    >
-      Compact timer
-    </button>
   ),
 }));
 
@@ -180,18 +170,19 @@ describe('quiet responsive document shell', () => {
 
   it('exposes a compact index at 1180px and the full labelled spine at 1440px', () => {
     const onJump = jest.fn();
-    render(<DocSpine sections={sections} others={[]} onJump={onJump} />);
+    render(<DocSpine sections={sections} onJump={onJump} />);
 
     const spine = screen.getByRole('complementary', { name: 'Document spine' });
     expect(spine).toHaveAttribute(
       'data-spine-regime',
-      'sheet-below-1180-compact-to-1439-full-from-1440',
+      'sheet-below-1180-narrow-to-1439-full-from-1440',
     );
     expect(spine).toHaveClass(
       'min-[1180px]:block',
       'min-[1180px]:box-border',
       'min-[1180px]:overflow-x-hidden',
       'min-[1180px]:w-full',
+      'min-[1180px]:px-3',
       'min-[1440px]:w-auto',
     );
 
@@ -210,15 +201,13 @@ describe('quiet responsive document shell', () => {
       screen.queryByRole('button', { name: /Direction/ }),
     ).not.toBeInTheDocument();
 
-    expect(screen.getByTestId('spine-timer').parentElement).toHaveClass(
-      'hidden',
-      'min-[1440px]:block',
-    );
-    expect(screen.getByTestId('compact-spine-timer')).toHaveClass(
-      'hidden',
-      'min-[1180px]:flex',
-      'min-[1440px]:hidden',
-    );
+    expect(screen.queryByTestId('spine-timer')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('compact-spine-timer'),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-spine-timer-regime]'),
+    ).not.toBeInTheDocument();
   });
 
   it('opens the laptop margin as a labelled, keyboard-contained sheet', async () => {
@@ -496,9 +485,9 @@ describe('the 390 bar', () => {
     expect(controls).toHaveLength(3);
 
     const [context, act, more] = controls;
-    expect(context).toHaveAccessibleName(
-      'Open sections, current section Project',
-    );
+    // OD-11 (W1-L3): the sections door names the reading STOP, not the
+    // section — `held` above carries no `readingIndex`, so it names none.
+    expect(context).toHaveAccessibleName('Open sections');
     expect(act).toHaveAttribute('data-action-key', 'pick-the-fabric');
     expect(act.querySelector('.da-label')?.textContent).toBe(
       'Pick the fabric for the Okonkwo sofa',
@@ -610,141 +599,298 @@ function ticketInputFor(section: SectionKey): TicketInput {
   };
 }
 
-function TicketPaper({ section }: { section: SectionKey }) {
+/* ── R127 Wave 3 (W3-L5) ────────────────────────────────────────────────────
+ * The job ticket is deleted. Its two claims on this paper move: the eight rows
+ * on three spreads become the BAND's two lines on three spreads, and the room
+ * lens — whose only path into the tree ran through the ticket's Rooms row and
+ * its chips — is now reached from the LADDER's room sub-rungs, which carry the
+ * same `data-room-chip` and the same `aria-pressed` the chips did (proposal §9).
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/** The stage the band names on each project-kind spread (reconciliation, "What
+ *  prints"). The band never prints the current STOP — that is the ladder's and
+ *  the paper's own head. */
+const SPREAD_STAGE: Record<
+  'project' | 'install' | 'care',
+  { word: string; index: { position: number; of: number } }
+> = {
+  project: { word: 'Procurement & Orders', index: { position: 4, of: 6 } },
+  install: { word: 'Installation & Styling', index: { position: 5, of: 6 } },
+  care: { word: 'Completion', index: { position: 6, of: 6 } },
+};
+
+/** Where she is standing while these cases run — Pieces, so the ladder prints
+ *  its room rungs (Override 2) and line 1 can be proved never to name it. */
+const READING_STOP = {
+  key: 'ffe' as const,
+  label: 'Pieces',
+  countLine: '3 lines · 2 rooms',
+};
+
+/** The band's model for a spread, composed the way `page.tsx` composes it
+ *  (C-5): the same specimen the ticket read, through `deriveTicket` for the
+ *  exceptions and `deriveLensBand` for the two lines. */
+function bandModelFor(section: 'project' | 'install' | 'care'): LensBandModel {
+  const stage = SPREAD_STAGE[section];
+  return deriveLensBand({
+    spreadKind: section as LensSpreadKind,
+    ticket: deriveTicket(ticketInputFor(section)),
+    needs: [],
+    guide: { text: 'Name the phases for this project', act: null },
+    household: 'Vandersteen residence',
+    stageWord: stage.word,
+    stageIndex: stage.index,
+    installDate: 'Sep 15',
+    moneyFigure: null,
+    proposalInvestment: null,
+    sentDate: null,
+    readingStop: READING_STOP,
+  });
+}
+
+/** The Pieces stop as the ladder prints it, with this specimen's two rooms as
+ *  its sub-rungs. `held` is the room lens's own answer, so pressing a rung and
+ *  reading it back is the same round trip the ticket's chips used to make. */
+function piecesSegment(heldRoomId: string | null): LadderSegment {
+  return {
+    key: 'ffe',
+    name: 'Pieces',
+    value: '3 LINES · 2 ROOMS',
+    narrowValue: '3 LINES · 2 ROOMS',
+    countLine: READING_STOP.countLine,
+    fallback: null,
+    extent: 3,
+    mounted: true,
+    floorPx: 45,
+    narrowFloorPx: 45,
+    rooms: TICKET_ROOMS.map((room) => ({
+      ...room,
+      held: room.id === heldRoomId,
+    })),
+  };
+}
+
+function BandPaper({ section }: { section: 'project' | 'install' | 'care' }) {
   const { heldRoomId, toggleRoom } = useRoomLens();
-  const input = ticketInputFor(section);
-  const rows = deriveTicket(input);
   const heldRoomName =
     TICKET_ROOMS.find((room) => room.id === heldRoomId)?.name ?? null;
 
   return (
     <>
-      <DocLetterhead
-        title="Vandersteen residence"
-        vitals="Procurement & Orders"
-        inHandRoomName={heldRoomName}
-        onReleaseRoom={heldRoomId ? () => toggleRoom(heldRoomId) : null}
+      <DocLetterhead title="Vandersteen residence" vitals="Procurement & Orders" />
+      {/* C-1 — the room in hand and its release live at the rail head; C-3/C-4
+          — the rungs that take a room in hand live on the ladder inside it.
+          The spine is rendered here so the hold's two printings (the rail's
+          line, the rung's `aria-pressed`) can be asserted together. */}
+      <DocSpine
+        sections={[]}
+        household="Vandersteen"
+        segments={[piecesSegment(heldRoomId)]}
+        activeKey="ffe"
+        onToggleRoom={toggleRoom}
+        roomInHand={
+          heldRoomId && heldRoomName
+            ? { id: heldRoomId, name: heldRoomName }
+            : null
+        }
+        onReleaseRoom={toggleRoom}
       />
-      <JobTicket
-        rows={rows}
-        seam={deriveTicketSeam(rows, deriveTicketIdentity(input))}
-        head={deriveTicketHead(input)}
-        onOpenLeaf={jest.fn()}
-        routes={{}}
-        onUnfoldRegion={jest.fn()}
-        onOpenCallSheet={jest.fn()}
+      {/* The band pins itself off its own sentinel (C-04): `passSentinel()`
+          is s1+, where line 1 prints. At s0 it yields to the letterhead 60px
+          above; that case is asserted below, with the observer left silent. */}
+      <LensBand
+        model={bandModelFor(section)}
+        readingStop={READING_STOP}
+        docId="doc-1"
       />
     </>
   );
 }
 
-function renderTicketPaper(section: SectionKey) {
+function renderBandPaper(section: 'project' | 'install' | 'care') {
   return render(
     <RoomLensProvider>
-      <TicketPaper section={section} />
+      <BandPaper section={section} />
     </RoomLensProvider>,
   );
 }
 
-const ticketRow = (key: string) =>
-  document.querySelector<HTMLElement>(`[data-ticket-row="${key}"]`);
+const bandLine = (n: '1' | '2') =>
+  document.querySelector<HTMLElement>(`[data-lens-line="${n}"]`);
+
+// C-04 — the band owns the sentinel's observer, so the pin is only reachable
+// through it; the global jsdom mock never fires.
+let sentinelCallback: IntersectionObserverCallback | null = null;
+function installSentinelObserver() {
+  sentinelCallback = null;
+  window.IntersectionObserver = jest.fn(
+    (callback: IntersectionObserverCallback) => {
+      sentinelCallback = callback;
+      return {
+        observe: jest.fn(),
+        unobserve: jest.fn(),
+        disconnect: jest.fn(),
+        takeRecords: () => [],
+        root: null,
+        rootMargin: '',
+        thresholds: [],
+      };
+    },
+  ) as unknown as typeof IntersectionObserver;
+}
+/** The sentinel has scrolled out of the frame — the band pins (s1+). */
+function passSentinel() {
+  act(() => {
+    sentinelCallback?.(
+      [{ isIntersecting: false } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+  });
+}
 
 const roomChip = (id: string) =>
   document.querySelector<HTMLButtonElement>(`[data-room-chip="${id}"]`);
 
-describe('the ticket, mounted by the document', () => {
+describe('the band, mounted by the document', () => {
+  const originalIO = window.IntersectionObserver;
   beforeEach(() => {
     installWidthMatchMedia(1440);
+    installSentinelObserver();
+  });
+  afterEach(() => {
+    window.IntersectionObserver = originalIO;
   });
 
   it.each([
-    ['project' as const, 'The job · Project'],
-    ['install' as const, 'The job · Install'],
-    ['care' as const, 'The job · Care'],
-  ])('mounts on a %s spread with the same eight rows', (section, identity) => {
-    renderTicketPaper(section);
+    ['project' as const, 'PROCUREMENT & ORDERS 4 OF 6'],
+    ['install' as const, 'INSTALLATION & STYLING 5 OF 6'],
+    ['care' as const, 'COMPLETION 6 OF 6'],
+  ])(
+    'mounts on a %s spread and prints the same two lines',
+    (section, stagePhrase) => {
+      // Was "mounts on a %s spread with the same eight rows". The rows are
+      // gone with the ticket; what the case held — one map, identical in shape
+      // on all three project-kind spreads, mounted by the document rather than
+      // the section — is now the band's TWO LINES, and it is held here.
+      renderBandPaper(section);
+      passSentinel();
 
-    const ticket = document.querySelector('[data-job-ticket]');
-    expect(ticket).not.toBeNull();
-    expect(ticket).toHaveAttribute('data-unfolded', 'true');
-    expect(document.querySelectorAll('[data-ticket-row]')).toHaveLength(8);
-    expect(
-      Array.from(document.querySelectorAll('[data-ticket-row]')).map((row) =>
-        row.getAttribute('data-ticket-row'),
-      ),
-    ).toEqual([
-      'rooms',
-      'pieces',
-      'drawings',
-      'spec',
-      'boards',
-      'money',
-      'dates',
-      'people',
-    ]);
-    expect(screen.getByText(identity)).toBeInTheDocument();
-    // The document's own facts, not the Project spread's: install and care read
-    // the same three lines this specimen carries.
-    expect(ticketRow('pieces')).toHaveTextContent('2 ordered · 1 delivered');
+      const band = document.querySelector('[data-lens-band]');
+      expect(band).not.toBeNull();
+      expect(band).toHaveAttribute('data-lens-open', 'false');
+      expect(document.querySelectorAll('[data-lens-band]')).toHaveLength(1);
+      expect(document.querySelectorAll('[data-lens-line="1"]')).toHaveLength(1);
+      expect(document.querySelectorAll('[data-lens-line="2"]')).toHaveLength(1);
+
+      // Line 1 — the household and the stage this spread stands in, and the
+      // dated fact where the spread has one (care has none after install).
+      expect(bandLine('1')).toHaveTextContent('VANDERSTEEN RESIDENCE');
+      expect(bandLine('1')).toHaveTextContent(stagePhrase);
+      if (section === 'care') {
+        expect(bandLine('1')!.textContent).not.toContain('INSTALL');
+      } else {
+        expect(bandLine('1')).toHaveTextContent('INSTALL SEP 15');
+      }
+
+      // The current stop's name is NEVER on line 1, at any width or spread —
+      // the paper's own head and the ladder carry it (OD-1).
+      expect(bandLine('1')!.textContent).not.toContain('Pieces');
+      expect(bandLine('1')!.textContent).not.toContain('PIECES');
+
+      // Line 2 — nothing stands on this specimen, so the stage's guide
+      // sentence speaks, and it is the one live region on the document.
+      expect(bandLine('2')).toHaveTextContent('Name the phases for this project');
+      expect(bandLine('2')).toHaveAttribute('aria-live', 'polite');
+      expect(bandLine('2')).toHaveAttribute('data-lens-line2-kind', 'guide');
+    },
+  );
+
+  it('yields line 1 to the letterhead at s0, and keeps line 2', () => {
+    // The other half of "two lines per spread": in flow at s0 the letterhead
+    // 60px above prints the household, the stage and the date, so line 1's
+    // left slot yields entirely and only what the letterhead does not print
+    // survives on the right.
+    render(
+      <RoomLensProvider>
+        <LensBand
+          model={bandModelFor('project')}
+          readingStop={READING_STOP}
+          docId="doc-1"
+        />
+      </RoomLensProvider>,
+    );
+
+    expect(document.querySelector('[data-lens-band]')).toHaveAttribute(
+      'data-lens-open',
+      'true',
+    );
+    const identity = document.querySelector('[data-lens-identity]')!;
+    expect(identity.textContent).toBe('');
+    expect(bandLine('1')!.textContent).not.toContain('PROCUREMENT');
+    expect(bandLine('2')).toHaveTextContent('Name the phases for this project');
   });
 });
 
 describe('a room in hand, carried down the widths', () => {
+  // W1 re-point (C-1) and W3 re-point (C-3/C-4). These two cases used to reach
+  // the room lens through the ticket's Rooms row and its chips; the ticket is
+  // deleted, and the only path to taking a room in hand is now the ladder's
+  // room sub-rung, which carries the same `data-room-chip` and `aria-pressed`.
+  // The rail head still owns the naming (`IN HAND · LIVING ROOM`, inside
+  // `[data-spine-head]`) and the release (`Put down the room`). The release
+  // assertions are unchanged in substance — only the act they press moved.
+  const railHead = () =>
+    document.querySelector<HTMLElement>('[data-spine-head]');
+  const releaseAct = () =>
+    screen.queryByRole('button', { name: 'Put down the room' });
+
   it('survives 1440 → 1280 → 390 with a release reachable at each', () => {
     const media = installWidthMatchMedia(1440);
-    renderTicketPaper('project');
+    renderBandPaper('project');
 
-    fireEvent.click(ticketRow('rooms')!.querySelector('button')!);
     fireEvent.click(roomChip('living')!);
 
-    // 1440 — the letterhead names it, and both controls are on screen.
+    // 1440 — the rail head names it, and both controls are on screen.
     expect(roomChip('living')).toHaveAttribute('aria-pressed', 'true');
-    expect(
-      screen.getByRole('button', { name: 'Put down Living room' }),
-    ).toBeInTheDocument();
+    expect(railHead()).toHaveTextContent('In hand · Living room');
+    expect(releaseAct()).toBeInTheDocument();
 
-    // 1280 — the width that used to drop the hold on the floor.
+    // 1280 — the width that used to drop the hold on the floor. The 136px rail
+    // prints words, so the head carries the same two lines it does at 1440.
     act(() => media.resizeTo(1280));
-    expect(
-      screen.getByRole('button', { name: 'Put down Living room' }),
-    ).toBeInTheDocument();
+    expect(railHead()).toHaveTextContent('In hand · Living room');
+    expect(releaseAct()).toBeInTheDocument();
     expect(roomChip('living')).toHaveAttribute('aria-pressed', 'true');
 
-    // 390 — the ticket rests as the seam, so the letterhead is the release
-    // that is already on screen; unfolding brings the chip back.
+    // 390 — the rail is display:none below 1180 and the ladder rides inside
+    // it, so the rung is on the paper but not on the screen (a CSS fact jsdom
+    // cannot render, so it is not asserted here; `quiet-responsive-shell.spec.ts`
+    // holds it, and D13's sections sheet is the index at this width). What is
+    // asserted is what the case was always for: the hold itself survived the
+    // trip down, and the release is still reachable from the rail head.
     act(() => media.resizeTo(390));
-    expect(document.querySelector('[data-job-ticket]')).not.toHaveAttribute(
-      'data-unfolded',
-    );
-    expect(
-      screen.getByRole('button', { name: 'Put down Living room' }),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Unfold ↓' }));
     expect(roomChip('living')).toHaveAttribute('aria-pressed', 'true');
+    expect(releaseAct()).toBeInTheDocument();
   });
 
-  it('puts the room down from the ticket, and from the letterhead', () => {
-    const media = installWidthMatchMedia(1440);
-    renderTicketPaper('project');
+  it('puts the room down from the rung, and from the rail head', () => {
+    installWidthMatchMedia(1440);
+    renderBandPaper('project');
 
-    fireEvent.click(ticketRow('rooms')!.querySelector('button')!);
     fireEvent.click(roomChip('living')!);
     fireEvent.click(roomChip('living')!);
     expect(roomChip('living')).toHaveAttribute('aria-pressed', 'false');
-    expect(
-      screen.queryByRole('button', { name: 'Put down Living room' }),
-    ).not.toBeInTheDocument();
+    expect(releaseAct()).not.toBeInTheDocument();
 
-    // Taken again and carried to the phone: the letterhead alone puts it down.
+    // Taken again: the rail head alone puts it down.
     fireEvent.click(roomChip('living')!);
-    act(() => media.resizeTo(390));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Put down Living room' }),
-    );
-    expect(
-      screen.queryByRole('button', { name: 'Put down Living room' }),
-    ).not.toBeInTheDocument();
+    expect(releaseAct()).toBeInTheDocument();
+    fireEvent.click(releaseAct()!);
+
+    expect(releaseAct()).not.toBeInTheDocument();
+    expect(roomChip('living')).toHaveAttribute('aria-pressed', 'false');
+    expect(document.querySelector('[data-spine-room-in-hand]')).toBeNull();
+    // The letterhead's old printing is gone for good.
     expect(document.querySelector('[data-in-hand-room]')).toBeNull();
   });
 });

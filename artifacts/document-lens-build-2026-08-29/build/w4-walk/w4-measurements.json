@@ -1,0 +1,1313 @@
+{
+ "1440-s0-project": {
+  "band": {
+   "height": 56,
+   "open": "true",
+   "state": null,
+   "line1": "",
+   "line2": "Invoice INV-2026-114 \u00b7 $17,500 overdue \u2014 oldest due Aug 22 \u2014 send a reminderSend reminder+9 MORE"
+  }
+ },
+ "1440-s2-project": {
+  "stopReachable": true,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+   "line2": "Invoice INV-2026-114 \u00b7 $17,500 overdue \u2014 oldest due Aug 22 \u2014 send a reminderSend reminder+9 MORENow at Schedule \u00b7 Install Sat, Sep 19 \u00b7 3 weeks out"
+  }
+ },
+ "1440-s3-project": {
+  "stopReachable": true,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+   "line2": "Invoice INV-2026-114 \u00b7 $17,500 overdue \u2014 oldest due Aug 22 \u2014 send a reminderSend reminder+9 MORENow at Pieces \u00b7 62 lines \u00b7 5 rooms \u00b7 1 damaged"
+  }
+ },
+ "1440-foot-project": {
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+   "line2": "Invoice INV-2026-114 \u00b7 $17,500 overdue \u2014 oldest due Aug 22 \u2014 send a reminderSend reminder+9 MORENow at Closing the book \u00b7 0 of 6 closed out"
+  }
+ },
+ "1440-s0-prework": {
+  "band": {
+   "height": 56,
+   "open": "true",
+   "state": null,
+   "line1": "",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "1440-s2-prework": {
+  "stopReachable": false,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROPOSALSENT AUG 23",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "1440-s3-prework": {
+  "stopReachable": false,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROPOSALSENT AUG 23",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "1440-foot-prework": {
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROPOSALSENT AUG 23",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "1280-s0-project": {
+  "band": {
+   "height": 56,
+   "open": "true",
+   "state": null,
+   "line1": "",
+   "line2": "Invoice INV-2026-114 \u00b7 $17,500 overdue \u2014 oldest due Aug 22 \u2014 send a reminderSend reminder+9 MORE"
+  }
+ },
+ "1280-s2-project": {
+  "stopReachable": true,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+   "line2": "Invoice INV-2026-114 \u00b7 $17,500 overdue \u2014 oldest due Aug 22 \u2014 send a reminderSend reminder+9 MORENow at Schedule \u00b7 Install Sat, Sep 19 \u00b7 3 weeks out"
+  }
+ },
+ "1280-s3-project": {
+  "stopReachable": true,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+   "line2": "Invoice INV-2026-114 \u00b7 $17,500 overdue \u2014 oldest due Aug 22 \u2014 send a reminderSend reminder+9 MORENow at Pieces \u00b7 62 lines \u00b7 5 rooms \u00b7 1 damaged"
+  }
+ },
+ "1280-foot-project": {
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+   "line2": "Invoice INV-2026-114 \u00b7 $17,500 overdue \u2014 oldest due Aug 22 \u2014 send a reminderSend reminder+9 MORENow at Closing the book \u00b7 0 of 6 closed out"
+  }
+ },
+ "1280-s0-prework": {
+  "band": {
+   "height": 56,
+   "open": "true",
+   "state": null,
+   "line1": "",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "1280-s2-prework": {
+  "stopReachable": false,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROPOSALSENT AUG 23",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "1280-s3-prework": {
+  "stopReachable": false,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROPOSALSENT AUG 23",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "1280-foot-prework": {
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROPOSALSENT AUG 23",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "390-s0-project": {
+  "band": {
+   "height": 56,
+   "open": "true",
+   "state": null,
+   "line1": "",
+   "line2": "OVERDUE 8D \u00b7 INV-2026-114Send+9 MORE"
+  }
+ },
+ "390-s2-project": {
+  "stopReachable": true,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+   "line2": "OVERDUE 8D \u00b7 INV-2026-114Send+9 MORENow at Schedule \u00b7 Install Sat, Sep 19 \u00b7 3 weeks out"
+  }
+ },
+ "390-s3-project": {
+  "stopReachable": true,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+   "line2": "OVERDUE 8D \u00b7 INV-2026-114Send+9 MORENow at Pieces \u00b7 62 lines \u00b7 5 rooms \u00b7 1 damaged"
+  }
+ },
+ "390-foot-project": {
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19",
+   "line2": "OVERDUE 8D \u00b7 INV-2026-114Send+9 MORENow at Closing the book \u00b7 0 of 6 closed out"
+  }
+ },
+ "390-s0-prework": {
+  "band": {
+   "height": 56,
+   "open": "true",
+   "state": null,
+   "line1": "",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "390-s2-prework": {
+  "stopReachable": false,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROPOSALSENT AUG 23",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "390-s3-prework": {
+  "stopReachable": false,
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROPOSALSENT AUG 23",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "390-foot-prework": {
+  "band": {
+   "height": 56,
+   "open": "false",
+   "state": null,
+   "line1": "CLIENT USER \u00b7 PROPOSALSENT AUG 23",
+   "line2": "Sent Aug 23 \u2014 not yet openedFollow up+1 MORE"
+  }
+ },
+ "densityMap": {
+  "s0": {
+   "roots": [
+    {
+     "key": "approvals",
+     "density": "full",
+     "passed": false,
+     "top": 326.06,
+     "bottom": 672.86,
+     "innerHeight": 900
+    },
+    {
+     "key": "schedule",
+     "density": "full",
+     "passed": false,
+     "top": 963.73,
+     "bottom": 1886.36,
+     "innerHeight": 900
+    },
+    {
+     "key": "ffe",
+     "density": "full",
+     "passed": false,
+     "top": 1910.36,
+     "bottom": 7690.55,
+     "innerHeight": 900
+    },
+    {
+     "key": "money",
+     "density": "full",
+     "passed": false,
+     "top": 7714.55,
+     "bottom": 8793.36,
+     "innerHeight": 900
+    },
+    {
+     "key": "care",
+     "density": "quiet",
+     "passed": false,
+     "top": 8817.36,
+     "bottom": 8918.91,
+     "innerHeight": 900
+    },
+    {
+     "key": "record",
+     "density": "full",
+     "passed": false,
+     "top": 9033.41,
+     "bottom": 9101.41,
+     "innerHeight": 900
+    }
+   ],
+   "fullCount": 5,
+   "anyInFrame": true,
+   "violations": {
+    "quietWithinLookahead": [],
+    "passedNotFull": [],
+    "fullCountZeroWhileInFrame": false
+   }
+  },
+  "s2": {
+   "roots": [
+    {
+     "key": "approvals",
+     "density": "full",
+     "passed": true,
+     "top": -565.94,
+     "bottom": -219.14,
+     "innerHeight": 900
+    },
+    {
+     "key": "schedule",
+     "density": "full",
+     "passed": false,
+     "top": 71.73,
+     "bottom": 994.36,
+     "innerHeight": 900
+    },
+    {
+     "key": "ffe",
+     "density": "full",
+     "passed": false,
+     "top": 1018.36,
+     "bottom": 6798.55,
+     "innerHeight": 900
+    },
+    {
+     "key": "money",
+     "density": "full",
+     "passed": false,
+     "top": 6822.55,
+     "bottom": 7901.36,
+     "innerHeight": 900
+    },
+    {
+     "key": "care",
+     "density": "quiet",
+     "passed": false,
+     "top": 7925.36,
+     "bottom": 8026.91,
+     "innerHeight": 900
+    },
+    {
+     "key": "record",
+     "density": "full",
+     "passed": false,
+     "top": 8141.41,
+     "bottom": 8209.41,
+     "innerHeight": 900
+    }
+   ],
+   "fullCount": 5,
+   "anyInFrame": true,
+   "violations": {
+    "quietWithinLookahead": [],
+    "passedNotFull": [],
+    "fullCountZeroWhileInFrame": false
+   }
+  },
+  "s3": {
+   "roots": [
+    {
+     "key": "approvals",
+     "density": "full",
+     "passed": true,
+     "top": -1511.94,
+     "bottom": -1165.14,
+     "innerHeight": 900
+    },
+    {
+     "key": "schedule",
+     "density": "full",
+     "passed": false,
+     "top": -874.27,
+     "bottom": 48.36,
+     "innerHeight": 900
+    },
+    {
+     "key": "ffe",
+     "density": "full",
+     "passed": false,
+     "top": 72.36,
+     "bottom": 5852.55,
+     "innerHeight": 900
+    },
+    {
+     "key": "money",
+     "density": "full",
+     "passed": false,
+     "top": 5876.55,
+     "bottom": 6955.36,
+     "innerHeight": 900
+    },
+    {
+     "key": "care",
+     "density": "quiet",
+     "passed": false,
+     "top": 6979.36,
+     "bottom": 7080.91,
+     "innerHeight": 900
+    },
+    {
+     "key": "record",
+     "density": "full",
+     "passed": false,
+     "top": 7195.41,
+     "bottom": 7263.41,
+     "innerHeight": 900
+    }
+   ],
+   "fullCount": 5,
+   "anyInFrame": true,
+   "violations": {
+    "quietWithinLookahead": [],
+    "passedNotFull": [],
+    "fullCountZeroWhileInFrame": false
+   }
+  },
+  "foot": {
+   "roots": [
+    {
+     "key": "approvals",
+     "density": "full",
+     "passed": true,
+     "top": -8779.94,
+     "bottom": -8433.14,
+     "innerHeight": 900
+    },
+    {
+     "key": "schedule",
+     "density": "full",
+     "passed": true,
+     "top": -8142.27,
+     "bottom": -7219.64,
+     "innerHeight": 900
+    },
+    {
+     "key": "ffe",
+     "density": "full",
+     "passed": true,
+     "top": -7195.64,
+     "bottom": -1415.45,
+     "innerHeight": 900
+    },
+    {
+     "key": "money",
+     "density": "full",
+     "passed": true,
+     "top": -1391.45,
+     "bottom": -312.64,
+     "innerHeight": 900
+    },
+    {
+     "key": "care",
+     "density": "full",
+     "passed": true,
+     "top": -288.64,
+     "bottom": 557.66,
+     "innerHeight": 900
+    },
+    {
+     "key": "record",
+     "density": "full",
+     "passed": true,
+     "top": 672.16,
+     "bottom": 740.16,
+     "innerHeight": 900
+    }
+   ],
+   "fullCount": 6,
+   "anyInFrame": true,
+   "violations": {
+    "quietWithinLookahead": [],
+    "passedNotFull": [],
+    "fullCountZeroWhileInFrame": false
+   }
+  }
+ },
+ "quietHeadsS0": [
+  {
+   "key": "approvals",
+   "mounted": true,
+   "density": "full",
+   "status": "0 decided \u00b7 no decision lead",
+   "srOnly": null,
+   "leaderLabel": "Assign project client",
+   "leaderKey": "assign-project-decision-lead",
+   "actionKeyCount": 2
+  },
+  {
+   "key": "schedule",
+   "mounted": true,
+   "density": "full",
+   "status": "5 phases \u00b7 Procurement & Orders \u00b7 next milestone Site walk",
+   "srOnly": null,
+   "leaderLabel": "+ New open item",
+   "leaderKey": "new-open-item",
+   "actionKeyCount": 2
+  },
+  {
+   "key": "ffe",
+   "mounted": true,
+   "density": "full",
+   "status": "the FF&E schedule, by room \u00b7 5 groups \u00b7 62 lines",
+   "srOnly": null,
+   "leaderLabel": "File the claim",
+   "leaderKey": "file-ffe-claim",
+   "actionKeyCount": 5
+  },
+  {
+   "key": "money",
+   "mounted": true,
+   "density": "full",
+   "status": "no budget yet",
+   "srOnly": null,
+   "leaderLabel": "Draw an invoice",
+   "leaderKey": "draw-project-invoice",
+   "actionKeyCount": 4
+  },
+  {
+   "key": "care",
+   "mounted": true,
+   "density": "quiet",
+   "status": "0 of 6 closed out",
+   "srOnly": "0 of 6 closed out \u00b7 not yet on the paper \u00b7 press Closing the book on the index to open",
+   "leaderLabel": "Close the book",
+   "leaderKey": "close-project",
+   "actionKeyCount": 1
+  },
+  {
+   "key": "record",
+   "mounted": true,
+   "density": "full",
+   "status": "4 complete",
+   "srOnly": null,
+   "leaderLabel": "Open the record",
+   "leaderKey": "toggle-record",
+   "actionKeyCount": 1
+  }
+ ],
+ "openingAheadFlip": {
+  "key": "care",
+  "scrollY": 7680,
+  "top": 1137.359375,
+  "distanceFromFrameBottom": -237.359375
+ },
+ "oneDirection": {
+  "fullAtFlip": [
+   "approvals",
+   "schedule",
+   "ffe",
+   "money",
+   "care",
+   "record"
+  ],
+  "afterReturn": {
+   "approvals": "full",
+   "schedule": "full",
+   "ffe": "full",
+   "money": "full",
+   "care": "full",
+   "record": "full"
+  },
+  "regressed": []
+ },
+ "ladderMoneyPress": {
+  "stopFound": true,
+  "reducedMotion": false,
+  "throughMoney": [
+   "approvals",
+   "schedule",
+   "ffe",
+   "money"
+  ],
+  "samples": [
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   }
+  ],
+  "finalDensities": {
+   "approvals": "full",
+   "schedule": "full",
+   "ffe": "full",
+   "money": "full"
+  },
+  "allFullBeforeLanding": true,
+  "rootTopAfterLanding": 71.55,
+  "h2TopAfterLanding": 94.05
+ },
+ "ladderMoneyPressReducedMotion": {
+  "stopFound": true,
+  "reducedMotion": true,
+  "throughMoney": [
+   "approvals",
+   "schedule",
+   "ffe",
+   "money"
+  ],
+  "samples": [
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   },
+   {
+    "approvals": "full",
+    "schedule": "full",
+    "ffe": "full",
+    "money": "full"
+   }
+  ],
+  "finalDensities": {
+   "approvals": "full",
+   "schedule": "full",
+   "ffe": "full",
+   "money": "full"
+  },
+  "allFullBeforeLanding": true,
+  "rootTopAfterLanding": 71.55,
+  "h2TopAfterLanding": 94.05
+ },
+ "settleFlipTiming": {
+  "timeline": [
+   {
+    "t": 39.70000001788139,
+    "value": "false"
+   },
+   {
+    "t": 611.3000000119209,
+    "value": "true"
+   }
+  ],
+  "wentFalse": true,
+  "recoveredWithinMs": 571.6,
+  "promiseResolved": true
+ },
+ "lensStateSweep": {
+  "atS0": {
+   "lensState": "rest",
+   "bandOpen": "true"
+  },
+  "afterScroll": {
+   "lensState": "reading",
+   "bandOpen": "false"
+  },
+  "editingState": {
+   "lensState": "editing",
+   "bandOpen": "false"
+  },
+  "editingFieldReached": true,
+  "marginNoteReached": false,
+  "marginNoteEditingState": null,
+  "at390": {
+   "lensState": "mobile"
+  }
+ },
+ "flingCensus": {
+  "samples": [
+   {
+    "tMs": 45.20000001788139,
+    "scrollY": 200,
+    "classification": "content",
+    "regionKey": "approvals"
+   },
+   {
+    "tMs": 47.900000005960464,
+    "scrollY": 200,
+    "classification": "content",
+    "regionKey": "approvals"
+   },
+   {
+    "tMs": 59,
+    "scrollY": 400,
+    "classification": "content",
+    "regionKey": "schedule"
+   },
+   {
+    "tMs": 69.30000001192093,
+    "scrollY": 400,
+    "classification": "content",
+    "regionKey": "schedule"
+   },
+   {
+    "tMs": 97.5,
+    "scrollY": 600,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 114.2000000178814,
+    "scrollY": 600,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 216.7000000178814,
+    "scrollY": 800,
+    "classification": "content",
+    "regionKey": "schedule"
+   },
+   {
+    "tMs": 296.7000000178814,
+    "scrollY": 800,
+    "classification": "content",
+    "regionKey": "schedule"
+   },
+   {
+    "tMs": 312.80000001192093,
+    "scrollY": 1000,
+    "classification": "content",
+    "regionKey": "schedule"
+   },
+   {
+    "tMs": 328,
+    "scrollY": 1000,
+    "classification": "content",
+    "regionKey": "schedule"
+   },
+   {
+    "tMs": 336.09999999403954,
+    "scrollY": 1200,
+    "classification": "content",
+    "regionKey": "schedule"
+   },
+   {
+    "tMs": 349.7000000178814,
+    "scrollY": 1400,
+    "classification": "content",
+    "regionKey": "schedule"
+   },
+   {
+    "tMs": 360.40000000596046,
+    "scrollY": 1400,
+    "classification": "content",
+    "regionKey": "schedule"
+   },
+   {
+    "tMs": 377.59999999403954,
+    "scrollY": 1600,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 385.09999999403954,
+    "scrollY": 1600,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 394.5,
+    "scrollY": 1800,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 415.30000001192093,
+    "scrollY": 2000,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 418.80000001192093,
+    "scrollY": 2000,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 427.90000000596046,
+    "scrollY": 2200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 443.2000000178814,
+    "scrollY": 2200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 452.5,
+    "scrollY": 2400,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 460.5,
+    "scrollY": 2400,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 469.59999999403954,
+    "scrollY": 2600,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 477.09999999403954,
+    "scrollY": 2600,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 486.7000000178814,
+    "scrollY": 2800,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 493.90000000596046,
+    "scrollY": 2800,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 502.80000001192093,
+    "scrollY": 3000,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 510.5,
+    "scrollY": 3000,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 518.8000000119209,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 527.2000000178814,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 535.4000000059605,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 544.4000000059605,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 552.0999999940395,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 560.7000000178814,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 568.5999999940395,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 577,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 585.9000000059605,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 593.8000000119209,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 602,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 610.3000000119209,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 618.5999999940395,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 636,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   },
+   {
+    "tMs": 677.2000000178814,
+    "scrollY": 3200,
+    "classification": "content",
+    "regionKey": "ffe"
+   }
+  ],
+  "counts": {
+   "content": 43,
+   "blank": 0,
+   "pre-region": 0,
+   "post-region": 0
+  },
+  "landing": {
+   "regionKey": "ffe",
+   "density": "full"
+  }
+ },
+ "reducedMotion": {
+  "animCountS0Reduced": 0,
+  "animCountS2Reduced": 0,
+  "pulseCountS0Reduced": 0,
+  "pulseCountS2Reduced": 0,
+  "wordsS0Identical": true,
+  "wordsS2Identical": true,
+  "wordsS0ReducedCount": 531,
+  "wordsS0NoPrefCount": 531,
+  "wordsS2ReducedCount": 535,
+  "wordsS2NoPrefCount": 535,
+  "note": "recheck with a 2.5s post-quiet settle margin (the original walk run under-margined this comparison \u2014 see w4-walk.md Methodology note)"
+ },
+ "explicitFoldClosedByYou": {
+  "foldButtonFound": true,
+  "seamFound": true,
+  "seamText": "Moneyno budget yet \u00b7 $0 authorizedCLOSED BY YOUunfold \u2193",
+  "printsClosedByYou": true
+ },
+ "railBudget": {
+  "distinctLabels": [
+   "Client User",
+   "PROCUREMENT & ORDERS",
+   "3 OF 5",
+   "Client approvals",
+   "Schedule",
+   "Pieces",
+   "Money",
+   "Closing the book",
+   "The record",
+   "Filed with this job",
+   "Plan room",
+   "Spec book",
+   "Boards",
+   "Call sheet"
+  ],
+  "distinctCount": 14,
+  "stops": 6,
+  "doors": 4,
+  "ceiling": 14,
+  "withinCeiling": true,
+  "heightOffenders": [],
+  "indexChanges": 2
+ },
+ "bandLine2Offset": {
+  "390": {
+   "atRest": 26.19,
+   "pinned": 26.19,
+   "equal": true,
+   "bandOpenAtRest": "true",
+   "bandOpenPinned": "false"
+  },
+  "1280": {
+   "atRest": 26.19,
+   "pinned": 26.19,
+   "equal": true,
+   "bandOpenAtRest": "true",
+   "bandOpenPinned": "false"
+  },
+  "1440": {
+   "atRest": 26.14,
+   "pinned": 26.19,
+   "equal": false,
+   "bandOpenAtRest": "true",
+   "bandOpenPinned": "false"
+  }
+ },
+ "mobileBar": {
+  "atS0": {
+   "barFound": true,
+   "readingIndex": "approvals",
+   "sectionsDoorFound": true,
+   "sectionsDoorAriaLabel": "Open sections, at Client approvals",
+   "lines": [
+    "In this document",
+    "Client User",
+    "At Client approvals"
+   ]
+  },
+  "afterScroll": {
+   "readingIndex": "schedule",
+   "lines": [
+    "In this document",
+    "Client User",
+    "At Schedule"
+   ]
+  }
+ },
+ "consoleErrorsByLabel": {
+  "1440-project": [
+   "[console error @1440-project] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-project] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-project] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-prework": [
+   "[console error @1440-prework] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-prework] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-prework] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}"
+  ],
+  "1280-project": [
+   "[console error @1280-project] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1280-project] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1280-project] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1280-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1280-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1280-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1280-prework": [
+   "[console error @1280-prework] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1280-prework] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1280-prework] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}"
+  ],
+  "390-project": [
+   "[console error @390-project] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @390-project] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @390-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @390-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @390-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "390-prework": [
+   "[console error @390-prework] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @390-prework] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}"
+  ],
+  "1440-density-map": [
+   "[console error @1440-density-map] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-density-map] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-density-map] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-density-map] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-density-map] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-density-map] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-quiet-heads": [
+   "[console error @1440-quiet-heads] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-quiet-heads] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-quiet-heads] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-quiet-heads] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-quiet-heads] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-quiet-heads] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-opening-ahead": [
+   "[console error @1440-opening-ahead] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-opening-ahead] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-opening-ahead] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-opening-ahead] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-opening-ahead] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-opening-ahead] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-ladder-money": [
+   "[console error @1440-ladder-money] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-ladder-money] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-ladder-money] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-ladder-money] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-ladder-money] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-ladder-money] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-ladder-money-reduced": [
+   "[console error @1440-ladder-money-reduced] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-ladder-money-reduced] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-ladder-money-reduced] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-ladder-money-reduced] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-ladder-money-reduced] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-ladder-money-reduced] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-settle-timing": [
+   "[console error @1440-settle-timing] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-settle-timing] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-settle-timing] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-settle-timing] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-settle-timing] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-settle-timing] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-lens-state": [
+   "[console error @1440-lens-state] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-lens-state] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-lens-state] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-lens-state] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-lens-state] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-lens-state] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "390-lens-state": [
+   "[console error @390-lens-state] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @390-lens-state] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}"
+  ],
+  "1440-fling-census": [
+   "[console error @1440-fling-census] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-fling-census] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-fling-census] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-fling-census] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-fling-census] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-fling-census] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-reduced-motion": [
+   "[console error @1440-reduced-motion] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-reduced-motion] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-reduced-motion] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-reduced-motion] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-reduced-motion] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-reduced-motion] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-no-preference": [
+   "[console error @1440-no-preference] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-no-preference] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-no-preference] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}"
+  ],
+  "1440-explicit-fold": [
+   "[console error @1440-explicit-fold] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-explicit-fold] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-explicit-fold] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-explicit-fold] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-explicit-fold] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-explicit-fold] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-explicit-fold] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-explicit-fold] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-explicit-fold] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-rail-budget": [
+   "[console error @1440-rail-budget] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-rail-budget] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-rail-budget] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-rail-budget] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-rail-budget] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-rail-budget] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1440-line2-offset": [
+   "[console error @1440-line2-offset] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1440-line2-offset] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1440-line2-offset] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1440-line2-offset] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-line2-offset] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1440-line2-offset] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "1280-line2-offset": [
+   "[console error @1280-line2-offset] Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+   "[console error @1280-line2-offset] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @1280-line2-offset] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @1280-line2-offset] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1280-line2-offset] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @1280-line2-offset] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ],
+  "390-line2-offset": [
+   "[console error @390-line2-offset] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @390-line2-offset] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}"
+  ],
+  "390-mobile-bar": [
+   "[console error @390-mobile-bar] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+   "[console error @390-mobile-bar] Error logged: AppError: Not authenticated\n    at R (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:10865)\n    at Object.onError (http://localhost:3000/_next/static/chunks/581-c33ddcf2b4577250.js:1:211)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-e9baec48e293ef6b.js:1:35065) {queryKey: Array(1), meta: undefined}",
+   "[console error @390-mobile-bar] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+   "[console error @390-mobile-bar] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+  ]
+ },
+ "reducedMotion_originalRun_underMargined": {
+  "animCountS0Reduced": 0,
+  "animCountS2Reduced": 0,
+  "pulseCountS0Reduced": 0,
+  "pulseCountS2Reduced": 0,
+  "wordsS0Identical": false,
+  "wordsS2Identical": false,
+  "wordsS0ReducedCount": 531,
+  "wordsS0NoPrefCount": 110,
+  "wordsS2ReducedCount": 535,
+  "wordsS2NoPrefCount": 114
+ }
+}

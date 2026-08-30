@@ -1,7 +1,25 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import DocumentPage from './page';
+import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
+import { paperRegionsForSection } from '@/lib/document/document-index';
+
+/**
+ * W3 — the band's line 2, the one printing of the sentence that changes (L-1).
+ * The red-letter zone and the guide strip are model providers now (C-6): the
+ * worst standing exception, or the stage's guide sentence when nothing stands.
+ */
+const bandLine2 = () =>
+  document.querySelector<HTMLElement>('[data-lens-line="2"]');
+const bandSentence = () =>
+  document.querySelector('[data-lens-sentence]')?.textContent ?? '';
+/** `standing` | `guide` | `none` — which source line 2 is speaking from. */
+const bandLine2Kind = () =>
+  bandLine2()?.getAttribute('data-lens-line2-kind') ?? null;
+/** Line 1's right-flush slot — the dated and money facts, per spread (OD-1). */
+const bandRightFlush = () =>
+  document.querySelector('[data-lens-right-flush]')?.textContent ?? '';
 
 let mockHydrated = false;
 const mockRetryDocumentResolution = jest.fn();
@@ -11,6 +29,9 @@ const mockRetryDocumentResolution = jest.fn();
 // scroll-jump because of this addition.
 let mockRecentDocumentsInHand: Array<{ id: string; title: string; subtitle?: string }> = [];
 const mockHistoryToggled = jest.fn();
+const mockLensLineShown = jest.fn();
+const mockLensLineActed = jest.fn();
+const mockLensStandingSheetOpened = jest.fn();
 const mockDiscoveryFacetOpen = jest.fn();
 let mockDiscoveryFacetExpanded = false;
 /** Rows the real MarginRail composes into real MarginItems. */
@@ -82,8 +103,12 @@ jest.mock('@portabletext/react', () => ({
   toPlainText: () => '',
 }));
 
+// W3 — the guide's deep links were an `<a href>` the guide strip rendered
+// itself; the band prints one act, as a press, so the navigation the act
+// performs is what these tests now read.
+const mockRouter = { push: jest.fn(), replace: jest.fn() };
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+  useRouter: () => mockRouter,
 }));
 
 let mockInvoices: Record<string, unknown>[] = [];
@@ -144,12 +169,63 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
 // The project document's own sections are not what these tests exercise; the
 // guide strip and the margin are.
 const mockFFESection = jest.fn();
+/** P2-07 — the id `landOnFfeAnchor` lands on, when the FF&E body has already
+ *  mounted it. Null in every other case, which is the cold-load shape: the
+ *  anchor does not exist until the unfold has been asked for and the promotion
+ *  flushed, and that is the branch that waits two frames. */
+let mockFfeAnchorId: string | null = null;
 jest.mock('@/components/document/ffe-section', () => ({
   FFESection: (props: Record<string, unknown>) => {
     mockFFESection(props);
-    return null;
+    return mockFfeAnchorId ? <div id={mockFfeAnchorId} /> : null;
   },
 }));
+
+/** P2-07 — the press order, in one log, from the three things `landOnFfeAnchor`
+ *  composes. Each is recorded where it actually happens, so an implementation
+ *  that reordered them (or dropped one) reads differently here. */
+const pressOrder: string[] = [];
+
+jest.mock('@/lib/document/document-index', () => {
+  const actual = jest.requireActual('@/lib/document/document-index');
+  return {
+    __esModule: true,
+    ...actual,
+    requestRegionUnfold: (key: string) => {
+      pressOrder.push(`unfold:${key}`);
+      return actual.requestRegionUnfold(key);
+    },
+  };
+});
+
+jest.mock('@/hooks/use-lens-density', () => {
+  const actual = jest.requireActual('@/hooks/use-lens-density');
+  // The real API object is `useMemo([])`-stable, and the page keeps it in
+  // `useCallback` deps — so the wrapper has to be stable too, or every render
+  // would rebuild the very handlers this case reads.
+  const wrapped = new WeakMap<object, unknown>();
+  return {
+    __esModule: true,
+    ...actual,
+    useLensDensity: (...args: unknown[]) => {
+      const api = actual.useLensDensity(...args) as Record<string, unknown> & {
+        forceFullThrough: (key: string) => void;
+      };
+      let seen = wrapped.get(api);
+      if (!seen) {
+        seen = {
+          ...api,
+          forceFullThrough: (key: string) => {
+            pressOrder.push(`promote:${key}`);
+            api.forceFullThrough(key);
+          },
+        };
+        wrapped.set(api, seen);
+      }
+      return seen;
+    },
+  };
+});
 jest.mock('@/components/document/schedule/schedule-spine', () => ({ ScheduleSpine: () => null }));
 jest.mock('@/components/document/approvals/project-approval-document', () => ({
   ProjectApprovalDocument: () => null,
@@ -171,21 +247,6 @@ jest.mock('@/components/document/schedule/install-window-ceremony', () => ({
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
 jest.mock('@/components/document/commercial/money-region', () => ({ MoneyRegion: () => null }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-// A1-L2's contract: the page hands this component the exact `regions` subset
-// `paperRegionsForSection` returned for the spread. Render that list as
-// testable rows here — the component's OWN rendering of them (labels, scroll
-// targets, fold state) is `shelved-spine.test.tsx`'s job (A1-L2), not this
-// integration suite's; this mock exists only to prove the page wired the
-// right subset through.
-jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: (props: { regions: ReadonlyArray<{ key: string }> }) => (
-    <ul data-testid="shelved-spine-regions" aria-label="On this paper">
-      {props.regions.map((region) => (
-        <li key={region.key}>{region.key}</li>
-      ))}
-    </ul>
-  ),
-}));
 jest.mock('@/components/document/shelves/document-shelves', () => ({
   DocumentShelves: () => null,
 }));
@@ -209,18 +270,35 @@ jest.mock('@/components/document/mobile/mobile-shell', () => ({
 }));
 
 jest.mock('@/components/document/doc-spine', () => ({
-  // F14/C11: the page passes its shelved-blocks element (or null) as `shelved`
-  // — render it, or `DocSpineShelvedBlocks`'s own mock above never mounts.
+  // W2 (C-3): the page hands the rail the exact ladder `deriveLadderSegments`
+  // returned for the spread. Render those keys as testable rows here — the
+  // rail's OWN rendering of them (registers, the bracket, the doors) is
+  // `lens-ladder.test.tsx`'s job, not this integration suite's; this mock
+  // exists only to prove the page wired the right stops through.
   DocSpine: ({
     onJump,
-    shelved,
+    segments = [],
+    doors = [],
   }: {
     onJump: (section: string) => void;
-    shelved?: ReactNode;
+    segments?: ReadonlyArray<{ key: string }>;
+    doors?: ReadonlyArray<{ key: string }>;
   }) => (
     <>
       <button type="button" onClick={() => onJump('brief')}>Jump to brief</button>
-      {shelved}
+      <ul data-testid="ladder-segments" aria-label="This paper">
+        {segments.map((segment) => (
+          <li key={segment.key}>{segment.key}</li>
+        ))}
+      </ul>
+      {/* W3 — `deriveLadderDoors` gates the four project doors on the SAME
+          `input.project` the ticket's People row used to read, so this is
+          where the page's leaf-mount predicate is now observable. */}
+      <ul data-testid="ladder-doors">
+        {doors.map((door) => (
+          <li key={door.key}>{door.key}</li>
+        ))}
+      </ul>
     </>
   ),
 }));
@@ -229,14 +307,18 @@ jest.mock('@/components/document/doc-letterhead', () => ({
     title,
     vitals,
     needsSetup,
+    instruments,
   }: {
     title: string;
     vitals?: string;
     needsSetup?: Array<{ text: string; remedyLabel: string; onActivate: () => void }> | null;
+    instruments?: ReactNode;
   }) => (
-    <header>
+    <header id="document-project-status">
       {title}
       <span data-testid="doc-vitals">{vitals}</span>
+      {/* W3 — the instruments' ledger stands INSIDE the letterhead now. */}
+      <span data-testid="letterhead-instruments">{instruments}</span>
       <span data-testid="doc-needs-setup-count">{needsSetup?.length ?? 0}</span>
       {(needsSetup ?? []).map((entry) => (
         <button key={entry.text} type="button" onClick={entry.onActivate}>
@@ -260,11 +342,22 @@ jest.mock('@/components/document/discovery/discovery-section', () => ({
     </>
   ),
 }));
-jest.mock('@/components/document/proposal-blocks-readonly', () => ({ ProposalBlocksReadOnly: () => null }));
+jest.mock('@/components/document/proposal-blocks-readonly', () => ({
+  // W5-R2 item 1 — the mock renders a testid keyed on `only` so a test can
+  // find which region root a given call landed under, without pulling in
+  // the real block components' own hooks.
+  ProposalBlocksReadOnly: ({ only }: { only?: string }) => (
+    <div data-testid={`blocks-${only ?? 'full'}`} />
+  ),
+}));
 jest.mock('@/components/document/proposal-instruments', () => ({ ProposalInstruments: () => null }));
 jest.mock('@/components/document/folio-strip', () => ({ FolioLetterhead: () => null, ProposalFolioStrip: () => null }));
-jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({ MobileMarginChips: () => null }));
-jest.mock('@/components/document/letterhead-instruments', () => ({ LetterheadInstruments: () => null }));
+// W3 — the instruments are handed to the letterhead as a node now, so the
+// stub prints a marker rather than nothing: where it lands, and how many of
+// it there are, is the assertion.
+jest.mock('@/components/document/letterhead-instruments', () => ({
+  LetterheadInstruments: () => <span data-testid="instruments-row" />,
+}));
 jest.mock('@/components/document/schedule/schedule-nav-context', () => ({
   ScheduleNavProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -367,8 +460,14 @@ jest.mock('@/hooks/use-section-work', () => ({
   useSectionTasks: () => ({ data: [] }),
 }));
 
+// Off for everything unless a test names the flag it needs — W3 turns
+// `worktable` on to prove the band prints once on the composed spreads.
+let mockEnabledFlags: string[] = [];
 jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: () => ({ value: false, isLoading: false }),
+  useFeatureFlag: (key: string) => ({
+    value: mockEnabledFlags.includes(key),
+    isLoading: false,
+  }),
 }));
 
 jest.mock('@/lib/help-system/use-document-surface', () => ({
@@ -380,8 +479,11 @@ jest.mock('@/lib/analytics/document-events', () => ({
   readRecentDocumentsInHand: () => mockRecentDocumentsInHand,
   documentEvents: {
     historyToggled: (...args: unknown[]) => mockHistoryToggled(...args),
-    guideShown: jest.fn(),
-    guideSelected: jest.fn(),
+    // D-B22 — the lens line's three events, fired from this page.
+    lensLineShown: (...args: unknown[]) => mockLensLineShown(...args),
+    lensLineActed: (...args: unknown[]) => mockLensLineActed(...args),
+    lensStandingSheetOpened: (...args: unknown[]) =>
+      mockLensStandingSheetOpened(...args),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     // The real MarginRail leads with the R94 first-touch margin note.
@@ -414,6 +516,14 @@ const fulfilledParams = {
   value: { id: 'missing-document' },
   then: () => undefined,
 } as unknown as Promise<{ id: string }>;
+
+// Flags are off for every test unless it names one; a test that turns one on
+// must not leak it into the next.
+beforeEach(() => {
+  mockEnabledFlags = [];
+  mockRouter.push.mockReset();
+  mockRouter.replace.mockReset();
+});
 
 describe('DocumentPage hydration render behavior', () => {
   beforeEach(() => {
@@ -568,9 +678,10 @@ describe('DocumentPage guide activation', () => {
     expect(mockSelectOperationalNeed).toHaveBeenCalledWith(
       mockDeskData, 'lead-1',
     );
-    expect(screen.getByRole('link', { name: 'Continue the introduction' })).toHaveAttribute(
-      'href', '/ceremony/lead-1',
-    );
+    // W3 — the strip rendered an `<a href>`; the band prints one act, as a
+    // press, so the destination is proven by what the press navigates to.
+    fireEvent.click(screen.getByRole('button', { name: 'Continue the introduction' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/ceremony/lead-1');
   });
 
   it('renders document-local guidance while the Desk read is still in flight', () => {
@@ -641,7 +752,8 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByRole('heading', { name: 'Guidance is unavailable' })).toBeInTheDocument();
+    // W3 — the strip's `<h2 id="document-next-up">` became the band's line 2.
+    expect(bandSentence()).toContain('Guidance is unavailable');
     const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
     activeSection!.scrollIntoView = jest.fn();
 
@@ -743,9 +855,8 @@ describe('DocumentPage guide activation', () => {
     expect(mockSelectOperationalNeed).toHaveBeenCalledWith(
       mockDeskData, 'proposal-1',
     );
-    expect(screen.getByRole('link', { name: 'Open the flagged lines' })).toHaveAttribute(
-      'href', '/drafting/proposal-1?flagged=1',
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open the flagged lines' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/drafting/proposal-1?flagged=1');
   });
 
   it('counts a programmatic history expansion once', () => {
@@ -790,9 +901,10 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByText(/Input needed · Working budget/).parentElement).toHaveTextContent(
-      'Client · blocks Direction · +3 more',
-    );
+    // W3 — the guide strip's `Input needed · Working budget · Client · blocks
+    // Direction · +3 more` line is deleted with the strip; the band prints the
+    // headline and the act only. What the composition still has to prove is
+    // that the canonical Discovery read reaches the facet the guide names.
     fireEvent.click(screen.getByRole('button', { name: 'Add Working budget' }));
     expect(mockDiscoveryFacetOpen).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Budget comfort' })).toHaveFocus();
@@ -816,10 +928,10 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByRole('link', { name: 'Open the Drafting Room' })).toHaveAttribute(
-      'href', '/drafting/proposal-1',
-    );
-    expect(screen.getByText(/Input needed · phases & fees/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open the Drafting Room' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/drafting/proposal-1');
+    // `Input needed · phases & fees` is deleted with the guide strip (see the
+    // Discovery case above); the gap still elects the act.
   });
 
   it('J1 — the successor id begin() lands on renders the doc\'s own Direction section', () => {
@@ -954,8 +1066,10 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByRole('heading', { name: 'Guidance is unavailable' })).toBeInTheDocument();
-    expect(screen.queryByText(/Input needed/)).not.toBeInTheDocument();
+    // W3 — the strip's heading became the band's line 2. `Input needed` is
+    // deleted with the strip, so its absence is no longer a claim this test
+    // can make about unknown guidance.
+    expect(bandSentence()).toContain('Guidance is unavailable');
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -1176,13 +1290,13 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
   });
 
-  // ── A1-L2: F14/C11 — the shelved spine mounts on install/care, and its index
-  // derives from the spread's own regions (paperRegionsForSection). The
-  // per-row rendering (labels, scroll targets, fold state) is
-  // shelved-spine.test.tsx's job; this integration suite only proves the page
-  // wires the right region SET through for each spread. ──
-  describe('the shelved spine mount (F14/C11)', () => {
-    it('mounts on an install document with the two regions that spread prints', () => {
+  // ── W2 (C-3, F14/C11) — the ladder mounts on every project-backed spread,
+  // and its stops derive from the spread's own regions
+  // (`paperRegionsForSection`, carried on the ticket's input). The per-row
+  // rendering is lens-ladder.test.tsx's job; this integration suite only
+  // proves the page wires the right stop SET through for each spread. ──
+  describe('the ladder mount (C-3, F14/C11)', () => {
+    it('mounts on an install document with the regions that spread prints', () => {
       asProjectDocument();
       const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
       mockDocumentQuery = {
@@ -1196,13 +1310,13 @@ describe('DocumentPage guide activation', () => {
       // and no schedule row (nor does ScheduleSpine, the only
       // data-index-region="schedule" root) — a row for either would be a jump
       // target with nothing behind it.
-      const index = screen.getByTestId('shelved-spine-regions');
+      const index = screen.getByTestId('ladder-segments');
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-        'approvals', 'ffe',
+        'approvals', 'ffe', 'care', 'record',
       ]);
     });
 
-    it('mounts on a care document with the same two regions', () => {
+    it('mounts on a care document with the same regions', () => {
       asProjectDocument();
       const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
       mockDocumentQuery = {
@@ -1216,41 +1330,176 @@ describe('DocumentPage guide activation', () => {
       // and no schedule row (nor does ScheduleSpine, the only
       // data-index-region="schedule" root) — a row for either would be a jump
       // target with nothing behind it.
-      const index = screen.getByTestId('shelved-spine-regions');
+      const index = screen.getByTestId('ladder-segments');
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-        'approvals', 'ffe',
+        'approvals', 'ffe', 'care', 'record',
       ]);
     });
 
-    it('still mounts all four regions, money included, on the project section', () => {
+    it('still mounts all six stops, money and the record included, on the project section', () => {
       asProjectDocument();
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      const index = screen.getByTestId('shelved-spine-regions');
+      const index = screen.getByTestId('ladder-segments');
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-        'approvals', 'schedule', 'ffe', 'money',
+        'approvals', 'schedule', 'ffe', 'money', 'care', 'record',
       ]);
     });
   });
 
-  // ── B1-L3/L5 — the job ticket is mounted by the DOCUMENT, not by the
-  // section: every `engagement_kind === 'project'` spread prints the same
-  // eight rows, and the three project-kind sections read identically. Its
-  // place on the paper is the whole premise of the sticky seam — it stands
-  // between the letterhead and the guide/red-letter zone, so it can collapse
-  // in place once the letterhead scrolls past. ──
-  describe('the job ticket mount (B1)', () => {
-    const TICKET = '[data-job-ticket]';
+  // ── P2-07 · `landOnFfeAnchor` — the composition the sheets ask for and
+  // nothing tested. The Margin sheet's line rows and the sections sheet's room
+  // rows both land on ids INSIDE the FF&E body, and a body that is quiet (or
+  // that she closed herself) is not mounted: the order is the whole mechanism.
+  // The sheets only ask; the page owns the landing (D-B46). ──
+  describe('the line-jump press order (D-B46, P2-07)', () => {
+    /** The handler the page publishes to the mobile shell — the one the Margin
+     *  sheet actually calls. Read from the publication, never re-derived. */
+    const publishedJumpToLine = (): ((lineId: string) => void) => {
+      const calls = (useMobileActiveDoc as jest.Mock).mock.calls;
+      for (let i = calls.length - 1; i >= 0; i -= 1) {
+        const doc = calls[i]?.[0] as { onJumpToLine?: (id: string) => void } | null;
+        if (doc?.onJumpToLine) return doc.onJumpToLine;
+      }
+      throw new Error('the page published no onJumpToLine');
+    };
 
-    const ticketRowKeys = () =>
+    beforeEach(() => {
+      pressOrder.length = 0;
+      mockFfeAnchorId = null;
+      (useMobileActiveDoc as jest.Mock).mockClear();
+    });
+
+    afterEach(() => {
+      mockFfeAnchorId = null;
+    });
+
+    it('asks for the unfold, flushes the promotion, THEN lands — in that order', () => {
+      mockFfeAnchorId = 'ffe-selection-ffe-2';
+      asProjectDocument();
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const anchor = document.getElementById('ffe-selection-ffe-2')!;
+      anchor.scrollIntoView = jest.fn(() => {
+        pressOrder.push('land:ffe-selection-ffe-2');
+      });
+
+      act(() => {
+        publishedJumpToLine()('ffe-2');
+      });
+
+      expect(pressOrder).toEqual([
+        'unfold:ffe',
+        'promote:ffe',
+        'land:ffe-selection-ffe-2',
+      ]);
+      // The landing is `block: 'start'` at either motion register; the
+      // behaviour follows `prefers-reduced-motion`, which the suite's own
+      // matchMedia stub answers, so only the block is asserted here.
+      expect(anchor.scrollIntoView).toHaveBeenCalledWith(
+        expect.objectContaining({ block: 'start' }),
+      );
+    });
+
+    it('waits two frames when the anchor is not mounted yet, and lands on the same id', () => {
+      // The cold-load shape: the promotion is flushed, but the UNFOLD is a
+      // React state change the region has to paint before its anchor exists.
+      asProjectDocument();
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const frames: FrameRequestCallback[] = [];
+      const raf = jest
+        .spyOn(window, 'requestAnimationFrame')
+        .mockImplementation((cb: FrameRequestCallback) => {
+          frames.push(cb);
+          return frames.length;
+        });
+
+      act(() => {
+        publishedJumpToLine()('ffe-2');
+      });
+
+      // Asked and promoted, but nothing landed — there is nothing to land on.
+      expect(pressOrder).toEqual(['unfold:ffe', 'promote:ffe']);
+      expect(frames).toHaveLength(1);
+
+      // The unfold paints: the body mounts its anchor.
+      const late = document.createElement('div');
+      late.id = 'ffe-selection-ffe-2';
+      late.scrollIntoView = jest.fn(() => {
+        pressOrder.push('land:ffe-selection-ffe-2');
+      });
+      document.body.appendChild(late);
+
+      act(() => {
+        frames.shift()!(0);
+      });
+      // Still one frame short — a single rAF is the write, not the paint.
+      expect(pressOrder).toEqual(['unfold:ffe', 'promote:ffe']);
+
+      act(() => {
+        frames.shift()!(0);
+      });
+      expect(pressOrder).toEqual([
+        'unfold:ffe',
+        'promote:ffe',
+        'land:ffe-selection-ffe-2',
+      ]);
+
+      raf.mockRestore();
+      late.remove();
+    });
+  });
+
+  // ── OD-9 / W0-L1 — the rendered replacement for the retired 1500-char
+  // regex in stage2-approval-cutover-contract.test.ts: the in-section stage
+  // line must actually land INSIDE <div data-active-section> (containment,
+  // not merely "somewhere after it in source text"), and after it in DOM
+  // order. jsdom has no :has(), so containment is proven by index comparison
+  // over a flattened element list rather than by selector. ──
+  describe('the stage line mount is contained by the active section (OD-9)', () => {
+    it('nests [data-section-stage-line] inside [data-active-section], after it in document order', () => {
+      asProjectDocument();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const activeSection = document.querySelector('[data-active-section]');
+      const stageLine = document.querySelector('[data-section-stage-line]');
+      expect(activeSection).not.toBeNull();
+      expect(stageLine).not.toBeNull();
+
+      expect(activeSection!.contains(stageLine!)).toBe(true);
+
+      const all = Array.from(document.querySelectorAll('*'));
+      expect(all.indexOf(stageLine!)).toBeGreaterThan(all.indexOf(activeSection!));
+    });
+  });
+
+  // ── W3 (C-5) — the job ticket is gone; the LENS BAND stands where it stood.
+  // Mounted by the DOCUMENT, not by the section, so every spread reads
+  // identically — and, because it is document-level and sticky, `TableFrame`
+  // no longer re-mounts anything at the table's head either.
+  //
+  // What moved, assertion by assertion: the eight `[data-ticket-row]` reads
+  // ("prints the same eight rows on a %s spread", the four projectless VALUE
+  // reads) are DELETED here — the rows are data, and `ticket-derivation.test.ts`
+  // owns them by name. The B3 People-row triple, which proved the PAGE hands
+  // the derivation its own leaf-mount predicate rather than `Boolean(project_id)`,
+  // is re-pointed at the ladder's doors: `deriveLadderDoors` gates the four
+  // project doors on the same `input.project`. The one-per-document count and
+  // the sentinel adjacency survive verbatim, renamed to `[data-lens-band]`. ──
+  describe('the lens band (B1 → C-5)', () => {
+    const BAND = '[data-lens-band]';
+    const band = () => document.querySelector<HTMLElement>(BAND);
+    const doorKeys = () =>
       Array.from(
-        document.querySelectorAll(`${TICKET} [data-ticket-row]`),
-        (row) => row.getAttribute('data-ticket-row'),
+        screen.getByTestId('ladder-doors').querySelectorAll('li'),
+        (li) => li.textContent,
       );
 
     it.each(['project', 'install', 'care'])(
-      'prints the same eight rows on a %s spread',
+      'stands on a %s spread',
       (section) => {
         asProjectDocument();
         const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
@@ -1261,63 +1510,30 @@ describe('DocumentPage guide activation', () => {
 
         render(<DocumentPage params={fulfilledParams} />);
 
-        expect(document.querySelector(TICKET)).not.toBeNull();
-        expect(ticketRowKeys()).toEqual([
-          'rooms', 'pieces', 'drawings', 'spec', 'boards', 'money', 'dates', 'people',
-        ]);
+        expect(band()).not.toBeNull();
+        expect(screen.getByRole('region', { name: 'The job' })).toBe(band());
       },
     );
 
-    it('prints the same eight rows on a document with no project (B2)', () => {
+    it('stands on a document with no project (B2)', () => {
       // The outer beforeEach's row is a lead (Brief) document. It has no
-      // project, so the ticket that stands on it reads NOTHING — every row is
-      // the honest empty `deriveTicket` holds for the four stages before the
-      // work starts, and the money ladder's two un-`enabled` reads are never
-      // fired at a document with no project behind them.
+      // project, so the derivation behind the band reads NOTHING — every row
+      // is the honest empty `deriveTicket` holds for the four stages before
+      // the work starts, and the money ladder's two un-`enabled` reads are
+      // never fired at a document with no project behind them.
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(document.querySelector(TICKET)).not.toBeNull();
-      expect(ticketRowKeys()).toEqual([
-        'rooms', 'pieces', 'drawings', 'spec', 'boards', 'money', 'dates', 'people',
-      ]);
-      const value = (key: string) =>
-        document
-          .querySelector(`[data-ticket-row="${key}"] span:nth-child(2)`)
-          ?.textContent;
-      expect(value('rooms')).toBe('No rooms yet');
-      expect(value('pieces')).toBe('No pieces yet');
-      expect(value('money')).toBe('Nothing moving yet');
-      // Not `No install date yet` — a paper with no project has never had an
-      // install to be missing.
-      expect(value('dates')).toBe('No dates yet');
+      expect(band()).not.toBeNull();
     });
 
-    // ── B3 · the People row's two absences, at the PAGE's grain. The
-    // derivation distinguishes them (`ticket-derivation.test.ts`); what is
-    // proven here is that the page hands it the fact it needs — `project` is
-    // read off THIS document's own row (`engagement_kind === 'project' &&
-    // project_id`), not assumed. Wired wrong — hard-true, or dropped — a lead
-    // document would tell the reader their studio has the call sheet switched
-    // off, which is a claim about the studio and false in the same session its
-    // project documents open theirs. The flag is off in this file's mocks and
-    // the roster is empty, so the two cases differ ONLY by that one fact. ──
-    const peopleValue = () =>
-      document
-        .querySelector('[data-ticket-row="people"] span:nth-child(2)')
-        ?.textContent;
-
-    it('says the roster is missing, not switched off, on a document with no project', () => {
-      render(<DocumentPage params={fulfilledParams} />);
-
-      expect(peopleValue()).toBe('No roster yet');
-    });
-
+    // ── B3 · the leaf-mount predicate, at the PAGE's grain. What is proven
+    // here is that the page hands the derivation the fact it needs —
+    // `project` is read off THIS document's own row (`engagement_kind ===
+    // 'project' && project_id`), not assumed from a project id. Wired wrong,
+    // a proposal engagement that happens to carry a project id would offer
+    // doors to leaves this page never mounted. The flag is off in this file's
+    // mocks, so the two cases differ ONLY by that one fact. ──
     it('reads the leaf-mount predicate, not merely the presence of a project id', () => {
-      // The one row that separates `Boolean(project_id)` from the predicate the
-      // call sheet actually mounts on (`:1487`). A proposal engagement can
-      // carry a project id, and the ticket mounted on it IS the job ticket —
-      // but its call sheet is not on the page, so the row must not offer a door
-      // to it, and must not blame the studio for the roster it cannot show.
       const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
       mockDocumentQuery = {
         ...mockDocumentQuery,
@@ -1334,28 +1550,51 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(peopleValue()).toBe('No roster yet');
-      expect(
-        document.querySelector('[data-ticket-row="people"] button'),
-      ).toBeNull();
+      expect(doorKeys()).not.toContain('planroom');
+      expect(doorKeys()).not.toContain('specbook');
     });
 
-    it('names the studio switch only once a project is behind the paper', () => {
+    it('opens the filed leaves only once a project is behind the paper', () => {
       asProjectDocument();
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(peopleValue()).toBe("the call sheet isn't turned on for this studio");
+      expect(doorKeys()).toEqual(
+        expect.arrayContaining(['planroom', 'specbook', 'moodboards']),
+      );
     });
 
-    it('mounts exactly one ticket on a document, project or not', () => {
+    it('mounts exactly one band on a document, project or not', () => {
       render(<DocumentPage params={fulfilledParams} />);
-      expect(document.querySelectorAll(TICKET)).toHaveLength(1);
+      expect(document.querySelectorAll(BAND)).toHaveLength(1);
 
       cleanup();
       asProjectDocument();
       render(<DocumentPage params={fulfilledParams} />);
-      expect(document.querySelectorAll(TICKET)).toHaveLength(1);
+      expect(document.querySelectorAll(BAND)).toHaveLength(1);
+    });
+
+    // ── W3 · the band is DOCUMENT-level, so the three worktable spreads that
+    // used to re-mount the ticket inside `TableFrame` print exactly one. ──
+      it.each([
+      ['speccing', 'direction'],
+      ['finalize', 'proposal'],
+      ['delivery', 'project'],
+    ])('mounts once on the %s spread', (_table, section) => {
+      asProjectDocument();
+      mockEnabledFlags = ['worktable'];
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: {
+          kind: 'engagement',
+          row: { ...current, active_section: section, proposal_status: 'sent' },
+        },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(document.querySelectorAll(BAND)).toHaveLength(1);
     });
 
     it('carries its pin sentinel with it, immediately above itself', () => {
@@ -1364,49 +1603,67 @@ describe('DocumentPage guide activation', () => {
       render(<DocumentPage params={fulfilledParams} />);
 
       const sentinel = document.getElementById('doc-ticket-sentinel');
-      const ticket = document.querySelector(TICKET);
       const letterhead = document.querySelector('main header');
       expect(sentinel).not.toBeNull();
-      // The ticket stands in one of two positions — under the letterhead, or
-      // inside TableFrame above the table — so the sentinel is the TICKET's,
-      // rendered directly above it. Anchored to the letterhead instead, the
-      // second position collapsed the rows and published a seam height while
-      // the ticket was still far below the viewport top.
+      // The sentinel is the BAND's, rendered directly above it. Anchored to
+      // the letterhead instead, a band standing anywhere else on the paper
+      // would report itself pinned while it was still far below the frame top.
       expect(
         letterhead!.compareDocumentPosition(sentinel!) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
       expect(
-        sentinel!.compareDocumentPosition(ticket!) & Node.DOCUMENT_POSITION_FOLLOWING,
+        sentinel!.compareDocumentPosition(band()!) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
-      expect(sentinel!.nextElementSibling).toBe(ticket);
+      expect(sentinel!.nextElementSibling).toBe(band());
     });
 
-    it('stands above the red-letter zone', () => {
+    it('stands under the letterhead, above the paper’s first region', () => {
       asProjectDocument();
-      mockDeskData = {
-        folders: [{
-          row: { engagement_id: 'project-1' },
-          need: {
-            kind: 'task_due', text: 'Confirm the site measure',
-            actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
-          },
-          needs: [{
-            kind: 'task_due', text: 'Confirm the site measure',
-            actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
-          }],
-        }],
-        chips: [],
-        composed: { 'project-1': true },
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const letterhead = document.querySelector('main header')!;
+      const firstRegion = document.querySelector('[data-index-region]')!;
+      expect(
+        letterhead.compareDocumentPosition(band()!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        band()!.compareDocumentPosition(firstRegion) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('hands the letterhead the instruments ledger, and mounts it once', () => {
+      asProjectDocument();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      // One mount: two would register `useMobilePrimaryAction` twice and put
+      // the same act on the 390 bar from two owners.
+      const rows = document.querySelectorAll('[data-testid="instruments-row"]');
+      expect(rows).toHaveLength(1);
+      // Inside the letterhead's own ledger slot, not a row on the paper below.
+      expect(
+        screen.getByTestId('letterhead-instruments').contains(rows[0]!),
+      ).toBe(true);
+    });
+
+    it('hands the letterhead the instruments on a document with no project', () => {
+      // A pre-project document with a client profile keeps the row (R63) — it
+      // just carries the direct-thread follow-up instead of the mirror.
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: {
+          kind: 'engagement',
+          row: { ...current, client_profile_id: 'client-1' },
+        },
       };
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      const ticket = document.querySelector(TICKET);
-      const zone = screen.getByRole('region', { name: 'Needs attention' });
-      expect(ticket).not.toBeNull();
       expect(
-        ticket!.compareDocumentPosition(zone) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy();
+        document.querySelectorAll('[data-testid="instruments-row"]'),
+      ).toHaveLength(1);
     });
   });
 
@@ -1445,27 +1702,144 @@ describe('DocumentPage guide activation', () => {
       expect(screen.queryByText('Confirm the site measure')).not.toBeInTheDocument();
     });
 
-    it('leads the red-letter zone with the same higher-ranked need, first row', () => {
+    // W3-R1 — the zone's `<li>` list became the band's line 2 (the worst) plus
+    // the standing sheet behind `+N MORE` (the rest), and line 2 is ranked by
+    // DEADLINE DISTANCE, not by kind: neither the four standing tiers nor the
+    // desk's four ranks decide it. The fixture below is the case that tells
+    // the three rules apart — a decision three weeks out against a claim
+    // window that shuts tomorrow. The retired tier sort put `decision-due`
+    // (tier 1) above `damage` (tier 2) and would have led with the task.
+    const farDecisionAndNearWindow = [
+      {
+        kind: 'task_due', text: 'Confirm the site measure — due in 21 days',
+        actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+      },
+      {
+        kind: 'damage_claim',
+        text: 'A delivered piece was damaged in transit — window closes in 1 day',
+        actionLabel: null, urgent: true, stamp: { label: 'DAMAGE CLAIM' },
+      },
+    ];
+
+    it('leads line 2 by deadline distance, and files the rest', () => {
       asProjectDocument();
       mockDeskData = {
-        folders: [{ row: { engagement_id: 'project-1' }, need: null, needs: rankThreeThenOne }],
+        folders: [
+          { row: { engagement_id: 'project-1' }, need: null, needs: farDecisionAndNearWindow },
+        ],
         chips: [],
         composed: { 'project-1': true },
       };
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      const region = screen.getByRole('region', { name: 'Needs attention' });
-      const rows = region.querySelectorAll('li');
-      expect(rows).toHaveLength(2);
-      expect(rows[0]!.textContent).toContain('A delivered piece was damaged in transit');
-      expect(rows[1]!.textContent).toContain('Confirm the site measure');
+      expect(bandSentence()).toContain('window closes in 1 day');
+      expect(bandSentence()).not.toContain('Confirm the site measure');
+
+      fireEvent.click(screen.getByRole('button', { name: '+1 MORE' }));
+      const sheet = screen.getByRole('dialog');
+      expect(
+        within(sheet).getByText('Confirm the site measure — due in 21 days'),
+      ).toBeInTheDocument();
     });
   });
 
-  // ── L1: the letterhead's red-letter zone (project documents only) ──
-  describe('the red-letter zone', () => {
-    it('renders the red-letter zone, not the guide strip, on a project document', () => {
+  // ── W3 (C-6) — the red-letter zone and the guide strip no longer print.
+  // Both are model providers for the band's line 2: the worst standing
+  // exception with its act, or the stage's guide sentence when nothing stands.
+  //
+  // What moved, assertion by assertion: `getByRole('region', { name: 'Needs
+  // attention' })` becomes `data-lens-line2-kind === 'standing'` on the band's
+  // one live region; `getElementById('document-next-up')` (the guide's own
+  // heading id, which the strip owned) becomes `=== 'guide'`. The zone's
+  // per-need `<li>` list becomes line 2 plus the standing sheet behind
+  // `+N MORE`. The guide's `reason`, its `Input needed · …` line and its
+  // `+N more` input count are DELETED with the strip — the band prints the
+  // headline and the act, nothing else (proposal §2.2). ──
+  // D-B22 — `guideShown`/`guideSelected` retired with the strip that fired
+  // them (`DocumentGuide` no longer mounts, so those two events fired
+  // NOWHERE). Their cases move here, against the three lens events, because
+  // the page — which owns the band's model — is where the lens line fires.
+  describe('the lens line’s telemetry (D-B22)', () => {
+    it('fires once for the model the page actually printed', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: null,
+          needs: [{
+            kind: 'task_due', text: 'Confirm the site measure',
+            actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+          }],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      // N-10 — ONCE. `toHaveBeenLastCalledWith` passes just as happily on a
+      // model that fired on every settling read, which is the defect the
+      // once-per-distinct-shape key exists to prevent.
+      expect(mockLensLineShown).toHaveBeenCalledTimes(1);
+      expect(mockLensLineShown).toHaveBeenCalledWith(
+        expect.objectContaining({
+          state: 'standing',
+          // N-05 — the act's own stable key, never its printed label.
+          action_key: 'task_due-0',
+          standing_count: 1,
+          tier: 'full',
+        }),
+      );
+    });
+
+    it('fires nothing from the loading tree (N-11)', () => {
+      // The loading and error trees print no band; an impression from a tree
+      // with no lens line on it is a phantom.
+      mockDocumentQuery = { isLoading: true, isFetching: true, isError: false, data: undefined };
+      render(<DocumentPage params={fulfilledParams} />);
+      expect(mockLensLineShown).not.toHaveBeenCalled();
+    });
+
+    it('fires on the act and on the door, and never from the band itself', () => {
+      asProjectDocument();
+      const needs = [
+        {
+          kind: 'task_due', text: 'Confirm the site measure',
+          actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+        },
+        {
+          kind: 'damage_claim', text: 'A delivered piece was damaged in transit',
+          actionLabel: null, urgent: true, stamp: { label: 'DAMAGE CLAIM' },
+        },
+      ];
+      mockDeskData = {
+        folders: [{ row: { engagement_id: 'project-1' }, need: null, needs }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      fireEvent.click(screen.getByRole('button', { name: '+1 MORE' }));
+      expect(mockLensStandingSheetOpened).toHaveBeenCalledTimes(1);
+      // The sheet's payload carries no `action_key` — the door opens a list,
+      // not an act.
+      expect(mockLensStandingSheetOpened.mock.calls[0][0]).not.toHaveProperty(
+        'action_key',
+      );
+      expect(mockLensLineActed).not.toHaveBeenCalled();
+    });
+
+    it('is the document’s ONE live region, wherever line 2 came from (OD-7)', () => {
+      asProjectDocument();
+      render(<DocumentPage params={fulfilledParams} />);
+      expect(document.querySelectorAll('[aria-live]')).toHaveLength(1);
+    });
+  });
+
+  describe('line 2 — the sentence that changes (L1 → C-6)', () => {
+    it('prints the standing exception, not the guide sentence, on a project document', () => {
       asProjectDocument();
       mockDeskData = {
         folders: [{
@@ -1485,27 +1859,25 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(screen.getByRole('region', { name: 'Needs attention' })).toBeInTheDocument();
-      expect(screen.getByText('Confirm the site measure')).toBeInTheDocument();
+      expect(bandLine2Kind()).toBe('standing');
+      expect(bandSentence()).toContain('Confirm the site measure');
       expect(screen.getByRole('button', { name: 'Open the task' })).toBeInTheDocument();
-      // The guide strip's own heading id never mounts alongside it.
-      expect(document.getElementById('document-next-up')).toBeNull();
+      // One thing stands, so there is nothing to file behind the door.
+      expect(screen.queryByRole('button', { name: /MORE$/ })).not.toBeInTheDocument();
     });
 
-    it('keeps the guide strip, not the red-letter zone, on a non-project document', () => {
+    it('prints the guide sentence on a non-project document', () => {
       // The default mockDocumentQuery row from the outer beforeEach is a lead
       // (Brief) document — unaffected by the project-only swap.
       render(<DocumentPage params={fulfilledParams} />);
 
-      // The strip's own heading id — the same proof the sibling test reads for
-      // its absence. A3-L7 leaves a resting Brief with no act to point at, so
-      // the strip is named by its heading rather than by a button.
-      expect(document.getElementById('document-next-up')).not.toBeNull();
-      expect(screen.getByText('Nothing to decide yet.')).toBeInTheDocument();
-      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(bandLine2Kind()).toBe('guide');
+      // A3-L7 leaves a resting Brief with no act to point at, so the sentence
+      // is what names the state.
+      expect(bandSentence()).toBe('Nothing to decide yet.');
     });
 
-    it('maps every need in the chain to its own red-letter row', () => {
+    it('files every other standing need behind the door', () => {
       asProjectDocument();
       mockDeskData = {
         folders: [{
@@ -1531,15 +1903,21 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      const region = screen.getByRole('region', { name: 'Needs attention' });
-      expect(region.querySelectorAll('li')).toHaveLength(2);
-      expect(screen.getByText('Confirm the site measure')).toBeInTheDocument();
-      expect(screen.getByText('1 piece delivered — awaiting inspection')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Open the task' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Inspect the delivery' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '+1 MORE' }));
+      const sheet = screen.getByRole('dialog');
+      // Every exception, none withheld — the sheet lists both, each with its
+      // own act (OD-6).
+      expect(sheet.querySelectorAll('[data-standing-row]')).toHaveLength(2);
+      expect(within(sheet).getByText('Confirm the site measure')).toBeInTheDocument();
+      expect(
+        within(sheet).getByText('1 piece delivered — awaiting inspection'),
+      ).toBeInTheDocument();
+      expect(
+        within(sheet).getByRole('button', { name: 'Inspect the delivery' }),
+      ).toBeInTheDocument();
     });
 
-    it('keeps the guide on a project the Desk composition never covered', () => {
+    it('keeps the guide sentence on a project the Desk composition never covered', () => {
       asProjectDocument();
       // Warm cache, other engagements only: the zone has no answer for THIS
       // document, and the page cannot derive one (it holds no invoice or
@@ -1554,11 +1932,10 @@ describe('DocumentPage guide activation', () => {
       render(<DocumentPage params={fulfilledParams} />);
 
       expect(mockSelectOperationalNeeds).toHaveReturnedWith(undefined);
-      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
-      expect(document.getElementById('document-next-up')).not.toBeNull();
+      expect(bandLine2Kind()).toBe('guide');
     });
 
-    it('B2 — elects the guide’s sentence from the ticket’s own rows', () => {
+    it('B2 — elects the guide’s sentence from the ticket’s own rows', async () => {
       asProjectDocument();
       mockDeskData = {
         folders: [{ row: { engagement_id: 'someone-else' }, need: null, needs: [] }],
@@ -1566,8 +1943,8 @@ describe('DocumentPage guide activation', () => {
         composed: { 'someone-else': true },
       };
       // One overdue receivable — the only thing wrong on this paper. The
-      // ticket's Money row states it, and the guide's sixth rung quotes the
-      // row rather than reaching for the stage's shrug.
+      // derivation's Money row states it, and the guide's sixth rung quotes
+      // the row rather than reaching for the stage's shrug.
       mockInvoices = [
         {
           id: 'invoice-1',
@@ -1580,11 +1957,19 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      const money = document.querySelector('[data-ticket-row="money"]')!;
-      expect(money.textContent).toContain('$17,500 owed you');
-      expect(document.getElementById('document-next-up')!.textContent).toContain(
-        'Money · $17,500 owed you',
-      );
+      // D-B26 — the money row's own exception is the worst thing standing, so
+      // line 2 names the figure and line 1 YIELDS it rather than printing
+      // $17,500 twice, twenty pixels apart. This paper has no install date, so
+      // line 1's right slot is empty rather than shortened.
+      expect(bandRightFlush()).not.toContain('$17,500');
+      // The election is more direct than it was: the guide strip quoted the
+      // row (`Money · $17,500 owed you`); the band takes the row's own
+      // exception into the standing set and prints it as the worst thing on
+      // the paper (OD-8, `rankStanding`). Same source, one hop fewer. The rows
+      // reach the page one paint after the first, and L-1 turns the sentence
+      // over 90ms rather than swapping it under the reader's eye.
+      await waitFor(() => expect(bandLine2Kind()).toBe('standing'));
+      expect(bandSentence()).toContain('$17,500 owed you');
     });
 
     it('B2 — stops naming a row once its data is gone', () => {
@@ -1597,11 +1982,9 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      const guide = document.getElementById('document-next-up')!;
-      expect(guide.textContent).not.toContain('owed you');
-      expect(document.querySelector('[data-ticket-row="money"]')!.textContent).toContain(
-        'Nothing moving yet',
-      );
+      expect(bandSentence()).not.toContain('owed you');
+      // Nothing is moving, so the money slot states nothing rather than a zero.
+      expect(bandRightFlush()).not.toContain('$');
     });
 
     it('keeps the guide — and its retry — on a project whose Desk read failed', () => {
@@ -1610,20 +1993,20 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'Guidance is unavailable' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+      expect(bandLine2Kind()).toBe('guide');
+      expect(bandSentence()).toContain('Guidance is unavailable');
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(mockRetryDesk).toHaveBeenCalledTimes(1);
     });
 
-    it('F77 — prints the guide, not the red-letter zone, when the composition covered the project and found nothing', () => {
+    it('F77 — prints the guide, not a standing exception, when the composition covered the project and found nothing', () => {
       asProjectDocument();
       mockDeskData = { folders: [], chips: [], composed: { 'project-1': true } };
 
       render(<DocumentPage params={fulfilledParams} />);
 
       expect(mockSelectOperationalNeeds).toHaveReturnedWith([]);
-      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
-      expect(document.getElementById('document-next-up')).not.toBeNull();
+      expect(bandLine2Kind()).toBe('guide');
     });
 
     it('F77 — a care document always shows a guide with no Desk composition', () => {
@@ -1637,8 +2020,7 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
-      expect(document.getElementById('document-next-up')).not.toBeNull();
+      expect(bandLine2Kind()).toBe('guide');
     });
 
     it('F77 — a care document always shows a guide when the composition covered it and found nothing', () => {
@@ -1653,8 +2035,7 @@ describe('DocumentPage guide activation', () => {
       render(<DocumentPage params={fulfilledParams} />);
 
       expect(mockSelectOperationalNeeds).toHaveReturnedWith([]);
-      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
-      expect(document.getElementById('document-next-up')).not.toBeNull();
+      expect(bandLine2Kind()).toBe('guide');
     });
   });
 
@@ -1681,10 +2062,14 @@ describe('DocumentPage guide activation', () => {
     expect(
       screen.getByRole('button', { name: 'Client approvals · 1 awaiting publish →' }),
     ).toBeVisible();
-    // The recap disclosure promises only what its own body holds.
-    expect(
-      screen.getByRole('button', { name: /^The record · \d+ complete$/ }),
-    ).toBeVisible();
+    // The recap disclosure promises only what its own body holds. W2 (C-2)
+    // gave the record a `RegionHead`, so the one line became two registers —
+    // the name and the count — on the region's own root.
+    const record = document.querySelector<HTMLElement>(
+      '[data-index-region="record"]',
+    )!;
+    expect(within(record).getByText('The record')).toBeVisible();
+    expect(within(record).getByText(/^\d+ complete$/)).toBeVisible();
   });
 
   it('says nothing about approvals while that read is unanswered', () => {
@@ -1776,6 +2161,216 @@ describe('DocumentPage guide activation', () => {
       expect(screen.getByRole('button', { name: 'Begin the direction' })).toBeInTheDocument();
     });
   });
+
+  // W5 (OD-2) — before this the four spreads before the work starts rendered
+  // ZERO `[data-index-region]` and ZERO `[data-region-head]` elements (F16):
+  // the ladder had nothing to index and the lens nothing to observe.
+  describe('the pre-work spreads carry real regions', () => {
+    const paperRegionKeys = () =>
+      Array.from(
+        document.querySelectorAll('[data-document-paper] [data-index-region]'),
+      ).map((el) => el.getAttribute('data-index-region'));
+
+    const openSpread = (row: Record<string, unknown>) => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, ...row } },
+      };
+      render(<DocumentPage params={fulfilledParams} />);
+    };
+
+    const SPREADS = [
+      ['brief', { engagement_kind: 'lead', active_section: 'brief', lead_id: 'lead-1' }],
+      [
+        'discovery',
+        {
+          engagement_kind: 'relationship',
+          active_section: 'discovery',
+          engagement_id: 'relationship-1',
+          lead_id: null,
+          client_profile_id: 'client-1',
+        },
+      ],
+      [
+        'direction',
+        {
+          engagement_kind: 'proposal',
+          active_section: 'direction',
+          proposal_id: 'proposal-1',
+          lead_id: null,
+        },
+      ],
+      [
+        'proposal',
+        {
+          engagement_kind: 'proposal',
+          active_section: 'proposal',
+          proposal_id: 'proposal-1',
+          lead_id: null,
+        },
+      ],
+    ] as const;
+
+    // W5F-02 — after N2 the strip is re-hosted inside `scope`, and `scope`
+    // mounts on the PROPOSAL spread only. Suppressing it for all four pre-work
+    // stages therefore took it off brief, discovery and direction entirely —
+    // `section-stage-line-mount.tsx`'s section-mode branch exists for exactly
+    // those three.
+    it.each(SPREADS)(
+      'the %s spread prints its stage strip exactly once, in the right place',
+      (label, row) => {
+        openSpread(row as Record<string, unknown>);
+
+        const strips = document.querySelectorAll('[data-section-stage-line]');
+        // One strip, on every pre-work spread — never zero (W5F-02), never two.
+        expect(strips).toHaveLength(1);
+
+        const insideScope = document.querySelector(
+          '[data-index-region="scope"] [data-section-stage-line]',
+        );
+        if (label === 'proposal') {
+          // Its body — so the first thing after the band is a region head.
+          expect(insideScope).not.toBeNull();
+        } else {
+          // Where R1/I114 put it: the open section's own sub-label.
+          expect(insideScope).toBeNull();
+        }
+      },
+    );
+
+    it.each(SPREADS)(
+      'the %s spread mounts exactly the stops the index declares, in order',
+      (section, row) => {
+        openSpread(row);
+        expect(paperRegionKeys()).toEqual(
+          paperRegionsForSection(section).map((region) => region.key),
+        );
+      },
+    );
+
+    it.each(SPREADS)('every %s stop prints a region head', (_section, row) => {
+      openSpread(row);
+      for (const root of Array.from(
+        document.querySelectorAll('[data-document-paper] [data-index-region]'),
+      )) {
+        expect(root.querySelector('[data-region-head]')).not.toBeNull();
+      }
+    });
+
+    // OD-2 — a row the spread cannot state a number for prints a sentence,
+    // never a dash and never a placeholder figure.
+    it('prints NOTHING YET on a stop with no number', () => {
+      // The proposal read has answered, with a paper that has not gone out:
+      // the difference between `Reading…` and `Not sent yet` is the whole
+      // discipline of the count line.
+      mockProposalData = {
+        id: 'proposal-1',
+        status: 'draft',
+        version: 1,
+        sent_at: null,
+        viewed_at: null,
+        total_amount: null,
+        items: [],
+      };
+      openSpread({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        proposal_id: 'proposal-1',
+        lead_id: null,
+      });
+      const statusOf = (key: string) =>
+        document.querySelector(
+          `[data-document-paper] [data-index-region="${key}"] [data-region-head]`,
+        )?.textContent ?? '';
+      // Prose has nothing to count, so the vision row is a name over a
+      // sentence at every state.
+      expect(statusOf('vision')).toContain('Not written yet');
+      // `mockProposalData` is undefined here — nothing has gone out — and the
+      // row says so in words rather than with a dash or a $0 husk.
+      expect(statusOf('proposal')).toContain('Not sent yet');
+      // W5-R5 §2 — `scope`'s fact HAS a source: the section stage line, which
+      // is now this stop's own body (N2). So it prints the stage phrase, not
+      // `Nothing yet` — and not the stop's name again, which the head prints
+      // one line above.
+      expect(statusOf('scope')).toContain('Core · stage 03');
+      expect(statusOf('scope')).not.toContain('Scope & Engagement · Core');
+      expect(statusOf('investment')).toContain('Nothing yet');
+      expect(statusOf('vision')).not.toMatch(/—|--|\$0/);
+    });
+
+    // DL-02 — the three stage stops' printed names.
+    it('names the stage stops as the design lead ruled', () => {
+      openSpread({ engagement_kind: 'lead', active_section: 'brief', lead_id: 'lead-1' });
+      expect(
+        document
+          .querySelector(
+            '[data-document-paper] [data-index-region="brief"] [data-region-head]',
+          )
+          ?.querySelector('h2')?.textContent,
+      ).toBe('The brief');
+    });
+
+    // W5-R2 item 1 — the proposal spread re-parents the blocks that used to
+    // stand entirely under `investment`: `vision` takes the description,
+    // `scope` takes the per-room budgets and the terms, `investment` keeps
+    // the totals ledger alone.
+    describe('re-parents the proposal blocks by region (W5-R2 item 1)', () => {
+      const PROPOSAL_ROW = {
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        proposal_id: 'proposal-1',
+        lead_id: null,
+      } as const;
+
+      it.each([
+        ['scope', 'scope'],
+        ['vision', 'vision'],
+        ['investment', 'investment'],
+      ] as const)('mounts the %s block under the %s stop', (group, region) => {
+        openSpread(PROPOSAL_ROW);
+        expect(
+          document.querySelector(
+            `[data-document-paper] [data-index-region="${region}"] [data-testid="blocks-${group}"]`,
+          ),
+        ).not.toBeNull();
+      });
+
+      it('mounts no block under a stop it was not re-parented to', () => {
+        openSpread(PROPOSAL_ROW);
+        const regionOf = (testId: string) =>
+          document
+            .querySelector(`[data-testid="${testId}"]`)
+            ?.closest('[data-index-region]')
+            ?.getAttribute('data-index-region');
+        expect(regionOf('blocks-scope')).toBe('scope');
+        expect(regionOf('blocks-vision')).toBe('vision');
+        expect(regionOf('blocks-investment')).toBe('investment');
+        // Never doubled onto `proposal` (the lifecycle stop) or onto each
+        // other's region.
+        expect(
+          document.querySelector(
+            '[data-index-region="proposal"] [data-testid^="blocks-"]',
+          ),
+        ).toBeNull();
+      });
+
+      it('the direction spread keeps every block under its one stop, unfiltered', () => {
+        openSpread({
+          engagement_kind: 'proposal',
+          active_section: 'direction',
+          proposal_id: 'proposal-1',
+          lead_id: null,
+        });
+        expect(
+          document.querySelector(
+            '[data-document-paper] [data-index-region="direction"] [data-testid="blocks-full"]',
+          ),
+        ).not.toBeNull();
+      });
+    });
+  });
+
 });
 
 describe('DocumentPage landedRef — A8 first-open gate', () => {
@@ -1893,5 +2488,57 @@ describe('furnishings authorization doorway', () => {
         documentKind: 'furnishings_authorization',
       }),
     ).toBeNull();
+  });
+});
+
+// W5-R6 / 1b — the shell's Put-down (D1) and text entry share one key. A
+// reader amending the letterhead's name pressed Escape to mean "leave it
+// alone" and the shell put the paper down underneath her: `/doc/…` → `/desk`.
+describe('Escape puts the paper down — unless a field is using the key', () => {
+  // The Put-down listener is registered by the shell itself, above whatever
+  // the paper is doing — so a still-resolving document is enough to read it.
+  beforeEach(() => {
+    mockHydrated = true;
+    mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
+    mockDraftingState = { gaps: [], isLoading: false, error: null };
+    mockProposalData = undefined;
+    mockProposalError = false;
+    mockProjectQuery = { data: undefined, isLoading: false, isError: false };
+    mockResolvedSchedule = NO_RESOLVED_SCHEDULE;
+    mockContextualHandoffsQuery = { data: [], isError: false };
+    mockDeskData = { folders: [], chips: [], composed: {} };
+    mockDeskLoading = false;
+    mockDeskError = false;
+    mockRecentDocumentsInHand = [];
+    mockDocumentQuery = {
+      data: undefined,
+      isLoading: true,
+      isFetching: true,
+      isError: false,
+      refetch: mockRetryDocumentResolution,
+    };
+    setViewport({ width: 1440, reducedMotion: true });
+  });
+
+  it('puts a bare document down', () => {
+    render(<DocumentPage params={fulfilledParams} />);
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/desk');
+  });
+
+  it('leaves the paper alone when the key came from text entry', () => {
+    render(<DocumentPage params={fulfilledParams} />);
+    // Fired straight at the shell's own listener, outside React's tree: the
+    // guard has to hold on its own, not because the field stopped the event.
+    const field = document.createElement('input');
+    document.body.appendChild(field);
+    try {
+      fireEvent.keyDown(field, { key: 'Escape' });
+      expect(mockRouter.push).not.toHaveBeenCalled();
+    } finally {
+      field.remove();
+    }
   });
 });

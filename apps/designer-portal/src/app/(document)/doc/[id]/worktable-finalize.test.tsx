@@ -14,6 +14,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import DocumentPage from './page';
+import {
+  deriveLensBand,
+  type LensBandInput,
+} from '@/lib/document/lens-band-derivation';
 
 jest.mock('@portabletext/react', () => ({
   PortableText: () => null,
@@ -57,6 +61,7 @@ jest.mock('@patina/supabase', () => ({
   useProjectRoster: () => ({ data: [] }),
   useDiscovery: () => ({ data: undefined, isLoading: false, isError: false }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  useCoordinationItems: () => ({ data: [] }),
   useResolvedSchedule: () => ({
     phases: [],
     milestones: [],
@@ -90,6 +95,13 @@ jest.mock('@patina/supabase', () => ({
       select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
     }),
   }),
+}));
+
+// W5-R1: the Margin sheet's whole-margin derivation lives in this local
+// hook, not `@patina/supabase` — mocking it keeps the fix top-of-file only
+// (no QueryClientProvider needed: the real `useQuery` inside it never runs).
+jest.mock('@/hooks/use-margin-items', () => ({
+  useMarginItems: () => ({ data: [] }),
 }));
 
 /* The money ladder under the ticket's Money row: four commercial reads that
@@ -176,9 +188,6 @@ jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
 jest.mock('@/components/document/quiet-sections', () => ({ CareSection: () => null }));
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: () => null,
-}));
 jest.mock('@/components/document/roster/call-sheet-mount', () => ({
   CallSheetMount: () => null,
 }));
@@ -206,9 +215,6 @@ jest.mock('@/components/document/folio-strip', () => ({
   FolioLetterhead: () => null,
   ProposalFolioStrip: () => null,
 }));
-jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
-}));
 jest.mock('@/components/document/letterhead-instruments', () => ({
   LetterheadInstruments: () => null,
 }));
@@ -233,7 +239,15 @@ jest.mock('@/components/document/margin-rail', () => ({
   openMarginRail: jest.fn(),
 }));
 jest.mock('@/components/document/household-chip', () => ({ HouseholdChip: () => null }));
-jest.mock('@/components/document/document-guide', () => ({ DocumentGuide: () => null }));
+// W3 (C-6) — the guide is a MODEL provider now: the page reads
+// `deriveGuideModel` for the band's line 2 and never renders the strip.
+jest.mock('@/components/document/document-guide', () => ({
+  DocumentGuide: () => null,
+  deriveGuideModel: (model: { headline: string }) => ({
+    text: model.headline,
+    act: null,
+  }),
+}));
 jest.mock('@/components/document/red-letter-zone', () => ({ RedLetterZone: () => null }));
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
@@ -292,9 +306,10 @@ jest.mock('@/lib/analytics/document-events', () => ({
   rememberDocumentInHand: jest.fn(),
   readRecentDocumentsInHand: () => [],
   documentEvents: {
+    lensLineShown: jest.fn(),
+    lensLineActed: jest.fn(),
+    lensStandingSheetOpened: jest.fn(),
     historyToggled: jest.fn(),
-    guideShown: jest.fn(),
-    guideSelected: jest.fn(),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     wayfinding: { marginNote: jest.fn() },
@@ -376,6 +391,35 @@ function renderPage(routeId = 'chain-root-1') {
 function precedes(a: Element, b: Element): boolean {
   return Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 }
+
+/** The ninth row itself — read by the band for `row.exception` only (OD-8),
+ *  which is exactly why its arrival cannot move a band line. */
+const CLIENT_COPY_ROW = {
+  key: 'clientcopy' as const,
+  label: 'The client’s copy',
+  value: 'as sent, live',
+  emphasis: null,
+  door: { kind: 'none' } as const,
+  exception: null,
+};
+
+/** This fixture's proposal, as `page.tsx` hands it to the band (C-5): Avery
+ *  Stone's $5,000 offer, sent 10 Aug 2026. */
+const bandInput = (over: Partial<LensBandInput> = {}): LensBandInput => ({
+  spreadKind: 'proposal',
+  ticket: [],
+  needs: [],
+  guide: null,
+  household: 'Avery Stone',
+  stageWord: 'Proposal',
+  stageIndex: null,
+  installDate: null,
+  moneyFigure: null,
+  proposalInvestment: '$5,000',
+  sentDate: 'Aug 10',
+  readingStop: null,
+  ...over,
+});
 
 const approvals = (n: number) =>
   Array.from({ length: n }, (_, i) => ({
@@ -566,42 +610,57 @@ describe('the Finalize table (W4a)', () => {
     expect(container.querySelector('[data-terms-body-editor]')).toBeNull();
   });
 
-  it('prints the client’s copy as the ticket’s NINTH row, and opens it as a leaf', () => {
+  it('prints the same two band lines whether or not the ninth row stands', () => {
+    // W3-L5, replacing "prints the client’s copy as the ticket’s NINTH row",
+    // and rewritten again in the W3 fix lane (C-15): the two cases this
+    // replaced the row assertions with called `deriveLensBand` on a fixture
+    // this FILE built, so neither could fail on a `page.tsx` regression, and
+    // one of them asserted `SENT AUG 10 · $5,000` — a line the shipped page
+    // cannot print, because it passes `proposalInvestment: null` (W3-R4).
+    // Both now read the band the page actually rendered.
+    //
+    // What the nine-row list carried survives in two halves:
+    //   · the copy is still reached from the document’s own map, now as the
+    //     ladder’s `clientcopy` door on the proposal spread only (OD-8 / DL-04).
+    //     That door lives in `spine/lens-ladder.tsx` and is proved in
+    //     `spine/__tests__/lens-ladder.test.tsx`; this suite stubs `DocSpine`,
+    //     so no ladder — and no door — stands on this paper to press.
+    //   · the copy’s own STATE ("as sent, live" / "not sent yet") is on
+    //     NEITHER band line (OD-1: it is a door, never line 2). That is this
+    //     suite’s to hold, because the band is the DOCUMENT’s map and the
+    //     Finalize table is what comes and goes beneath it.
     const { container } = renderPage();
 
-    // B2 — the proposal's one shelf is a ticket row now, so the copy is
-    // reached the way this document reaches everything else. The spine's
-    // shelves block, and the transitional row that stood in for it, are gone.
+    // The spine’s shelves block, and the transitional row that stood in for it,
+    // are gone. (Survivor.)
     expect(container.querySelector('[data-shelf-trigger]')).toBeNull();
 
-    const rows = Array.from(
-      container.querySelectorAll('[data-job-ticket] [data-ticket-row]'),
-    ).map((el) => el.getAttribute('data-ticket-row'));
-    expect(rows).toEqual([
-      'rooms', 'pieces', 'drawings', 'spec', 'boards', 'money', 'dates', 'people',
-      'clientcopy',
-    ]);
-
-    const row = container.querySelector(
-      '[data-ticket-row="clientcopy"] button',
-    ) as HTMLElement;
-    // The fixture's proposal carries a `sent_at`, so the row says so.
-    expect(row.textContent).toContain('The client’s copy · as sent, live');
-
-    fireEvent.click(row);
-    expect(container.querySelector('[data-shelf-leaf="clientcopy"]')).not.toBeNull();
-    expect(
-      container.querySelector('[data-client-copy-rail="proposal-live-1"]'),
-    ).not.toBeNull();
+    expect(container.querySelectorAll('[data-lens-band]')).toHaveLength(1);
+    const printed = [
+      container.querySelector('[data-lens-identity]')?.textContent ?? '',
+      container.querySelector('[data-lens-right-flush]')?.textContent ?? '',
+      container.querySelector('[data-lens-sentence]')?.textContent ?? '',
+    ];
+    for (const text of printed) {
+      expect(text.toLowerCase()).not.toContain('copy');
+      expect(text.toLowerCase()).not.toContain('as sent, live');
+      expect(text.toLowerCase()).not.toContain('not sent yet');
+    }
   });
 
-  it('says the copy has not gone out when the proposal has no sent day', () => {
-    mockProposal = { ...mockProposal, sent_at: null };
+  it('prints the proposal’s own investment total beside its send date (W3-R4, discharged in W5)', () => {
+    // W3-R4 held this slot to the sent date alone "until Wave 5's `investment`
+    // stop lands". It has landed: the figure is `proposals.total_amount` — the
+    // proposal's OWN total (DL-01), never an FF&E budget wearing its name —
+    // and the absent-never-placeholder rule still governs the shape.
     const { container } = renderPage();
 
-    expect(
-      container.querySelector('[data-ticket-row="clientcopy"]')?.textContent,
-    ).toContain('The client’s copy · not sent yet');
+    const rightFlush =
+      container.querySelector('[data-lens-right-flush]')?.textContent ?? '';
+    // At s0 the slot is `moneyOnly` — the investment total alone (OD-1); the
+    // send date joins it once the band pins.
+    expect(rightFlush).toBe('$5,000');
+    expect(rightFlush).not.toMatch(/—|--|n\/a/i);
   });
 
   it('mounts none of it with the flag off — parity', () => {
@@ -612,10 +671,11 @@ describe('the Finalize table (W4a)', () => {
     expect(container.querySelector('[data-table]')).toBeNull();
     expect(container.querySelector('[data-finalize-head]')).toBeNull();
     expect(container.querySelector('[data-offer-facets]')).toBeNull();
-    // The ticket still stands off the flag — it is the DOCUMENT's map, not the
-    // table's — but with no Finalize table there is no ninth row on it.
-    expect(container.querySelector('[data-job-ticket]')).not.toBeNull();
-    expect(container.querySelector('[data-ticket-row="clientcopy"]')).toBeNull();
+    // The band still stands off the flag — it is the DOCUMENT's map, not the
+    // table's — but with no Finalize table there is no ninth row behind it, so
+    // the ladder prints no door to the copy.
+    expect(container.querySelector('[data-lens-band]')).not.toBeNull();
+    expect(container.querySelector('[data-ladder-door="clientcopy"]')).toBeNull();
     expect(container.querySelector('[data-action-variant="inked"]')).toBeNull();
     // The whisper is back where it has always been.
     const whisper = screen.getByText('2 of 2 approved');
@@ -640,7 +700,8 @@ describe('the Finalize table (W4a)', () => {
     );
     expect(container.querySelector('[data-finalize-head]')).toBeNull();
     expect(container.querySelector('[data-offer-facets]')).toBeNull();
-    // Eight rows, never nine: the ninth row's subject gates it, not a flag.
-    expect(container.querySelector('[data-ticket-row="clientcopy"]')).toBeNull();
+    // No door to the copy: the ninth row's subject gates it, not a flag — and
+    // a project spread has no client's copy to file.
+    expect(container.querySelector('[data-ladder-door="clientcopy"]')).toBeNull();
   });
 });

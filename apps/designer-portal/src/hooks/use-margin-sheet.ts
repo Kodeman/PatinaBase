@@ -1,0 +1,177 @@
+'use client';
+
+/**
+ * D-B30 / W5-R1 — the margin, derived once for the mobile bar's door and the
+ * 390 Margin sheet.
+ *
+ * `useMarginSheet` is the whole margin (every anchor kind), grouped exactly
+ * as the desktop rail groups it (`margin-rail.tsx`'s `anchorGroups`,
+ * `marginAnchorRegion`/`marginRegionName` from `margin-item.tsx`): "THE
+ * WHOLE JOB" (letterhead/section-anchored) and one "BESIDE <region>" group
+ * per paper region with a line-anchored member — the sheet prints WHOLE JOB
+ * first (the rail prints it last; W5-R1 reverses the print order, not the
+ * grouping mechanic). A line-anchored row also carries its line's own label
+ * (room · item name) so a row lifted into a bottom sheet still says what it
+ * sits beside.
+ *
+ * D-B45 — `useLetterheadMargin` and `MobileMarginChips` are DELETED. The chips
+ * were mobile-only from the start (the component's own docstring: "the desktop
+ * margin rail owns these above 980px", `min-[980px]:hidden` since `1b93def1a`),
+ * so "they stay >=980" was a misreading: they never printed at desktop widths,
+ * and printing them there would double every line item beside the rail. Below
+ * 980 this sheet carries the whole margin, line-anchored rows included. One
+ * derivation, one surface.
+ */
+
+import { useMemo } from 'react';
+import { useMarginItems } from '@/hooks/use-margin-items';
+import { useCoordinationItems, useProjectFFEItems } from '@patina/supabase';
+import {
+  classifyMarginItems,
+  marginDecisionClassificationState,
+  type MarginDecisionClassificationState,
+} from '@/lib/document/stage2-approval-exclusions';
+import type { MarginItemRow } from '@/lib/document/margin-derivation';
+import { marginAnchorRegion, marginRegionName } from '@/components/document/margin-item';
+import {
+  PROJECT_PAPER_ORDER,
+  type DocumentIndexKey,
+} from '@/lib/document/document-index';
+import { useHandoffGates } from '@/components/document/margin-handoff-item';
+import type { WorkflowGate } from '@/lib/document/workflow-gate';
+import {
+  groupMarginRows,
+  marginListable,
+} from '@/lib/document/margin-groups';
+
+export interface MarginSheetRow {
+  row: MarginItemRow;
+  /** Set only for a line-anchored row: "<Room> · <FF&E line name>" (falls
+   *  back to whichever half is known, null if neither resolved yet). */
+  lineLabel: string | null;
+}
+
+export interface MarginSheetGroup {
+  /** null = "the whole job"; a DocumentIndexKey names a "beside <region>"
+   *  group (only ever 'ffe' today — `marginAnchorRegion` never yields
+   *  another region). */
+  key: DocumentIndexKey | null;
+  heading: string;
+  rows: MarginSheetRow[];
+}
+
+export interface MarginSheet {
+  /** "THE WHOLE JOB" first (W5-R1's print order), then one "BESIDE <region>"
+   *  group per paper region with a member, in `PROJECT_PAPER_ORDER`. Empty
+   *  groups never print (mirrors the rail). */
+  groups: MarginSheetGroup[];
+  gates: WorkflowGate[];
+  decisionState: MarginDecisionClassificationState;
+  showDecisionNotice: boolean;
+  /** Every item across every group, plus gates — what the door and the head
+   *  count (W5-R1: "Margin · 7" on `…d5`). */
+  count: number;
+  /** Overdue DECISIONS only — money is never counted (W5-R1). */
+  overdueCount: number;
+}
+
+export function useMarginSheet({
+  projectId,
+  proposalId,
+  clientName = '',
+}: {
+  projectId: string | null;
+  proposalId: string | null;
+  clientName?: string;
+}): MarginSheet {
+  const { data: items } = useMarginItems(projectId, proposalId);
+  const coordinationQuery = useCoordinationItems(projectId);
+  const coordinationItems = coordinationQuery.data;
+
+  const classificationState = marginDecisionClassificationState({
+    projectId,
+    coordinationItems,
+    isLoading:
+      coordinationQuery.isLoading === true ||
+      coordinationQuery.isPending === true,
+    isError: coordinationQuery.isError === true,
+  });
+
+  const classifiedMargin = useMemo(
+    () =>
+      classifyMarginItems(items ?? [], coordinationItems ?? [], classificationState),
+    [classificationState, coordinationItems, items],
+  );
+
+  // The whole margin, every anchor kind — W5-R1 supersedes D-B30's
+  // letterhead-only scope.
+  const allItems = useMemo(
+    () => marginListable(classifiedMargin.items),
+    [classifiedMargin.items],
+  );
+
+  // A line-anchored row's second line names its FF&E line (room · name),
+  // the same embed margin-rail.tsx already fetches for its line-rank sort.
+  const { data: ffeItems } = useProjectFFEItems(projectId ?? '');
+  const lineById = useMemo(() => {
+    const map = new Map<string, { name: string; room: string | null }>();
+    for (const it of (ffeItems ?? []) as Array<{
+      id: string;
+      name: string;
+      room?: { name?: string | null } | null;
+    }>) {
+      map.set(it.id, { name: it.name, room: it.room?.name ?? null });
+    }
+    return map;
+  }, [ffeItems]);
+
+  // W5F-06 — the margin's ONE grouper, shared with the desktop rail. W5-R1
+  // leads with the whole job; the rail leads with the regions. Same mechanic,
+  // one implementation.
+  const groups = useMemo(
+    () =>
+      groupMarginRows<MarginSheetRow>(allItems, {
+        order: 'whole-job-first',
+        decorate: (row) => {
+          const key = marginAnchorRegion(row);
+          const line = row.anchor_id ? lineById.get(row.anchor_id) : undefined;
+          return {
+            row,
+            lineLabel:
+              key && line
+                ? [line.room, line.name].filter(Boolean).join(' · ')
+                : null,
+          };
+        },
+      }),
+    [allItems, lineById],
+  );
+
+  const handoffNow = useMemo(() => new Date(), []);
+  const { gates } = useHandoffGates({ projectId, clientName, now: handoffNow });
+
+  // W5-C11 — overdue DECISIONS only; money is never counted (W5-R1). The
+  // filter is the code's own, not the DB view's: `margin_items`
+  // (`00219_coordination_read_models.sql`) happens to write `'overdue'` only
+  // in the decision branch, and the invoice branch passes `inv.status`
+  // through, whose CHECK (`00178_invoices_v1.sql`) is
+  // `draft|sent|partially_paid|paid|void` — so today a state filter alone
+  // gets the right answer for the wrong reason, and a later migration that
+  // taught invoices the word would silently start counting money.
+  const overdueCount = useMemo(
+    () =>
+      allItems.filter(
+        (row) => row.kind === 'decision' && row.state === 'overdue',
+      ).length + gates.filter((gate) => gate.overdue.isOverdue).length,
+    [allItems, gates],
+  );
+
+  return {
+    groups,
+    gates,
+    decisionState: classifiedMargin.decisionState,
+    showDecisionNotice: classifiedMargin.withheldDecisionCount > 0,
+    count: allItems.length + gates.length,
+    overdueCount,
+  };
+}

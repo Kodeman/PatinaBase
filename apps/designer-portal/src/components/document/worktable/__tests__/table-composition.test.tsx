@@ -1,14 +1,26 @@
 /**
- * The Worktable composition (B2-L4, direction-b §9) — where the ticket stands
- * once a table does, and what the table keeps when it arrives.
+ * The Worktable composition (B2-L4, direction-b §9; R127 Wave 3) — where the
+ * band stands once a table does, and what the table keeps when it arrives.
  *
- * What this suite holds: the ticket prints ABOVE the table on every one of the
- * four compositions; it prints nowhere at all when there is no table, because
- * that is the paper where the page mounts it under the letterhead; there is
- * never more than one of it; and nothing ratified moves out from under it —
- * Speccing keeps I139's rooms rail at the table head, Delivery keeps I141's
- * release lift leading the table and keeps the money seam, and Intake keeps
- * its honest `opens when…` seams.
+ * W3-L5 rewrite. The job ticket is deleted and the lens band takes its place,
+ * and the band is the DOCUMENT's, not the table's: it is composed once at the
+ * top of the paper and the frame no longer re-mounts it anywhere. So the
+ * claims this suite held divide in two.
+ *
+ * KEPT — the ordering claims, which are what B2-L4 was actually protecting:
+ * the band prints above the table on every one of the four compositions, above
+ * the turn line and the seal note rather than between them, and nothing
+ * ratified moves out from under it — Speccing keeps I139's rooms rail at the
+ * table head, Delivery keeps I141's release lift leading the table and keeps
+ * the money seam, and Intake keeps its honest `opens when…` seams.
+ *
+ * REWRITTEN — the two claims that said the FRAME owns the mount. "Prints
+ * exactly one ticket on this composition" was the frame's single-mount rule;
+ * its replacement truth is that the frame mounts NO band of its own, so the
+ * document's one band is still the only one on the paper. "Prints no ticket at
+ * all when there is no table" was the frame's conditional mount; that claim no
+ * longer exists — the band prints on every spread, table or no table — and its
+ * replacement truth is asserted here instead.
  */
 import { render, screen } from '@testing-library/react';
 
@@ -45,21 +57,25 @@ const DELIVERY: TableComposition = {
   setting: 'procurement',
 };
 
-const TICKET = <section data-job-ticket="" aria-label="The job" />;
+/** The document's one band, stood where the page stands it: above everything
+ *  the frame prints (C-5). A stub, because this suite is about composition. */
+const BAND = <section data-lens-band="" aria-label="The job" />;
 
 function frame(props: Partial<React.ComponentProps<typeof TableFrame>> = {}) {
   return render(
-    <TableFrame
-      composition={DELIVERY}
-      pending={null}
-      onTurn={jest.fn()}
-      sealTurn={null}
-      slots={{}}
-      ticket={TICKET}
-      {...props}
-    >
-      <p data-spread>the spread</p>
-    </TableFrame>,
+    <>
+      {BAND}
+      <TableFrame
+        composition={DELIVERY}
+        pending={null}
+        onTurn={jest.fn()}
+        sealTurn={null}
+        slots={{}}
+        {...props}
+      >
+        <p data-spread>the spread</p>
+      </TableFrame>
+    </>,
   );
 }
 
@@ -70,39 +86,35 @@ function precedes(first: Element, second: Element): boolean {
   );
 }
 
-describe('the ticket above the table', () => {
+// C-16 — two cases deleted here rather than kept: "prints above the table" and
+// "stands on the paper that has no table too" asserted that THIS FILE's own
+// JSX put its `BAND` stub before `<TableFrame>`, and that its own stub exists.
+// The frame no longer takes a `ticket` node, so neither could fail on any
+// product change. The composition claim they were standing in for is carried
+// by `page.test.tsx`'s "mounts once on the %s spread", which renders the real
+// page with `worktable` on. What survives here is the one claim that still has
+// a subject: the frame could in principle mount a band, and does not.
+describe('the band above the table', () => {
   it.each([
     ['intake', INTAKE],
     ['speccing', SPECCING],
     ['finalize', FINALIZE],
     ['delivery', DELIVERY],
-  ])('prints above the table on the %s composition', (_name, composition) => {
+  ])('the frame mounts no band of its own on the %s composition', (_name, composition) => {
+    // Was "prints exactly one ticket on this composition", when the frame
+    // owned one of the ticket's two positions. The band has one position and
+    // the document owns it, so the claim that survives is that the frame adds
+    // nothing: the paper still carries exactly the one band above it.
     const { container } = frame({ composition });
 
-    const ticket = container.querySelector('[data-job-ticket]')!;
-    const table = container.querySelector('[data-table]')!;
-    expect(ticket).not.toBeNull();
-    expect(table).not.toBeNull();
-    expect(precedes(ticket, table)).toBe(true);
+    expect(container.querySelectorAll('[data-lens-band]')).toHaveLength(1);
   });
 
-  it.each([
-    ['intake', INTAKE],
-    ['speccing', SPECCING],
-    ['finalize', FINALIZE],
-    ['delivery', DELIVERY],
-  ])('prints exactly one ticket on the %s composition', (_name, composition) => {
-    const { container } = frame({ composition });
-
-    expect(container.querySelectorAll('[data-job-ticket]')).toHaveLength(1);
-  });
-
-  it('prints no ticket at all when there is no table', () => {
-    // The page mounts it under the letterhead on that paper; a second one here
-    // would be two maps of one job.
+  it('mounts no band of its own on a paper with no table either', () => {
     const { container } = frame({ composition: null });
 
-    expect(container.querySelector('[data-job-ticket]')).toBeNull();
+    expect(container.querySelectorAll('[data-lens-band]')).toHaveLength(1);
+    expect(container.querySelector('[data-table]')).toBeNull();
     expect(container.querySelector('[data-spread]')).not.toBeNull();
   });
 
@@ -112,13 +124,13 @@ describe('the ticket above the table', () => {
       sealTurn: { signedDate: '12 Aug 2026' },
     });
 
-    const ticket = container.querySelector('[data-job-ticket]')!;
+    const band = container.querySelector('[data-lens-band]')!;
     const turn = container.querySelector('[data-table-turn]')!;
-    expect(precedes(ticket, turn)).toBe(true);
+    expect(precedes(band, turn)).toBe(true);
   });
 });
 
-describe('what the table keeps under the ticket', () => {
+describe('what the table keeps under the band', () => {
   it('Speccing: the rooms rail still stands at the table head', () => {
     const { container } = frame({
       composition: SPECCING,
@@ -135,46 +147,48 @@ describe('what the table keeps under the ticket', () => {
     expect(screen.getByRole('button', { name: '+ Add a room' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Living Room' })).toBeTruthy();
 
-    const ticket = container.querySelector('[data-job-ticket]')!;
+    const band = container.querySelector('[data-lens-band]')!;
     const spread = container.querySelector('[data-spread]')!;
-    expect(precedes(ticket, rail)).toBe(true);
+    expect(precedes(band, rail)).toBe(true);
     expect(precedes(rail, spread)).toBe(true);
   });
 
   it('Delivery: the release lift still leads the table, and the money seam stands', () => {
     const { container } = render(
-      <TableFrame
-        composition={DELIVERY}
-        pending={null}
-        onTurn={jest.fn()}
-        sealTurn={null}
-        slots={{}}
-        ticket={TICKET}
-      >
-        <ReleaseLift />
-        <section data-index-region="money" aria-label="Money" />
-      </TableFrame>,
+      <>
+        {BAND}
+        <TableFrame
+          composition={DELIVERY}
+          pending={null}
+          onTurn={jest.fn()}
+          sealTurn={null}
+          slots={{}}
+        >
+          <ReleaseLift />
+          <section data-index-region="money" aria-label="Money" />
+        </TableFrame>
+      </>,
     );
 
-    const ticket = container.querySelector('[data-job-ticket]')!;
+    const band = container.querySelector('[data-lens-band]')!;
     const table = container.querySelector('[data-table]')!;
     const lift = container.querySelector('[data-release-lift]')!;
     const money = container.querySelector('[data-index-region="money"]')!;
 
     expect(lift).not.toBeNull();
     expect(money).not.toBeNull();
-    expect(precedes(ticket, lift)).toBe(true);
+    expect(precedes(band, lift)).toBe(true);
     // I141 — the lift is still the first thing ON the table.
     expect(table.firstElementChild).toBe(lift);
     expect(precedes(lift, money)).toBe(true);
   });
 
-  it('Intake: the honest future seams still stand under the ticket', () => {
+  it('Intake: the honest future seams still stand under the band', () => {
     const { container } = frame({ composition: INTAKE });
 
-    const ticket = container.querySelector('[data-job-ticket]')!;
+    const band = container.querySelector('[data-lens-band]')!;
     const seams = container.querySelectorAll('[data-future-seam]');
     expect(seams).toHaveLength(3);
-    expect(precedes(ticket, seams[0])).toBe(true);
+    expect(precedes(band, seams[0])).toBe(true);
   });
 });

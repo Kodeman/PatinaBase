@@ -212,16 +212,32 @@
   --space-16: 4rem;
   --space-20: 5rem;
   --space-24: 6rem;
+
+  /* — The Smart Lens (R127): the declared lengths —
+     Lengths only, declared exactly once here (C-7) and never redeclared. The
+     old seam measured itself at runtime and published its height; the band is
+     a fixed organ, so every consumer names a constant instead. */
+  --doc-region-gap: 24px; /* R127: the one gap between region roots on the paper */
+  --doc-band-height: 56px; /* R127: the lens band's declared height — what the `sticky top-0` organs stand under */
+  --doc-landing-clear: calc(var(--doc-band-height) + 16px); /* R127: 72px — where a jumped-to stop or focused control comes to rest, clear of the band. The gap is an absolute 16px, not 1rem: this route's root font-size is 18px, so a `1rem` arm computes to 74px against the proposal's declared 72. */
+  --doc-quiet-reserve-min: 68px; /* R127/OD-12: a quiet region's floor — head + count line + one leader */
+  --doc-quiet-reserve-exc: 112px; /* R127/OD-12: the same floor when the region also prints standing exceptions */
+  --doc-passed-reserve: 112px; /* R127/OD-4 (W4-C8): the estimate a PASSED region spends before the engine has ever remembered a real size for it — deliberately not --doc-quiet-reserve, which every region root shadows on itself */
 }
 
-/* The Document owns one persistent viewport edge at every width: MobileBar
-   below 1180px and the 60px Studio Drawer above it. Floating actions inherit
-   this contract so they clear the active chrome (and the mobile safe area)
-   without changing their legacy-portal position outside this route group. */
+/* The Document owns one persistent viewport edge at every width: the 72px
+   MobileBar below 1180px (W1/OD-11 raised it from 64px for its third line)
+   and the 60px Studio Drawer above it. Floating actions inherit this contract
+   so they clear the active chrome (and the mobile safe area) without changing
+   their legacy-portal position outside this route group. The below-1180 value
+   is the bar's own floor, so it holds with no safe area to add. */
 .document-route-shell {
+  /* D-B47: `--doc-mobile-bar-height` is published on `html` by the bar's own
+     ResizeObserver (min 72px), and is absent wherever the bar is not laid
+     out — so the fallback is the contract this rule always carried. */
   --doc-shell-bottom-inset: max(
-    64px,
-    calc(52px + env(safe-area-inset-bottom))
+    var(--doc-mobile-bar-height, 72px),
+    calc(60px + env(safe-area-inset-bottom))
   );
   --doc-shell-floating-bottom: calc(var(--doc-shell-bottom-inset) + 1.5rem);
 }
@@ -282,6 +298,32 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .doc-breath {
+    animation: none;
+  }
+}
+
+/* R127/D-B21 (W4-L4) — a yield is a STATE that holds at every motion
+   register, never an animation that only reduced motion turns off: this
+   block kills the transitions/animations on the lens's three yielding sites
+   (L-1's line-2 crossfade spans, L-3's ladder segment head-in-frame, L-6's
+   letterhead stage phrase) so they snap instead of crossfading, but the
+   yielded phrase is still `opacity: 0` under EITHER motion register — the
+   instrument for falsifiable sentence (d) is the visible-word set
+   (opacity > 0, visible, displayed), never opacity itself, so this rule may
+   never touch opacity, visibility or display. This amends the design's
+   original "transition: none; opacity: 1" sentence (technical-design.md §5),
+   which would have printed the yielded phrase under reduce and hidden it
+   otherwise (deviations.md D-B21). The Tailwind `motion-reduce:transition-
+   none` already on `doc-spine.tsx:235-237` and `lens-ladder.tsx:387` is the
+   same rule stated locally and stays; this is the design's declared site for
+   it — sited immediately after the pre-existing `.doc-breath` reduced-motion
+   block above, per D-B21's "immediately after globals.css:283". */
+@media (prefers-reduced-motion: reduce) {
+  [data-lens-line='2'] > span,
+  [data-letterhead-in-frame],
+  [data-region-head-in-frame],
+  [data-region-head-in-frame] > * {
+    transition: none;
     animation: none;
   }
 }
@@ -1016,26 +1058,116 @@
   }
 }
 
-/* Two organs stick to the top of the paper: the job ticket's pinned seam,
-   which has to ride with the reader (R124), and the schedule's own pinned
-   glance. Both are `sticky top-0`, and the glance is later in the same scroll
-   container, so it used to paint over the seam for the whole length of the
-   Schedule region. The seam publishes its height while it is pinned; the
-   glance stands under it, and falls back to the top when nothing is pinned. */
+/* Two organs stick to the top of the paper: the lens band, which has to ride
+   with the reader (R127), and the schedule's own pinned glance. Both are
+   `sticky top-0`, and the glance is later in the same scroll container, so it
+   used to paint over the band for the whole length of the Schedule region.
+   The band's height is DECLARED, not measured, so the glance stands under a
+   constant and there is no published length to fall back from. */
 [data-document-shell] section[aria-label='Schedule rule'] {
-  top: var(--doc-seam-height, 0px);
+  top: var(--doc-band-height);
 }
 
-/* Every region root the ticket's rows and the running index land on stands
-   clear of the pinned seam, not the Money one alone: `scrollToRegion` lands
-   each of them at `block: start`, and the seam is what is holding that top.
-   The FF&E region keeps the 4rem breathing room it already had as its floor. */
-[data-document-shell] [data-index-region] {
-  scroll-margin-top: var(--doc-seam-height, 0px);
+/* Every region root the band's rows and the running index land on stands clear
+   of the band, not the Money one alone: `scrollToRegion` lands each of them at
+   `block: start`, and the band is what is holding that top. FF&E's own 4rem
+   floor is retired rather than kept as a `max()` arm: --doc-landing-clear is
+   72px, which already clears 64px, so the floor can never bind again. */
+[data-document-paper] [data-index-region] {
+  scroll-margin-top: var(--doc-landing-clear);
 }
-[data-document-shell] [data-index-region='ffe'] {
-  scroll-margin-top: max(var(--doc-seam-height, 0px), 4rem);
+
+/* R127 — a keyboard landing is a landing too. Tab and browser find-in-page
+   scroll a focusable into view on their own, with no `scrollToRegion` to route
+   through, so the clearance has to live on the element itself or the band eats
+   the thing that just took focus. */
+[data-document-paper] :is(a, button, input, select, textarea, [tabindex]) {
+  scroll-margin-top: var(--doc-landing-clear);
 }
+
+/* R127 — the paper's scrolling root is the WINDOW: `[data-document-shell]` is
+   a `min-h-screen` grid with no overflow of its own, so the scroll padding
+   belongs on `html`, scoped by the shell so no other portal surface inherits
+   it. The value is the shell's own `--doc-shell-bottom-inset` arithmetic
+   restated: below 1180 the persistent edge is the 72px MobileBar, above it the
+   60px Studio Drawer, and a 60px padding leaves a stop resting 12px behind the
+   bar at the very width the clearance rule exists for. The token itself is
+   declared on `.document-route-shell` and cannot be read from `html`. */
+html:has([data-document-shell]) {
+  scroll-padding-bottom: max(
+    var(--doc-mobile-bar-height, 72px),
+    calc(60px + env(safe-area-inset-bottom))
+  );
+}
+
+/* R127/A-07 — the foot reserve. The last stop on the paper has to be able to
+   come to rest at `--doc-landing-clear` like every stop above it, and without
+   this the document simply runs out of scroll extent and the head lands
+   wherever the paper ends. `4rem` is the colophon's own standing room, which
+   is already below the last stop. */
+[data-document-paper] {
+  padding-block-end: calc(100dvh - var(--doc-landing-clear) - 4rem);
+}
+
+/* R127/OD-12 (W4-L4) — a quiet region's body never shrinks its root below the
+   region's own reserve, so promoting it to `full` and mounting its real body
+   never moves anything above it. The six quiet-body lanes (W4-L2/L3) set
+   `--doc-quiet-reserve` on the region root itself — `var(--doc-quiet-reserve-
+   exc)` (112px) when the region prints standing exceptions, `var(--doc-quiet-
+   reserve-min)` (68px) otherwise (the two literals declared once, above). This
+   rule holds AT EVERY DENSITY, not only while quiet: OD-12's own contract is
+   "a body shorter than its reserve never shrinks the region on mount", and a
+   short FULL body is exactly as capable of doing that as a quiet one. The DOM
+   contract (technical-design.md §5) names no separate body-wrapper attribute
+   — `data-passed` and `data-density` are both written on the SAME element
+   that carries `[data-index-region]` — so this selects the region root
+   directly rather than a child "body" element.
+
+   Scoped to `[data-document-paper]`, NEVER `[data-document-shell]`: C-4 puts
+   `data-index-region` on the rail ladder's stops too (`spine/lens-ladder.tsx`,
+   both the pressable `<button>` and the unmounted `<div role="text">`), and
+   the ladder is inside the shell. A shell-scoped floor gives every stop a 68px
+   minimum and blows OD-14's derived segment floors (45/45/112/60/45/29) past
+   the 336px track. `lens-css-scope.test.ts` holds the scope. */
+[data-document-paper] [data-index-region] {
+  min-block-size: var(--doc-quiet-reserve, 68px);
+}
+
+/* R127/OD-4 (W4-L4) — DELETED, by OD-4's own pre-agreed failure move.
+   Item 12 · what was here:
+
+     @supports (content-visibility: auto) {
+       [data-document-paper] [data-index-region][data-passed] {
+         content-visibility: auto;
+         contain-intrinsic-size: auto var(--doc-passed-reserve, 112px);
+       }
+     }
+
+   MEASURED, chromium, 1440x900, the 30-step settled scroll `lens-cls.spec.ts`
+   drives: CLS **0.8658** with the block, **0.000986** with the single
+   `content-visibility: auto` declaration removed and everything else
+   unchanged — the property is 99.9% of the shift, and D-B29's gate is exactly
+   0. The two shifts it produces are step 9 (a folded region's `FoldSeam`
+   subtree collapsing 219.73px -> 40.94px and back, 0.078 each way) and step 24
+   (four `li#ffe-selection-…` rows zeroing and returning, 0.353 + 0.355).
+
+   Both are the property TOGGLING, not a missing reserve. `contain-intrinsic-
+   size: auto <length>` was already the remembering form, and deferring
+   `data-passed` until two frames after the promotion — so the engine has laid
+   the full body out and has a real last-remembered size before it may skip it
+   — was tried and moved the number NOT AT ALL (0.8657658230921531 both runs,
+   to the digit). A region whose contents the engine skips and unskips as it
+   crosses the relevance margin shifts on each crossing whatever size is
+   remembered for it.
+
+   OD-4's own text names the remedy for exactly this: "its pre-agreed failure
+   move is to DELETE this block and log the finding in `deviations.md` as an
+   'OD-4 fallback candidate' — never a CSS change that tries to keep both."
+   Logged as D-B33. `--doc-passed-reserve` stays declared on `:root`, unspent,
+   for whoever takes the candidate up.
+
+   Note the find-in-page gate (`quiet-responsive-shell.spec.ts`, chromium AND
+   webkit) PASSES either way — it was never the thing that failed here. */
 
 /* Typography: now provided by @patina/design-system/styles/typography.css.
    Font variable mappings set on body below in @layer base. */

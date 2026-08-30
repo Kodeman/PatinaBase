@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { psqlScalar } from './psql';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321';
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -87,13 +88,18 @@ export async function deleteProposalCascade(proposalId: string): Promise<void> {
 }
 
 export async function getUserIdByEmail(email: string): Promise<string> {
-  // Service-role auth admin API: fetch up to 1000 users so we don't silently
-  // miss the target account when the auth.users table exceeds the default 50-row page.
-  const { data, error } = await adminDb.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  if (error) throw error;
-  const user = data.users.find((u) => u.email === email);
-  if (!user) throw new Error(`Auth user not found for email: ${email}`);
-  return user.id;
+  // Not GoTrue's `/admin/users` (adminDb.auth.admin.listUsers): it 500s
+  // against a freshly reset local stack because `supabase/seed/leads_room_scans.sql`
+  // inserts auth.users rows without the token columns, and GoTrue's Go scanner
+  // cannot read a NULL `confirmation_token` ("converting NULL to string is
+  // unsupported"). Reading auth.users directly is immune to that — same
+  // workaround as `e2e/document/plan-room.spec.ts` and
+  // `e2e/library-configuration/fixtures.ts`'s `userIdByEmail`. `helpers/psql`
+  // refuses any non-local database.
+  const escaped = email.replace(/'/g, "''");
+  const id = psqlScalar(`select id from auth.users where email = '${escaped}'`);
+  if (!id) throw new Error(`Auth user not found for email: ${email}`);
+  return id;
 }
 
 export async function setProposalClient(proposalId: string, clientUserId: string): Promise<void> {

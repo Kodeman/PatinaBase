@@ -13,19 +13,24 @@
  * one date grammar the rest of the Document now speaks (DECISIONS.md I133).
  * Money and everything below the line keep blur-save untouched.
  *
- * Below the line, a quiet "Phases" fold: each project phase's hour estimate
- * (project_phases.estimated_hours, 00177) as an editable mono field beside its
- * logged actual — estimates beside actuals, where the hours truly live.
+ * Wave 1 (D-6, amended by D-B7): the vitals row prints only what is real —
+ * no `Start —`, no `Band $ – $`, no fallback string in the live-figure
+ * register, and a zero contract total prints nothing. But an unset vital is
+ * still SETTABLE from the paper: it prints as one scored-ink act (`Set dates`
+ * / `Set start` / `Set target`, `Set a budget band`) that opens the very
+ * editor the recorded field uses. The act is the door D-6's suppression would
+ * otherwise have bricked up — clearing a date with × cannot strand the
+ * designer, and focus lands on the act that replaced the field rather than
+ * dropping to <body>. The `Phases ▸` fold went with the placeholders (the
+ * proposal wins; per-phase hour estimates are not a letterhead fact).
  *
  * Zero shadows (D4); failures read inline at the field (R83). Renders only on
  * project documents (the page passes projectId).
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { useProjectV2, useProjectPhases } from '@patina/supabase';
-import { useUpdatePhaseEstimates } from '@/hooks/use-time-tracking';
+import { useProjectV2 } from '@patina/supabase';
 import {
-  usePhaseActualMinutes,
   useSaveProjectVitals,
   type ProjectVitalsPatch,
 } from '@/hooks/use-project-lifecycle';
@@ -45,11 +50,6 @@ const prettyPhase = (phase: string | null) =>
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
         .join(' ')
     : null;
-
-const fmtHours = (minutes: number) => {
-  const h = minutes / 60;
-  return Number.isInteger(h) ? `${h}h` : `${h.toFixed(1)}h`;
-};
 
 /** One save channel per field — mutation + a transient quiet status (the
  *  Piece's useFacetSave, retargeted at the project vitals write). */
@@ -108,24 +108,41 @@ function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | nul
  *  not applied to `value`) rather than dropped: a close that ISN'T a fresh
  *  commit (Esc, outside click) flushes it so the display never gets stuck
  *  showing what the popover opened with. `commit`/`clear` both discard any
- *  pending echo — the locally authored value wins over a now-stale one. */
+ *  pending echo — the locally authored value wins over a now-stale one.
+ *
+ *  D-B7: with no value the field prints `emptyAct` — a scored-ink act opening
+ *  the same popover — rather than a dash, and `emptyAct: null` prints nothing
+ *  at all (the sibling's `Set dates` is already the door for both dates). One
+ *  `triggerRef` serves whichever of the two buttons is mounted, so clearing a
+ *  value hands focus straight to the act that replaces it. */
 function VitalDate({
   projectId,
   column,
   serverValue,
   label,
+  emptyAct,
 }: {
   projectId: string;
   column: 'start_date' | 'target_end_date';
   serverValue: string | null;
   label: string;
+  emptyAct: string | null;
 }) {
   const [value, setValue] = useState(serverValue ?? '');
   const [open, setOpen] = useState(false);
   const lastServer = useRef(serverValue ?? '');
   const pendingEcho = useRef<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // × clears the field and swaps the trigger for the act; focus follows the
+  // swap so the press never drops the designer onto <body>.
+  const restoreFocus = useRef(false);
   const { save, state, errorMsg } = useVitalSave(projectId);
+
+  useEffect(() => {
+    if (!restoreFocus.current) return;
+    restoreFocus.current = false;
+    triggerRef.current?.focus();
+  }, [value]);
 
   useEffect(() => {
     const incoming = serverValue ?? '';
@@ -158,9 +175,46 @@ function VitalDate({
 
   const clear = () => {
     pendingEcho.current = null;
+    restoreFocus.current = true;
     setValue('');
     if ((serverValue ?? '') !== '') void save({ [column]: null });
   };
+
+  const folio = open && (
+    <FolioPopover onClose={() => setOpen(false)} aria-label={`${label} date`} returnFocusRef={triggerRef}>
+      <FolioCalendar
+        value={value ? { kind: 'day', date: value } : null}
+        today={todayYmd()}
+        modes={['day']}
+        readoutLabels={{ day: label.toUpperCase(), span: label.toUpperCase() }}
+        onCommit={commit}
+      />
+    </FolioPopover>
+  );
+
+  if (!value) {
+    if (!emptyAct) return null;
+    return (
+      <span className="relative inline-flex items-baseline gap-1">
+        {/* Never disabled while a save is in flight: this act only opens the
+            popover, and the × that clears a field hands focus straight to it
+            — a disabled button cannot take focus, which would drop her on
+            <body>, the very one-way door D-B7 closes. */}
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          className="group inline-flex items-baseline text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        >
+          <span className="da-score-hover font-mono text-[11px] uppercase tracking-[0.06em] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+            {emptyAct}
+          </span>
+        </button>
+        <SaveDot state={state} errorMsg={errorMsg} />
+        {folio}
+      </span>
+    );
+  }
 
   return (
     <span className="relative inline-flex items-baseline gap-1">
@@ -175,31 +229,19 @@ function VitalDate({
         disabled={state === 'saving'}
         className="border-b border-transparent bg-transparent font-mono text-[11px] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
       >
-        {value ? fmtDay(value) : '—'}
+        {fmtDay(value)}
       </button>
-      {value && (
-        <button
-          type="button"
-          aria-label={`Clear ${label.toLowerCase()}`}
-          onClick={clear}
-          disabled={state === 'saving'}
-          className="font-mono text-[11px] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)] disabled:opacity-50"
-        >
-          ×
-        </button>
-      )}
+      <button
+        type="button"
+        aria-label={`Clear ${label.toLowerCase()}`}
+        onClick={clear}
+        disabled={state === 'saving'}
+        className="font-mono text-[11px] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)] disabled:opacity-50"
+      >
+        ×
+      </button>
       <SaveDot state={state} errorMsg={errorMsg} />
-      {open && (
-        <FolioPopover onClose={() => setOpen(false)} aria-label={`${label} date`} returnFocusRef={triggerRef}>
-          <FolioCalendar
-            value={value ? { kind: 'day', date: value } : null}
-            today={todayYmd()}
-            modes={['day']}
-            readoutLabels={{ day: label.toUpperCase(), span: label.toUpperCase() }}
-            onCommit={commit}
-          />
-        </FolioPopover>
-      )}
+      {folio}
     </span>
   );
 }
@@ -211,16 +253,14 @@ function VitalMoney({
   serverCents,
   ariaLabel,
   placeholder,
-  autoFocus = false,
+  inputRef,
 }: {
   projectId: string;
   column: 'budget_min' | 'budget_max';
   serverCents: number | null;
   ariaLabel: string;
   placeholder: string;
-  /** Set on the first field the ghost affordance reveals, so opening the band
-   *  by keyboard does not drop focus onto the body. */
-  autoFocus?: boolean;
+  inputRef?: React.Ref<HTMLInputElement>;
 }) {
   const serverDollars = centsToDollarString(serverCents);
   const [value, setValue] = useState(serverDollars);
@@ -244,13 +284,12 @@ function VitalMoney({
   return (
     <span className="inline-flex items-baseline">
       <input
+        ref={inputRef}
         type="text"
         inputMode="decimal"
         aria-label={ariaLabel}
         value={value}
         placeholder={placeholder}
-        // eslint-disable-next-line jsx-a11y/no-autofocus
-        autoFocus={autoFocus}
         onFocus={() => (focused.current = true)}
         onChange={(e) => setValue(e.target.value)}
         onBlur={commit}
@@ -272,90 +311,64 @@ function VitalMoney({
   );
 }
 
-/** The phases fold — estimate fields (blur-save, 00177) beside logged actuals. */
-function PhasesFold({ projectId }: { projectId: string }) {
-  const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
-  const { data: actualMinutes } = usePhaseActualMinutes(projectId);
-  const updateEstimates = useUpdatePhaseEstimates();
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [rowError, setRowError] = useState<string | null>(null);
+/** The budget band — two blur-save dollar fields behind one act. With no
+ *  bound recorded the band prints `Set a budget band` (D-B7) rather than an
+ *  empty `Band $ – $`; pressing it reveals the same two editors a recorded
+ *  band uses and puts the caret in the first of them. */
+function VitalBand({
+  projectId,
+  minCents,
+  maxCents,
+}: {
+  projectId: string;
+  minCents: number | null;
+  maxCents: number | null;
+}) {
+  const bandSet = minCents != null || maxCents != null;
+  const [revealed, setRevealed] = useState(false);
+  const minRef = useRef<HTMLInputElement>(null);
 
-  if (!phases || phases.length === 0) return null;
+  useEffect(() => {
+    if (revealed) minRef.current?.focus();
+  }, [revealed]);
 
-  const valueFor = (p: AnyRecord) =>
-    values[p.id] ?? (p.estimated_hours != null ? String(p.estimated_hours) : '');
-
-  const commit = (p: AnyRecord) => {
-    const raw = valueFor(p).trim();
-    const parsed = raw === '' ? null : Math.round(parseFloat(raw) * 10) / 10;
-    if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) return;
-    const current = p.estimated_hours != null ? Number(p.estimated_hours) : null;
-    if (parsed === current) return;
-    setRowError(null);
-    updateEstimates.mutate(
-      { projectId, changes: [{ phaseId: p.id as string, estimatedHours: parsed }] },
-      {
-        onError: (err) =>
-          setRowError(err instanceof Error ? err.message : 'Could not save the estimate.'),
-      },
+  if (!bandSet && !revealed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setRevealed(true)}
+        className="group inline-flex items-baseline text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      >
+        <span className="da-score-hover font-mono text-[11px] uppercase tracking-[0.06em] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+          Set a budget band
+        </span>
+      </button>
     );
-  };
+  }
 
   return (
-    <div className="mt-1.5">
-      <table className="text-left">
-        <caption className="sr-only">Phase hour estimates beside logged actuals</caption>
-        <tbody>
-          {phases.map((p) => {
-            const logged = actualMinutes?.[p.phase_key ?? ''] ?? 0;
-            return (
-              <tr key={p.id}>
-                <td className="pr-4 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-                  {p.name ?? prettyPhase(p.phase_key)}
-                </td>
-                <td className="pr-2 text-right font-mono text-[11px] text-[var(--text-muted)]">
-                  {logged > 0 ? fmtHours(logged) : '—'}
-                </td>
-                <td className="pr-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
-                  of
-                </td>
-                <td>
-                  <input
-                    value={valueFor(p)}
-                    aria-label={`${p.name ?? prettyPhase(p.phase_key)} — estimated hours`}
-                    placeholder="est"
-                    inputMode="decimal"
-                    onChange={(e) =>
-                      setValues((prev) => ({
-                        ...prev,
-                        [p.id]: e.target.value.replace(/[^0-9.]/g, ''),
-                      }))
-                    }
-                    onBlur={() => commit(p)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        e.currentTarget.blur();
-                      } else if (e.key === 'Escape') {
-                        e.stopPropagation();
-                        e.currentTarget.blur();
-                      }
-                    }}
-                    className="w-10 border-b border-transparent bg-transparent text-right font-mono text-[11px] text-[var(--text-muted)] placeholder:text-[var(--color-aged-oak)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none"
-                  />
-                  <span className="font-mono text-[11px] text-[var(--text-muted)]">h est.</span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {rowError && (
-        <p role="alert" className="mt-0.5 text-[11px] text-[var(--color-terracotta-ink)]">
-          {rowError}
-        </p>
-      )}
-    </div>
+    <span className="inline-flex items-baseline gap-0.5">
+      <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        Band
+      </span>
+      <span className="font-mono text-[11px] text-[var(--text-primary)]">$</span>
+      <VitalMoney
+        projectId={projectId}
+        column="budget_min"
+        serverCents={minCents}
+        ariaLabel="Budget band minimum (dollars)"
+        placeholder="from"
+        inputRef={minRef}
+      />
+      <span className="font-mono text-[11px] text-[var(--text-primary)]">–</span>
+      <VitalMoney
+        projectId={projectId}
+        column="budget_max"
+        serverCents={maxCents}
+        ariaLabel="Budget band maximum (dollars)"
+        placeholder="to"
+      />
+    </span>
   );
 }
 
@@ -374,18 +387,19 @@ function contractTotal(cents: number): string {
 
 export function LetterheadVitals({ projectId }: { projectId: string }) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
-  const [phasesOpen, setPhasesOpen] = useState(false);
-  const [bandOpen, setBandOpen] = useState(false);
 
   if (!project) return null;
 
   const phaseWord = prettyPhase(project.current_phase);
-  const total = project.total_amount_cents ?? null;
-  // Band-honest empty rendering: with neither bound recorded, the two dollar
-  // marks and the dash have nothing to punctuate, and a contract total of zero
-  // is the absence of a recorded amount rather than a project worth nothing.
-  // Both read as stated figures, so neither renders until it is one.
-  const bandUnset = project.budget_min == null && project.budget_max == null;
+  const startDate: string | null = project.start_date ?? null;
+  const targetDate: string | null = project.target_end_date ?? null;
+  const total: number | null = project.total_amount_cents ?? null;
+  // A contract total of zero is the absence of a recorded amount rather than
+  // a project worth nothing.
+  const totalSet = total != null && total !== 0;
+  // D-B7: with neither date recorded the two fields share ONE act — `Set
+  // dates` — so an empty letterhead never prints two doors to the same idea.
+  const noDates = !startDate && !targetDate;
 
   return (
     <div className="mt-1">
@@ -393,65 +407,43 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           while open (no portal, by the Folio's own house rule — see
           folio-popover.tsx), and a <div> can never legally nest inside a
           <p> (the browser silently closes it, a hydration hazard). */}
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-primary)]">
+      {/* W3-R4: ONE row at the tier the height budget is measured at. The
+          FolioPopover a VitalDate opens is portaled to <body>, so clipping
+          here cannot swallow a calendar. Below 1180 the row may still wrap
+          rather than hide a `Set dates` act behind the ellipsis. */}
+      <div
+        data-letterhead-vitals
+        // N-07 — `overflow-clip` with a margin, not `overflow-hidden`: the row
+        // holds real focusable acts (`Set dates`), and a hidden overflow clips
+        // their focus ring flat against the text. `text-ellipsis` is dropped:
+        // it is inert on a flex container, which has no inline content of its
+        // own to elide.
+        className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 overflow-clip [overflow-clip-margin:6px] whitespace-nowrap text-[11px] text-[var(--text-primary)] min-[1180px]:flex-nowrap"
+      >
         {phaseWord && <span>{phaseWord}</span>}
         <VitalDate
           projectId={projectId}
           column="start_date"
-          serverValue={project.start_date ?? null}
+          serverValue={startDate}
           label="Start"
+          emptyAct={noDates ? 'Set dates' : 'Set start'}
         />
         <VitalDate
           projectId={projectId}
           column="target_end_date"
-          serverValue={project.target_end_date ?? null}
+          serverValue={targetDate}
           label="Target"
+          emptyAct={noDates ? null : 'Set target'}
         />
-        {bandUnset && !bandOpen ? (
-          <button
-            type="button"
-            onClick={() => setBandOpen(true)}
-            className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-          >
-            Set a budget band
-          </button>
-        ) : (
-          <span className="inline-flex items-baseline gap-0.5">
-            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-              Band
-            </span>
-            <span className="font-mono text-[11px] text-[var(--text-primary)]">$</span>
-            <VitalMoney
-              projectId={projectId}
-              column="budget_min"
-              serverCents={project.budget_min ?? null}
-              ariaLabel="Budget band minimum (dollars)"
-              placeholder="from"
-              autoFocus={bandOpen}
-            />
-            <span className="font-mono text-[11px] text-[var(--text-primary)]">–</span>
-            <VitalMoney
-              projectId={projectId}
-              column="budget_max"
-              serverCents={project.budget_max ?? null}
-              ariaLabel="Budget band maximum (dollars)"
-              placeholder="to"
-            />
-          </span>
-        )}
-        {total != null && total !== 0 && (
+        <VitalBand
+          projectId={projectId}
+          minCents={project.budget_min ?? null}
+          maxCents={project.budget_max ?? null}
+        />
+        {totalSet && (
           <span className="font-mono text-[11px]">{contractTotal(total)}</span>
         )}
-        <button
-          type="button"
-          aria-expanded={phasesOpen}
-          onClick={() => setPhasesOpen((v) => !v)}
-          className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
-        >
-          Phases {phasesOpen ? '▾' : '▸'}
-        </button>
       </div>
-      {phasesOpen && <PhasesFold projectId={projectId} />}
     </div>
   );
 }
@@ -487,27 +479,97 @@ export function LetterheadTitle({
     if (next !== serverTitle) void save({ name: next });
   };
 
+  // D-B48 — the name WRAPS. An `<input>` cannot, so at 390 (a 327px measure,
+  // 32px Playfair ≈ 11 characters) `Aspen Loft — the long paper` printed
+  // `Aspen Loft — the long p`, and the 390 spec's `scrollWidth === clientWidth`
+  // witness was satisfied BY the overflow. At rest the name is `<h1>` text; the
+  // input appears only in edit mode, in the same box.
+  const [editing, setEditing] = useState(false);
+  const editButton = useRef<HTMLButtonElement | null>(null);
+  const leaveEdit = (restoreFocus = true) => {
+    setEditing(false);
+    if (restoreFocus)
+      window.requestAnimationFrame(() =>
+        editButton.current?.focus({ preventScroll: true }),
+      );
+  };
+
+  // One class set for both forms, so the rect does not move on the swap.
+  const TYPE =
+    'font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] min-[1180px]:text-[40px]';
+
   return (
-    <h1 className="flex items-baseline gap-2 font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)]">
-      <input
-        type="text"
-        aria-label="Project title"
-        value={value}
-        onFocus={() => (focused.current = true)}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            e.currentTarget.blur();
-          } else if (e.key === 'Escape') {
-            e.stopPropagation();
-            e.currentTarget.blur();
-          }
-        }}
-        disabled={state === 'saving'}
-        className="min-w-0 flex-1 border-b border-transparent bg-transparent font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60"
-      />
+    /* 32px below 1180, 40px from 1180 up (W3-R4, corrected by NF-02: the
+       SHELL's own tier, never Tailwind's `sm`): 40px of Playfair spends ~46
+       characters of a 1440 measure but only ~11 of a 390 one. The `<h1>` never
+       changes element type, so the heading outline is stable across the swap.
+       `break-words` wraps at WORD boundaries only — no `overflow-wrap:
+       anywhere`, no `text-wrap: balance`: the em-dash form breaks after the
+       dash as the mockup does, and balancing would move that break. */
+    <h1
+      // NOT `flex-wrap`: the two flex ITEMS are the name and the SaveDot, and
+      // they do not wrap — the NAME wraps, inside its own box, which is what
+      // `break-words` on the button does. Adding it here moved the baseline by
+      // 0.08px and D-B38's "line 2 holds its y across the pin" caught it.
+      className={`flex items-baseline gap-2 min-w-0 ${TYPE}`}
+    >
+      {editing ? (
+        <input
+          type="text"
+          aria-label="Project title"
+          autoFocus
+          value={value}
+          onFocus={(e) => {
+            focused.current = true;
+            // Caret at the end, not a select-all: she pressed to amend a name,
+            // not to replace it.
+            const end = e.currentTarget.value.length;
+            e.currentTarget.setSelectionRange(end, end);
+          }}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={() => {
+            commit();
+            leaveEdit(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+              leaveEdit();
+            } else if (e.key === 'Escape') {
+              // W5-R6 / 1b — three things, in this order, and the third
+              // matters as much as the first two: the shell puts the paper
+              // down on Escape (D1), so without stopping here the reader
+              // restored the name and lost the document underneath her
+              // (`/doc/…` → `/desk`). `nativeEvent.stopImmediatePropagation`
+              // as well as React's own, because the shell's listener is on
+              // `document` and outside React's tree.
+              e.stopPropagation();
+              e.nativeEvent.stopImmediatePropagation();
+              e.preventDefault();
+              // D-B48: Escape RESTORES. It used to blur, and blur commits — so
+              // the one key that means "leave it alone" saved.
+              focused.current = false;
+              setValue(serverTitle);
+              leaveEdit();
+            }
+          }}
+          disabled={state === 'saving'}
+          className={`min-w-0 w-full flex-1 border-b border-transparent bg-transparent hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60 ${TYPE}`}
+        />
+      ) : (
+        /* The visible name IS the control — no second glyph, no pencil. */
+        <button
+          ref={editButton}
+          type="button"
+          aria-label="Rename the project"
+          data-letterhead-title-edit
+          onClick={() => setEditing(true)}
+          className={`min-w-0 cursor-text break-words text-left ${TYPE}`}
+        >
+          {value}
+        </button>
+      )}
       <SaveDot state={state} errorMsg={errorMsg} />
     </h1>
   );

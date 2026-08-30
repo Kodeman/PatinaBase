@@ -1,0 +1,558 @@
+{
+  "1440-s0-project": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "state": "rest",
+      "line1": "$17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Client approvals · Reading…"
+    }
+  },
+  "1440-s2-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Schedule · Install Sat, Sep 19 · 3 weeks out"
+    }
+  },
+  "1440-s3-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Pieces · 62 lines · 5 rooms · 1 damaged"
+    }
+  },
+  "1440-foot-project": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at The record · 4 complete"
+    }
+  },
+  "firstRegionHead-1440-project": {
+    "found": true,
+    "top": 383.0625,
+    "key": "approvals-head"
+  },
+  "railLabels": {
+    "distinct": [
+      "←",
+      "PUT DOWN",
+      "Client User",
+      "PROCUREMENT & ORDERS",
+      "3 OF 5",
+      "Client approvals",
+      "NOTHING YET",
+      "Schedule",
+      "INSTALL SEP 19 · 3 WEEKS",
+      "Pieces",
+      "62 LINES · 1 DAMAGED AUG 29",
+      "Money",
+      "$17,500 OUT · $28,080 UNDRAWN",
+      "Closing the book",
+      "0 OF 6 CLOSED OUT",
+      "The record",
+      "4 COMPLETE",
+      "FILED WITH THIS JOB",
+      "Plan room",
+      "Spec book",
+      "Boards",
+      "Call sheet"
+    ],
+    "values": [
+      "3 OF 5",
+      "NOTHING YET",
+      "INSTALL SEP 19 · 3 WEEKS",
+      "62 LINES · 1 DAMAGED AUG 29",
+      "$17,500 OUT · $28,080 UNDRAWN",
+      "0 OF 6 CLOSED OUT",
+      "4 COMPLETE"
+    ],
+    "labels": [
+      "←",
+      "PUT DOWN",
+      "Client User",
+      "PROCUREMENT & ORDERS",
+      "Client approvals",
+      "Schedule",
+      "Pieces",
+      "Money",
+      "Closing the book",
+      "The record",
+      "FILED WITH THIS JOB",
+      "Plan room",
+      "Spec book",
+      "Boards",
+      "Call sheet"
+    ],
+    "distinctCount": 22,
+    "labelOnlyCount": 15
+  },
+  "interStopGaps": [
+    {
+      "pair": "approvals -> schedule",
+      "gap": 290.875
+    },
+    {
+      "pair": "schedule -> ffe",
+      "gap": 24
+    },
+    {
+      "pair": "ffe -> money",
+      "gap": 24
+    },
+    {
+      "pair": "money -> care",
+      "gap": 24
+    },
+    {
+      "pair": "care -> record",
+      "gap": 108.5
+    }
+  ],
+  "landingClearProbe": "72px",
+  "1440-s0-prework": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "state": "rest",
+      "line1": "",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "1440-s2-prework": {
+    "stopReachable": false,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "1440-s3-prework": {
+    "stopReachable": false,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "1440-foot-prework": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "1280-s0-project": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "state": "rest",
+      "line1": "$17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Client approvals · Reading…"
+    }
+  },
+  "1280-s2-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Schedule · Install Sat, Sep 19 · 3 weeks out"
+    }
+  },
+  "1280-s3-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Pieces · 62 lines · 5 rooms · 1 damaged"
+    }
+  },
+  "1280-foot-project": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at The record · 4 complete"
+    }
+  },
+  "1280-s0-prework": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "state": "rest",
+      "line1": "",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "1280-s2-prework": {
+    "stopReachable": false,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "1280-s3-prework": {
+    "stopReachable": false,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "1280-foot-prework": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "390-s0-project": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "state": "rest",
+      "line1": "$17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Client approvals · Reading…"
+    }
+  },
+  "390-s2-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Schedule · Install Sat, Sep 19 · 3 weeks out"
+    }
+  },
+  "390-s3-project": {
+    "stopReachable": true,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Pieces · 62 lines · 5 rooms · 1 damaged"
+    }
+  },
+  "390-foot-project": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at The record · 4 complete"
+    }
+  },
+  "firstRegionHead-390-project": {
+    "found": true,
+    "top": 665.3125,
+    "key": "approvals-head"
+  },
+  "letterhead-390-project": {
+    "height": 367.0625,
+    "gridClass": "grid grid-cols-1 items-start gap-x-6 gap-y-2 min-[1180px]:grid-cols-[1fr_auto]",
+    "top": 36,
+    "bottom": 403.0625,
+    "gridTop": 103
+  },
+  "390-s0-prework": {
+    "band": {
+      "height": 56,
+      "open": "true",
+      "state": "rest",
+      "line1": "",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "390-s2-prework": {
+    "stopReachable": false,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "390-s3-prework": {
+    "stopReachable": false,
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "390-foot-prework": {
+    "band": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROPOSALSENT AUG 23",
+      "line2": "Sent Aug 23 — not yet openedFollow up"
+    }
+  },
+  "firstRegionHead-390-prework": {
+    "found": true,
+    "top": 1373.15625,
+    "key": "record"
+  },
+  "letterhead-390-prework": {
+    "height": 283.5,
+    "gridClass": "grid grid-cols-1 items-start gap-x-6 gap-y-2 min-[1180px]:grid-cols-[1fr_auto]",
+    "top": 36,
+    "bottom": 319.5,
+    "gridTop": 103
+  },
+  "standingSheet-1440": {
+    "doorPresent": true,
+    "doorText": "+7 MORE",
+    "title": "STANDING · 8",
+    "rows": [
+      "STANDING · 8",
+      "PUT BACK · ESC",
+      "PAST DUE",
+      "$17,500 owed you",
+      "PAST DUE",
+      "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminder",
+      "SEND REMINDER",
+      "DECISION DUE",
+      "2 decisions overdue — oldest due Aug 23",
+      "CHASE THE APPROVAL",
+      "AWAITING INSPECTION",
+      "1 piece delivered — awaiting inspection",
+      "INSPECT THE DELIVERY",
+      "CLAIM OPEN",
+      "FDL-0912 has an open damage claim",
+      "FILE THE CLAIM",
+      "NOT SENT",
+      "PO-2026-0418 drafted — not yet sent",
+      "SEND THE PURCHASE ORDER",
+      "STUCK",
+      "1 damaged",
+      "STUCK",
+      "2 unspecified"
+    ],
+    "focusReturnedToDoor": true
+  },
+  "standingSheet-390": {
+    "doorPresent": true,
+    "doorText": "+7 MORE",
+    "title": "STANDING · 8",
+    "rows": [
+      "STANDING · 8",
+      "CLOSE",
+      "PAST DUE",
+      "$17,500 owed you",
+      "PAST DUE",
+      "Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminder",
+      "SEND REMINDER",
+      "DECISION DUE",
+      "2 decisions overdue — oldest due Aug 23",
+      "CHASE THE APPROVAL",
+      "AWAITING INSPECTION",
+      "1 piece delivered — awaiting inspection",
+      "INSPECT THE DELIVERY",
+      "CLAIM OPEN",
+      "FDL-0912 has an open damage claim",
+      "FILE THE CLAIM",
+      "NOT SENT",
+      "PO-2026-0418 drafted — not yet sent",
+      "SEND THE PURCHASE ORDER",
+      "STUCK",
+      "1 damaged",
+      "STUCK",
+      "2 unspecified"
+    ],
+    "focusReturnedToDoor": true
+  },
+  "letterheadInFrameYield": {
+    "atTop": {
+      "height": 56,
+      "open": "true",
+      "state": "rest",
+      "line1": "$17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Client approvals · Reading…"
+    },
+    "afterScroll": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Client approvals · Reading…"
+    },
+    "stagePhraseAppeared": true,
+    "line1Changed": true
+  },
+  "reducedMotion": {
+    "animCountS0": 0,
+    "animCountS2": 0,
+    "bandS0Reduced": {
+      "height": 56,
+      "open": "true",
+      "state": "rest",
+      "line1": "$17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Client approvals · Reading…"
+    },
+    "bandS2Reduced": {
+      "height": 56,
+      "open": "false",
+      "state": "reading",
+      "line1": "CLIENT USER · PROCUREMENT & ORDERS 3 OF 5INSTALL SEP 19 · $17,500 OWED YOU, 7 DAYS",
+      "line2": "$17,500 owed you+7 MORENow at Schedule · Install Sat, Sep 19 · 3 weeks out"
+    },
+    "wordsS2Reduced": [
+      "$17,500",
+      "$17,500",
+      "&",
+      "+7",
+      "19",
+      "19",
+      "3",
+      "3",
+      "5",
+      "7",
+      "CLIENT",
+      "DAYS",
+      "INSTALL",
+      "Install",
+      "MORE",
+      "Now",
+      "OF",
+      "ORDERS",
+      "OWED",
+      "PROCUREMENT",
+      "SEP",
+      "Sat,",
+      "Schedule",
+      "Sep",
+      "USER",
+      "YOU,",
+      "at",
+      "out",
+      "owed",
+      "weeks",
+      "you",
+      "·",
+      "·",
+      "·",
+      "·"
+    ]
+  },
+  "wordsS2NoPreference": [
+    "$17,500",
+    "$17,500",
+    "&",
+    "+7",
+    "19",
+    "19",
+    "3",
+    "3",
+    "5",
+    "7",
+    "CLIENT",
+    "DAYS",
+    "INSTALL",
+    "Install",
+    "MORE",
+    "Now",
+    "OF",
+    "ORDERS",
+    "OWED",
+    "PROCUREMENT",
+    "SEP",
+    "Sat,",
+    "Schedule",
+    "Sep",
+    "USER",
+    "YOU,",
+    "at",
+    "out",
+    "owed",
+    "weeks",
+    "you",
+    "·",
+    "·",
+    "·",
+    "·"
+  ],
+  "deskWalkthrough": {
+    "deskLoaded": true,
+    "longPaperLinkFound": true,
+    "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a[href*=\"b0000000-0000-0000-0000-0000000000d5\"]').first()\u001b[22m\n\u001b[2m    - locator resolved to <a href=\"/doc/b0000000-0000-0000-0000-0000000000d5\" class=\"row-wash-score font-heading text-[16px] font-medium text-[var(--text-primary)] underline decoration-transparent decoration-1 underline-offset-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none\">Aspen Loft — the long paper</a>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-testid=\"welcome-modal-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:transition-none motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-testid=\"welcome-modal-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:transition-none motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    58 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-testid=\"welcome-modal-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:transition-none motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none\"></div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+  },
+  "consoleErrorsByLabel": {
+    "1440-project": [
+      "[console error @1440-project] TypeError: Failed to fetch\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/helpers.js:120:25)\n    at _handleRequest (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:106:24)\n    at _request (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:96:24)\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1303:82)\n    at SupabaseAuthClient._useSession (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1189:26)\n    at async SupabaseAuthClient._getUser (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1293:20)\n    at async eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1277:20)",
+      "[console error @1440-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "1440-prework": [],
+    "1280-project": [
+      "[console error @1280-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1280-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1280-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "1280-prework": [
+      "[console error @1280-prework] TypeError: Failed to fetch\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/helpers.js:120:25)\n    at _handleRequest (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:106:24)\n    at _request (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/lib/fetch.js:96:24)\n    at eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1303:82)\n    at SupabaseAuthClient._useSession (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1189:26)\n    at async SupabaseAuthClient._getUser (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1293:20)\n    at async eval (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@supabase+auth-js@2.98.0/node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:1277:20)",
+      "[console error @1280-prework] Error: AppError: Not authenticated\n    at handleApiError (webpack-internal:///(app-pages-browser)/./src/lib/error-handler.ts:587:12)\n    at Object.onError (webpack-internal:///(app-pages-browser)/./src/lib/react-query.ts:15:88)\n    at Query.fetch (webpack-internal:///(app-pages-browser)/../../node_modules/.pnpm/@tanstack+query-core@5.90.20/node_modules/@tanstack/query-core/build/modern/query.js:304:35) {queryKey: Array(1), meta: undefined}"
+    ],
+    "390-project": [
+      "[console error @390-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @390-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @390-project] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "390-prework": [],
+    "1440-sheet": [
+      "[console error @1440-sheet] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-sheet] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "390-sheet": [],
+    "1440-letterhead-yield": [
+      "[console error @1440-letterhead-yield] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-letterhead-yield] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-letterhead-yield] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "1440-reduced-motion": [
+      "[console error] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "1440-no-preference-s2": [
+      "[console error @1440-no-preference-s2] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-no-preference-s2] Failed to load resource: net::ERR_NAME_NOT_RESOLVED",
+      "[console error @1440-no-preference-s2] Failed to load resource: net::ERR_NAME_NOT_RESOLVED"
+    ],
+    "desk-walkthrough": []
+  }
+}

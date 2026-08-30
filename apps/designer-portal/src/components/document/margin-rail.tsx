@@ -8,6 +8,9 @@
  */
 
 import {
+  createContext,
+  useCallback,
+  useContext,
   useEffect,
   useId,
   useMemo,
@@ -41,8 +44,16 @@ import {
   type MarginItemRow,
 } from '@/lib/document/margin-derivation';
 import { todayYmd } from '@/lib/document/format';
+import {
+  PROJECT_PAPER_ORDER,
+  type DocumentIndexKey,
+} from '@/lib/document/document-index';
 import { DateTextInput } from './date-text-input';
-import { MarginItem } from './margin-item';
+import {
+  MarginItem,
+  marginAnchorRegion,
+  marginRegionName,
+} from './margin-item';
 import { MarginHandoffs, useHandoffGates } from './margin-handoff-item';
 import { MarginItemBody } from './margin-bodies';
 import { MarginNote } from './margin-note';
@@ -64,6 +75,10 @@ import {
   DocumentActionGroup,
   DocumentActionRow,
 } from './document-action';
+import {
+  groupMarginRows,
+  marginListable,
+} from '@/lib/document/margin-groups';
 
 /**
  * Ask the margin to open. Between 1180px and 1440px the rail is a closed,
@@ -74,6 +89,45 @@ export const OPEN_MARGIN_EVENT = 'document:open-margin' as const;
 
 export function openMarginRail(): void {
   window.dispatchEvent(new CustomEvent(OPEN_MARGIN_EVENT));
+}
+
+/**
+ * What the 1180–1439 tab prints beside its own word. `MarginRail` knows the
+ * counts and `ResponsiveMarginRail` owns the tab, and page.tsx composes them as
+ * parent and child — so the counts travel down a context rather than through a
+ * prop the page would have to thread.
+ */
+export interface MarginTabSummary {
+  /** Raised (unsettled) items — the number the tab and the groups agree on. */
+  count: number;
+  /** The worst standing kind, already printed (`1 OVERDUE`), or null. */
+  worst: string | null;
+}
+
+const MarginSummaryContext = createContext<
+  ((summary: MarginTabSummary) => void) | null
+>(null);
+
+/** The worst standing kind in the margin, ranked as R12 ranks the float:
+ *  an overdue decision, then a field text awaiting a read, then anything due. */
+export function worstMarginKind(rows: readonly MarginItemRow[]): string | null {
+  const count = (state: string) => rows.filter((row) => row.state === state).length;
+  const overdue = count('overdue');
+  if (overdue > 0) return `${overdue} OVERDUE`;
+  const review = count('needs_review');
+  if (review > 0) return `${review} NEEDS REVIEW`;
+  const due = count('due');
+  if (due > 0) return `${due} DUE`;
+  return null;
+}
+
+/** The tab's own line — `MARGIN · 7 · 1 OVERDUE` once the button's `uppercase`
+ *  has had it. A zero is never announced: with nothing raised the tab is the
+ *  bare word it has always been. */
+export function marginTabLabel(summary: MarginTabSummary): string {
+  if (summary.count === 0) return 'Margin';
+  const worst = summary.worst ? ` · ${summary.worst}` : '';
+  return `Margin · ${summary.count}${worst}`;
 }
 
 const COMPACT_MARGIN_QUERY = '(min-width: 1180px)';
@@ -104,6 +158,15 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
   const panelRef = useRef<HTMLElement>(null);
   const titleId = useId();
   const [isTopModal, setIsTopModal] = useState(true);
+  const [summary, setSummary] = useState<MarginTabSummary>({
+    count: 0,
+    worst: null,
+  });
+  const publishSummary = useCallback((next: MarginTabSummary) => {
+    setSummary((prev) =>
+      prev.count === next.count && prev.worst === next.worst ? prev : next,
+    );
+  }, []);
 
   useEffect(() => {
     const compactMedia = window.matchMedia(COMPACT_MARGIN_QUERY);
@@ -228,7 +291,7 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
         className="group fixed right-0 top-28 z-[30] hidden min-h-11 min-w-11 items-center gap-2 rounded-l-[4px] border border-r-0 border-[var(--color-pearl)] bg-[rgba(250,247,242,0.96)] px-3 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1180px]:inline-flex min-[1440px]:hidden"
       >
         <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
-          Margin
+          {marginTabLabel(summary)}
         </span>
         <span aria-hidden>←</span>
       </button>
@@ -282,9 +345,11 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
           </button>
         </div>
         <div className="px-4 pb-24 pt-4 min-[1440px]:pt-6">
-          <DocSheetOriginProvider origin="margin">
-            {children}
-          </DocSheetOriginProvider>
+          <MarginSummaryContext.Provider value={publishSummary}>
+            <DocSheetOriginProvider origin="margin">
+              {children}
+            </DocSheetOriginProvider>
+          </MarginSummaryContext.Provider>
         </div>
       </aside>
     </>
@@ -300,6 +365,7 @@ export function MarginRail({
   pendingNoteAnchor = null,
   onNoteAnchorConsumed = () => {},
   approvalSurfaceMounted = false,
+  currentStop = null,
   now,
 }: {
   projectId: string | null;
@@ -318,6 +384,10 @@ export function MarginRail({
   /** R14: a line unfold asked for a note — open the composer pre-anchored. */
   pendingNoteAnchor?: string | null;
   onNoteAnchorConsumed?: () => void;
+  /** The reading stop currently in frame. It changes which group's count reads
+   *  charcoal — never which group a card sits in, and never the group order:
+   *  re-sorting the margin under the reader is the CLS the lens forbids. */
+  currentStop?: DocumentIndexKey | null;
 }) {
   const { data: items, isLoading } = useMarginItems(projectId, proposalId);
   const handoffGates = useHandoffGates({ projectId, clientName, now });
@@ -336,11 +406,22 @@ export function MarginRail({
       classifyMarginItems(items ?? [], coordItems ?? [], classificationState),
     [classificationState, coordItems, items],
   );
-  const visibleItems = classifiedMargin.items;
+  // W5F-06 — `marginListable` is the margin's own "what the margin LISTS"
+  // rule, shared with the 390 sheet: everything but the studio's own clock.
+  // The rail did not filter `time`, so a logged entry counted toward
+  // `THE WHOLE JOB · N` here and not there — one margin, two numbers.
+  const visibleItems = useMemo(
+    () => marginListable(classifiedMargin.items),
+    [classifiedMargin.items],
+  );
   const { data: fileChanges } = useProjectFileChangeNotifications(projectId);
   const markFileChangeRead = useMarkProjectFileChangeRead();
   const [openId, setOpenId] = useState<string | null>(null);
-  const [settledOpen, setSettledOpen] = useState(false);
+  // W5-R5 §3 — one fold per group, keyed by the group's own key, so folding
+  // `THE WHOLE JOB` never folds `BESIDE PIECES` with it.
+  const [settledOpenByGroup, setSettledOpenByGroup] = useState<
+    Record<string, boolean>
+  >({});
 
   // R12 ordering: needs-action floats → anchor order → "Settled · N" fold.
   // Line anchors rank by the document's rendered FF&E order (shared cache
@@ -354,6 +435,45 @@ export function MarginRail({
     );
     return partitionMargin(visibleItems, new Date(), { lineRank });
   }, [visibleItems, ffeItems]);
+
+  // RF-03: one group per anchor that has members, in the paper's own region
+  // order with the whole job last. The order is stable by construction, so a
+  // card never moves between groups (or up the rail) as the reading stop moves.
+  // W5-R5 §3 (N3) — a group's heading counts EVERY item in the group, at every
+  // width. The rail counted `raised` only and printed `BESIDE PIECES · 1`
+  // where the 390 sheet, counting the whole group, printed `· 3`: one margin,
+  // two numbers, and the desktop one under-reported what was there. Settled
+  // items stay folded — that is R12 — but the fold now lives INSIDE its own
+  // group rather than as a separate section below every group, so folding
+  // never changes a heading's count.
+  // W5F-06 / W5-R5 §3 — the margin's ONE grouper (shared with the 390 sheet),
+  // over EVERY item in the group so the heading's count is the group's; the
+  // raised/settled split is then applied inside each group, because R12's fold
+  // may not change a heading's number. The rail leads with the regions; the
+  // sheet leads with the whole job (W5-R1 reverses the print order, not the
+  // grouping mechanic).
+  const anchorGroups = useMemo(() => {
+    // Grouped over `raised` THEN `settled`, not over `visibleItems`, so
+    // `partitionMargin`'s R12 ordering survives inside each group: needs-action
+    // floats to the top of its own group, and the settled fold keeps its own
+    // order beneath.
+    const isSettled = new Set(settled);
+    return groupMarginRows<MarginItemRow>([...raised, ...settled], {
+      order: 'regions-first',
+      decorate: (row) => row,
+    }).map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) => !isSettled.has(row)),
+      settledRows: group.rows.filter((row) => isSettled.has(row)),
+      count: group.rows.length,
+    }));
+  }, [raised, settled]);
+
+  const publishSummary = useContext(MarginSummaryContext);
+  const worst = useMemo(() => worstMarginKind(raised), [raised]);
+  useEffect(() => {
+    publishSummary?.({ count: raised.length, worst });
+  }, [publishSummary, raised.length, worst]);
 
   // ── R55: the decision composer, opened from the margin "+ New" ──
   // designer_clients.id resolution (the band's pattern) — the composer INSERT
@@ -460,7 +580,7 @@ export function MarginRail({
           (the timer claim is only true with a project in hand); the primitive
           owns once-only + recede. */}
       {projectId && (
-        <MarginNote noteKey="doc-first-touch" className="mb-5">
+        <MarginNote noteKey="doc-first-touch" clamp className="mb-5">
           The margin on the right is where decisions and money gather. Esc puts
           the document down — and the hours log themselves while it&apos;s in
           your hand.
@@ -486,7 +606,10 @@ export function MarginRail({
         </MarginNote>
       ))}
       <div className="mb-3 flex items-baseline justify-between">
-        <p className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
+        {/* The sheet header above already prints this word between 1180 and
+            1439, so the column heading is the ≥1440 printing only — the two
+            are complementary and can never both be on screen. */}
+        <p className="hidden font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] min-[1440px]:block">
           In the margin
         </p>
         <DocumentActionGroup
@@ -632,25 +755,53 @@ export function MarginRail({
           </p>
         )}
 
-      {raised.map(renderItem)}
-
-      {/* R12: resolved items fold away — the fold label is the only number
-          anywhere in the margin. */}
-      {settled.length > 0 && (
-        <div className="mt-3 border-t border-dashed border-[var(--color-pearl)] pt-2">
-          <button
-            type="button"
-            aria-expanded={settledOpen}
-            onClick={() => setSettledOpen((v) => !v)}
-            className="group mb-1.5 inline-flex min-h-11 min-w-11 items-center font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
-          >
-            <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
-              Settled · {settled.length} {settledOpen ? '↑' : '↓'}
-            </span>
-          </button>
-          {settledOpen && settled.map(renderItem)}
-        </div>
-      )}
+      {anchorGroups.map((group) => {
+        const current = group.key !== null && group.key === currentStop;
+        return (
+          <div key={group.key ?? 'whole-job'} data-margin-group={group.key ?? 'whole-job'}>
+            <p
+              data-beside-current={current ? '' : undefined}
+              className="mb-1.5 mt-3 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]"
+            >
+              {group.heading}{' '}
+              <span
+                className={
+                  current
+                    ? 'text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)]'
+                }
+              >
+                · {group.count}
+              </span>
+            </p>
+            {group.rows.map(renderItem)}
+            {/* R12 — resolved items fold away, inside the group they belong
+                to, so the heading's number never moves when she folds. */}
+            {group.settledRows.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  aria-expanded={Boolean(settledOpenByGroup[group.key ?? 'whole-job'])}
+                  onClick={() =>
+                    setSettledOpenByGroup((open) => ({
+                      ...open,
+                      [group.key ?? 'whole-job']: !open[group.key ?? 'whole-job'],
+                    }))
+                  }
+                  className="group mb-1.5 inline-flex min-h-11 min-w-11 items-center font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+                >
+                  <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
+                    {group.settledRows.length} settled{' '}
+                    {settledOpenByGroup[group.key ?? 'whole-job'] ? '↑' : '↓'}
+                  </span>
+                </button>
+                {settledOpenByGroup[group.key ?? 'whole-job'] &&
+                  group.settledRows.map(renderItem)}
+              </>
+            )}
+          </div>
+        );
+      })}
 
       {/* R55: the decision composer — a DocSheet overlay; the document stays
           mounted beneath (D1). Keyed so switching new↔draft remounts fresh. */}

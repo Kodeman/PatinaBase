@@ -113,11 +113,43 @@ describe('RegionHead', () => {
     // The two-track grid — the one that put the inked leader over the heading
     // at 390 — is now gated behind 1180; below it the head is one column.
     expect(head).toHaveClass('grid-cols-1');
-    expect(head).toHaveClass('min-[1180px]:grid-cols-[1fr_auto]');
-    expect(head).not.toHaveClass('grid-cols-[1fr_auto]');
+    expect(head).toHaveClass('min-[1180px]:grid-cols-[minmax(20rem,1fr)_auto]');
+    expect(head).not.toHaveClass('grid-cols-[minmax(20rem,1fr)_auto]');
     expect(
       document.querySelector('[role="group"][data-action-region="approvals"]'),
     ).toHaveClass('justify-start', 'min-[1180px]:justify-end');
+  });
+
+  // B5 — jsdom lays nothing out, so the fix is asserted as the tracks the
+  // browser is handed. Under the Pieces ledger at 1440 the `auto` column took
+  // its max-content and the status broke one word per line; the left track's
+  // floor caps that column, and the ledger wraps on its own `flex-wrap`.
+  it('floors the status track under a four-act ledger so the ACTS wrap, not the words', () => {
+    renderHead({
+      status: 'the FF&E schedule, by room · 5 groups · 62 lines',
+      actions: [
+        { key: 'file-claim', label: 'File the claim', onClick: jest.fn() },
+        { key: 'add-line', label: 'Add a line', onClick: jest.fn() },
+        { key: 'bill', label: 'Bill 62 uninvoiced lines →', onClick: jest.fn() },
+        { key: 'spec', label: 'Spec the 4 unspecified →', onClick: jest.fn() },
+      ],
+      bodyId: 'region-approvals-body',
+      onFold: jest.fn(),
+    });
+    const head = document.querySelector('[data-region-head="approvals"]')!;
+    expect(head).toHaveClass('min-[1180px]:grid-cols-[minmax(20rem,1fr)_auto]');
+    expect(head).not.toHaveClass('min-[1180px]:grid-cols-[1fr_auto]');
+
+    const group = document.querySelector(
+      '[role="group"][data-action-region="approvals"]',
+    )!;
+    // Five acts on the ledger, and the ledger is the thing that wraps.
+    expect(group.querySelectorAll('[data-action-key]')).toHaveLength(5);
+    expect(group).toHaveClass('flex-wrap');
+    // The status keeps its own track and still never truncates.
+    expect(
+      screen.getByText('the FF&E schedule, by room · 5 groups · 62 lines'),
+    ).not.toHaveClass('truncate');
   });
 
   // jsdom evaluates no media queries, so "at every width" is asserted
@@ -143,7 +175,7 @@ describe('RegionHead', () => {
     // <1180 — the stacked head. >=1180 — the two-track grid. Same element.
     expect(head).toHaveClass('grid-cols-1');
     expect(group).toHaveClass('justify-start');
-    expect(head).toHaveClass('min-[1180px]:grid-cols-[1fr_auto]');
+    expect(head).toHaveClass('min-[1180px]:grid-cols-[minmax(20rem,1fr)_auto]');
     expect(group).toHaveClass('min-[1180px]:justify-end');
 
     // No class on either the head or the ledger removes the region at a width.
@@ -197,6 +229,16 @@ describe('RegionHead', () => {
     const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     renderHead({ actions: [] });
     expect(spy.mock.calls.some((call) => /neither a ledger entry/.test(String(call[0])))).toBe(true);
+    spy.mockRestore();
+  });
+
+  // W3-L4 — `allowNoActs` silences the guard for a head that is neither
+  // foldable nor ledgered by construction (a ratified state), while leaving
+  // the guard on everywhere else.
+  it('silences the empty-head guard when allowNoActs is set', () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    renderHead({ actions: [], allowNoActs: true });
+    expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
 });

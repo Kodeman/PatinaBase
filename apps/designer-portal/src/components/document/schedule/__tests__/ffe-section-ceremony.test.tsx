@@ -12,6 +12,21 @@ let mockReadinessLoading = false;
 let mockReadinessError = false;
 const mockReadinessRefetch = jest.fn();
 
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
@@ -88,9 +103,6 @@ jest.mock('@/components/portal/ffe/stages', () => ({
 jest.mock('../../accounts/invoice-overlays', () => ({
   openInvoiceComposer: jest.fn(),
 }));
-jest.mock('../../mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
-}));
 jest.mock('../../work-block', () => ({ WorkBlock: () => null }));
 jest.mock('../../folio-strip', () => ({ FolioStrip: () => null }));
 jest.mock('../../strata-mark', () => ({ StrataMark: () => null }));
@@ -102,6 +114,7 @@ jest.mock('../../line-unfold', () => ({
 }));
 
 import { FFESection } from '../../ffe-section';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 const item = (over: Record<string, unknown> = {}) => ({
   id: 'line-1',
@@ -120,6 +133,26 @@ const item = (over: Record<string, unknown> = {}) => ({
 
 const renderSection = () =>
   render(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
+
+
+// D-B49 — the FF&E/schedule region ROOTS now own the work reads (they moved out
+// of `WorkBlock`/`CoordinationWork`, which mount only in a promoted body, so a
+// promotion no longer fetches). This suite mounts the region with no
+// QueryClientProvider — every other data hook it uses is mocked the same way —
+// so these three have to be mocked too or the root throws "No QueryClient set".
+jest.mock('@/hooks/use-section-work', () => {
+  const actual = jest.requireActual('@/hooks/use-section-work');
+  const idle = { mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false };
+  return {
+    ...actual,
+    useSectionTasks: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useSectionGates: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useSectionLoggedMinutes: () => ({ data: 0 }),
+    useCreateSectionTask: () => idle,
+    useToggleSectionTask: () => idle,
+    useRequestSectionGate: () => idle,
+  };
+});
 
 describe('the schedule ceremony', () => {
   beforeEach(() => {
@@ -180,10 +213,13 @@ describe('the schedule ceremony', () => {
 
     mockItemsError = false;
     renderSection();
-    // A settled, genuinely empty schedule defaults its region to folded (the
-    // seam reads "N rooms · no lines yet"); the guided empty state lives in
-    // the body, so unfold first to reach it.
-    fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
+    // R127 OD-10 (W3-L5). A settled, genuinely empty schedule USED to default
+    // its region to folded (the seam read "N rooms · no lines yet"), so the
+    // guided empty state in the body had to be unfolded to. `ffe` is a STOP
+    // key now — a derived default quiets it, never folds it — so the guided
+    // empty state is already on the paper, with no seam standing in front of
+    // it. The claim is unchanged: a successful empty schedule GUIDES.
+    expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
     expect(screen.getByText('Build the FF&E schedule')).toBeVisible();
   });
 

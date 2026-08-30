@@ -96,14 +96,27 @@ jest.mock('@/components/portal/ffe/stages', () => ({
 jest.mock('../../accounts/invoice-overlays', () => ({
   openInvoiceComposer: jest.fn(),
 }));
-jest.mock('../../mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
-}));
 jest.mock('../../work-block', () => ({ WorkBlock: () => null }));
 jest.mock('../../folio-strip', () => ({ FolioStrip: () => null }));
 jest.mock('../../strata-mark', () => ({ StrataMark: () => null }));
 jest.mock('../../strata-mini-rule', () => ({ StrataMiniRule: () => null }));
 jest.mock('../../line-unfold', () => ({ LineUnfold: () => null }));
+
+// R127/W4 — this suite mounts a region on its own, with no page to attach the
+// lens (OD-15 attaches `useLensDensity` in `page.tsx`), so nothing ever
+// promotes and every stop would render its quiet form: a head, a count line
+// and one leader, with the body these cases are about absent. The mock is the
+// lens saying `full`, which is what a reader who has reached this region sees.
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
 
 import { SpecBookLeaf } from '../spec-book-leaf';
 import { FFESection } from '../../ffe-section';
@@ -111,6 +124,7 @@ import {
   deriveLineStamp,
   lineStampLabel,
 } from '@/lib/document/stamp-derivation';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 const rooms = [{ id: 'room-1', name: 'Living', budget_cents: 0 }];
 
@@ -194,6 +208,26 @@ const STATES: { state: string; row: Record<string, unknown>; word: string }[] =
       word: 'Decision due',
     },
   ];
+
+
+// D-B49 — the FF&E/schedule region ROOTS now own the work reads (they moved out
+// of `WorkBlock`/`CoordinationWork`, which mount only in a promoted body, so a
+// promotion no longer fetches). This suite mounts the region with no
+// QueryClientProvider — every other data hook it uses is mocked the same way —
+// so these three have to be mocked too or the root throws "No QueryClient set".
+jest.mock('@/hooks/use-section-work', () => {
+  const actual = jest.requireActual('@/hooks/use-section-work');
+  const idle = { mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false };
+  return {
+    ...actual,
+    useSectionTasks: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useSectionGates: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useSectionLoggedMinutes: () => ({ data: 0 }),
+    useCreateSectionTask: () => idle,
+    useToggleSectionTask: () => idle,
+    useRequestSectionGate: () => idle,
+  };
+});
 
 describe('F58 — one line, one word, on the paper and on the shelf', () => {
   it.each(STATES)('$state reads $word in both places', ({ row, word }) => {

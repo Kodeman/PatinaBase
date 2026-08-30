@@ -7,11 +7,14 @@ let tasksQuery: Record<string, unknown>;
 let gatesQuery: Record<string, unknown>;
 let createTaskMutate: jest.Mock;
 
+// D-B49 — the three READS moved to the FF&E region root (`ffe-section.tsx`),
+// which is mounted at every density, so the block no longer calls them: it
+// takes `tasks`, `gates`, `loggedMinutes` and the loading/error/retry triple as
+// props. `tasksQuery`/`gatesQuery` below are still the suite's fixtures — they
+// are now fed through `renderWork` rather than through a hook mock, which is
+// exactly what the rule asks a body to do. The MUTATIONS stay hooks.
 jest.mock('@/hooks/use-section-work', () => ({
   gateState: () => 'requested',
-  useSectionTasks: () => tasksQuery,
-  useSectionGates: () => gatesQuery,
-  useSectionLoggedMinutes: () => ({ data: 0 }),
   useCreateSectionTask: () => ({ mutate: (...args: unknown[]) => createTaskMutate(...args) }),
   useToggleSectionTask: () => ({ mutate: jest.fn() }),
 }));
@@ -64,6 +67,17 @@ const renderWork = (clientUserId: string | null = null) =>
       sectionLabel="Project"
       clientUserId={clientUserId}
       clientName="Avery"
+      tasks={tasksQuery.data as never}
+      gates={gatesQuery.data as never}
+      loggedMinutes={0}
+      workLoading={
+        Boolean(tasksQuery.isLoading) || Boolean(gatesQuery.isLoading)
+      }
+      workError={Boolean(tasksQuery.isError) || Boolean(gatesQuery.isError)}
+      onRetryWork={() => {
+        (tasksQuery.refetch as () => void)();
+        (gatesQuery.refetch as () => void)();
+      }}
     />,
   );
 

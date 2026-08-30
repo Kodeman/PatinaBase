@@ -18,7 +18,10 @@ const code = (...parts: string[]) =>
     .replace(/^\s*\/\/.*$/gm, '');
 
 const marginRail = code('components', 'document', 'margin-rail.tsx');
-const chips = code(
+/** D-B45 — `mobile-margin-chips.tsx` is DELETED, so there is no `chips` source
+ *  to read. The path is kept only to assert its absence, below. */
+const CHIPS_PATH = join(
+  SRC,
   'components',
   'document',
   'mobile',
@@ -26,6 +29,12 @@ const chips = code(
 );
 const spine = code('components', 'document', 'mobile', 'mobile-sheets.tsx');
 const handoffItem = code('components', 'document', 'margin-handoff-item.tsx');
+/**
+ * D-B30/W5-R1/D-B45: the Margin sheet's derivation (handoff gates included)
+ * lives in this one hook — the sheet just calls it — so the "counts" half of
+ * the contract reads here and the "lists" half reads on the sheet itself.
+ */
+const marginSheetHook = code('hooks', 'use-margin-sheet.ts');
 /**
  * R1 deleted `workflow-stage-document-mount.tsx` and put
  * `section-stage-line-mount.tsx` at the same mount point; the "nothing mounts
@@ -88,12 +97,28 @@ describe('the margin carries the handoffs instead', () => {
     );
   });
 
-  it('counts and lists them on the mobile surfaces too', () => {
+  it('counts them on the mobile surface — the hook', () => {
     // Mobile must not under-report the highest-ranked thing in the margin.
-    for (const source of [chips, spine]) {
-      expect(source).toContain('useHandoffGates');
-    }
-    expect(spine).toContain('raised.length + handoffGates.length');
+    expect(spine).toContain('useMarginSheet');
+    expect(marginSheetHook).toContain('useHandoffGates');
+    expect(marginSheetHook).toContain('gates.length');
+  });
+
+  it('LISTS them on the mobile surface — the sheet', () => {
+    // The sentence is "counts AND lists". `gates.length` is satisfied by a
+    // `count:` with no listing anywhere, so the listing needs its own reader:
+    // the `'margin'` branch renders a row per gate.
+    expect(spine).toContain('gates.map');
+  });
+
+  it('has no second mobile margin surface to keep in step (D-B45)', () => {
+    // `MobileMarginChips` is deleted. It was mobile-only from the start (its
+    // own docstring: "the desktop margin rail owns these above 980px", and
+    // `min-[980px]:hidden` since `1b93def1a`), so below 980 the Margin sheet
+    // is the whole margin and above 980 the rail is — one surface per width.
+    // A file that comes back is a second place for the gates to go missing,
+    // so its absence IS the contract.
+    expect(existsSync(CHIPS_PATH)).toBe(false);
   });
 
   it('threads one clock rather than reading its own', () => {

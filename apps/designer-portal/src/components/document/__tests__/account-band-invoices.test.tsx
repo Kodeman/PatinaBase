@@ -61,6 +61,33 @@ jest.mock('../command-bar', () => ({
   openLedger: jest.fn(),
 }));
 
+describe('AccountBand root spacing', () => {
+  beforeEach(() => {
+    mockInvoiceId = null;
+    mockQueryState = 'ready';
+  });
+
+  it('takes the one region gap standing alone between care and the Record', () => {
+    // B7: the standalone band is an organ between two stops, so its top edge is
+    // the region token and it carries no bottom margin.
+    const { container } = render(<AccountBand projectId="project-1" />);
+
+    const root = container.firstElementChild as HTMLElement;
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root.className.split(/\s+/).filter((cls) => /^m[trblxy]?-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+  });
+
+  it('keeps the money region\u2019s own rhythm when it rides headless inside it', () => {
+    const { container } = render(<AccountBand projectId="project-1" headless />);
+
+    const root = container.firstElementChild as HTMLElement;
+    expect(root).toHaveClass('mt-4');
+    expect(root.className).not.toContain('--doc-region-gap');
+  });
+});
+
 describe('AccountBand invoice handoff', () => {
   beforeEach(() => {
     mockInvoiceId = null;

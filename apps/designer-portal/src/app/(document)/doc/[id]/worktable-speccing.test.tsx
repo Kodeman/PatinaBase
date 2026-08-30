@@ -117,6 +117,7 @@ jest.mock('@patina/supabase', () => ({
   useProjectRoster: () => ({ data: [] }),
   useDiscovery: () => ({ data: undefined, isLoading: false, isError: false }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  useCoordinationItems: () => ({ data: [] }),
   useResolvedSchedule: () => ({
     phases: [],
     milestones: [],
@@ -158,6 +159,13 @@ jest.mock('@patina/supabase', () => ({
       }),
     }),
   }),
+}));
+
+// W5-R1: the Margin sheet's whole-margin derivation lives in this local
+// hook, not `@patina/supabase` — mocking it keeps the fix top-of-file only
+// (no QueryClientProvider needed: the real `useQuery` inside it never runs).
+jest.mock('@/hooks/use-margin-items', () => ({
+  useMarginItems: () => ({ data: [] }),
 }));
 
 /* The money ladder under the ticket's Money row: four commercial reads that
@@ -272,9 +280,6 @@ jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
 jest.mock('@/components/document/quiet-sections', () => ({ CareSection: () => null }));
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: () => null,
-}));
 jest.mock('@/components/document/shelves/document-shelves', () => ({
   DocumentShelves: () => null,
 }));
@@ -306,9 +311,6 @@ jest.mock('@/components/document/folio-strip', () => ({
   FolioLetterhead: () => null,
   ProposalFolioStrip: () => null,
 }));
-jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
-}));
 jest.mock('@/components/document/letterhead-instruments', () => ({
   LetterheadInstruments: () => null,
 }));
@@ -333,7 +335,15 @@ jest.mock('@/components/document/margin-rail', () => ({
   openMarginRail: jest.fn(),
 }));
 jest.mock('@/components/document/household-chip', () => ({ HouseholdChip: () => null }));
-jest.mock('@/components/document/document-guide', () => ({ DocumentGuide: () => null }));
+// W3 (C-6) — the guide is a MODEL provider now: the page reads
+// `deriveGuideModel` for the band's line 2 and never renders the strip.
+jest.mock('@/components/document/document-guide', () => ({
+  DocumentGuide: () => null,
+  deriveGuideModel: (model: { headline: string }) => ({
+    text: model.headline,
+    act: null,
+  }),
+}));
 jest.mock('@/components/document/red-letter-zone', () => ({ RedLetterZone: () => null }));
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
@@ -376,9 +386,10 @@ jest.mock('@/lib/analytics/document-events', () => ({
   rememberDocumentInHand: jest.fn(),
   readRecentDocumentsInHand: () => [],
   documentEvents: {
+    lensLineShown: jest.fn(),
+    lensLineActed: jest.fn(),
+    lensStandingSheetOpened: jest.fn(),
     historyToggled: jest.fn(),
-    guideShown: jest.fn(),
-    guideSelected: jest.fn(),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     wayfinding: { marginNote: jest.fn() },
@@ -544,50 +555,42 @@ describe('the Speccing table, tooled (W3)', () => {
     expect(await screen.findByText('A mohair sofa')).toBeInTheDocument();
   });
 
-  it('stands the ticket above the table, and the rail still under it', () => {
-    // B2-L4's acceptance, on the PAGE's own composition: the ticket is the
-    // job's header over the job's middle (I138), and I139's rail is not
-    // replaced by the Rooms row — it keeps being add-a-room's speccing home.
+  it('stands the band above the table, and the rail still under it', () => {
+    // B2-L4's acceptance, on the PAGE's own composition, carried onto R127's
+    // band (W3-L5): the band is the job's header over the job's middle (I138),
+    // and I139's rail is not replaced by anything the band prints — it keeps
+    // being add-a-room's speccing home. The selector is the only thing that
+    // moved; the ordering claim and the one-map claim are unchanged.
     const { container } = renderPage('chain-root-1');
 
-    const ticket = container.querySelector('[data-job-ticket]')!;
+    const band = container.querySelector('[data-lens-band]')!;
     const table = container.querySelector('[data-table="speccing"]')!;
     const rail = container.querySelector('[data-table-slot="rooms-rail"]')!;
-    expect(ticket).not.toBeNull();
-    expect(precedes(ticket, table)).toBe(true);
-    expect(precedes(ticket, rail)).toBe(true);
-    expect(container.querySelectorAll('[data-job-ticket]')).toHaveLength(1);
+    expect(band).not.toBeNull();
+    expect(precedes(band, table)).toBe(true);
+    expect(precedes(band, rail)).toBe(true);
+    expect(container.querySelectorAll('[data-lens-band]')).toHaveLength(1);
   });
 
-  it('anchors the ticket’s Rooms and Boards rows to the tools already on the paper', () => {
-    // direction-b §9 / C9 — two doors to the boards on one paper is the split
-    // Q1 exists to prevent, so the row takes the reader to the strip below it.
+  it('keeps one door to the rooms and one to the boards on this paper', () => {
+    // W3-L5. The claim this replaces — "the ticket's Rooms and Boards rows take
+    // the reader to the tools already on the paper" — no longer exists: the
+    // eight-row list dies with the ticket and the band prints no rows at all.
+    // What direction-b §9 / C9 was protecting does survive, and is asserted
+    // here in the only form left to it: two doors to the boards on one paper is
+    // the split Q1 exists to prevent, so this paper prints exactly ONE of each.
+    // The ladder's own `Mood boards` door and its room rungs are project-keyed
+    // (OD-8) and stand on no proposal spread, so the table's tools are alone.
     const { container } = renderPage('chain-root-1');
 
-    const rooms = container.querySelector<HTMLElement>(
-      '[data-ticket-row="rooms"] button',
-    )!;
-    const boards = container.querySelector<HTMLElement>(
-      '[data-ticket-row="boards"] button',
-    )!;
-    // Not the rooms-chip expander, and not the mood-board leaf.
-    expect(rooms.getAttribute('aria-expanded')).toBeNull();
-
-    const rail = container.querySelector<HTMLElement>(
-      '[data-table-slot="rooms-rail"]',
-    )!;
-    const strip = container.querySelector<HTMLElement>(
-      '[data-table-slot="boards-strip"]',
-    )!;
-    const scrolled = HTMLElement.prototype.scrollIntoView as jest.Mock;
-
-    scrolled.mockClear();
-    fireEvent.click(rooms);
-    expect(scrolled.mock.instances).toContain(rail);
-
-    scrolled.mockClear();
-    fireEvent.click(boards);
-    expect(scrolled.mock.instances).toContain(strip);
+    expect(
+      container.querySelectorAll('[data-table-slot="rooms-rail"]'),
+    ).toHaveLength(1);
+    expect(
+      container.querySelectorAll('[data-table-slot="boards-strip"]'),
+    ).toHaveLength(1);
+    expect(container.querySelector('[data-ladder-door="moodboards"]')).toBeNull();
+    expect(container.querySelector('[data-room-chip]')).toBeNull();
   });
 
   it('keys every tool on the proposal identity — never the chain-root route id', async () => {

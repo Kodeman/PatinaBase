@@ -30,6 +30,7 @@ import {
   useState,
 } from 'react';
 import type { SpineSection } from '@/lib/document/section-derivation';
+import type { DocumentIndexKey } from '@/lib/document/document-index';
 
 export interface MobileActiveDoc {
   projectId: string | null;
@@ -39,13 +40,59 @@ export interface MobileActiveDoc {
   sections: SpineSection[];
   /** R25: room headings join the spine sheet as jump rows. */
   rooms?: { id: string; name: string }[];
+  /**
+   * A-08: the current reading stop, mirrored from the page's running index
+   * (`activeKey`) so the mobile bar can print "AT <STOP>" without its own
+   * subscription. Optional so a caller that predates A-08 still type-checks;
+   * treated as null when absent.
+   */
+  readingIndex?: DocumentIndexKey | null;
+  /** W2 · the ladder's per-stop values for the open spread. The sections sheet
+   *  mounts in `(document)/layout.tsx`, above the page that derives them, so
+   *  they ride the published document rather than a prop the layout has no way
+   *  to fill. */
+  ladderValues?: Partial<Record<DocumentIndexKey, string>>;
+  /** DL-04 · this spread carries a client's copy, so the sections sheet prints
+   *  the fifth door under `Filed with this job`. */
+  clientCopy?: boolean;
+  /** D-B18 · the page's region-jump handler: `requestRegionUnfold` →
+   *  `forceFullThrough` → `scrollToRegion`. The sections sheet mounts in
+   *  `(document)/layout.tsx`, above the page that owns the lens, so the press
+   *  order rides the published document. Without it the sheet scrolls to a
+   *  stop whose body the lens has not been asked to promote, and the landing
+   *  reads a y that the promotion then moves.
+   *
+   *  REQUIRED. It was optional, which made a sections-sheet press a silent
+   *  no-op if a publisher ever forgot it — where the pre-D-B18 code at least
+   *  scrolled. `page.tsx` is the only publisher and always supplies it. */
+  onJumpRegion: (key: DocumentIndexKey) => void;
+  /** D-B46 · the whole press, for a target INSIDE a region rather than a
+   *  region: `requestRegionUnfold('ffe')` → `forceFullThrough('ffe')` → land
+   *  on `#ffe-selection-<lineId>`. The sheet cannot do this itself — an FF&E
+   *  the reader closed keeps its body unmounted whatever the density says
+   *  (C-8: a stop's fold is explicit-only), so the id does not exist until the
+   *  unfold has been asked for AND the promotion flushed. The page owns the
+   *  landing; no sheet calls `scrollIntoView`. */
+  onJumpToLine?: (lineId: string) => void;
+  /** The same press for a room heading (`#doc-room-<roomId>`), which also
+   *  lives inside the FF&E body and was unreachable for the same reason. */
+  onJumpToRoom?: (roomId: string) => void;
+  /** D-B30 · the letterhead- and section-anchored margin count (the same set
+   *  `useMarginSheet` lists — W5-R1's whole margin), so the bar's `Margin · N` door and the
+   *  Margin sheet's head can print it without their own subscription.
+   *  Optional so a caller that predates D-B30 still type-checks. */
+  marginCount?: number | null;
 }
 
 type Sheet =
   | { kind: 'spine' }
   | { kind: 'timer' }
   | { kind: 'drawer' }
-  | { kind: 'margin-item'; itemId: string };
+  | { kind: 'margin-item'; itemId: string }
+  | { kind: 'margin' }
+  /** W5-R4(a)/D-B44 — the margin's own note composer, text only. The Field
+   *  app keeps photo and voice; the web has no capture path for either. */
+  | { kind: 'note' };
 
 export type MobilePrimaryAction = {
   actionKey: string;
@@ -77,6 +124,9 @@ interface MobileShellValue {
   openTimer: () => void;
   openDrawer: () => void;
   openMarginItem: (itemId: string) => void;
+  openMargin: () => void;
+  /** W5-R4(a) — `CAPTURE A NOTE`, the Margin sheet's lead act. */
+  openNote: () => void;
   closeSheet: () => void;
   primaryAction: MobilePrimaryAction | null;
   registerPrimaryAction: (
@@ -181,6 +231,8 @@ export function MobileShellProvider({
       openDrawer: () => setSheet({ kind: 'drawer' }),
       openMarginItem: (itemId: string) =>
         setSheet({ kind: 'margin-item', itemId }),
+      openMargin: () => setSheet({ kind: 'margin' }),
+      openNote: () => setSheet({ kind: 'note' }),
       closeSheet: () => setSheet(null),
       primaryAction,
       registerPrimaryAction,
@@ -296,9 +348,21 @@ export function useMobileActiveDoc(doc: MobileActiveDoc | null) {
     doc?.sections.map((s) => `${s.key}:${s.state}`).join('|') ?? '',
     doc?.rooms?.map((r) => r.id).join('|') ?? '',
   ].join('//');
+  // W2 — the reading stop and the ladder's values change while the engagement
+  // and its sections stand still, and they are what the bar's `AT <STOP>` line
+  // and the sections sheet print. Without them in the signature the published
+  // document is the one from the first paint for the life of the document.
+  const stateSig = [
+    doc?.readingIndex ?? '',
+    Object.entries(doc?.ladderValues ?? {})
+      .map(([stop, value]) => `${stop}=${value ?? ''}`)
+      .join('|'),
+    doc?.clientCopy ? 'copy' : '',
+    doc?.marginCount ?? '',
+  ].join('//');
   useEffect(() => {
     setActiveDoc(doc);
     return () => setActiveDoc(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, sectionsSig, setActiveDoc]);
+  }, [key, sectionsSig, stateSig, setActiveDoc]);
 }

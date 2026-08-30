@@ -32,19 +32,26 @@ describe('R126 · the rail stock', () => {
     expect(source).not.toContain('rgba(250,247,242,0.55)');
   });
 
-  it('keeps the spine’s register to charcoal, the muted ramp and clay-ink', () => {
-    const source = read('doc-spine.tsx');
-    const inks = source.match(/text-\[var\(--[a-z-]+\)\]/g) ?? [];
-    const allowed = new Set([
-      'text-[var(--color-charcoal)]',
-      'text-[var(--color-clay-ink)]',
-      'text-[var(--text-primary)]',
-      'text-[var(--text-body)]',
-      'text-[var(--text-muted)]',
-      'text-[var(--text-subtle)]',
-      'text-[var(--text-faint)]',
-    ]);
-    expect(inks.length).toBeGreaterThan(0);
-    expect([...new Set(inks)].filter((ink) => !allowed.has(ink))).toEqual([]);
-  });
+  // The ladder is the rail's one block now (OD-16), so it spends the rail's
+  // register or nothing: `--color-aged-oak` on this stock measured 3.51:1 and
+  // `--color-clay` 1.82:1, which is what took the old running index's inactive
+  // values below AA.
+  it.each(['doc-spine.tsx', 'spine/lens-ladder.tsx'])(
+    'keeps %s to charcoal, the muted ramp and clay-ink',
+    (file) => {
+      const source = read(file);
+      const inks = source.match(/text-\[var\(--[a-z-]+\)\]/g) ?? [];
+      const allowed = new Set([
+        'text-[var(--color-charcoal)]',
+        'text-[var(--color-clay-ink)]',
+        'text-[var(--text-primary)]',
+        'text-[var(--text-body)]',
+        'text-[var(--text-muted)]',
+        'text-[var(--text-subtle)]',
+        'text-[var(--text-faint)]',
+      ]);
+      expect(inks.length).toBeGreaterThan(0);
+      expect([...new Set(inks)].filter((ink) => !allowed.has(ink))).toEqual([]);
+    },
+  );
 });

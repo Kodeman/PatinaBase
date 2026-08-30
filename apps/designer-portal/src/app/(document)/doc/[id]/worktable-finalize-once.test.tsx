@@ -68,6 +68,8 @@ jest.mock('@patina/supabase', () => ({
   useProjectRoster: () => ({ data: [] }),
   useDiscovery: () => ({ data: undefined, isLoading: false, isError: false }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  useCoordinationItems: () => ({ data: [] }),
+  useProjectFFEItems: () => ({ data: [] }),
   useResolvedSchedule: () => ({
     phases: [],
     milestones: [],
@@ -115,6 +117,13 @@ jest.mock('@patina/supabase', () => ({
       select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
     }),
   }),
+}));
+
+// W5-R1: the Margin sheet's whole-margin derivation lives in this local
+// hook, not `@patina/supabase` — mocking it keeps the fix top-of-file only
+// (no QueryClientProvider needed: the real `useQuery` inside it never runs).
+jest.mock('@/hooks/use-margin-items', () => ({
+  useMarginItems: () => ({ data: [] }),
 }));
 
 jest.mock('@/hooks/use-proposals', () => ({
@@ -191,9 +200,6 @@ jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
 jest.mock('@/components/document/quiet-sections', () => ({ CareSection: () => null }));
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: () => null,
-}));
 jest.mock('@/components/document/roster/call-sheet-mount', () => ({
   CallSheetMount: () => null,
 }));
@@ -220,9 +226,6 @@ jest.mock('@/components/document/folio-strip', () => ({
   FolioLetterhead: () => null,
   ProposalFolioStrip: () => null,
 }));
-jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({
-  MobileMarginChips: () => null,
-}));
 jest.mock('@/components/document/section-stage-line-mount', () => ({
   SectionStageLineMount: () => null,
 }));
@@ -244,7 +247,15 @@ jest.mock('@/components/document/margin-rail', () => ({
   openMarginRail: jest.fn(),
 }));
 jest.mock('@/components/document/household-chip', () => ({ HouseholdChip: () => null }));
-jest.mock('@/components/document/document-guide', () => ({ DocumentGuide: () => null }));
+// W3 (C-6) — the guide is a MODEL provider now: the page reads
+// `deriveGuideModel` for the band's line 2 and never renders the strip.
+jest.mock('@/components/document/document-guide', () => ({
+  DocumentGuide: () => null,
+  deriveGuideModel: (model: { headline: string }) => ({
+    text: model.headline,
+    act: null,
+  }),
+}));
 jest.mock('@/components/document/red-letter-zone', () => ({ RedLetterZone: () => null }));
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
@@ -303,9 +314,10 @@ jest.mock('@/lib/analytics/document-events', () => ({
   rememberDocumentInHand: jest.fn(),
   readRecentDocumentsInHand: () => [],
   documentEvents: {
+    lensLineShown: jest.fn(),
+    lensLineActed: jest.fn(),
+    lensStandingSheetOpened: jest.fn(),
     historyToggled: jest.fn(),
-    guideShown: jest.fn(),
-    guideSelected: jest.fn(),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     wayfinding: { marginNote: jest.fn() },

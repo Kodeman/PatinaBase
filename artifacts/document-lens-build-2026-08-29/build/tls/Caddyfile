@@ -1,0 +1,4 @@
+localhost:3443 {
+  tls /Users/kody/.patina/tls/localhost.pem /Users/kody/.patina/tls/localhost-key.pem
+  reverse_proxy 127.0.0.1:3000
+}

@@ -3,6 +3,7 @@ import { axe, toHaveNoViolations } from 'jest-axe';
 
 import { ProjectApprovalDocument } from './project-approval-document';
 import { FOCUS_PROJECT_APPROVAL_EVENT } from './project-approval-navigation';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
 import type {
   ProjectApprovalArtifactCandidate,
   ProjectApprovalReview,
@@ -21,6 +22,21 @@ let approvals: ProjectApprovalReview[] = [];
 let candidates: ProjectApprovalArtifactCandidate[] = [];
 let approvalsLoading = false;
 let approvalsFetching = false;
+
+/* R127 W4 — the lens's fourth fold voice. With no lens attached (the page
+   attaches it) a stop renders QUIET, so every claim below about the region's
+   body states which density it is making the claim at. `full` is the default
+   here because these suites were written against the full body. */
+// W4-C9 — the real `useLensDensityStore` runs here, driven through the store's
+// own test setter. A `jest.mock` of the module replaced a two-slot hook with a
+// zero-slot arrow, so a conditional call could never be detected from this
+// suite; C-8 asks for exactly that guard.
+beforeEach(() => {
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
 
 jest.mock('@patina/supabase', () => ({
   useProjectApprovals: () => ({
@@ -140,18 +156,24 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
-/** The Client approvals region defaults folded shut once its data settles
- *  with no open work (no lead + no approvals, or every approval sealed).
- *  Tests that read the record body against exactly that data must unfold
- *  the seam first — the same act a designer would take. */
-const unfoldApprovals = () => {
-  fireEvent.click(screen.getByRole('button', { name: /client approvals/i }));
+/** R127 OD-10 (W3-L5). The Client approvals region USED to default folded shut
+ *  once its data settled with no open work (no lead + no approvals, or every
+ *  approval sealed), so tests that read the record body against exactly that
+ *  data had to unfold the seam first. `approvals` is a STOP key now: a derived
+ *  default quiets it, never folds it, so the body those tests read is already
+ *  on the paper. The act each of them took is replaced by the assertion that
+ *  there is nothing left to take — the region arrives open, head and all. */
+const approvalsArriveOpen = () => {
+  expect(document.querySelector('[data-fold-seam]')).toBeNull();
+  expect(
+    document.querySelector('[data-region-head="approvals-head"]'),
+  ).not.toBeNull();
 };
 
 describe('ProjectApprovalDocument authority and composer', () => {
   it('assigns only the exact project client with first-write CAS', async () => {
     renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
     fireEvent.click(
       screen.getByRole('button', { name: 'Assign project client' }),
     );
@@ -320,7 +342,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       value: scrollIntoView,
     });
     const { rerender } = renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     window.dispatchEvent(
       new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
@@ -606,7 +628,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       },
     ];
     renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     window.dispatchEvent(
       new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
@@ -767,7 +789,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
         ]}
       />,
     );
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     expect(
       screen.queryByRole('button', { name: 'Supersede with new artifact' }),
@@ -891,7 +913,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       },
     ];
     const { container } = renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     expect(
       container.querySelector('[data-gate-state="sealed"]'),
@@ -936,7 +958,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       value: scrollIntoView,
     });
     renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     const link = screen.getByRole('button', {
       name: 'Edition 2 superseded — view',
@@ -1041,7 +1063,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       },
     ];
     renderDocument();
-    unfoldApprovals();
+    approvalsArriveOpen();
 
     expect(
       screen.getByText(`Edition 2 · frozen at publish · proof ${'a'.repeat(8)}`),
@@ -1119,5 +1141,32 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       container.querySelector('[data-project-approval-document]'),
     ).toHaveClass('min-w-0');
     expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
+describe('ProjectApprovalDocument region gap (W3-L4)', () => {
+  it('carries the region-gap token on its root, open and folded, and no other mt-*/mb-*', () => {
+    const { container } = renderDocument();
+
+    const open = container.querySelector('[data-index-region="approvals"]');
+    expect(open).not.toBeNull();
+    expect(open).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      open!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(open!.className).not.toMatch(/\bmb-/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fold ↑' }));
+
+    const folded = container.querySelector('[data-index-region="approvals"]');
+    expect(folded).not.toBeNull();
+    expect(folded).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      folded!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(folded!.className).not.toMatch(/\bmb-/);
+    // The folded rule steps to `mid` — `strong` is reserved for an open region.
+    const rule = folded!.querySelector('[data-rule-weight]');
+    expect(rule).toHaveAttribute('data-rule-weight', 'mid');
   });
 });

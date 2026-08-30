@@ -8,15 +8,9 @@ let mockMutateAsync: jest.Mock;
 
 jest.mock('@patina/supabase', () => ({
   useProjectV2: () => ({ data: mockProject }),
-  useProjectPhases: () => ({ data: [] }),
-}));
-
-jest.mock('@/hooks/use-time-tracking', () => ({
-  useUpdatePhaseEstimates: () => ({ mutate: jest.fn() }),
 }));
 
 jest.mock('@/hooks/use-project-lifecycle', () => ({
-  usePhaseActualMinutes: () => ({ data: {} }),
   useSaveProjectVitals: () => ({ mutateAsync: mockMutateAsync }),
 }));
 
@@ -51,7 +45,7 @@ jest.mock('@/components/document/date', () => ({
   ),
 }));
 
-import { LetterheadVitals } from './letterhead-vitals';
+import { LetterheadTitle, LetterheadVitals } from './letterhead-vitals';
 
 beforeEach(() => {
   mockMutateAsync = jest.fn().mockResolvedValue(undefined);
@@ -66,16 +60,99 @@ const baseProject = {
   total_amount_cents: null,
 };
 
-describe('LetterheadVitals band-honest empty rendering', () => {
-  it('offers a ghost affordance instead of an empty band when no bound is recorded', () => {
+describe('LetterheadVitals prints only what is real (D-6, amended by D-B7)', () => {
+  it('prints no figure and no placeholder when nothing is recorded — only the acts', () => {
     mockProject = { ...baseProject };
     const { container } = render(<LetterheadVitals projectId="project-1" />);
 
-    expect(screen.getByRole('button', { name: 'Set a budget band' })).toBeVisible();
-    expect(screen.queryByText('Band')).not.toBeInTheDocument();
+    // No placeholders in the live-figure register.
+    expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Target')).not.toBeInTheDocument();
+    expect(container).not.toHaveTextContent('—');
     expect(container).not.toHaveTextContent('$');
+    expect(screen.queryByText('Band')).not.toBeInTheDocument();
     expect(
       screen.queryByLabelText('Budget band minimum (dollars)'),
+    ).not.toBeInTheDocument();
+
+    // D-B7 — the write path survives the suppression: one act per unset
+    // vital, and the two empty dates share the single `Set dates` door.
+    expect(screen.getByRole('button', { name: 'Set dates' })).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Set start' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Set target' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Set a budget band' }),
+    ).toBeVisible();
+
+    // The phase word is the one fact this project carries, so the row stays.
+    expect(screen.getByText('Design Development')).toBeVisible();
+  });
+
+  it('still offers both acts when the project carries none of the vitals', () => {
+    mockProject = { ...baseProject, current_phase: null };
+    render(<LetterheadVitals projectId="project-1" />);
+
+    expect(screen.getByRole('button', { name: 'Set dates' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Set a budget band' }),
+    ).toBeVisible();
+  });
+
+  it('`Set dates` opens the start editor rather than printing a placeholder', () => {
+    mockProject = { ...baseProject };
+    render(<LetterheadVitals projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set dates' }));
+    expect(screen.getByTestId('folio-popover')).toBeInTheDocument();
+  });
+
+  it('`Set a budget band` reveals the band editors in place', () => {
+    mockProject = { ...baseProject };
+    render(<LetterheadVitals projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set a budget band' }));
+
+    const min = screen.getByLabelText('Budget band minimum (dollars)');
+    expect(min).toBeVisible();
+    expect(min).toHaveFocus();
+    expect(screen.getByLabelText('Budget band maximum (dollars)')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Set a budget band' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('prints a date only once it has one — never `NO DATE YET`', () => {
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
+    const { container } = render(<LetterheadVitals projectId="project-1" />);
+
+    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
+    // The set date prints its value and no act; its unset sibling names itself.
+    expect(
+      screen.queryByRole('button', { name: 'Set start' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Target')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set target' })).toBeVisible();
+    expect(container).not.toHaveTextContent(/NO DATE YET/i);
+    expect(container).not.toHaveTextContent(/NOT KNOWN YET/i);
+  });
+
+  it('carries no Phases toggle and no per-phase hours table', () => {
+    mockProject = {
+      ...baseProject,
+      start_date: '2026-01-15',
+      budget_min: 5_000_00,
+      total_amount_cents: 7_500_00,
+    };
+    const { container } = render(<LetterheadVitals projectId="project-1" />);
+
+    expect(screen.queryByText(/Phases/)).not.toBeInTheDocument();
+    expect(container.querySelector('table')).toBeNull();
+    expect(
+      screen.queryByRole('button', { expanded: false }),
     ).not.toBeInTheDocument();
   });
 
@@ -100,16 +177,6 @@ describe('LetterheadVitals band-honest empty rendering', () => {
     expect(screen.getByText('−$7,500')).toBeVisible();
   });
 
-  it('keeps the blur-save inputs one click away from the ghost affordance', () => {
-    mockProject = { ...baseProject };
-    render(<LetterheadVitals projectId="project-1" />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Set a budget band' }));
-
-    expect(screen.getByLabelText('Budget band minimum (dollars)')).toHaveFocus();
-    expect(screen.getByLabelText('Budget band maximum (dollars)')).toBeVisible();
-  });
-
   it('renders the band and the total normally once either is recorded', () => {
     mockProject = {
       ...baseProject,
@@ -119,15 +186,17 @@ describe('LetterheadVitals band-honest empty rendering', () => {
     };
     render(<LetterheadVitals projectId="project-1" />);
 
-    expect(screen.queryByRole('button', { name: 'Set a budget band' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Budget band minimum (dollars)')).toHaveValue('5000');
     expect(screen.getByText('$7,500')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Set a budget band' }),
+    ).not.toBeInTheDocument();
   });
 });
 
 describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
   it('SET on the Folio saves the picked date — never a blur commit', async () => {
-    mockProject = { ...baseProject, start_date: null };
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
     render(<LetterheadVitals projectId="project-1" />);
 
     fireEvent.click(screen.getByLabelText('Start'));
@@ -138,10 +207,11 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     );
   });
 
-  it('the clear affordance saves null and only appears once a value exists', () => {
-    mockProject = { ...baseProject };
+  it('the clear affordance belongs to the field that has a value', () => {
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
     render(<LetterheadVitals projectId="project-1" />);
-    expect(screen.queryByLabelText('Clear start')).not.toBeInTheDocument();
+
+    expect(screen.getByLabelText('Clear start')).toBeVisible();
     expect(screen.queryByLabelText('Clear target')).not.toBeInTheDocument();
   });
 
@@ -158,21 +228,41 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
   });
 
   it('a server echo while the popover is open does not clobber the trigger', () => {
-    mockProject = { ...baseProject, start_date: null };
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
     const { rerender } = render(<LetterheadVitals projectId="project-1" />);
 
     fireEvent.click(screen.getByLabelText('Start'));
-    expect(screen.getByLabelText('Start')).toHaveTextContent('—');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
 
     // A refetch lands a different value while the popover is still up.
     mockProject = { ...baseProject, start_date: '2026-02-01' };
     rerender(<LetterheadVitals projectId="project-1" />);
 
-    expect(screen.getByLabelText('Start')).toHaveTextContent('—');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
+  });
+
+  it('the × hands focus to the act that replaces the field — never to <body>', async () => {
+    mockProject = { ...baseProject, start_date: '2026-01-15', target_end_date: '2026-03-01' };
+    render(<LetterheadVitals projectId="project-1" />);
+
+    fireEvent.click(screen.getByLabelText('Clear start'));
+
+    const act = screen.getByRole('button', { name: 'Set start' });
+    expect(act).toBeVisible();
+    // Enabled even mid-save: a disabled button cannot hold focus.
+    expect(act).toBeEnabled();
+    expect(act).toHaveFocus();
+    expect(document.body).not.toHaveFocus();
+    // The cleared field prints its act, never a dash in the figure register.
+    expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
+
+    await waitFor(() =>
+      expect(mockMutateAsync).toHaveBeenCalledWith({ start_date: null }),
+    );
   });
 
   it('flushes a pending echo once the popover closes without a pick', () => {
-    mockProject = { ...baseProject, start_date: null };
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
     const { rerender } = render(<LetterheadVitals projectId="project-1" />);
 
     fireEvent.click(screen.getByLabelText('Start'));
@@ -180,7 +270,7 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     // An echo lands while the popover is up — must not clobber it live.
     mockProject = { ...baseProject, start_date: '2026-05-01' };
     rerender(<LetterheadVitals projectId="project-1" />);
-    expect(screen.getByLabelText('Start')).toHaveTextContent('—');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
 
     // Dismiss (Esc/outside-click stand-in) WITHOUT picking a date.
     fireEvent.click(screen.getByText('close-popover'));
@@ -188,5 +278,117 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     // The display must now show what the server actually has — not stay
     // stuck at the value the popover opened with.
     expect(screen.getByLabelText('Start')).toHaveTextContent('May 1');
+  });
+});
+
+// ── D-B48 — the paper's name wraps, and never clips ──────────────────────
+describe('LetterheadTitle (D-B48)', () => {
+  const NAME = 'Aspen Loft — the long paper';
+
+  beforeEach(() => {
+    mockMutateAsync = jest.fn().mockResolvedValue(undefined);
+    mockProject = { id: 'project-1', name: NAME };
+  });
+
+  const renderTitle = () =>
+    render(<LetterheadTitle projectId="project-1" serverTitle={NAME} />);
+
+  it('prints the WHOLE name at rest, as text, with no input in the DOM', () => {
+    renderTitle();
+    // An `<input>` cannot wrap: at 390 this name printed
+    // `Aspen Loft — the long p`, and the spec's `scrollWidth === clientWidth`
+    // witness was satisfied BY the overflow.
+    const button = screen.getByRole('button', { name: 'Rename the project' });
+    expect(button).toHaveTextContent(NAME);
+    expect(screen.queryByLabelText('Project title')).not.toBeInTheDocument();
+    expect(button.className).toContain('break-words');
+  });
+
+  it('swaps the input in on a press, carrying the server title, and focuses it', async () => {
+    renderTitle();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Rename the project' }),
+    );
+    const input = screen.getByLabelText('Project title') as HTMLInputElement;
+    expect(input.value).toBe(NAME);
+    await waitFor(() => expect(input).toHaveFocus());
+    expect(
+      screen.queryByRole('button', { name: 'Rename the project' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('Enter saves once and swaps back, with focus on the button', async () => {
+    renderTitle();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename the project' }));
+    const input = screen.getByLabelText('Project title');
+    fireEvent.change(input, { target: { value: 'Aspen Loft' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+    expect(mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Aspen Loft' }),
+    );
+    const button = await screen.findByRole('button', {
+      name: 'Rename the project',
+    });
+    await waitFor(() => expect(button).toHaveFocus());
+  });
+
+  it('Escape restores the server title and saves NOTHING', async () => {
+    renderTitle();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename the project' }));
+    const input = screen.getByLabelText('Project title');
+    fireEvent.change(input, { target: { value: 'something else' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    // It used to BLUR, and blur commits — so the one key that means "leave it
+    // alone" saved.
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole('button', { name: 'Rename the project' }),
+    ).toHaveTextContent(NAME);
+  });
+
+  // W5-R6 / 1b. The shell puts the paper down on Escape (D1). Amending the
+  // name and pressing the one key that means "leave it alone" restored the
+  // name AND navigated `/doc/…` → `/desk`: the reader lost the document.
+  it('Escape keeps the key to itself — focus lands on the name, nothing above the input hears it', async () => {
+    const shell = jest.fn();
+    document.addEventListener('keydown', shell);
+    try {
+      renderTitle();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Rename the project' }),
+      );
+      const input = screen.getByLabelText('Project title');
+      fireEvent.change(input, { target: { value: 'something else' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+
+      const button = await screen.findByRole('button', {
+        name: 'Rename the project',
+      });
+      await waitFor(() => expect(button).toHaveFocus());
+      expect(button).toHaveTextContent(NAME);
+      expect(shell).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener('keydown', shell);
+    }
+  });
+
+  it('never saves a blank name', () => {
+    renderTitle();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename the project' }));
+    const input = screen.getByLabelText('Project title');
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('keeps the heading an <h1> across the swap', () => {
+    const { container } = renderTitle();
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Rename the project' }));
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
   });
 });
