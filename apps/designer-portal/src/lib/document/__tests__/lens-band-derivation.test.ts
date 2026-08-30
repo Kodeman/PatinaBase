@@ -557,14 +557,23 @@ describe('the short form and the act’s verb (D-B24, C-07)', () => {
    */
   describe('the short subject is the need\'s OBJECT, chosen by kind (W6-R1/F1)', () => {
     it('a schedule conflict names its DATE, never the sentence\'s first word', () => {
-      // The walked shape, verbatim.
+      // The walked sentence, VERBATIM from `build/w6-walk.md` "Differs" #1:
+      // `…d7` at 390 printed `CONFLICT · TWO` `RESOLVE` for this need.
+      expect(
+        shortSubject(
+          'Two installs collide — week of Sep 21 · RESOLVE THE SCHEDULE',
+          'schedule_conflict',
+        ),
+      ).toBe('SEP 21');
       expect(
         shortSubject('Two milestones land on Sep 21', 'schedule_conflict'),
       ).toBe('SEP 21');
       // …and the generic rule, which is what produced the defect, still reads
       // the first word — so this case fails the moment the kind stops being
       // consulted.
-      expect(shortSubject('Two milestones land on Sep 21')).toBe('TWO');
+      expect(
+        shortSubject('Two installs collide — week of Sep 21 · RESOLVE THE SCHEDULE'),
+      ).toBe('TWO');
     });
 
     it('a proposed date names its date too', () => {
