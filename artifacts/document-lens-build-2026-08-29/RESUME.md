@@ -1,18 +1,21 @@
 # The Smart Lens → production (build program) — RESUME
 
-**STATE: PR #40 IS OPEN. The program's build work is DONE. Nothing is deployed.**
+**STATE: SHIPPED. PR #40 merged; The Smart Lens is LIVE on app.patina.cloud as Worker version
+`55907643-6bca-4b2f-84ed-9e715554cb83` (2026-08-30). Probes all PASS. `I152-deploy` is written.
+Still owed: Kody's signed-in prod walk, and the TLS WebKit ship-bar run (D-B41).**
 
 | | |
 |---|---|
 | Branch | `document-lens/integration`, tip **`9897c9c61`**, pushed |
-| PR | **https://github.com/Kodeman/PatinaBase/pull/40** → `main`, `--no-ff`. **Do not merge on an agent's say-so; it is Kody's.** |
-| `main` | still `dab057537` — untouched for the whole program |
-| Ledger | **R127** and **I152** are in `docs/design/the-document/DECISIONS.md` (lines 10110–10468). `I152-deploy` stays a DRAFT at `build/ledger/I152-deploy-draft.md` until Kody deploys. |
+| PR | **https://github.com/Kodeman/PatinaBase/pull/40** → `main`, `--no-ff`. **MERGED** as `5178d7d8e`. |
+| `main` | **`fab79cdd3`** — the deployed tip. PR #39 (capture-launch) merged after #40, so this deploy also carries its portal surface (public `/privacy` + `/terms`, the `isPublicPage` middleware allowance — CL-R4); its migrations 00541/00542 remain unpushed, the extension program's. Pre-lens source commit = `dab057537`. |
+| Ledger | **R127**, **I152** and **I152-deploy** are all in `docs/design/the-document/DECISIONS.md`. |
 | Gates at the tip | type-check **0** · lint **exactly the 2 known pre-existing errors** · jest **476 suites / 5678 tests, 0 failing** · seed **19/19** · dry-run phases 1–2 **DRY RUN OK** |
 | e2e | chromium ×2 on the production standalone (**149/3** then, after `supabase db reset` + reseed, **153 passed · 5 skipped · 0 failed**) · webkit **73 passed · 3 skipped · 0 failed** across four ≤2-file shards on `next dev` |
 | Design lead | final walk **SHIP** (`build/w6-walk.md`, walked at `975fdf6b7`) |
 | Architect | audit closed, 60 rows, drift list empty; ledger 52 rows D-B1…D-B50 |
-| Rollback, pinned | `npx wrangler rollback 9c0c2cdd-2041-4848-a193-93d9e8fb0b71 --name patina-designer-portal --yes` |
+| Deployed | before `9c0c2cdd-2041-4848-a193-93d9e8fb0b71` → after **`55907643-6bca-4b2f-84ed-9e715554cb83`**, created 2026-08-30T20:27:59.570Z |
+| Rollback, pinned | `npx wrangler rollback 9c0c2cdd-2041-4848-a193-93d9e8fb0b71 --name patina-designer-portal --yes` (source-level pre-lens commit = `dab057537`, NOT `deploy-lens-before.txt`'s `PARENT_SHA`, which is the lens merge itself) |
 
 ## ⚠ OWED — Kody's, in order, with the exact commands
 
@@ -45,7 +48,7 @@ PLAYWRIGHT_BASE_URL=https://localhost:3443 npx playwright test e2e/document \
 process. Export the five local Supabase demo values inline on that command. **Never write
 `.env.local`.**
 
-### 2. Merge PR #40, then rehearse the deploy from a clean `main`
+### 2. ~~Merge PR #40, then rehearse the deploy from a clean `main`~~ — DONE (2026-08-30, `DRY RUN OK`)
 
 ```bash
 git checkout main && git pull
@@ -55,7 +58,7 @@ LENS_DRY_RUN=1 bash artifacts/document-lens-build-2026-08-29/build/deploy-lens.s
 Phase 0 requires a clean `main` checkout, which is why no agent has run it. Expect the before-version
 bottom row to read `9c0c2cdd-2041-4848-a193-93d9e8fb0b71`.
 
-### 3. The real deploy
+### 3. ~~The real deploy~~ — DONE (2026-08-30 → `55907643-6bca-4b2f-84ed-9e715554cb83`, all probes PASS)
 
 ```bash
 bash artifacts/document-lens-build-2026-08-29/build/deploy-lens.sh
@@ -65,7 +68,15 @@ Six phases: preflight → resolve `NEXT_PUBLIC_*` from `wrangler.jsonc` → gate
 `./infra/deploy-portal.sh designer` → after-version → nine probes. Any FAIL prints the rollback
 command and the parent SHA.
 
-### 4. Write `I152-deploy`
+⚠ The first verifying run printed 10 PASS + **one spurious FAIL** (`data-density NOT found in
+served CSS`). Two probe defects, both fixed in `build/deploy-lens.sh` in the I152-deploy commit:
+`data-density` is a DOM attribute, never a CSS hook (now checked JS-side against the document
+route's served chunk, `curl -g` for the `[id]` path); and every string probe used
+`printf | grep -q`, which under `set -o pipefail` reports a FOUND string as not-found via SIGPIPE
+on large payloads — all four now use a pure-bash `contains()`. Nothing was rolled back; the deploy
+itself was correct throughout.
+
+### 4. ~~Write `I152-deploy`~~ — DONE (in `DECISIONS.md`; Kody's walk recorded as OWED there)
 
 Fill `build/ledger/I152-deploy-draft.md` from the script's own output — `deploy-lens-after.txt`
 plus every probe line **verbatim, not paraphrased** — then append it to `DECISIONS.md` in house
@@ -293,7 +304,7 @@ first.
 
 ## Open / owed
 
-- **Kody's signed-in prod walk** — owed after the real deploy (ruling 7); no session before ship.
+- **Kody's signed-in prod walk** — STILL OWED. The deploy happened 2026-08-30 (`55907643-6bca-4b2f-84ed-9e715554cb83`); no Kody session before ship (ruling 7). Checklist: `build/30-deploy-runbook.md` "Kody's signed-in walk".
 - **D-B5 — `estimated_hours` editor unreachable** after the `PHASES` fold's W1 deletion; still open, owed a re-home in the schedule region.
 - **The `/desk` `welcome-modal-overlay` defect** — a real, reproducible pointer-event-eating `aria-hidden="true"` overlay on the direct `/desk → click` path (help-system's first-signin tour); pre-existing, unrelated to any lens file, still unfixed.
 - **N2-01…N2-06** (W3-fix pass-2, all minor/nit, none gating) — the damage-window carrier date still can't rank (no source column; N2-01); a client-side nav mislabels every 390 telemetry impression as `tier:'full'` (N2-02, worth taking into the next lane); `sense`/`tier` can disagree on a due-today deadline (N2-03); the short form's `ND` grammar doesn't distinguish past/ahead (N2-04); two stale code comments (N2-05); a rare announcement pre-empt window (N2-06).

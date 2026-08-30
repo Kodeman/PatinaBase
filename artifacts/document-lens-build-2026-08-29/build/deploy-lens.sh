@@ -503,6 +503,17 @@ if phase_enabled 6; then
   probe_fail() { echo "    FAIL: $1"; OVERALL_PASS=false; }
   probe_warn() { echo "    WARN: $1"; }
 
+  # `printf '%s' "$big" | grep -qF -- "$needle"` is UNSAFE under this script's
+  # `set -o pipefail`: `grep -q` exits at its first match, `printf` then takes
+  # SIGPIPE (141), and pipefail promotes that to the pipeline's status — so a
+  # FOUND string reports as NOT FOUND whenever the payload is large enough that
+  # printf is still writing when grep leaves. It is deterministic on the 712KB
+  # document-route chunk: that is what produced the spurious `data-density`
+  # FAIL on 2026-08-30 (version 55907643-6bca-4b2f-84ed-9e715554cb83), and it
+  # was latent in every other string probe below. Pure-bash substring matching
+  # has no pipe, no subprocess, and no early-exit signal.
+  contains() { case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac; }
+
   # Probe 1 — /desk, unauthenticated, must redirect (307). No redirect-follow.
   DESK_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 'https://app.patina.cloud/desk' || echo '000')"
   if [ "$DESK_CODE" = "307" ]; then
@@ -546,18 +557,55 @@ ${chunk_body}"
     fi
   done <<< "$CSS_URLS"
 
-  # Probe 3 — the new lens tokens/attribute must be present (proves the new
-  # bundle is live, not a stale/cached one).
-  for token in '--doc-band-height' '--doc-region-gap' '--doc-landing-clear' 'data-density'; do
-    if printf '%s' "$CSS_BLOB" | grep -qF -- "$token"; then
+  # Probe 3 — the new lens CSS tokens must be present (proves the new bundle is
+  # live, not a stale/cached one).
+  #
+  # `data-density` is deliberately NOT in this list. It is a DOM attribute the
+  # region components write (care-band.tsx, money-region.tsx, ffe-section.tsx,
+  # project-approval-document.tsx …), never a CSS hook: no `[data-density…]`
+  # selector exists anywhere in the portal, and globals.css names the string
+  # only inside the OD-12 comment at ~line 1122 — which the production minifier
+  # strips. Grepping served CSS for it therefore FAILS on a correct build. It
+  # did exactly that on the 2026-08-30 deploy of 55907643-6bca-4b2f-84ed-9e715554cb83
+  # (10 PASS, 1 spurious FAIL). It is checked JS-side as probe 3b instead.
+  for token in '--doc-band-height' '--doc-region-gap' '--doc-landing-clear'; do
+    if contains "$CSS_BLOB" "$token"; then
       probe_pass "${token} found in served CSS"
     else
       probe_fail "${token} NOT found in served CSS"
     fi
   done
 
+  # Probe 3b — `data-density` must be present in the DOCUMENT route's served JS
+  # chunk. /auth/signin's manifest never pulls that route, so the chunk is
+  # located by hash from the local build we just shipped and fetched directly
+  # (Next serves it publicly by hash, no session needed).
+  #
+  # curl needs -g/--globoff here: the path contains `[id]`, which curl would
+  # otherwise read as a character-range glob and reject as a malformed URL.
+  # -mindepth/-maxdepth 2 pins this to `doc/[id]/page-*.js` — the paper route
+  # itself. Without it the search also matches `doc/[id]/boards|plans|spec-book`
+  # (depth 3), none of which render a region root, and find's traversal order
+  # returned spec-book first on the 2026-08-30 re-run.
+  DOC_CHUNK_FILE="$(find "$REPO_ROOT/apps/designer-portal/.next/static/chunks/app/(document)/doc" \
+    -mindepth 2 -maxdepth 2 -type f -name 'page-*.js' 2>/dev/null | head -n 1)"
+  if [ -z "$DOC_CHUNK_FILE" ]; then
+    probe_warn "document-route chunk not found in the local build — cannot check data-density served-side (WARN, not FAIL)"
+  else
+    DOC_CHUNK_URL="https://app.patina.cloud/_next/${DOC_CHUNK_FILE#*/.next/}"
+    if doc_chunk_body="$(curl -g -fsSL --max-time 20 "$DOC_CHUNK_URL" 2>/dev/null)"; then
+      if contains "$doc_chunk_body" 'data-density'; then
+        probe_pass "data-density found in the served document-route chunk ($(basename "$DOC_CHUNK_FILE"))"
+      else
+        probe_fail "data-density NOT found in the served document-route chunk ($(basename "$DOC_CHUNK_FILE"))"
+      fi
+    else
+      probe_warn "WARN (chunk name not derivable signed-out) — could not fetch ${DOC_CHUNK_URL}"
+    fi
+  fi
+
   # Probe 4 — the retired seam-height token must be ABSENT.
-  if printf '%s' "$CSS_BLOB" | grep -qF -- 'doc-seam-height'; then
+  if contains "$CSS_BLOB" 'doc-seam-height'; then
     probe_fail "doc-seam-height STILL present in served CSS (expected removed)"
   else
     probe_pass "doc-seam-height absent from served CSS"
@@ -583,7 +631,7 @@ ${chunk_body}"
     js_url="https://app.patina.cloud${js_path}"
     if chunk_body="$(curl -fsSL --max-time 20 "$js_url" 2>/dev/null)"; then
       JS_CHUNK_COUNT=$((JS_CHUNK_COUNT + 1))
-      if printf '%s' "$chunk_body" | grep -qF -- 'data-job-ticket'; then
+      if contains "$chunk_body" 'data-job-ticket'; then
         JOB_TICKET_SEEN=true
       fi
     fi
