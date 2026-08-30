@@ -1518,6 +1518,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         actionLabel: action.label,
         onAct: () => activateDestination(action.destination),
         urgent: need.urgent,
+        // N-01 — the deadline the band ranks on, structured. The need already
+        // holds it; the sentence it prints does not.
+        dueOn: need.dueOn ?? null,
       };
     });
   }, [row, rankedOperationalNeeds, activateDestination]);
@@ -1795,6 +1798,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       : NO_BAND_NEEDS;
   const guideHeadline = guideModel?.headline ?? null;
   const guideActLabel = guideModel?.action?.label ?? null;
+  // N-05 — telemetry keys on the act's own key, never on its printed label.
+  const guideActKey = guideModel?.action?.key ?? null;
   // W3-R2 — the guide's open inputs, the sheet's own second section. Their
   // facts are rebuilt every render from the same reads; this string is what
   // actually changes.
@@ -1817,7 +1822,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const bandModel = useMemo<LensBandModel | null>(() => {
     if (!bandSpread) return null;
     const guideAct = guideActLabel
-      ? { label: guideActLabel, onAct: activateGuide }
+      ? { key: guideActKey ?? 'guide', label: guideActLabel, onAct: activateGuide }
       : null;
     const inputs: LensInputItem[] = guideInputs.map((fact, index) => ({
       key: `${index}:${fact.label}`,
@@ -1857,6 +1862,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     inputSignature,
     guideHeadline,
     guideActLabel,
+    guideActKey,
     activateGuide,
     lensTier,
     bandHousehold,
@@ -1871,25 +1877,32 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // D-B22 — the lens line's telemetry fires from the page, which owns the
   // model; the band captures nothing. Once per distinct model shape, the same
   // shape `guideShown` used before it retired.
-  const lensLineProps = bandModel
-    ? {
-        stage: bandSpread ?? '',
-        state: bandModel.line2.kind,
-        action_key: bandModel.line2.act?.label ?? null,
-        standing_count: bandModel.line2.standingCount,
-        tier: lensTier,
-      }
-    : null;
+  // N-11 — the loading and error trees print no band, so they must fire no
+  // `shown`: an event from a tree with no lens line is a phantom impression.
+  const lensLineSettled =
+    hydrated && resolutionState !== 'loading' && resolutionState !== 'error';
+  const lensLineProps =
+    bandModel && lensLineSettled
+      ? {
+          stage: bandSpread ?? '',
+          state: bandModel.line2.kind,
+          // N-05 — the act's own key. The LABEL is copy: it changes with the
+          // short form, with a rewording, with the tier.
+          action_key: bandModel.line2.act?.key ?? null,
+          standing_count: bandModel.line2.standingCount,
+          tier: lensTier,
+        }
+      : null;
   const lensLinePropsRef = useRef(lensLineProps);
   lensLinePropsRef.current = lensLineProps;
   const lensLineKind = bandModel?.line2.kind ?? null;
-  const lensLineActKey = bandModel?.line2.act?.label ?? null;
+  const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;
   useEffect(() => {
     const props = lensLinePropsRef.current;
     if (!props) return;
     documentEvents.lensLineShown(props);
-  }, [id, lensLineKind, lensLineActKey, lensStandingCount]);
+  }, [id, lensLineKind, lensLineActKey, lensStandingCount, lensLineSettled]);
   const onLensActed = useCallback(() => {
     const props = lensLinePropsRef.current;
     if (props) documentEvents.lensLineActed(props);

@@ -1615,14 +1615,27 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(mockLensLineShown).toHaveBeenLastCalledWith(
+      // N-10 — ONCE. `toHaveBeenLastCalledWith` passes just as happily on a
+      // model that fired on every settling read, which is the defect the
+      // once-per-distinct-shape key exists to prevent.
+      expect(mockLensLineShown).toHaveBeenCalledTimes(1);
+      expect(mockLensLineShown).toHaveBeenCalledWith(
         expect.objectContaining({
           state: 'standing',
-          action_key: 'Open the task',
+          // N-05 — the act's own stable key, never its printed label.
+          action_key: 'task_due-0',
           standing_count: 1,
           tier: 'full',
         }),
       );
+    });
+
+    it('fires nothing from the loading tree (N-11)', () => {
+      // The loading and error trees print no band; an impression from a tree
+      // with no lens line on it is a phantom.
+      mockDocumentQuery = { isLoading: true, isFetching: true, isError: false, data: undefined };
+      render(<DocumentPage params={fulfilledParams} />);
+      expect(mockLensLineShown).not.toHaveBeenCalled();
     });
 
     it('fires on the act and on the door, and never from the band itself', () => {
