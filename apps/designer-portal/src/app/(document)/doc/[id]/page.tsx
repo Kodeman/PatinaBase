@@ -46,7 +46,7 @@ import {
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
-import { MobileMarginChips } from '@/components/document/mobile/mobile-margin-chips';
+import { useMarginSheet } from '@/hooks/use-margin-sheet';
 import {
   documentEvents,
   rememberDocumentInHand,
@@ -1767,6 +1767,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     ladderSegments.find((segment) => segment.key === key)?.countLine ??
     'Nothing yet';
 
+  // W5-R1: the whole-margin count — the mobile bar's "Margin · N" door and
+  // the Margin sheet's head both read it off `MobileActiveDoc` rather than
+  // each re-deriving it.
+  const { count: marginSheetCount } = useMarginSheet({
+    projectId: row?.project_id ?? null,
+    proposalId: row?.proposal_id ?? null,
+    clientName: row?.client_name ?? '',
+  });
+
   // D13: publish the held document to the mobile shell (bar + spine sheet).
   useMobileActiveDoc(
     row
@@ -1781,6 +1790,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           ladderValues,
           clientCopy: ticketInput?.clientCopy != null,
           onJumpRegion: jumpToRegion,
+          marginCount: marginSheetCount,
         }
       : null,
   );
@@ -2462,14 +2472,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           <FolioLetterhead projectId={row.project_id} />
         )}
 
-        {/* D13: letterhead-anchored margin items (Pulse, section items) as
-            chips beneath the title — the desktop margin rail hides on mobile. */}
-        <MobileMarginChips
-          projectId={row.project_id}
-          proposalId={row.proposal_id}
-          anchorKind="letterhead"
-          clientName={row.client_name}
-        />
+        {/* D-B30: the letterhead margin chips block is retired at 390 — the
+            Margin sheet (mobile-bar's "In this document" door) replaces it.
+            The `marginCount` it needs rides `useMobileActiveDoc` below. */}
 
         <ProjectApprovalDocumentMount
           quietLeader={approvalsQuietLeaderAct}

@@ -159,6 +159,37 @@ test.describe('the lens band’s declared height', () => {
     console.log(`SC2 · band bottom at 1440, scrollY 400: ${bottom}px`);
     expect(bottom).toBeLessThanOrEqual(SC2_MAX_BOTTOM);
   });
+
+  // D-B30 (W5-L3): the letterhead `MobileMarginChips` block that used to
+  // stand between the band and the first region at 390 is gone (a Margin
+  // sheet off the mobile bar's More menu replaces it — mobile-margin-sheet
+  // .spec.ts covers that door). D-B26's 390 first-head budget (≤400) was
+  // measured NET of that block on `document-lens/w3-fix`; that allowance
+  // line (`// D-B30: net of MobileMarginChips until W5-L3`) never reached
+  // this branch, so there is nothing to delete here — this is the GROSS
+  // assertion D-B30 promotes it to. If a future merge brings the W3-fix
+  // allowance line into this file, delete it in favour of this case.
+  test('D-B30 — at 390 the letterhead chips block is gone and the first region head stands at or above 400px gross', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page, LONG_PAPER_ID, 390, 844);
+    await scrollTo(page, 0);
+
+    await expect(
+      page.locator('[data-mobile-margin-chips="letterhead"]'),
+    ).toHaveCount(0);
+
+    const firstHead = page
+      .locator('[data-document-paper] [data-region-head]')
+      .first();
+    await expect(firstHead).toBeVisible({ timeout: 20_000 });
+    const box = await firstHead.boundingBox();
+    expect(box).not.toBeNull();
+    console.log(
+      `D-B30 · first [data-region-head] top at 390, rest, gross: ${box!.y}px`,
+    );
+    expect(box!.y).toBeLessThanOrEqual(400);
+  });
 });
 
 /**
