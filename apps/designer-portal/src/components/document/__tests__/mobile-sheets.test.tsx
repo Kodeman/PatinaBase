@@ -28,6 +28,9 @@ jest.mock('next/navigation', () => ({
 jest.mock('@patina/supabase', () => ({
   useCoordinationItems: () => ({ data: [] }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  // W5-L3: `useMarginSheet` (mobile-sheets.tsx) reads the FF&E lines to name
+  // a line-anchored margin row's own line.
+  useProjectFFEItems: () => ({ data: [] }),
   isProjectArtifactApproval: () => false,
 }));
 

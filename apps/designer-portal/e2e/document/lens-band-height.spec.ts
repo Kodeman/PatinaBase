@@ -160,16 +160,15 @@ test.describe('the lens band’s declared height', () => {
     expect(bottom).toBeLessThanOrEqual(SC2_MAX_BOTTOM);
   });
 
-  // D-B30 (W5-L3): the letterhead `MobileMarginChips` block that used to
+  // D-B30 / W5-R1: the letterhead `MobileMarginChips` block that used to
   // stand between the band and the first region at 390 is gone (a Margin
   // sheet off the mobile bar's More menu replaces it — mobile-margin-sheet
-  // .spec.ts covers that door). D-B26's 390 first-head budget (≤400) was
-  // measured NET of that block on `document-lens/w3-fix`; that allowance
-  // line (`// D-B30: net of MobileMarginChips until W5-L3`) never reached
-  // this branch, so there is nothing to delete here — this is the GROSS
-  // assertion D-B30 promotes it to. If a future merge brings the W3-fix
-  // allowance line into this file, delete it in favour of this case.
-  test('D-B30 — at 390 the letterhead chips block is gone and the first region head stands at or above 400px gross', async ({
+  // .spec.ts covers that door), and so is the line-anchored mount below 980.
+  // The W3-fix chips allowance is deleted from this file at the W5
+  // integration: every 390 first-head assertion is now GROSS against
+  // W3-R7's own ≤435 (W5-R1: "the 390 first head gross ≤ 435 — D-B26's
+  // W3-R7 number, now without the chips subtraction").
+  test('D-B30 — at 390 no margin-chips block prints and the first region head stands at or above 435px gross', async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 390, 844);
@@ -178,6 +177,7 @@ test.describe('the lens band’s declared height', () => {
     await expect(
       page.locator('[data-mobile-margin-chips="letterhead"]'),
     ).toHaveCount(0);
+    await expect(page.locator(CHIPS_BLOCK)).toHaveCount(0);
 
     const firstHead = page
       .locator('[data-document-paper] [data-region-head]')
@@ -188,7 +188,7 @@ test.describe('the lens band’s declared height', () => {
     console.log(
       `D-B30 · first [data-region-head] top at 390, rest, gross: ${box!.y}px`,
     );
-    expect(box!.y).toBeLessThanOrEqual(400);
+    expect(box!.y).toBeLessThanOrEqual(FIRST_HEAD_MAX_Y_390);
   });
 });
 
@@ -247,14 +247,13 @@ const VITALS_MAX_HEIGHT = 24;
  *  are what make one row reachable; two rows now means one of them regressed. */
 const LEDGER_MAX_ROWS = 1;
 /**
- * At 390 the first head must be reachable inside the 844px frame — measured
- * NET of `MobileMarginChips` (W3-R7: chromium 423.17 · webkit 430.25 → gate
- * ≤ 435, engine allowance +5 — D-B30: net of MobileMarginChips until W5-L3
- * retires the chips block and the gate goes gross). W3-R5 §4: the mockup
- * prints nothing between the band and the first region (its seven chips live
- * in a 390 Margin sheet the shipped app has no door for), so hiding the block
- * would remove the margin at 390 entirely. The run records the gross height
- * beside the net one.
+ * At 390 the first head must be reachable inside the 844px frame — GROSS
+ * (W3-R7: chromium 423.17 · webkit 430.25 net of the chips → gate ≤ 435,
+ * engine allowance +5). W5-L3 retired `MobileMarginChips` at 390 (D-B30 /
+ * W5-R1 — the mockup prints nothing between the band and the first region;
+ * its seven margin items live in the 390 Margin sheet, which now exists),
+ * so gross and net are the same number and the W3-fix allowance line is
+ * deleted. `CHIPS_BLOCK` survives as the falsifier: the count is 0.
  */
 const FIRST_HEAD_MAX_Y_390 = 435;
 const CHIPS_BLOCK = '[data-document-paper] [data-mobile-margin-chips]';
@@ -351,12 +350,9 @@ test.describe('the letterhead grid', () => {
     expect(rows).toBeLessThanOrEqual(LEDGER_MAX_ROWS);
     expect(ledgerBox!.height).toBeLessThanOrEqual(LEDGER_MAX_HEIGHT_390);
 
-    // W3-R5 §4 — net of the chips block, whose GROSS height is recorded too so
-    // the number D-B27 will reclaim stays visible in every run.
-    const chips = page.locator(CHIPS_BLOCK);
-    const chipsHeight = (await chips.count())
-      ? ((await chips.first().boundingBox())?.height ?? 0)
-      : 0;
+    // W5-R1 — the chips block is gone at 390, so the first head is reported
+    // gross and its count is the falsifier for the retirement.
+    await expect(page.locator(CHIPS_BLOCK)).toHaveCount(0);
     const firstHead = page
       .locator('[data-document-paper] [data-region-head]')
       .first();
@@ -364,10 +360,7 @@ test.describe('the letterhead grid', () => {
     const headBox = await firstHead.boundingBox();
     expect(headBox).not.toBeNull();
     console.log(
-      `W3-R5 · MobileMarginChips height at 390: ${chipsHeight}px (gross first head ${headBox!.y}px)`,
-    );
-    console.log(
-      `W3-R5 · first [data-region-head] at 390, net of the chips: ${headBox!.y - chipsHeight}px`,
+      `W5-R1 · first [data-region-head] at 390, gross (no chips block): ${headBox!.y}px`,
     );
   });
 
@@ -522,7 +515,8 @@ test.describe('line 2’s two forms on the seeded paper (D-B24, NF-01)', () => {
  *
  *   1440 letterhead     — chromium 192.06 · webkit 201     → gate ≤ 205 (engine allowance +10 over chromium's 192.06→~195 own-engine ceiling)
  *   390 letterhead      — chromium 255.17 · webkit 262.25  → gate ≤ 265 (engine allowance +5)
- *   390 first head, net — chromium 423.17 · webkit 430.25  → gate ≤ 435 (engine allowance +5; D-B30: net of MobileMarginChips until W5-L3)
+ *   390 first head, gross — chromium 423.17 · webkit 430.25 (measured net of the
+ *                            now-retired chips block) → gate ≤ 435 (engine allowance +5)
  *
  * WebKit's own figures run higher for the same reason `quiet-responsive-
  * shell.spec.ts` measures a 1431px layout viewport at a 1440 window (font
@@ -551,22 +545,20 @@ test.describe("W3-R7's budget numbers, across engines", () => {
     expect(box!.height).toBeLessThanOrEqual(LETTERHEAD_MAX_390);
   });
 
-  test(`first [data-region-head] is ≤${FIRST_HEAD_MAX_Y_390}px at 390, net of the chips (chromium 423.17 · webkit 430.25, engine allowance +5)`, async ({
+  test(`first [data-region-head] is ≤${FIRST_HEAD_MAX_Y_390}px at 390, gross (chromium 423.17 · webkit 430.25, engine allowance +5)`, async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, LONG_PAPER_ID, 390, 844);
     await scrollTo(page, 0);
-    const chips = page.locator(CHIPS_BLOCK);
-    const chipsHeight = (await chips.count())
-      ? ((await chips.first().boundingBox())?.height ?? 0)
-      : 0;
+    // W5-R1 — the chips block no longer prints at 390, so there is nothing to
+    // subtract: the count is asserted 0 and the head is gated gross.
+    await expect(page.locator(CHIPS_BLOCK)).toHaveCount(0);
     const head = page.locator('[data-document-paper] [data-region-head]').first();
     await expect(head).toBeVisible({ timeout: 20_000 });
     const headBox = await head.boundingBox();
     console.log(
-      `W3-R7 · first head at 390: gross ${headBox!.y}px, chips ${chipsHeight}px, net ${headBox!.y - chipsHeight}px (chromium measured 423.17, webkit 430.25)`,
+      `W3-R7 · first head at 390: gross ${headBox!.y}px (chromium measured 423.17, webkit 430.25 net of the retired chips block)`,
     );
-    // D-B30: net of MobileMarginChips until W5-L3
-    expect(headBox!.y - chipsHeight).toBeLessThanOrEqual(FIRST_HEAD_MAX_Y_390);
+    expect(headBox!.y).toBeLessThanOrEqual(FIRST_HEAD_MAX_Y_390);
   });
 });
