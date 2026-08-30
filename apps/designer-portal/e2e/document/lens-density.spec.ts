@@ -616,6 +616,10 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
   test('a warm second navigation arrives with the first stop already full', async ({
     authenticatedPage: page,
   }) => {
+    // W4F3-07 — CLIENT-SIDE, or the cache is not warm: React Query's cache
+    // lives in the JS context, so a second `goto` is another cold load and the
+    // case would prove nothing about the warm path. She puts the document down
+    // and picks it up again, which is the journey the claim is about.
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('[data-document-shell]')).toBeVisible({
@@ -624,7 +628,34 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
     await settle(page);
     await quiet(page);
 
-    await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: 'domcontentloaded' });
+    // Dispatched on the anchor rather than clicked through the pointer: the
+    // band and the rail overlap this corner at 1440 and Playwright's
+    // actionability check waits forever on a link nothing is actually
+    // covering. The event still runs Next's own Link handler, which is what
+    // makes the navigation client-side — the whole point of the case.
+    const putDown = page.locator('a[aria-label="Put down document"]');
+    if ((await putDown.count()) === 0) {
+      test.skip(true, 'no "Put down document" exit at this width — nothing to navigate with');
+    }
+    await page.evaluate(() =>
+      (
+        document.querySelector(
+          'a[aria-label="Put down document"]',
+        ) as HTMLElement | null
+      )?.click(),
+    );
+    await page.waitForURL(/\/desk/, { timeout: 30_000 });
+
+    const backIn = page.locator(`a[href*="/doc/${LONG_PAPER_ID}"]`);
+    if ((await backIn.count()) === 0) {
+      test.skip(true, 'the desk carries no link back to the long paper on this seed');
+    }
+    await page.evaluate((id) => {
+      (
+        document.querySelector(`a[href*="/doc/${id}"]`) as HTMLElement | null
+      )?.click();
+    }, LONG_PAPER_ID);
+    await page.waitForURL(new RegExp(LONG_PAPER_ID), { timeout: 30_000 });
     await expect(page.locator('[data-document-shell]')).toBeVisible({
       timeout: 30_000,
     });

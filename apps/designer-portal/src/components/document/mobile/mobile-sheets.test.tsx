@@ -289,6 +289,21 @@ describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
     expect(within(panel).getByText('2 overdue')).toBeInTheDocument();
   });
 
+  it('D-B46 — a room row asks the page too; its heading lives in the same body', () => {
+    const onJumpToRoom = jest.fn();
+    mountBarAndSheets({
+      doc: {
+        ...heldDocument,
+        rooms: [{ id: 'room-7', name: 'Primary bedroom' }],
+        onJumpToRoom,
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Open sections/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Primary bedroom' }));
+
+    expect(onJumpToRoom).toHaveBeenCalledWith('room-7');
+  });
+
   it('W5-R1 — a line-anchored row names its line on a second line', () => {
     mockItems = [
       row({
@@ -308,12 +323,15 @@ describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
     ).toBeInTheDocument();
   });
 
-  it('W5-R1 — tapping a line-anchored row jumps to its line and opens the margin-item sheet', () => {
-    const target = document.createElement('div');
-    target.id = 'ffe-selection-ffe-2';
-    target.scrollIntoView = jest.fn();
-    document.body.appendChild(target);
-
+  it('W5-R1/D-B46 — tapping a line-anchored row asks the PAGE to land, and opens the margin-item sheet', () => {
+    // D-B46 — was: the sheet called `scrollIntoView` on `#ffe-selection-<id>`
+    // itself, asserted through a stub target appended to the body. That target
+    // does not exist on a real cold load: the id lives inside the FF&E body,
+    // and a body that is quiet — or that the reader closed herself, which no
+    // density can reopen (C-8) — is not mounted. The press order belongs to
+    // the page (unfold → promote → land), so the assertion moves from "the
+    // sheet scrolled" to "the sheet asked, with the line's own id".
+    const onJumpToLine = jest.fn();
     mockItems = [
       row({
         item_id: 'com',
@@ -322,15 +340,15 @@ describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
         title: 'Living room fabric',
       }),
     ];
-    mountBarAndSheets({ marginCount: 1 });
+    mountBarAndSheets({
+      doc: { ...heldDocument, onJumpToLine },
+      marginCount: 1,
+    });
     fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
     fireEvent.click(screen.getByText('Living room fabric'));
 
-    expect(target.scrollIntoView).toHaveBeenCalledWith(
-      expect.objectContaining({ block: 'start' }),
-    );
+    expect(onJumpToLine).toHaveBeenCalledWith('ffe-2');
     expect(screen.getByRole('dialog', { name: 'Margin item' })).toBeInTheDocument();
-    document.body.removeChild(target);
   });
 
   it('prints no BESIDE group when nothing is line-anchored', () => {

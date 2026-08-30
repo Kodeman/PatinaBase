@@ -704,12 +704,9 @@ export function MobileSheets({
                     type="button"
                     onClick={() => {
                       closeSheet();
-                      document
-                        .getElementById(`doc-room-${r.id}`)
-                        ?.scrollIntoView({
-                          block: 'start',
-                          behavior: 'smooth',
-                        });
+                      // Room headings live inside the FF&E body too, so the
+                      // same press order and the same owner.
+                      activeDoc?.onJumpToRoom?.(r.id);
                     }}
                     className="block w-full py-1.5 text-left font-heading text-[13px] italic text-[var(--color-charcoal)]"
                   >
@@ -745,20 +742,11 @@ export function MobileSheets({
       // never moved) and then opens the same margin-item sheet the line's
       // own chip opened (D-B30's SHEET_RETURN_FALLBACKS still find it).
       if (row.anchor_kind === 'line' && row.anchor_id) {
-        // D-B46: every `ffe-selection-*` id lives in the FF&E region's body,
-        // and a quiet region has no body — so on a cold 390 load the line this
-        // row names does not exist yet. The promotion is flushed (D-B18), so
-        // the element is there by the next statement.
-        activeDoc?.onPromoteThrough?.('ffe');
-        const reduceMotion = window.matchMedia?.(
-          '(prefers-reduced-motion: reduce)',
-        ).matches;
-        document
-          .getElementById(`ffe-selection-${row.anchor_id}`)
-          ?.scrollIntoView({
-            block: 'start',
-            behavior: reduceMotion ? 'auto' : 'smooth',
-          });
+        // D-B46: the page owns the landing — unfold, promote, then scroll.
+        // Every `ffe-selection-*` id lives in the FF&E region's body, and a
+        // region that is quiet (or that the reader closed herself) has no
+        // body, so a scroll issued from here had nothing to land on.
+        activeDoc?.onJumpToLine?.(row.anchor_id);
       }
       openMarginItem(row.item_id);
     };

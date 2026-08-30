@@ -21,7 +21,11 @@ export function RecentBoardsStrip() {
   if (isError || (!isLoading && boards.length === 0)) return null;
 
   return (
-    <section aria-labelledby="recent-mood-boards" className="mt-12">
+    <section
+      aria-labelledby="recent-mood-boards"
+      aria-busy={isLoading || undefined}
+      className="mt-12"
+    >
       <SectionEyebrow count={boards.length || undefined}>
         <span id="recent-mood-boards">Recent boards</span>
       </SectionEyebrow>

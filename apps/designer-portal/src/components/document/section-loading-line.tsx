@@ -33,7 +33,11 @@ export function SectionLoadingLine({
 }) {
   if (variant === 'inline') {
     return (
-      <span role="status" aria-live="polite" className={className}>
+      // `aria-busy` is the CONTRACT (D-B46): the lens's resolution gate reads
+      // `[aria-busy="true"], .animate-pulse` on the paper to know that a body
+      // is still arriving, and `aria-busy` is the half that survives a class
+      // rename. Both forms carry it; both unmount when their data lands.
+      <span role="status" aria-live="polite" aria-busy="true" className={className}>
         <span
           aria-hidden
           className="ml-[0.5ch] inline-block h-[0.85em] w-[3ch] animate-pulse rounded-[2px] bg-[var(--color-pearl)] align-middle motion-reduce:animate-none"
@@ -48,7 +52,12 @@ export function SectionLoadingLine({
     // 9px and 13px, clustered around 11.5-12px — this keeps the bar's
     // 0.85em height in that register instead of inheriting the ~16px body
     // size (no call site passes a font-size override today).
-    <p role="status" aria-live="polite" className={`my-1 text-[11.5px] ${className}`}>
+    <p
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className={`my-1 text-[11.5px] ${className}`}
+    >
       <span
         aria-hidden
         className="inline-block h-[0.85em] w-24 max-w-[45%] animate-pulse rounded-[2px] bg-[var(--color-pearl)] align-middle motion-reduce:animate-none"
