@@ -3,12 +3,15 @@
 -- Companion wave 4, package 4-3). Spec: docs/design/field-companion/
 -- field-companion-package.md §9.4.
 --
--- ⚠ NN IS DRAWN AT LANDING from the reserved band 00530–00535 (FC-R17), after
---   re-checking BOTH docs/engineering/migration-number-reservations.md AND
---   `supabase migration list` against Strata (constraint C6, and the
---   file-based push invariant in docs/ops/strata-staging.md). This file lives
---   under docs/design/field-companion/plans/sql/ until then; the orchestrator
---   copies it to supabase/migrations/ with its number at landing.
+-- ⚠ NUMBERED 00543 — NOT drawn from the reserved band 00530–00535 (FC-R17).
+--   That band is CLOSED/EXHAUSTED: `00530` and `00532` are this program's
+--   (waves 1 and 3), `00531` is an unrelated `uuid_generate_v5` grant hotfix,
+--   and `00533`/`00534`/`00535` were drawn by OTHER lanes
+--   (`00533_piece_detail_contract.sql`, `00534_client_attention_notifications.sql`,
+--   `00535_saved_items_price_snapshot.sql`) before wave 4 ran its landing
+--   census. Wave 4 drew `00543–00545` above the head (`00542`) instead — see
+--   docs/engineering/migration-number-reservations.md. This file already
+--   lives in supabase/migrations/, not docs/design/field-companion/plans/sql/.
 --
 -- WHAT THIS DOES — two things, both additive:
 --   (a) margin_notes.field_capture_id — the back-reference from a designer's
@@ -347,22 +350,39 @@ select
     -- a field-less project changes shape (FC-R10's browser-verified criterion).
     'field_capture_id', n.field_capture_id,
     'capture_visible', (n.field_capture_id IS NOT NULL AND fc.id IS NOT NULL),
+    -- ⚠ F1: neither voice_audio_segments nor photos carries an arrayness
+    -- CHECK, and `authenticated` can PATCH either through PostgREST to any
+    -- jsonb value. jsonb_array_length()/jsonb_array_elements() on a non-array
+    -- raise 22023 — unguarded, that error propagates out of the whole UNION
+    -- ALL view, so one malformed capture killed EVERY margin kind for that
+    -- designer, not just the note. jsonb_typeof(...) = 'array' guards both:
+    -- a malformed value degrades to '[]'/0 instead of raising.
     'has_audio', (
       fc.voice_audio_path IS NOT NULL
-      OR jsonb_array_length(coalesce(fc.voice_audio_segments, '[]'::jsonb)) > 0
+      OR (
+        jsonb_typeof(coalesce(fc.voice_audio_segments, '[]'::jsonb)) = 'array'
+        AND jsonb_array_length(coalesce(fc.voice_audio_segments, '[]'::jsonb)) > 0
+      )
     ),
     'audio_path', fc.voice_audio_path,
-    'audio_segments', coalesce(fc.voice_audio_segments, '[]'::jsonb),
+    'audio_segments', case
+      when jsonb_typeof(coalesce(fc.voice_audio_segments, '[]'::jsonb)) = 'array'
+        then coalesce(fc.voice_audio_segments, '[]'::jsonb)
+      else '[]'::jsonb
+    end,
     'voice_duration_seconds', fc.voice_duration_seconds,
     'transcript_source', fc.transcript_source,
     -- Storage keys only, in capture order. The portal signs them with
     -- useCaptureMediaUrls(paths, ttl) (§11.1); the view never mints a URL.
-    'photo_paths', coalesce(
-      (select jsonb_agg(ph->>'path' order by ph_ord)
-         from jsonb_array_elements(coalesce(fc.photos, '[]'::jsonb))
-              with ordinality as t(ph, ph_ord)
-        where ph->>'path' is not null),
-      '[]'::jsonb)
+    'photo_paths', case
+      when jsonb_typeof(coalesce(fc.photos, '[]'::jsonb)) = 'array' then coalesce(
+        (select jsonb_agg(ph->>'path' order by ph_ord)
+           from jsonb_array_elements(coalesce(fc.photos, '[]'::jsonb))
+                with ordinality as t(ph, ph_ord)
+          where ph->>'path' is not null),
+        '[]'::jsonb)
+      else '[]'::jsonb
+    end
   )                                         as payload
 from margin_notes n
 left join profiles ap on ap.id = n.designer_id
@@ -454,7 +474,14 @@ BEGIN
     RAISE EXCEPTION 'margin migration: margin_notes.field_capture_id is missing';
   END IF;
 
+  -- ⚠ F14: a bare '%field_capture_id%' match is satisfied by the column
+  -- reference alone (e.g. the join predicate) and says nothing about the
+  -- payload keys the note branch is supposed to add. Require 'capture_visible'
+  -- and the 'body' key too, so this cannot pass on a view carrying none of
+  -- the field-note payload.
   SELECT pg_get_viewdef('public.margin_items'::regclass) LIKE '%field_capture_id%'
+     AND pg_get_viewdef('public.margin_items'::regclass) LIKE '%capture_visible%'
+     AND pg_get_viewdef('public.margin_items'::regclass) LIKE '%''body''%'
     INTO v_note_carries_body;
   IF NOT v_note_carries_body THEN
     RAISE EXCEPTION

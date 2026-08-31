@@ -87,6 +87,7 @@ DECLARE
   v_status_ck TEXT;
   v_owner_ck  TEXT;
   v_trigger   BOOLEAN;
+  v_trig_def  TEXT;
   v_fn_src    TEXT;
   v_jsonb     INTEGER;
   v_after     UUID;
@@ -161,6 +162,19 @@ BEGIN
   ) INTO v_trigger;
   ASSERT v_trigger,
     'FAIL 4a: fc_task_assignment_dispatch is gone — a punch item would reach no GC';
+
+  -- ⚠ F13: `tgname` existing is not enough — a trigger narrowed to UPDATE-only
+  -- (dropping the INSERT event entirely) would still pass the assertion above
+  -- while every Field punch INSERT silently stops dispatching. Pin the actual
+  -- event list and the column the UPDATE is scoped to.
+  SELECT pg_get_triggerdef(oid) INTO v_trig_def
+    FROM pg_trigger
+   WHERE tgrelid = 'public.project_tasks'::regclass
+     AND tgname = 'fc_task_assignment_dispatch'
+     AND NOT tgisinternal;
+  ASSERT v_trig_def LIKE '%AFTER INSERT OR UPDATE OF owner_party_id%',
+    'FAIL 4a2: fc_task_assignment_dispatch is no longer AFTER INSERT OR UPDATE OF owner_party_id — a punch INSERT would silently stop dispatching, got ' ||
+    COALESCE(v_trig_def, 'NULL');
 
   SELECT pg_get_functiondef('public.fc_dispatch_task_assignment()'::regprocedure)
     INTO v_fn_src;

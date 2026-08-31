@@ -4,17 +4,22 @@
 -- FC-R7). Spec: docs/design/field-companion/field-companion-package.md §9.5;
 -- ruling: docs/design/field-companion/field-companion-rulings.md FC-R7 + FC-R15.
 --
--- ⚠ NN IS DRAWN AT LANDING from the reserved band 00530–00535 (FC-R17), after
---   re-checking BOTH docs/engineering/migration-number-reservations.md AND
---   `supabase migration list` against Strata (constraint C6). This file lives
---   under docs/design/field-companion/plans/sql/ until then.
+-- ⚠ NUMBERED 00544 — NOT drawn from the reserved band 00530–00535 (FC-R17).
+--   That band is CLOSED/EXHAUSTED: `00530` and `00532` are this program's
+--   (waves 1 and 3), `00531` is an unrelated `uuid_generate_v5` grant hotfix,
+--   and `00533`/`00534`/`00535` were drawn by OTHER lanes
+--   (`00533_piece_detail_contract.sql`, `00534_client_attention_notifications.sql`,
+--   `00535_saved_items_price_snapshot.sql`) before wave 4 ran its landing
+--   census. Wave 4 drew `00543–00545` above the head (`00542`) instead — see
+--   docs/engineering/migration-number-reservations.md. This file already
+--   lives in supabase/migrations/, not docs/design/field-companion/plans/sql/.
 --
 -- ── WHAT CHANGED FROM THE PACKAGE, AND WHY ────────────────────────────────
 -- The build package (§9.5) reserved this migration as
 -- `005NN_client_decision_field_capture_ref.sql`: a `client_decisions.
 -- field_capture_id` column, a widened `create_client_decision` payload
--- allow-list, and a CREATE OR REPLACE of that SECURITY DEFINER, money-adjacent
--- RPC.
+-- allow-list, and a CREATE OR REPLACE of that definer-privileged, money-adjacent
+-- RPC (elevated ownership rights, not a caller-scoped function).
 --
 -- FC-R7 (ratified 2026-08-24) rules that a Field punch item is a
 -- `project_tasks` row owned by the GC riding the party-anchored SMS rail —

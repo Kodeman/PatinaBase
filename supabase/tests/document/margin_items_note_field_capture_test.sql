@@ -13,15 +13,21 @@
 --                       that same collapsed preview for EVERY kind; widening
 --                       it would dump a transcript into the rail.
 -- 4. FIELD LANE       → field_capture_id, capture_visible, has_audio,
---                       audio_segments, photo_paths and voice_duration_seconds
---                       reach the payload from the joined capture.
+--                       audio_path, audio_segments, photo_paths and
+--                       voice_duration_seconds reach the payload from the
+--                       joined capture.
 -- 5. FIELD-LESS NOTE  → a typed R14 note is byte-identical to today apart from
 --                       the added keys reading null/false/[]. This is FC-R10's
 --                       "renders nothing on a field-less project" at the SQL
 --                       layer; the browser half is Task 18.
--- 6. SHAPE            → margin_items still emits exactly 11 columns, so the
---                       CREATE OR REPLACE stayed column-compatible and
---                       MarginItemRow (margin-derivation.ts:21-33) still fits.
+-- 6. SHAPE            → margin_items still emits the same 11 columns in the
+--                       same order with the same types, so the CREATE OR
+--                       REPLACE stayed column-compatible and MarginItemRow
+--                       (margin-derivation.ts:21-33) still fits. Also
+--                       exercises the `time` arm (the cheapest of the six
+--                       untouched UNION arms) end to end, since the
+--                       "verbatim except note" claim was otherwise backed
+--                       only by human diffing.
 -- 7. ANCHOR CHECK     → margin_notes.anchor_kind still admits exactly
 --                       ('line','section','letterhead'). A field note anchors
 --                       to 'letterhead'; nothing may widen this.
@@ -102,8 +108,9 @@ DO $$
 DECLARE
   v_field    RECORD;
   v_typed    RECORD;
+  v_time     RECORD;
   v_body     TEXT;
-  v_cols     INTEGER;
+  v_shape    TEXT[];
   v_check    TEXT;
 BEGIN
   SELECT body INTO v_body FROM margin_notes
@@ -126,9 +133,13 @@ BEGIN
   -- in margin_items, so `v_field IS NOT NULL` reads false even when the SELECT
   -- INTO found the row — a false FAIL 0a, verified by direct psql probing
   -- against 00543 (the note reaches margin_items with the full field-capture
-  -- payload; only the row-nullness check was wrong). item_id is NOT NULL in
-  -- the schema and is the actual "a row was found" signal: it is present when
-  -- SELECT INTO matched a row and only NULL when v_field is the true
+  -- payload; only the row-nullness check was wrong). item_id is the actual
+  -- "a row was found" signal — NOT because margin_items has a NOT NULL on it
+  -- (it is a view; views carry no NOT NULL constraints on any column) but
+  -- because it is non-null BY CONSTRUCTION in every UNION arm: each arm
+  -- selects a real primary-key id (cd.id, t.id, inv.id, wp.id, the te.
+  -- synthetic id, n.id, pp.id, m.id), never a literal null. It is present
+  -- when SELECT INTO matched a row and only NULL when v_field is the true
   -- not-found sentinel (field access on a NULL record yields NULL, not error).
   ASSERT v_field.item_id IS NOT NULL,
     'FAIL 0a: the field note did not reach margin_items at all';
@@ -155,6 +166,11 @@ BEGIN
     'FAIL 4b: capture_visible must be true when the capture joins';
   ASSERT (v_field.payload->>'has_audio')::boolean,
     'FAIL 4c: has_audio must be true when the capture carries segments';
+  -- ⚠ F10: audio_path shipped with zero assertions even though Tasks 2-4
+  -- consume it (FieldNoteMedia's single-recording playback path).
+  ASSERT v_field.payload->>'audio_path' = 'fb/ct/voice-000.m4a',
+    'FAIL 4c2: payload.audio_path must carry the capture''s voice_audio_path, got ' ||
+    COALESCE(v_field.payload->>'audio_path', 'NULL');
   ASSERT jsonb_array_length(v_field.payload->'audio_segments') = 2,
     'FAIL 4d: audio_segments must carry 2 entries, got ' ||
     COALESCE(v_field.payload->>'audio_segments', 'NULL');
@@ -186,10 +202,48 @@ BEGIN
     'FAIL 5f: a typed note''s title/detail must be byte-identical to today';
 
   -- 6 ---------------------------------------------------------------------
-  SELECT count(*) INTO v_cols FROM information_schema.columns
+  -- ⚠ F11: a bare column COUNT proves nothing about ORDER or TYPE — a
+  -- migration could swap two adjacent columns, or turn `ts` into a bare
+  -- `date`, and a count of 11 would still pass. Assert the full ORDERED
+  -- (column_name, data_type) shape instead.
+  SELECT array_agg(column_name || ':' || data_type ORDER BY ordinal_position)
+    INTO v_shape
+    FROM information_schema.columns
    WHERE table_schema = 'public' AND table_name = 'margin_items';
-  ASSERT v_cols = 11,
-    'FAIL 6: margin_items must still emit 11 columns, got ' || v_cols;
+  ASSERT v_shape = ARRAY[
+    'kind:text', 'item_id:uuid', 'project_id:uuid', 'proposal_id:uuid',
+    'anchor_kind:text', 'anchor_id:uuid', 'state:text', 'title:text',
+    'detail:text', 'ts:timestamp with time zone', 'payload:jsonb'
+  ], 'FAIL 6a: margin_items column shape drifted, got ' || array_to_string(v_shape, ', ');
+
+  -- This migration's own discipline claims the other six UNION arms are
+  -- 00282:606-909 verbatim — a claim backed only by human diffing so far.
+  -- Exercise the cheapest untouched arm (`time`, a query over
+  -- project_time_entries, not a table of its own) end to end so a break in
+  -- one of the arms this migration did NOT touch shows up here too.
+  INSERT INTO project_time_entries (
+    id, project_id, user_id, started_at, duration_minutes, source, activity)
+  VALUES (
+    'fb000000-0000-4000-8000-0000000000d1',
+    'fb000000-0000-4000-8000-0000000000a1',
+    'fb000000-0000-4000-8000-000000000001',
+    now() - interval '1 day', 90, 'manual_entry', 'site_visit');
+
+  SELECT * INTO v_time FROM margin_items
+   WHERE kind = 'time' AND project_id = 'fb000000-0000-4000-8000-0000000000a1';
+
+  ASSERT v_time.item_id IS NOT NULL,
+    'FAIL 6b: the time arm did not reach margin_items at all — an untouched arm broke';
+  ASSERT v_time.anchor_kind = 'letterhead',
+    'FAIL 6c: time arm anchor_kind must be letterhead, got ' || COALESCE(v_time.anchor_kind, 'NULL');
+  ASSERT v_time.detail = '',
+    'FAIL 6d: time arm detail must be empty, got ' || COALESCE(v_time.detail, 'NULL');
+  ASSERT v_time.title = 'Time · ' || to_char((now() - interval '1 day')::date, 'Mon FMDD'),
+    'FAIL 6e: time arm title format changed, got ' || COALESCE(v_time.title, 'NULL');
+  ASSERT (v_time.payload->>'minutes')::numeric = 90,
+    'FAIL 6f: time arm payload.minutes wrong, got ' || COALESCE(v_time.payload->>'minutes', 'NULL');
+  ASSERT (v_time.payload->>'entry_count')::int = 1,
+    'FAIL 6g: time arm payload.entry_count wrong, got ' || COALESCE(v_time.payload->>'entry_count', 'NULL');
 
   -- 7 ---------------------------------------------------------------------
   SELECT pg_get_constraintdef(oid) INTO v_check
