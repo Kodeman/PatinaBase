@@ -753,6 +753,7 @@ public final class CaptureStore {
             if $0.needsProjectPlacement { return true }
             if $0.needsMarginNote { return true }
             if $0.needsPunchTask { return true }
+            if $0.needsDegradeNote { return true }
             return ($0.remoteId ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .isEmpty

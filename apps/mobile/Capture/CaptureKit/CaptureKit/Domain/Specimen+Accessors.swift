@@ -274,25 +274,28 @@ public extension Specimen {
     }
 
     /// `.refused` closes the lane as firmly as `.written`: a 42501 is a fact
-    /// about who owns this project, not a transient error (FC-R8).
+    /// about who owns this project, not a transient error (FC-R8). `.unwritable`
+    /// closes it too — the row can never be accepted as composed, or the lane
+    /// spent its retries. Both leave `fieldWriteAttention` set.
     var needsMarginNote: Bool {
         guard marginNoteId?.trimmingCharacters(
             in: .whitespacesAndNewlines
         ).isEmpty == false else { return false }
-        return marginNoteState != .written && marginNoteState != .refused
+        return marginNoteState != .written
+            && marginNoteState != .refused
+            && marginNoteState != .unwritable
     }
 
     /// `body: nil` means "compose it from the transcript at drain time" — the
-    /// ordinary case, including the automatic in-visit note (ruling 1). A body
-    /// is passed only by FC-R8's degrade (ruling 3), which has words of its own.
+    /// ordinary case, including the automatic in-visit note (ruling 1).
     ///
     /// Re-requesting an OPEN lane is a no-op on the id: the id is the
     /// idempotency key, and re-minting it mid-flight would write the note
-    /// twice. A lane whose note has already landed is FREE, and re-requesting
-    /// it starts a second note — which is how FC-R8's degrade (ruling 3) still
-    /// files its words on a capture that already auto-filed its transcript.
-    /// The degrade passes a deterministic id (the refused task's own UUID), so
-    /// that second note is replay-safe exactly like the first.
+    /// twice. A lane whose note has already landed is FREE again.
+    ///
+    /// FC-R8's degrade does NOT come through here — it has `degradeNote*`,
+    /// because this slot is usually already occupied by the auto-filed
+    /// transcript (ruling 1) and one slot cannot hold two pending notes.
     func requestMarginNote(noteID: UUID, body: String? = nil) {
         guard marginNoteId == nil || marginNoteState == .written else { return }
         marginNoteId = noteID.uuidString
@@ -300,6 +303,7 @@ public extension Specimen {
         marginNoteState = .pending
         marginNoteLastError = nil
         marginNoteRetryCount = 0
+        clearFieldWriteAttention(.marginNote)
         touch()
     }
 
@@ -321,19 +325,53 @@ public extension Specimen {
         guard marginNoteId != nil else { return }
         marginNoteState = .written
         marginNoteLastError = nil
+        clearFieldWriteAttention(.marginNote)
         touch()
     }
 
     func markMarginNoteFailed(_ message: String) {
-        marginNoteState = .failed
+        guard marginNoteId != nil else { return }
+        let attempts = (marginNoteRetryCount ?? 0) + 1
+        marginNoteRetryCount = attempts
         marginNoteLastError = message
-        marginNoteRetryCount = (marginNoteRetryCount ?? 0) + 1
+        if attempts >= FieldWriteGate.retryCeiling {
+            marginNoteState = .unwritable
+            fieldWriteAttentionLane = .marginNote
+        } else {
+            marginNoteState = .failed
+        }
         touch()
     }
 
+    /// Terminal on the first attempt: no retry can satisfy this error.
+    func markMarginNoteUnwritable(_ message: String) {
+        guard marginNoteId != nil else { return }
+        marginNoteState = .unwritable
+        marginNoteLastError = message
+        fieldWriteAttentionLane = .marginNote
+        touch()
+    }
+
+    /// A margin 42501 has nowhere to degrade — `margin_notes_designer_all` keys
+    /// on the note's OWN designer_id, so a refusal here means this build put the
+    /// wrong value in `designer_id`. The lane still closes (retrying would be a
+    /// lie), but the loss is recorded rather than left in a field nothing reads.
     func markMarginNoteRefused(_ message: String) {
+        guard marginNoteId != nil else { return }
         marginNoteState = .refused
         marginNoteLastError = message
+        fieldWriteAttentionLane = .marginNote
+        touch()
+    }
+
+    /// The lane was opened on a capture whose words later resolved to nothing —
+    /// `MarginNoteComposer.request` returns nil and there is no row to write.
+    /// Without this the lane never closes and the committed specimen comes back
+    /// from `outbox()` on every drain, forever.
+    func settleMarginNoteWithNothingToWrite() {
+        guard marginNoteId != nil, marginNoteState != .written else { return }
+        marginNoteState = .unwritable
+        marginNoteLastError = nil
         touch()
     }
 
@@ -343,6 +381,7 @@ public extension Specimen {
         marginNoteState = nil
         marginNoteLastError = nil
         marginNoteRetryCount = nil
+        clearFieldWriteAttention(.marginNote)
         touch()
     }
 
@@ -357,16 +396,34 @@ public extension Specimen {
         guard punchTaskId?.trimmingCharacters(
             in: .whitespacesAndNewlines
         ).isEmpty == false else { return false }
-        return punchTaskState != .written && punchTaskState != .refused
+        return punchTaskState != .written
+            && punchTaskState != .refused
+            && punchTaskState != .unwritable
     }
 
+    /// Re-requesting an OPEN lane is a no-op on the id, exactly as on the margin
+    /// lane — and here it is the difference between one text and two.
+    /// `fc_dispatch_task_assignment` is an AFTER INSERT trigger (00284:207-210)
+    /// that invokes sms-dispatch for every qualifying insert, so a second id is
+    /// a second `project_tasks` row and a second SMS to the general contractor.
+    /// The gateway's lookup-before-write cannot catch it: it looks up the NEW
+    /// id, which has never been written. A lane whose task has landed is free
+    /// again — that is a deliberate second item, not a re-tap of the first.
+    ///
+    /// `owner: "gc"` with no party is normalised to her own task rather than
+    /// persisted: ruling 2 forbids the invisible row, and an owner_party_id-less
+    /// gc row reaches neither the trigger (00284:169) nor the daily digest.
     func requestPunchTask(taskID: UUID, owner: String, partyID: String?) {
+        guard punchTaskId == nil || punchTaskState == .written else { return }
+        let party = partyID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let court = (party?.isEmpty == false) ? party : nil
         punchTaskId = taskID.uuidString
-        punchTaskOwnerRaw = owner
-        punchTaskPartyId = partyID
+        punchTaskOwnerRaw = (owner == "gc" && court == nil) ? "designer" : owner
+        punchTaskPartyId = punchTaskOwnerRaw == "gc" ? court : nil
         punchTaskState = .pending
         punchTaskLastError = nil
         punchTaskRetryCount = 0
+        clearFieldWriteAttention(.punchTask)
         touch()
     }
 
@@ -388,17 +445,37 @@ public extension Specimen {
         guard punchTaskId != nil else { return }
         punchTaskState = .written
         punchTaskLastError = nil
+        clearFieldWriteAttention(.punchTask)
         touch()
     }
 
     func markPunchTaskFailed(_ message: String) {
-        punchTaskState = .failed
+        guard punchTaskId != nil else { return }
+        let attempts = (punchTaskRetryCount ?? 0) + 1
+        punchTaskRetryCount = attempts
         punchTaskLastError = message
-        punchTaskRetryCount = (punchTaskRetryCount ?? 0) + 1
+        if attempts >= FieldWriteGate.retryCeiling {
+            punchTaskState = .unwritable
+            fieldWriteAttentionLane = .punchTask
+        } else {
+            punchTaskState = .failed
+        }
+        touch()
+    }
+
+    /// Terminal on the first attempt. Unlike `.refused` this does NOT degrade to
+    /// a note: 42501 says the row belongs to someone else, while these codes say
+    /// the row as composed is malformed or the schema it names is not deployed.
+    func markPunchTaskUnwritable(_ message: String) {
+        guard punchTaskId != nil else { return }
+        punchTaskState = .unwritable
+        punchTaskLastError = message
+        fieldWriteAttentionLane = .punchTask
         touch()
     }
 
     func markPunchTaskRefused(_ message: String) {
+        guard punchTaskId != nil else { return }
         punchTaskState = .refused
         punchTaskLastError = message
         touch()
@@ -411,7 +488,130 @@ public extension Specimen {
         punchTaskState = nil
         punchTaskLastError = nil
         punchTaskRetryCount = nil
+        clearFieldWriteAttention(.punchTask)
         touch()
+    }
+
+    // MARK: - Degrade-note lane (wave 4, FC-R8 / ruling 3)
+
+    var degradeNoteState: FieldWriteState? {
+        get { degradeNoteStateRaw.flatMap(FieldWriteState.init(rawValue:)) }
+        set { degradeNoteStateRaw = newValue?.rawValue }
+    }
+
+    var needsDegradeNote: Bool {
+        guard degradeNoteId?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty == false else { return false }
+        return degradeNoteState != .written
+            && degradeNoteState != .refused
+            && degradeNoteState != .unwritable
+    }
+
+    /// The refused task's own UUID and the words composed at refusal time.
+    ///
+    /// This lane exists so the degrade cannot be dropped. Routed through
+    /// `requestMarginNote` it was a no-op whenever the capture's auto-filed
+    /// transcript note (ruling 1) was still `.pending`, `.writing`, `.failed` or
+    /// `.refused` — and by then the punch lane is already `.refused`, so nothing
+    /// retried and the co-member's item was gone with no trace.
+    func requestDegradeNote(noteID: UUID, body: String) {
+        guard degradeNoteId == nil || degradeNoteState == .written else { return }
+        degradeNoteId = noteID.uuidString
+        degradeNoteBodyRaw = body
+        degradeNoteState = .pending
+        degradeNoteLastError = nil
+        degradeNoteRetryCount = 0
+        clearFieldWriteAttention(.degradeNote)
+        touch()
+    }
+
+    func markDegradeNotePending() {
+        guard degradeNoteId != nil else { return }
+        degradeNoteState = .pending
+        degradeNoteLastError = nil
+        touch()
+    }
+
+    func markDegradeNoteStarted() {
+        guard degradeNoteId != nil else { return }
+        degradeNoteState = .writing
+        degradeNoteLastError = nil
+        touch()
+    }
+
+    func markDegradeNoteWritten() {
+        guard degradeNoteId != nil else { return }
+        degradeNoteState = .written
+        degradeNoteLastError = nil
+        clearFieldWriteAttention(.degradeNote)
+        touch()
+    }
+
+    func markDegradeNoteFailed(_ message: String) {
+        guard degradeNoteId != nil else { return }
+        let attempts = (degradeNoteRetryCount ?? 0) + 1
+        degradeNoteRetryCount = attempts
+        degradeNoteLastError = message
+        if attempts >= FieldWriteGate.retryCeiling {
+            degradeNoteState = .unwritable
+            fieldWriteAttentionLane = .degradeNote
+        } else {
+            degradeNoteState = .failed
+        }
+        touch()
+    }
+
+    func markDegradeNoteUnwritable(_ message: String) {
+        guard degradeNoteId != nil else { return }
+        degradeNoteState = .unwritable
+        degradeNoteLastError = message
+        fieldWriteAttentionLane = .degradeNote
+        touch()
+    }
+
+    /// The last landing there is. A refusal here means the degrade itself was
+    /// declined, so the item is genuinely lost — which is the one thing that
+    /// must not happen quietly.
+    func markDegradeNoteRefused(_ message: String) {
+        guard degradeNoteId != nil else { return }
+        degradeNoteState = .refused
+        degradeNoteLastError = message
+        fieldWriteAttentionLane = .degradeNote
+        touch()
+    }
+
+    func clearDegradeNote() {
+        degradeNoteId = nil
+        degradeNoteBodyRaw = nil
+        degradeNoteState = nil
+        degradeNoteLastError = nil
+        degradeNoteRetryCount = nil
+        clearFieldWriteAttention(.degradeNote)
+        touch()
+    }
+
+    // MARK: - What a closed-without-landing lane leaves behind
+
+    var fieldWriteAttentionLane: FieldWriteLane? {
+        get { fieldWriteAttentionRaw.flatMap(FieldWriteLane.init(rawValue:)) }
+        set { fieldWriteAttentionRaw = newValue?.rawValue }
+    }
+
+    /// The lane that closed without writing its row, and the words it closed
+    /// with — durable, so a Sync-screen reader can show that something was lost
+    /// instead of the designer discovering it from the Document's silence.
+    var fieldWriteAttention: (lane: FieldWriteLane, message: String?)? {
+        guard let lane = fieldWriteAttentionLane else { return nil }
+        switch lane {
+        case .marginNote:  return (lane, marginNoteLastError)
+        case .punchTask:   return (lane, punchTaskLastError)
+        case .degradeNote: return (lane, degradeNoteLastError)
+        }
+    }
+
+    private func clearFieldWriteAttention(_ lane: FieldWriteLane) {
+        if fieldWriteAttentionLane == lane { fieldWriteAttentionLane = nil }
     }
 }
 

@@ -210,7 +210,8 @@ final class LocalCaptureSyncService: CaptureSyncService {
         specimen.hasConfirmedCaptureReceipt
             && !specimen.needsProjectPlacement
             && !specimen.placementNeedsReplay
-            && (specimen.needsMarginNote || specimen.needsPunchTask)
+            && (specimen.needsMarginNote || specimen.needsPunchTask
+                || specimen.needsDegradeNote)
     }
 
     private func beginAttempt(_ specimen: Specimen) {
@@ -716,13 +717,12 @@ final class LocalCaptureSyncService: CaptureSyncService {
         await writeMarginNoteIfNeeded(
             specimen, owner: owner, captureID: captureID, writes: writes)
         await writePunchTaskIfNeeded(specimen, owner: owner, captureID: captureID, writes: writes)
-        // Run the note lane a second time. FC-R8's degrade (ruling 3) opens it
-        // from inside the punch branch above, which has already run past the
-        // first pass — and a degrade that waits for the NEXT drain is a degrade
-        // that may never happen on a phone about to go in a pocket.
-        // requestMarginNote is id-guarded, so this is a no-op in every other
-        // case, including the one where the note was written thirty lines ago.
-        await writeMarginNoteIfNeeded(
+        // FC-R8's degrade (ruling 3) is opened from inside the punch branch
+        // above, which has already run past the note pass — and a degrade that
+        // waits for the NEXT drain is a degrade that may never happen on a phone
+        // about to go in a pocket. It has its own lane precisely so it does not
+        // have to find the margin slot free.
+        await writeDegradeNoteIfNeeded(
             specimen, owner: owner, captureID: captureID, writes: writes)
 
         try? store.save()
@@ -738,18 +738,25 @@ final class LocalCaptureSyncService: CaptureSyncService {
               let noteID = specimen.marginNoteId.flatMap(UUID.init(uuidString:)),
               let projectRaw = specimen.venue?.projectId,
               let projectID = UUID(uuidString: projectRaw),
-              let designerID = UUID(uuidString: owner.userID),
-              let request = MarginNoteComposer.request(
-                  noteID: noteID,
-                  projectID: projectID,
-                  designerID: designerID,
-                  fieldCaptureID: captureID,
-                  // marginNoteBodyRaw is set only by FC-R8's degrade (ruling 3),
-                  // which has words of its own; every other note is the transcript.
-                  transcript: specimen.marginNoteBodyRaw
-                      ?? specimen.voiceTranscript
-                      ?? specimen.voicePartialTranscript)
+              let designerID = UUID(uuidString: owner.userID)
         else { return }
+
+        // A lane opened on a capture whose words later resolve to nothing has no
+        // row to write and no way to close itself: only markWritten/markRefused
+        // close a lane, so `outbox()` would hand this committed specimen back on
+        // every drain, forever. Settle it instead of returning.
+        guard let request = MarginNoteComposer.request(
+            noteID: noteID,
+            projectID: projectID,
+            designerID: designerID,
+            fieldCaptureID: captureID,
+            transcript: specimen.marginNoteBodyRaw
+                ?? specimen.voiceTranscript
+                ?? specimen.voicePartialTranscript)
+        else {
+            specimen.settleMarginNoteWithNothingToWrite()
+            return
+        }
 
         specimen.markMarginNoteStarted()
         do {
@@ -763,6 +770,44 @@ final class LocalCaptureSyncService: CaptureSyncService {
         }
         if specimen.marginNoteState == .written {
             analytics?.event("field.margin_note.ok", ["capture_id": captureID.uuidString])
+        }
+    }
+
+    /// FC-R8's degrade, on its own lane. Same write as a margin note and the
+    /// same policy admits it (`margin_notes_designer_all` keys on the note's own
+    /// designer_id, 00196:51-54); only the slot differs, so a capture that
+    /// already auto-filed its transcript can still land this.
+    private func writeDegradeNoteIfNeeded(
+        _ specimen: Specimen,
+        owner: CaptureOwnerIdentity,
+        captureID: UUID,
+        writes: SupabaseFieldWriteGateway
+    ) async {
+        guard specimen.needsDegradeNote,
+              let noteID = specimen.degradeNoteId.flatMap(UUID.init(uuidString:)),
+              let projectRaw = specimen.venue?.projectId,
+              let projectID = UUID(uuidString: projectRaw),
+              let designerID = UUID(uuidString: owner.userID),
+              let request = MarginNoteComposer.request(
+                  noteID: noteID,
+                  projectID: projectID,
+                  designerID: designerID,
+                  fieldCaptureID: captureID,
+                  transcript: specimen.degradeNoteBodyRaw)
+        else { return }
+
+        specimen.markDegradeNoteStarted()
+        do {
+            let outcome = try await MarginNoteOrchestrator(gateway: writes).write(request)
+            apply(outcome: outcome, toDegradeNoteOn: specimen)
+        } catch {
+            apply(outcome: FieldWriteClassifier.outcome(
+                      code: SupabaseFieldWriteGateway.postgrestCode(from: error),
+                      message: error.localizedDescription),
+                  toDegradeNoteOn: specimen)
+        }
+        if specimen.degradeNoteState == .written {
+            analytics?.event("field.degrade_note.ok", ["capture_id": captureID.uuidString])
         }
     }
 
@@ -835,11 +880,23 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// FC-R8's degrade never fires.
     private func apply(outcome: FieldWriteOutcome, toMarginNoteOn specimen: Specimen) {
         switch FieldWriteGate.laneState(for: outcome) {
-        case .written:  specimen.markMarginNoteWritten()
-        case .pending:  specimen.markMarginNotePending()
-        case .refused:  specimen.markMarginNoteRefused(outcome.message ?? "")
-        case .failed:   specimen.markMarginNoteFailed(outcome.message ?? "")
-        case .writing:  break   // laneState never returns the in-flight state
+        case .written:    specimen.markMarginNoteWritten()
+        case .pending:    specimen.markMarginNotePending()
+        case .refused:    specimen.markMarginNoteRefused(outcome.message ?? "")
+        case .failed:     specimen.markMarginNoteFailed(outcome.message ?? "")
+        case .unwritable: specimen.markMarginNoteUnwritable(outcome.message ?? "")
+        case .writing:    break   // laneState never returns the in-flight state
+        }
+    }
+
+    private func apply(outcome: FieldWriteOutcome, toDegradeNoteOn specimen: Specimen) {
+        switch FieldWriteGate.laneState(for: outcome) {
+        case .written:    specimen.markDegradeNoteWritten()
+        case .pending:    specimen.markDegradeNotePending()
+        case .refused:    specimen.markDegradeNoteRefused(outcome.message ?? "")
+        case .failed:     specimen.markDegradeNoteFailed(outcome.message ?? "")
+        case .unwritable: specimen.markDegradeNoteUnwritable(outcome.message ?? "")
+        case .writing:    break
         }
     }
 
@@ -849,10 +906,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
         request: PunchTaskWriteRequest
     ) {
         switch FieldWriteGate.laneState(for: outcome) {
-        case .written:  specimen.markPunchTaskWritten()
-        case .pending:  specimen.markPunchTaskPending()
-        case .failed:   specimen.markPunchTaskFailed(outcome.message ?? "")
-        case .writing:  break
+        case .written:    specimen.markPunchTaskWritten()
+        case .pending:    specimen.markPunchTaskPending()
+        case .failed:     specimen.markPunchTaskFailed(outcome.message ?? "")
+        case .unwritable: specimen.markPunchTaskUnwritable(outcome.message ?? "")
+        case .writing:    break
         case .refused:
             specimen.markPunchTaskRefused(outcome.message ?? "")
             // FC-R8 / ruling 3: 42501 is terminal on this lane, and the degrade
@@ -867,8 +925,12 @@ final class LocalCaptureSyncService: CaptureSyncService {
             // writes once. margin_notes_designer_all admits her own note
             // (00196:51-54) because it keys on the note's designer_id, not the
             // project's, so this write is the one that CAN land.
+            //
+            // It goes to `degradeNote*`, NOT the margin lane: by ruling 1 this
+            // capture has usually already auto-opened the margin slot with its
+            // transcript, and a single-slot lane silently drops the second note.
             let degrade = FieldWriteGate.degrade(request)
-            specimen.requestMarginNote(noteID: degrade.noteID, body: degrade.body)
+            specimen.requestDegradeNote(noteID: degrade.noteID, body: degrade.body)
         }
     }
 

@@ -506,12 +506,15 @@ private struct ProjectPartyRow: Decodable {
         case consentStatus = "sms_consent_status"
     }
 
-    /// Unlike `assignee`, never nil: a GC with no phone number still has to
-    /// reach PunchCourtResolver, which reads kind and consent rather than phone.
+    /// Unlike `assignee`, never nil — a phoneless party still has to REACH the
+    /// resolver, which is what decides it is no court. The number travels with
+    /// it because consent and a phone are independent columns and the resolver
+    /// needs both to promise a text honestly.
     var fieldParty: FieldPartyRef {
         FieldPartyRef(id: id, displayName: displayName,
                       partyKind: partyKind ?? "",
-                      smsConsentGranted: consentStatus == "granted")
+                      smsConsentGranted: consentStatus == "granted",
+                      phoneE164: phoneE164 ?? phone)
     }
 
     var assignee: SiteRequestAssignee? {

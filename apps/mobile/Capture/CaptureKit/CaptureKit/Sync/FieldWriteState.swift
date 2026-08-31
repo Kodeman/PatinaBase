@@ -22,6 +22,20 @@ public enum FieldWriteState: String, Codable, Sendable {
     case written
     case failed
     case refused
+    /// Terminal, and NOT a refusal. The row as composed can never be accepted —
+    /// a dangling FK, a null in a NOT NULL column, a check the body fails, an
+    /// unparseable uuid, or a column this build knows about and the deployed
+    /// schema does not. Retrying spends battery to receive the same error, so
+    /// the lane closes and its words stay on `…LastError`.
+    case unwritable
+}
+
+/// Which post-commit lane a fact belongs to. Persisted on the specimen so a
+/// lane that closed without landing leaves something a reader can name.
+public enum FieldWriteLane: String, Codable, Sendable {
+    case marginNote = "margin_note"
+    case punchTask = "punch_task"
+    case degradeNote = "degrade_note"
 }
 
 public enum FieldWriteOutcome: Equatable, Sendable {
@@ -30,20 +44,43 @@ public enum FieldWriteOutcome: Equatable, Sendable {
     case deferred(String)
     case refused(String)
     case failed(String)
+    case unsatisfiable(String)
 }
 
 public enum FieldWriteClassifier {
+    /// Codes no retry can ever satisfy, so they must not enter the retry loop.
+    ///
+    /// `23503` the capture row this FK points at is gone · `23502` a NOT NULL
+    /// column arrived null · `23514` the body fails a CHECK · `22P02` an id is
+    /// not uuid text · `PGRST204` the deployed schema has no such column.
+    ///
+    /// `PGRST204` is the live one: 00543–00545 add `project_tasks.
+    /// field_capture_id`, and a Field build shipping ahead of them takes
+    /// "Could not find the 'field_capture_id' column … in the schema cache" on
+    /// every attempt. As a `.failed` that is an infinite loop with no surface.
+    public static let unsatisfiableCodes: Set<String> = [
+        "23503", "23502", "23514", "22P02", "PGRST204"
+    ]
+
     /// PostgREST surfaces the SQLSTATE as `code`; the SDK sometimes only gives
     /// a message. Both paths must reach the same verdict.
+    ///
+    /// A refusal needs the CODE or the words "row-level security". The bare
+    /// substring "permission denied" is NOT enough: `permission denied for
+    /// table project_tasks` is a missing GRANT — a deploy defect on every
+    /// device, not a fact about this designer and this project — and closing
+    /// the lane terminally on it would discard every write silently.
     public static func outcome(code: String?, message: String) -> FieldWriteOutcome {
         let lowered = message.lowercased()
 
-        if code == "42501" || lowered.contains("row-level security")
-            || lowered.contains("permission denied") {
+        if code == "42501" || lowered.contains("row-level security") {
             return .refused(message)
         }
         if code == "23505" || lowered.contains("duplicate key") {
             return .alreadyWritten
+        }
+        if let code, unsatisfiableCodes.contains(code) {
+            return .unsatisfiable(message)
         }
         if code == "PGRST301"
             || lowered.contains("offline")
@@ -61,7 +98,9 @@ public extension FieldWriteOutcome {
     var message: String? {
         switch self {
         case .written, .alreadyWritten: return nil
-        case .deferred(let text), .refused(let text), .failed(let text): return text
+        case .deferred(let text), .refused(let text), .failed(let text),
+             .unsatisfiable(let text):
+            return text
         }
     }
 }
@@ -119,8 +158,17 @@ public enum FieldWriteGate {
         case .deferred:                 return .pending
         case .refused:                  return .refused
         case .failed:                   return .failed
+        case .unsatisfiable:            return .unwritable
         }
     }
+
+    /// How many `.failed` attempts a lane gets before it closes as `.unwritable`
+    /// with its last error kept.
+    ///
+    /// `…RetryCount` was written and never read as a bound, so a `.failed` lane
+    /// re-attempted on every drain forever. A classifier can only recognise the
+    /// errors it was taught; this is the backstop for the ones it was not.
+    public static let retryCeiling = 5
 
     /// FC-R8's degrade (ruling 3): a refused task becomes her own margin note.
     ///

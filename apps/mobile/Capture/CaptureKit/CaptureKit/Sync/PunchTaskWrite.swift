@@ -23,17 +23,31 @@
 
 import Foundation
 
-public struct FieldPartyRef: Codable, Hashable, Sendable {
+/// Encodable only. The `project_parties` row this mirrors does not decode into
+/// this shape — its keys are snake_case and `sms_consent_status` is TEXT, not a
+/// Bool — so a synthesised `Decodable` conformance could only ever fail at
+/// runtime. `ProjectPartyRow` owns the wire shape and maps into this one.
+public struct FieldPartyRef: Encodable, Hashable, Sendable {
     public let id: String
     public let displayName: String
     public let partyKind: String
     public let smsConsentGranted: Bool
+    /// `sms_consent_status` and `phone_e164` are independent columns, and
+    /// consent without a number reaches nobody — so the resolver needs both.
+    public let phoneE164: String?
 
-    public init(id: String, displayName: String, partyKind: String, smsConsentGranted: Bool) {
+    public init(
+        id: String,
+        displayName: String,
+        partyKind: String,
+        smsConsentGranted: Bool,
+        phoneE164: String? = nil
+    ) {
         self.id = id
         self.displayName = displayName
         self.partyKind = partyKind
         self.smsConsentGranted = smsConsentGranted
+        self.phoneE164 = phoneE164
     }
 }
 
@@ -50,7 +64,7 @@ public enum PunchCourt: Equatable, Sendable {
 }
 
 public enum PunchCourtResolver {
-    /// fc_dispatch_task_assignment will text any of these (00284:174). Kept as
+    /// fc_dispatch_task_assignment will text any of these (00284:178). Kept as
     /// the documented mirror of the trigger — and pinned by a test — but NOT
     /// used as this resolver's filter.
     public static let dispatchableKinds: Set<String> = ["gc", "sub", "installer", "receiver"]
@@ -65,9 +79,28 @@ public enum PunchCourtResolver {
     /// filters on owner_party_id too.
     public static let punchCourtKind = "gc"
 
+    /// A phone number is part of the filter for the same reason consent is.
+    /// `sms_consent_status` and `phone_e164` are INDEPENDENT columns: a party
+    /// can be consented and have no number. sms-dispatch cannot send without
+    /// one (`_shared/sms.ts:194-198`), and field-daily skips a phoneless party
+    /// before it ever queries that party's owned tasks
+    /// (`field-daily/core.ts:165-168`). Promising her a text that reaches
+    /// nobody is the same lie ruling 2 narrowed this resolver to prevent.
+    ///
+    /// ⚠ KNOWN NARROWING: with two consented, reachable GCs on one project this
+    /// resolves by `parties.first(where:)` — i.e. by the order the
+    /// `project_parties` query returned. Ruling 2 named the cross-KIND version
+    /// of this failure ("no array-order routing can text a trade she never
+    /// named") and left the within-kind case undocumented. A second GC is rare
+    /// and both are the GC's court, so v1 takes the first; the party picker
+    /// ruling 2 already owes is where this gets decided properly. Pinned by a
+    /// test so it is a choice rather than an accident.
     public static func resolve(parties: [FieldPartyRef]) -> PunchCourt {
         guard let gc = parties.first(where: {
-            $0.partyKind == punchCourtKind && $0.smsConsentGranted
+            $0.partyKind == punchCourtKind
+                && $0.smsConsentGranted
+                && $0.phoneE164?.trimmingCharacters(
+                    in: .whitespacesAndNewlines).isEmpty == false
         }) else { return .noCourt }
         return .reachable(gc)
     }
@@ -77,7 +110,7 @@ public struct PunchTaskWriteRequest: Encodable, Equatable, Sendable {
     public let id: UUID
     public let projectID: UUID
     public let title: String
-    public let description: String
+    public let description: String?
     public let status: String
     public let owner: String
     public let ownerPartyID: String?
@@ -99,6 +132,44 @@ public enum PunchTaskComposer {
     private static let fallbackTitle = "From a site visit"
     private static let titleLimit = 80
 
+    /// Periods that are not full stops. A dictated measurement and a spoken
+    /// courtesy title are the two that show up in a punch item, and both used
+    /// to truncate it: "the alcove reads 42.5 short" became "The alcove reads
+    /// 42." and "Mr. Delaney says…" became "Mr.". That string is what the GC
+    /// receives as `vars.item_title` (00284:192) and what the daily digest
+    /// shows, so it has to be the words she said.
+    private static let abbreviations: Set<String> = [
+        "mr", "mrs", "ms", "dr", "st", "jr", "sr", "no", "approx",
+        "ft", "in", "rm", "apt", "ste", "bldg", "ea", "min", "max"
+    ]
+
+    /// The index just past the first sentence, or nil when there is only one.
+    private static func firstStop(in text: String) -> String.Index? {
+        let chars = Array(text)
+        for (offset, char) in chars.enumerated() {
+            if char == "\n" { return text.index(text.startIndex, offsetBy: offset) }
+            guard char == "." else { continue }
+
+            let next = offset + 1 < chars.count ? chars[offset + 1] : nil
+            // "42.5" — a decimal point sits between two digits.
+            if offset > 0, chars[offset - 1].isNumber,
+               let next, next.isNumber { continue }
+            // A full stop is followed by a space or by nothing at all.
+            if let next, !next.isWhitespace { continue }
+            // "Mr." — an abbreviation, not the end of a thought.
+            if abbreviations.contains(word(endingBefore: offset, in: chars)) { continue }
+
+            return text.index(text.startIndex, offsetBy: offset)
+        }
+        return nil
+    }
+
+    private static func word(endingBefore offset: Int, in chars: [Character]) -> String {
+        var start = offset
+        while start > 0, chars[start - 1].isLetter { start -= 1 }
+        return String(chars[start..<offset]).lowercased()
+    }
+
     /// The first sentence, sentence-cased, clipped to something that reads in a
     /// list. The WHOLE transcript still travels in `description` — a title is a
     /// label, not the record.
@@ -107,7 +178,7 @@ public enum PunchTaskComposer {
         guard !text.isEmpty else { return fallbackTitle }
 
         var candidate = text
-        if let stop = text.firstIndex(where: { $0 == "." || $0 == "\n" }) {
+        if let stop = firstStop(in: text) {
             let head = String(text[text.startIndex...stop])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if head.count > 1 { candidate = head }
@@ -123,10 +194,12 @@ public enum PunchTaskComposer {
         return String(first).uppercased() + candidate.dropFirst()
     }
 
-    private static func describe(transcript: String?, roomName: String?) -> String {
+    /// nil, not "", when there is nothing to say: `project_tasks.description` is
+    /// nullable and an empty string is a different value from NULL.
+    private static func describe(transcript: String?, roomName: String?) -> String? {
         let body = (transcript ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let room = (roomName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if body.isEmpty { return room }
+        if body.isEmpty { return room.isEmpty ? nil : room }
         if room.isEmpty { return body }
         return "\(body)\n\(room)"
     }
@@ -157,7 +230,7 @@ public enum PunchTaskComposer {
     }
 
     /// `courtPartyID` is NON-optional on purpose (ruling 2). A gc-owned row with
-    /// a null owner_party_id reaches no trigger (00284:161) and no daily digest
+    /// a null owner_party_id reaches no trigger (00284:169) and no daily digest
     /// (field-daily/core.ts:177-181) — it is a punch item nobody will ever see.
     /// With no reachable GC the caller writes `task(...)` instead.
     public static func punch(

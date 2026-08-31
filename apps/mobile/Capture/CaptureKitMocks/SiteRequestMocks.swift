@@ -159,7 +159,8 @@ public actor MockSiteRequestService: SiteRequestService, GuestSiteRequestService
     /// line rather than only the no-court fallback.
     public func fieldParties(projectID _: String) async throws -> [FieldPartyRef] {
         [FieldPartyRef(id: "party-gc", displayName: "Delaney Build Co",
-                       partyKind: "gc", smsConsentGranted: true)]
+                       partyKind: "gc", smsConsentGranted: true,
+                       phoneE164: "+15555550142")]
     }
 
     public func createDraft(_ draft: SiteRequestDraft) async throws -> String {

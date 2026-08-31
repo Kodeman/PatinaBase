@@ -26,13 +26,13 @@ struct PunchTaskWriteTests {
 
     private let consentedGC = FieldPartyRef(
         id: "party-gc", displayName: "Delaney Build Co",
-        partyKind: "gc", smsConsentGranted: true)
+        partyKind: "gc", smsConsentGranted: true, phoneE164: "+15555550142")
     private let silentGC = FieldPartyRef(
         id: "party-gc2", displayName: "Halloran & Sons",
-        partyKind: "gc", smsConsentGranted: false)
+        partyKind: "gc", smsConsentGranted: false, phoneE164: "+15555550143")
     private let client = FieldPartyRef(
         id: "party-client", displayName: "The Ellsworths",
-        partyKind: "client_rep", smsConsentGranted: true)
+        partyKind: "client_rep", smsConsentGranted: true, phoneE164: "+15555550144")
 
     // MARK: - Which court
 
@@ -59,10 +59,44 @@ struct PunchTaskWriteTests {
                 == .reachable(consentedGC))
     }
 
+    @Test func aConsentedGeneralContractorWithNoPhoneNumberIsNoCourt() {
+        // sms_consent_status and phone_e164 are independent columns. sms-dispatch
+        // cannot send without a number (_shared/sms.ts:194-198) and field-daily
+        // skips a phoneless party before it queries owned tasks
+        // (field-daily/core.ts:165-168) — so "he will get a text" would be a lie
+        // twice over.
+        let phoneless = FieldPartyRef(
+            id: "party-gc3", displayName: "Ackerly & Vale",
+            partyKind: "gc", smsConsentGranted: true, phoneE164: nil)
+        let blank = FieldPartyRef(
+            id: "party-gc4", displayName: "Ackerly & Vale",
+            partyKind: "gc", smsConsentGranted: true, phoneE164: "   ")
+
+        #expect(PunchCourtResolver.resolve(parties: [phoneless]) == .noCourt)
+        #expect(PunchCourtResolver.resolve(parties: [blank]) == .noCourt)
+        #expect(PunchCourtResolver.resolve(parties: [phoneless, consentedGC])
+                == .reachable(consentedGC))
+    }
+
+    @Test func twoReachableGeneralContractorsResolveByQueryOrder_documentedNarrowing() {
+        // Ruling 2 named the cross-KIND version of this ("no array-order routing
+        // can text a trade she never named") and left the within-kind case open.
+        // Both of these ARE the GC's court, so v1 takes the first the query
+        // returned; the owed party picker is where this gets decided properly.
+        let second = FieldPartyRef(
+            id: "party-gc5", displayName: "Sorrel Construction",
+            partyKind: "gc", smsConsentGranted: true, phoneE164: "+15555550145")
+
+        #expect(PunchCourtResolver.resolve(parties: [consentedGC, second])
+                == .reachable(consentedGC))
+        #expect(PunchCourtResolver.resolve(parties: [second, consentedGC])
+                == .reachable(second))
+    }
+
     @Test func aConsentedSubIsNotACourt_becauseArrayOrderMustNotPickTheTrade() {
         let plumber = FieldPartyRef(
             id: "party-sub", displayName: "Chen Plumbing",
-            partyKind: "sub", smsConsentGranted: true)
+            partyKind: "sub", smsConsentGranted: true, phoneE164: "+15555550146")
         // The plumber is FIRST and consented, and the trigger would happily
         // text him. FC-R7 says a Field punch is the GC's court, so he loses.
         #expect(PunchCourtResolver.resolve(parties: [plumber, consentedGC])
@@ -71,7 +105,7 @@ struct PunchTaskWriteTests {
     }
 
     @Test func theDispatchableKindsStillMirrorTheTriggerExactly() {
-        // Documentation of 00284:174, not the resolver's filter. If someone
+        // Documentation of 00284:178, not the resolver's filter. If someone
         // widens the court later, this is the line they have to look at.
         #expect(PunchCourtResolver.dispatchableKinds == ["gc", "sub", "installer", "receiver"])
         #expect(PunchCourtResolver.punchCourtKind == "gc")
@@ -150,12 +184,50 @@ struct PunchTaskWriteTests {
         #expect(request.description == "scribe short")
     }
 
+    @Test func nothingToDescribeIsNullRatherThanAnEmptyString() throws {
+        let request = PunchTaskComposer.task(
+            id: taskID, projectID: projectID, createdBy: designerID,
+            fieldCaptureID: captureID, transcript: nil, roomName: nil)
+
+        #expect(request.description == nil)
+
+        // project_tasks.description is nullable, and "" is a different value
+        // from NULL — an absent key is what a null column wants.
+        let data = try JSONEncoder().encode(request)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["description"] == nil)
+    }
+
     // MARK: - The title
 
     @Test func theTitleIsTheFirstSentence_sentenceCased() {
         #expect(PunchTaskComposer.title(
             from: "the base cabinet scribe is short. the filler needs re-cutting.")
                 == "The base cabinet scribe is short.")
+    }
+
+    @Test func aDictatedMeasurementIsNotASentenceEnd() {
+        // This string is what the GC receives as vars.item_title (00284:192) and
+        // what the daily digest shows. Splitting on the first "." truncated it
+        // to "The alcove reads 42." — a number with no unit and no fault.
+        #expect(PunchTaskComposer.title(from: "the alcove reads 42.5 short")
+                == "The alcove reads 42.5 short")
+        #expect(PunchTaskComposer.title(from: "trim the stile 0.75 at the head. then re-hang it.")
+                == "Trim the stile 0.75 at the head.")
+    }
+
+    @Test func anAbbreviationIsNotASentenceEnd() {
+        #expect(PunchTaskComposer.title(from: "Mr. Delaney says the hinge is backwards")
+                == "Mr. Delaney says the hinge is backwards")
+        #expect(PunchTaskComposer.title(from: "the run is 8 ft. short at the return")
+                == "The run is 8 ft. short at the return")
+    }
+
+    @Test func aTrailingFullStopStillEndsTheTitle() {
+        #expect(PunchTaskComposer.title(from: "the scribe is short.")
+                == "The scribe is short.")
+        #expect(PunchTaskComposer.title(from: "the scribe is short\nsecond thought")
+                == "The scribe is short")
     }
 
     @Test func aLongUnbrokenTitleIsClippedSoItReadsInAList() {
@@ -217,6 +289,75 @@ struct PunchTaskWriteTests {
         #expect(specimen.punchTaskPartyId == "party-gc")
         #expect(specimen.punchTaskState == .pending)
         #expect(specimen.punchTaskRetryCount == 0)
+    }
+
+    @Test func reTappingAnOpenPunchLaneKeepsTheFirstId_soTheGCIsTextedOnce() {
+        // fc_task_assignment_dispatch is AFTER INSERT (00284:207-210): a second
+        // id is a second project_tasks row and a SECOND TEXT to the general
+        // contractor. Lookup-before-write cannot save it — the gateway looks up
+        // the NEW id, which has never been written. The margin lane has carried
+        // this guard since it was written; this lane assigned unconditionally.
+        let specimen = Specimen()
+        specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
+        specimen.requestPunchTask(taskID: UUID(), owner: "gc", partyID: "party-gc2")
+
+        #expect(specimen.punchTaskId == taskID.uuidString)
+        #expect(specimen.punchTaskPartyId == "party-gc")
+    }
+
+    @Test func aWrittenPunchLaneReOpensForADeliberateSecondItem() {
+        let specimen = Specimen()
+        specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
+        specimen.markPunchTaskWritten()
+
+        let second = UUID()
+        specimen.requestPunchTask(taskID: second, owner: "designer", partyID: nil)
+
+        #expect(specimen.punchTaskId == second.uuidString)
+        #expect(specimen.punchTaskOwnerRaw == "designer")
+        #expect(specimen.punchTaskState == .pending)
+        #expect(specimen.needsPunchTask)
+    }
+
+    @Test func aGCOwnedRowWithNoPartyCannotBePersisted() {
+        // Ruling 2 forbids the invisible row: owner='gc' with a null
+        // owner_party_id reaches neither the trigger (00284:169) nor the daily
+        // digest. PunchTaskComposer.punch already made it unrepresentable; the
+        // lane accepted it and let it survive a relaunch.
+        let specimen = Specimen()
+        specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: nil)
+
+        #expect(specimen.punchTaskOwnerRaw == "designer")
+        #expect(specimen.punchTaskPartyId == nil)
+
+        let blank = Specimen()
+        blank.requestPunchTask(taskID: taskID, owner: "gc", partyID: "   ")
+
+        #expect(blank.punchTaskOwnerRaw == "designer")
+        #expect(blank.punchTaskPartyId == nil)
+    }
+
+    @Test func aPunchLaneThatSpendsItsRetriesClosesInsteadOfLoopingForever() {
+        let specimen = Specimen()
+        specimen.requestPunchTask(taskID: taskID, owner: "designer", partyID: nil)
+        for attempt in 1...FieldWriteGate.retryCeiling {
+            specimen.markPunchTaskFailed("boom \(attempt)")
+        }
+
+        #expect(specimen.punchTaskState == .unwritable)
+        #expect(specimen.needsPunchTask == false)
+        #expect(specimen.punchTaskLastError == "boom \(FieldWriteGate.retryCeiling)")
+        #expect(specimen.fieldWriteAttention?.lane == .punchTask)
+    }
+
+    @Test func markingAnUnopenedPunchLaneIsANoOp() {
+        let specimen = Specimen()
+        specimen.markPunchTaskFailed("earlier")
+        specimen.markPunchTaskRefused("also earlier")
+
+        #expect(specimen.punchTaskState == nil)
+        #expect(specimen.punchTaskLastError == nil)
+        #expect(specimen.punchTaskRetryCount == nil)
     }
 }
 
