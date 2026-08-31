@@ -554,7 +554,7 @@ struct VisitContextTests {
         #expect(!resolved.isVisit)
         #expect(store.visitState(identity: identity, now: late, calendar: calendar) == .none)
 
-        let pending = store.takePendingVisitEnds(identity: identity)
+        let pending = store.takePendingVisitEnds(identity: identity, now: late)
         #expect(pending.count == 1)
         let notice = try #require(pending.first)
         #expect(notice.reason == .auto)
@@ -565,10 +565,10 @@ struct VisitContextTests {
         #expect(notice.context.endedAt == nil)
         #expect(notice.closedAt == late)
         // Drained: the emitter cannot fire the same close twice.
-        #expect(store.takePendingVisitEnds(identity: identity).isEmpty)
+        #expect(store.takePendingVisitEnds(identity: identity, now: late).isEmpty)
         // And nobody else's device drains hers.
         let stranger = CaptureSessionIdentity(userID: "u2", workspaceID: "w1")
-        #expect(store.takePendingVisitEnds(identity: stranger).isEmpty)
+        #expect(store.takePendingVisitEnds(identity: stranger, now: late).isEmpty)
     }
 
     /// `resolve`'s SECOND branch — a calendar rollover reached with UNDER four
@@ -614,7 +614,7 @@ struct VisitContextTests {
         #expect(!resolved.isVisit)
         #expect(resolved.routing == opened.routing)   // the branch's own job, kept
 
-        let pending = store.takePendingVisitEnds(identity: identity)
+        let pending = store.takePendingVisitEnds(identity: identity, now: afterMidnight)
         #expect(pending.count == 1)
         let notice = try #require(pending.first)
         #expect(notice.reason == .rollover)
@@ -652,7 +652,8 @@ struct VisitContextTests {
         #expect(first.visitID != opened.visitID)
         #expect(second.visitID == first.visitID)
         #expect(!second.isVisit)
-        #expect(store.takePendingVisitEnds(identity: identity).count == 1)
+        #expect(store.takePendingVisitEnds(identity: identity,
+                                           now: late.addingTimeInterval(60)).count == 1)
     }
 
     /// The other half of exactly-once, in the other order: whichever of the two
@@ -705,7 +706,7 @@ struct VisitContextTests {
         // The context is gone...
         #expect(!store.current(identity: identity, now: late, calendar: calendar).isVisit)
         // ...and the close it owes is not.
-        let pending = store.takePendingVisitEnds(identity: identity)
+        let pending = store.takePendingVisitEnds(identity: identity, now: late)
         #expect(pending.count == 1)
         #expect(pending.first?.context.visitID == opened.visitID)
     }
@@ -731,10 +732,122 @@ struct VisitContextTests {
             _ = store.current(identity: identity, now: cursor, calendar: calendar)
         }
 
-        let pending = store.takePendingVisitEnds(identity: identity)
+        let pending = store.takePendingVisitEnds(identity: identity, now: cursor)
         #expect(pending.count == 8)
         #expect(pending.map(\.context.label) == Array(labels.suffix(8)))
         #expect(pending.map(\.context.label).contains("Visit 10"))
+    }
+
+    /// The cap is PER OWNER, and it has to be: `reset()` keeps the queue across
+    /// a sign-out precisely so a close reaped seconds before it still gets
+    /// emitted, and one shared eight-slot list evicting by age across identities
+    /// meant the NEXT designer's eight visits destroyed every notice the
+    /// signed-out one was still owed — undoing the thing keeping the queue was
+    /// for. Each identity keeps its own eight.
+    @Test @MainActor func oneOwnersEightClosesSurviveAnotherOwnersEight() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+        let other = CaptureSessionIdentity(userID: "u2", workspaceID: "w2")
+
+        var cursor = now
+        func closeEight(as who: CaptureSessionIdentity, named prefix: String) -> [String] {
+            var labels: [String] = []
+            for index in 0..<8 {
+                let label = "\(prefix) \(index)"
+                labels.append(label)
+                store.startVisit(
+                    CaptureVisitDraft(kind: .site, kit: .walkThrough, label: label),
+                    identity: who, now: cursor)
+                cursor = cursor.addingTimeInterval(13 * 60 * 60)
+                _ = store.current(identity: who, now: cursor, calendar: calendar)
+            }
+            return labels
+        }
+
+        let hers = closeEight(as: identity, named: "Hers")
+        let theirs = closeEight(as: other, named: "Theirs")
+
+        // Sixteen notices standing, not eight: the cap counted them together.
+        let mine = store.takePendingVisitEnds(identity: identity, now: cursor)
+        #expect(mine.count == 8)
+        #expect(mine.map(\.context.label) == hers)
+        let others = store.takePendingVisitEnds(identity: other, now: cursor)
+        #expect(others.count == 8)
+        #expect(others.map(\.context.label) == theirs)
+    }
+
+    /// The other half of a per-owner cap: it is still a CAP. A ninth close from
+    /// the same owner evicts that owner's oldest, and touches nobody else's.
+    @Test @MainActor func aNinthCloseEvictsItsOwnOwnersOldest_notTheOtherOwners() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+        let other = CaptureSessionIdentity(userID: "u2", workspaceID: "w2")
+
+        var cursor = now
+        store.startVisit(CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Theirs"),
+                         identity: other, now: cursor)
+        cursor = cursor.addingTimeInterval(13 * 60 * 60)
+        _ = store.current(identity: other, now: cursor, calendar: calendar)
+
+        var labels: [String] = []
+        for index in 0..<9 {
+            let label = "Hers \(index)"
+            labels.append(label)
+            store.startVisit(CaptureVisitDraft(kind: .site, kit: .walkThrough, label: label),
+                             identity: identity, now: cursor)
+            cursor = cursor.addingTimeInterval(13 * 60 * 60)
+            _ = store.current(identity: identity, now: cursor, calendar: calendar)
+        }
+
+        let mine = store.takePendingVisitEnds(identity: identity, now: cursor)
+        #expect(mine.map(\.context.label) == Array(labels.suffix(8)))
+        #expect(store.takePendingVisitEnds(identity: other, now: cursor)
+                    .map(\.context.label) == ["Theirs"])
+    }
+
+    /// The sanity TTL. A notice nobody drained in a fortnight describes a visit
+    /// long gone, and the queue is persisted — without this a close for an
+    /// account that never signs back in sits in UserDefaults for the life of
+    /// the install. Dropped at READ, so every reader applies it and nothing has
+    /// to remember to sweep.
+    @Test @MainActor func aNoticeNobodyDrainedInTwoWeeksIsDroppedAtRead() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        func notice(closedAt: Date) -> FieldVisitEndNotice {
+            FieldVisitEndNotice(
+                context: CaptureSessionContext(
+                    identity: identity, startedAt: closedAt.addingTimeInterval(-3_600),
+                    lastActivityAt: closedAt, kind: .site, kit: .walkThrough,
+                    label: "Maple St"),
+                reason: .auto,
+                closedAt: closedAt)
+        }
+        let stale = notice(closedAt: now)
+        let fresh = notice(closedAt: now.addingTimeInterval(13 * 24 * 60 * 60))
+        defaults.set(try JSONEncoder().encode([stale, fresh]), forKey: "context.pending-ends")
+
+        let readAt = now.addingTimeInterval(CaptureSessionContextStore.pendingVisitEndTTL + 60)
+        #expect(readAt.timeIntervalSince(fresh.closedAt)
+                < CaptureSessionContextStore.pendingVisitEndTTL)
+
+        let pending = store.takePendingVisitEnds(identity: identity, now: readAt)
+        #expect(pending.count == 1)
+        #expect(pending.first?.context.visitID == fresh.context.visitID)
+
+        // A day earlier both are still owed an event — the TTL is the only
+        // reason the first one went.
+        defaults.set(try JSONEncoder().encode([stale, fresh]), forKey: "context.pending-ends")
+        #expect(store.takePendingVisitEnds(
+            identity: identity,
+            now: now.addingTimeInterval(CaptureSessionContextStore.pendingVisitEndTTL - 60)
+        ).count == 2)
     }
 
     /// One unreadable entry must not take the queue with it. `try?` on the
@@ -757,10 +870,32 @@ struct VisitContextTests {
         blob.append(Data("]".utf8))
         defaults.set(blob, forKey: "context.pending-ends")
 
-        let pending = store.takePendingVisitEnds(identity: identity)
+        let pending = store.takePendingVisitEnds(identity: identity, now: now)
         #expect(pending.count == 1)
         #expect(pending.first?.context.visitID == context.visitID)
         #expect(pending.first?.reason == .auto)
+    }
+
+    /// The limit of that tolerance, pinned so the comment above
+    /// `pendingVisitEnds` cannot overclaim again. Element-level leniency does
+    /// NOTHING for a blob that stopped mid-write: the outer array is still
+    /// decoded in one piece, and JSON that never closes fails wholesale.
+    @Test @MainActor func aTruncatedQueueIsNotSurvivable_onlyAMalformedElementIs() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let context = CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            kind: .site, kit: .walkThrough, label: "Maple St")
+        let whole = try JSONEncoder().encode(
+            [FieldVisitEndNotice(context: context, reason: .auto, closedAt: now)])
+        var truncated = Data("[".utf8)
+        truncated.append(whole.dropFirst().dropLast(4))   // no closing brace, no "]"
+        defaults.set(truncated, forKey: "context.pending-ends")
+
+        #expect(store.takePendingVisitEnds(identity: identity, now: now).isEmpty)
     }
 
     /// The happy path is unchanged: a visit idle 10 minutes resumes with its

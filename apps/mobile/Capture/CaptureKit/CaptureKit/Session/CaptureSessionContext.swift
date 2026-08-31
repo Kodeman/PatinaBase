@@ -268,7 +268,7 @@ public final class CaptureSessionContextStore {
         // context, not a notice, and cannot reach the app-side emitter, so the
         // notice waits in the pending-end queue for the next `reapExpired`.
         if let notice = reapExpiredVisit(identity: identity, now: now, calendar: calendar) {
-            enqueuePendingVisitEnd(notice)
+            enqueuePendingVisitEnd(notice, now: now)
         }
         let resolved = CaptureSessionContextPolicy.resolve(
             existing: existing,
@@ -389,9 +389,10 @@ public final class CaptureSessionContextStore {
     /// event.
     @discardableResult
     public func takePendingVisitEnds(
-        identity: CaptureSessionIdentity
+        identity: CaptureSessionIdentity,
+        now: Date = Date()
     ) -> [FieldVisitEndNotice] {
-        let pending = pendingVisitEnds()
+        let pending = pendingVisitEnds(now: now)
         guard !pending.isEmpty else { return [] }
         let mine = pending.filter { $0.context.identity == identity }
         guard !mine.isEmpty else { return [] }
@@ -420,27 +421,55 @@ public final class CaptureSessionContextStore {
     /// make this chatter.
     public static let visitDidChange = Notification.Name("capture.visitDidChange")
 
-    /// The cap keeps the NEWEST. Keeping the oldest meant that once eight
-    /// closes had queued, every close after them was dropped on the floor for
-    /// good — the queue froze on the first eight and no later visit could ever
-    /// reach a dashboard. Dropping the oldest loses one old close instead of
-    /// every new one, and the ones still worth acting on are the recent ones.
-    private static let maxPendingVisitEnds = 8
+    /// The cap keeps the NEWEST, and it is PER OWNER. Keeping the oldest meant
+    /// that once eight closes had queued, every close after them was dropped on
+    /// the floor for good — the queue froze on the first eight and no later
+    /// visit could ever reach a dashboard. Dropping the oldest loses one old
+    /// close instead of every new one.
+    ///
+    /// Per owner because `reset()` (sign-out, workspace change) deliberately
+    /// keeps the queue: one shared eight-slot list evicting by age ACROSS
+    /// identities means the next designer's eight visits destroy the notices the
+    /// signed-out designer is still owed, which is the exact thing keeping the
+    /// queue across a reset exists to prevent. Only the enqueuing identity can
+    /// grow, so only its own run is trimmed.
+    private static let maxPendingVisitEndsPerOwner = 8
 
-    private func enqueuePendingVisitEnd(_ notice: FieldVisitEndNotice) {
-        let queued = (pendingVisitEnds() + [notice]).suffix(Self.maxPendingVisitEnds)
-        persistPendingVisitEnds(Array(queued))
+    /// A close nobody has drained in two weeks is not going to be drained: the
+    /// counts it carries describe a visit a fortnight gone, and the queue is
+    /// persisted, so without this a notice for an account that never signs back
+    /// in sits in `UserDefaults` for the life of the install.
+    public static let pendingVisitEndTTL: TimeInterval = 14 * 24 * 60 * 60
+
+    private func enqueuePendingVisitEnd(_ notice: FieldVisitEndNotice, now: Date) {
+        let queued = pendingVisitEnds(now: now) + [notice]
+        let owner = notice.context.identity
+        let evicted = Set(queued.indices
+            .filter { queued[$0].context.identity == owner }
+            .dropLast(Self.maxPendingVisitEndsPerOwner))
+        persistPendingVisitEnds(queued.enumerated()
+            .filter { !evicted.contains($0.offset) }
+            .map(\.element))
     }
 
-    /// One unreadable entry must not strand the other seven. Decoding the array
-    /// with `try?` returned nil for the whole queue whenever a single element
-    /// failed — a shape change in `CaptureSessionContext` or a truncated write
-    /// would silently discard every close waiting. Each notice is decoded on
-    /// its own and a failure skips just that element.
-    private func pendingVisitEnds() -> [FieldVisitEndNotice] {
+    /// One unreadable ELEMENT must not strand the other seven. Decoding the
+    /// array with `try?` returned nil for the whole queue whenever a single
+    /// element failed — a shape change in `CaptureSessionContext` discarded
+    /// every close waiting. Each notice is decoded on its own and a failure
+    /// skips just that element.
+    ///
+    /// ⚠ This does NOT survive a truncated write: the outer array is still
+    /// decoded in one piece, so JSON that stops mid-blob fails wholesale and the
+    /// queue reads empty. Element-level tolerance is the whole of the guarantee.
+    ///
+    /// Expired notices are dropped HERE rather than on a sweep, so every read
+    /// applies the TTL and nothing has to remember to run one.
+    private func pendingVisitEnds(now: Date) -> [FieldVisitEndNotice] {
         guard let data = defaults.data(forKey: pendingEndsKey) else { return [] }
         let entries = (try? decoder.decode([LenientVisitEndNotice].self, from: data)) ?? []
-        return entries.compactMap(\.notice)
+        return entries.compactMap(\.notice).filter {
+            now.timeIntervalSince($0.closedAt) < Self.pendingVisitEndTTL
+        }
     }
 
     private func persistPendingVisitEnds(_ notices: [FieldVisitEndNotice]) {
@@ -459,7 +488,9 @@ public final class CaptureSessionContextStore {
 }
 
 /// One element of the persisted pending-end queue, decoded tolerantly so a
-/// malformed neighbour cannot take the rest of the queue with it.
+/// malformed neighbour cannot take the rest of the queue with it. An ELEMENT
+/// only: the surrounding array is still decoded whole, so this does nothing for
+/// a blob that was truncated mid-write.
 private struct LenientVisitEndNotice: Decodable {
     let notice: FieldVisitEndNotice?
 
