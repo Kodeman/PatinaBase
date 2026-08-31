@@ -111,8 +111,18 @@ final class LocalCaptureSyncService: CaptureSyncService {
         guard let specimen = scopedSpecimen(id: specimenID, owner: owner) else {
             return
         }
-        specimen.applyTransferState(CaptureTransferState(
-            phase: .queued, retryCount: specimen.retryCount))
+        // A committed specimen is NOT demoted. Its receipt is durable and its
+        // local media has been swept, so a re-stamped `.queued` sends it back
+        // through the upload leg against files that are gone and ends it
+        // `.rejected` — a permanent failure badge on a capture the server
+        // accepted. The only reason a committed row returns to the drain is a
+        // wave-4 write lane, and those keep their own state: the same fact
+        // `isFieldWriteLaneOnly` makes the three transfer-phase branches honour.
+        // Reachable from every field-write verb, each of which enqueues.
+        if !specimen.hasConfirmedCaptureReceipt {
+            specimen.applyTransferState(CaptureTransferState(
+                phase: .queued, retryCount: specimen.retryCount))
+        }
         try? store.save()
         analytics?.event("sync.enqueue", ["id": specimenID.uuidString])
         emitFromOutbox(lastTitle: specimen.title)
@@ -734,7 +744,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
         captureID: UUID,
         writes: SupabaseFieldWriteGateway
     ) async {
+        // Re-checked per lane, not once for all three: the lanes run in
+        // sequence, so a switch during the note's await must not send the punch
+        // item on the new account's JWT.
         guard specimen.needsMarginNote,
+              activeOwner == owner,
               let noteID = specimen.marginNoteId.flatMap(UUID.init(uuidString:)),
               let projectRaw = specimen.venue?.projectId,
               let projectID = UUID(uuidString: projectRaw),
@@ -761,8 +775,21 @@ final class LocalCaptureSyncService: CaptureSyncService {
         specimen.markMarginNoteStarted()
         do {
             let outcome = try await MarginNoteOrchestrator(gateway: writes).write(request)
+            // The same owner re-check `commit`, `route` and `drainOwned` make
+            // after every network await. An account switch mid-await means this
+            // verdict was reached under a different JWT, and `.refused` is
+            // terminal — so it defers instead, and the next drain under the
+            // right account decides.
+            guard activeOwner == owner else {
+                specimen.markMarginNotePending()
+                return
+            }
             apply(outcome: outcome, toMarginNoteOn: specimen)
         } catch {
+            guard activeOwner == owner else {
+                specimen.markMarginNotePending()
+                return
+            }
             apply(outcome: FieldWriteClassifier.outcome(
                       code: SupabaseFieldWriteGateway.postgrestCode(from: error),
                       message: error.localizedDescription),
@@ -784,6 +811,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
         writes: SupabaseFieldWriteGateway
     ) async {
         guard specimen.needsDegradeNote,
+              activeOwner == owner,
               let noteID = specimen.degradeNoteId.flatMap(UUID.init(uuidString:)),
               let projectRaw = specimen.venue?.projectId,
               let projectID = UUID(uuidString: projectRaw),
@@ -799,8 +827,16 @@ final class LocalCaptureSyncService: CaptureSyncService {
         specimen.markDegradeNoteStarted()
         do {
             let outcome = try await MarginNoteOrchestrator(gateway: writes).write(request)
+            guard activeOwner == owner else {
+                specimen.markDegradeNotePending()
+                return
+            }
             apply(outcome: outcome, toDegradeNoteOn: specimen)
         } catch {
+            guard activeOwner == owner else {
+                specimen.markDegradeNotePending()
+                return
+            }
             apply(outcome: FieldWriteClassifier.outcome(
                       code: SupabaseFieldWriteGateway.postgrestCode(from: error),
                       message: error.localizedDescription),
@@ -818,14 +854,23 @@ final class LocalCaptureSyncService: CaptureSyncService {
         writes: SupabaseFieldWriteGateway
     ) async {
         guard specimen.needsPunchTask,
+              activeOwner == owner,
               let request = punchTaskRequest(for: specimen, owner: owner, captureID: captureID)
         else { return }
 
         specimen.markPunchTaskStarted()
         do {
             let outcome = try await PunchTaskOrchestrator(gateway: writes).write(request)
+            guard activeOwner == owner else {
+                specimen.markPunchTaskPending()
+                return
+            }
             apply(outcome: outcome, toPunchTaskOn: specimen, request: request)
         } catch {
+            guard activeOwner == owner else {
+                specimen.markPunchTaskPending()
+                return
+            }
             apply(outcome: FieldWriteClassifier.outcome(
                       code: SupabaseFieldWriteGateway.postgrestCode(from: error),
                       message: error.localizedDescription),
