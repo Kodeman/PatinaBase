@@ -11968,6 +11968,24 @@ END $g$;
 
 -- 00546_guest_board_share_reactions.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.escalate_item_feedback_to_decision(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.escalate_item_feedback_to_decision(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.notify_item_feedback(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.guard_document_share_board_payload() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

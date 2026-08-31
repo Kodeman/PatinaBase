@@ -26,17 +26,36 @@
 -- authority: _item_feedback_gate_impl resolves a board anchor only through
 -- proposal_boards.proposal_id, so on a project board it returns NO row. That
 -- made can_access_item_feedback_anchor() false (the studio could not read the
--- verdicts it was just given) and, worse, left resolve/reopen/reply comparing
--- auth.uid() against a NULL designer_id — a NULL predicate that fails OPEN.
--- Both are closed here with an owner-agnostic board authority.
+-- verdicts it was just given) and, worse, left FOUR RPCs comparing auth.uid()
+-- against a NULL designer_id — `auth.uid() <> NULL` is NULL, not true, so the
+-- guard never fired: reply, resolve, reopen (00267) and escalate-to-decision
+-- (00271). All four are closed here with an owner-agnostic board authority.
+--
+-- RULED (board-paths, 2026-08-31) — the same fix widens the PROPOSAL leg too:
+-- a studio co-member, not only the named designer_id, may resolve / reopen /
+-- reply / escalate on a proposal-owned board's verdicts. That is the intended
+-- posture, and it matches how the studio already reaches these boards
+-- everywhere else — create_board_share, revoke_document_share and the
+-- document_shares board policies are all is_design_studio_comember, not
+-- designer_id equality. It is covered by the co-member-allowed probe in
+-- supabase/tests/mood_boards/project_board_share_test.sql.
+--
+-- RULED (board-paths, 2026-08-31) — item_feedback.guest_share_id CASCADEs on
+-- delete DELIBERATELY. Revoking a link (status='revoked') is the supported way
+-- to end it and preserves every reaction; DELETEing the share row is an
+-- intentionally destructive act, and a verdict whose only author was that link
+-- has no attribution left once it is gone. This also matches the column next to
+-- it: client_id already CASCADEs from auth.users.
 --
 -- Lineage
---   create_board_share            00406 → 00434 → 00462 → 00545 → 00546
---   resolve_board_share           00406 → 00434 → 00462 → 00545 → 00546
---   guard_document_share_…payload 00462 → 00546
---   reply_to_item_feedback        00267 → 00546
---   resolve_item_feedback         00267 → 00546
---   reopen_item_feedback          00267 → 00546
+--   create_board_share             00406 → 00434 → 00462 → 00545 → 00546
+--   resolve_board_share            00406 → 00434 → 00462 → 00545 → 00546
+--   guard_document_share_…payload  00462 → 00546
+--   reply_to_item_feedback         00267 → 00546
+--   resolve_item_feedback          00267 → 00546
+--   reopen_item_feedback           00267 → 00546
+--   notify_item_feedback           00267 → 00546
+--   escalate_item_feedback_to_…    00271 → 00546
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1. The per-share opt-in ────────────────────────────────────────────────
@@ -92,7 +111,10 @@ CREATE INDEX IF NOT EXISTS idx_item_feedback_guest_share
 
 COMMENT ON COLUMN public.item_feedback.guest_share_id IS
   'Set when the verdict came from a guest on an opted-in board share link. '
-  'Attribution is the SHARE, never a user; client_id is NULL on those rows.';
+  'Attribution is the SHARE, never a user; client_id is NULL on those rows. '
+  'ON DELETE CASCADE is deliberate (00546): revoking a link keeps every '
+  'reaction, and DELETEing the share row is an intentionally destructive act '
+  'that leaves such a verdict with no author at all.';
 
 -- The thread event a guest verdict writes has no auth.users actor. (The column
 -- already declared ON DELETE SET NULL, which NOT NULL made unreachable.)
@@ -156,10 +178,11 @@ CREATE POLICY item_feedback_events_studio_board_read
     )
   );
 
--- ── 4. Close the NULL-designer fail-open on the three verdict RPCs ─────────
--- Bodies are 00267's verbatim; the authorization predicate is the only delta.
--- `auth.uid() <> v_gate.designer_id` yields NULL — not true — when the gate
--- finds no proposal, so the guard never fired for a project-owned board anchor.
+-- ── 4. Close the NULL-designer fail-open on the four verdict RPCs ──────────
+-- Bodies are 00267's / 00271's verbatim; the authorization predicate is the
+-- only delta. `auth.uid() <> v_gate.designer_id` yields NULL — not true — when
+-- the gate finds no proposal, so the guard never fired for a project-owned
+-- board anchor.
 
 CREATE OR REPLACE FUNCTION public.reply_to_item_feedback(p_feedback_id UUID, p_body TEXT)
 RETURNS public.item_feedback_events
@@ -298,6 +321,185 @@ BEGIN
   RETURN v_fb;
 END;
 $$;
+
+-- 00271's C4 back-link carries the same NULL predicate. Its second guard (the
+-- decision must belong to auth.uid()) narrowed the blast radius but never
+-- closed it: a caller who owns any decision could stamp its id onto another
+-- studio's project-board verdict and thread a 'replied' event onto it.
+CREATE OR REPLACE FUNCTION public.escalate_item_feedback_to_decision(
+  p_feedback_id uuid,
+  p_decision_id uuid
+)
+RETURNS public.item_feedback
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_fb           public.item_feedback;
+  v_gate         RECORD;
+  v_owns_decision boolean;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'authentication required' USING errcode = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_fb FROM public.item_feedback WHERE id = p_feedback_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'feedback % not found', p_feedback_id USING errcode = 'no_data_found';
+  END IF;
+
+  SELECT * INTO v_gate
+    FROM public.item_feedback_gate(v_fb.proposal_item_id, v_fb.ffe_item_id, v_fb.board_item_id);
+  IF NOT COALESCE(
+       auth.uid() = v_gate.designer_id
+       OR public.can_manage_board_item_feedback(v_fb.board_item_id),
+       false
+     )
+  THEN
+    RAISE EXCEPTION 'only the owning designer may escalate' USING errcode = 'insufficient_privilege';
+  END IF;
+
+  -- The decision must belong to the same designer (guards against linking an
+  -- arbitrary decision id through the DEFINER context).
+  SELECT EXISTS (
+    SELECT 1
+      FROM public.client_decisions d
+      JOIN public.designer_clients dc ON dc.id = d.designer_client_id
+     WHERE d.id = p_decision_id
+       AND dc.designer_id = auth.uid()
+  ) INTO v_owns_decision;
+  IF NOT v_owns_decision THEN
+    RAISE EXCEPTION 'decision % not found or not owned', p_decision_id USING errcode = 'no_data_found';
+  END IF;
+
+  UPDATE public.item_feedback
+     SET decision_id = p_decision_id, updated_at = now()
+   WHERE id = p_feedback_id
+   RETURNING * INTO v_fb;
+
+  INSERT INTO public.item_feedback_events (feedback_id, actor, kind, body)
+  VALUES (p_feedback_id, auth.uid(), 'replied', 'Put to the client as a Decision.');
+
+  RETURN v_fb;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.escalate_item_feedback_to_decision(uuid, uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.escalate_item_feedback_to_decision(uuid, uuid)
+  TO authenticated;
+
+-- ── 4b. The guest loop has to actually reach the designer ─────────────────
+-- 00267's body bailed at `v_gate.designer_id IS NULL`, which is EVERY
+-- project-owned board — the exact case this slice ships. Fall back to the
+-- board's own owner, and say "a guest" when the verdict came from a link.
+-- Still best-effort: the trigger swallows failures so a notification can
+-- never block a reaction.
+
+CREATE OR REPLACE FUNCTION public.notify_item_feedback(p_feedback_id UUID)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_fb          public.item_feedback;
+  v_gate        RECORD;
+  v_designer_id UUID;
+  v_proposal_id UUID;
+  v_board_id    UUID;
+  v_item_name   TEXT;
+  v_actor       TEXT;
+  v_verb        TEXT;
+  v_headline    TEXT;
+  v_preview     TEXT;
+  v_link        TEXT;
+  v_existing    UUID;
+  v_id          UUID;
+BEGIN
+  SELECT * INTO v_fb FROM public.item_feedback WHERE id = p_feedback_id;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+
+  SELECT * INTO v_gate
+    FROM public.item_feedback_gate(v_fb.proposal_item_id, v_fb.ffe_item_id, v_fb.board_item_id);
+  v_designer_id := v_gate.designer_id;
+  v_proposal_id := v_gate.proposal_id;
+
+  IF v_fb.board_item_id IS NOT NULL THEN
+    SELECT board.id, COALESCE(proposal.designer_id, project.designer_id),
+           COALESCE(NULLIF(btrim(item.data->>'name'), ''), NULLIF(btrim(item.content), ''))
+    INTO v_board_id, v_designer_id, v_item_name
+    FROM public.proposal_board_items AS item
+    JOIN public.proposal_boards AS board ON board.id = item.board_id
+    LEFT JOIN public.proposals AS proposal ON proposal.id = board.proposal_id
+    LEFT JOIN public.projects AS project ON project.id = board.project_id
+    WHERE item.id = v_fb.board_item_id;
+    v_designer_id := COALESCE(v_designer_id, v_gate.designer_id);
+  ELSE
+    SELECT pi.name INTO v_item_name
+      FROM public.proposal_items pi WHERE pi.id = v_fb.proposal_item_id;
+  END IF;
+
+  IF v_designer_id IS NULL THEN RETURN NULL; END IF;
+
+  -- Idempotency: one in-app row per verdict.
+  SELECT id INTO v_existing
+    FROM public.notification_log
+   WHERE type = 'client_feedback'
+     AND channel = 'in_app'
+     AND metadata->>'feedbackId' = p_feedback_id::text
+   LIMIT 1;
+  IF v_existing IS NOT NULL THEN RETURN v_existing; END IF;
+
+  v_item_name := COALESCE(
+    NULLIF(btrim(v_item_name), ''),
+    CASE WHEN v_fb.board_item_id IS NOT NULL THEN 'a piece' ELSE 'a line' END
+  );
+  v_actor := CASE WHEN v_fb.guest_share_id IS NOT NULL THEN 'A guest' ELSE 'Client' END;
+  v_verb := CASE v_fb.verdict
+              WHEN 'approved' THEN 'approved'
+              WHEN 'rejected' THEN 'flagged'
+              ELSE 'left a note on'
+            END;
+  v_headline := v_actor || ' ' || v_verb || ' ' || v_item_name;
+  v_preview  := NULLIF(btrim(v_fb.body), '');
+  -- A project-owned board has no proposal to land on; the room itself is the
+  -- destination. (The old body always wrote '/doc/' || proposal_id, which is
+  -- literally '/doc/' when there is no proposal.)
+  v_link := CASE
+    WHEN v_proposal_id IS NOT NULL THEN '/doc/' || v_proposal_id::text
+    WHEN v_board_id IS NOT NULL THEN '/board/' || v_board_id::text
+    ELSE NULL
+  END;
+
+  INSERT INTO public.notification_log (user_id, type, channel, status, template_id, metadata)
+  VALUES (
+    v_designer_id, 'client_feedback', 'in_app', 'delivered', 'client-feedback',
+    jsonb_strip_nulls(jsonb_build_object(
+      'feedbackId', p_feedback_id,
+      'proposalId', v_proposal_id,
+      'boardId',    v_board_id,
+      'guestShareId', v_fb.guest_share_id,
+      'source',     CASE WHEN v_fb.guest_share_id IS NOT NULL THEN 'guest_link' ELSE 'client' END,
+      'verdict',    v_fb.verdict,
+      'headline',   v_headline,
+      'title',      v_headline,
+      'subject',    v_headline,
+      'preview',    v_preview,
+      'body',       v_preview,
+      'deep_link',  v_link,
+      'url',        v_link
+    ))
+  )
+  RETURNING id INTO v_id;
+
+  RETURN v_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.notify_item_feedback(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
 
 -- ── 5. The edition guard also freezes the opt-in ───────────────────────────
 -- 00462's body verbatim; board_reactions_enabled joins the UPDATE-immutability
@@ -469,7 +671,10 @@ BEGIN
     board_payload, board_payload_hash, board_reactions_enabled
   ) VALUES (
     v_id, NULL, NULL, p_board_id,
-    v_hash, v_label, jsonb_build_object('feedbackEnabled', false),
+    v_hash, v_label,
+    -- Kept in step with board_reactions_enabled so the two never disagree: a
+    -- reader of `visibility` alone must not conclude a reaction link is mute.
+    jsonb_build_object('feedbackEnabled', COALESCE(p_reactions_enabled, false)),
     'active', p_expires_at, auth.uid(),
     v_payload,
     encode(extensions.digest(convert_to(v_payload::text, 'UTF8'), 'sha256'), 'hex'),
@@ -577,11 +782,10 @@ DECLARE
   c_row_cap    constant integer := 200;
   c_body_limit constant integer := 280;
   v_hash       text;
-  v_share_id   uuid;
-  v_board_id   uuid;
+  v_share      public.document_shares;
+  v_designer   uuid;
   v_verdict    text := btrim(COALESCE(p_verdict, ''));
   v_body       text := NULLIF(btrim(COALESCE(p_body, '')), '');
-  v_existing   uuid;
   v_rows       integer;
 BEGIN
   IF v_verdict NOT IN ('approved', 'rejected') THEN
@@ -599,67 +803,101 @@ BEGIN
 
   v_hash := encode(extensions.digest(p_token, 'sha256'), 'hex');
 
-  -- The same ceremony resolve_board_share runs, plus the opt-in. Every refusal
-  -- class raises the SAME message: a caller learns nothing about which wall
-  -- it hit, or whether the link ever existed.
-  SELECT share.id, share.board_id
-  INTO v_share_id, v_board_id
+  -- The same ceremony resolve_board_share runs, plus the opt-in, ordered
+  -- cheapest-first: the token/status/expiry/opt-in lookup is an index probe,
+  -- while board_json_media_references_are_allowed() walks the whole frozen
+  -- payload, so an invalid or revoked token never pays for that walk.
+  --
+  -- Every REFUSAL IN THIS FAMILY — bad token, unknown token, revoked, expired,
+  -- not opted in, tampered payload, a pin outside the frozen edition — raises
+  -- the same message, so a caller learns nothing about which wall it hit or
+  -- whether the link ever existed. (The argument checks above, and the row cap
+  -- below, deliberately say what they mean: those tell a legitimate reader
+  -- something actionable and reveal nothing about the link.)
+  SELECT * INTO v_share
   FROM public.document_shares AS share
-  JOIN public.proposal_boards AS board ON board.id = share.board_id
-  LEFT JOIN public.proposals AS proposal ON proposal.id = board.proposal_id
-  LEFT JOIN public.projects AS project ON project.id = board.project_id
   WHERE share.token_hash = v_hash
     AND share.board_id IS NOT NULL
     AND share.status = 'active'
     AND share.board_reactions_enabled
     AND (share.expires_at IS NULL OR share.expires_at > now())
     AND share.board_payload IS NOT NULL
-    AND share.board_payload_hash = encode(
-      extensions.digest(convert_to(share.board_payload::text, 'UTF8'), 'sha256'),
-      'hex'
-    )
-    AND public.board_json_media_references_are_allowed(
-      share.board_payload,
-      COALESCE(proposal.designer_id, project.designer_id)
-    )
   LIMIT 1;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'this link cannot take reactions'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  -- The pin must belong to the board this token shared.
+  SELECT COALESCE(proposal.designer_id, project.designer_id)
+  INTO v_designer
+  FROM public.proposal_boards AS board
+  LEFT JOIN public.proposals AS proposal ON proposal.id = board.proposal_id
+  LEFT JOIN public.projects AS project ON project.id = board.project_id
+  WHERE board.id = v_share.board_id;
+
+  IF v_share.board_payload_hash IS DISTINCT FROM encode(
+       extensions.digest(convert_to(v_share.board_payload::text, 'UTF8'), 'sha256'),
+       'hex'
+     )
+     OR NOT public.board_json_media_references_are_allowed(
+          v_share.board_payload, v_designer
+        )
+  THEN
+    RAISE EXCEPTION 'this link cannot take reactions'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- The pin must be part of the FROZEN EDITION this token captured, not merely
+  -- of the board as it stands now. A pin added after the mint is not something
+  -- this reader was ever shown, so an old link cannot reach it. The live-board
+  -- check stays alongside it: item_feedback.board_item_id is a real FK.
   IF NOT EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      CASE WHEN jsonb_typeof(v_share.board_payload #> '{board,items}') = 'array'
+        THEN v_share.board_payload #> '{board,items}'
+        ELSE '[]'::jsonb END
+    ) AS frozen_item
+    WHERE frozen_item->>'id' = p_board_item_id::text
+  ) OR NOT EXISTS (
     SELECT 1 FROM public.proposal_board_items AS item
-    WHERE item.id = p_board_item_id AND item.board_id = v_board_id
+    WHERE item.id = p_board_item_id AND item.board_id = v_share.board_id
   ) THEN
     RAISE EXCEPTION 'this link cannot take reactions'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT id INTO v_existing
-  FROM public.item_feedback
-  WHERE guest_share_id = v_share_id AND board_item_id = p_board_item_id;
-
-  IF v_existing IS NULL THEN
+  -- The cap bounds how many DISTINCT pins one link may speak about; changing
+  -- your mind about a pin already inside it is always allowed, so the count
+  -- only gates a row that does not exist yet.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.item_feedback
+    WHERE guest_share_id = v_share.id AND board_item_id = p_board_item_id
+  ) THEN
     SELECT count(*) INTO v_rows
     FROM public.item_feedback
-    WHERE guest_share_id = v_share_id;
+    WHERE guest_share_id = v_share.id;
     IF v_rows >= c_row_cap THEN
       RAISE EXCEPTION 'this link has reached its reaction limit'
         USING ERRCODE = 'check_violation';
     END IF;
-
-    INSERT INTO public.item_feedback (
-      board_item_id, client_id, guest_share_id, verdict, body
-    ) VALUES (
-      p_board_item_id, NULL, v_share_id, v_verdict, v_body
-    );
-  ELSE
-    UPDATE public.item_feedback
-       SET verdict = v_verdict, body = v_body, updated_at = now()
-     WHERE id = v_existing;
   END IF;
+
+  -- One statement, so a double-tap cannot lose the race between the existence
+  -- check and the write and surface a raw 23505 with the index name.
+  -- DO UPDATE does not fire the AFTER INSERT trigger, which is what we want:
+  -- the designer is notified when a link first speaks about a pin, not every
+  -- time the reader changes their mind.
+  INSERT INTO public.item_feedback (
+    board_item_id, client_id, guest_share_id, verdict, body
+  ) VALUES (
+    p_board_item_id, NULL, v_share.id, v_verdict, v_body
+  )
+  ON CONFLICT (guest_share_id, board_item_id) WHERE guest_share_id IS NOT NULL
+  DO UPDATE SET
+    verdict = EXCLUDED.verdict,
+    body = EXCLUDED.body,
+    updated_at = now();
 
   RETURN jsonb_build_object(
     'boardItemId', p_board_item_id,
