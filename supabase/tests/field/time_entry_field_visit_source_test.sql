@@ -24,8 +24,15 @@
 --   scripts/run-sql-tests.sh -f time_entry_field_visit_source
 -- and the FULL suite for the wave report (22 documented known failures).
 --
--- ⚠ Runs as `postgres` (superuser) — RLS bypassed. Nothing here is evidence
--- about the four "Team can …" policies or the studio-co-member set.
+-- 6. AS authenticated  → cases 1-5 run as the connecting superuser. Case 6
+--                        switches role and proves the offer INSERTs, reads
+--                        back and still fails a garbage source under the
+--                        designer's own policies, and that another designer
+--                        reads none of it.
+--
+-- ⚠ Cases 1-5 run as `postgres` (superuser) — RLS bypassed there. Nothing in
+-- them, and nothing in case 6, is evidence about the four "Team can …"
+-- policies or the studio-co-member set.
 --
 -- Transaction-wrapped + ROLLBACK.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -114,6 +121,97 @@ BEGIN
     'FAIL 5b: a second running timer inserted — V4 could steal the desk timer''s slot';
 
   RAISE NOTICE 'time_entry field_visit source: all 5 cases passed.';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 6 — AS `authenticated`, not as the superuser the runner connects as.
+--
+-- Cases 1-5 run as `postgres`: RLS bypassed, table privileges never checked.
+-- V4 writes this row from the phone as `authenticated` through PostgREST, so
+-- "the offer lands" is only really proven under that role. Role-switching
+-- idiom copied from supabase/tests/security/extension_execute_authenticated_test.sql.
+--
+--   6a  the designer INSERTs a completed field_visit entry on her own project
+--       ("Designers manage their project time entries") and reads it back.
+--   6b  the widened CHECK still bites under RLS — an unknown source raises.
+--   6c  a different authenticated designer reads none of it.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES ('fbc00000-0000-4000-8000-000000000002', 'fbc-outsider@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO profiles (id, email, full_name, created_at, updated_at)
+VALUES ('fbc00000-0000-4000-8000-000000000002', 'fbc-outsider@test.invalid', 'FBC Outsider', NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
+
+CREATE OR REPLACE FUNCTION pg_temp.assume_user(
+  p_user_id uuid,
+  p_role text DEFAULT 'authenticated'
+)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config(
+    'request.jwt.claims',
+    jsonb_build_object('sub', p_user_id, 'role', p_role)::text,
+    true
+  );
+END;
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid, text) TO PUBLIC;
+
+DO $$
+DECLARE
+  v_row     RECORD;
+  v_raised  BOOLEAN := false;
+  v_others  INTEGER;
+BEGIN
+  -- 6a ---------------------------------------------------------------------
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.assume_user('fbc00000-0000-4000-8000-000000000001');
+
+  INSERT INTO project_time_entries (
+    id, project_id, user_id, started_at, duration_minutes,
+    source, activity, billable, notes)
+  VALUES (
+    'fbc00000-0000-4000-8000-0000000000e2',
+    'fbc00000-0000-4000-8000-0000000000a1',
+    'fbc00000-0000-4000-8000-000000000001',
+    NOW() - INTERVAL '95 minutes', 95,
+    'field_visit', 'site_visit', true, 'Maple St · punch walk');
+
+  SELECT * INTO v_row FROM project_time_entries
+   WHERE id = 'fbc00000-0000-4000-8000-0000000000e2';
+
+  -- 6b ---------------------------------------------------------------------
+  BEGIN
+    INSERT INTO project_time_entries (project_id, user_id, duration_minutes, source)
+    VALUES ('fbc00000-0000-4000-8000-0000000000a1', 'fbc00000-0000-4000-8000-000000000001', 20, 'field_note');
+  EXCEPTION WHEN check_violation THEN
+    v_raised := true;
+  END;
+
+  RESET ROLE;
+
+  ASSERT v_row.id IS NOT NULL,
+    'FAIL 6a1: the designer must be able to INSERT and read back a field_visit entry as authenticated';
+  ASSERT v_row.source = 'field_visit' AND v_row.activity = 'site_visit',
+    'FAIL 6a2: the field_visit / site_visit pair must survive the authenticated INSERT';
+  ASSERT v_row.duration_minutes = 95,
+    'FAIL 6a3: a field_visit entry is COMPLETED under RLS too';
+  ASSERT v_raised,
+    'FAIL 6b: an unknown source no longer raises as authenticated — the CHECK is not the gate it looks like';
+
+  -- 6c ---------------------------------------------------------------------
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.assume_user('fbc00000-0000-4000-8000-000000000002');
+  SELECT count(*) INTO v_others FROM project_time_entries
+   WHERE id = 'fbc00000-0000-4000-8000-0000000000e2';
+  RESET ROLE;
+
+  ASSERT v_others = 0,
+    'FAIL 6c: another designer read this project''s time entry — project_time_entries RLS is not per-project any more';
+
+  RAISE NOTICE 'time_entry field_visit source: case 6 (authenticated) passed.';
 END $$;
 
 ROLLBACK;

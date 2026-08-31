@@ -34,10 +34,16 @@
 --   scripts/run-sql-tests.sh -f project_task_field_capture_ref
 -- and the FULL suite for the wave report (22 documented known failures).
 --
--- ⚠ Runs as `postgres` (superuser), so RLS is BYPASSED. This file proves the
--- COLUMN, the CONSTRAINTS and the TRIGGER — it proves nothing about the 42501
--- a studio co-member gets from "Designers manage their project tasks"
--- (00169:61-62), which is FC-R8's degrade and is device-verified in Task 18.
+-- 7. AS authenticated   → cases 1-6 run as the connecting superuser. Case 7
+--                         switches role and proves the punch item INSERTs and
+--                         reads back — with its capture joined — under the
+--                         designer's own policies, and that a different
+--                         designer reads neither.
+--
+-- ⚠ Cases 1-6 run as `postgres` (superuser), so RLS is BYPASSED there. They
+-- prove the COLUMN, the CONSTRAINTS and the TRIGGER. Case 7 adds the owner's
+-- and an outsider's paths; the STUDIO CO-MEMBER degrade (FC-R8) is still not
+-- covered here and is device-verified in Task 18.
 --
 -- ⚠ The fixture party is deliberately sms_consent_status='not_asked' so the
 -- dispatch trigger returns early and no edge function is invoked from a test.
@@ -80,6 +86,28 @@ VALUES (
   'the base cabinet scribe is short on the left return',
   '[{"path": "fbb/ct/photo-0.heic", "isPrimary": true}]'::jsonb,
   'fbb/ct/photo-0.heic');
+
+-- A second capture, for case 7's role-switched insert. Case 5 deletes f1.
+INSERT INTO field_captures (
+  id, client_capture_id, designer_id, status, destination, project_id,
+  voice_transcript, photos, primary_photo_path)
+VALUES (
+  'fbb00000-0000-4000-8000-0000000000f2',
+  'fbb00000-0000-4000-8000-0000000000c2',
+  'fbb00000-0000-4000-8000-000000000001',
+  'inbox', 'inbox', 'fbb00000-0000-4000-8000-0000000000a1',
+  'the range filler needs re-cutting',
+  '[{"path": "fbb/ct/photo-1.heic", "isPrimary": true}]'::jsonb,
+  'fbb/ct/photo-1.heic');
+
+-- A second designer, for case 7c: another authenticated user must not read
+-- this project's punch items.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES ('fbb00000-0000-4000-8000-000000000002', 'fbb-outsider@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO profiles (id, email, full_name, created_at, updated_at)
+VALUES ('fbb00000-0000-4000-8000-000000000002', 'fbb-outsider@test.invalid', 'FBB Outsider', NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
 
 DO $$
 DECLARE
@@ -206,6 +234,98 @@ BEGIN
     'FAIL 6: project_tasks grew a jsonb column — re-open the FK-vs-routing_source decision, got ' || v_jsonb;
 
   RAISE NOTICE 'project_tasks field-capture back-reference: all 6 cases passed.';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 7 — AS `authenticated`, not as the superuser the runner connects as.
+--
+-- Cases 1-6 run as `postgres`: RLS bypassed, table privileges never checked.
+-- The device writes this row as `authenticated` through PostgREST, so the
+-- landing FC-R7 rests on is only really proven under that role. Role-switching
+-- idiom copied from supabase/tests/security/extension_execute_authenticated_test.sql.
+--
+--   7a  the designer INSERTs her own punch item (project_tasks "Designers
+--       manage their project tasks", 00169:61-62) and reads it back with the
+--       field_capture_id intact.
+--   7b  the back-reference resolves to a capture she can also read
+--       (field_captures_owner_select) — the two grants the punch surface needs
+--       are both present under the same role in the same statement.
+--   7c  a different authenticated designer reads neither the task nor the
+--       capture. That is FC-R8's per-designer posture at the SQL layer.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION pg_temp.assume_user(
+  p_user_id uuid,
+  p_role text DEFAULT 'authenticated'
+)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config(
+    'request.jwt.claims',
+    jsonb_build_object('sub', p_user_id, 'role', p_role)::text,
+    true
+  );
+END;
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid, text) TO PUBLIC;
+
+DO $$
+DECLARE
+  v_task    RECORD;
+  v_join    RECORD;
+  v_others  INTEGER;
+BEGIN
+  -- 7a ---------------------------------------------------------------------
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.assume_user('fbb00000-0000-4000-8000-000000000001');
+
+  INSERT INTO project_tasks (
+    id, project_id, title, description, status, owner, owner_party_id,
+    section_key, created_by, field_capture_id)
+  VALUES (
+    'fbb00000-0000-4000-8000-0000000000d2',
+    'fbb00000-0000-4000-8000-0000000000a1',
+    'Range filler needs re-cutting',
+    'the range filler needs re-cutting' || E'\n' || 'Kitchen',
+    'todo', 'gc', 'fbb00000-0000-4000-8000-0000000000b1',
+    'install',
+    'fbb00000-0000-4000-8000-000000000001',
+    'fbb00000-0000-4000-8000-0000000000f2');
+
+  SELECT * INTO v_task FROM project_tasks
+   WHERE id = 'fbb00000-0000-4000-8000-0000000000d2';
+
+  -- 7b ---------------------------------------------------------------------
+  SELECT t.id AS task_id, fc.id AS capture_id, fc.primary_photo_path
+    INTO v_join
+    FROM project_tasks t
+    LEFT JOIN field_captures fc ON fc.id = t.field_capture_id
+   WHERE t.id = 'fbb00000-0000-4000-8000-0000000000d2';
+
+  RESET ROLE;
+
+  ASSERT v_task.id IS NOT NULL,
+    'FAIL 7a1: the designer must be able to INSERT and read back her own punch item as authenticated';
+  ASSERT v_task.field_capture_id = 'fbb00000-0000-4000-8000-0000000000f2',
+    'FAIL 7a2: field_capture_id must survive the authenticated INSERT';
+  ASSERT v_task.owner = 'gc' AND v_task.status = 'todo',
+    'FAIL 7a3: the punch item must land owner=gc / status=todo under RLS too';
+  ASSERT v_join.capture_id = 'fbb00000-0000-4000-8000-0000000000f2',
+    'FAIL 7b1: the owner must read the capture the back-reference points at — without SELECT on field_captures the punch thumbnail has nothing to sign';
+  ASSERT v_join.primary_photo_path = 'fbb/ct/photo-1.heic',
+    'FAIL 7b2: the capture''s primary photo must reach the owner through RLS';
+
+  -- 7c ---------------------------------------------------------------------
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.assume_user('fbb00000-0000-4000-8000-000000000002');
+  SELECT count(*) INTO v_others FROM project_tasks
+   WHERE id = 'fbb00000-0000-4000-8000-0000000000d2';
+  RESET ROLE;
+
+  ASSERT v_others = 0,
+    'FAIL 7c: another designer read this project''s punch item — project_tasks RLS is not per-project any more';
+
+  RAISE NOTICE 'project_tasks field-capture back-reference: case 7 (authenticated) passed.';
 END $$;
 
 ROLLBACK;

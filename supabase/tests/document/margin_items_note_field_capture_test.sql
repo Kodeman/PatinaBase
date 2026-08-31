@@ -38,11 +38,18 @@
 -- documented known failures in supabase/tests/KNOWN_FAILURES.md, so a new
 -- unexpected failure is a real regression.
 --
--- ⚠ The runner connects as `postgres` (superuser, run-sql-tests.sh:92), so the
--- security_invoker join in margin_items resolves with RLS BYPASSED. This file
--- therefore CANNOT prove the FC-R8 co-member case (capture_visible = false
--- because field_captures is owner-only). Nothing here is evidence about RLS.
--- That case is browser-verified in Task 18.
+-- 8. AS authenticated  → cases 1-7 run as the connecting superuser, where RLS
+--                        is bypassed and table privileges are never checked.
+--                        Case 8 switches role, proves the field_captures GRANT
+--                        the note branch depends on is load-bearing (revoke it
+--                        and the WHOLE view 42501s), and reads the note back
+--                        under the author's own policies.
+--
+-- ⚠ The runner connects as `postgres` (superuser, run-sql-tests.sh:92), so
+-- cases 1-7 resolve the security_invoker join with RLS BYPASSED — nothing in
+-- them is evidence about RLS. Case 8 covers the OWNER's path only; this file
+-- still CANNOT prove the FC-R8 co-member case (capture_visible = false because
+-- field_captures is owner-only), which is browser-verified in Task 18.
 --
 -- ⚠ Every fixture UUID uses hex-only prefixes. 'm'/'r'/'g' are not hex digits
 -- and the cast fails before the first assertion runs.
@@ -200,6 +207,12 @@ BEGIN
     'FAIL 5e: the pre-existing author_name key must survive the replace';
   ASSERT v_typed.title = 'Ask about the runner.' AND v_typed.detail = '',
     'FAIL 5f: a typed note''s title/detail must be byte-identical to today';
+  -- W4-C8: a full body for a TYPED note is explicitly not taken this wave.
+  -- The body key must read null on one, so readFieldNotePayload falls back to
+  -- row.title and the escalation/amendment seeds stay pre-wave byte-identical.
+  ASSERT v_typed.payload->>'body' IS NULL,
+    'FAIL 5g: a typed note must carry a null payload.body — W4-C8 does not take a full body for typed notes, got ' ||
+    COALESCE(left(v_typed.payload->>'body', 40), 'NULL');
 
   -- 6 ---------------------------------------------------------------------
   -- ⚠ F11: a bare column COUNT proves nothing about ORDER or TYPE — a
@@ -258,6 +271,107 @@ BEGIN
     'FAIL 7b: anchor_kind was widened — §9.4 forbids a new anchor kind: ' || v_check;
 
   RAISE NOTICE 'margin_items note/field-capture: all 7 cases passed.';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 8 — AS `authenticated`, not as the superuser the runner connects as.
+--
+-- Everything above runs as `postgres`, so the security_invoker view resolved
+-- with RLS bypassed AND with table privileges never checked. Neither the
+-- grants the note branch now depends on nor the policies that gate it were
+-- exercised at all. This section switches role the way
+-- supabase/tests/security/extension_execute_authenticated_test.sql does.
+--
+-- 8a is the falsifier for the field_captures grant the margin migration adds:
+-- margin_items LEFT JOINs public.field_captures, so without table-level SELECT
+-- on it the reader takes a 42501 on the WHOLE view — every margin kind, not
+-- just the note. Locally the legacy-grants seed hands `authenticated` a
+-- blanket grant, so the grant can only be proven by removing it inside this
+-- rolled-back transaction and watching the read break.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION pg_temp.assume_user(
+  p_user_id uuid,
+  p_role text DEFAULT 'authenticated'
+)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config(
+    'request.jwt.claims',
+    jsonb_build_object('sub', p_user_id, 'role', p_role)::text,
+    true
+  );
+END;
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid, text) TO PUBLIC;
+
+DO $$
+DECLARE
+  v_revoked boolean := false;
+  v_caught  boolean := false;
+  v_field   RECORD;
+  v_typed   RECORD;
+  v_body    TEXT;
+BEGIN
+  SELECT body INTO v_body FROM margin_notes
+   WHERE id = 'fb000000-0000-4000-8000-0000000000e1';
+
+  -- 8a — the grant is load-bearing. REVOKE only removes the aclitem whose
+  -- grantor is the current role, so this is a no-op on a connection that did
+  -- not make the grant; the has_table_privilege probe below is what decides
+  -- whether the negative case runs or self-skips with a NOTICE.
+  BEGIN
+    EXECUTE 'REVOKE SELECT ON public.field_captures FROM authenticated';
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+  v_revoked := NOT has_table_privilege('authenticated', 'public.field_captures', 'SELECT');
+
+  IF v_revoked THEN
+    BEGIN
+      SET LOCAL ROLE authenticated;
+      PERFORM pg_temp.assume_user('fb000000-0000-4000-8000-000000000001');
+      SELECT * INTO v_field FROM margin_items
+       WHERE kind = 'note' AND item_id = 'fb000000-0000-4000-8000-0000000000e1';
+    EXCEPTION WHEN insufficient_privilege THEN
+      v_caught := true;
+    END;
+    RESET ROLE;
+    ASSERT v_caught,
+      'FAIL 8a: reading margin_items as authenticated WITHOUT select on field_captures must raise 42501 — if it does not, the grant this migration adds is not what the note branch depends on and 8b proves nothing';
+  ELSE
+    RAISE NOTICE 'NOTE: skipping case 8a — this connection could not revoke authenticated''s SELECT on field_captures (it is not the grantor), so the pre-grant state cannot be reproduced.';
+  END IF;
+
+  -- 8b — with the grant in place, the author reads her own note through the
+  -- view under her OWN RLS: margin_notes_designer_all for the note,
+  -- field_captures_owner_select for the capture.
+  EXECUTE 'GRANT SELECT ON public.field_captures TO authenticated';
+
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.assume_user('fb000000-0000-4000-8000-000000000001');
+  SELECT * INTO v_field FROM margin_items
+   WHERE kind = 'note' AND item_id = 'fb000000-0000-4000-8000-0000000000e1';
+  SELECT * INTO v_typed FROM margin_items
+   WHERE kind = 'note' AND item_id = 'fb000000-0000-4000-8000-0000000000e2';
+  RESET ROLE;
+
+  ASSERT v_field.item_id IS NOT NULL,
+    'FAIL 8b: the author must read her own field note through margin_items as authenticated';
+  ASSERT v_field.payload->>'body' = v_body,
+    'FAIL 8c: the field note''s full body must survive the role switch';
+  ASSERT (v_field.payload->>'capture_visible')::boolean,
+    'FAIL 8d: the owner joins her own capture, so capture_visible must be true as authenticated';
+  ASSERT v_field.payload->'photo_paths' = '["fb/ct/photo-0.heic", "fb/ct/photo-1.heic"]'::jsonb,
+    'FAIL 8e: photo_paths must reach the owner through RLS, got ' ||
+    COALESCE(v_field.payload->>'photo_paths', 'NULL');
+
+  ASSERT v_typed.item_id IS NOT NULL,
+    'FAIL 8f: the typed note must also reach the author as authenticated';
+  ASSERT v_typed.payload->>'body' IS NULL,
+    'FAIL 8g: a typed note carries no body under RLS either (W4-C8)';
+
+  RAISE NOTICE 'margin_items note/field-capture: case 8 (authenticated) passed.';
 END $$;
 
 ROLLBACK;
