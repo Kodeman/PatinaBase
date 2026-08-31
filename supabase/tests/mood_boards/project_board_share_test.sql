@@ -342,6 +342,16 @@ BEGIN
   ASSERT v_row.verdict = 'approved' AND v_row.body = 'Love this one',
     'the guest verdict must carry its tap and note';
 
+  -- The write does not open a read. `anon` holds table-level SELECT on these
+  -- (legacy grant posture), so RLS is the only wall — and it must hold, or a
+  -- guest could read every share's token_hash and every link's reactions.
+  SET LOCAL ROLE anon;
+  ASSERT (SELECT count(*) FROM public.item_feedback) = 0
+     AND (SELECT count(*) FROM public.document_shares) = 0
+     AND (SELECT count(*) FROM public.item_feedback_events) = 0,
+    'a guest must read nothing directly from the share or feedback tables';
+  RESET ROLE;
+
   -- Idempotency: the same pin re-tapped updates in place.
   SET LOCAL ROLE anon;
   PERFORM public.submit_board_share_reaction(
