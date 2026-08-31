@@ -271,9 +271,10 @@ GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid, text) TO PUBLIC;
 
 DO $$
 DECLARE
-  v_task    RECORD;
-  v_join    RECORD;
-  v_others  INTEGER;
+  v_task            RECORD;
+  v_join            RECORD;
+  v_others          INTEGER;
+  v_others_captures INTEGER;
 BEGIN
   -- 7a ---------------------------------------------------------------------
   SET LOCAL ROLE authenticated;
@@ -320,10 +321,17 @@ BEGIN
   PERFORM pg_temp.assume_user('fbb00000-0000-4000-8000-000000000002');
   SELECT count(*) INTO v_others FROM project_tasks
    WHERE id = 'fbb00000-0000-4000-8000-0000000000d2';
+  -- The capture half of the same claim. The fixture supports it: f2 carries no
+  -- organization_id, so field_captures_org_inbox_select (00233:175-186) cannot
+  -- match for the outsider either and owner-only is the whole policy set.
+  SELECT count(*) INTO v_others_captures FROM field_captures
+   WHERE id = 'fbb00000-0000-4000-8000-0000000000f2';
   RESET ROLE;
 
   ASSERT v_others = 0,
-    'FAIL 7c: another designer read this project''s punch item — project_tasks RLS is not per-project any more';
+    'FAIL 7c1: another designer read this project''s punch item — project_tasks RLS is not per-project any more';
+  ASSERT v_others_captures = 0,
+    'FAIL 7c2: another designer read the capture behind this punch item — field_captures RLS is not owner-only any more (FC-R8)';
 
   RAISE NOTICE 'project_tasks field-capture back-reference: case 7 (authenticated) passed.';
 END $$;
