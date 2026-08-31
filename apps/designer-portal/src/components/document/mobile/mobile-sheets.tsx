@@ -11,6 +11,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+// W7-R1 §3 — the sections sheet's door rows carry the SAME glyphs the rail's
+// doors do (`spine/lens-ladder.tsx`), at the same 14px / 1.5 stroke, in
+// `currentColor`, `aria-hidden`: the icon decorates, the word still labels.
+import { BookOpen, Compass, FileText, LayoutGrid, Users } from 'lucide-react';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useCoordinationItems, useSendDecisionReminder } from '@patina/supabase';
 import { useQueryClient } from '@tanstack/react-query';
@@ -653,8 +657,9 @@ export function MobileSheets({
                     closeSheet();
                     router.push(`/doc/${projectId}/plans`);
                   }}
-                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                  className="flex min-h-11 w-full items-center gap-[8px] py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
                 >
+                  <Compass size={14} strokeWidth={1.5} color="currentColor" aria-hidden="true" className="shrink-0" />
                   Plan room
                 </button>
               </li>
@@ -665,8 +670,9 @@ export function MobileSheets({
                     closeSheet();
                     router.push(`/doc/${projectId}/spec-book`);
                   }}
-                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                  className="flex min-h-11 w-full items-center gap-[8px] py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
                 >
+                  <BookOpen size={14} strokeWidth={1.5} color="currentColor" aria-hidden="true" className="shrink-0" />
                   Spec book
                 </button>
               </li>
@@ -677,8 +683,9 @@ export function MobileSheets({
                     closeSheet();
                     router.push(boardsRoutePath(projectId));
                   }}
-                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                  className="flex min-h-11 w-full items-center gap-[8px] py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
                 >
+                  <LayoutGrid size={14} strokeWidth={1.5} color="currentColor" aria-hidden="true" className="shrink-0" />
                   Boards
                 </button>
               </li>
@@ -694,8 +701,9 @@ export function MobileSheets({
                         }),
                       );
                     }}
-                    className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                    className="flex min-h-11 w-full items-center gap-[8px] py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
                   >
+                    <Users size={14} strokeWidth={1.5} color="currentColor" aria-hidden="true" className="shrink-0" />
                     Call sheet
                   </button>
                 </li>
@@ -727,8 +735,9 @@ export function MobileSheets({
                       }),
                     );
                   }}
-                  className="flex min-h-11 w-full items-center py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                  className="flex min-h-11 w-full items-center gap-[8px] py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
                 >
+                  <FileText size={14} strokeWidth={1.5} color="currentColor" aria-hidden="true" className="shrink-0" />
                   The client’s copy
                 </button>
               </li>

@@ -21,6 +21,15 @@
 
 import Link from 'next/link';
 import {
+  BookOpen,
+  Compass,
+  FileText,
+  LayoutGrid,
+  Undo2,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import {
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -33,6 +42,7 @@ import type { DocumentIndexKey } from '@/lib/document/document-index';
 import { LADDER_SEGMENT_MIN_PX } from '@/lib/document/lens-constants';
 import type {
   LadderDoor,
+  LadderDoorKey,
   LadderSegment,
 } from '@/lib/document/lens-ladder-derivation';
 
@@ -57,6 +67,22 @@ export interface LensLadderProps {
  * rail's own furniture and they never compete with the track for height.
  */
 const ROOM_RUNG_PX = 27;
+
+/**
+ * W7-R1 §3 — one glyph per door. Kody: "filed with this job items should have
+ * an icon for each room." They are decoration beside the word that is already
+ * the label: 14px, 1.5 stroke, `currentColor` (so each icon inherits the row's
+ * charcoal and its clay-ink hover, and no hex ink enters the rail), and
+ * `aria-hidden`, so the accessible name and the R1 label census are unchanged.
+ */
+const DOOR_ICON: Record<LadderDoorKey, LucideIcon> = {
+  planroom: Compass,
+  specbook: BookOpen,
+  moodboards: LayoutGrid,
+  callsheet: Users,
+  clientcopy: FileText,
+  'release-room': Undo2,
+};
 
 const NAME_CLASS = 'block text-[13px] leading-tight';
 const VALUE_CLASS =
@@ -504,7 +530,17 @@ export function LensLadder({
           </p>
           {doors.map((door) => {
             const className =
-              'flex min-h-11 w-full items-center text-left text-[13px] leading-tight text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+              'flex min-h-11 w-full items-center gap-[8px] text-left text-[13px] leading-tight text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+            const Icon = DOOR_ICON[door.key];
+            const glyph = (
+              <Icon
+                size={14}
+                strokeWidth={1.5}
+                color="currentColor"
+                aria-hidden="true"
+                className="shrink-0"
+              />
+            );
             return door.href ? (
               <Link
                 key={door.key}
@@ -513,6 +549,7 @@ export function LensLadder({
                 data-rail-label
                 className={className}
               >
+                {glyph}
                 {door.label}
               </Link>
             ) : (
@@ -524,6 +561,7 @@ export function LensLadder({
                 onClick={door.onOpen}
                 className={className}
               >
+                {glyph}
                 {door.label}
               </button>
             );

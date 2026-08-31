@@ -524,6 +524,29 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     expect(mockRouterPush).toHaveBeenCalledWith('/doc/proj-1/plans');
   });
 
+  // W7-R1 §3 — the SAME glyphs the rail's doors carry, on the same rows. The
+  // Margin row and the stop rows are not doors and get none.
+  it('gives each door row the rail’s own glyph, and no other row one (W7-R1 §3)', () => {
+    mountBarAndSheets();
+    openSections();
+    const panel = sectionsPanel();
+    for (const label of ['Plan room', 'Spec book', 'Boards', 'Call sheet']) {
+      const row = within(panel).getByRole('button', { name: label });
+      const svg = row.querySelector('svg');
+      expect(svg).not.toBeNull();
+      expect(svg).toHaveAttribute('aria-hidden', 'true');
+      expect(svg).toHaveAttribute('width', '14');
+      expect(svg).toHaveAttribute('stroke-width', '1.5');
+      expect(svg).toHaveAttribute('stroke', 'currentColor');
+      expect(row).toHaveClass('gap-[8px]', 'min-h-11');
+      // The word is still the label; the icon adds nothing to it.
+      expect(row).toHaveAccessibleName(label);
+    }
+    // A stop row is not a door.
+    const stop = within(panel).getByRole('button', { name: /^Pieces/ });
+    expect(stop.querySelector('svg')).toBeNull();
+  });
+
   it('routes Spec book and Boards at this project', () => {
     const first = mountBarAndSheets();
     openSections();

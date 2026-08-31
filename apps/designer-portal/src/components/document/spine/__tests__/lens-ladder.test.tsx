@@ -462,6 +462,46 @@ describe('the doors', () => {
     ).toEqual(['proposal', 'scope', 'vision', 'investment', 'record']);
   });
 
+  // W7-R1 §3 — Kody: "filed with this job items should have an icon for each
+  // room." The glyph decorates; the word still labels.
+  it('gives every door a glyph, and leaves its accessible name alone (W7-R1 §3)', () => {
+    const { doors } = ladderFor('project');
+    render(
+      <LensLadder
+        segments={[]}
+        doors={doors}
+        activeKey={null}
+        onJump={jest.fn()}
+      />,
+    );
+    const rows = Array.from(
+      ladderNav().querySelectorAll<HTMLElement>('[data-ladder-door]'),
+    );
+    expect(rows).toHaveLength(doors.length);
+    for (const row of rows) {
+      const svg = row.querySelector('svg');
+      expect(svg).not.toBeNull();
+      expect(svg).toHaveAttribute('aria-hidden', 'true');
+      expect(svg).toHaveAttribute('width', '14');
+      expect(svg).toHaveAttribute('height', '14');
+      expect(svg).toHaveAttribute('stroke-width', '1.5');
+      expect(svg).toHaveAttribute('stroke', 'currentColor');
+      expect(row).toHaveClass('gap-[8px]');
+      // The icon adds nothing to the name: `Plan room` is still `Plan room`.
+      const label = doors.find(
+        (door) => door.key === row.getAttribute('data-ladder-door'),
+      )?.label as string;
+      expect(row).toHaveAccessibleName(label);
+      expect(row.textContent).toBe(label);
+    }
+    // A non-door row in the same rail carries none.
+    expect(
+      ladderNav()
+        .querySelector('[data-rail-label]:not([data-ladder-door])')
+        ?.querySelector('svg'),
+    ).toBeFalsy();
+  });
+
   it('gives every door a 44px target', () => {
     mount();
     for (const door of doorRows()) expect(door).toHaveClass('min-h-11');
