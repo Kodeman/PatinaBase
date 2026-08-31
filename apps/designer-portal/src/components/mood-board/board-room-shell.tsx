@@ -797,11 +797,21 @@ function BoardRoomSurface({
       x: ((rect?.width ?? 800) / 2 - api.view.pan.x) / api.view.zoom - 130,
       y: ((rect?.height ?? 600) / 2 - api.view.pan.y) / api.view.zoom - 150,
     };
+    // Section-band bounds (label included) are also avoided, so a click-add
+    // never lands under a band.
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: state.canvasWidth,
+      canvasHeight: state.canvasHeight,
+      backgroundColor: state.backgroundColor,
+      sections: state.sections,
+      items: state.items,
+    });
     // Cascades by (24, 24) past whatever already occupies the centre point,
     // so repeated click-adds don't stack invisibly on top of each other (CI-11).
     return findBoardCascadePlacement(
       base,
       state.items.map((item) => ({ x: item.x, y: item.y })),
+      { avoidRects: geometry.sections.map((section) => section.bounds) },
     );
   };
   const nextZ = () => Math.max(-1, ...state.items.map((item) => item.zIndex ?? 0)) + 1;
