@@ -2008,3 +2008,131 @@ put at risk.
 > has never been exercised against the build that actually ships. Recipe:
 > `build/30-deploy-runbook.md` "Rehearsal: the ship-bar server".
 
+
+## W7 fix lane — the three prod rulings + the mobile-nav fix
+
+**Tree:** worktree `.codex/worktrees/agent-lens-w7`, branch `document-lens/w7-adjust` off
+`main@646aa98d5`. Own `next dev --webpack -p 3031` from the worktree's `apps/designer-portal`,
+driven through `playwright.ship-bar.config.ts` with `PLAYWRIGHT_BASE_URL=http://localhost:3031`
+(`playwright.config.ts` untouched — the secret-scan trap). Env inline from that base config's
+committed local-demo block; **no `.env.local` written or read** (a fresh worktree has none, and
+without the three vars the middleware's `createSSRServerClient` throws). `next-env.d.ts` and the
+help-walkthrough PNGs `desk-walkthrough.spec.ts` rewrites were reverted before the last commit.
+
+### Gates
+
+| gate | result |
+|---|---|
+| `type-check` | 0 errors |
+| `lint` | 201 problems, **2 errors** — the two known, do-not-touch (`piece-room-save-gate.test.tsx:159` `import/first`, `use-commercial-documents.test.ts:930` `rules-of-hooks`) |
+| `test -- --ci --silent` (branch) | **476 suites · 5687 tests · 0 failed** |
+| `test -- --ci --silent` (main, same command, measured with `--json`) | **476 suites · 5682 tests · 0 failed** |
+| delta | **+5**, all accounted: doc-spine +2 (arc case retired, three W7 cases added), lens-ladder +1 (door glyphs), derivation −1 (two geometry cases → one "carries no geometry"), mobile-bar +3 (sheet glyphs, two D-B54) |
+
+Formatting drift is reported by the pre-commit hook on every touched file; the same files drift on
+`main` (`npx prettier --check` on main's `doc-spine.tsx`/`strata-mark.tsx` warns identically), so it
+is pre-existing and was not introduced here.
+
+### chromium e2e — `--workers=1`, against :3031
+
+`lens-rail-budget lens-band-height lens-density quiet-responsive-shell desk-walkthrough
+mobile-margin-sheet` → **60 passed · 1 skipped · 0 failed (6.9m)**.
+
+New measurements printed by the run:
+
+```
+W7-R1 §2 · stop gaps [{"after":"approvals","gap":0},{"after":"schedule","gap":0},
+                      {"after":"ffe","gap":0},{"after":"money","gap":0},{"after":"care","gap":0}]
+          · gap before the doors 88.5px
+W7-R1 §2 · 1180x620 doors {"doorCount":4,"clipped":[],"breath":13.5,"trackScrolls":true,
+                           "doorsBottom":533,"drawerTop":560,"viewport":620}
+D-B37 · 30 steps, 2 index change(s), 0 unexplained segment resize(s)
+long paper rail census: 12 distinct labels (6 stops, 4 doors) — ceiling 14   (unchanged by the mark)
+pre-work paper rail census: 6 distinct labels (5 stops, 0 doors) — ceiling 9
+```
+
+**D-B52 (3), the drawer reserve — answered by measurement, no code added.** At the short viewport
+the doors' rule ends at **533px** and the Studio Drawer's top edge is at **560px**
+(`window.innerHeight − --doc-shell-bottom-inset`): the sticky box's existing `min-[1180px]:h-screen`
++ `box-border` + `pb-[var(--doc-shell-floating-bottom)]` already stops the flex column above the
+drawer, so the conditional `max-height: calc(100dvh − var(--doc-shell-bottom-inset, 60px))` D-B52
+authorised was **not** added. The assertion is in the spec so a future change that breaks it fails.
+
+**The head reserve — measured, not arithmetic** (`[data-spine-head]` content height, probe spec run
+and then deleted): project paper **106px at 1280**, **92.25px at 1440**; pre-work 78.5 at both. The
+mark measures **88 × 17** and is named `PROCUREMENT & ORDERS — 3 of 5` (project) / `Proposal`
+(pre-work, unfilled). Reserve set to **107 / 93**, down from the arc's 126 / 117.
+
+Shots: `build/w7-shots/rail-after.png` (the whole rail, 1440×900, s0, `…d5`),
+`build/w7-shots/head-mark.png` (the head), `build/w7-shots/sheet-doors.png` (the 390 sections
+sheet's doors).
+
+### Commands run unsandboxed (W7)
+
+| command | why the sandbox blocks it |
+|---|---|
+| `git worktree add .codex/worktrees/agent-lens-w7 -b document-lens/w7-adjust main` | the `.env*` deny-list breaks turbo/git's status scan |
+| `pnpm install` (in the worktree) | network egress + writes outside the allowlist |
+| `pnpm turbo build --filter=@patina/designer-portal^...` | same |
+| `npx supabase status` | reads the local CLI's state outside the allowlist |
+| `psql …` (schema/id lookups, the `project_time_entries` cleanup check) | local socket/binary outside the allowlist |
+| `lsof -i :3000/:3031 -t`, `lsof -ti :3031 \| xargs kill` | process inspection |
+| `nohup npx next dev --webpack -p 3031 …` (inline env) | server boot; headless Chromium cannot claim a mach port inside the sandbox |
+| `curl http://localhost:3031/desk`, `/doc/…d5`, `/doc/…d6` (warm) | local network |
+| every `npx playwright test … --config playwright.ship-bar.config.ts` | Chromium |
+| `git push origin document-lens/w7-adjust` | network egress |
+
+### W7 fix lane — pass 2 (the correctness review's W7-C1…C14)
+
+Same worktree, same `next dev -p 3031` recipe and inline env as pass 1; `playwright.config.ts`
+still untouched. Three commits on top of `c616045b7`: `21d699709` (C1/C2/C7), `5e3bdd712`
+(C3–C6, C9, C11), `ad4befdf7` (C14 ruling (b), C8).
+
+| gate | result |
+|---|---|
+| `type-check` | 0 errors |
+| `lint` | 201 problems, **2 errors** — the same two known, do-not-touch |
+| `test -- --ci --silent` | **477 suites · 5699 tests · 0 failed** (pass 1: 476 / 5687) |
+| delta | **+12 / +1 suite**: provider +4 (D-B54's derivation), mobile-bar +1 (2 pre-derived cases → 3 raw-shape), lens-ladder +3 (the bracket's branch), `strata-mark.test.tsx` +4 (new suite, W7-C14) |
+| chromium e2e, `--workers=1` | `lens-rail-budget lens-band-height lens-density quiet-responsive-shell desk-walkthrough mobile-margin-sheet action-visibility` → **65 passed · 2 skipped · 0 failed (7.6m)** |
+| `action-visibility.spec.ts` alone (W7-C13, D-B54's own named gate) | **3 passed · 1 skipped (26.1s)** |
+
+**Mutation proof (W7-C1/C2).** `offerOwnsThumbEdge` mutated to `return offer !== null` — the exact
+prod defect, re-introduced:
+
+```
+● LogStrip › does not overlay an unrelated saved offer on the project in hand
+● DocumentTimeProvider — who owns the thumb edge (D-B54) › an offer on ANOTHER project while this one is held: the offer does NOT own the edge
+    Expected: false / Received: true
+● the thumb edge’s one owner (D-B54) › RENDERS the bar while a CROSS-PROJECT offer stands — the strip will not paint it
+Test Suites: 3 failed, 3 total
+Tests:       3 failed, 44 passed, 47 total
+```
+
+**Mutation proof (W7-C3, e2e).** `mobile-bar.tsx` reverted to `if (offer) return null`: the
+cross-project case fails at `quiet-responsive-shell.spec.ts:713`
+(`expect(page.getByTestId('mobile-bar')).toBeVisible()`). Both mutations reverted.
+
+New measurements printed by the pass-2 run:
+
+```
+W7-C6 · reading window {"hasBracket":true,"hasCurrent":true,"stop":"schedule","stamp":"40:54",
+                        "bracket":{"top":241.25,"bottom":295.25,"height":54},
+                        "row":{"top":241.25,"bottom":295,"height":53.75}}
+W7-R1 §2 · stop gaps [all 0] · gap before the doors 79.5px      (was 88.5 — the head reserve shrank)
+W7-R1 §2 · 1180x620 doors {"doorCount":4,"clipped":[],"breath":13.5,"trackScrolls":true,
+                           "doorsBottom":533,"drawerTop":560,"viewport":620}
+D-B37 · 30 steps, 2 index change(s), 0 unexplained segment resize(s)
+```
+
+**W7-C4, stated plainly.** Full fixture isolation is unreachable on the shared designer and the
+schema is why: `uniq_project_time_entries_running_timer` is UNIQUE on `user_id` over open rows, so
+this designer holds exactly ONE running timer and an insert cannot proceed while another open row
+exists (the first pass-2 run failed on exactly that, against a row an earlier spec in the same file
+had left open on `…d4`). The fixture now owns two fixed entry ids, DELETES only those, and CLOSES a
+pre-existing open row at 1 minute (the smallest `duration_minutes > 0` allows) rather than deleting
+it — the other spec's data survives as a logged entry. A dedicated designer is the complete answer;
+it needs a second auth fixture and its own seeded documents, and is not built here.
+
+`build/w7-shots/head-mark.png` and `rail-after.png` re-shot after W7-C14 (`ground="rail"`); the
+third line's remainder now prints. `sheet-doors.png` is unchanged from pass 1.
