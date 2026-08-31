@@ -187,4 +187,31 @@ describe('canvas auto-grow', () => {
     expect(growth.canvas).toEqual({ width: 1100, height: 980 })
     expect(growth.items[0]).toMatchObject({ id: 'outside', x: 240, y: 240 })
   })
+
+  it('grows to whole pixels even when the overflowing pin is rotated', () => {
+    const geometry = resolveMoodBoardGeometry({
+      ...MOOD_BOARD_GOLDEN_FIXTURE,
+      canvasWidth: 500,
+      canvasHeight: 400,
+      sections: [],
+      items: [
+        {
+          id: 'tilted',
+          type: 'image',
+          x: 320,
+          y: 240,
+          width: 220,
+          height: 180,
+          rotation: 30,
+          data: {},
+        },
+      ],
+    })
+    const growth = computeBoardAutoGrow(geometry)
+    expect(growth.grew).toBe(true)
+    // A fractional canvas is unwritable: canvas_width/canvas_height are
+    // integer columns and apply_board_room_state rejects anything else.
+    expect(Number.isInteger(growth.canvas.width)).toBe(true)
+    expect(Number.isInteger(growth.canvas.height)).toBe(true)
+  })
 })

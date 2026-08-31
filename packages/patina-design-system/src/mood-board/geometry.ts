@@ -735,11 +735,15 @@ export function computeBoardAutoGrow(
   const grew = leftGrowth > 0 || topGrowth > 0 || rightGrowth > 0 || bottomGrowth > 0
   const translation = { x: leftGrowth, y: topGrowth }
 
+  // Canvas dimensions are integers on the wire (proposal_boards.canvas_width /
+  // canvas_height are `integer`, and apply_board_room_state rejects anything
+  // that is not `^[0-9]+$`). Growth derived from rotated/fractional content
+  // bounds is not, so it is rounded up here rather than at each consumer.
   return {
     grew,
     canvas: {
-      width: geometry.canvas.width + leftGrowth + rightGrowth,
-      height: geometry.canvas.height + topGrowth + bottomGrowth,
+      width: Math.ceil(geometry.canvas.width + leftGrowth + rightGrowth),
+      height: Math.ceil(geometry.canvas.height + topGrowth + bottomGrowth),
     },
     translation,
     items: geometry.items.map((item) => ({
