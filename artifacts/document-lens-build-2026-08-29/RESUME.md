@@ -1,23 +1,34 @@
 # The Smart Lens → production (build program) — RESUME
 
-**STATE: SHIPPED. PR #40 merged; The Smart Lens is LIVE on app.patina.cloud as Worker version
-`55907643-6bca-4b2f-84ed-9e715554cb83` (2026-08-30). Probes all PASS. `I152-deploy` is written.
-Still owed: Kody's signed-in prod walk, and the TLS WebKit ship-bar run (D-B41).**
+**STATE: SHIPPED, PLUS W7. The Smart Lens is LIVE on app.patina.cloud, now carrying Kody's four
+first-look adjustments (W7) as Worker version `c2bb9a9a-de4f-4a76-9ac0-7359cc203ac3` (2026-08-31).
+Probes all PASS. `I152-deploy` and `I152-adjust` are both written.
+Still owed: Kody's re-look at the W7 changes, his signed-in prod walk, and the TLS WebKit ship-bar
+run (D-B41).**
 
 | | |
 |---|---|
-| Branch | `document-lens/integration`, tip **`9897c9c61`**, pushed |
+| Branch | `document-lens/integration`, tip **`9897c9c61`**, pushed. W7 = `document-lens/w7-adjust` tip **`ad4befdf7`**, merged to `main` as **`4f7485b6c`**. |
 | PR | **https://github.com/Kodeman/PatinaBase/pull/40** → `main`, `--no-ff`. **MERGED** as `5178d7d8e`. |
-| `main` | **`fab79cdd3`** — the deployed tip. PR #39 (capture-launch) merged after #40, so this deploy also carries its portal surface (public `/privacy` + `/terms`, the `isPublicPage` middleware allowance — CL-R4); its migrations 00541/00542 remain unpushed, the extension program's. Pre-lens source commit = `dab057537`. |
-| Ledger | **R127**, **I152** and **I152-deploy** are all in `docs/design/the-document/DECISIONS.md`. |
-| Gates at the tip | type-check **0** · lint **exactly the 2 known pre-existing errors** · jest **476 suites / 5678 tests, 0 failing** · seed **19/19** · dry-run phases 1–2 **DRY RUN OK** |
+| `main` | **`8fdf9fac9`** — the W7-deployed tip (merge `4f7485b6c` + the W7 record). Previously **`fab79cdd3`**, the `I152-deploy` tip. PR #39 (capture-launch) merged after #40, so this deploy also carries its portal surface (public `/privacy` + `/terms`, the `isPublicPage` middleware allowance — CL-R4); its migrations 00541/00542 remain unpushed, the extension program's. Pre-lens source commit = `dab057537`. |
+| Ledger | **R127**, **I152**, **I152-deploy** and **I152-adjust** are all in `docs/design/the-document/DECISIONS.md`. W7's own rulings: **W7-R1**, deviations **D-B51…D-B54**. |
+| Gates at the tip | type-check **0** · lint **exactly the 2 known pre-existing errors** · jest **476 suites / 5687 tests, 0 failing** at W7 (5678 at the I152 tip) · seed **19/19** · dry-run **DRY RUN OK** |
 | e2e | chromium ×2 on the production standalone (**149/3** then, after `supabase db reset` + reseed, **153 passed · 5 skipped · 0 failed**) · webkit **73 passed · 3 skipped · 0 failed** across four ≤2-file shards on `next dev` |
 | Design lead | final walk **SHIP** (`build/w6-walk.md`, walked at `975fdf6b7`) |
 | Architect | audit closed, 60 rows, drift list empty; ledger 52 rows D-B1…D-B50 |
-| Deployed | before `9c0c2cdd-2041-4848-a193-93d9e8fb0b71` → after **`55907643-6bca-4b2f-84ed-9e715554cb83`**, created 2026-08-30T20:27:59.570Z |
-| Rollback, pinned | `npx wrangler rollback 9c0c2cdd-2041-4848-a193-93d9e8fb0b71 --name patina-designer-portal --yes` (source-level pre-lens commit = `dab057537`, NOT `deploy-lens-before.txt`'s `PARENT_SHA`, which is the lens merge itself) |
+| Deployed | W7: before `55907643-6bca-4b2f-84ed-9e715554cb83` → after **`c2bb9a9a-de4f-4a76-9ac0-7359cc203ac3`**, created 2026-08-31T14:26:53.830Z. (I152 before that: `9c0c2cdd…` → `55907643…`, 2026-08-30T20:27:59.570Z.) |
+| Rollback, pinned | W7: `npx wrangler rollback 55907643-6bca-4b2f-84ed-9e715554cb83 --name patina-designer-portal --yes` (the W7-parent version — drops W7, keeps the lens). To drop the lens entirely, `npx wrangler rollback 9c0c2cdd-2041-4848-a193-93d9e8fb0b71 …` (source-level pre-lens commit = `dab057537`, NOT `deploy-lens-before.txt`'s `PARENT_SHA`, which is the lens merge itself). |
 
 ## ⚠ OWED — Kody's, in order, with the exact commands
+
+### 0. The W7 re-look (NEW, 2026-08-31)
+
+Live now on `app.patina.cloud`: the head's **one** progress mark in place of the seven-mark arc
+(D-B51), the **packed** ladder with a single gap before the doors (D-B52), **lucide** door icons
+(D-B53), and the phone's bottom chrome restored when a cross-project timer is running (D-B54 — a
+pre-existing defect the lens surfaced). Worth a look at 1440 and 390. Carried non-gating nits and the
+full record: `I152-adjust` in `docs/design/the-document/DECISIONS.md`, `build/w7-review-correctness.md`,
+`build/w7-triage-mobile-nav.md`, shots in `build/w7-shots/`.
 
 ### 1. The TLS WebKit ship-bar run (D-B41) — the one gate never run against the shipping build
 

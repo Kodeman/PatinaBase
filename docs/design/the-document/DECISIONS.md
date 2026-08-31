@@ -10571,3 +10571,70 @@ RESUME ruling 7 (no Kody session before ship). Checklist and full detail in
 (D-B41) is also still owed, and is unaffected by this deploy.
 
 *Entries add: I152-deploy · last id = I152-deploy*
+
+---
+
+### I152-adjust · W7 — Kody's first-look adjustments — 2026-08-31
+
+Kody's first look at the live lens asked for four changes; W7-R1 ruled them and `build/deploy-lens.sh`
+shipped them from `main` at **`8fdf9fac9`**, on his in-session ask. What changed:
+
+- **The progress mark.** The head's seven-mark arc — seven `StrataMark`s in a wrapping list, each a
+  jump button — becomes **one** `StrataMark`, filled from the engagement's own fill state, inert
+  (`role="img"`, named `<stage> · N of M`), with no tooltip and no tabstop. The ladder is the
+  navigator now. (W7-R1 §1 / **D-B51**; the mark's ghost track prints on the rail via `ground="rail"`,
+  W7-C14.)
+- **The packed rail.** The ladder track drops `flex-grow: extent`: rows take their natural height and
+  a single flexible gap (`margin-top: auto`) sits **before the doors**, so the stops pack to the top
+  instead of spreading down the rail. The floor arithmetic is deleted; `LADDER_SEGMENT_MIN_PX`
+  survives as a plain `min-height`. (§2 / **D-B52**.)
+- **Door icons.** The doors take `lucide-react` icons — imported by name, `aria-hidden` decoration
+  beside the unchanged text labels. No new dependency (lucide was already one) and no change to the
+  `data-rail-label` census. (§3 / **D-B53**.)
+- **One thumb-edge owner.** A **pre-existing prod defect**, surfaced by the lens rather than caused by
+  it: a cross-project running timer removed the phone's entire bottom chrome. The bar yielded the
+  thumb edge to a time-log offer that the strip — suppressed for unrelated projects in
+  `180d50aee fix(document): suppress unrelated time offers` — then refused to paint, so neither
+  painted. One provider-published `offerOwnsEdge` boolean now owns the rule for both consumers.
+  (**D-B54**; triage in `build/w7-triage-mobile-nav.md`.)
+
+Before → after: **`55907643-6bca-4b2f-84ed-9e715554cb83`** (the version `I152-deploy` shipped) →
+**`c2bb9a9a-de4f-4a76-9ac0-7359cc203ac3`** (created 2026-08-31T14:26:53.830Z, per
+`build/deploy-lens-after.txt`). Gates before deploy: `tsc --noEmit` clean; the five Document jest
+suites `5 passed / 154 tests`; the source tripwires OK.
+
+Probes — **all PASS**, on the corrected probe set `I152-deploy` fixed:
+
+```
+==> RESULT: PASS — production looks correct.
+    Live version: c2bb9a9a-de4f-4a76-9ac0-7359cc203ac3
+```
+
+Independently of the script: `wrangler deployments list`'s bottom row (oldest-first) reads
+`c2bb9a9a-de4f-4a76-9ac0-7359cc203ac3`, created 2026-08-31T14:26:56.525Z; `/desk` → `307`; the served
+CSS still carries `--doc-band-height` and `--doc-region-gap` with `doc-seam-height` absent; the
+served document-route chunk (`page-2160c50e1165875e.js`, 711,410 bytes) still carries `data-density`;
+and the retired `--seg-floor` is absent from every chunk fetched. The lucide door icons are present
+as `Compass`, `BookOpen`, `FileText`, `LayoutGrid`, `Users` in the served shared chunk
+`4644-44ffb2628206c493.js` — the route chunk itself does not name them because the minifier renames
+the import bindings and the icons code-split into that shared chunk, which this deploy uploaded.
+
+Rollback: redeploy the W7-parent version —
+
+```
+npx wrangler rollback 55907643-6bca-4b2f-84ed-9e715554cb83 --name patina-designer-portal --yes
+```
+
+Carried, none of them gating: **W7-C10** (`onJump` is dead in `DocSpine` and still passed by
+`page.tsx`) · **W7P2-1** (the bracket's union arm is unexercised — the e2e's one-row case satisfies
+both shapes) · **W7P2-2** (production announces `PROCUREMENT & ORDERS — 3 of 5` where W7-R1 §1 prints
+sentence case — a one-line change or a DESIGN LEAD ruling) · **W7P2-3** (the e2e teardown closes
+rather than deletes, leaving permanent 1-minute ledger entries) · **W7P2-4** (`flexShrink`'s restored
+branch wants one sentence on D-B52). The **dedicated-designer e2e fixture** (W7-C4 — the new spec
+writes shared DB state under `fullyParallel: true`) is owed at the integration merge, not this branch.
+
+**Kody's re-look on `app.patina.cloud` is OWED** — the head's one mark, the packed ladder, the door
+icons, and the 390 bar with a cross-project timer running. The `I152-deploy` signed-in walk and the
+TLS WebKit ship-bar run (D-B41) remain owed and are unaffected by this deploy.
+
+*Entries add: I152-adjust · last id = I152-adjust*

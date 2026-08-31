@@ -1,16 +1,7 @@
-DEPLOY_SHA=fab79cdd358b904d8896ddd04be59b87fd7a5223
-PARENT_SHA=5178d7d8e375a43937ee2be44c2c3de218894917
+DEPLOY_SHA=8fdf9fac9a43c8ab52f20230ad5dd1d4f9a19806
+PARENT_SHA=4f7485b6c11f3addbc73639cadd2fd8e37811a7d
 
 --- wrangler deployments list (pre-deploy, tail) ---
-Author:      kody@thesaunabuild.com
-Source:      Unknown (deployment)
-Message:     rollback: deploy 0d66c4a2 inlined placeholder NEXT_PUBLIC_SUPABASE_ANON_KEY
-Version(s):  (100%) d9a307bd-11ee-4c32-99a3-268e6cb11388
-                 Created:  2026-08-25T19:23:56.267Z
-                     Tag:  -
-                 Message:  -
-
-Created:     2026-08-26T21:45:59.637Z
 Author:      kody@thesaunabuild.com
 Source:      Unknown (deployment)
 Message:     -
@@ -25,5 +16,14 @@ Source:      Unknown (deployment)
 Message:     -
 Version(s):  (100%) 9c0c2cdd-2041-4848-a193-93d9e8fb0b71
                  Created:  2026-08-29T01:46:42.945Z
+                     Tag:  -
+                 Message:  -
+
+Created:     2026-08-30T20:28:02.141Z
+Author:      kody@thesaunabuild.com
+Source:      Unknown (deployment)
+Message:     -
+Version(s):  (100%) 55907643-6bca-4b2f-84ed-9e715554cb83
+                 Created:  2026-08-30T20:27:59.570Z
                      Tag:  -
                  Message:  -
