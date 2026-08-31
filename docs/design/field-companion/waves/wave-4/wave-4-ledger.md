@@ -160,11 +160,47 @@ Two more capacity notes from the same batch, for whoever plans Wave 5:
 - **`.written` close records are never deleted** and accumulate for the life of the install.
 - The "byte-for-byte" backoff tests hardcode expected delays rather than asserting against `SiteRequestOutboxRecord.retryDelay`. The formulas are currently character-identical (verified by hand); an edit to either would not be caught.
 
+## 🔴 I-4 — the three verbs ship on a screen no shipping build can open. **GAP RECORDED, needs a Kody ruling.**
+
+Task 12's three verbs (*Make it a note in the Document* · *Make it a task* · *Make it a punch item*) and Task 10's whole punch lane live in `SmartGuessSheet.swift`'s `verbMenu`. **`SmartGuessSheet` has no production presenter.**
+
+Evidenced, not asserted:
+
+- `CaptureSheet.smartGuessCard` is presented from exactly **one** call site in the whole app: `Capture/App/DeepLinking/CaptureDeepLink.swift:102`, inside `withSample { … }`.
+- That whole `route(for:)` switch sits behind `guard verificationHarnessAllowed` (`:64`), which is `#if DEBUG true #else !AppConfiguration.runsRealServices #endif` (`:224-230`). **In a Release build against real services it is `false`.** So the screenshot harness is not merely the *only* way in — in a shipping build there is no way in at all.
+- The sheet's only other reference is its registration, `RecognitionScreens.swift:89-101`.
+
+**Consequence:** acceptance criterion 3 of the wave is unwalkable (the device pass's step 3, plan `:6228`, and the FC-R8 degrade at `:6232`, cannot be performed), and Tasks 10 and 12 ship unreachable. `LocalCaptureSyncService`'s I-14 demotion bug is latent for the same reason — it goes live the moment a production entry point exists. (I-14 is fixed anyway in this fix wave, so the mount, whenever it lands, is not landing on top of it.)
+
+**Why this was not wired here.** The spec is genuinely silent on mounting N5, and the plan's file list conflates two different screens:
+
+- **The plan's Task 12 calls `SmartGuessSheet` "the C3 card"** (`:4605`, `:4623-4624`, `:4781`) and puts the overflow *"beside the existing `RecognitionActionBar` (`SmartGuessSheet.swift:50-55`)"*.
+- **But §7.5's "C3 Quick-confirm card" is `CaptureCardOverlay.swift`** — its diagram (thumb · category/material · placement line · inline mic · *Save* / *Add detail* / swipe) is that file line for line, it is what `ViewfinderScreen.swift:81` actually mounts after the shutter, and its own header comment at `:10` says so in as many words: *"a transient overlay INSIDE the viewfinder, not a registered sheet (Team C owns `CaptureSheet.smartGuessCard`)."*
+- `SmartGuessSheet` is **N5 · "Review guesses"**, a different screen. The package names it exactly once, at `:531`, and names it as a screen nothing opens: *"already built, reachable today only behind the N5 sheet the photo path never opens."* No wave in the package is given the job of opening it.
+
+So there is no spec line to obey, and inventing a mount would be inventing UX on the app's hottest surface under a fix brief. **Recorded, not invented.**
+
+**The ruling Kody owes — two candidates, materially different:**
+
+1. **Move the verbs to the real C3 card** (`CaptureCardOverlay`), which is what the plan's *prose* intended and its *file list* got wrong. Cheapest path to a walkable criterion 3; but it puts the app's first overflow menu on the post-shutter card, which §7.5 has already loaded with a placement line and an inline mic across three waves.
+2. **Give N5 a production entry point** (e.g. from C5 *Add detail*, or a row on the C3 card), which also un-strands `HeuristicSmartGuessService`'s confirm-or-correct screen. Larger, and it is a new screen in the flow rather than a menu on an existing one.
+
+Either way it is a wave of its own, with the device pass attached. **Wave 5.**
+
 ## ⚠ Owed decision created by the CaptureKit fixes (`653904911`)
 
 The fixes added a durable `fieldWriteAttention` record so a lane that closes terminally — a new `.unwritable` state after the retry ceiling, or a margin-lane `.refused` — **leaves the loss on record instead of vanishing**. But **nothing reads it yet.** `SmartGuessSheet.fieldWriteStatus` switches on `punchTaskState` with a `default:`, so `.unwritable` compiles and shows the designer nothing, and the Sync-screen surface is unbuilt. The implementer deliberately did not invent user-facing copy for it.
 
 So the data loss is now *recorded* rather than *silent*, which is the right first move — but it is not yet *visible*. **Owed: a surface that reads `fieldWriteAttention`, plus its copy.** Wave 5.
+
+## Carried to Wave 5, deliberately not taken in the fix wave
+
+Recorded here so none of them is re-discovered as an omission.
+
+- **I-9 — only one of the four `endVisit` sites routes through V4.** The call sites are `V0VisitSheet.swift:362` (the visit sheet's own *End visit*), `V4VisitReviewScreen.swift:357` (reached only from the tray), `WorkDashboardScreen.swift:71` (the stale prompt's *End visit*), and `RootView.swift:264` (the Today band's `FieldCompanionActionID.endVisit`). Only `V1SessionTrayScreen.swift:403-408` opens V4 first. So a visit closed from the sheet, the Today band or the stale prompt produces **no receipt and no Hours offer** — the two things Task 15/16 exist for. This is FC-R3 breadth, not a defect in the shipped code: making the other three route through V4 changes what those three controls *do*, and the stale-prompt one in particular is a close the designer did not initiate. **Needs a ruling.**
+- **I-6 — nothing reads `fieldWriteAttention`.** Already recorded above under *Owed decision created by the CaptureKit fixes*; carried unchanged. Wave 5 owes the surface and its copy.
+- **The punch-row visual residual** — the 10px / 32px / baseline relationship on the punch row after W4-C13 confined the grid change. A browser-walk item, not a test item; it needs Kody's eye on the running page, not another jest assertion.
+- **W4-01's harness `withSample` cleanup** — contingent on I-4 landing a production mount. I-4 did not land (see the gap above), so `CaptureDeepLink.swift:102` stays as the only presenter and there is nothing to clean up yet.
 
 ## Process finding — sandboxed `sleep` does not wait
 
