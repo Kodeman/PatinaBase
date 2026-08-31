@@ -243,6 +243,57 @@ struct VisitCloseOrchestratorTests {
         #expect(r.isDue(at: now.addingTimeInterval(86_400)) == false)
     }
 
+    // MARK: - Cancellation is not a failure
+
+    /// A cancelled attempt used to be classified `.failed`, which SPENDS an
+    /// attempt: five interrupted launches — the app backgrounded while the
+    /// reconcile task was mid-flight — walked a perfectly writable close to the
+    /// retry ceiling and closed it `.unwritable` forever.
+    @Test func aCancelledAttemptDefersInsteadOfSpendingARetry() throws {
+        let cancelled: [Error] = [CancellationError(), URLError(.cancelled)]
+
+        for error in cancelled {
+            let r = record()
+            let outcome = try #require(FieldWriteClassifier.cancellationOutcome(for: error))
+            VisitCloseOrchestrator.apply(outcome, to: r, now: now)
+
+            #expect(r.state == .pending)
+            #expect(r.retryCount == 0)
+            #expect(r.nextAttemptAt == nil)
+            #expect(r.isDue(at: now))
+        }
+
+        // The whole point, stated as the failure it prevents: interruption after
+        // interruption leaves the record retryable rather than terminal.
+        let r = record()
+        for _ in 0...FieldWriteGate.retryCeiling {
+            let outcome = try #require(
+                FieldWriteClassifier.cancellationOutcome(for: CancellationError()))
+            VisitCloseOrchestrator.apply(outcome, to: r, now: now)
+        }
+        #expect(r.state == .pending)
+        #expect(r.retryCount == 0)
+        #expect(r.isDue(at: now))
+    }
+
+    /// The falsifier: without the cancellation branch the drainer's own
+    /// classifier reaches `.failed` for both of these, which is the bug.
+    @Test func theCodeAndMessageClassifierAloneWouldSpendAnAttemptOnACancellation() {
+        #expect(FieldWriteClassifier.outcome(
+            code: nil, message: URLError(.cancelled).localizedDescription)
+            == .failed(URLError(.cancelled).localizedDescription))
+        #expect(FieldWriteClassifier.outcome(
+            code: nil, message: CancellationError().localizedDescription)
+            == .failed(CancellationError().localizedDescription))
+    }
+
+    /// Nil for everything else, or an ordinary timeout would stop backing off.
+    @Test func onlyCancellationTakesTheCancellationBranch() {
+        #expect(FieldWriteClassifier.cancellationOutcome(for: URLError(.timedOut)) == nil)
+        #expect(FieldWriteClassifier.cancellationOutcome(
+            for: URLError(.notConnectedToInternet)) == nil)
+    }
+
     @Test func aFailedOutcomeBacksOffAndEventuallyStops() {
         let r = record()
         VisitCloseOrchestrator.apply(.failed("500"), to: r, now: now)
@@ -307,5 +358,52 @@ struct VisitCloseOrchestratorTests {
         #expect(VisitCloseOrchestrator.notes(
             for: record(),
             captures: [capture(label: "   ", room: nil, offset: 0)]) == nil)
+    }
+}
+
+/// What the drainer is allowed to pick up. The fetch it walked was unscoped —
+/// every `FieldVisitCloseRecord` on the device — so after an account switch the
+/// previous designer's close was sent under the new designer's JWT, against the
+/// user id the RECORD carries rather than the one signed in.
+struct VisitCloseOutboxScopeTests {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func close(owner: String, endedAt: Date) -> FieldVisitCloseRecord {
+        FieldVisitCloseRecord(
+            visitID: UUID(), timeEntryID: UUID(),
+            projectID: "a1111111-1111-4111-8111-111111111111",
+            ownerUserID: owner,
+            startedAt: endedAt.addingTimeInterval(-30 * 60),
+            endedAt: endedAt,
+            durationMinutes: 30)
+    }
+
+    @Test @MainActor func aForeignOwnersCloseIsNeverHandedToTheDrainer() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = try #require(CaptureOwnerIdentity(
+            userID: "user-a", workspaceID: "workspace-a"))
+
+        // Upper-cased on purpose: the record stores whatever `uuidString` gave
+        // it, and `CaptureOwnerIdentity` normalises. A case-sensitive compare
+        // would quarantine her own close.
+        let mine = close(owner: "USER-A", endedAt: now)
+        let theirs = close(owner: "user-b", endedAt: now.addingTimeInterval(60))
+        store.context.insert(mine)
+        store.context.insert(theirs)
+        try store.save()
+
+        #expect(store.visitCloseOutbox().count == 2)
+        #expect(store.visitCloseOutbox(owner: owner).map(\.visitID) == [mine.visitID])
+    }
+
+    @Test @MainActor func theQueueIsWorkedOldestFirst() throws {
+        let store = try CaptureStore.inMemory()
+        let second = close(owner: "user-a", endedAt: now.addingTimeInterval(60))
+        let first = close(owner: "user-a", endedAt: now)
+        store.context.insert(second)
+        store.context.insert(first)
+        try store.save()
+
+        #expect(store.visitCloseOutbox().map(\.visitID) == [first.visitID, second.visitID])
     }
 }

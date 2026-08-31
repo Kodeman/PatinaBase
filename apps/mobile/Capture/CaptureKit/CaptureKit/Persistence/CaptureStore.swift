@@ -672,6 +672,28 @@ public final class CaptureStore {
         try save()
     }
 
+    // ── Visit-close outbox (wave 4) ──
+
+    /// Every standing close, oldest first — the order the drainer works them in.
+    public func visitCloseOutbox() -> [FieldVisitCloseRecord] {
+        let descriptor = FetchDescriptor<FieldVisitCloseRecord>(
+            sortBy: [SortDescriptor(\.endedAt, order: .forward)])
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    /// Owner-scoped, exactly as `outbox(owner:)` is: an unscoped drain would
+    /// send the previous designer's close under whoever signed in next, on that
+    /// account's JWT. The record carries only a user id — it becomes
+    /// `project_time_entries.user_id`, which has no workspace half — so that is
+    /// the whole of the match, normalised the way `CaptureOwnerIdentity` is.
+    public func visitCloseOutbox(owner: CaptureOwnerIdentity) -> [FieldVisitCloseRecord] {
+        visitCloseOutbox().filter {
+            $0.ownerUserID
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() == owner.userID
+        }
+    }
+
     /// A scoped visit returns all of its captures, including queued transfers.
     /// The nil legacy query remains drafts + ready for older callers.
     public func session(visitID: UUID? = nil) -> [Specimen] {

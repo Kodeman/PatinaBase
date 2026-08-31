@@ -40,10 +40,23 @@ final class VisitCloseOutboxDrainer {
         }
     }
 
+    /// Owner-scoped the way every sibling outbox is (`store.outbox(owner:)`,
+    /// `scanUploadRecords(owner:)`). An unscoped fetch drains the PREVIOUS
+    /// designer's close under the current designer's JWT after an account
+    /// switch, and `project_time_entries.user_id` is carried in the record, not
+    /// taken from the session — so the row lands against the wrong account.
     private func due(at now: Date) -> [FieldVisitCloseRecord] {
-        let descriptor = FetchDescriptor<FieldVisitCloseRecord>(
-            sortBy: [SortDescriptor(\.endedAt, order: .forward)])
-        return ((try? store.context.fetch(descriptor)) ?? []).filter { $0.isDue(at: now) }
+        let standing: [FieldVisitCloseRecord]
+        switch CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID
+        ) {
+        case .globalFixtures:   standing = store.visitCloseOutbox()
+        case .owner(let owner): standing = store.visitCloseOutbox(owner: owner)
+        case .unavailable:      standing = []
+        }
+        return standing.filter { $0.isDue(at: now) }
     }
 
     private func drain(_ record: FieldVisitCloseRecord, now: Date) async {
@@ -84,10 +97,15 @@ final class VisitCloseOutboxDrainer {
                 record.markDelivered()
             }
         } catch {
+            // Cancellation first: it is the app being stopped, not the write
+            // being refused, and spending an attempt on it means five
+            // interrupted launches close a perfectly writable record as
+            // `.unwritable`.
             VisitCloseOrchestrator.apply(
-                FieldWriteClassifier.outcome(
-                    code: SupabaseFieldWriteGateway.postgrestCode(from: error),
-                    message: error.localizedDescription),
+                FieldWriteClassifier.cancellationOutcome(for: error)
+                    ?? FieldWriteClassifier.outcome(
+                        code: SupabaseFieldWriteGateway.postgrestCode(from: error),
+                        message: error.localizedDescription),
                 to: record, now: now)
         }
         try? store.save()

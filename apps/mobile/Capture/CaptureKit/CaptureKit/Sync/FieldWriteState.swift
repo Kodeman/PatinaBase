@@ -91,6 +91,25 @@ public enum FieldWriteClassifier {
         }
         return .failed(message)
     }
+
+    /// Cancellation is the app being told to stop, never a verdict on the write.
+    /// A cancelled `URLSession` task surfaces as `URLError.cancelled` and a
+    /// cancelled structured task as `CancellationError`; neither carries a
+    /// PostgREST code or any of the words `outcome` recognises, so both land as
+    /// `.failed` and SPEND AN ATTEMPT. Five interrupted launches then close a
+    /// perfectly writable record at the retry ceiling. `.deferred` reopens it
+    /// with no backoff and no attempt consumed.
+    ///
+    /// Nil for everything else, so a caller falls through to `outcome`.
+    public static func cancellationOutcome(for error: Error) -> FieldWriteOutcome? {
+        if error is CancellationError {
+            return .deferred(error.localizedDescription)
+        }
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return .deferred(error.localizedDescription)
+        }
+        return nil
+    }
 }
 
 public extension FieldWriteOutcome {
