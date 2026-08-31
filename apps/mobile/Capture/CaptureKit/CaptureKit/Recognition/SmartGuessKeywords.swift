@@ -27,13 +27,65 @@ public enum SmartGuessKeywords {
         ("knob", .hardware), ("handle", .hardware), ("hinge", .hardware)
     ]
 
-    /// First table entry whose keyword appears in the label, or nil. Nil means
-    /// "we could not tell" — never `.unknown` dressed up as an answer.
+    /// First table entry whose keyword matches a WHOLE WORD of the label, or
+    /// nil. Nil means "we could not tell" — never `.unknown` dressed up as an
+    /// answer.
+    ///
+    /// Word-boundary, not longest-match: the table is a flat list of
+    /// single-word keywords with no length ordering, and none of the known
+    /// mis-mappings ("tapestry" via "tap", "skylight" via "light", "printer"
+    /// via "print") has a second, longer candidate to prefer over the short
+    /// one — the failure was a short keyword matching INSIDE an unrelated
+    /// word, not a shorter keyword beating a longer one. Splitting both the
+    /// label and each keyword into alphanumeric tokens and comparing whole
+    /// tokens (allowing a keyword's own last token to also match a simple
+    /// "s"/"es" plural) fixes that without reordering the table — and
+    /// without losing the plural match ("chairs" still finds "chair") the
+    /// old substring test gave away for free.
     public static func category(forVisionLabel label: String) -> SpecimenCategory? {
-        let id = label.lowercased()
-        for entry in table where id.contains(entry.keyword) {
-            return entry.category
+        let labelTokens = tokens(from: label)
+        guard !labelTokens.isEmpty else { return nil }
+        for entry in table {
+            let keywordTokens = tokens(from: entry.keyword)
+            guard !keywordTokens.isEmpty else { continue }
+            if labelTokens.containsWholeWordMatch(for: keywordTokens) {
+                return entry.category
+            }
         }
         return nil
+    }
+
+    private static func tokens(from string: String) -> [String] {
+        string.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+    }
+}
+
+private extension Array where Element == String {
+    /// True if `keywordTokens` appears as a CONSECUTIVE run inside `self`,
+    /// comparing each token for equality except the keyword's last token,
+    /// which also accepts itself plus a bare "s" or "es"
+    /// ("chair"/"chairs", "bench"/"benches") — a whole-word plural, never a
+    /// substring match ("chairlift" does not find "chair").
+    func containsWholeWordMatch(for keywordTokens: [String]) -> Bool {
+        guard !keywordTokens.isEmpty, count >= keywordTokens.count else { return false }
+        for start in 0...(count - keywordTokens.count) {
+            var matched = true
+            for offset in keywordTokens.indices {
+                let labelToken = self[start + offset]
+                let keywordToken = keywordTokens[offset]
+                let isLastKeywordToken = offset == keywordTokens.count - 1
+                if labelToken == keywordToken { continue }
+                if isLastKeywordToken,
+                   labelToken == keywordToken + "s" || labelToken == keywordToken + "es" {
+                    continue
+                }
+                matched = false
+                break
+            }
+            if matched { return true }
+        }
+        return false
     }
 }

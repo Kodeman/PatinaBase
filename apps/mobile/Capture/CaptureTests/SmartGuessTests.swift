@@ -35,9 +35,47 @@ struct SmartGuessKeywordTests {
         #expect(SmartGuessKeywords.category(forVisionLabel: "drywall seam") == nil)
     }
 
-    @Test func matchingIsCaseInsensitiveAndSubstringBased() {
+    /// Matching is case-insensitive but, since Wave 4 Task 0c, whole-WORD, not
+    /// substring: "chairlift" — a compound word that merely CONTAINS "chair"
+    /// — used to read as seating for the same reason "tapestry" used to read
+    /// as plumbing (see `theThreeMisMappedLabelsNoLongerMisMap` below). This
+    /// test used to pin the substring behaviour directly (`"chairlift" ==
+    /// .seating`); it is updated, not deleted, to pin the fixed behaviour
+    /// instead — case-insensitivity survives, the substring match does not.
+    @Test func matchingIsCaseInsensitiveButNoLongerSubstringBased() {
         #expect(SmartGuessKeywords.category(forVisionLabel: "OAK DINING CHAIR") == .seating)
-        #expect(SmartGuessKeywords.category(forVisionLabel: "chairlift") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "chairlift") == nil)
+    }
+
+    /// Wave 4 Task 0c (wave-4-preflight.md §0.10): the ordered-substring bug
+    /// meant a short keyword could match INSIDE an unrelated compound word —
+    /// "tap" inside "tapestry", "light" inside "skylight", "print" inside
+    /// "printer" — none of which name furniture the keyword's category fits.
+    @Test func theThreeMisMappedLabelsNoLongerMisMap() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "tapestry") != .plumbing)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "tapestry") == nil)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "skylight") != .lighting)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "skylight") == nil)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "printer") != .art)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "printer") == nil)
+    }
+
+    /// The word-boundary fix must not silently break the free plural match
+    /// substring matching gave for nothing: "chairs" finding "chair".
+    @Test func pluralVisionLabelsStillMatchTheirSingularKeyword() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "chairs") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "sofas") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "benches") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "two dining chairs") == .seating)
+    }
+
+    /// Multi-word Vision labels ("coffee table") already worked under the old
+    /// substring match; pinned again under the new tokenized match so the
+    /// fix does not regress them.
+    @Test func multiWordVisionLabelsStillMatchOnTheRightToken() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "coffee table") == .table)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "area rug") == .rug)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "brass knob") == .hardware)
     }
 
     @Test func everyKeywordInTheTableResolvesToItsOwnCategory() {
