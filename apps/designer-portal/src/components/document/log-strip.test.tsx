@@ -12,10 +12,16 @@ let mockOffer: null | {
 } = null;
 let mockHeldProjectId: string | null = null;
 
+// D-B54 — the cross-project rule moved into the provider, which publishes it
+// as one boolean both edge tenants read (`mobile-bar.tsx` yields on exactly
+// this). The stub derives it the same way the provider does, so these cases
+// keep asserting the behaviour they always did.
 jest.mock('@/hooks/document-time-provider', () => ({
   useDocumentTime: () => ({
     offer: mockOffer,
-    heldProjectId: mockHeldProjectId,
+    offerOwnsEdge:
+      mockOffer !== null &&
+      !(mockHeldProjectId && mockHeldProjectId !== mockOffer.projectId),
     logOffer: mockLogOffer,
     discardOffer: mockDiscardOffer,
   }),

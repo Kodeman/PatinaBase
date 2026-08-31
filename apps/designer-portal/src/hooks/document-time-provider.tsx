@@ -83,6 +83,17 @@ interface DocumentTimeValue {
   elapsedSeconds: number;
   /** A stopped timer waiting in the strip. */
   offer: LogOffer | null;
+  /**
+   * D-B54 — whether the offer OWNS the thumb edge, published once so the two
+   * components that share that edge cannot answer it differently.
+   *
+   * `MobileBar` yielded on a bare `offer`, while `LogStrip` refused to paint
+   * an offer belonging to a project other than the one in hand — so opening a
+   * document while a timer ran on another project left BOTH null and the
+   * phone with no bottom chrome at all. An offer only takes the edge when the
+   * strip will actually paint it.
+   */
+  offerOwnsEdge: boolean;
   /** Today's minutes across every engagement, live timer included. */
   inHandToday: number;
   hold: (doc: HeldDocument) => void;
@@ -469,6 +480,9 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       paused: pausedFor !== null && pausedFor === held?.projectId,
       elapsedSeconds,
       offer,
+      offerOwnsEdge:
+        offer !== null &&
+        !(held?.projectId && held.projectId !== offer.projectId),
       inHandToday,
       hold,
       release,

@@ -60,6 +60,11 @@ jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: mockCallSheetOn }),
 }));
 
+// D-B54 — the whole defect lived in this value. The file pinned `offer: null`
+// for every case, so the yield branch never rendered and the cross-project
+// state the designer is actually in was never once executed.
+let mockOfferOwnsEdge = false;
+
 jest.mock('@/hooks/document-time-provider', () => ({
   useDocumentTime: () => ({
     inHandToday: 0,
@@ -67,6 +72,7 @@ jest.mock('@/hooks/document-time-provider', () => ({
     paused: false,
     elapsedSeconds: 0,
     offer: null,
+    offerOwnsEdge: mockOfferOwnsEdge,
   }),
 }));
 
@@ -652,5 +658,48 @@ describe('the bar publishes its own height (D-B47)', () => {
     expect(published()).toBe('93px');
     unmount();
     expect(published()).toBe('');
+  });
+});
+
+/**
+ * D-B54 — who owns the thumb edge.
+ *
+ * Kody saw NO navigation at all on prod at 390: opening a document while a
+ * timer ran on another project chained that timer out into a log offer, the
+ * bar yielded the edge on a bare `offer`, and `LogStrip` refused to paint an
+ * offer belonging to a different project — both returned null and the phone
+ * had no bottom chrome. The two components now read ONE boolean the provider
+ * derives, so they cannot answer the question differently.
+ */
+describe('the thumb edge’s one owner (D-B54)', () => {
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    mockCallSheetOn = true;
+    mockOfferOwnsEdge = false;
+  });
+
+  afterEach(() => {
+    mockOfferOwnsEdge = false;
+  });
+
+  it('RENDERS the bar while an offer stands that the strip will not paint (a cross-project offer)', () => {
+    // `offerOwnsEdge` is exactly `offer && !crossProject`: a chained-out timer
+    // on project A while document B is in hand does NOT own the edge.
+    mockOfferOwnsEdge = false;
+    mountBar();
+    const bar = screen.getByTestId('mobile-bar');
+    expect(bar).toBeInTheDocument();
+    expect(
+      document.querySelectorAll('[data-mobile-edge-owner]'),
+    ).toHaveLength(1);
+  });
+
+  it('yields the edge when the offer DOES own it — the strip is about to paint', () => {
+    mockOfferOwnsEdge = true;
+    mountBar();
+    expect(screen.queryByTestId('mobile-bar')).toBeNull();
+    expect(document.querySelectorAll('[data-mobile-edge-owner]')).toHaveLength(
+      0,
+    );
   });
 });

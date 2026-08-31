@@ -22,6 +22,9 @@ let mockTimeState = {
   paused: false,
   elapsedSeconds: 0,
   offer: null as null | { id: string },
+  // D-B54 — the bar yields on the provider's derived boolean, never on a bare
+  // `offer`: an offer the strip will not paint must not take the edge.
+  offerOwnsEdge: false,
 };
 
 jest.mock('next/navigation', () => ({
@@ -91,6 +94,7 @@ describe('unified mobile edge owner', () => {
       paused: false,
       elapsedSeconds: 0,
       offer: null,
+      offerOwnsEdge: false,
     };
     mockOpenPost.mockClear();
     jest.mocked(openFeedbackSheet).mockClear();
@@ -408,8 +412,9 @@ describe('unified mobile edge owner', () => {
     ).toBeInTheDocument();
   });
 
-  it('yields the edge while a log offer is active', () => {
+  it('yields the edge while a log offer OWNS it', () => {
     mockTimeState.offer = { id: 'offer-1' };
+    mockTimeState.offerOwnsEdge = true;
     render(
       <MobileShellProvider>
         <MobileBar />
