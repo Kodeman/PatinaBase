@@ -3,6 +3,7 @@ import { BoardsBuilder } from '../boards-builder';
 
 const push = jest.fn();
 const upsert = jest.fn();
+const createProjectBoard = jest.fn();
 const materialize = jest.fn();
 const draftingTouched = jest.fn();
 const templateUsed = jest.fn();
@@ -89,6 +90,7 @@ jest.mock('@patina/supabase', () => ({
   useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
   useBoardTemplates: () => ({ data: [template], isLoading: false, isError: false }),
   useUpsertBoard: () => ({ mutateAsync: upsert, isPending: false }),
+  useCreateProjectBoard: () => ({ mutateAsync: createProjectBoard, isPending: false }),
   useMaterializeBoardTemplate: () => ({ mutateAsync: materialize, isPending: false }),
 }));
 
@@ -96,6 +98,7 @@ describe('BoardsBuilder launcher', () => {
   beforeEach(() => {
     push.mockReset();
     upsert.mockReset();
+    createProjectBoard.mockReset();
     materialize.mockReset();
     draftingTouched.mockReset();
     templateUsed.mockReset();
@@ -156,20 +159,26 @@ describe('BoardsBuilder launcher', () => {
     );
   });
 
-  it('uses the project owner namespace before creating a project-owned board', async () => {
-    upsert.mockResolvedValue({ id: 'project-board' });
+  it('creates a project-owned blank board through the owner-aware server path', async () => {
+    createProjectBoard.mockResolvedValue('project-board');
     render(<BoardsBuilder projectId="same-id" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'New board' }));
     fireEvent.click(screen.getByRole('button', { name: 'Blank board A clean, flexible canvas. Choose' }));
 
-    await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
-      proposalId: undefined,
+    await waitFor(() => expect(createProjectBoard).toHaveBeenCalledWith({
       projectId: 'same-id',
-    })));
+      name: 'Board 1',
+    }));
+    // useUpsertBoard throws outright for a project owner, so it must never be
+    // the blank-create path on this leg.
+    expect(upsert).not.toHaveBeenCalled();
     expect(runAutosaveAction).toHaveBeenCalledWith(
       { kind: 'project', id: 'same-id' },
       expect.any(Function),
+    );
+    expect(push).toHaveBeenCalledWith(
+      '/board/project-board?source=project_surface&from=%2Fdrafting%2Fproposal-1',
     );
     expect(draftingTouched).not.toHaveBeenCalled();
   });
