@@ -61,12 +61,39 @@ struct SmartGuessKeywordTests {
     }
 
     /// The word-boundary fix must not silently break the free plural match
-    /// substring matching gave for nothing: "chairs" finding "chair".
-    @Test func pluralVisionLabelsStillMatchTheirSingularKeyword() {
+    /// substring matching gave for nothing: "chairs" finding "chair". The rule
+    /// is narrow — a trailing "s" or "es", nothing else — and always was, under
+    /// the substring test too. "shelves" and "draperies" are pinned here so the
+    /// narrowness is a recorded fact rather than a surprise on a device.
+    @Test func regularSAndEsPluralsMatchWhileIrregularOnesDoNot() {
         #expect(SmartGuessKeywords.category(forVisionLabel: "chairs") == .seating)
         #expect(SmartGuessKeywords.category(forVisionLabel: "sofas") == .seating)
         #expect(SmartGuessKeywords.category(forVisionLabel: "benches") == .seating)
         #expect(SmartGuessKeywords.category(forVisionLabel: "two dining chairs") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "shelves") == nil)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "draperies") == nil)
+    }
+
+    /// F11: whole-token matching means a compound Vision identifier reads as
+    /// NOTHING unless it has a row of its own — and "bookshelf" is in Apple's
+    /// `VNClassifyImageRequest` taxonomy, so the fix that stopped "chairlift"
+    /// reading as seating also stopped a real bookshelf reading as storage.
+    /// Nothing pinned a compound that SHOULD match, which is how it slipped.
+    @Test func compoundIdentifiersThatNameFurnitureMatchThroughTheirOwnRow() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "bookshelf") == .storage)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "spotlight") == .lighting)
+        // Still not the loose rule that put them there: a compound whose inner
+        // word names something it is not stays unplaced.
+        #expect(SmartGuessKeywords.category(forVisionLabel: "chairlift") == nil)
+    }
+
+    /// F17: Vision identifiers are underscore-joined, not space-separated, and
+    /// nothing covered a separator other than a space. The tokenizer splits on
+    /// any non-alphanumeric, so both shapes land on the same tokens.
+    @Test func underscoreAndHyphenSeparatorsTokenizeLikeSpaces() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "coffee_table") == .table)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "wall-sconce") == .lighting)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "dining_chairs") == .seating)
     }
 
     /// Multi-word Vision labels ("coffee table") already worked under the old
@@ -79,14 +106,29 @@ struct SmartGuessKeywordTests {
     }
 
     @Test func everyKeywordInTheTableResolvesToItsOwnCategory() {
-        // Matching is first-match-wins over an ordered table, so a keyword can
-        // be swallowed by an earlier entry it happens to contain — move "tile"
-        // above "textile" and "textile" starts reading as .tile. Asserting the
-        // category, not merely non-nil, is what pins the current ordering.
+        // F13: this is a COMPLETENESS check, not an ordering one. Under
+        // whole-token matching a bare keyword has exactly one candidate — its
+        // own row — so no reordering can break it; what it does catch is a row
+        // nothing can ever reach (a typo, a multi-word keyword, a duplicate
+        // pointing at a second category). The ordering hazard that survives
+        // tokenization is pinned by the next test instead.
         for entry in SmartGuessKeywords.table {
             #expect(SmartGuessKeywords.category(forVisionLabel: entry.keyword) == entry.category,
                     "\(entry.keyword) does not resolve to \(entry.category) through its own table")
         }
+    }
+
+    /// The real ordering hazard: a label with SEVERAL tokens can match two
+    /// different rows, and first-match-wins means the earlier row takes it. A
+    /// "table lamp" is a lamp, and reads as `.table` purely because `table`
+    /// sits above `lamp`. Swap the two rows and this flips — which is exactly
+    /// the sensitivity the completeness check above cannot see.
+    @Test func aMultiWordLabelIsTakenByTheEarlierOfTwoMatchingRows() throws {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "table lamp") == .table)
+        let keywords = SmartGuessKeywords.table.map(\.keyword)
+        let table = try #require(keywords.firstIndex(of: "table"))
+        let lamp = try #require(keywords.firstIndex(of: "lamp"))
+        #expect(table < lamp, "the .table read above is the earlier row winning, not a lamp rule")
     }
 
     @Test func anUnknownCategoryIsNeverWorthRecording() {

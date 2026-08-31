@@ -14,8 +14,10 @@ public enum SmartGuessKeywords {
         ("armchair", .seating), ("chair", .seating), ("sofa", .seating), ("couch", .seating),
         ("stool", .seating), ("bench", .seating), ("seat", .seating),
         ("table", .table), ("desk", .table), ("nightstand", .table),
-        ("lamp", .lighting), ("light", .lighting), ("chandelier", .lighting), ("sconce", .lighting),
-        ("cabinet", .storage), ("shelf", .storage), ("bookcase", .storage), ("dresser", .storage),
+        ("lamp", .lighting), ("light", .lighting), ("chandelier", .lighting),
+        ("sconce", .lighting), ("spotlight", .lighting),
+        ("cabinet", .storage), ("shelf", .storage), ("bookshelf", .storage),
+        ("bookcase", .storage), ("dresser", .storage),
         ("wardrobe", .storage), ("credenza", .storage),
         ("rug", .rug), ("carpet", .rug),
         ("curtain", .textile), ("fabric", .textile), ("textile", .textile), ("pillow", .textile),
@@ -38,22 +40,36 @@ public enum SmartGuessKeywords {
     /// one — the failure was a short keyword matching INSIDE an unrelated
     /// word, not a shorter keyword beating a longer one. Splitting both the
     /// label and each keyword into alphanumeric tokens and comparing whole
-    /// tokens (allowing a keyword's own last token to also match a simple
-    /// "s"/"es" plural) fixes that without reordering the table — and
-    /// without losing the plural match ("chairs" still finds "chair") the
-    /// old substring test gave away for free.
+    /// tokens fixes that without reordering the table.
+    ///
+    /// The cost is that a compound Vision identifier no longer rides in on the
+    /// word inside it — which is right for "chairlift" and wrong for
+    /// "bookshelf", so a compound that genuinely names furniture earns its OWN
+    /// table row ("bookshelf", "spotlight") rather than a looser match rule.
+    ///
+    /// The plural it keeps is only the REGULAR one: a trailing "s" or "es" on
+    /// the keyword's last token ("chairs", "benches"). "shelves" does not find
+    /// "shelf" and "draperies" does not find "drapery" — no irregular plural
+    /// matches, and none did under the old substring test either.
     public static func category(forVisionLabel label: String) -> SpecimenCategory? {
         let labelTokens = tokens(from: label)
         guard !labelTokens.isEmpty else { return nil }
-        for entry in table {
-            let keywordTokens = tokens(from: entry.keyword)
-            guard !keywordTokens.isEmpty else { continue }
-            if labelTokens.containsWholeWordMatch(for: keywordTokens) {
-                return entry.category
-            }
+        for entry in tokenizedTable
+        where labelTokens.containsWholeWordMatch(for: entry.tokens) {
+            return entry.category
         }
         return nil
     }
+
+    /// `table`, tokenized ONCE. `category(forVisionLabel:)` runs per Vision
+    /// observation, and re-splitting every keyword on every call was 40-odd
+    /// tokenizations per label for a table that never changes. Derived from
+    /// `table` rather than written out again, so the two cannot drift.
+    private static let tokenizedTable: [(tokens: [String], category: SpecimenCategory)] =
+        table.compactMap { entry in
+            let keywordTokens = tokens(from: entry.keyword)
+            return keywordTokens.isEmpty ? nil : (keywordTokens, entry.category)
+        }
 
     private static func tokens(from string: String) -> [String] {
         string.lowercased()

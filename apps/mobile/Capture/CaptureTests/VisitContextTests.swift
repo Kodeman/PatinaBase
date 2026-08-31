@@ -213,6 +213,62 @@ struct VisitContextTests {
         #expect(resolved.routing == routing)
     }
 
+    /// W4-C15, at the guard that caused it: `inactivityWindow` is 4 hours and
+    /// `autoEndWindow` is 12, so between them sits a same-day visit that
+    /// `visitState` still calls live while the routing window has lapsed. The
+    /// first guard used to return a fresh kindless context there on elapsed
+    /// time alone. It must resume instead — visit and routing whole.
+    @Test func resolveResumesALiveVisitPastTheFourHourRoutingWindow() throws {
+        // LOCAL clock times, not offsets from the shared `now` (02:00 Chicago):
+        // `now - 5h` would land on the previous Chicago day and the calendar-day
+        // rule, not the routing window, would be what killed the visit.
+        let start = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 8, minute: 0, second: 0)))
+        let lastCapture = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 9, minute: 0, second: 0)))
+        let resumeTap = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 14, minute: 0, second: 0)))
+        let routing = CaptureRoutingMemory(destination: .inbox, projectID: "p1",
+                                           projectName: "Maple St",
+                                           projectRoomID: "project-room-1", room: "Living")
+        let stored = CaptureSessionContext(
+            identity: identity, startedAt: start, lastActivityAt: lastCapture,
+            routing: routing, kind: .site, kit: .walkThrough, label: "Maple St",
+            scanRoomID: "scan-room-1", projectsInMind: ["p1"])
+        #expect(resumeTap.timeIntervalSince(stored.lastActivityAt)
+                > CaptureSessionContextPolicy.inactivityWindow)
+        #expect(CaptureSessionContextPolicy.visitState(
+            for: stored, now: resumeTap, calendar: calendar) != .none)
+
+        let resolved = CaptureSessionContextPolicy.resolve(
+            existing: stored, identity: identity, now: resumeTap, calendar: calendar)
+
+        #expect(resolved.visitID == stored.visitID)
+        #expect(resolved.kind == .site)
+        #expect(resolved.kit == .walkThrough)
+        #expect(resolved.label == "Maple St")
+        #expect(resolved.scanRoomID == "scan-room-1")
+        #expect(resolved.projectsInMind == ["p1"])
+        #expect(resolved.routing == routing)
+        #expect(resolved.lastActivityAt == resumeTap)
+    }
+
+    /// The window still bounds a KINDLESS context: routing memory alone has no
+    /// visit rules to outrank it, so five hours of silence starts a fresh one.
+    @Test func resolveStillDropsAKindlessContextPastTheRoutingWindow() {
+        let stale = CaptureSessionContext(
+            identity: identity, startedAt: now.addingTimeInterval(-5 * 60 * 60),
+            lastActivityAt: now.addingTimeInterval(-5 * 60 * 60),
+            routing: CaptureRoutingMemory(destination: .library))
+
+        let resolved = CaptureSessionContextPolicy.resolve(
+            existing: stale, identity: identity, now: now, calendar: calendar)
+
+        #expect(resolved.visitID != stale.visitID)
+        #expect(resolved.routing == .empty)
+        #expect(resolved.startedAt == now)
+    }
+
     @Test func resolveStillResumesTodaysVisit() {
         let earlier = now.addingTimeInterval(-600)
         let stored = visit(startedAt: earlier, lastActivityAt: earlier)
@@ -388,70 +444,92 @@ struct VisitContextTests {
         #expect(store.visitState(identity: other, now: now, calendar: calendar) == .none)
     }
 
-    // MARK: - FC-R21 N-2 (Wave 4 Task 0b): `current()` must not silently
-    // destroy a still-live visit past the 4-hour routing window.
+    // MARK: - FC-R21 N-2 / W4-C15 (Wave 4 Task 0b): the 4-hour window ROUTES.
+    // A visit the visit's own rules still call live resumes across it; the
+    // closes `expiry()` does name are reaped AND handed to an emitter.
 
-    /// The reported gap, reproduced exactly: a visit idle 5 hours on the SAME
-    /// calendar day is still "live" by `CaptureVisitPolicy`'s own 12-hour /
-    /// same-day rules (`expiry()` returns nil for it — see the assertion
-    /// below), yet `resolve`'s shorter 4-hour routing window would silently
-    /// wipe it with no trace at all. `current()` must now reap it — persist
-    /// `ended()` and post `visitDidChange` — BEFORE handing it to `resolve`,
-    /// so the close is real (endedAt stamped, notice posted) rather than
-    /// invisible. Observed via a `visitDidChange` observer: `current()` is
-    /// `@MainActor`-isolated like every other store method here, and this
-    /// test body has no `await` between registering the observer and calling
-    /// `current()`, so no other MainActor-isolated test can interleave and
-    /// pollute the count (Swift's actor isolation serializes them).
-    @Test @MainActor func aVisitIdleFiveHoursOnTheSameDayIsEndedNotSilentlyReplaced() throws {
+    /// The reported reproduction, and the ruling: visit opened 08:00, last
+    /// capture 09:00, "Still at Maple St? → Resume" tapped at 14:00. Five hours
+    /// idle on the SAME calendar day is still live by `CaptureVisitPolicy`'s
+    /// own rules (`expiry()` returns nil for it — asserted below), so
+    /// `resolve`'s shorter 4-hour ROUTING window must not end it. She stays
+    /// inside her visit: same `visitID`, kind, kit, label and routing, and
+    /// nothing is closed or announced. Observed via a `visitDidChange`
+    /// observer: `current()` is `@MainActor`-isolated like every other store
+    /// method here, and this body has no `await` between registering the
+    /// observer and calling `current()`, so no other MainActor-isolated test
+    /// can interleave and pollute the count.
+    @Test @MainActor func aVisitIdleFiveHoursOnTheSameDayResumesAcrossTheRoutingWindow() throws {
         let suite = "visit-context-tests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = CaptureSessionContextStore(defaults: defaults, key: "context")
-        let decoder = JSONDecoder()
+
+        // The reproduction's own clock, in LOCAL times: the shared `now` is
+        // 02:00 Chicago, so `now - 5h` would sit on the previous Chicago day and
+        // the calendar-day rule — not the routing window — would be what ended
+        // the visit, testing the wrong rule.
+        let start = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 8, minute: 0, second: 0)))
+        let lastCapture = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 9, minute: 0, second: 0)))
+        let resumeTap = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 14, minute: 0, second: 0)))
 
         let opened = store.startVisit(
-            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
-            identity: identity, now: now)
-        let resumeTap = now.addingTimeInterval(5 * 60 * 60)
-        // Still alive by the visit's OWN rules — this is exactly what makes
-        // the gap invisible to `expiry()`/`reapExpiredVisit` alone.
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St",
+                              projectID: "p1", projectName: "Maple St",
+                              projectRoomID: "project-room-1", room: "Living"),
+            identity: identity, now: start)
+        // Her 09:00 capture, which is what actually sets `lastActivityAt`.
+        _ = store.current(identity: identity, now: lastCapture, calendar: calendar)
+        // Still alive by the visit's OWN rules at 14:00 — which is precisely why
+        // the routing window has no business ending it.
         #expect(CaptureSessionContextPolicy.expiry(for: opened, now: resumeTap,
                                                     calendar: calendar) == nil)
 
+        // What W1 renders at 14:00, BEFORE she answers: five hours idle is past
+        // the confirm window, so the visit is STALE and the prompt "Still at
+        // Maple St? — Resume / End visit" is showing. Stale is a question, not
+        // a close.
+        let beforeTap = store.visitState(identity: identity, now: resumeTap,
+                                         calendar: calendar)
+        let promptIsShowing: Bool
+        if case .stale = beforeTap { promptIsShowing = true } else { promptIsShowing = false }
+        #expect(promptIsShowing, "W1 must still ASK at 14:00, not have ended the visit")
+        #expect(beforeTap.context?.visitID == opened.visitID)
+
         var closeCount = 0
-        var closedSnapshot: CaptureSessionContext?
         let observer = NotificationCenter.default.addObserver(
             forName: CaptureSessionContextStore.visitDidChange, object: nil, queue: nil
-        ) { _ in
-            closeCount += 1
-            if let data = defaults.data(forKey: "context") {
-                closedSnapshot = try? decoder.decode(CaptureSessionContext.self, from: data)
-            }
-        }
+        ) { _ in closeCount += 1 }
         defer { NotificationCenter.default.removeObserver(observer) }
 
+        // Resume, which routes through `remember`/`current`.
         let resolved = store.current(identity: identity, now: resumeTap, calendar: calendar)
 
-        #expect(closeCount == 1)
-        let closed = try #require(closedSnapshot)
-        #expect(closed.visitID == opened.visitID)      // the SAME visit, closed...
-        #expect(closed.endedAt == resumeTap)            // ...not silently dropped.
-        #expect(closed.kind == .site)
-        #expect(closed.label == "Maple St")
-
-        // `resolve` still mints a fresh context, exactly as today — the
-        // OUTCOME is unchanged, only the missing close is now recorded.
-        #expect(resolved.visitID != opened.visitID)
-        #expect(!resolved.isVisit)
+        #expect(closeCount == 0)
+        #expect(resolved.visitID == opened.visitID)     // still HER visit...
+        #expect(resolved.kind == .site)
+        #expect(resolved.kit == .walkThrough)
+        #expect(resolved.label == "Maple St")
+        #expect(resolved.routing == opened.routing)
+        #expect(resolved.lastActivityAt == resumeTap)   // ...and touched, not ended.
+        #expect(resolved.isVisit)
+        // And answering Resume puts her back INSIDE it: the tap is activity, so
+        // the visit reads active again rather than re-asking.
         #expect(store.visitState(identity: identity, now: resumeTap,
-                                 calendar: calendar) == .none)
+                                 calendar: calendar) == .active(resolved))
+        #expect(store.takePendingVisitEnds(identity: identity).isEmpty)
     }
 
-    /// Reason correctness, past the 12-hour rule: `expiry()` itself already
-    /// names `.auto`, and `current()`'s reap must carry that through, never
-    /// `.explicit` (explicit is reserved for a tapped End-visit).
-    @Test @MainActor func aVisitPastTwelveHoursIsEndedThroughCurrentWithReasonAuto() throws {
+    /// Past the 12-hour rule the visit IS over, and `current()` must both close
+    /// it and leave an emittable notice behind: it hands back a context, not a
+    /// notice, and four routing screens call it with no reaper in front of them,
+    /// so without the queue the close emits nothing at all. The reason is the
+    /// one `expiry()` named — `.auto`, never `.explicit`, which is reserved for
+    /// a tapped End-visit.
+    @Test @MainActor func aVisitPastTwelveHoursClosesThroughCurrentAndQueuesReasonAuto() throws {
         let suite = "visit-context-tests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -475,11 +553,31 @@ struct VisitContextTests {
         #expect(closeCount == 1)
         #expect(!resolved.isVisit)
         #expect(store.visitState(identity: identity, now: late, calendar: calendar) == .none)
+
+        let pending = store.takePendingVisitEnds(identity: identity)
+        #expect(pending.count == 1)
+        let notice = try #require(pending.first)
+        #expect(notice.reason == .auto)
+        // The OPEN context, so the emitter can still read the visit's own
+        // counts, and the instant it closed, so `duration_min` is wall time to
+        // the close rather than to whenever the emitter drained the queue.
+        #expect(notice.context.visitID == opened.visitID)
+        #expect(notice.context.endedAt == nil)
+        #expect(notice.closedAt == late)
+        // Drained: the emitter cannot fire the same close twice.
+        #expect(store.takePendingVisitEnds(identity: identity).isEmpty)
+        // And nobody else's device drains hers.
+        let stranger = CaptureSessionIdentity(userID: "u2", workspaceID: "w1")
+        #expect(store.takePendingVisitEnds(identity: stranger).isEmpty)
     }
 
-    /// Reason correctness, across a calendar day (idle also past the 4-hour
-    /// window so `current()`'s reap fires): `expiry()` names `.rollover`.
-    @Test @MainActor func aVisitThatCrossesMidnightIsEndedThroughCurrentWithReasonRollover() throws {
+    /// `resolve`'s SECOND branch — a calendar rollover reached with UNDER four
+    /// hours idle — is the one that used to drop the visit with no `endedAt`
+    /// and no event whatsoever, and it is reachable from `current()` on S1, S2
+    /// and S3, none of which hold an emitter. It must now close for `.rollover`
+    /// and queue that reason, while still doing the one thing it always did
+    /// right: carrying her day-agnostic routing memory forward.
+    @Test @MainActor func aRolloverUnderFourHoursIdleClosesAndKeepsHerRouting() throws {
         let suite = "visit-context-tests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -487,14 +585,20 @@ struct VisitContextTests {
 
         var components = DateComponents()
         components.year = 2026; components.month = 8; components.day = 25
-        components.hour = 20; components.minute = 0
-        let evening = calendar.date(from: components)!
+        components.hour = 23; components.minute = 40
+        let lateEvening = calendar.date(from: components)!
 
         let opened = store.startVisit(
-            CaptureVisitDraft(kind: .site, kit: .install, label: "Maple St"),
-            identity: identity, now: evening)
-        let nextMorning = evening.addingTimeInterval(5 * 60 * 60)
-        #expect(CaptureSessionContextPolicy.expiry(for: opened, now: nextMorning,
+            CaptureVisitDraft(kind: .site, kit: .install, label: "Maple St",
+                              projectID: "p1", projectName: "Maple St",
+                              projectRoomID: "project-room-1", room: "Living"),
+            identity: identity, now: lateEvening)
+        // 30 minutes later: WELL inside the 4-hour routing window, and already a
+        // different calendar day.
+        let afterMidnight = lateEvening.addingTimeInterval(30 * 60)
+        #expect(afterMidnight.timeIntervalSince(lateEvening)
+                < CaptureSessionContextPolicy.inactivityWindow)
+        #expect(CaptureSessionContextPolicy.expiry(for: opened, now: afterMidnight,
                                                     calendar: calendar) == .rollover)
 
         var closeCount = 0
@@ -503,16 +607,26 @@ struct VisitContextTests {
         ) { _ in closeCount += 1 }
         defer { NotificationCenter.default.removeObserver(observer) }
 
-        let resolved = store.current(identity: identity, now: nextMorning, calendar: calendar)
+        let resolved = store.current(identity: identity, now: afterMidnight, calendar: calendar)
 
         #expect(closeCount == 1)
+        #expect(resolved.visitID != opened.visitID)
         #expect(!resolved.isVisit)
+        #expect(resolved.routing == opened.routing)   // the branch's own job, kept
+
+        let pending = store.takePendingVisitEnds(identity: identity)
+        #expect(pending.count == 1)
+        let notice = try #require(pending.first)
+        #expect(notice.reason == .rollover)
+        #expect(notice.context.visitID == opened.visitID)
+        #expect(notice.closedAt == afterMidnight)
     }
 
     /// Exactly ONE `visit.end` per close: a repeated `current()` call over
     /// the same expired visit must not re-close what the first call already
     /// closed (the second call sees the FRESH kindless context `resolve`
-    /// already minted, which has no `kind` and is never reaped).
+    /// already minted, which has no `kind` and is never reaped), and the queue
+    /// must hold one notice, not two.
     @Test @MainActor func exactlyOneVisitEndFiresEvenIfCurrentIsCalledAgain() throws {
         let suite = "visit-context-tests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
@@ -522,7 +636,7 @@ struct VisitContextTests {
         let opened = store.startVisit(
             CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
             identity: identity, now: now)
-        let resumeTap = now.addingTimeInterval(5 * 60 * 60)
+        let late = now.addingTimeInterval(13 * 60 * 60)
 
         var closeCount = 0
         let observer = NotificationCenter.default.addObserver(
@@ -530,14 +644,41 @@ struct VisitContextTests {
         ) { _ in closeCount += 1 }
         defer { NotificationCenter.default.removeObserver(observer) }
 
-        let first = store.current(identity: identity, now: resumeTap, calendar: calendar)
+        let first = store.current(identity: identity, now: late, calendar: calendar)
         let second = store.current(identity: identity,
-                                   now: resumeTap.addingTimeInterval(60), calendar: calendar)
+                                   now: late.addingTimeInterval(60), calendar: calendar)
 
         #expect(closeCount == 1)
         #expect(first.visitID != opened.visitID)
         #expect(second.visitID == first.visitID)
         #expect(!second.isVisit)
+        #expect(store.takePendingVisitEnds(identity: identity).count == 1)
+    }
+
+    /// The other half of exactly-once, in the other order: whichever of the two
+    /// reap paths notices the expiry first is the only one that closes it, so a
+    /// screen that reaps THEN resolves does not emit twice.
+    @Test @MainActor func aReapedVisitIsNotClosedASecondTimeByCurrent() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        store.startVisit(CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+                         identity: identity, now: now)
+        let late = now.addingTimeInterval(13 * 60 * 60)
+
+        // The emitter's own path wins the race and emits directly...
+        let reaped = try #require(store.reapExpiredVisit(identity: identity, now: late,
+                                                         calendar: calendar))
+        #expect(reaped.reason == .auto)
+        #expect(reaped.closedAt == late)
+
+        // ...so `current()` finds an already-closed visit, queues nothing, and
+        // the close is not counted twice.
+        let resolved = store.current(identity: identity, now: late, calendar: calendar)
+        #expect(!resolved.isVisit)
+        #expect(store.takePendingVisitEnds(identity: identity).isEmpty)
     }
 
     /// The happy path is unchanged: a visit idle 10 minutes resumes with its

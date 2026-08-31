@@ -507,9 +507,16 @@ struct FieldVisitEndEmitter {
     /// first caller to notice a given expiry emits.
     func reapExpired(now: Date = Date()) {
         let identity = CaptureSessionIdentity(userID: userID, workspaceID: workspaceID)
-        guard let notice = CaptureSessionContextStore.shared.reapExpiredVisit(
-            identity: identity, now: now) else { return }
-        emit(notice.reason, context: notice.context, now: now)
+        let contexts = CaptureSessionContextStore.shared
+        // Closes `current()` reaped on one of the four routing screens, which
+        // hold no emitter. Emitted at the instant they CLOSED, not now, so
+        // `duration_min` stays the wall time to the close FC-R21 specifies.
+        for pending in contexts.takePendingVisitEnds(identity: identity) {
+            emit(pending.reason, context: pending.context, now: pending.closedAt)
+        }
+        guard let notice = contexts.reapExpiredVisit(identity: identity, now: now)
+        else { return }
+        emit(notice.reason, context: notice.context, now: notice.closedAt)
     }
 }
 
@@ -559,7 +566,11 @@ enum FieldVisitEndCounts {
                     || specimen.voiceAudioFilename?.isEmpty == false)
         }.count
         return FieldVisitCounts(
-            duration: now.timeIntervalSince(context.startedAt),
+            // Floored: a backwards clock is an `auto` close (CaptureVisitPolicy
+            // `expiry`), and it can stamp the close BEFORE `startedAt` — which
+            // now that the close really emits would ship a negative
+            // `duration_min` to the dashboard.
+            duration: max(0, now.timeIntervalSince(context.startedAt)),
             captures: max(0, visitCaptures.count - notes),
             notes: notes,
             scans: pendingScans,

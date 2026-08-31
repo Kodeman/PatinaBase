@@ -146,7 +146,6 @@ public enum CaptureSessionContextPolicy {
         guard let existing,
               existing.identity == identity,
               existing.endedAt == nil,
-              now.timeIntervalSince(existing.lastActivityAt) < inactivityWindow,
               now >= existing.lastActivityAt else {
             return CaptureSessionContext(
                 identity: identity,
@@ -154,15 +153,31 @@ public enum CaptureSessionContextPolicy {
                 lastActivityAt: now
             )
         }
-        // The visit's own rules outrank this 4-hour routing window, and `resolve`
-        // WRITES: `current` persists what it returns, so resuming a visit the
-        // rules have killed would both hand out its `visitID` (ViewfinderModel
-        // mints every draft's `sessionID` from it, so yesterday's visit would
-        // collect today's captures) and refresh its `lastActivityAt`, pushing the
-        // 12-hour auto-end out of reach forever. Routing memory has always been
-        // day-agnostic and survives; the visit fields and the grouping id do not.
-        if existing.kind != nil,
-           visitState(for: existing, now: now, calendar: calendar) == .none {
+        // W4-C15: `inactivityWindow` is a ROUTING window, not a visit's lifetime.
+        // A visit `CaptureVisitPolicy.visitState` still calls live — up to 12
+        // hours idle on the same calendar day — RESUMES across it whole, keeping
+        // its `visitID`, kind, kit, label and routing. That is what W1's "Still
+        // at Maple St? → Resume" already promises her, and the shorter window
+        // used to break the promise silently. Only a kindless context can be
+        // dropped for elapsed time alone.
+        let live = visitState(for: existing, now: now, calendar: calendar) != .none
+        guard live || now.timeIntervalSince(existing.lastActivityAt) < inactivityWindow else {
+            return CaptureSessionContext(
+                identity: identity,
+                startedAt: now,
+                lastActivityAt: now
+            )
+        }
+        // A visit the rules HAVE killed, reached inside the routing window (the
+        // calendar rollover is the only way in). `resolve` WRITES — `current`
+        // persists what it returns — so resuming it would both hand out its
+        // `visitID` (ViewfinderModel mints every draft's `sessionID` from it, so
+        // yesterday's visit would collect today's captures) and refresh its
+        // `lastActivityAt`, pushing the 12-hour auto-end out of reach forever.
+        // Routing memory has always been day-agnostic and survives; the visit
+        // fields and the grouping id do not. `current` reaps this close first, so
+        // it is recorded and emitted rather than dropped.
+        if existing.kind != nil, !live {
             return CaptureSessionContext(
                 identity: identity,
                 startedAt: now,
@@ -187,14 +202,24 @@ public enum CaptureSessionContextPolicy {
     }
 }
 
-/// What `reapExpiredVisit` found: the visit as it stood OPEN, and why it closed.
-public struct FieldVisitEndNotice: Equatable, Sendable {
+/// What a reap found: the visit as it stood OPEN, why it closed, and when.
+///
+/// `Codable` because a close reaped inside `current()` has no emitter in front
+/// of it and has to wait in the store's pending-end queue for one.
+public struct FieldVisitEndNotice: Codable, Equatable, Sendable {
     public let context: CaptureSessionContext
     public let reason: FieldVisitEndReason
+    /// The instant the close was reaped. FC-R21 makes `duration_min` wall time
+    /// from `startedAt` to HERE, so a notice drained later must not be measured
+    /// from whenever the emitter got round to it.
+    public let closedAt: Date
 
-    public init(context: CaptureSessionContext, reason: FieldVisitEndReason) {
+    public init(context: CaptureSessionContext,
+                reason: FieldVisitEndReason,
+                closedAt: Date) {
         self.context = context
         self.reason = reason
+        self.closedAt = closedAt
     }
 }
 
@@ -204,6 +229,7 @@ public final class CaptureSessionContextStore {
 
     private let defaults: UserDefaults
     private let key: String
+    private let pendingEndsKey: String
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -215,6 +241,7 @@ public final class CaptureSessionContextStore {
     ) {
         self.defaults = defaults
         self.key = key
+        self.pendingEndsKey = key + ".pending-ends"
     }
 
     public func current(
@@ -222,36 +249,26 @@ public final class CaptureSessionContextStore {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> CaptureSessionContext {
-        var existing = defaults.data(forKey: key).flatMap {
+        // Read BEFORE the reap. `resolve` has to see the still-OPEN context, or
+        // the rollover branch below finds `endedAt != nil`, falls into the first
+        // guard and loses her routing memory.
+        let existing = defaults.data(forKey: key).flatMap {
             try? decoder.decode(CaptureSessionContext.self, from: $0)
         }
-        // FC-R21 N-2: `resolve`'s FIRST guard fires on ELAPSED TIME alone
-        // (its own 4-hour routing window, `inactivityWindow`) and returns a
-        // fresh, kindless context the moment that fails — before the
-        // visit-aware branch ever runs. A visit idle 4-12 hours on the same
-        // calendar day is still "live" by `CaptureVisitPolicy`'s own longer
-        // rules (`autoEndWindow`, 12 hours + same day), so that guard would
-        // otherwise destroy it with no `endVisit`, no reap, and no
-        // `visit.end` — `expiry()` alone would miss this exact window too
-        // (it stays nil while the visit is still alive by ITS rules), so the
-        // reap below fires on the SAME time-based condition `resolve`'s own
-        // guard uses, not on `expiry()`'s narrower one. Deliberately left
-        // alone: `resolve`'s SECOND branch (a same-day rollover reached with
-        // under 4 hours idle), which already preserves routing memory
-        // correctly on its own and must keep doing so — reaping first there
-        // would force `resolve` into its routing-losing FIRST branch
-        // instead. Mirrors the persist(ended())+notify sequence
-        // `reapExpiredVisit` already makes, so the close is recorded before
-        // the replace happens rather than lost.
-        if let open = existing, open.identity == identity, open.kind != nil, open.endedAt == nil {
-            let withinRoutingWindow = now >= open.lastActivityAt &&
-                now.timeIntervalSince(open.lastActivityAt) < CaptureSessionContextPolicy.inactivityWindow
-            if !withinRoutingWindow {
-                let closed = CaptureSessionContextPolicy.ended(open, now: now)
-                persist(closed)
-                NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
-                existing = closed
-            }
+        // FC-R21 N-2 / W4-C15. A visit the rules still call live now resumes
+        // across the 4-hour routing window (`resolve`), so what is left to close
+        // here is exactly what `expiry()` names: `auto` (12 hours idle, or a
+        // backwards clock) and `rollover` (a new calendar day) — INCLUDING the
+        // rollover `resolve` reaches with under 4 hours idle, which used to drop
+        // the visit with no `endedAt` and no event at all, on four routing
+        // screens that call `current()` with no reaper in front of them.
+        //
+        // It goes through the SAME reap every other computed close uses, so the
+        // close is stamped, persisted and announced once. `current` hands back a
+        // context, not a notice, and cannot reach the app-side emitter, so the
+        // notice waits in the pending-end queue for the next `reapExpired`.
+        if let notice = reapExpiredVisit(identity: identity, now: now, calendar: calendar) {
+            enqueuePendingVisitEnd(notice)
         }
         let resolved = CaptureSessionContextPolicy.resolve(
             existing: existing,
@@ -358,19 +375,70 @@ public final class CaptureSessionContextStore {
         else { return nil }
         persist(CaptureSessionContextPolicy.ended(open, now: now))
         NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
-        return FieldVisitEndNotice(context: open, reason: reason)
+        return FieldVisitEndNotice(context: open, reason: reason, closedAt: now)
+    }
+
+    /// FC-R21 part 3: the closes `current()` reaped on a screen with no emitter
+    /// in front of it, oldest first. Taking them clears them, so each close
+    /// emits exactly once however many surfaces drain the queue.
+    ///
+    /// FC-R21's own N-2 note names this remedy — "a persisted pending-end slot
+    /// or reap inside `current()`" — and the fix is both: `current()` reaps, and
+    /// what it reaps waits here. Persisted rather than in-memory because a close
+    /// reaped seconds before the app is killed is still a close that owes an
+    /// event.
+    @discardableResult
+    public func takePendingVisitEnds(
+        identity: CaptureSessionIdentity
+    ) -> [FieldVisitEndNotice] {
+        let pending = pendingVisitEnds()
+        guard !pending.isEmpty else { return [] }
+        let mine = pending.filter { $0.context.identity == identity }
+        guard !mine.isEmpty else { return [] }
+        // Another account's undrained closes are left for that account's
+        // emitter: the counts `visit.end` carries are read per owner.
+        persistPendingVisitEnds(pending.filter { $0.context.identity != identity })
+        return mine
     }
 
     public func reset() {
         defaults.removeObject(forKey: key)
+        defaults.removeObject(forKey: pendingEndsKey)
     }
 
     /// R119: a visit can begin or end from a surface that presents no sheet —
     /// the Companion strip's "End visit" is inline — so a screen that names the
-    /// visit has nothing to hang a refresh on. Posted by `startVisit`/`endVisit`
-    /// only: the ordinary `current(…)` resolve persists on every draft and would
+    /// visit has nothing to hang a refresh on. Posted by `startVisit`,
+    /// `endVisit` and `reapExpiredVisit` — every path that actually opens or
+    /// closes a visit, the reap `current()` makes included. NOT posted by an
+    /// ordinary `current(…)` resolve, which persists on every draft and would
     /// make this chatter.
     public static let visitDidChange = Notification.Name("capture.visitDidChange")
+
+    /// A queue that is not draining means nothing is emitting, and the closes
+    /// already waiting are the ones a dashboard is missing — so the cap keeps
+    /// the OLDEST rather than the newest.
+    private static let maxPendingVisitEnds = 8
+
+    private func enqueuePendingVisitEnd(_ notice: FieldVisitEndNotice) {
+        let queued = (pendingVisitEnds() + [notice]).prefix(Self.maxPendingVisitEnds)
+        persistPendingVisitEnds(Array(queued))
+    }
+
+    private func pendingVisitEnds() -> [FieldVisitEndNotice] {
+        defaults.data(forKey: pendingEndsKey).flatMap {
+            try? decoder.decode([FieldVisitEndNotice].self, from: $0)
+        } ?? []
+    }
+
+    private func persistPendingVisitEnds(_ notices: [FieldVisitEndNotice]) {
+        guard !notices.isEmpty else {
+            defaults.removeObject(forKey: pendingEndsKey)
+            return
+        }
+        guard let data = try? encoder.encode(notices) else { return }
+        defaults.set(data, forKey: pendingEndsKey)
+    }
 
     private func persist(_ context: CaptureSessionContext) {
         guard let data = try? encoder.encode(context) else { return }
