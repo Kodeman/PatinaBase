@@ -215,10 +215,16 @@ export function ProjectMoodBoards({
   }, [activeSelectionRows, attentionQuery.data, canCreate, liveBoards, pathname, readinessQuery.data, revealSelection]);
 
   const boardsEmpty = liveBoards.length === 0 && frozenBoards.length === 0;
+  // D4' — an empty Boards region used to default FOLDED, so the only "Start a
+  // board" affordance on the paper was a click behind a plain unfold seam:
+  // audit personas took minutes to find where a board even lives. The region
+  // now always defaults open (a designer can still fold it explicitly — that
+  // choice is remembered same as ever); this only changes what a reader sees
+  // on the FIRST visit to an empty region.
   const { folded: boardsFolded, setFolded: setBoardsFolded, cause: boardsCause } = useRegionFold({
     docId: projectId,
     region: 'boards',
-    defaultFolded: isLoading ? null : boardsEmpty,
+    defaultFolded: isLoading ? null : false,
   });
   const unfoldFocusRef = useRef(false);
 
