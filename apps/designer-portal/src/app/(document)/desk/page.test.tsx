@@ -30,6 +30,13 @@ jest.mock('@patina/supabase', () => ({
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
   useRecentBoards: (...args: unknown[]) => mockRecentBoards(...args),
+  // Desk rollup line (board-paths W2b #3) — no boards behind any bucket in
+  // this suite's fixtures, so the strip renders nothing.
+  useBoardsReactionRollup: () => ({
+    data: { awaitingReaction: [], reactionsIn: [], approvedPipeline: [], capped: false },
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 jest.mock('@/hooks/use-desk-engagements', () => ({

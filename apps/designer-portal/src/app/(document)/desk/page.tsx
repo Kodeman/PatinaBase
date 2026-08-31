@@ -29,6 +29,7 @@ import { DeskRoster } from '@/components/document/desk-roster';
 import { deriveDeskRoster } from '@/lib/document/desk-roster-derivation';
 import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
+import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reaction-rollup';
 import { MarginNote } from '@/components/document/margin-note';
 import { StudioSetupWhisper } from '@/components/document/account/studio-setup-whisper';
 import { deriveSetupSteps } from '@/lib/document/studio-setup';
@@ -394,6 +395,7 @@ export default function DeskPage() {
               grammar. It renders nothing of its own once its query resolves
               empty, so a boardless studio sees no seam here at all. */}
           <RecentBoardsStrip />
+          <DeskBoardsReactionRollup />
 
           {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to
               fill the space the folders would occupy. */}
