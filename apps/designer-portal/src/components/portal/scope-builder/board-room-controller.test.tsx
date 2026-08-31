@@ -168,6 +168,32 @@ describe('BoardRoomController binding', () => {
     expect(mockCanvasProps).not.toBeNull();
   });
 
+  it('suspends mod+ edit shortcuts while a pointer gesture is in flight, and restores them on gesture end', async () => {
+    render(
+      <BoardRoomController
+        owner={{ kind: 'project', id: 'project-1' }}
+        boardId="board-project"
+      />,
+    );
+    await screen.findByTestId('edit-canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Select item' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move item' }));
+    expect(screen.getByTestId('edit-canvas')).toHaveTextContent('edit-x:410;selected:1');
+
+    // The canvas reports a gesture in flight (drag/resize/rotate/marquee/pan).
+    act(() => mockCanvasProps!.onGestureActiveChange?.(true));
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    // Cmd+Z is a no-op: undo must not fire against gesture-local state that
+    // hasn't committed, and this is also what the Ctrl/Cmd suppress-snap
+    // modifier could otherwise collide with mid-drag.
+    expect(screen.getByTestId('edit-canvas')).toHaveTextContent('edit-x:410;selected:1');
+
+    // Pointer-up: the canvas reports the gesture has ended.
+    act(() => mockCanvasProps!.onGestureActiveChange?.(false));
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(screen.getByTestId('edit-canvas')).toHaveTextContent('edit-x:10;selected:1');
+  });
+
   it('wires Alt-drag through one structural duplicate command and preserves the original', async () => {
     let api: BoardRoomControllerApi | null = null;
     render(
