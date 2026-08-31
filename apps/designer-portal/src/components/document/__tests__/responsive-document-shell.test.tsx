@@ -653,10 +653,7 @@ function piecesSegment(heldRoomId: string | null): LadderSegment {
     narrowValue: '3 LINES · 2 ROOMS',
     countLine: READING_STOP.countLine,
     fallback: null,
-    extent: 3,
     mounted: true,
-    floorPx: 45,
-    narrowFloorPx: 45,
     rooms: TICKET_ROOMS.map((room) => ({
       ...room,
       held: room.id === heldRoomId,

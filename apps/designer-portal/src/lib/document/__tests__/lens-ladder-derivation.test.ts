@@ -165,29 +165,39 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
     expect(segments.care.countLine).toBe('0 of 6 closed out');
   });
 
-  it('takes every extent from a count, never from a rect', () => {
-    const segments = byKey(input());
-    expect(segments.ffe.extent).toBe(40); // 36 lines + 4 rooms
-    expect(segments.approvals.extent).toBe(4); // approval records
-    expect(segments.care.extent).toBe(6);
-    expect(segments.record.extent).toBe(12);
-    expect(segments.money.extent).toBe(5); // the ladder's rungs that carry money
-  });
-
-  it('floors each segment at 36px and grows it by the lines its value wraps to', () => {
-    const segments = byKey(input());
-    // `12 COMPLETE` is one line at both measures → the bare floor.
-    expect(segments.record.floorPx).toBe(36);
-    expect(segments.record.narrowFloorPx).toBe(36);
-    // Each measure floors on ITS OWN string: 27 chars over 23 and 30 over 15
-    // are both two lines, so `2 × 15.4 + 8` either way.
-    expect(segments.ffe.floorPx).toBe(39);
-    expect(segments.ffe.narrowFloorPx).toBe(39);
-    // `$17,500 OUT · $12,300 UNDRAWN` is 29 — two lines at 23, two at 15.
-    expect(segments.money.narrowFloorPx).toBe(39);
-    // `0 OF 6 CLOSED OUT` is 17: one line at 23, two at 15.
-    expect(segments.care.floorPx).toBe(36);
-    expect(segments.care.narrowFloorPx).toBe(39);
+  // D-B52 (W7-R1 §2) — the model carries NO geometry any more. OD-14's floor
+  // formula (`max(36, lines × 15.4 + 8)`) and the `extent` count that fed
+  // `flex-grow` are both retired on Kody's ruling that the stops pack; a row
+  // takes the height its own words need, in CSS, and the derivation stays out
+  // of it. This is the falsifier: a segment that regrows a measurement fails.
+  it('carries no measured height and no growth count — the rows pack in CSS (D-B52)', () => {
+    for (const segment of Object.values(byKey(input()))) {
+      expect(segment).not.toHaveProperty('extent');
+      expect(segment).not.toHaveProperty('floorPx');
+      expect(segment).not.toHaveProperty('narrowFloorPx');
+      expect(Object.keys(segment).sort()).toEqual(
+        segment.rooms
+          ? [
+              'countLine',
+              'fallback',
+              'key',
+              'mounted',
+              'name',
+              'narrowValue',
+              'rooms',
+              'value',
+            ]
+          : [
+              'countLine',
+              'fallback',
+              'key',
+              'mounted',
+              'name',
+              'narrowValue',
+              'value',
+            ],
+      );
+    }
   });
 
   it('hangs the rooms off Pieces alone, and marks the one in hand', () => {

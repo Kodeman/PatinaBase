@@ -10,18 +10,15 @@
  * re-read from its own input rather than from its rows — one source, two
  * registers, and no second query.
  *
- * The extent is a COUNT — lines, rooms, rungs, records — never a measured
- * height. The ladder draws order and reach above a floor and lets the value
- * line carry scale; a `ResizeObserver` over the region roots would be measuring
- * the 112px reserve L-4 has just put there, which is the instrument erasing its
- * own subject.
+ * Nothing here measures a height. The rows print at the height their own
+ * words need (D-B52 — W7-R1 §2 retired OD-14's floor arithmetic and the
+ * extent-proportional growth it fed, on Kody's ruling that the stops pack with
+ * ONE gap, after `The record`); a `ResizeObserver` over the region roots would
+ * be measuring the 112px reserve L-4 has just put there, which is the
+ * instrument erasing its own subject.
  */
 
-import {
-  LADDER_SEGMENT_MIN_PX,
-  LENS_COUNT_MAX_CHARS,
-  LENS_VALUE_MAX_CHARS,
-} from './lens-constants';
+import { LENS_COUNT_MAX_CHARS, LENS_VALUE_MAX_CHARS } from './lens-constants';
 import {
   DOCUMENT_INDEX_LABELS,
   paperRegionFor,
@@ -30,8 +27,6 @@ import {
 } from './document-index';
 import { money } from './project-commerce';
 import type { TicketInput } from './ticket-derivation';
-
-export type LadderTier = 'full' | 'narrow';
 
 export interface LadderRoomRung {
   id: string;
@@ -55,15 +50,9 @@ export interface LadderSegment {
   /** The paper's own count line, sentence case — OD-7's announcement reads it. */
   countLine: string;
   fallback: LadderFallback | null;
-  /** A count, never a rect. */
-  extent: number;
   /** Whether the stop's root is on the paper; a stop with none is not a press
    *  target. */
   mounted: boolean;
-  /** `max(36, lines × 15.4 + 8)` at the 168px measure (OD-14). */
-  floorPx: number;
-  /** The same formula at the 112px measure, where the value wraps further. */
-  narrowFloorPx: number;
   rooms?: LadderRoomRung[];
 }
 
@@ -92,7 +81,7 @@ export interface LadderApprovalsFacts {
   overdue: number;
   /** Days the OLDEST overdue approval has been standing. */
   overdueDays: number | null;
-  /** Every approval record on the paper — the segment's extent. */
+  /** Every approval record on the paper. */
   records: number;
 }
 
@@ -122,7 +111,7 @@ export interface LadderPreworkFacts {
   sentOn: string | null;
   /** The day the client first opened it, where they have. */
   openedOn: string | null;
-  /** Rooms in the proposal's scope — `Scope & engagement`'s extent. */
+  /** Rooms in the proposal's scope. */
   scopeRooms: number;
   /** W5-R5 §2 — the stage phrase the section stage line prints (`Core ·
    *  stage 03`), reported up by `SectionStageLineMount` so the stop's head,
@@ -151,21 +140,6 @@ export interface LadderInput {
 }
 
 const READING = 'READING…';
-
-/** The value line's two measures: 168px inside the 200px rail's `px-4`, 112px
- *  inside the 136px rail's `px-3` (OD-14). One string, both tiers. */
-const CHARS_PER_LINE: Record<LadderTier, number> = { full: 23, narrow: 15 };
-const VALUE_LINE_PX = 15.4;
-const VALUE_LEAD_PX = 8;
-
-function floorFor(value: string | null, tier: LadderTier): number {
-  const chars = value?.length ?? 0;
-  const lines = Math.max(1, Math.ceil(chars / CHARS_PER_LINE[tier]));
-  return Math.max(
-    LADDER_SEGMENT_MIN_PX,
-    Math.round(lines * VALUE_LINE_PX + VALUE_LEAD_PX),
-  );
-}
 
 /** Bare DATE columns must parse as LOCAL midnight, or the printed day slips
  *  back one in a negative-offset timezone. */
@@ -241,7 +215,6 @@ interface Register {
   narrowValue: string | null;
   countLine: string;
   fallback: LadderFallback | null;
-  extent: number;
 }
 
 const empty = (
@@ -252,7 +225,6 @@ const empty = (
   narrowValue: null,
   countLine,
   fallback,
-  extent: 0,
 });
 
 const reading = (): Register => ({
@@ -260,13 +232,12 @@ const reading = (): Register => ({
   narrowValue: READING,
   countLine: 'Reading…',
   fallback: null,
-  extent: 0,
 });
 
 function approvalsRegister(facts: LadderApprovalsFacts): Register {
   if (!facts.settled) return reading();
   if (facts.awaiting === 0 && facts.overdue === 0) {
-    return { ...empty('Nothing awaiting the client'), extent: facts.records };
+    return empty('Nothing awaiting the client');
   }
   const parts: string[] = [];
   const words: string[] = [];
@@ -293,7 +264,6 @@ function approvalsRegister(facts: LadderApprovalsFacts): Register {
     narrowValue: value,
     countLine: cap(words.join(' · '), LENS_COUNT_MAX_CHARS),
     fallback: null,
-    extent: facts.records,
   };
 }
 
@@ -317,7 +287,6 @@ function scheduleRegister(input: TicketInput): Register {
         narrowValue: value,
         countLine: cap(schedule.positionText, LENS_COUNT_MAX_CHARS),
         fallback: null,
-        extent: 1,
       };
     }
     return empty('Not known yet', 'NOT KNOWN YET');
@@ -357,7 +326,6 @@ function scheduleRegister(input: TicketInput): Register {
       LENS_COUNT_MAX_CHARS,
     ),
     fallback: null,
-    extent: 1,
   };
 }
 
@@ -402,7 +370,6 @@ function piecesRegister(input: LadderInput): Register {
     narrowValue: cap(narrow, LENS_VALUE_MAX_CHARS),
     countLine: cap(words, LENS_COUNT_MAX_CHARS),
     fallback: null,
-    extent: counts.total + counts.rooms,
   };
 }
 
@@ -416,7 +383,7 @@ function moneyRegister(input: TicketInput): Register {
     (rung) => rung.cents != null && rung.cents > 0,
   ).length;
   if (out <= 0 && undrawn <= 0) {
-    return { ...empty('Nothing moving yet'), extent: rungs };
+    return empty('Nothing moving yet');
   }
   const parts: string[] = [];
   const words: string[] = [];
@@ -434,7 +401,6 @@ function moneyRegister(input: TicketInput): Register {
     narrowValue: value,
     countLine: cap(words.join(' · '), LENS_COUNT_MAX_CHARS),
     fallback: null,
-    extent: rungs,
   };
 }
 
@@ -453,7 +419,6 @@ function careRegister(facts: LadderCareFacts): Register {
       LENS_COUNT_MAX_CHARS,
     ),
     fallback: null,
-    extent: facts.total,
   };
 }
 
@@ -466,7 +431,6 @@ function recordRegister(facts: LadderRecordFacts): Register {
     narrowValue: value,
     countLine: cap(`${facts.complete} complete`, LENS_COUNT_MAX_CHARS),
     fallback: null,
-    extent: facts.complete,
   };
 }
 
@@ -485,7 +449,6 @@ function proposalRegister(facts: LadderPreworkFacts | undefined, now: Date): Reg
       narrowValue: cap(`SENT ${rail} · OPENED`, LENS_VALUE_MAX_CHARS),
       countLine: cap(`Sent ${long} · opened`, LENS_COUNT_MAX_CHARS),
       fallback: null,
-      extent: 1,
     };
   }
   const days = calendarDaysUntil(facts.sentOn, now);
@@ -498,7 +461,6 @@ function proposalRegister(facts: LadderPreworkFacts | undefined, now: Date): Reg
     narrowValue: cap(`SENT ${rail}${tail}`, LENS_VALUE_MAX_CHARS),
     countLine: cap(`Sent ${long}${words}`, LENS_COUNT_MAX_CHARS),
     fallback: null,
-    extent: 1,
   };
 }
 
@@ -553,7 +515,6 @@ function scopeRegister(facts: LadderPreworkFacts | undefined): Register {
     narrowValue: cap(value, LENS_VALUE_MAX_CHARS),
     countLine: cap(words, LENS_COUNT_MAX_CHARS),
     fallback: null,
-    extent: facts.scopeRooms,
   };
 }
 
@@ -568,7 +529,6 @@ function investmentRegister(facts: LadderPreworkFacts | undefined): Register {
     narrowValue: cap(figure, LENS_VALUE_MAX_CHARS),
     countLine: cap(figure, LENS_COUNT_MAX_CHARS),
     fallback: null,
-    extent: 1,
   };
 }
 
@@ -637,10 +597,7 @@ export function deriveLadderSegments(input: LadderInput): LadderSegment[] {
       narrowValue: register.narrowValue,
       countLine: register.countLine,
       fallback: register.fallback,
-      extent: register.extent,
       mounted: mounted.has(region.key),
-      floorPx: floorFor(register.value, 'full'),
-      narrowFloorPx: floorFor(register.narrowValue, 'narrow'),
     };
     if (region.key === 'ffe') {
       segment.rooms = input.ticket.rooms.list.map((room) => ({

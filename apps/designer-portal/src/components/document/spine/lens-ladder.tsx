@@ -121,22 +121,6 @@ export function LensLadder({
   const rovingKey =
     roving !== null && rowKeys.includes(roving) ? roving : (rowKeys[0] ?? null);
 
-  // What each stop asks for, per measure. The rungs ride inside Pieces' own
-  // ask, so opening them spends the track's remainder — the space the stops
-  // were growing into — rather than pushing the track past its column. A
-  // CLOSED Pieces reserves nothing for them.
-  const rungsPx = shownRungs * ROOM_RUNG_PX + (hiddenRungs > 0 ? ROOM_RUNG_PX : 0);
-  const fullFloorFor = (segment: LadderSegment) =>
-    segment.floorPx + (printRooms && segment.rooms?.length ? rungsPx : 0);
-  const trackFloorPx = segments.reduce(
-    (sum, segment) => sum + fullFloorFor(segment),
-    0,
-  );
-  const narrowTrackFloorPx = segments.reduce(
-    (sum, segment) => sum + segment.narrowFloorPx,
-    0,
-  );
-
   useIsomorphicLayoutEffect(() => {
     const track = trackRef.current;
     if (!track || segments.length === 0 || roomCount === 0) return;
@@ -144,14 +128,11 @@ export function LensLadder({
     // below 1180 and display:none, or this is jsdom, which reports 0 for
     // everything. Neither is an answer, and neither may collapse the rungs.
     if (track.clientHeight <= 0) return;
-    // The rungs are paid for out of the REMAINDER: what the track has left
-    // once every stop has the height its OWN words need. Measured off the stop
-    // rows rather than off `floorPx`, because the floor formula counts the
-    // value line and not the name above it — it under-reserves by about a line
-    // at every stop, and a cap computed from it lets one rung too many in.
-    // A stop row's height does not move with the cap (the flex REMAINDER
-    // distributes into the segment box around it), so this converges in one
-    // pass rather than oscillating.
+    // The rungs are paid for out of what the track has left once every stop
+    // row has printed at its own natural height (D-B52: the rows no longer
+    // grow, so the remainder is simply the track's height less the rows).
+    // A stop row's height does not move with the cap, so this converges in
+    // one pass rather than oscillating.
     const stops = Array.from(
       track.querySelectorAll<HTMLElement>('[data-ladder-stop]'),
     ).reduce(
@@ -159,7 +140,16 @@ export function LensLadder({
       0,
     );
     if (stops === 0) return;
-    const slots = Math.max(0, Math.floor((track.clientHeight - stops) / ROOM_RUNG_PX));
+    // The free space is the NAV's, not the track's. D-B52 stopped the track
+    // growing into its column, so its own height is now the height of the rows
+    // it is already printing — reading the remainder off it would ratchet the
+    // cap down and never let it back up when the window is enlarged again.
+    const nav = track.parentElement;
+    if (!nav) return;
+    const doorsBox = nav.querySelector<HTMLElement>('[data-ladder-doors]');
+    const gap = Number.parseFloat(getComputedStyle(track).marginBottom) || 0;
+    const available = nav.clientHeight - (doorsBox?.offsetHeight ?? 0) - gap;
+    const slots = Math.max(0, Math.floor((available - stops) / ROOM_RUNG_PX));
     // One of the slots goes to the `+N` line itself when there is one.
     const fits = roomCount <= slots ? roomCount : Math.max(0, slots - 1);
     setRungCap((previous) => (previous === fits ? previous : fits));
@@ -171,19 +161,33 @@ export function LensLadder({
   const place = useCallback(() => {
     const bracket = windowRef.current;
     if (!bracket) return;
-    const row = activeKey ? segmentRefs.current.get(activeKey) : undefined;
-    if (!row) {
+    // D-B52 — the bracket spans the ROWS of the stops the rail knows are in
+    // frame: the reading stop, and the stop whose own head is in frame where
+    // that is a different one. With the rows packed at their natural heights
+    // there is no extent share left to map onto, so the window is simply the
+    // union of those rows' boxes, floored at one rung (27px) so a short row
+    // still prints a readable bracket.
+    // Anchored on the reading stop: with no index there is no window, exactly
+    // as before — the bracket never sits on rail the reader is not in.
+    const rows = (activeKey ? [activeKey, headInFrame] : [])
+      .filter((key): key is DocumentIndexKey => key != null)
+      .map((key) => segmentRefs.current.get(key))
+      .filter((row): row is HTMLButtonElement => row != null);
+    if (rows.length === 0) {
       bracket.hidden = true;
       bracket.removeAttribute('data-lens-window');
       return;
     }
-    const top = row.offsetTop;
-    const height = row.offsetHeight;
+    const top = Math.min(...rows.map((row) => row.offsetTop));
+    const bottom = Math.max(
+      ...rows.map((row) => row.offsetTop + row.offsetHeight),
+    );
+    const height = Math.max(ROOM_RUNG_PX, bottom - top);
     bracket.hidden = false;
     bracket.style.height = `${height}px`;
     bracket.style.transform = `translateY(${top}px)`;
     bracket.setAttribute('data-lens-window', `${top}:${height}`);
-  }, [activeKey]);
+  }, [activeKey, headInFrame]);
 
   // A value that yields (RF-02) unmounts the value line and changes the row's
   // height, so the bracket must re-measure on it as well as on the row list.
@@ -267,29 +271,21 @@ export function LensLadder({
         ref={trackRef}
         data-lens-track
         onKeyDown={onKeyDown}
-        // The track asks for exactly what its rows need — the sum of the
-        // floors it is about to lay out, plus the rungs it is about to print —
-        // and takes the rest of the column when there is more. When there is
-        // LESS (1440 · Pieces open · five rooms: 331.75px of rows in a 259px
-        // track) it scrolls itself rather than spilling: the head and
-        // `FILED WITH THIS JOB` are always whole, and the doors are never
-        // overprinted by a rung.
-        className="relative flex min-h-0 flex-col overflow-y-auto pl-3 [--track-floor:var(--track-floor-narrow)] [scrollbar-width:thin] min-[1440px]:[--track-floor:var(--track-floor-full)]"
+        // D-B52 — the track takes its ROWS' height and nothing more: no
+        // basis, no growth. Kody: "between sections there should not be giant
+        // gaps, the only gap should be after 'the record'." The `--track-floor`
+        // arithmetic (and the pre-work zero-floor special case it needed) is
+        // gone with the growth it fed. It still scrolls itself when the column
+        // genuinely cannot hold the rows, so the head and `FILED WITH THIS
+        // JOB` stay whole and no rung overprints a door. `mb-3` on the rows
+        // keeps the 12px separation in exactly that case, where the doors'
+        // `mt-auto` collapses to zero.
+        className="relative mb-3 flex min-h-0 flex-col overflow-y-auto pl-3 [scrollbar-width:thin]"
         style={
           {
-            '--track-floor-narrow': `${narrowTrackFloorPx}px`,
-            '--track-floor-full': `${trackFloorPx}px`,
-            // A pre-work spread's floors sum to 0px, so a definite basis of
-            // `var(--track-floor)` with nothing to grow into laid the track
-            // out at zero height and `overflow-y-auto` clipped OD-2's one
-            // line out of sight — the empty track printed NOTHING, under a
-            // head that was still speaking. It takes its content's height
-            // there instead: it does not grow (growing it opened ~450px of
-            // nothing above `FILED WITH THIS JOB`) and does not shrink below
-            // the line it has to say.
-            flexBasis: segments.length > 0 ? 'var(--track-floor)' : 'auto',
-            flexGrow: segments.length > 0 ? 1 : 0,
-            flexShrink: segments.length > 0 ? 1 : 0,
+            flexBasis: 'auto',
+            flexGrow: 0,
+            flexShrink: 1,
           } as CSSProperties
         }
       >
@@ -330,14 +326,12 @@ export function LensLadder({
                     value and keeps the name.
 
                     D-B37 — the yield is a PAINT change and never a layout one.
-                    Unrendering the line took its box away too: the segment fell
-                    back toward its `flex-basis` floor and `flex-grow: extent`
-                    re-dealt the freed height across every sibling, so one stop's
-                    head crossing the frame reflowed the whole rail — chrome
-                    moving on a step whose reading index never changed, which is
-                    what D-B34's cause gate caught. The line now always renders
-                    and always takes its box; yielded, it is `visibility: hidden`
-                    and out of the accessibility tree. */}
+                    Unrendering the line took its box away too, and the row
+                    shrank under it — chrome moving on a step whose reading
+                    index never changed, which is what D-B34's cause gate
+                    caught. The line now always renders and always takes its
+                    box; yielded, it is `visibility: hidden` and out of the
+                    accessibility tree. */}
                 <span
                   className={`block ${yielded ? 'invisible' : ''}`}
                   aria-hidden={yielded ? 'true' : undefined}
@@ -390,20 +384,18 @@ export function LensLadder({
               <div
                 key={segment.key}
                 data-ladder-segment={segment.key}
-                // The floor is taken first and the remainder distributes by
-                // extent, so `flex-basis` IS the floor and `flex-grow` IS the
-                // count. The two floors ride as custom properties because they
-                // differ by measure and only a class may carry a media query.
-                className="[--seg-floor:var(--seg-floor-narrow)] min-[1440px]:[--seg-floor:var(--seg-floor-full)]"
+                // D-B52 — the row takes the height its own words need and no
+                // more: `flex: none` over a 36px minimum. Nothing redistributes
+                // freed height any more, so a stop's box cannot move on a step
+                // that did not change what the stop prints (D-B37, strictly
+                // stronger), and the stops pack against each other instead of
+                // opening a rail-wide gap between every pair.
                 style={
                   {
-                    '--seg-floor-narrow': `${segment.narrowFloorPx}px`,
-                    '--seg-floor-full': `${fullFloorFor(segment)}px`,
-                    flexBasis: 'var(--seg-floor)',
-                    flexGrow: segment.extent,
-                    // Never below the floor its own words need: a shrunk stop
-                    // does not clip, it overprints the one beneath it.
+                    flexBasis: 'auto',
+                    flexGrow: 0,
                     flexShrink: 0,
+                    minHeight: LADDER_SEGMENT_MIN_PX,
                   } as CSSProperties
                 }
               >
@@ -496,7 +488,14 @@ export function LensLadder({
           project, so OD-8 gives it none of the project doors) got a rule, a
           34px reserve and a word standing over nothing. */}
       {doors.length > 0 && (
-        <div className="mt-3 shrink-0 border-t border-[var(--color-pearl)] pt-3">
+        // D-B52 — `mt-auto` is the nav column's ONE flexible gap, and it sits
+        // here: between `The record` and this rule. On a short viewport the
+        // auto margin collapses to zero and the rows' own `mb-3` keeps a
+        // breath above the border.
+        <div
+          data-ladder-doors
+          className="mt-auto shrink-0 border-t border-[var(--color-pearl)] pt-3"
+        >
           <p
             data-rail-label
             className="mb-1 min-h-[34px] font-mono text-[11px] uppercase leading-tight tracking-[0.1em] text-[var(--text-muted)]"
