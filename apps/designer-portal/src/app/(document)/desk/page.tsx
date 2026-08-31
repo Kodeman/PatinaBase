@@ -28,6 +28,7 @@ import { documentEvents } from '@/lib/analytics/document-events';
 import { DeskRoster } from '@/components/document/desk-roster';
 import { deriveDeskRoster } from '@/lib/document/desk-roster-derivation';
 import { DeskContents } from '@/components/document/desk-contents';
+import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
 import { MarginNote } from '@/components/document/margin-note';
 import { StudioSetupWhisper } from '@/components/document/account/studio-setup-whisper';
 import { deriveSetupSteps } from '@/lib/document/studio-setup';
@@ -385,6 +386,14 @@ export default function DeskPage() {
           ) : (
             <DeskRoster roster={roster} />
           )}
+
+          {/* D5 — the recents strip returns (B2-L2 deleted it along with the
+              folio grid it used to sit beside). It keeps its own quiet
+              doorway shape rather than a roster line: a board has no stage
+              and no need line, so it never fit the roster's one-line-per-job
+              grammar. It renders nothing of its own once its query resolves
+              empty, so a boardless studio sees no seam here at all. */}
+          <RecentBoardsStrip />
 
           {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to
               fill the space the folders would occupy. */}
