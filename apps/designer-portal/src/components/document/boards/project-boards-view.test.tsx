@@ -57,7 +57,7 @@ function engagement(over: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  startBoardPending.value = false;
+  startBoardPending.projectId = null;
   mockReplace.mockClear();
   mockEngagement.mockReturnValue(engagement());
   mockLive.mockReturnValue({
@@ -117,17 +117,31 @@ describe('the boards page', () => {
   // D4' — ⌘K's "Start a board…" command navigates here before the event it
   // would fire has a listener; the pending flag carries the intent across
   // that navigation instead, same pattern as command-bar.tsx's callSheetPending.
-  it('opens the builder immediately when it lands carrying the Start-a-board pending flag', () => {
-    startBoardPending.value = true;
+  it('opens the builder immediately when it lands carrying its own project’s pending flag', () => {
+    startBoardPending.projectId = 'proj-1'; // this page's project (engagement()'s fixture)
     render(<ProjectBoardsView routeId="eng-1" />);
 
     expect(screen.getByTestId('boards-builder')).toBeInTheDocument();
-    expect(startBoardPending.value).toBe(false);
+    expect(startBoardPending.projectId).toBeNull();
   });
 
   it('does not auto-open the builder when no pending flag was set', () => {
     render(<ProjectBoardsView routeId="eng-1" />);
     expect(screen.queryByTestId('boards-builder')).toBeNull();
+  });
+
+  // The P2 fix: a boolean flag left stuck true by an abandoned navigation
+  // (a superseded push, a fast back, an aborted RSC nav) used to auto-open
+  // the builder on the NEXT unrelated project's Boards page. Scoping the
+  // flag to a project id closes that leak — a mismatch is ignored, not
+  // honored, AND the stale flag is cleared here rather than left to leak
+  // into whatever page mounts after this one.
+  it('ignores and clears a pending flag left over from a different project', () => {
+    startBoardPending.projectId = 'proj-abandoned';
+    render(<ProjectBoardsView routeId="eng-1" />);
+
+    expect(screen.queryByTestId('boards-builder')).toBeNull();
+    expect(startBoardPending.projectId).toBeNull();
   });
 
   it('says so plainly when there are none', () => {

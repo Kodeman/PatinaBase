@@ -707,8 +707,9 @@ export function CommandBar() {
     // rather than a board room — a board has no id until one exists.
     const startBoardRow: PaletteRow | null = pairedDoc?.project_id
       ? (() => {
+          const targetProjectId = pairedDoc!.project_id!;
           const command = startBoardCommandDescriptor({
-            projectId: pairedDoc!.project_id!,
+            projectId: targetProjectId,
             projectName: folderTab(pairedDoc!),
           });
           return {
@@ -718,7 +719,10 @@ export function CommandBar() {
             sub: command.sub,
             icon: START_BOARD_ICON,
             run: () => {
-              startBoardPending.value = true;
+              // Scoped to the exact project this row named — an abandoned
+              // navigation must not open the builder on a LATER, unrelated
+              // project's Boards page (see startBoardPending's own doc).
+              startBoardPending.projectId = targetProjectId;
               router.push(command.href);
             },
             match: command.match,

@@ -105,7 +105,7 @@ beforeEach(() => {
   mockDeskData.mockReturnValue({ folders: [], chips: [] });
   mockPush.mockClear();
   window.localStorage.clear();
-  startBoardPending.value = false;
+  startBoardPending.projectId = null;
 });
 
 /** The Desk header's actual control (desk/page.tsx:225-237), reproduced
@@ -667,7 +667,9 @@ describe('D4\' — ⌘K offers a Start a board… command', () => {
     fireEvent.click(screen.getByText('Start a board…').closest('button')!);
 
     expect(mockPush).toHaveBeenCalledWith('/doc/proj-1/boards');
-    expect(startBoardPending.value).toBe(true);
+    // Scoped to the exact project this row named (P2 fix) — the Boards page
+    // it lands on ignores a pending flag naming any other project.
+    expect(startBoardPending.projectId).toBe('proj-1');
   });
 
   it('is reachable by typing "start a board" or "new board"', () => {
@@ -706,6 +708,7 @@ describe('D4\' — ⌘K offers a Start a board… command', () => {
     expect(screen.getByText('Start a board…')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Start a board…').closest('button')!);
     expect(mockPush).toHaveBeenCalledWith('/doc/proj-v/boards');
+    expect(startBoardPending.projectId).toBe('proj-v');
   });
 
   it('does not offer it without any project context at all', () => {

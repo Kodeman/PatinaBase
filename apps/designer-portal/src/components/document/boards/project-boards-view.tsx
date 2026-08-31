@@ -89,12 +89,20 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
 
   // D4' — ⌘K's "Start a board…" command lands here after a navigation, so the
   // intent has to be read off the pending flag rather than the live event
-  // (this page did not exist yet when the command fired it).
+  // (this page did not exist yet when the command fired it). Gated on this
+  // page's OWN project id, and cleared unconditionally once that id is known
+  // — a mismatch is cleared just as eagerly as a match, so an abandoned
+  // navigation (a superseded push, a fast back, an aborted RSC nav) cannot
+  // leave the flag to silently auto-open the builder on a later, unrelated
+  // project's Boards page. Depends on `projectId` rather than running once on
+  // mount: the engagement read resolves after first paint, so the id is not
+  // yet known on the render that installs this effect.
   useEffect(() => {
-    if (!startBoardPending.value) return;
-    startBoardPending.value = false;
-    setStarting(true);
-  }, []);
+    if (!projectId) return;
+    const pendingProjectId = startBoardPending.projectId;
+    startBoardPending.projectId = null;
+    if (pendingProjectId === projectId) setStarting(true);
+  }, [projectId]);
 
   const live = useProjectOwnedBoards(projectId ?? '');
   const frozen = useProjectBoards(projectId ?? '');

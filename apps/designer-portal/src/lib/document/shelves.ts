@@ -166,6 +166,14 @@ export const NEW_BOARD_EVENT = 'document:new-project-board';
  *  (`boardsRoutePath`) before it can fire {@link NEW_BOARD_EVENT} into it —
  *  the event fires before that page's own listener exists on a fresh
  *  navigation, so this flag carries the intent across, mirroring
- *  `command-bar.tsx`'s `callSheetPending`. The Boards page reads and clears
- *  it on mount. */
-export const startBoardPending = { value: false };
+ *  `command-bar.tsx`'s `callSheetPending`.
+ *
+ *  Scoped to a project id rather than a bare boolean: an abandoned navigation
+ *  (a superseded push, a fast back, an aborted RSC nav) would otherwise leave
+ *  a boolean stuck true with no project attached, and the NEXT unrelated
+ *  visit to ANY project's Boards page would silently auto-open the builder.
+ *  The Boards page only honors this when its own project id matches, and
+ *  clears it unconditionally once it knows its project id — a mismatch is
+ *  cleared just as eagerly as a match, so the flag cannot leak past the next
+ *  Boards page mounted, whichever project that page belongs to. */
+export const startBoardPending: { projectId: string | null } = { projectId: null };
