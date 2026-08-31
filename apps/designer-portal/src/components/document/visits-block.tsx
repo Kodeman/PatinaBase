@@ -180,7 +180,7 @@ export function VisitsBlock({ projectId }: { projectId: string }) {
                           // sits open in the document grid.
                           <a
                             href={`#margin-item-${c.marginNoteId}`}
-                            className="ml-auto hidden flex-shrink-0 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay)] min-[1440px]:inline-flex"
+                            className="ml-auto hidden flex-shrink-0 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)] min-[1440px]:inline-flex"
                           >
                             Read it in the margin
                           </a>
