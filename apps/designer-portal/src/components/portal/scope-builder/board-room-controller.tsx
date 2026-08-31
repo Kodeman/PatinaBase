@@ -233,6 +233,9 @@ export interface BoardRoomControllerApi {
   trimCanvas: () => void;
   /** Clears a surfaced error after the failed structural change was reverted. */
   discardPersistenceError: () => void;
+  /** Re-sends the reverted-but-consistent board. Resolves true once it lands. */
+  retryPersistence: () => Promise<boolean>;
+  isRetryingPersistence: boolean;
 }
 
 function boardItemFromRow(row: ProposalBoardItem): EditableMoodBoardItem {
@@ -356,6 +359,56 @@ function atomicBoardState(state: BoardRoomState) {
 }
 
 export type StructuralTransitionDirection = 'apply' | 'undo' | 'redo';
+
+/**
+ * Human copy for a failed board write. The backend's own message names RPCs
+ * and validation internals ("Project board changes require
+ * apply_board_room_state", "invalid board item") and reached designers in
+ * production, so it is never rendered — only classified here and logged.
+ */
+export function boardPersistenceMessage(error: unknown): string {
+  // PostgREST rejects with a plain {code, message, details, hint} object, not
+  // an Error, so the message is read structurally rather than by instanceof.
+  const raw = typeof error === 'string'
+    ? error
+    : error && typeof error === 'object' &&
+      typeof (error as { message?: unknown }).message === 'string'
+      ? (error as { message: string }).message
+      : '';
+  const text = raw.toLowerCase();
+  if (
+    text.includes('unavailable') ||
+    text.includes('not accessible') ||
+    text.includes('access denied') ||
+    text.includes('authentication required') ||
+    text.includes('permission') ||
+    text.includes('does not belong')
+  ) {
+    return 'That change was reverted — this board is no longer open for editing here. Reopen it from the project and try again.';
+  }
+  if (text.includes('limit exceeded')) {
+    return 'That change was reverted — this board is already holding as many pins as it can.';
+  }
+  if (
+    text.includes('invalid board') ||
+    text.includes('out of range') ||
+    text.includes('apply_board_room_state') ||
+    text.includes('check_violation')
+  ) {
+    return 'That change was reverted — the board could not accept that layout.';
+  }
+  if (
+    text.includes('failed to fetch') ||
+    text.includes('networkerror') ||
+    text.includes('network request failed') ||
+    text.includes('load failed') ||
+    text.includes('timeout') ||
+    text.includes('aborted')
+  ) {
+    return 'That change was reverted — the connection dropped before it could be saved.';
+  }
+  return 'That change was reverted because it could not be saved.';
+}
 
 function recoveryCommand(
   command: BoardRoomCommand,
@@ -824,8 +877,8 @@ export function useBoardRoomController({
             direction === 'undo' ? 1 : -1,
           );
         }
-        const normalized = error instanceof Error ? error : new Error('The board change could not be saved.');
-        reportError(new Error(`That change was reverted because it could not be saved. ${normalized.message}`));
+        console.warn('[board-room] structural write failed', error);
+        reportError(new Error(boardPersistenceMessage(error)));
         throw error;
       }
     });
@@ -1228,24 +1281,53 @@ export function useBoardRoomController({
   }, [canvasBuffer, layoutBuffer, owner, persistenceError]);
   transitionBarrierRef.current = flushPending;
 
+  const [isRetryingPersistence, setIsRetryingPersistence] = useState(false);
+
+  const retryPersistence = useCallback(async () => {
+    const current = stateRef.current;
+    if (!current) return false;
+    setIsRetryingPersistence(true);
+    try {
+      await runBoardOwnerAutosaveAction(owner, () => applyStateMutation.mutateAsync({
+        boardId,
+        owner,
+        state: atomicBoardState(current),
+      }));
+      for (const item of current.items) snapshotItemIdsRef.current.add(item.id);
+      setPersistenceError(null);
+      setAnnouncement('Board changes saved');
+      return true;
+    } catch (error) {
+      console.warn('[board-room] retry of the board write failed', error);
+      setPersistenceError(boardPersistenceMessage(error));
+      return false;
+    } finally {
+      setIsRetryingPersistence(false);
+    }
+  }, [applyStateMutation, boardId, owner]);
+
   const requestExit = useCallback(async () => {
     if (isExiting) return false;
-    if (persistenceError) {
-      reportError(new Error(persistenceError));
-      return false;
-    }
     setIsExiting(true);
     try {
-      await flushPending();
+      try {
+        await flushPending();
+      } catch (error) {
+        // A failed structural write is always reverted before it surfaces, so
+        // what the server holds is already consistent. Leaving must stay
+        // possible; the banner keeps carrying the failure.
+        console.warn('[board-room] leaving the room with a reverted change', error);
+      }
       await onExit?.();
       return true;
     } catch (error) {
-      reportError(error);
+      console.warn('[board-room] exit failed', error);
+      reportError(new Error(boardPersistenceMessage(error)));
       return false;
     } finally {
       setIsExiting(false);
     }
-  }, [flushPending, isExiting, onExit, persistenceError, reportError]);
+  }, [flushPending, isExiting, onExit, reportError]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1510,7 +1592,7 @@ export function useBoardRoomController({
 
   const effectiveError = persistenceError ?? layoutBuffer.error ?? canvasBuffer.error ??
     (boardQuery.error instanceof Error ? boardQuery.error.message : null);
-  const persistenceState: BoardRoomControllerApi['persistenceState'] = structuralSaving
+  const persistenceState: BoardRoomControllerApi['persistenceState'] = structuralSaving || isRetryingPersistence
     ? 'saving'
     : layoutBuffer.state === 'error' || canvasBuffer.state === 'error'
       ? 'error'
@@ -1574,6 +1656,8 @@ export function useBoardRoomController({
     moveSectionBand,
     trimCanvas,
     discardPersistenceError: () => setPersistenceError(null),
+    retryPersistence,
+    isRetryingPersistence,
   };
 }
 
