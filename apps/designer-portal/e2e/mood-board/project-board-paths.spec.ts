@@ -78,6 +78,22 @@ function boardItemCount(): number {
   );
 }
 
+/**
+ * Resolves a share token as the `anon` role — the exact grant a guest holds.
+ * Returns psql's rendering of the boolean: 'true' / 'false'.
+ */
+function resolveAsGuest(token: string): string {
+  return psqlScalar(
+    `BEGIN; SET LOCAL ROLE anon; SELECT (public.resolve_board_share('${token}') IS NOT NULL)::text; COMMIT;`,
+  );
+}
+
+function guestResolvedBoardName(token: string): string {
+  return psqlScalar(
+    `BEGIN; SET LOCAL ROLE anon; SELECT public.resolve_board_share('${token}') #>> '{board,name}'; COMMIT;`,
+  );
+}
+
 async function openProjectBoard(page: AuthenticatedPage): Promise<void> {
   await page.goto(`/board/${BOARD_ID}?from=%2Fdesk&source=recent_boards`, {
     waitUntil: "domcontentloaded",
@@ -267,9 +283,12 @@ test.describe("Project-owned board save path", () => {
       .getByRole("button", { name: "Create and copy link" })
       .click();
 
-    await expect(page.getByLabel("Board share link")).toBeVisible({
-      timeout: 15_000,
-    });
+    const linkField = page.getByLabel("Board share link");
+    await expect(linkField).toBeVisible({ timeout: 15_000 });
+    const shareUrl = await linkField.inputValue();
+    const token = shareUrl.match(/\/share\/([0-9a-f]{64})/)?.[1];
+    expect(token, `minted link should carry a token: ${shareUrl}`).toBeTruthy();
+
     await expect
       .poll(() =>
         Number(
@@ -279,6 +298,25 @@ test.describe("Project-owned board save path", () => {
         ),
       )
       .toBe(1);
+
+    // The guest leg, from an identity that has never signed in. The link's own
+    // host is the client portal on :3002, which this suite's webServer does not
+    // start — so the fresh context proves it holds no designer session, and the
+    // token is then resolved through the same `anon`-granted RPC the guest page
+    // calls, which is where the actual authorization lives.
+    const guestContext = await page.context().browser()!.newContext();
+    try {
+      const guestPage = await guestContext.newPage();
+      await guestPage.goto("/desk", { waitUntil: "domcontentloaded" });
+      await expect(guestPage).toHaveURL(/\/auth\/signin/, { timeout: 20_000 });
+
+      expect(resolveAsGuest(token!)).toBe("true");
+      expect(guestResolvedBoardName(token!)).toBe(
+        "Project leg acceptance board",
+      );
+    } finally {
+      await guestContext.close();
+    }
 
     await page.getByRole("button", { name: "Revoke" }).first().click();
     await expect
@@ -290,6 +328,10 @@ test.describe("Project-owned board save path", () => {
         ),
       )
       .toBe(0);
+
+    // A revoked token must go dead for the guest, not merely disappear from the
+    // designer's list.
+    expect(resolveAsGuest(token!)).toBe("false");
   });
 
   test("a failed save reads in plain words, retries, and never traps the reader", async ({
