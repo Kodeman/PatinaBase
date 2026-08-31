@@ -127,8 +127,8 @@ public final class AppContainer {
             let gateway = SupabaseCaptureGateway(client: client,
                                                  bucket: AppConfiguration.captureMediaBucket)
             self.sync = LocalCaptureSyncService(store: store, analytics: analytics,
-                                                liveActivity: liveActivity,
-                                                session: session, remote: gateway, projectCache: cache)
+                                                liveActivity: liveActivity, session: session, remote: gateway,
+                                                projectCache: cache, fieldWrites: SupabaseFieldWriteGateway(client: client))
             self.projectCreator = SupabaseProjectCreator(client: client, session: session)
 
             #if targetEnvironment(simulator)
