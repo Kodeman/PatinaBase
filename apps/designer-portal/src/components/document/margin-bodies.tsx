@@ -880,7 +880,7 @@ export function NoteBody({
               toDecision.mutate({
                 noteId: row.item_id,
                 projectId,
-                body: row.title,
+                body: field.body,
               })
             }
           >
@@ -909,8 +909,8 @@ export function NoteBody({
           onClose={() => setAmending(false)}
           seed={{
             title:
-              row.title.length > 70 ? `${row.title.slice(0, 67)}…` : row.title,
-            description: row.title,
+              field.body.length > 70 ? `${field.body.slice(0, 67)}…` : field.body,
+            description: field.body,
             noteId: row.item_id,
           }}
         />
