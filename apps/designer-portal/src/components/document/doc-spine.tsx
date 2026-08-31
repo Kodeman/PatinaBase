@@ -202,7 +202,7 @@ export function DocSpine({
               size="md"
               fill={markFill}
               breathing
-              ground="light"
+              ground="rail"
               label={markLabel}
             />
           </div>

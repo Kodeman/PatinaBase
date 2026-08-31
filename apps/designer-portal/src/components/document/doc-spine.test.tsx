@@ -10,11 +10,13 @@ jest.mock('./strata-mark', () => ({
     fill,
     size,
     breathing,
+    ground,
   }: {
     label?: string;
     fill?: [number, number, number];
     size?: string;
     breathing?: boolean;
+    ground?: string;
   }) =>
     label ? (
       <span
@@ -22,6 +24,7 @@ jest.mock('./strata-mark', () => ({
         aria-label={label}
         data-mark-fill={fill?.join(',')}
         data-mark-size={size}
+        data-mark-ground={ground}
         data-mark-breathing={breathing ? 'true' : undefined}
       />
     ) : (
@@ -76,8 +79,12 @@ describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
   }
 
   it('prints the household, ONE progress mark and the two stage-phrase lines in one reserved block', () => {
+    // The SHIPPED shape: `page.tsx:2475` passes
+    // `stageWord={ticketPhase.name.toUpperCase()}`, so the name production
+    // announces is ALL CAPS. The twin asserts that string, not a mixed-case
+    // one the page cannot produce (W7-C8).
     const head = renderHead({
-      stageWord: 'Procurement & Orders',
+      stageWord: 'PROCUREMENT & ORDERS',
       stagePhase: { name: 'Procurement & Orders', position: 3, of: 5 },
     });
 
@@ -89,10 +96,13 @@ describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
     expect(within(head).queryByRole('list')).toBeNull();
     expect(head.querySelectorAll('[role="img"]')).toHaveLength(1);
     const mark = within(head).getByRole('img', {
-      name: 'Procurement & Orders — 3 of 5',
+      name: 'PROCUREMENT & ORDERS — 3 of 5',
     });
     expect(mark).toHaveAttribute('data-mark-size', 'md');
     expect(mark).toHaveAttribute('data-mark-breathing', 'true');
+    // W7-C14 — the rail's ghost track, one register up, so the unfilled
+    // remainder actually prints at 3px on the rail stock.
+    expect(mark).toHaveAttribute('data-mark-ground', 'rail');
 
     // The count itself stays printed — Kody called the ROW useless, not the
     // number — and it is formatted from the same phase the mark is named from.
@@ -100,7 +110,7 @@ describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
     expect(phrase).not.toBeNull();
     expect(phrase).toHaveClass('font-mono', 'text-[11px]', 'uppercase');
     expect(
-      within(phrase as HTMLElement).getByText('Procurement & Orders'),
+      within(phrase as HTMLElement).getByText('PROCUREMENT & ORDERS'),
     ).toBeInTheDocument();
     expect(within(phrase as HTMLElement).getByText('3 OF 5')).toBeInTheDocument();
 
@@ -111,11 +121,11 @@ describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
 
   it('is inert: no press, no tooltip, no tabstop on the mark (W7-R1 §1)', () => {
     const head = renderHead({
-      stageWord: 'Procurement & Orders',
+      stageWord: 'PROCUREMENT & ORDERS',
       stagePhase: { name: 'Procurement & Orders', position: 3, of: 5 },
     });
     const mark = within(head).getByRole('img', {
-      name: 'Procurement & Orders — 3 of 5',
+      name: 'PROCUREMENT & ORDERS — 3 of 5',
     });
     expect(mark.closest('button')).toBeNull();
     expect(mark.closest('a')).toBeNull();
@@ -128,9 +138,9 @@ describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
     // `project` is active, so shaping and commitment are behind her and
     // delivery has just begun: the staircase `fillStateAtSection` already
     // computes, unchanged.
-    const working = renderHead({ stageWord: 'Procurement & Orders' });
+    const working = renderHead({ stageWord: 'PROCUREMENT & ORDERS' });
     expect(
-      within(working).getByRole('img', { name: 'Procurement & Orders' }),
+      within(working).getByRole('img', { name: 'PROCUREMENT & ORDERS' }),
     ).toHaveAttribute('data-mark-fill', '1,1,0.16666666666666666');
 
     cleanup();
@@ -144,8 +154,8 @@ describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
   });
 
   it('the mark is a GLYPH, never a rail label — the R1 census is unchanged', () => {
-    const head = renderHead({ stageWord: 'Procurement & Orders' });
-    const mark = within(head).getByRole('img', { name: 'Procurement & Orders' });
+    const head = renderHead({ stageWord: 'PROCUREMENT & ORDERS' });
+    const mark = within(head).getByRole('img', { name: 'PROCUREMENT & ORDERS' });
     expect(mark).not.toHaveAttribute('data-rail-label');
     expect(mark.closest('[data-rail-label]')).toBeNull();
     // Two head labels remain: the household and the stage phrase's top line.
