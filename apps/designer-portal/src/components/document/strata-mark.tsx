@@ -66,8 +66,12 @@ export function StrataMark({
   breathing?: boolean;
   /** R35: collapse the three movement hues to a single clay fade (wordmark). */
   mono?: boolean;
-  /** Ghost-track tone — `dark` for charcoal grounds (the spine). */
-  ground?: 'light' | 'dark';
+  /** Ghost-track tone — `dark` for charcoal grounds (the spine); `rail` is
+   *  `light` one register up (W7-C14, the design lead's W7 sign-off): at 3px
+   *  on the rail stock a 0.12 track does not print at all, so the mark read as
+   *  three descending bars at rest rather than as progress with a remainder.
+   *  The fills and the movement hues are unchanged — only the ghost. */
+  ground?: 'light' | 'dark' | 'rail';
   /** A11y: when the mark CARRIES meaning (spine active marker, letterhead
    *  progress), give it a text alternative so it isn't silent to AT. Decorative
    *  instances omit this and stay aria-hidden. */
@@ -76,7 +80,12 @@ export function StrataMark({
   const { w, bar, gap } = SIZES[size];
   const widths = RATIO.map((r) => Math.round(w * r));
   const breath = breathing ? ' doc-breath' : '';
-  const track = ground === 'dark' ? 'rgba(250,247,242,0.12)' : 'rgba(44,41,38,0.12)';
+  const track =
+    ground === 'dark'
+      ? 'rgba(250,247,242,0.12)'
+      : ground === 'rail'
+        ? 'rgba(44,41,38,0.22)'
+        : 'rgba(44,41,38,0.12)';
   // Meaning-carrying marks announce; decorative ones stay hidden.
   const a11y = label
     ? ({ role: 'img', 'aria-label': label } as const)
@@ -100,13 +109,16 @@ export function StrataMark({
               }}
             >
               <span
-                className="strata-fill absolute inset-0"
+                // W7-R1 §1 — the fill's ease is a CLASS, not an inline style:
+                // an inline `transition` outranks `motion-reduce:transition-none`
+                // and the mark would keep animating under reduce. `ease-in-out`
+                // IS cubic-bezier(0.4,0,0.2,1).
+                className="strata-fill absolute inset-0 transition-transform duration-[600ms] ease-in-out motion-reduce:transition-none"
                 style={{
                   background: hue,
                   borderRadius: 999,
                   transformOrigin: 'left center',
                   transform: `scaleX(${clamp(fill[i])})`,
-                  transition: 'transform 0.6s cubic-bezier(0.4,0,0.2,1)',
                 }}
               />
             </span>

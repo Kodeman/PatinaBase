@@ -178,15 +178,20 @@ describe('the ladder’s stops', () => {
     expect(screen.getByText('Nothing on this paper yet')).toBeInTheDocument();
   });
 
-  // B4 — the line was in the DOM and off the paper: the track's floors sum to
-  // 0px on a pre-work spread, and a definite `flex-basis: 0px` with nothing to
-  // grow into laid it out at zero height under `overflow-y-auto`. jsdom cannot
-  // measure that, so the flex the browser is handed is asserted instead.
+  // B4 — the line was in the DOM and off the paper: the track's floors summed
+  // to 0px on a pre-work spread and a definite `flex-basis: 0px` with nothing
+  // to grow into laid it out at zero height under `overflow-y-auto`. D-B52
+  // deleted the basis, the growth and the special case together: EVERY track
+  // now takes its content's height, so the pre-work spread has no branch of
+  // its own left to get wrong.
   it('gives the empty track the height of the one line it prints, and prints it once, unpressable', () => {
     mount({ segments: [] });
     const track = ladderNav().querySelector('[data-lens-track]') as HTMLElement;
     expect(track.style.flexBasis).toBe('auto');
     expect(track.style.flexGrow).toBe('0');
+    // B4's other half survives D-B52: an EMPTY track may not be shrunk under
+    // the one line it prints, or `overflow-y-auto` clips OD-2's sentence out
+    // of sight again and the pre-work rail says nothing at all.
     expect(track.style.flexShrink).toBe('0');
 
     const line = screen.getByText('Nothing on this paper yet');
@@ -198,14 +203,58 @@ describe('the ladder’s stops', () => {
     expect(line.onclick).toBeNull();
   });
 
-  it('keeps the track on its measured floor wherever the spread does print stops', () => {
+  it('takes its rows’ height and never grows, wherever the spread does print stops (D-B52)', () => {
     mount();
     const track = ladderNav().querySelector('[data-lens-track]') as HTMLElement;
-    // jsdom drops a `var()` it cannot resolve, so the floor branch is asserted
-    // by what it is NOT: the content-height flex the empty track takes.
-    expect(track.style.flexBasis).not.toBe('auto');
-    expect(track.style.flexGrow).toBe('1');
-    expect(track.style.flexShrink).not.toBe('0');
+    // One flex for every spread: no basis, no growth, shrink only where the
+    // column genuinely cannot hold the rows — and then it scrolls itself.
+    expect(track.style.flexBasis).toBe('auto');
+    expect(track.style.flexGrow).toBe('0');
+    expect(track.style.flexShrink).toBe('1');
+    expect(track).toHaveClass('min-h-0', 'overflow-y-auto', 'mb-3');
+    expect(track.style.getPropertyValue('--track-floor-full')).toBe('');
+    expect(track.style.getPropertyValue('--track-floor-narrow')).toBe('');
+    expect(track.className).not.toContain('--track-floor');
+  });
+
+  /**
+   * W7-C6 — the reading window had no falsifier at all: `data-lens-window`
+   * appeared nowhere outside the component. jsdom cannot measure `offsetTop`,
+   * so the geometry is the e2e's (`lens-rail-budget.spec.ts`); what IS
+   * assertable here is the branch — printed with a reading stop, hidden and
+   * unstamped without one — and that it stays out of the accessibility tree.
+   */
+  describe('the reading window', () => {
+    const bracketEl = () =>
+      ladderNav().querySelector<HTMLElement>('[data-lens-track] > span');
+
+    it('prints and stamps its box while a stop is being read', () => {
+      mount({ activeKey: 'ffe' });
+      const bracket = bracketEl();
+      expect(bracket).not.toBeNull();
+      expect(bracket!.hidden).toBe(false);
+      expect(bracket).toHaveAttribute('data-lens-window');
+      // `<top>:<height>` — the two numbers the rAF write publishes.
+      expect(bracket!.getAttribute('data-lens-window')).toMatch(/^-?\d+(\.\d+)?:-?\d+(\.\d+)?$/);
+      expect(bracket).toHaveAttribute('aria-hidden');
+    });
+
+    it('hides and un-stamps itself where there is no reading stop', () => {
+      // The bracket may never sit on rail the reader is not standing in: no
+      // index, no window — the union with `headInFrame` is anchored on the
+      // reading stop precisely so this stays true.
+      mount({ activeKey: null, headInFrame: 'ffe' });
+      const bracket = bracketEl();
+      expect(bracket).not.toBeNull();
+      expect(bracket!.hidden).toBe(true);
+      expect(bracket).not.toHaveAttribute('data-lens-window');
+    });
+
+    it('stays printed when a head crosses the frame under the reading stop', () => {
+      mount({ activeKey: 'ffe', headInFrame: 'money' });
+      expect(bracketEl()!.hidden).toBe(false);
+      expect(bracketEl()).toHaveAttribute('data-lens-window');
+    });
   });
 
   it('marks exactly one stop current, and jumps from any of them', () => {
@@ -268,10 +317,10 @@ describe('the ladder’s stops', () => {
     mount({ activeKey: 'ffe', headInFrame: 'ffe' });
 
     // Same count, same strings — the only difference is paint. An unrendered
-    // line would take its box with it, the segment would fall back toward its
-    // `flex-basis` floor, and `flex-grow: extent` would re-deal the freed height
-    // across every sibling: a rail-wide reflow on a step the reader never
-    // caused (the shift D-B34's cause gate reported).
+    // line would take its box with it and the row would shrink under it: a
+    // reflow on a step the reader never caused (the shift D-B34's cause gate
+    // reported). D-B52 removed the redistribution channel entirely, so the
+    // invariant is now local to the row as well as global to the track.
     expect(valueLines()).toEqual(before);
     expect(ladderNav().querySelectorAll('[data-ladder-value]')).toHaveLength(
       before.length,
@@ -457,6 +506,46 @@ describe('the doors', () => {
     ).toEqual(['proposal', 'scope', 'vision', 'investment', 'record']);
   });
 
+  // W7-R1 §3 — Kody: "filed with this job items should have an icon for each
+  // room." The glyph decorates; the word still labels.
+  it('gives every door a glyph, and leaves its accessible name alone (W7-R1 §3)', () => {
+    const { doors } = ladderFor('project');
+    render(
+      <LensLadder
+        segments={[]}
+        doors={doors}
+        activeKey={null}
+        onJump={jest.fn()}
+      />,
+    );
+    const rows = Array.from(
+      ladderNav().querySelectorAll<HTMLElement>('[data-ladder-door]'),
+    );
+    expect(rows).toHaveLength(doors.length);
+    for (const row of rows) {
+      const svg = row.querySelector('svg');
+      expect(svg).not.toBeNull();
+      expect(svg).toHaveAttribute('aria-hidden', 'true');
+      expect(svg).toHaveAttribute('width', '14');
+      expect(svg).toHaveAttribute('height', '14');
+      expect(svg).toHaveAttribute('stroke-width', '1.5');
+      expect(svg).toHaveAttribute('stroke', 'currentColor');
+      expect(row).toHaveClass('gap-[8px]');
+      // The icon adds nothing to the name: `Plan room` is still `Plan room`.
+      const label = doors.find(
+        (door) => door.key === row.getAttribute('data-ladder-door'),
+      )?.label as string;
+      expect(row).toHaveAccessibleName(label);
+      expect(row.textContent).toBe(label);
+    }
+    // A non-door row in the same rail carries none.
+    expect(
+      ladderNav()
+        .querySelector('[data-rail-label]:not([data-ladder-door])')
+        ?.querySelector('svg'),
+    ).toBeFalsy();
+  });
+
   it('gives every door a 44px target', () => {
     mount();
     for (const door of doorRows()) expect(door).toHaveClass('min-h-11');
@@ -494,7 +583,7 @@ describe('the doors', () => {
 // clipped. The track now states what it needs and scrolls itself when the rail
 // is shorter than that; the doors are never asked to give way.
 describe('the track’s own height', () => {
-  it('asks for the sum of the floors it prints, per measure, and scrolls rather than spilling', () => {
+  it('gives every stop row its own natural height over a 36px minimum, and no growth (D-B52)', () => {
     const { segments } = ladderFor('project');
     render(
       <LensLadder
@@ -504,26 +593,21 @@ describe('the track’s own height', () => {
         onJump={jest.fn()}
       />,
     );
-    const track = ladderNav().querySelector(
-      '[data-lens-track]',
-    ) as HTMLElement;
-
-    const full =
-      segments.reduce((sum, segment) => sum + segment.floorPx, 0) + 4 * 27;
-    const narrow = segments.reduce(
-      (sum, segment) => sum + segment.narrowFloorPx,
-      0,
+    const rows = Array.from(
+      ladderNav().querySelectorAll<HTMLElement>('[data-ladder-segment]'),
     );
-    expect(track.style.getPropertyValue('--track-floor-full')).toBe(`${full}px`);
-    expect(track.style.getPropertyValue('--track-floor-narrow')).toBe(
-      `${narrow}px`,
-    );
-    expect(track).toHaveClass('overflow-y-auto');
-    // Render once: the measure chooses the floor, not a width read.
-    expect(track).toHaveClass(
-      '[--track-floor:var(--track-floor-narrow)]',
-      'min-[1440px]:[--track-floor:var(--track-floor-full)]',
-    );
+    expect(rows).toHaveLength(segments.length);
+    for (const row of rows) {
+      expect(row.style.flexBasis).toBe('auto');
+      expect(row.style.flexGrow).toBe('0');
+      expect(row.style.flexShrink).toBe('0');
+      expect(row.style.minHeight).toBe('36px');
+      // The two per-measure floors and the class that chose between them are
+      // gone with the growth they fed (W7-R1 §2, Kody's ruling).
+      expect(row.style.getPropertyValue('--seg-floor-full')).toBe('');
+      expect(row.style.getPropertyValue('--seg-floor-narrow')).toBe('');
+      expect(row.className).not.toContain('--seg-floor');
+    }
   });
 
   // Design review item 9 — the rungs open by taking the remainder from the
@@ -581,22 +665,27 @@ describe('the track’s own height', () => {
     expect(track.style.flexGrow).toBe('0');
   });
 
-  it('drops the rungs’ share back out of the ask when they are not printed', () => {
-    const { segments } = ladderFor('project');
+  it('hangs the nav’s ONE flexible gap under the last stop, above the doors (W7-R1 §2)', () => {
+    const { segments, doors } = ladderFor('project');
     render(
       <LensLadder
         segments={segments}
-        doors={[]}
+        doors={doors}
         activeKey="money"
         onJump={jest.fn()}
       />,
     );
-    const track = ladderNav().querySelector(
-      '[data-lens-track]',
+    // Kody: "between sections there should not be giant gaps, the only gap
+    // should be after 'the record'." `mt-auto` on the doors is that gap, and
+    // the rows' own `mb-3` keeps a breath where it collapses to zero.
+    const doorsBox = ladderNav().querySelector(
+      '[data-ladder-doors]',
     ) as HTMLElement;
-    expect(track.style.getPropertyValue('--track-floor-full')).toBe(
-      `${segments.reduce((sum, segment) => sum + segment.floorPx, 0)}px`,
-    );
+    expect(doorsBox).toHaveClass('mt-auto', 'shrink-0', 'border-t', 'pt-3');
+    expect(doorsBox.className).not.toContain('mt-3');
+    expect(
+      ladderNav().querySelector('[data-lens-track]'),
+    ).toHaveClass('mb-3');
   });
 });
 
@@ -875,7 +964,7 @@ describe('the rail around the ladder', () => {
         segments={segments}
         doors={doors}
         stageWord="Procurement & Orders"
-        stageIndex="4 OF 6"
+        stagePhase={{ name: 'Procurement & Orders', position: 4, of: 6 }}
       />,
     );
     const spine = document.querySelector('[data-document-spine]') as HTMLElement;

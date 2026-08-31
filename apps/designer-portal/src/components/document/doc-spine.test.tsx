@@ -1,22 +1,41 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { DocSpine } from './doc-spine';
 import type { SpineSection } from '@/lib/document/section-derivation';
 
-jest.mock('./strata-mark', () => ({ StrataMark: () => <span aria-hidden>mark</span> }));
+// The mark carries meaning now, so the stub carries its name and its fill:
+// W7-R1 §1's whole subject is which single mark prints and how full it is.
+jest.mock('./strata-mark', () => ({
+  StrataMark: ({
+    label,
+    fill,
+    size,
+    breathing,
+    ground,
+  }: {
+    label?: string;
+    fill?: [number, number, number];
+    size?: string;
+    breathing?: boolean;
+    ground?: string;
+  }) =>
+    label ? (
+      <span
+        role="img"
+        aria-label={label}
+        data-mark-fill={fill?.join(',')}
+        data-mark-size={size}
+        data-mark-ground={ground}
+        data-mark-breathing={breathing ? 'true' : undefined}
+      />
+    ) : (
+      <span aria-hidden>mark</span>
+    ),
+}));
 
 const sections: SpineSection[] = [
   { key: 'brief', label: 'Brief', state: 'unrecorded', sub: 'Not recorded' },
   { key: 'project', label: 'Project', state: 'active', sub: 'Active' },
 ];
-
-describe('DocSpine unrecorded stages', () => {
-  it('names unrecorded history but does not make it a jump target', () => {
-    render(<DocSpine sections={sections} onJump={jest.fn()} />);
-    expect(screen.getByLabelText('Brief: Not recorded')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Jump to Brief/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Jump to Project/ })).toBeInTheDocument();
-  });
-});
 
 describe('DocSpine at the narrow tier (1180–1439) — F02', () => {
   it('prints the active section label and "Put down" from 1180, not only from 1440', () => {
@@ -44,14 +63,14 @@ describe('DocSpine at the narrow tier (1180–1439) — F02', () => {
   });
 });
 
-describe('DocSpine · the rail head (R127 W1)', () => {
-  function renderHead() {
+describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
+  function renderHead(props: Partial<Parameters<typeof DocSpine>[0]> = {}) {
     const { container } = render(
       <DocSpine
         sections={sections}
-       
         onJump={jest.fn()}
         household="Vandersteen"
+        {...props}
       />,
     );
     const head = container.querySelector('[data-spine-head]');
@@ -59,38 +78,93 @@ describe('DocSpine · the rail head (R127 W1)', () => {
     return head as HTMLElement;
   }
 
-  it('prints the household, the seven-mark arc and the two stage-phrase lines in one reserved block', () => {
-    const head = renderHead();
+  it('prints the household, ONE progress mark and the two stage-phrase lines in one reserved block', () => {
+    // The SHIPPED shape: `page.tsx:2475` passes
+    // `stageWord={ticketPhase.name.toUpperCase()}`, so the name production
+    // announces is ALL CAPS. The twin asserts that string, not a mixed-case
+    // one the page cannot produce (W7-C8).
+    const head = renderHead({
+      stageWord: 'PROCUREMENT & ORDERS',
+      stagePhase: { name: 'Procurement & Orders', position: 3, of: 5 },
+    });
 
     // The household, at the letterhead's own name, 13px.
     expect(within(head).getByText('Vandersteen')).toHaveClass('text-[13px]');
 
-    // The arc, unmoved: one <li> per section, inside the head.
-    const arc = within(head).getByRole('list');
-    expect(within(arc).getAllByRole('listitem')).toHaveLength(sections.length);
+    // W7-R1 §1 — the seven-mark arc is gone: no list, no jump cells, and ONE
+    // mark in its place, named by the stage word and the ordinal.
+    expect(within(head).queryByRole('list')).toBeNull();
+    expect(head.querySelectorAll('[role="img"]')).toHaveLength(1);
+    const mark = within(head).getByRole('img', {
+      name: 'PROCUREMENT & ORDERS — 3 of 5',
+    });
+    expect(mark).toHaveAttribute('data-mark-size', 'md');
+    expect(mark).toHaveAttribute('data-mark-breathing', 'true');
+    // W7-C14 — the rail's ghost track, one register up, so the unfilled
+    // remainder actually prints at 3px on the rail stock.
+    expect(mark).toHaveAttribute('data-mark-ground', 'rail');
 
-    // The stage phrase: the caption's two strings, re-set as one mono block.
+    // The count itself stays printed — Kody called the ROW useless, not the
+    // number — and it is formatted from the same phase the mark is named from.
     const phrase = head.querySelector('[data-spine-stage-phrase]');
     expect(phrase).not.toBeNull();
     expect(phrase).toHaveClass('font-mono', 'text-[11px]', 'uppercase');
-    expect(within(phrase as HTMLElement).getByText('Project')).toBeInTheDocument();
-    expect(within(phrase as HTMLElement).getByText('Active')).toBeInTheDocument();
+    expect(
+      within(phrase as HTMLElement).getByText('PROCUREMENT & ORDERS'),
+    ).toBeInTheDocument();
+    expect(within(phrase as HTMLElement).getByText('3 OF 5')).toBeInTheDocument();
 
-    // The height is reserved, not measured, at both desktop tiers.
-    // Measured, not arithmetic: this portal's root is 18px, so `min-h-6`
-    // computes to 27 and `min-h-11` to 49.5, and the wrapped arc costs more
-    // than §10's estimate (W1 e2e: 126 at 1280, 117 at 1440).
-    expect(head).toHaveClass('min-h-[126px]', 'min-[1440px]:min-h-[117px]');
+    // The height is still RESERVED, not measured — at the new, smaller
+    // reserve the arc's 44/48px row left behind.
+    expect(head).toHaveClass('min-h-[107px]', 'min-[1440px]:min-h-[93px]');
+  });
+
+  it('is inert: no press, no tooltip, no tabstop on the mark (W7-R1 §1)', () => {
+    const head = renderHead({
+      stageWord: 'PROCUREMENT & ORDERS',
+      stagePhase: { name: 'Procurement & Orders', position: 3, of: 5 },
+    });
+    const mark = within(head).getByRole('img', {
+      name: 'PROCUREMENT & ORDERS — 3 of 5',
+    });
+    expect(mark.closest('button')).toBeNull();
+    expect(mark.closest('a')).toBeNull();
+    expect(mark).not.toHaveAttribute('title');
+    expect(mark).not.toHaveAttribute('tabindex');
+    expect(screen.queryByRole('button', { name: /Jump to/ })).toBeNull();
+  });
+
+  it('takes its fill from the engagement’s own section — and prints UNFILLED before the work (W7-R1 §1)', () => {
+    // `project` is active, so shaping and commitment are behind her and
+    // delivery has just begun: the staircase `fillStateAtSection` already
+    // computes, unchanged.
+    const working = renderHead({ stageWord: 'PROCUREMENT & ORDERS' });
+    expect(
+      within(working).getByRole('img', { name: 'PROCUREMENT & ORDERS' }),
+    ).toHaveAttribute('data-mark-fill', '1,1,0.16666666666666666');
+
+    cleanup();
+
+    // A pre-work spread has placed no phase: the mark keeps its box and its
+    // stage word, and claims no progress.
+    const preWork = renderHead({ preWork: true, stageWord: 'Proposal' });
+    const mark = within(preWork).getByRole('img', { name: 'Proposal' });
+    expect(mark).toHaveAttribute('data-mark-fill', '0,0,0');
+    expect(preWork.querySelectorAll('[role="img"]')).toHaveLength(1);
+  });
+
+  it('the mark is a GLYPH, never a rail label — the R1 census is unchanged', () => {
+    const head = renderHead({ stageWord: 'PROCUREMENT & ORDERS' });
+    const mark = within(head).getByRole('img', { name: 'PROCUREMENT & ORDERS' });
+    expect(mark).not.toHaveAttribute('data-rail-label');
+    expect(mark.closest('[data-rail-label]')).toBeNull();
+    // Two head labels remain: the household and the stage phrase's top line.
+    expect(head.querySelectorAll('[data-rail-label]')).toHaveLength(2);
   });
 
   it('carries no timer and no presence line — both left the rail (OD-16)', () => {
     const { container } = render(
-      <DocSpine
-        sections={sections}
-       
-        onJump={jest.fn()}
-        household="Vandersteen"
-      />,
+      <DocSpine sections={sections} onJump={jest.fn()} household="Vandersteen" />,
     );
     expect(screen.queryByTestId('spine-timer')).toBeNull();
     expect(container.querySelector('[data-spine-timer-regime]')).toBeNull();
@@ -105,7 +179,6 @@ describe('DocSpine · the rail head (R127 W1)', () => {
     render(
       <DocSpine
         sections={sections}
-       
         onJump={jest.fn()}
         household="Vandersteen"
         roomInHand={{ id: 'r1', name: 'Kitchen' }}

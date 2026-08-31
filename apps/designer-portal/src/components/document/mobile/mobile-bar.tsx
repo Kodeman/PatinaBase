@@ -97,7 +97,7 @@ export function MobileBar() {
     openDrawer,
     openMargin,
   } = useMobileShell();
-  const { inHandToday, running, paused, elapsedSeconds, offer } =
+  const { inHandToday, running, paused, elapsedSeconds, offer, offerOwnsEdge } =
     useDocumentTime();
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
   const { data: unreadProcurement = 0 } = useProcurementUnreadCount();
@@ -203,6 +203,9 @@ export function MobileBar() {
     };
   }, [moreOpen]);
 
+  // D-B54 ruled this line STAYS on the bare `offer`: a chain-out is a change
+  // of subject whether or not it takes the edge, and an open More menu over
+  // it is stale either way. Only the EDGE question reads `offerOwnsEdge`.
   useEffect(() => {
     if (sheet || offer) setMoreOpen(false);
   }, [offer, sheet]);
@@ -216,7 +219,7 @@ export function MobileBar() {
   // is the bar not laid out at all — `min-[1180px]:hidden`, or the log offer
   // owning the edge instead — and then the property comes off, so the desktop
   // inset stays exactly what it was.
-  const barRendered = !offer;
+  const barRendered = !offerOwnsEdge;
   useEffect(() => {
     const root = document.documentElement;
     const clear = () => root.style.removeProperty('--doc-mobile-bar-height');
@@ -246,8 +249,11 @@ export function MobileBar() {
     };
   }, [barRendered]);
 
-  // The log offer becomes the edge owner while it is actionable.
-  if (offer) return null;
+  // D-B54 — the log offer becomes the edge owner while it is ACTIONABLE, and
+  // actionability is the provider's one boolean, not a bare `offer` read. The
+  // strip refuses a cross-project offer; a bar that yielded to one anyway left
+  // the phone with no bottom chrome at all.
+  if (offerOwnsEdge) return null;
 
   const closeThen = (action: () => void) => {
     // Hand modal focus restoration a stable, still-rendered doorway before the

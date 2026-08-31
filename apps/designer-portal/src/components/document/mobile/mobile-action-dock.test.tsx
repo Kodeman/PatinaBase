@@ -21,7 +21,10 @@ let mockTimeState = {
   running: false,
   paused: false,
   elapsedSeconds: 0,
-  offer: null as null | { id: string },
+  offer: null as null | { id: string; projectId: string },
+  // D-B54 — the bar yields on the provider's derived boolean, never on a bare
+  // `offer`: an offer the strip will not paint must not take the edge.
+  heldProjectId: null as string | null,
 };
 
 jest.mock('next/navigation', () => ({
@@ -42,9 +45,18 @@ jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: false }),
 }));
 
-jest.mock('@/hooks/document-time-provider', () => ({
-  useDocumentTime: () => mockTimeState,
-}));
+jest.mock('@/hooks/document-time-provider', () => {
+  const actual = jest.requireActual('@/hooks/document-time-provider');
+  return {
+    useDocumentTime: () => ({
+      ...mockTimeState,
+      offerOwnsEdge: actual.offerOwnsThumbEdge(
+        mockTimeState.offer,
+        mockTimeState.heldProjectId,
+      ),
+    }),
+  };
+});
 
 jest.mock('../overlays/post-sheet', () => ({
   openPost: () => mockOpenPost(),
@@ -91,6 +103,7 @@ describe('unified mobile edge owner', () => {
       paused: false,
       elapsedSeconds: 0,
       offer: null,
+      heldProjectId: null,
     };
     mockOpenPost.mockClear();
     jest.mocked(openFeedbackSheet).mockClear();
@@ -408,8 +421,9 @@ describe('unified mobile edge owner', () => {
     ).toBeInTheDocument();
   });
 
-  it('yields the edge while a log offer is active', () => {
-    mockTimeState.offer = { id: 'offer-1' };
+  it('yields the edge while a log offer OWNS it', () => {
+    // Nothing held: the offer is the Desk's, and it owns the edge.
+    mockTimeState.offer = { id: 'offer-1', projectId: 'project-a' };
     render(
       <MobileShellProvider>
         <MobileBar />

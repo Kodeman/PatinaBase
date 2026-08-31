@@ -12,14 +12,21 @@ let mockOffer: null | {
 } = null;
 let mockHeldProjectId: string | null = null;
 
-jest.mock('@/hooks/document-time-provider', () => ({
-  useDocumentTime: () => ({
-    offer: mockOffer,
-    heldProjectId: mockHeldProjectId,
-    logOffer: mockLogOffer,
-    discardOffer: mockDiscardOffer,
-  }),
-}));
+// D-B54 — the cross-project rule moved into the provider, which publishes it
+// as one boolean both edge tenants read (`mobile-bar.tsx` yields on exactly
+// this). The stub calls the provider's OWN exported rule rather than copying
+// it: a re-derived formula in a mock asserts the mock.
+jest.mock('@/hooks/document-time-provider', () => {
+  const actual = jest.requireActual('@/hooks/document-time-provider');
+  return {
+    useDocumentTime: () => ({
+      offer: mockOffer,
+      offerOwnsEdge: actual.offerOwnsThumbEdge(mockOffer, mockHeldProjectId),
+      logOffer: mockLogOffer,
+      discardOffer: mockDiscardOffer,
+    }),
+  };
+});
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {

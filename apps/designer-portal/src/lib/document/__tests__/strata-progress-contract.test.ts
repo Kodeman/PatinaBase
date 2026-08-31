@@ -73,9 +73,18 @@ describe('R35 — the sweep loader', () => {
 });
 
 describe('R35 — surfaces carry the mark', () => {
-  it('the spine renders per-section fill (the staircase), active breathing', () => {
-    expect(spine).toMatch(/fillStateAtSection\(s\.key\)/);
-    expect(spine).toMatch(/breathing=\{s\.state === 'active'\}/);
+  // W7-R1 §1 supersedes the seven-mark arc: Kody ruled the row useless and
+  // asked for ONE mark filled to the document's own progress. The staircase
+  // resolver survives — it is now read once, at the section the engagement
+  // stands in — and the mark still breathes and stills under reduce.
+  it('the spine renders ONE mark, filled from the engagement’s own section, breathing', () => {
+    expect(spine).toMatch(/fillStateAtSection\(activeSection\.key\)/);
+    expect(spine).toMatch(/breathing\b/);
+    expect(spine).not.toMatch(/fillStateAtSection\(s\.key\)/);
+    expect((spine.match(/<StrataMark/g) ?? []).length).toBe(1);
+    // The fill's ease is a class, so `motion-reduce` can still it.
+    expect(mark).toMatch(/motion-reduce:transition-none/);
+    expect(mark).not.toMatch(/transition: 'transform/);
   });
 
   it('the canonical button sweeps on load (no lucide spinner)', () => {

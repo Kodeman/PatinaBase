@@ -25,7 +25,7 @@ import { documentEvents } from '@/lib/analytics/document-events';
 import { DocumentAction } from './document-action';
 
 export function LogStrip() {
-  const { offer, heldProjectId, logOffer, discardOffer } = useDocumentTime();
+  const { offer, offerOwnsEdge, logOffer, discardOffer } = useDocumentTime();
   const [minutes, setMinutes] = useState('');
   const [activity, setActivity] = useState('design');
   const [busy, setBusy] = useState(false);
@@ -49,18 +49,17 @@ export function LogStrip() {
       window.removeEventListener('keydown', onKey, { capture: true });
   }, [offer, discardOffer]);
 
-  if (!offer) return null;
+  // A chained-out entry is already saved. Keep its adjustment offer in the
+  // provider, but do not lay an unrelated project's controls over the document
+  // currently in hand — it can surface again once no other project is held
+  // (for example, back at the Desk). D-B54: the rule is the PROVIDER's now,
+  // and `MobileBar` yields the edge on the same boolean, so the strip refusing
+  // an offer can never again leave the thumb edge unowned.
+  if (!offer || !offerOwnsEdge) return null;
 
   const parsed = parseInt(minutes, 10);
   const valid = Number.isFinite(parsed) && parsed >= 1;
   const adjusted = valid && isAdjusted(offer, parsed);
-  const crossProject = Boolean(heldProjectId && heldProjectId !== offer.projectId);
-
-  // A chained-out entry is already saved. Keep its adjustment offer in the
-  // provider, but do not lay an unrelated project's controls over the
-  // document currently in hand. It can surface again once no other project is
-  // held (for example, back at the Desk).
-  if (crossProject) return null;
 
   const submit = async () => {
     if (!valid || busy) return;

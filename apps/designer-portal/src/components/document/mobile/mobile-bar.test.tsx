@@ -60,15 +60,30 @@ jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: mockCallSheetOn }),
 }));
 
-jest.mock('@/hooks/document-time-provider', () => ({
-  useDocumentTime: () => ({
-    inHandToday: 0,
-    running: false,
-    paused: false,
-    elapsedSeconds: 0,
-    offer: null,
-  }),
-}));
+// D-B54 — the whole defect lived here. This file used to pin `offer: null`
+// for every case, so the bar's yield branch never rendered once and the
+// cross-project state the designer is actually in was never executed. The
+// stub now carries the RAW pair the provider reasons over and derives the
+// answer with the provider's OWN exported rule, so a change to that rule goes
+// red here rather than being re-stated (and re-blessed) by a hand-copied
+// formula in the mock.
+let mockOffer: { entryId: string; projectId: string } | null = null;
+let mockHeldProjectId: string | null = null;
+
+jest.mock('@/hooks/document-time-provider', () => {
+  const actual = jest.requireActual('@/hooks/document-time-provider');
+  return {
+    useDocumentTime: () => ({
+      inHandToday: 0,
+      running: false,
+      paused: false,
+      elapsedSeconds: 0,
+      offer: mockOffer,
+      heldProjectId: mockHeldProjectId,
+      offerOwnsEdge: actual.offerOwnsThumbEdge(mockOffer, mockHeldProjectId),
+    }),
+  };
+});
 
 jest.mock('@/hooks/use-margin-items', () => ({
   useMarginItems: () => ({ data: [] }),
@@ -524,6 +539,29 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     expect(mockRouterPush).toHaveBeenCalledWith('/doc/proj-1/plans');
   });
 
+  // W7-R1 §3 — the SAME glyphs the rail's doors carry, on the same rows. The
+  // Margin row and the stop rows are not doors and get none.
+  it('gives each door row the rail’s own glyph, and no other row one (W7-R1 §3)', () => {
+    mountBarAndSheets();
+    openSections();
+    const panel = sectionsPanel();
+    for (const label of ['Plan room', 'Spec book', 'Boards', 'Call sheet']) {
+      const row = within(panel).getByRole('button', { name: label });
+      const svg = row.querySelector('svg');
+      expect(svg).not.toBeNull();
+      expect(svg).toHaveAttribute('aria-hidden', 'true');
+      expect(svg).toHaveAttribute('width', '14');
+      expect(svg).toHaveAttribute('stroke-width', '1.5');
+      expect(svg).toHaveAttribute('stroke', 'currentColor');
+      expect(row).toHaveClass('gap-[8px]', 'min-h-11');
+      // The word is still the label; the icon adds nothing to it.
+      expect(row).toHaveAccessibleName(label);
+    }
+    // A stop row is not a door.
+    const stop = within(panel).getByRole('button', { name: /^Pieces/ });
+    expect(stop.querySelector('svg')).toBeNull();
+  });
+
   it('routes Spec book and Boards at this project', () => {
     const first = mountBarAndSheets();
     openSections();
@@ -629,5 +667,60 @@ describe('the bar publishes its own height (D-B47)', () => {
     expect(published()).toBe('93px');
     unmount();
     expect(published()).toBe('');
+  });
+});
+
+/**
+ * D-B54 — who owns the thumb edge.
+ *
+ * Kody saw NO navigation at all on prod at 390: opening a document while a
+ * timer ran on another project chained that timer out into a log offer, the
+ * bar yielded the edge on a bare `offer`, and `LogStrip` refused to paint an
+ * offer belonging to a different project — both returned null and the phone
+ * had no bottom chrome. The two components now read ONE boolean the provider
+ * derives, so they cannot answer the question differently.
+ */
+describe('the thumb edge’s one owner (D-B54)', () => {
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    mockCallSheetOn = true;
+    mockOffer = null;
+    mockHeldProjectId = null;
+  });
+
+  afterEach(() => {
+    mockOffer = null;
+    mockHeldProjectId = null;
+  });
+
+  it('RENDERS the bar while a CROSS-PROJECT offer stands — the strip will not paint it', () => {
+    // Kody's screen, stated in the two raw facts the provider reasons over: a
+    // chained-out timer on project A while document B is in hand. `LogStrip`
+    // refuses this offer, so a bar that yielded to it would leave the phone
+    // with no bottom chrome at all.
+    mockOffer = { entryId: 'entry-a', projectId: 'project-a' };
+    mockHeldProjectId = 'project-b';
+    mountBar();
+    expect(screen.getByTestId('mobile-bar')).toBeInTheDocument();
+    expect(
+      document.querySelectorAll('[data-mobile-edge-owner]'),
+    ).toHaveLength(1);
+  });
+
+  it('yields the edge to an offer on the project IN HAND — the strip is about to paint it', () => {
+    mockOffer = { entryId: 'entry-a', projectId: 'project-a' };
+    mockHeldProjectId = 'project-a';
+    mountBar();
+    expect(screen.queryByTestId('mobile-bar')).toBeNull();
+    expect(document.querySelectorAll('[data-mobile-edge-owner]')).toHaveLength(
+      0,
+    );
+  });
+
+  it('yields the edge to an offer with NOTHING held — the Desk, where it resurfaces', () => {
+    mockOffer = { entryId: 'entry-a', projectId: 'project-a' };
+    mockHeldProjectId = null;
+    mountBar();
+    expect(screen.queryByTestId('mobile-bar')).toBeNull();
   });
 });
