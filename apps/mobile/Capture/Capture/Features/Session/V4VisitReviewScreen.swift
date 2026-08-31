@@ -35,7 +35,10 @@ struct V4VisitReviewScreen: View {
     @State private var closedAt = Date()
     @State private var player = VoiceSegmentPlayer()
     @State private var playingSpecimenID: UUID?
-    @State private var offerAccepted = false
+    /// The standing close record's own state, or nil when there is none. The
+    /// button reads THIS rather than a "she tapped" flag: a local insert is not
+    /// a send, and saying "Logged." before the row exists is the §3.3 failure.
+    @State private var closeState: FieldWriteState?
     @State private var projectID: String?
     private let sessionContext = CaptureSessionContextStore.shared
 
@@ -149,25 +152,38 @@ struct V4VisitReviewScreen: View {
     /// The thumbnail when there is one, a mic when the capture is only words.
     @ViewBuilder
     private func glyph(_ specimen: Specimen) -> some View {
-        let photo = specimen.photos.first { $0.isPrimary } ?? specimen.photos.first
-        let image = photo.flatMap {
-            UIImage(contentsOfFile: store.mediaURL(for: $0.thumbnailFilename ?? $0.filename).path)
-        }
         ZStack {
             RoundedRectangle(cornerRadius: 6).fill(CaptureColor.paper2)
-            if let image {
+            #if canImport(UIKit)
+            if let image = thumbnail(specimen) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             } else {
-                Image(systemName: "mic.fill")
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.inkSoft)
+                micGlyph
             }
+            #else
+            micGlyph
+            #endif
         }
         .frame(width: 40, height: 40)
     }
+
+    private var micGlyph: some View {
+        Image(systemName: "mic.fill")
+            .font(CaptureType.footnote)
+            .foregroundStyle(CaptureColor.inkSoft)
+    }
+
+    #if canImport(UIKit)
+    private func thumbnail(_ specimen: Specimen) -> UIImage? {
+        let photo = specimen.photos.first { $0.isPrimary } ?? specimen.photos.first
+        return photo.flatMap {
+            UIImage(contentsOfFile: store.mediaURL(for: $0.thumbnailFilename ?? $0.filename).path)
+        }
+    }
+    #endif
 
     private func rowTitle(_ specimen: Specimen) -> String {
         if let title = specimen.title?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -262,37 +278,72 @@ struct V4VisitReviewScreen: View {
 
     /// One tap logs the visit as the hours it took. The offer is hidden
     /// entirely when the visit has no project — project_time_entries.project_id
-    /// is NOT NULL, so there would be nothing to log it against.
+    /// is NOT NULL, so there would be nothing to log it against — and equally
+    /// when her user id will not resolve, because `user_id` is NOT NULL too.
     @ViewBuilder
     private var timeOffer: some View {
-        if let projectID, !projectID.isEmpty {
-            RouteActionButton(
-                offerAccepted
-                    ? "Logged."
-                    : VisitReviewComposer.timeOffer(minutes: summary.elapsedMinutes),
-                systemImage: "clock",
-                kind: .secondary) {
-                    logTheHours(projectID: projectID)
-                }
-                .disabled(offerAccepted)
+        if let projectID, !projectID.isEmpty, let ownerUserID {
+            RouteActionButton(offerLabel, systemImage: "clock", kind: .secondary) {
+                logTheHours(projectID: projectID, ownerUserID: ownerUserID)
+            }
+            .disabled(closeState != nil)
         }
+    }
+
+    /// What is true right now. A record that exists but has not landed is being
+    /// logged, not logged; one the server closed for good says so rather than
+    /// claiming a send that never happened.
+    private var offerLabel: String {
+        switch closeState {
+        case .none:                     return VisitReviewComposer.timeOffer(
+                                                   minutes: summary.elapsedMinutes)
+        case .written:                  return "Logged."
+        case .refused, .unwritable:     return "These hours didn't log."
+        case .pending, .writing, .failed: return "Logging these hours."
+        }
+    }
+
+    /// `CaptureSessionIdentity` substitutes "anonymous" for a user id it cannot
+    /// resolve, and `project_time_entries.user_id` is a NOT NULL uuid — so an
+    /// offer taken on that substitute could only ever mint a record that fails.
+    /// The sibling write lanes guard the owner id at composition time for the
+    /// same reason (LocalCaptureSyncService); this never queues a doomed close.
+    private var ownerUserID: UUID? {
+        session.userID
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap(UUID.init(uuidString:))
     }
 
     /// The row is written locally and drained later: she is standing in a house
     /// with one bar, and the hours should not depend on her having signal at the
     /// moment she taps. Always a completed entry — never a running timer.
-    private func logTheHours(projectID: String) {
-        guard !offerAccepted else { return }
-        offerAccepted = true
+    private func logTheHours(projectID: String, ownerUserID: UUID) {
+        // Re-read rather than trust `@State`. SwiftData UPSERTS on
+        // `@Attribute(.unique)`: a second insert for this visitID would not
+        // throw, it would overwrite the standing row — including the freshly
+        // minted timeEntryID — and reset it to pending, which is exactly how one
+        // visit ends up as two project_time_entries rows.
+        guard standingClose() == nil else {
+            closeState = standingClose()?.state
+            return
+        }
         store.context.insert(FieldVisitCloseRecord(
             visitID: visitID,
             timeEntryID: UUID(),
             projectID: projectID,
-            ownerUserID: identity.userID,
+            ownerUserID: ownerUserID.uuidString,
             startedAt: startedAt,
             endedAt: closedAt,
             durationMinutes: summary.elapsedMinutes))
         try? store.save()
+        closeState = standingClose()?.state
+    }
+
+    private func standingClose() -> FieldVisitCloseRecord? {
+        let id = visitID
+        let descriptor = FetchDescriptor<FieldVisitCloseRecord>(
+            predicate: #Predicate { $0.visitID == id })
+        return ((try? store.context.fetch(descriptor)) ?? []).first
     }
 
     private func done() {
@@ -315,12 +366,9 @@ struct V4VisitReviewScreen: View {
             startedAt = context.startedAt
             projectID = context.routing.projectID
         }
-        // Re-entering the screen must not offer the hours a second time; the
-        // record's visitID is unique, so a second insert would fail anyway.
-        let id = visitID
-        let already = FetchDescriptor<FieldVisitCloseRecord>(
-            predicate: #Predicate { $0.visitID == id })
-        offerAccepted = ((try? store.context.fetch(already)) ?? []).isEmpty == false
+        // Re-entering the screen must not offer the hours a second time, and
+        // the button says what the standing record actually is.
+        closeState = standingClose()?.state
         switch localListScope {
         case .globalFixtures:
             specimens = store.session(visitID: visitID)

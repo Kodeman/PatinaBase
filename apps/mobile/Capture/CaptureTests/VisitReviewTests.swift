@@ -84,6 +84,21 @@ struct VisitReviewTests {
         #expect(summary.elapsedMinutes == 130)
     }
 
+    /// `.rounded()` is half-AWAY-from-zero, not half-up-from-a-floor, and both
+    /// sides of the half-minute are billable minutes she is charged for. An
+    /// exact multiple of 60 proves neither.
+    @Test func theHalfMinuteBoundaryRoundsTheWaySwiftRounds() {
+        func minutes(after seconds: TimeInterval) -> Int {
+            VisitReviewComposer.summarize(
+                rows: [row("d8888888-8888-4888-8888-888888888888", photo: true)],
+                startedAt: start, now: start.addingTimeInterval(seconds)).elapsedMinutes
+        }
+        #expect(minutes(after: 89) == 1)    // 1m29s
+        #expect(minutes(after: 90) == 2)    // 1m30s — up, not down
+        #expect(minutes(after: 149) == 2)   // 2m29s
+        #expect(minutes(after: 150) == 3)   // 2m30s
+    }
+
     @Test func aVisitShorterThanAMinuteStillOffersOne_becauseZeroCannotBeLogged() {
         let summary = VisitReviewComposer.summarize(
             rows: [row("d6666666-6666-4666-8666-666666666666", photo: true)],
@@ -115,10 +130,11 @@ struct VisitReviewTests {
         #expect(VisitReviewComposer.timeOffer(minutes: 120) == "Log 2h as a site visit")
     }
 
-    @Test func theCloseRecordBacksOffTheSameWayTheSiteRequestOutboxDoes() {
-        #expect(FieldVisitCloseRecord.retryDelay(attempt: 1) == 5)
-        #expect(FieldVisitCloseRecord.retryDelay(attempt: 2) == 10)
-        #expect(FieldVisitCloseRecord.retryDelay(attempt: 3) == 20)
-        #expect(FieldVisitCloseRecord.retryDelay(attempt: 99) == 3_600)
+    /// The offer is public and must never propose an entry the CHECK forbids.
+    @Test func theOfferNeverProposesZeroMinutes() {
+        #expect(VisitReviewComposer.timeOffer(minutes: 0) == "Log 1m as a site visit")
+        #expect(VisitReviewComposer.timeOffer(minutes: -30) == "Log 1m as a site visit")
     }
+
+    // The close record's backoff is pinned once, in FieldVisitCloseRecordTests.
 }

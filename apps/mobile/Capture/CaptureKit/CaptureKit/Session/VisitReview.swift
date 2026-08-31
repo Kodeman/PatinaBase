@@ -90,7 +90,11 @@ public enum VisitReviewComposer {
             : "\(unplacedCount) captures still unplaced — they'll wait on Today."
     }
 
+    /// `summarize` can never hand this a zero, but the function is `public` and
+    /// "Log 0m as a site visit" is an offer that cannot be honoured — the same
+    /// CHECK (duration_minutes > 0) floor, applied to the words as well.
     public static func timeOffer(minutes: Int) -> String {
+        let minutes = max(1, minutes)
         let hours = minutes / 60
         let mins = minutes % 60
         let span: String

@@ -70,17 +70,29 @@ public extension FieldVisitCloseRecord {
         nextAttemptAt = nil
     }
 
+    /// The same ceiling the margin-note, punch-task and degrade lanes carry
+    /// (`FieldWriteGate.retryCeiling`, applied in Specimen+Accessors). A
+    /// classifier can only recognise the errors it was taught; a plain `.failed`
+    /// — a 500, a token problem — otherwise retries hourly for the life of the
+    /// install, which is the loop 653904911 added that ceiling to stop.
     func markFailed(_ message: String, now: Date) {
-        state = .failed
         lastError = message
         retryCount += 1
-        nextAttemptAt = now.addingTimeInterval(Self.retryDelay(attempt: retryCount))
+        if retryCount >= FieldWriteGate.retryCeiling {
+            state = .unwritable
+            nextAttemptAt = nil
+        } else {
+            state = .failed
+            nextAttemptAt = now.addingTimeInterval(Self.retryDelay(attempt: retryCount))
+        }
     }
 
-    /// `written` is done and `refused` is a fact about this designer and this
-    /// project (FC-R8), so neither is ever tried again.
+    /// `written` is done, `refused` is a fact about this designer and this
+    /// project (FC-R8), and `unwritable` is a row no retry can satisfy — none of
+    /// the three is ever tried again. Leaving `unwritable` out would turn the
+    /// ceiling above into a permanent one-hour loop rather than a stop.
     func isDue(at now: Date) -> Bool {
-        guard state != .written, state != .refused else { return false }
+        guard state != .written, state != .refused, state != .unwritable else { return false }
         guard let nextAttemptAt else { return true }
         return nextAttemptAt <= now
     }
@@ -123,7 +135,11 @@ public struct TimeEntryWriteRequest: Encodable, Equatable, Sendable {
         self.projectID = projectID
         self.userID = userID
         self.startedAt = startedAt
-        self.durationMinutes = durationMinutes
+        // Floored here as well as on the record. This initialiser is `public`
+        // and only its one caller happens to pass an already-floored value; a
+        // zero reaching the wire fails CHECK (duration_minutes > 0) on every
+        // attempt, and a nil-shaped duration is not expressible at all.
+        self.durationMinutes = max(1, durationMinutes)
         self.source = source
         self.activity = activity
         self.notes = notes
@@ -146,4 +162,63 @@ public protocol TimeEntryGateway: Sendable {
     /// response-loss gap one round-trip before the primary key does.
     func existingTimeEntry(id: UUID) async throws -> Bool
     func insertTimeEntry(_ request: TimeEntryWriteRequest) async throws
+}
+
+/// The close lane's two decisions, held where they can be tested.
+///
+/// `capture-gate.sh test` runs `-scheme CaptureKit` alone, so anything left in
+/// the app-side drainer is proven by a device pass and nothing else. These are
+/// pure functions of a record and its captures — the same split
+/// `PunchTaskOrchestrator` and `MarginNoteOrchestrator` already make — and the
+/// SwiftData fetch and PostgREST call stay app-side.
+public enum VisitCloseOrchestrator {
+    /// The state an outcome lands the close on.
+    ///
+    /// `.alreadyWritten` closes exactly as `.written` does: the id is
+    /// client-minted, so a row standing under it is THIS close arriving twice.
+    /// `.deferred` reopens with no backoff — she is on a road, not refused.
+    /// `.unsatisfiable` is `.unwritable`, matching `FieldWriteGate.laneState`:
+    /// a 23514 or a schema the build is ahead of is not a per-designer refusal,
+    /// and calling it one both names the wrong cause and hides the record from
+    /// any surface keying on `.unwritable`.
+    public static func apply(_ outcome: FieldWriteOutcome,
+                             to record: FieldVisitCloseRecord,
+                             now: Date) {
+        switch outcome {
+        case .written, .alreadyWritten:
+            record.markDelivered()
+        case .deferred(let message):
+            record.state = .pending
+            record.lastError = message
+            record.nextAttemptAt = nil
+        case .refused(let message):
+            record.state = .refused
+            record.lastError = message
+            record.nextAttemptAt = nil
+        case .unsatisfiable(let message):
+            record.state = .unwritable
+            record.lastError = message
+            record.nextAttemptAt = nil
+        case .failed(let message):
+            record.markFailed(message, now: now)
+        }
+    }
+
+    /// FC-R3: the Visits block is the record and the Hours entry is its billing
+    /// shadow, so they carry the same name — "Maple St · Living, Dining".
+    /// Derived from the visit's own captures, which is where the label and the
+    /// rooms actually live once the context has closed.
+    public static func notes(for record: FieldVisitCloseRecord,
+                             captures: [Specimen]) -> String? {
+        let label = captures
+            .compactMap { $0.visitLabel?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+        let rooms = VisitReviewComposer.summarize(
+            rows: captures.map(VisitReviewRow.init(specimen:)),
+            startedAt: record.startedAt,
+            now: record.endedAt).rooms
+        let parts = [label, rooms.isEmpty ? nil : rooms.joined(separator: ", ")]
+            .compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 }

@@ -109,7 +109,7 @@ public final class AppContainer {
         let sync = LocalCaptureSyncService(store: store, analytics: analytics,
                                            liveActivity: liveActivity, session: session, remote: gateway,
                                            projectCache: cache, fieldWrites: fieldWrites)
-        return (sync, VisitCloseOutboxDrainer(store: store, gateway: fieldWrites))
+        return (sync, VisitCloseOutboxDrainer(store: store, gateway: fieldWrites, session: session))
     }
 
     public init() {
