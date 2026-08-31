@@ -636,6 +636,9 @@ function BoardRoomSurface({
 
   useEffect(() => {
     const guard = (items: readonly EditableMoodBoardItem[]) => {
+      // Was proposal-owners-only. A project board's pins can now carry guest
+      // link reactions, so deleting them destroys real client feedback there
+      // too — the guard has to wait for the feed on both owner kinds.
       if (!feedbackQuery.isSuccess) {
         setSurfaceError(FEEDBACK_UNAVAILABLE_MESSAGE);
         void feedbackQuery.refetch();
