@@ -69,6 +69,8 @@ DECLARE
   v_registered_retry jsonb;
   v_prepared jsonb;
   v_prepared_retry jsonb;
+  v_registered_other_source jsonb;
+  v_prepared_cross_source jsonb;
   v_attempt_id uuid;
 BEGIN
   PERFORM pg_temp.assume_service_actor('f7000000-0000-4000-8000-000000000001');
@@ -154,6 +156,40 @@ BEGIN
     );
     RAISE EXCEPTION 'mismatched derivative checksum was accepted';
   EXCEPTION WHEN check_violation THEN NULL; END;
+
+  -- D6 (board-paths audit 2026-08-31, fixed by 00543): a SECOND, DIFFERENT
+  -- working-media upload with byte-identical content (same checksum/size/
+  -- content type as the source.pdf above) must still resolve to the SAME
+  -- content-addressed derivative as a reuse, not a hard mismatch. Before
+  -- 00543 this raised 'review derivative registration does not match
+  -- verified stored bytes' — reproduced verbatim in Strata's prod logs when
+  -- a forced board-cover exit-write re-uploaded an unchanged cover under a
+  -- fresh random path (mood-board cover-generation D6).
+  v_registered_other_source := public.register_project_ffe_working_media_source(
+    'f7100000-0000-4000-8000-000000000001',
+    'f7000000-0000-4000-8000-000000000001',
+    'project-ffe-working',
+    'f7100000-0000-4000-8000-000000000001/specifications/source-retry.pdf',
+    repeat('b',64),4096,'application/pdf','source_document',NULL
+  );
+  ASSERT v_registered_other_source->>'sourceAssetId' <> v_prepared->>'sourceAssetId',
+    'cross-source reuse case requires a genuinely different source_asset_id';
+  v_prepared_cross_source := public.prepare_project_review_media_asset(
+    'f7100000-0000-4000-8000-000000000001',
+    'f7000000-0000-4000-8000-000000000001',
+    'project-ffe-working',
+    'f7100000-0000-4000-8000-000000000001/specifications/source-retry.pdf',
+    repeat('b',64),4096,'application/pdf',
+    'project-review-media',
+    'f7100000-0000-4000-8000-000000000001/reviews/' || repeat('d',64) || '.webp',
+    repeat('d',64),3072,'display',1200,900
+  );
+  ASSERT (v_prepared_cross_source->>'reused')::boolean,
+    'byte-identical content from a different source upload must reuse the existing derivative';
+  ASSERT v_prepared_cross_source->>'assetId' = v_prepared->>'assetId',
+    'cross-source reuse must resolve to the SAME derivative row';
+  ASSERT v_prepared_cross_source->>'sourceAssetId' = v_registered_other_source->>'sourceAssetId',
+    'the response must echo the CALLING request''s own source, not the derivative''s original lineage';
 
   v_selection := public.place_product_in_project_v2(jsonb_build_object(
     'projectId','f7100000-0000-4000-8000-000000000001',
