@@ -1,5 +1,5 @@
 import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
-import { psqlRun, psqlScalar } from "../helpers/psql";
+import { psqlRow, psqlRun, psqlScalar } from "../helpers/psql";
 
 /**
  * The GA acceptance suite (mood-board-ga.spec.ts) drives a PROPOSAL-owned
@@ -92,6 +92,34 @@ function guestResolvedBoardName(token: string): string {
   return psqlScalar(
     `BEGIN; SET LOCAL ROLE anon; SELECT public.resolve_board_share('${token}') #>> '{board,name}'; COMMIT;`,
   );
+}
+
+/** One key of the resolve DTO, read through the guest's own `anon` grant. */
+function guestResolvedField(token: string, expression: string): string {
+  return psqlScalar(
+    `BEGIN; SET LOCAL ROLE anon; SELECT ${expression.replace(/PAYLOAD/g, `public.resolve_board_share('${token}')`)}; COMMIT;`,
+  );
+}
+
+/**
+ * A guest tap, at the exact grant the guest page's browser call holds: the
+ * `anon` role and nothing else. Returns 'ok' or 'refused'.
+ */
+function guestReaction(
+  token: string,
+  boardItemId: string,
+  verdict: string,
+  body: string | null,
+): string {
+  const bodyLiteral = body === null ? "NULL" : `'${body.replace(/'/g, "''")}'`;
+  try {
+    psqlRun(
+      `BEGIN; SET LOCAL ROLE anon; SELECT public.submit_board_share_reaction('${token}', '${boardItemId}'::uuid, '${verdict}', ${bodyLiteral}); COMMIT;`,
+    );
+    return "ok";
+  } catch {
+    return "refused";
+  }
 }
 
 async function openProjectBoard(page: AuthenticatedPage): Promise<void> {
@@ -332,6 +360,146 @@ test.describe("Project-owned board save path", () => {
     // A revoked token must go dead for the guest, not merely disappear from the
     // designer's list.
     expect(resolveAsGuest(token!)).toBe("false");
+  });
+
+  /**
+   * The guest half of this pair runs at the `anon` grant rather than in the
+   * client portal's own page, for the reason the D3 test above already
+   * documents: the link's host is :3002, which this suite's webServer does not
+   * start. The page-level check that IS available here is the designer's — the
+   * verdict has to reach the room and read as a guest's, which is what the
+   * reload below asserts. The client-portal render itself is covered by that
+   * app's own unit suite (share/[token]/__tests__/board-reactions.test.tsx).
+   */
+  test("an opted-in link takes a guest reaction and the room shows it as a guest's (Path B)", async ({
+    authenticatedPage: page,
+  }) => {
+    psqlRun(
+      `DELETE FROM public.item_feedback WHERE board_item_id IN (SELECT id FROM public.proposal_board_items WHERE board_id = '${BOARD_ID}'::uuid);
+       DELETE FROM public.document_shares WHERE board_id = '${BOARD_ID}'::uuid`,
+    );
+    await openProjectBoard(page);
+
+    await page.getByRole("button", { name: "Share", exact: true }).click();
+    await expect(
+      page.getByRole("heading", {
+        name: "Share Project leg acceptance board",
+      }),
+    ).toBeVisible({ timeout: 15_000 });
+
+    await page.getByLabel(/^Label/).fill("Reaction link");
+    await page.getByRole("checkbox", { name: /Allow reactions/ }).check();
+    await page.getByRole("button", { name: "Create and copy link" }).click();
+
+    const linkField = page.getByLabel("Board share link");
+    await expect(linkField).toBeVisible({ timeout: 15_000 });
+    const token = (await linkField.inputValue()).match(
+      /\/share\/([0-9a-f]{64})/,
+    )?.[1];
+    expect(token).toBeTruthy();
+
+    await expect
+      .poll(() =>
+        psqlScalar(
+          `SELECT board_reactions_enabled::text FROM public.document_shares WHERE board_id = '${BOARD_ID}'::uuid AND status = 'active'`,
+        ),
+      )
+      .toBe("true");
+
+    // The capability is in the resolve DTO the guest page reads.
+    expect(guestResolvedField(token!, "PAYLOAD ->> 'reactionsEnabled'")).toBe(
+      "true",
+    );
+
+    expect(guestReaction(token!, PRODUCT_ID, "approved", "Love this one")).toBe(
+      "ok",
+    );
+
+    // Server-side truth: one row, attributed to the share and to no user.
+    expect(
+      psqlRow(
+        `SELECT verdict, body, (client_id IS NULL)::text, (guest_share_id IS NOT NULL)::text
+           FROM public.item_feedback WHERE board_item_id = '${PRODUCT_ID}'::uuid`,
+      ),
+    ).toEqual(["approved", "Love this one", "true", "true"]);
+
+    // Re-tapping updates rather than stacking.
+    expect(guestReaction(token!, PRODUCT_ID, "rejected", null)).toBe("ok");
+    expect(
+      psqlScalar(
+        `SELECT count(*)::text FROM public.item_feedback WHERE board_item_id = '${PRODUCT_ID}'::uuid`,
+      ),
+    ).toBe("1");
+
+    // And the link plays its own reactions back on the next resolve.
+    expect(
+      guestResolvedField(token!, "PAYLOAD #>> '{reactions,0,verdict}'"),
+    ).toBe("rejected");
+
+    // The designer's page-level check: the verdict lands on the pin, marked.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("board-room-canvas")).toBeVisible();
+    await expect(
+      page.locator('[data-verdict-source="guest"]').first(),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.locator('[data-board-verdict="rejected"]').first(),
+    ).toBeVisible();
+
+    psqlRun(
+      `DELETE FROM public.item_feedback WHERE board_item_id = '${PRODUCT_ID}'::uuid;
+       DELETE FROM public.document_shares WHERE board_id = '${BOARD_ID}'::uuid`,
+    );
+  });
+
+  test("a link minted without the opt-in offers no reaction capability at all", async ({
+    authenticatedPage: page,
+  }) => {
+    psqlRun(
+      `DELETE FROM public.document_shares WHERE board_id = '${BOARD_ID}'::uuid`,
+    );
+    await openProjectBoard(page);
+
+    await page.getByRole("button", { name: "Share", exact: true }).click();
+    await expect(
+      page.getByRole("heading", {
+        name: "Share Project leg acceptance board",
+      }),
+    ).toBeVisible({ timeout: 15_000 });
+
+    // The toggle is OFF by default — a designer has to ask for the capability.
+    await expect(
+      page.getByRole("checkbox", { name: /Allow reactions/ }),
+    ).not.toBeChecked();
+    await page.getByRole("button", { name: "Create and copy link" }).click();
+
+    const linkField = page.getByLabel("Board share link");
+    await expect(linkField).toBeVisible({ timeout: 15_000 });
+    const token = (await linkField.inputValue()).match(
+      /\/share\/([0-9a-f]{64})/,
+    )?.[1];
+    expect(token).toBeTruthy();
+
+    // The guest page decides what to render from this DTO. There is no
+    // `reactions` key to hang an affordance on, and the flag says so outright.
+    expect(guestResolvedField(token!, "PAYLOAD ->> 'reactionsEnabled'")).toBe(
+      "false",
+    );
+    expect(guestResolvedField(token!, "(PAYLOAD ? 'reactions')::text")).toBe(
+      "false",
+    );
+
+    // And the write path refuses even a caller that skips the page entirely.
+    expect(guestReaction(token!, PRODUCT_ID, "approved", null)).toBe("refused");
+    expect(
+      psqlScalar(
+        `SELECT count(*)::text FROM public.item_feedback WHERE board_item_id = '${PRODUCT_ID}'::uuid`,
+      ),
+    ).toBe("0");
+
+    psqlRun(
+      `DELETE FROM public.document_shares WHERE board_id = '${BOARD_ID}'::uuid`,
+    );
   });
 
   test("a failed save reads in plain words, retries, and never traps the reader", async ({

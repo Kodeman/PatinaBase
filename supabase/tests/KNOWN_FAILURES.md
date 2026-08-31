@@ -90,7 +90,6 @@ Un-related residuals, each a genuine assertion failure whose root cause
 (a later migration changing a guard, a policy count, or an ordering) was
 identified only down to the failing message, not chased further:
 
-- `supabase/tests/mood_boards/share_security_test.sql` — MOVED here from Group 2 by `00510`, and its old Group 2 diagnosis was MIS-ATTRIBUTED. The `permission denied for function is_project_team_member` error did not come from a `proposal-mood-boards` policy at all: the culprit was `"Project members can read documents"` on the **project-documents** bucket, which applied `TO PUBLIC` while calling the helper. Policy EXECUTE checks resolve at executor-init for every policy applying to the caller's role, so that one policy broke `anon` SELECT on `storage.objects` for **every** bucket. Verified by flipping the policy back to `TO PUBLIC` locally: the file fails at line 262 with exactly that message, and stops doing so under 00510. It now reaches line 467 and fails on an unrelated business assertion, `board not found or not accessible`, from `public.create_board_share` — root cause not chased.
 - `supabase/tests/library/product_configuration_test.sql` — `issued cabinetry must lock the exact approved snapshot on the FF&E spec`.
 - `supabase/tests/notifications/unconfirmed_analytics_test.sql` — `active service role must not read user-owned campaign analytics`.
 - `supabase/tests/procurement/state_chain_test.sql` — `authentication required to link a configured line to a purchase order`. Runs as the unrestricted session owner (no actor assumed) at that point; a trigger apparently now requires `auth.uid()` to be set where it previously didn't.
@@ -113,11 +112,18 @@ The file `document/client_scope_change_request_test.sql` was a Group 2 entry
 set `assignment_scope` explicitly in the RPC body. That file
 is now **green** end to end and carries no entry.
 
-Two other Group 2 entries had their stated root cause closed by 00510 but are
-still red on a later, unrelated assertion, so they moved to Group 3 rather than
-away: `commercial/trade_scope_test.sql` (§S2) and
-`mood_boards/share_security_test.sql` (§S1 — see the corrected attribution in
-that entry).
+One other Group 2 entry had its stated root cause closed by 00510 but is still
+red on a later, unrelated assertion, so it moved to Group 3 rather than away:
+`commercial/trade_scope_test.sql` (§S2).
+
+`mood_boards/share_security_test.sql` followed the same path and has now left
+the list entirely. 00510 closed its storage-policy root cause; its residual
+`board not found or not accessible` from `public.create_board_share` was the
+2026-08-12 project-board exclusion, reopened by `00545_project_board_share_links`
+(board-paths D3). `00546_guest_board_share_reactions` then took the file off the
+superuser bypass — its `create_board_share` calls now run under
+`SET LOCAL ROLE authenticated`, so the edition-mint guard the file exists to
+police actually runs. Green as of 2026-08-31.
 
 ## Fixed during this pass (for context, not failures)
 
