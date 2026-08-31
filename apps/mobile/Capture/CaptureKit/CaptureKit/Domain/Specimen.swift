@@ -145,6 +145,46 @@ public final class Specimen {
     public var placementLastError: String?
     public var placementRetryCount: Int?
 
+    // ── Margin-note lane (wave 4, FC-R4) — a post-commit write, exactly the
+    //    shape of the placement lane above. marginNoteId is the client-minted
+    //    margin_notes.id AND the idempotency key.
+    //
+    //    marginNoteBodyRaw exists for a note whose words are not the transcript.
+    public var marginNoteId: String?
+    public var marginNoteBodyRaw: String?
+    public var marginNoteStateRaw: String?
+    public var marginNoteLastError: String?
+    public var marginNoteRetryCount: Int?
+
+    // ── Task/punch lane (wave 4, FC-R7) — punchTaskId is the client-minted
+    //    project_tasks.id AND the idempotency key. punchTaskOwnerRaw is
+    //    'designer' for a task and 'gc' for a punch item.
+    public var punchTaskId: String?
+    public var punchTaskPartyId: String?
+    public var punchTaskOwnerRaw: String?
+    public var punchTaskStateRaw: String?
+    public var punchTaskLastError: String?
+    public var punchTaskRetryCount: Int?
+
+    // ── Degrade-note lane (wave 4, FC-R8 / ruling 3) — its OWN slot, not the
+    //    margin lane's. By ruling 1 the same specimen has usually already
+    //    auto-opened `marginNote*` with its transcript; a single-slot lane
+    //    cannot hold two pending notes, so routing the degrade through it drops
+    //    the write whenever that auto-note is still in flight. The id is the
+    //    refused task's own UUID (same lineage, replay-safe) and the body is
+    //    composed at refusal time, because it has to survive the relaunch
+    //    between the 42501 and the write.
+    public var degradeNoteId: String?
+    public var degradeNoteBodyRaw: String?
+    public var degradeNoteStateRaw: String?
+    public var degradeNoteLastError: String?
+    public var degradeNoteRetryCount: Int?
+
+    // ── The lane that closed WITHOUT landing its row (a margin refusal, or any
+    //    lane that ran out of retries). `…LastError` alone was written and read
+    //    by nothing, so the loss was invisible. Nil once nothing is owed.
+    public var fieldWriteAttentionRaw: String?
+
     // ── The visit (Field Companion wave 3). All additive optionals. ──
     // captureSessionID already carries the visitID; these carry what
     // field_captures' visit/suggestion columns need.

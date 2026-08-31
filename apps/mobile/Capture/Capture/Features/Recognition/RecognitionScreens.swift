@@ -70,7 +70,22 @@ enum RecognitionScreens {
             ))
         }
 
-        // N5 · .smartGuessCard — smart field guess (Vision classify + heuristics)
+        registerSmartGuess(into: r, container: container, coordinator: coordinator)
+    }
+
+    /// N5 · .smartGuessCard — smart field guess (Vision classify + heuristics).
+    /// Lifted out of `register` so that function stays under swiftlint's
+    /// 60-line body limit, which `--strict` promotes to an error.
+    ///
+    /// ⚠ The route case is `smartGuessCard` but the screen this builds is
+    /// `SmartGuessSheet`, whose accessibility id is `n5SmartGuess`. The route
+    /// name and the screen id disagree; left as found.
+    @MainActor
+    private static func registerSmartGuess(
+        into r: RouteRegistry,
+        container: AppContainer,
+        coordinator: CaptureCoordinator
+    ) {
         r.registerSheet(CaptureSheet.smartGuessCard(UUID()).registryKey) { sheet in
             guard case let .smartGuessCard(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(SmartGuessSheet(
@@ -80,6 +95,8 @@ enum RecognitionScreens {
                 camera: container.camera,
                 smartGuess: container.smartGuess,
                 analytics: container.analytics,
+                sync: container.sync,
+                siteRequests: container.siteRequests,
                 coordinator: coordinator
             ))
         }

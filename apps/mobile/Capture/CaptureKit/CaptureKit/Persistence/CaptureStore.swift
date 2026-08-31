@@ -80,7 +80,8 @@ public final class CaptureStore {
     public static let schema = Schema([
         Specimen.self, CapturePhoto.self, CaptureMeasurement.self, CaptureProjectRef.self,
         ScanUploadRecord.self,  // item 8 — durable resumable upload state (additive)
-        SiteRequestOutboxRecord.self
+        SiteRequestOutboxRecord.self,
+        FieldVisitCloseRecord.self  // wave 4 — the visit close's time entry (additive)
     ])
 
     public let container: ModelContainer
@@ -671,6 +672,28 @@ public final class CaptureStore {
         try save()
     }
 
+    // ── Visit-close outbox (wave 4) ──
+
+    /// Every standing close, oldest first — the order the drainer works them in.
+    public func visitCloseOutbox() -> [FieldVisitCloseRecord] {
+        let descriptor = FetchDescriptor<FieldVisitCloseRecord>(
+            sortBy: [SortDescriptor(\.endedAt, order: .forward)])
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    /// Owner-scoped, exactly as `outbox(owner:)` is: an unscoped drain would
+    /// send the previous designer's close under whoever signed in next, on that
+    /// account's JWT. The record carries only a user id — it becomes
+    /// `project_time_entries.user_id`, which has no workspace half — so that is
+    /// the whole of the match, normalised the way `CaptureOwnerIdentity` is.
+    public func visitCloseOutbox(owner: CaptureOwnerIdentity) -> [FieldVisitCloseRecord] {
+        visitCloseOutbox().filter {
+            $0.ownerUserID
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() == owner.userID
+        }
+    }
+
     /// A scoped visit returns all of its captures, including queued transfers.
     /// The nil legacy query remains drafts + ready for older callers.
     public func session(visitID: UUID? = nil) -> [Specimen] {
@@ -751,6 +774,9 @@ public final class CaptureStore {
             // project_id NULL forever, with nothing on screen to say so.
             if $0.placementNeedsReplay { return true }
             if $0.needsProjectPlacement { return true }
+            if $0.needsMarginNote { return true }
+            if $0.needsPunchTask { return true }
+            if $0.needsDegradeNote { return true }
             return ($0.remoteId ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .isEmpty

@@ -85,11 +85,12 @@ enum CaptureDeepLink {
              .e1AppIcon, .e2SystemEntry, .r1LowLight,
              // C6 is a camera MODE of C1, not a route or a sheet, so there is
              // nothing to present for it — `ViewfinderScreen` reads the harness
-             // argument itself and selects `.voice`. V4 is wave 4 and has no
-             // destination yet, so the harness stays on C1 rather than
-             // screenshotting a screen that does not exist.
-             .c6Voice, .v4VisitReview:
+             // argument itself and selects `.voice`.
+             .c6Voice:
             break
+        case .v4VisitReview:
+            coordinator.navigate(to: .visitReview(
+                visitID: sampleVisitID(store: store, session: session)))
         // V0 is a SHEET, not a route: without this the sweep would file a PNG
         // of C1 under `screen.V0.visit`.
         case .v0Visit:          coordinator.present(.visit)
@@ -159,6 +160,32 @@ enum CaptureDeepLink {
             specimen = nil
         }
         return specimen?.id
+    }
+
+    /// V4 reviews a visit, so the harness needs one. The visit a local capture
+    /// already belongs to shows the screen with its groups filled; failing that
+    /// the live visit; failing both a fresh id, which V4 renders as its empty
+    /// state — still the screen, which is what the sweep is there to capture.
+    @MainActor
+    private static func sampleVisitID(
+        store: CaptureStore,
+        session: any SessionProviding
+    ) -> UUID {
+        let specimens: [Specimen]
+        switch CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID
+        ) {
+        case .globalFixtures:   specimens = store.session()
+        case .owner(let owner): specimens = store.session(owner: owner)
+        case .unavailable:      specimens = []
+        }
+        if let visitID = specimens.compactMap(\.captureSessionID).first { return visitID }
+        return CaptureSessionContextStore.shared.visitState(
+            identity: CaptureSessionIdentity(userID: session.userID,
+                                             workspaceID: session.workspaceID)
+        ).context?.visitID ?? UUID()
     }
 
     /// Phase 2 designer/pro harness routes. Detail screens resolve the stable

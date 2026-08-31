@@ -37,6 +37,8 @@ import {
 import { useEscalateNoteToDecision } from '@/hooks/use-margin-notes';
 import { AmendmentSheet } from '@/components/document/overlays/amendment-sheet';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
+import { readFieldNotePayload } from '@/lib/document/field-note-payload';
+import { FieldNoteMedia } from './field-note-media';
 import { extendRevivesDecision } from '@/lib/document/decision-edges';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd, tomorrowYmd } from '@/lib/document/format';
@@ -834,8 +836,33 @@ export function NoteBody({
     return <Quiet>Escalated — now {became}. The note rests here.</Quiet>;
   }
 
+  const field = readFieldNotePayload(row);
+
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
+      {field.fieldCaptureId ? (
+        <p className="mb-2 whitespace-pre-wrap text-[11.5px] leading-[1.55] text-[var(--color-charcoal)]">
+          {field.body}
+        </p>
+      ) : null}
+      {field.captureVisible ? (
+        <FieldNoteMedia
+          audioPaths={field.audioPaths}
+          photoPaths={field.photoPaths}
+          durationSeconds={field.durationSeconds}
+        />
+      ) : null}
+      {/* §8.5 — the transcript is labelled a draft ONCE, where she reads it.
+          No mechanism talk, and never the word "AI". */}
+      {field.fieldCaptureId && field.captureVisible && field.hasAudio ? (
+        <Quiet>A first reading. The recording is here.</Quiet>
+      ) : null}
+      {/* FC-R8 / §9.4 — margin_items is security_invoker, so a studio
+          co-member reads the note and not the capture. Say so, rather than
+          showing her a note with a missing play button and no explanation. */}
+      {field.fieldCaptureId && !field.captureVisible ? (
+        <Quiet>The recording is the author&rsquo;s.</Quiet>
+      ) : null}
       {row.payload.author_name ? (
         <p className="mb-2 text-[11px] text-[var(--text-muted)]">
           {String(row.payload.author_name)}
@@ -855,7 +882,7 @@ export function NoteBody({
               toDecision.mutate({
                 noteId: row.item_id,
                 projectId,
-                body: row.title,
+                body: field.body,
               })
             }
           >
@@ -884,8 +911,8 @@ export function NoteBody({
           onClose={() => setAmending(false)}
           seed={{
             title:
-              row.title.length > 70 ? `${row.title.slice(0, 67)}…` : row.title,
-            description: row.title,
+              field.body.length > 70 ? `${field.body.slice(0, 67)}…` : field.body,
+            description: field.body,
             noteId: row.item_id,
           }}
         />

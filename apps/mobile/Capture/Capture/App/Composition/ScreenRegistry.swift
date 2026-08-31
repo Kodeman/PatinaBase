@@ -15,6 +15,7 @@ enum ScreenRegistry {
         CaptureCoreScreens.register(into: r, container: container, coordinator: coordinator)      // B: C1, C5
         RecognitionScreens.register(into: r, container: container, coordinator: coordinator)       // C: N1–N5
         RouteSessionScreens.register(into: r, container: container, coordinator: coordinator)       // E: S1–S5, V1–V3
+        VisitReviewScreens.register(into: r, container: container, coordinator: coordinator)        // E: V4
         SystemSurfaceScreens.register(into: r, container: container, coordinator: coordinator)      // F: U1, U2, T1, T2
         ResilienceScreens.register(into: r, container: container, coordinator: coordinator)         // D: R3
         // A (Onboarding) is phase-based — wired via OnboardingHost in RootView, not routes.

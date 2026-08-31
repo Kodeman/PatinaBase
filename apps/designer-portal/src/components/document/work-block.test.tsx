@@ -19,6 +19,21 @@ jest.mock('@/hooks/use-section-work', () => ({
   useToggleSectionTask: () => ({ mutate: jest.fn() }),
 }));
 
+// FC-R15 (9b9c134bf) added two useQuery calls inside WorkBlock itself
+// (useFieldCapturePhotoPaths, useCaptureMediaUrls). This suite renders with
+// no QueryClientProvider — every other WorkBlock/FF&E suite does the same
+// and mocks its data hooks instead (ffe-section-trade-lines.test.tsx et al.)
+// — so both have to be mocked here too, or the component throws "No
+// QueryClient set, use QueryClientProvider to set one" at render time
+// regardless of `enabled`.
+jest.mock('@/hooks/use-field-capture-photos', () => ({
+  useFieldCapturePhotoPaths: () => ({ data: undefined }),
+}));
+
+jest.mock('@patina/supabase', () => ({
+  useCaptureMediaUrls: () => ({ data: undefined }),
+}));
+
 // A lightweight stand-in for the real Folio: two buttons that fire the SAME
 // onCommit shapes a day-pick / span-pick would, plus the footerExtra slot so
 // the "Place it in the schedule" link still renders. Real Folio interaction

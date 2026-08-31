@@ -11,6 +11,10 @@ import CaptureKit
 struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
     private static let mediaBucket = "site-requests"
     private static let displayURLLifetime = 10 * 60
+    /// `party_kind` is the wave-4 addition: PunchCourtResolver routes on it
+    /// (ruling 2, GC-only), and it was the one column this select did not carry.
+    private static let partyColumns =
+        "id,display_name,company_name,phone,phone_e164,trade,party_kind,sms_consent_status"
 
     let client: SupabaseClient
     let functionBaseURL: URL
@@ -42,7 +46,7 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
             .order("sort_order")
             .execute().value
         async let parties: [ProjectPartyRow] = client.from("project_parties")
-            .select("id,display_name,company_name,phone,phone_e164,trade,sms_consent_status")
+            .select(Self.partyColumns)
             .eq("project_id", value: projectID)
             .order("display_name")
             .execute().value
@@ -78,6 +82,15 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
             binderEntries: binderHistory,
             currentBinderEntries: currentBinderEntries
         )
+    }
+
+    func fieldParties(projectID: String) async throws -> [FieldPartyRef] {
+        let rows: [ProjectPartyRow] = try await client.from("project_parties")
+            .select(Self.partyColumns)
+            .eq("project_id", value: projectID)
+            .order("display_name")
+            .execute().value
+        return rows.map(\.fieldParty)
     }
 
     private func signingMedia(
@@ -482,13 +495,26 @@ private struct ProjectPartyRow: Decodable {
     let phone: String?
     let phoneE164: String?
     let trade: String?
+    let partyKind: String?
     let consentStatus: String
     enum CodingKeys: String, CodingKey {
         case id, phone, trade
         case displayName = "display_name"
         case companyName = "company_name"
         case phoneE164 = "phone_e164"
+        case partyKind = "party_kind"
         case consentStatus = "sms_consent_status"
+    }
+
+    /// Unlike `assignee`, never nil — a phoneless party still has to REACH the
+    /// resolver, which is what decides it is no court. The number travels with
+    /// it because consent and a phone are independent columns and the resolver
+    /// needs both to promise a text honestly.
+    var fieldParty: FieldPartyRef {
+        FieldPartyRef(id: id, displayName: displayName,
+                      partyKind: partyKind ?? "",
+                      smsConsentGranted: consentStatus == "granted",
+                      phoneE164: phoneE164 ?? phone)
     }
 
     var assignee: SiteRequestAssignee? {

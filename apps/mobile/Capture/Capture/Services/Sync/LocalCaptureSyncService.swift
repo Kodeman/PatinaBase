@@ -72,6 +72,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// Where a filing is remembered (§2.2), so proximity can offer the project
     /// back next visit. Fed only from a capture the server has accepted.
     private let projectCache: CaptureProjectCache?
+    /// FC-R4's two post-commit lanes. Nil leaves both closed, exactly as a nil
+    /// `remote` leaves the capture itself queued.
+    private let fieldWrites: SupabaseFieldWriteGateway?
     private let stream: AsyncStream<SyncSnapshot>
     private let continuation: AsyncStream<SyncSnapshot>.Continuation
     /// One drain task per authenticated identity. Re-entrant callers await the
@@ -84,13 +87,15 @@ final class LocalCaptureSyncService: CaptureSyncService {
          liveActivity: CaptureLiveActivityController? = nil,
          session: (any SessionProviding)? = nil,
          remote: SupabaseCaptureGateway? = nil,
-         projectCache: CaptureProjectCache? = nil) {
+         projectCache: CaptureProjectCache? = nil,
+         fieldWrites: SupabaseFieldWriteGateway? = nil) {
         self.store = store
         self.analytics = analytics
         self.liveActivity = liveActivity
         self.session = session
         self.remote = remote
         self.projectCache = projectCache
+        self.fieldWrites = fieldWrites
         var cont: AsyncStream<SyncSnapshot>.Continuation!
         self.stream = AsyncStream(bufferingPolicy: .bufferingNewest(8)) { cont = $0 }
         self.continuation = cont
@@ -106,8 +111,18 @@ final class LocalCaptureSyncService: CaptureSyncService {
         guard let specimen = scopedSpecimen(id: specimenID, owner: owner) else {
             return
         }
-        specimen.applyTransferState(CaptureTransferState(
-            phase: .queued, retryCount: specimen.retryCount))
+        // A committed specimen is NOT demoted. Its receipt is durable and its
+        // local media has been swept, so a re-stamped `.queued` sends it back
+        // through the upload leg against files that are gone and ends it
+        // `.rejected` — a permanent failure badge on a capture the server
+        // accepted. The only reason a committed row returns to the drain is a
+        // wave-4 write lane, and those keep their own state: the same fact
+        // `isFieldWriteLaneOnly` makes the three transfer-phase branches honour.
+        // Reachable from every field-write verb, each of which enqueues.
+        if !specimen.hasConfirmedCaptureReceipt {
+            specimen.applyTransferState(CaptureTransferState(
+                phase: .queued, retryCount: specimen.retryCount))
+        }
         try? store.save()
         analytics?.event("sync.enqueue", ["id": specimenID.uuidString])
         emitFromOutbox(lastTitle: specimen.title)
@@ -195,11 +210,25 @@ final class LocalCaptureSyncService: CaptureSyncService {
         emitFromOutbox()
     }
 
+    /// A committed row back in the outbox ONLY for a wave-4 write lane. Its
+    /// capture is durable and its Product (if any) is placed; the three
+    /// transfer-phase branches below must leave it alone, or a margin-note
+    /// retry paints `.uploading` and then `.retryableFailure` on a row the
+    /// server accepted — a failure badge for something that did not fail.
+    /// The lanes keep their own state, and that is where their errors show.
+    private func isFieldWriteLaneOnly(_ specimen: Specimen) -> Bool {
+        specimen.hasConfirmedCaptureReceipt
+            && !specimen.needsProjectPlacement
+            && !specimen.placementNeedsReplay
+            && (specimen.needsMarginNote || specimen.needsPunchTask
+                || specimen.needsDegradeNote)
+    }
+
     private func beginAttempt(_ specimen: Specimen) {
         if specimen.hasConfirmedCaptureReceipt
             && specimen.needsProjectPlacement {
             specimen.markProjectPlacementStarted()
-        } else {
+        } else if !isFieldWriteLaneOnly(specimen) {
             specimen.applyTransferState(CaptureTransferState(
                 phase: .uploading, retryCount: specimen.retryCount))
         }
@@ -217,7 +246,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
             if specimen.hasConfirmedCaptureReceipt
                 && specimen.needsProjectPlacement {
                 specimen.markProjectPlacementPending()
-            } else {
+            } else if !isFieldWriteLaneOnly(specimen) {
                 specimen.applyTransferState(CaptureTransferState(
                     phase: .queued, retryCount: specimen.retryCount))
             }
@@ -236,7 +265,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
             if specimen.placementState != .failed {
                 specimen.markProjectPlacementFailed(error.localizedDescription)
             }
-        } else {
+        } else if !isFieldWriteLaneOnly(specimen) {
             let rejected = shouldReject(error)
             specimen.applyTransferState(CaptureTransferState(
                 phase: rejected ? .rejected : .retryableFailure,
@@ -299,6 +328,10 @@ final class LocalCaptureSyncService: CaptureSyncService {
                 productID: productID,
                 owner: owner)
         }
+        // OUTSIDE the productId branch on purpose: a spoken note commits with no
+        // Product at all, and that is precisely the capture the margin lane
+        // exists for. The receipt above is the only thing either lane waits on.
+        await performFieldWritesIfNeeded(specimen, owner: owner)
         return receipt
     }
 
@@ -601,6 +634,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
                     owner: owner
                 )
             }
+            await performFieldWritesIfNeeded(specimen, owner: owner)
         } else if previousDestination != .inbox {
             throw LocalSyncError.remoteRejected(
                 "A confirmed library capture can’t be held for later from this device.")
@@ -653,6 +687,295 @@ final class LocalCaptureSyncService: CaptureSyncService {
                 "project_id": specimen.placementProjectId ?? "invalid"
             ])
             throw error
+        }
+    }
+
+    // ── field writes (wave 4, FC-R4) ────────────────────────────────────────
+    /// Post-commit, exactly like the placement lane above: both rows carry
+    /// field_capture_id, an FK to field_captures(id), which only exists once
+    /// commit_field_capture has returned a receipt. `FieldWriteGate` reads the
+    /// same `hasConfirmedCaptureReceipt` the placement lane waits on.
+    ///
+    /// Nothing here throws. A lane failure is the lane's own state, never the
+    /// capture's: the capture already landed, and reporting a refused task as a
+    /// failed upload would be a lie about a row the server has.
+    private func performFieldWritesIfNeeded(
+        _ specimen: Specimen,
+        owner: CaptureOwnerIdentity
+    ) async {
+        guard activeOwner == owner,
+              let captureID = FieldWriteGate.fieldCaptureID(for: specimen),
+              let writes = fieldWrites else { return }
+
+        // Ruling 1 (2026-08-24) / spec §6 Flow 2 step 4: a note spoken inside a
+        // PLACED visit files itself. No tap. The id is minted once here and
+        // persisted, so a second drain finds marginNoteId already set, re-uses
+        // it, and the gateway's lookup-before-write turns the replay into
+        // .alreadyWritten — exactly as idempotent as the deliberate path.
+        //
+        // Wave 3 spells "in a visit" as `visitKind` (there is no `visitID` on
+        // Specimen; `captureSessionID` groups a session, and a fresh draft
+        // carries one whether or not a visit was ever declared). `visitKind` is
+        // what `FieldCapturePayload` itself gates the visit block on.
+        if FieldWriteGate.shouldAutoFileMarginNote(
+            for: specimen,
+            projectID: specimen.venue?.projectId,
+            insideVisit: specimen.visitKind != nil) {
+            specimen.requestMarginNote(noteID: UUID())
+        }
+
+        await writeMarginNoteIfNeeded(
+            specimen, owner: owner, captureID: captureID, writes: writes)
+        await writePunchTaskIfNeeded(specimen, owner: owner, captureID: captureID, writes: writes)
+        // FC-R8's degrade (ruling 3) is opened from inside the punch branch
+        // above, which has already run past the note pass — and a degrade that
+        // waits for the NEXT drain is a degrade that may never happen on a phone
+        // about to go in a pocket. It has its own lane precisely so it does not
+        // have to find the margin slot free.
+        await writeDegradeNoteIfNeeded(
+            specimen, owner: owner, captureID: captureID, writes: writes)
+
+        try? store.save()
+    }
+
+    private func writeMarginNoteIfNeeded(
+        _ specimen: Specimen,
+        owner: CaptureOwnerIdentity,
+        captureID: UUID,
+        writes: SupabaseFieldWriteGateway
+    ) async {
+        // Re-checked per lane, not once for all three: the lanes run in
+        // sequence, so a switch during the note's await must not send the punch
+        // item on the new account's JWT.
+        guard specimen.needsMarginNote,
+              activeOwner == owner,
+              let noteID = specimen.marginNoteId.flatMap(UUID.init(uuidString:)),
+              let projectRaw = specimen.venue?.projectId,
+              let projectID = UUID(uuidString: projectRaw),
+              let designerID = UUID(uuidString: owner.userID)
+        else { return }
+
+        // A lane opened on a capture whose words later resolve to nothing has no
+        // row to write and no way to close itself: only markWritten/markRefused
+        // close a lane, so `outbox()` would hand this committed specimen back on
+        // every drain, forever. Settle it instead of returning.
+        guard let request = MarginNoteComposer.request(
+            noteID: noteID,
+            projectID: projectID,
+            designerID: designerID,
+            fieldCaptureID: captureID,
+            transcript: specimen.marginNoteBodyRaw
+                ?? specimen.voiceTranscript
+                ?? specimen.voicePartialTranscript)
+        else {
+            specimen.settleMarginNoteWithNothingToWrite()
+            return
+        }
+
+        specimen.markMarginNoteStarted()
+        do {
+            let outcome = try await MarginNoteOrchestrator(gateway: writes).write(request)
+            // The same owner re-check `commit`, `route` and `drainOwned` make
+            // after every network await. An account switch mid-await means this
+            // verdict was reached under a different JWT, and `.refused` is
+            // terminal — so it defers instead, and the next drain under the
+            // right account decides.
+            guard activeOwner == owner else {
+                specimen.markMarginNotePending()
+                return
+            }
+            apply(outcome: outcome, toMarginNoteOn: specimen)
+        } catch {
+            guard activeOwner == owner else {
+                specimen.markMarginNotePending()
+                return
+            }
+            apply(outcome: FieldWriteClassifier.outcome(
+                      code: SupabaseFieldWriteGateway.postgrestCode(from: error),
+                      message: error.localizedDescription),
+                  toMarginNoteOn: specimen)
+        }
+        if specimen.marginNoteState == .written {
+            analytics?.event("field.margin_note.ok", ["capture_id": captureID.uuidString])
+        }
+    }
+
+    /// FC-R8's degrade, on its own lane. Same write as a margin note and the
+    /// same policy admits it (`margin_notes_designer_all` keys on the note's own
+    /// designer_id, 00196:51-54); only the slot differs, so a capture that
+    /// already auto-filed its transcript can still land this.
+    private func writeDegradeNoteIfNeeded(
+        _ specimen: Specimen,
+        owner: CaptureOwnerIdentity,
+        captureID: UUID,
+        writes: SupabaseFieldWriteGateway
+    ) async {
+        guard specimen.needsDegradeNote,
+              activeOwner == owner,
+              let noteID = specimen.degradeNoteId.flatMap(UUID.init(uuidString:)),
+              let projectRaw = specimen.venue?.projectId,
+              let projectID = UUID(uuidString: projectRaw),
+              let designerID = UUID(uuidString: owner.userID),
+              let request = MarginNoteComposer.request(
+                  noteID: noteID,
+                  projectID: projectID,
+                  designerID: designerID,
+                  fieldCaptureID: captureID,
+                  transcript: specimen.degradeNoteBodyRaw)
+        else { return }
+
+        specimen.markDegradeNoteStarted()
+        do {
+            let outcome = try await MarginNoteOrchestrator(gateway: writes).write(request)
+            guard activeOwner == owner else {
+                specimen.markDegradeNotePending()
+                return
+            }
+            apply(outcome: outcome, toDegradeNoteOn: specimen)
+        } catch {
+            guard activeOwner == owner else {
+                specimen.markDegradeNotePending()
+                return
+            }
+            apply(outcome: FieldWriteClassifier.outcome(
+                      code: SupabaseFieldWriteGateway.postgrestCode(from: error),
+                      message: error.localizedDescription),
+                  toDegradeNoteOn: specimen)
+        }
+        if specimen.degradeNoteState == .written {
+            analytics?.event("field.degrade_note.ok", ["capture_id": captureID.uuidString])
+        }
+    }
+
+    private func writePunchTaskIfNeeded(
+        _ specimen: Specimen,
+        owner: CaptureOwnerIdentity,
+        captureID: UUID,
+        writes: SupabaseFieldWriteGateway
+    ) async {
+        guard specimen.needsPunchTask,
+              activeOwner == owner,
+              let request = punchTaskRequest(for: specimen, owner: owner, captureID: captureID)
+        else { return }
+
+        specimen.markPunchTaskStarted()
+        do {
+            let outcome = try await PunchTaskOrchestrator(gateway: writes).write(request)
+            guard activeOwner == owner else {
+                specimen.markPunchTaskPending()
+                return
+            }
+            apply(outcome: outcome, toPunchTaskOn: specimen, request: request)
+        } catch {
+            guard activeOwner == owner else {
+                specimen.markPunchTaskPending()
+                return
+            }
+            apply(outcome: FieldWriteClassifier.outcome(
+                      code: SupabaseFieldWriteGateway.postgrestCode(from: error),
+                      message: error.localizedDescription),
+                  toPunchTaskOn: specimen, request: request)
+        }
+        if specimen.punchTaskState == .written {
+            analytics?.event("field.punch_task.ok", [
+                "capture_id": captureID.uuidString,
+                "owner": specimen.punchTaskOwnerRaw ?? "designer"
+            ])
+        }
+    }
+
+    /// The court was RESOLVED at tap time (Task 12); only the party id was
+    /// persisted, and `punch(courtPartyID:)` is all this needs. Nothing is
+    /// re-decided here, and whether a text goes out is the database's call, not
+    /// this call site's: fc_dispatch_task_assignment re-reads the party's real
+    /// sms_consent_status (00284:172-179).
+    ///
+    /// owner=='gc' with no persisted party cannot happen — ruling 2 makes a
+    /// partyless punch a plain task at tap time — but if a build ever produced
+    /// one, writing it as her own task is the honest landing: an
+    /// owner_party_id-less gc row reaches no trigger and no digest.
+    private func punchTaskRequest(
+        for specimen: Specimen,
+        owner: CaptureOwnerIdentity,
+        captureID: UUID
+    ) -> PunchTaskWriteRequest? {
+        guard let taskID = specimen.punchTaskId.flatMap(UUID.init(uuidString:)),
+              let projectRaw = specimen.venue?.projectId,
+              let projectID = UUID(uuidString: projectRaw),
+              let designerID = UUID(uuidString: owner.userID) else { return nil }
+
+        let transcript = specimen.voiceTranscript ?? specimen.voicePartialTranscript
+        let room = specimen.venue?.room
+        if specimen.punchTaskOwnerRaw == "gc", let partyID = specimen.punchTaskPartyId {
+            return PunchTaskComposer.punch(
+                id: taskID, projectID: projectID, createdBy: designerID,
+                fieldCaptureID: captureID, transcript: transcript, roomName: room,
+                courtPartyID: partyID)
+        }
+        return PunchTaskComposer.task(
+            id: taskID, projectID: projectID, createdBy: designerID,
+            fieldCaptureID: captureID, transcript: transcript, roomName: room)
+    }
+
+    /// Both lanes read the returned outcome rather than assuming a non-throwing
+    /// call wrote the row. Today the orchestrators return only `.written` /
+    /// `.alreadyWritten` and throw on everything else, so marking written
+    /// unconditionally would be correct — but correct by accident. The day one
+    /// of them RETURNS `.refused`, that shape marks a refusal as written and
+    /// FC-R8's degrade never fires.
+    private func apply(outcome: FieldWriteOutcome, toMarginNoteOn specimen: Specimen) {
+        switch FieldWriteGate.laneState(for: outcome) {
+        case .written:    specimen.markMarginNoteWritten()
+        case .pending:    specimen.markMarginNotePending()
+        case .refused:    specimen.markMarginNoteRefused(outcome.message ?? "")
+        case .failed:     specimen.markMarginNoteFailed(outcome.message ?? "")
+        case .unwritable: specimen.markMarginNoteUnwritable(outcome.message ?? "")
+        case .writing:    break   // laneState never returns the in-flight state
+        }
+    }
+
+    private func apply(outcome: FieldWriteOutcome, toDegradeNoteOn specimen: Specimen) {
+        switch FieldWriteGate.laneState(for: outcome) {
+        case .written:    specimen.markDegradeNoteWritten()
+        case .pending:    specimen.markDegradeNotePending()
+        case .refused:    specimen.markDegradeNoteRefused(outcome.message ?? "")
+        case .failed:     specimen.markDegradeNoteFailed(outcome.message ?? "")
+        case .unwritable: specimen.markDegradeNoteUnwritable(outcome.message ?? "")
+        case .writing:    break
+        }
+    }
+
+    private func apply(
+        outcome: FieldWriteOutcome,
+        toPunchTaskOn specimen: Specimen,
+        request: PunchTaskWriteRequest
+    ) {
+        switch FieldWriteGate.laneState(for: outcome) {
+        case .written:    specimen.markPunchTaskWritten()
+        case .pending:    specimen.markPunchTaskPending()
+        case .failed:     specimen.markPunchTaskFailed(outcome.message ?? "")
+        case .unwritable: specimen.markPunchTaskUnwritable(outcome.message ?? "")
+        case .writing:    break
+        case .refused:
+            specimen.markPunchTaskRefused(outcome.message ?? "")
+            // FC-R8 / ruling 3: 42501 is terminal on this lane, and the degrade
+            // has to be a WRITE, HERE. This drain is background and
+            // per-owner-serialized; the card that reports the refusal may never
+            // be on screen, and the app may have been relaunched since. A
+            // degrade that lives only in the UI silently loses her punch item,
+            // which is what §3.3 forbids.
+            //
+            // The refused task's own UUID becomes the note id — same
+            // client-minted id lineage, so a replayed drain re-uses it and
+            // writes once. margin_notes_designer_all admits her own note
+            // (00196:51-54) because it keys on the note's designer_id, not the
+            // project's, so this write is the one that CAN land.
+            //
+            // It goes to `degradeNote*`, NOT the margin lane: by ruling 1 this
+            // capture has usually already auto-opened the margin slot with its
+            // transcript, and a single-slot lane silently drops the second note.
+            let degrade = FieldWriteGate.degrade(request)
+            specimen.requestDegradeNote(noteID: degrade.noteID, body: degrade.body)
         }
     }
 

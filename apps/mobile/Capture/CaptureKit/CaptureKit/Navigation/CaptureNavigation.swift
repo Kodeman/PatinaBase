@@ -40,6 +40,12 @@ public enum CaptureRoute: Hashable, Sendable {
     case siteScanSetup                                   // F1
     case siteScan(projectID: String?, projectRoomID: String?)  // F2 (hosts F3/F4)
     case site(screen: CaptureScreenID, projectID: String?, requestID: String?)
+
+    // ── Field Companion — the visit spine ──
+    // Foundation-owner edit for this enum: the Field Companion wave-4 lane.
+    // ONE case, because ending a visit is a screen (§7.9, Flow 7) rather than
+    // a dismissal, and every other flow reaches it through this route.
+    case visitReview(visitID: UUID)                            // V4 — wave 4
 }
 
 /// Sheets / overlays (presented over the viewfinder or a screen).

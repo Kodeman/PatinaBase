@@ -90,6 +90,7 @@ import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-re
 import { FFESection } from '@/components/document/ffe-section';
 import { ScheduleSpine } from '@/components/document/schedule/schedule-spine';
 import { RoomFilesSection } from '@/components/room-file/room-files-section';
+import { VisitsBlock } from '@/components/document/visits-block';
 import { InstallWindowCeremony } from '@/components/document/schedule/install-window-ceremony';
 import { BriefSection } from '@/components/document/brief-section';
 import { BriefRecap } from '@/components/document/brief-recap';
@@ -2827,6 +2828,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     Room-File-bearing scans, so a field-less project renders
                     exactly as it did before this line existed. */}
                   <RoomFilesSection projectId={row.project_id} />
+                  <VisitsBlock projectId={row.project_id} />
                   <FFESection
                     projectId={row.project_id}
                     projectName={row.title}

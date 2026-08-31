@@ -1862,3 +1862,10 @@ export {
   CAPTURE_MEDIA_TTL_SECONDS,
 } from "./use-capture-media";
 export { useCaptureVenueLabels } from "./use-capture-venues";
+export {
+  useProjectVisits,
+  groupCapturesIntoVisits,
+  type ProjectVisit,
+  type ProjectVisitCapture,
+  type ProjectVisitRow,
+} from "./use-project-visits";

@@ -35,20 +35,147 @@ struct SmartGuessKeywordTests {
         #expect(SmartGuessKeywords.category(forVisionLabel: "drywall seam") == nil)
     }
 
-    @Test func matchingIsCaseInsensitiveAndSubstringBased() {
+    /// Matching is case-insensitive but, since Wave 4 Task 0c, whole-WORD, not
+    /// substring: "chairlift" — a compound word that merely CONTAINS "chair"
+    /// — used to read as seating for the same reason "tapestry" used to read
+    /// as plumbing (see `theThreeMisMappedLabelsNoLongerMisMap` below). This
+    /// test used to pin the substring behaviour directly (`"chairlift" ==
+    /// .seating`); it is updated, not deleted, to pin the fixed behaviour
+    /// instead — case-insensitivity survives, the substring match does not.
+    @Test func matchingIsCaseInsensitiveButNoLongerSubstringBased() {
         #expect(SmartGuessKeywords.category(forVisionLabel: "OAK DINING CHAIR") == .seating)
-        #expect(SmartGuessKeywords.category(forVisionLabel: "chairlift") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "chairlift") == nil)
+    }
+
+    /// Wave 4 Task 0c (wave-4-preflight.md §0.10): the ordered-substring bug
+    /// meant a short keyword could match INSIDE an unrelated compound word —
+    /// "tap" inside "tapestry", "light" inside "skylight", "print" inside
+    /// "printer" — none of which name furniture the keyword's category fits.
+    @Test func theThreeMisMappedLabelsNoLongerMisMap() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "tapestry") != .plumbing)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "tapestry") == nil)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "skylight") != .lighting)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "skylight") == nil)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "printer") != .art)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "printer") == nil)
+    }
+
+    /// The word-boundary fix must not silently break the free plural match
+    /// substring matching gave for nothing: "chairs" finding "chair". The rule
+    /// is narrow — a trailing "s" or "es", nothing else — and always was, under
+    /// the substring test too. "shelves" and "draperies" are pinned here so the
+    /// narrowness is a recorded fact rather than a surprise on a device.
+    @Test func regularSAndEsPluralsMatchWhileIrregularOnesDoNot() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "chairs") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "sofas") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "benches") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "two dining chairs") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "shelves") == nil)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "draperies") == nil)
+    }
+
+    /// F11: whole-token matching means a compound Vision identifier reads as
+    /// NOTHING unless it has a row of its own — and "bookshelf" is in Apple's
+    /// `VNClassifyImageRequest` taxonomy, so the fix that stopped "chairlift"
+    /// reading as seating also stopped a real bookshelf reading as storage.
+    /// Nothing pinned a compound that SHOULD match, which is how it slipped.
+    @Test func compoundIdentifiersThatNameFurnitureMatchThroughTheirOwnRow() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "bookshelf") == .storage)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "spotlight") == .lighting)
+        // Still not the loose rule that put them there: a compound whose inner
+        // word names something it is not stays unplaced.
+        #expect(SmartGuessKeywords.category(forVisionLabel: "chairlift") == nil)
+    }
+
+    /// F17: Vision identifiers are underscore-joined, not space-separated, and
+    /// nothing covered a separator other than a space. The tokenizer splits on
+    /// any non-alphanumeric, so both shapes land on the same tokens.
+    @Test func underscoreAndHyphenSeparatorsTokenizeLikeSpaces() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "coffee_table") == .table)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "wall-sconce") == .lighting)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "dining_chairs") == .seating)
+    }
+
+    /// Multi-word Vision labels ("coffee table") already worked under the old
+    /// substring match; pinned again under the new tokenized match so the
+    /// fix does not regress them.
+    @Test func multiWordVisionLabelsStillMatchOnTheRightToken() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "coffee table") == .table)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "area rug") == .rug)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "brass knob") == .hardware)
     }
 
     @Test func everyKeywordInTheTableResolvesToItsOwnCategory() {
-        // Matching is first-match-wins over an ordered table, so a keyword can
-        // be swallowed by an earlier entry it happens to contain — move "tile"
-        // above "textile" and "textile" starts reading as .tile. Asserting the
-        // category, not merely non-nil, is what pins the current ordering.
+        // F13: this is a COMPLETENESS check, not an ordering one. Under
+        // whole-token matching a bare keyword has exactly one candidate — its
+        // own row — so no reordering can break it; what it does catch is a row
+        // nothing can ever reach (a typo, a multi-word keyword, a duplicate
+        // pointing at a second category). The ordering hazard that survives
+        // tokenization is pinned by the next test instead.
         for entry in SmartGuessKeywords.table {
             #expect(SmartGuessKeywords.category(forVisionLabel: entry.keyword) == entry.category,
                     "\(entry.keyword) does not resolve to \(entry.category) through its own table")
         }
+    }
+
+    /// The ordering hazard, now closed. A label with SEVERAL tokens can match
+    /// two rows; first-match-wins gave it to whichever sat higher in the table,
+    /// so "table lamp" read as `.table` — an answer about table ORDER, not
+    /// about the label. A table lamp is a lamp. The head of an English compound
+    /// noun is its last word, so the row matching furthest into the label wins,
+    /// and the assertion below is deliberately made against the row order that
+    /// used to decide it.
+    @Test func aCompoundLabelIsTakenByItsHeadNoun_notByTableOrder() throws {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "table lamp") == .lighting)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "desk lamp") == .lighting)
+        let keywords = SmartGuessKeywords.table.map(\.keyword)
+        let table = try #require(keywords.firstIndex(of: "table"))
+        let lamp = try #require(keywords.firstIndex(of: "lamp"))
+        #expect(table < lamp,
+                "the .lighting read above is the head noun winning against, not with, row order")
+    }
+
+    /// The head-noun rule's own false positive. A carpet tile is soft flooring
+    /// sold by the box — the thing a designer specs as a rug — and reading it as
+    /// ceramic is exactly as wrong as reading "table lamp" as furniture was.
+    /// The exception is a multi-word row, which wins the length tiebreak at the
+    /// same head position.
+    @Test func aCarpetTileIsSoftFlooring_notCeramic() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "carpet tile") == .rug)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "carpet tiles") == .rug)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "carpet_tile") == .rug)
+        // The exception is exactly that wide: a tile with no carpet in front of
+        // it is still a tile, and carpet on its own is still a rug.
+        #expect(SmartGuessKeywords.category(forVisionLabel: "floor tile") == .tile)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "carpet") == .rug)
+    }
+
+    /// The rule now decides a great many compounds nothing pinned, and an
+    /// unpinned decision is one nobody notices going wrong. Each assertion below
+    /// states the category the LABEL deserves, not the one the table happens to
+    /// reach: the head noun names the thing in every one of them.
+    @Test func realisticCompoundLabelsLandOnTheCategoryTheThingActuallyIs() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "floor lamp") == .lighting)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "bar stool") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "side table") == .table)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "console table") == .table)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "kitchen sink") == .plumbing)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "throw pillow") == .textile)
+    }
+
+    /// Two deliberate calls, stated rather than left to drift.
+    ///
+    /// A faucet handle is `.hardware`, not `.plumbing`: `hardware` is where this
+    /// table puts knobs, handles and hinges, and a faucet handle is one of them
+    /// — the piece specified from a hardware page, next to the fixture rather
+    /// than as it.
+    ///
+    /// A ceiling fan is NOTHING. The table names no fan, and nil means "we could
+    /// not tell", which is the honest answer — never `.lighting` because some
+    /// fans carry a bulb, and never a guess dressed up as a read.
+    @Test func twoCompoundsWhoseRightAnswerIsDeliberate() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "faucet handle") == .hardware)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "ceiling fan") == nil)
     }
 
     @Test func anUnknownCategoryIsNeverWorthRecording() {

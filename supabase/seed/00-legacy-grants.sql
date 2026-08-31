@@ -530,6 +530,96 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00191_document_state_view.sql
+DO $g$ BEGIN
+  grant select on document_state to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00191_document_state_view.sql
+DO $g$ BEGIN
+  grant select on document_state to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00192_document_state_open_claims.sql
+DO $g$ BEGIN
+  grant select on document_state to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00192_document_state_open_claims.sql
+DO $g$ BEGIN
+  grant select on document_state to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00194_margin_items_view.sql
+DO $g$ BEGIN
+  grant select on margin_items to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00194_margin_items_view.sql
+DO $g$ BEGIN
+  grant select on margin_items to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00195_document_state_pulse_and_send_rpc.sql
+DO $g$ BEGIN
+  grant select on document_state to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00195_document_state_pulse_and_send_rpc.sql
+DO $g$ BEGIN
+  grant select on document_state to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00195_document_state_pulse_and_send_rpc.sql
+DO $g$ BEGIN
+  grant execute on function public.send_weekly_pulse(uuid, text, text) to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00197_margin_items_note_branch.sql
+DO $g$ BEGIN
+  grant select on margin_items to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00197_margin_items_note_branch.sql
+DO $g$ BEGIN
+  grant select on margin_items to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00204_account_milestones_and_settlement.sql
+DO $g$ BEGIN
+  revoke execute on function draft_invoice_from_milestone(uuid) from public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00204_account_milestones_and_settlement.sql
+DO $g$ BEGIN
+  grant execute on function generate_milestone_invoice(uuid) to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00206_margin_own_voice_and_milestone_cron.sql
+DO $g$ BEGIN
+  grant select on margin_items to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00206_margin_own_voice_and_milestone_cron.sql
+DO $g$ BEGIN
+  grant select on margin_items to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00209_invoice_chase.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.chase_invoice(UUID) FROM PUBLIC;
@@ -539,6 +629,24 @@ END $g$;
 -- 00209_invoice_chase.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.chase_invoice(UUID) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00210_sign_proposal_as_decision.sql
+DO $g$ BEGIN
+  grant execute on function public.request_proposal_change(uuid, text) to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00211_document_state_proposal_touched.sql
+DO $g$ BEGIN
+  grant select on document_state to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00211_document_state_proposal_touched.sql
+DO $g$ BEGIN
+  grant select on document_state to service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -608,9 +716,63 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00219_coordination_read_models.sql
+DO $g$ BEGIN
+  grant select on margin_items to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00219_coordination_read_models.sql
+DO $g$ BEGIN
+  grant select on margin_items to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00219_coordination_read_models.sql
+DO $g$ BEGIN
+  grant select on document_state to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00219_coordination_read_models.sql
+DO $g$ BEGIN
+  grant select on document_state to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00221_people_directory.sql
 DO $g$ BEGIN
   GRANT SELECT ON public.people_directory TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00224_client_discovery.sql
+DO $g$ BEGIN
+  revoke all on function begin_direction_from_discovery(uuid) from public;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00224_client_discovery.sql
+DO $g$ BEGIN
+  grant execute on function begin_direction_from_discovery(uuid) to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00225_set_document_client.sql
+DO $g$ BEGIN
+  grant execute on function public.set_document_client(text, uuid, uuid) to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00230_document_state_proposal_opens.sql
+DO $g$ BEGIN
+  grant select on document_state to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00230_document_state_proposal_opens.sql
+DO $g$ BEGIN
+  grant select on document_state to service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -683,6 +845,30 @@ END $g$;
 -- 00235_commit_field_capture_rpc.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION mark_capture_upload_complete(UUID) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00236_document_state_relationship_title.sql
+DO $g$ BEGIN
+  grant select on document_state to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00236_document_state_relationship_title.sql
+DO $g$ BEGIN
+  grant select on document_state to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00237_open_project_direct.sql
+DO $g$ BEGIN
+  grant execute on function public.open_project_direct(text, uuid, integer, integer, date, uuid) to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00238_close_project.sql
+DO $g$ BEGIN
+  grant execute on function public.close_project(uuid, jsonb, jsonb) to authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -1292,6 +1478,12 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00254_record_offline_signature.sql
+DO $g$ BEGIN
+  grant execute on function public.record_offline_signature(uuid, text, boolean, date) to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00255_feedback_layer.sql
 DO $g$ BEGIN
   GRANT SELECT, INSERT ON public.feedback TO authenticated;
@@ -1676,6 +1868,12 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00280_deposit_draft_notification.sql
+DO $g$ BEGIN
+  revoke execute on function draft_invoice_from_milestone(uuid) from public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00281_field_parties.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.normalize_phone_e164(TEXT) FROM PUBLIC, anon;
@@ -1751,6 +1949,18 @@ END $g$;
 -- 00282_sms_core.sql
 DO $g$ BEGIN
   GRANT SELECT ON public.field_activity_summary TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00282_sms_core.sql
+DO $g$ BEGIN
+  grant select on margin_items to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00282_sms_core.sql
+DO $g$ BEGIN
+  grant select on margin_items to service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -1967,6 +2177,12 @@ END $g$;
 -- 00292_designer_onboarding_enrollment.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.enroll_designer_onboarding(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00292_designer_onboarding_enrollment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_designer_first_signin() FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -2578,6 +2794,30 @@ END $g$;
 
 -- 00327_document_state_arrival_linkage.sql
 DO $g$ BEGIN
+  grant select on document_state to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00327_document_state_arrival_linkage.sql
+DO $g$ BEGIN
+  grant select on document_state to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00327_document_state_arrival_linkage.sql
+DO $g$ BEGIN
+  revoke all on function begin_direction_from_discovery(uuid) from public;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00327_document_state_arrival_linkage.sql
+DO $g$ BEGIN
+  grant execute on function begin_direction_from_discovery(uuid) to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00327_document_state_arrival_linkage.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION clone_proposal(UUID, TEXT, TEXT) FROM PUBLIC;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -2585,6 +2825,24 @@ END $g$;
 -- 00327_document_state_arrival_linkage.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION clone_proposal(UUID, TEXT, TEXT) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00329_match_ceremonies.sql
+DO $g$ BEGIN
+  revoke all on public.match_ceremonies from public, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00329_match_ceremonies.sql
+DO $g$ BEGIN
+  grant select, update on public.match_ceremonies to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00329_match_ceremonies.sql
+DO $g$ BEGIN
+  grant all on public.match_ceremonies to service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -2609,6 +2867,12 @@ END $g$;
 -- 00331_ceremony_complete.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.ceremony_complete(uuid, text, jsonb, text, text, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00331_ceremony_complete.sql
+DO $g$ BEGIN
+  grant execute on function public.open_project_direct(text, uuid, integer, integer, date, uuid) to authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -2639,6 +2903,24 @@ END $g$;
 -- 00334_refresh_offered_slots.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.refresh_offered_slots(uuid, jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00335_device_push_tokens.sql
+DO $g$ BEGIN
+  revoke all on public.device_push_tokens from public, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00335_device_push_tokens.sql
+DO $g$ BEGIN
+  grant select, insert, update, delete on public.device_push_tokens to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00335_device_push_tokens.sql
+DO $g$ BEGIN
+  grant all on public.device_push_tokens to service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -11939,5 +12221,29 @@ END $g$;
 -- 00540_direct_orders_attribution.sql
 DO $g$ BEGIN
   GRANT SELECT ( id, order_id, product_id, item_name, qty, unit_price_cents, line_state, line_state_entered_at, line_index, created_at, updated_at ) ON public.fulfillment_order_items TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00543_margin_notes_field_capture.sql
+DO $g$ BEGIN
+  grant select on public.margin_items to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00543_margin_notes_field_capture.sql
+DO $g$ BEGIN
+  grant select on public.margin_items to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00543_margin_notes_field_capture.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.field_captures TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00543_margin_notes_field_capture.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.field_captures TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

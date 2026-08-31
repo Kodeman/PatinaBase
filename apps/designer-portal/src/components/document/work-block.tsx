@@ -9,12 +9,14 @@
  */
 
 import { useMemo, useRef, useState } from 'react';
+import { useCaptureMediaUrls } from '@patina/supabase';
 import {
   gateState,
   useCreateSectionTask,
   type SectionGate,
   type SectionTask,
 } from '@/hooks/use-section-work';
+import { useFieldCapturePhotoPaths } from '@/hooks/use-field-capture-photos';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, todayYmd } from '@/lib/document/format';
 import { useToggleSectionTask } from '@/hooks/use-section-work';
@@ -68,6 +70,48 @@ function normalizeWhen(selection: FolioSelection): FolioSelection {
   return selection.kind === 'span' && selection.start === selection.end
     ? { kind: 'day', date: selection.start }
     : selection;
+}
+
+/**
+ * The lead photo of every Field-raised task on this section, resolved in one
+ * pass. Both hooks are called once, above the rows: one query key and one
+ * createSignedUrls for the whole trade walk, not one of each per punch item.
+ */
+export function leadPhotoUrls(
+  tasks: readonly { field_capture_id: string | null }[],
+  byCapture: Record<string, string[]> | undefined,
+  signed: Record<string, string> | undefined,
+): { paths: string[]; byTaskCapture: Record<string, string | null> } {
+  const paths: string[] = [];
+  const byTaskCapture: Record<string, string | null> = {};
+
+  for (const task of tasks) {
+    const captureId = task.field_capture_id;
+    if (!captureId || captureId in byTaskCapture) continue;
+    const lead = byCapture?.[captureId]?.[0];
+    if (!lead) {
+      byTaskCapture[captureId] = null;
+      continue;
+    }
+    paths.push(lead);
+    byTaskCapture[captureId] = signed?.[lead] ?? null;
+  }
+  return { paths, byTaskCapture };
+}
+
+export function PunchPhoto({ url }: { url: string | null }) {
+  if (!url) return null;
+  return (
+    // The alt is the row's only signal that this punch item carries a
+    // photo — there is no adjacent "N photos" text the way
+    // capture-context-section.tsx has, so it has to say something real.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt="The photo this task was raised from"
+      className="h-8 w-8 flex-shrink-0 rounded-[3px] object-cover"
+    />
+  );
 }
 
 /**
@@ -127,6 +171,19 @@ export function WorkBlock({
     () => (gates ?? []).find((g) => g.section_key === sectionKey) ?? null,
     [gates, sectionKey],
   );
+
+  // Field Companion wave 4 (FC-R15) — the punch photo strip. Both hooks fire
+  // ONCE here, over every task on this section, never per row: one `in`-filtered
+  // read plus one batched signing call for the whole trade walk, not one of
+  // each per punch item. Both are enabled-gated on an empty input, so a
+  // section with no Field tasks issues no query.
+  const captureIds = sectionTasks
+    .map((t) => t.field_capture_id)
+    .filter((id): id is string => Boolean(id));
+  const { data: byCapture } = useFieldCapturePhotoPaths(captureIds);
+  const { paths: leadPaths } = leadPhotoUrls(sectionTasks, byCapture, undefined);
+  const { data: signedUrls } = useCaptureMediaUrls(leadPaths);
+  const { byTaskCapture } = leadPhotoUrls(sectionTasks, byCapture, signedUrls);
 
   const estTotal = sectionTasks.reduce(
     (s, t) => s + (t.estimate_minutes ?? 0),
@@ -228,8 +285,27 @@ export function WorkBlock({
               <button
                 type="button"
                 onClick={() => toggleTask.mutate(t)}
-                className="grid w-full grid-cols-[auto_1fr_auto] items-baseline gap-2.5 px-1 py-1.5 text-left hover:bg-[rgba(196,165,123,0.04)]"
+                className={`grid w-full ${
+                  t.field_capture_id ? 'grid-cols-[auto_auto_1fr_auto]' : 'grid-cols-[auto_1fr_auto]'
+                } items-baseline gap-2.5 px-1 py-1.5 text-left hover:bg-[rgba(196,165,123,0.04)]`}
               >
+                {/* FC-R15: a punch item raised from Field carries the photo
+                    it was taken from, at the head of its line. The photo's
+                    wrapper span — and the extra grid track it needs — renders
+                    ONLY when this row actually has a field_capture_id.
+                    CSS Grid's `gap` applies between every DECLARED track
+                    whether or not that track carries content, so a fixed
+                    four-track template would widen every task row on the
+                    section — including every row on a field-less project —
+                    by one unconditional gap even though the wrapper span
+                    itself collapses to 0 width. Confining the wider template
+                    to punch rows (conductor ruling W4-C13) keeps a
+                    desk-typed row byte-for-byte what it always was. */}
+                {t.field_capture_id && (
+                  <span className="flex items-center">
+                    <PunchPhoto url={byTaskCapture[t.field_capture_id] ?? null} />
+                  </span>
+                )}
                 {/* The tick is a stamp, not a SaaS checkbox: sage-wash fill
                     + a sage ✓ when done (HTML §1 .tick.done). */}
                 <span

@@ -560,7 +560,13 @@ export function MarginRail({
         key={`${row.kind}-${row.item_id}`}
         row={row}
         open={openId === row.item_id}
-        targetId={row.kind === 'pulse' ? 'document-pulse-control-desktop' : undefined}
+        targetId={
+          row.kind === 'pulse'
+            ? 'document-pulse-control-desktop'
+            : row.kind === 'note'
+              ? `margin-item-${row.item_id}`
+              : undefined
+        }
         onToggle={
           expandable
             ? () => setOpenId((v) => (v === row.item_id ? null : row.item_id))

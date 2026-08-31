@@ -213,6 +213,62 @@ struct VisitContextTests {
         #expect(resolved.routing == routing)
     }
 
+    /// W4-C15, at the guard that caused it: `inactivityWindow` is 4 hours and
+    /// `autoEndWindow` is 12, so between them sits a same-day visit that
+    /// `visitState` still calls live while the routing window has lapsed. The
+    /// first guard used to return a fresh kindless context there on elapsed
+    /// time alone. It must resume instead — visit and routing whole.
+    @Test func resolveResumesALiveVisitPastTheFourHourRoutingWindow() throws {
+        // LOCAL clock times, not offsets from the shared `now` (02:00 Chicago):
+        // `now - 5h` would land on the previous Chicago day and the calendar-day
+        // rule, not the routing window, would be what killed the visit.
+        let start = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 8, minute: 0, second: 0)))
+        let lastCapture = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 9, minute: 0, second: 0)))
+        let resumeTap = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 14, minute: 0, second: 0)))
+        let routing = CaptureRoutingMemory(destination: .inbox, projectID: "p1",
+                                           projectName: "Maple St",
+                                           projectRoomID: "project-room-1", room: "Living")
+        let stored = CaptureSessionContext(
+            identity: identity, startedAt: start, lastActivityAt: lastCapture,
+            routing: routing, kind: .site, kit: .walkThrough, label: "Maple St",
+            scanRoomID: "scan-room-1", projectsInMind: ["p1"])
+        #expect(resumeTap.timeIntervalSince(stored.lastActivityAt)
+                > CaptureSessionContextPolicy.inactivityWindow)
+        #expect(CaptureSessionContextPolicy.visitState(
+            for: stored, now: resumeTap, calendar: calendar) != .none)
+
+        let resolved = CaptureSessionContextPolicy.resolve(
+            existing: stored, identity: identity, now: resumeTap, calendar: calendar)
+
+        #expect(resolved.visitID == stored.visitID)
+        #expect(resolved.kind == .site)
+        #expect(resolved.kit == .walkThrough)
+        #expect(resolved.label == "Maple St")
+        #expect(resolved.scanRoomID == "scan-room-1")
+        #expect(resolved.projectsInMind == ["p1"])
+        #expect(resolved.routing == routing)
+        #expect(resolved.lastActivityAt == resumeTap)
+    }
+
+    /// The window still bounds a KINDLESS context: routing memory alone has no
+    /// visit rules to outrank it, so five hours of silence starts a fresh one.
+    @Test func resolveStillDropsAKindlessContextPastTheRoutingWindow() {
+        let stale = CaptureSessionContext(
+            identity: identity, startedAt: now.addingTimeInterval(-5 * 60 * 60),
+            lastActivityAt: now.addingTimeInterval(-5 * 60 * 60),
+            routing: CaptureRoutingMemory(destination: .library))
+
+        let resolved = CaptureSessionContextPolicy.resolve(
+            existing: stale, identity: identity, now: now, calendar: calendar)
+
+        #expect(resolved.visitID != stale.visitID)
+        #expect(resolved.routing == .empty)
+        #expect(resolved.startedAt == now)
+    }
+
     @Test func resolveStillResumesTodaysVisit() {
         let earlier = now.addingTimeInterval(-600)
         let stored = visit(startedAt: earlier, lastActivityAt: earlier)
@@ -386,6 +442,488 @@ struct VisitContextTests {
         // A stranger's device reads nothing of hers.
         let other = CaptureSessionIdentity(userID: "u2", workspaceID: "w1")
         #expect(store.visitState(identity: other, now: now, calendar: calendar) == .none)
+    }
+
+    // MARK: - FC-R21 N-2 / W4-C15 (Wave 4 Task 0b): the 4-hour window ROUTES.
+    // A visit the visit's own rules still call live resumes across it; the
+    // closes `expiry()` does name are reaped AND handed to an emitter.
+
+    /// The reported reproduction, and the ruling: visit opened 08:00, last
+    /// capture 09:00, "Still at Maple St? → Resume" tapped at 14:00. Five hours
+    /// idle on the SAME calendar day is still live by `CaptureVisitPolicy`'s
+    /// own rules (`expiry()` returns nil for it — asserted below), so
+    /// `resolve`'s shorter 4-hour ROUTING window must not end it. She stays
+    /// inside her visit: same `visitID`, kind, kit, label and routing, and
+    /// nothing is closed or announced. Observed via a `visitDidChange`
+    /// observer: `current()` is `@MainActor`-isolated like every other store
+    /// method here, and this body has no `await` between registering the
+    /// observer and calling `current()`, so no other MainActor-isolated test
+    /// can interleave and pollute the count.
+    @Test @MainActor func aVisitIdleFiveHoursOnTheSameDayResumesAcrossTheRoutingWindow() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        // The reproduction's own clock, in LOCAL times: the shared `now` is
+        // 02:00 Chicago, so `now - 5h` would sit on the previous Chicago day and
+        // the calendar-day rule — not the routing window — would be what ended
+        // the visit, testing the wrong rule.
+        let start = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 8, minute: 0, second: 0)))
+        let lastCapture = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 9, minute: 0, second: 0)))
+        let resumeTap = try #require(calendar.date(from: DateComponents(
+            year: 2027, month: 1, day: 15, hour: 14, minute: 0, second: 0)))
+
+        let opened = store.startVisit(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St",
+                              projectID: "p1", projectName: "Maple St",
+                              projectRoomID: "project-room-1", room: "Living"),
+            identity: identity, now: start)
+        // Her 09:00 capture, which is what actually sets `lastActivityAt`.
+        _ = store.current(identity: identity, now: lastCapture, calendar: calendar)
+        // Still alive by the visit's OWN rules at 14:00 — which is precisely why
+        // the routing window has no business ending it.
+        #expect(CaptureSessionContextPolicy.expiry(for: opened, now: resumeTap,
+                                                    calendar: calendar) == nil)
+
+        // What W1 renders at 14:00, BEFORE she answers: five hours idle is past
+        // the confirm window, so the visit is STALE and the prompt "Still at
+        // Maple St? — Resume / End visit" is showing. Stale is a question, not
+        // a close.
+        let beforeTap = store.visitState(identity: identity, now: resumeTap,
+                                         calendar: calendar)
+        let promptIsShowing: Bool
+        if case .stale = beforeTap { promptIsShowing = true } else { promptIsShowing = false }
+        #expect(promptIsShowing, "W1 must still ASK at 14:00, not have ended the visit")
+        #expect(beforeTap.context?.visitID == opened.visitID)
+
+        var closeCount = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: CaptureSessionContextStore.visitDidChange, object: nil, queue: nil
+        ) { _ in closeCount += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        // Resume, which routes through `remember`/`current`.
+        let resolved = store.current(identity: identity, now: resumeTap, calendar: calendar)
+
+        #expect(closeCount == 0)
+        #expect(resolved.visitID == opened.visitID)     // still HER visit...
+        #expect(resolved.kind == .site)
+        #expect(resolved.kit == .walkThrough)
+        #expect(resolved.label == "Maple St")
+        #expect(resolved.routing == opened.routing)
+        #expect(resolved.lastActivityAt == resumeTap)   // ...and touched, not ended.
+        #expect(resolved.isVisit)
+        // And answering Resume puts her back INSIDE it: the tap is activity, so
+        // the visit reads active again rather than re-asking.
+        #expect(store.visitState(identity: identity, now: resumeTap,
+                                 calendar: calendar) == .active(resolved))
+        #expect(store.takePendingVisitEnds(identity: identity).isEmpty)
+    }
+
+    /// Past the 12-hour rule the visit IS over, and `current()` must both close
+    /// it and leave an emittable notice behind: it hands back a context, not a
+    /// notice, and four routing screens call it with no reaper in front of them,
+    /// so without the queue the close emits nothing at all. The reason is the
+    /// one `expiry()` named — `.auto`, never `.explicit`, which is reserved for
+    /// a tapped End-visit.
+    @Test @MainActor func aVisitPastTwelveHoursClosesThroughCurrentAndQueuesReasonAuto() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let opened = store.startVisit(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+            identity: identity, now: now)
+        let late = now.addingTimeInterval(13 * 60 * 60)
+        #expect(CaptureSessionContextPolicy.expiry(for: opened, now: late,
+                                                    calendar: calendar) == .auto)
+
+        var closeCount = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: CaptureSessionContextStore.visitDidChange, object: nil, queue: nil
+        ) { _ in closeCount += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let resolved = store.current(identity: identity, now: late, calendar: calendar)
+
+        #expect(closeCount == 1)
+        #expect(!resolved.isVisit)
+        #expect(store.visitState(identity: identity, now: late, calendar: calendar) == .none)
+
+        let pending = store.takePendingVisitEnds(identity: identity, now: late)
+        #expect(pending.count == 1)
+        let notice = try #require(pending.first)
+        #expect(notice.reason == .auto)
+        // The OPEN context, so the emitter can still read the visit's own
+        // counts, and the instant it closed, so `duration_min` is wall time to
+        // the close rather than to whenever the emitter drained the queue.
+        #expect(notice.context.visitID == opened.visitID)
+        #expect(notice.context.endedAt == nil)
+        #expect(notice.closedAt == late)
+        // Drained: the emitter cannot fire the same close twice.
+        #expect(store.takePendingVisitEnds(identity: identity, now: late).isEmpty)
+        // And nobody else's device drains hers.
+        let stranger = CaptureSessionIdentity(userID: "u2", workspaceID: "w1")
+        #expect(store.takePendingVisitEnds(identity: stranger, now: late).isEmpty)
+    }
+
+    /// `resolve`'s SECOND branch — a calendar rollover reached with UNDER four
+    /// hours idle — is the one that used to drop the visit with no `endedAt`
+    /// and no event whatsoever, and it is reachable from `current()` on S1, S2
+    /// and S3, none of which hold an emitter. It must now close for `.rollover`
+    /// and queue that reason, while still doing the one thing it always did
+    /// right: carrying her day-agnostic routing memory forward.
+    @Test @MainActor func aRolloverUnderFourHoursIdleClosesAndKeepsHerRouting() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        var components = DateComponents()
+        components.year = 2026; components.month = 8; components.day = 25
+        components.hour = 23; components.minute = 40
+        let lateEvening = calendar.date(from: components)!
+
+        let opened = store.startVisit(
+            CaptureVisitDraft(kind: .site, kit: .install, label: "Maple St",
+                              projectID: "p1", projectName: "Maple St",
+                              projectRoomID: "project-room-1", room: "Living"),
+            identity: identity, now: lateEvening)
+        // 30 minutes later: WELL inside the 4-hour routing window, and already a
+        // different calendar day.
+        let afterMidnight = lateEvening.addingTimeInterval(30 * 60)
+        #expect(afterMidnight.timeIntervalSince(lateEvening)
+                < CaptureSessionContextPolicy.inactivityWindow)
+        #expect(CaptureSessionContextPolicy.expiry(for: opened, now: afterMidnight,
+                                                    calendar: calendar) == .rollover)
+
+        var closeCount = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: CaptureSessionContextStore.visitDidChange, object: nil, queue: nil
+        ) { _ in closeCount += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let resolved = store.current(identity: identity, now: afterMidnight, calendar: calendar)
+
+        #expect(closeCount == 1)
+        #expect(resolved.visitID != opened.visitID)
+        #expect(!resolved.isVisit)
+        #expect(resolved.routing == opened.routing)   // the branch's own job, kept
+
+        let pending = store.takePendingVisitEnds(identity: identity, now: afterMidnight)
+        #expect(pending.count == 1)
+        let notice = try #require(pending.first)
+        #expect(notice.reason == .rollover)
+        #expect(notice.context.visitID == opened.visitID)
+        #expect(notice.closedAt == afterMidnight)
+    }
+
+    /// Exactly ONE `visit.end` per close: a repeated `current()` call over
+    /// the same expired visit must not re-close what the first call already
+    /// closed (the second call sees the FRESH kindless context `resolve`
+    /// already minted, which has no `kind` and is never reaped), and the queue
+    /// must hold one notice, not two.
+    @Test @MainActor func exactlyOneVisitEndFiresEvenIfCurrentIsCalledAgain() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let opened = store.startVisit(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+            identity: identity, now: now)
+        let late = now.addingTimeInterval(13 * 60 * 60)
+
+        var closeCount = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: CaptureSessionContextStore.visitDidChange, object: nil, queue: nil
+        ) { _ in closeCount += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let first = store.current(identity: identity, now: late, calendar: calendar)
+        let second = store.current(identity: identity,
+                                   now: late.addingTimeInterval(60), calendar: calendar)
+
+        #expect(closeCount == 1)
+        #expect(first.visitID != opened.visitID)
+        #expect(second.visitID == first.visitID)
+        #expect(!second.isVisit)
+        #expect(store.takePendingVisitEnds(identity: identity,
+                                           now: late.addingTimeInterval(60)).count == 1)
+    }
+
+    /// The other half of exactly-once, in the other order: whichever of the two
+    /// reap paths notices the expiry first is the only one that closes it, so a
+    /// screen that reaps THEN resolves does not emit twice.
+    @Test @MainActor func aReapedVisitIsNotClosedASecondTimeByCurrent() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        store.startVisit(CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+                         identity: identity, now: now)
+        let late = now.addingTimeInterval(13 * 60 * 60)
+
+        // The emitter's own path wins the race and emits directly...
+        let reaped = try #require(store.reapExpiredVisit(identity: identity, now: late,
+                                                         calendar: calendar))
+        #expect(reaped.reason == .auto)
+        #expect(reaped.closedAt == late)
+
+        // ...so `current()` finds an already-closed visit, queues nothing, and
+        // the close is not counted twice.
+        let resolved = store.current(identity: identity, now: late, calendar: calendar)
+        #expect(!resolved.isVisit)
+        #expect(store.takePendingVisitEnds(identity: identity).isEmpty)
+    }
+
+    // MARK: - The pending-end queue survives its owner's sign-out, and its cap
+
+    /// `reset()` is sign-out / workspace change, and it used to delete the
+    /// pending-end queue with the open context. A close reaped seconds before
+    /// she signs out is still a close that owes a `visit.end` — and every
+    /// notice carries its own visit and identity, so nothing about a switch
+    /// makes it wrong to keep. The open context still goes.
+    @Test @MainActor func signingOutKeepsTheClosesThatAreStillOwedAnEvent() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let opened = store.startVisit(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+            identity: identity, now: now)
+        let late = now.addingTimeInterval(13 * 60 * 60)
+        _ = store.current(identity: identity, now: late, calendar: calendar)
+
+        store.reset()
+
+        // The context is gone...
+        #expect(!store.current(identity: identity, now: late, calendar: calendar).isVisit)
+        // ...and the close it owes is not.
+        let pending = store.takePendingVisitEnds(identity: identity, now: late)
+        #expect(pending.count == 1)
+        #expect(pending.first?.context.visitID == opened.visitID)
+    }
+
+    /// The 8-cap kept the OLDEST, so once eight closes had queued behind a
+    /// surface that never drained, every close after them was dropped for good
+    /// — the queue froze and no later visit could ever reach a dashboard.
+    /// Dropping the oldest loses one stale close instead of all the new ones.
+    @Test @MainActor func anOverflowingQueueDropsTheOldestCloseRatherThanEveryNewOne() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        var cursor = now
+        var labels: [String] = []
+        for index in 0..<11 {
+            let label = "Visit \(index)"
+            labels.append(label)
+            store.startVisit(CaptureVisitDraft(kind: .site, kit: .walkThrough, label: label),
+                             identity: identity, now: cursor)
+            cursor = cursor.addingTimeInterval(13 * 60 * 60)
+            _ = store.current(identity: identity, now: cursor, calendar: calendar)
+        }
+
+        let pending = store.takePendingVisitEnds(identity: identity, now: cursor)
+        #expect(pending.count == 8)
+        #expect(pending.map(\.context.label) == Array(labels.suffix(8)))
+        #expect(pending.map(\.context.label).contains("Visit 10"))
+    }
+
+    /// The cap is PER OWNER, and it has to be: `reset()` keeps the queue across
+    /// a sign-out precisely so a close reaped seconds before it still gets
+    /// emitted, and one shared eight-slot list evicting by age across identities
+    /// meant the NEXT designer's eight visits destroyed every notice the
+    /// signed-out one was still owed — undoing the thing keeping the queue was
+    /// for. Each identity keeps its own eight.
+    @Test @MainActor func oneOwnersEightClosesSurviveAnotherOwnersEight() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+        let other = CaptureSessionIdentity(userID: "u2", workspaceID: "w2")
+
+        var cursor = now
+        func closeEight(as who: CaptureSessionIdentity, named prefix: String) -> [String] {
+            var labels: [String] = []
+            for index in 0..<8 {
+                let label = "\(prefix) \(index)"
+                labels.append(label)
+                store.startVisit(
+                    CaptureVisitDraft(kind: .site, kit: .walkThrough, label: label),
+                    identity: who, now: cursor)
+                cursor = cursor.addingTimeInterval(13 * 60 * 60)
+                _ = store.current(identity: who, now: cursor, calendar: calendar)
+            }
+            return labels
+        }
+
+        let hers = closeEight(as: identity, named: "Hers")
+        let theirs = closeEight(as: other, named: "Theirs")
+
+        // Sixteen notices standing, not eight: the cap counted them together.
+        let mine = store.takePendingVisitEnds(identity: identity, now: cursor)
+        #expect(mine.count == 8)
+        #expect(mine.map(\.context.label) == hers)
+        let others = store.takePendingVisitEnds(identity: other, now: cursor)
+        #expect(others.count == 8)
+        #expect(others.map(\.context.label) == theirs)
+    }
+
+    /// The other half of a per-owner cap: it is still a CAP. A ninth close from
+    /// the same owner evicts that owner's oldest, and touches nobody else's.
+    @Test @MainActor func aNinthCloseEvictsItsOwnOwnersOldest_notTheOtherOwners() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+        let other = CaptureSessionIdentity(userID: "u2", workspaceID: "w2")
+
+        var cursor = now
+        store.startVisit(CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Theirs"),
+                         identity: other, now: cursor)
+        cursor = cursor.addingTimeInterval(13 * 60 * 60)
+        _ = store.current(identity: other, now: cursor, calendar: calendar)
+
+        var labels: [String] = []
+        for index in 0..<9 {
+            let label = "Hers \(index)"
+            labels.append(label)
+            store.startVisit(CaptureVisitDraft(kind: .site, kit: .walkThrough, label: label),
+                             identity: identity, now: cursor)
+            cursor = cursor.addingTimeInterval(13 * 60 * 60)
+            _ = store.current(identity: identity, now: cursor, calendar: calendar)
+        }
+
+        let mine = store.takePendingVisitEnds(identity: identity, now: cursor)
+        #expect(mine.map(\.context.label) == Array(labels.suffix(8)))
+        #expect(store.takePendingVisitEnds(identity: other, now: cursor)
+                    .map(\.context.label) == ["Theirs"])
+    }
+
+    /// The sanity TTL. A notice nobody drained in a fortnight describes a visit
+    /// long gone, and the queue is persisted — without this a close for an
+    /// account that never signs back in sits in UserDefaults for the life of
+    /// the install. Dropped at READ, so every reader applies it and nothing has
+    /// to remember to sweep.
+    @Test @MainActor func aNoticeNobodyDrainedInTwoWeeksIsDroppedAtRead() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        func notice(closedAt: Date) -> FieldVisitEndNotice {
+            FieldVisitEndNotice(
+                context: CaptureSessionContext(
+                    identity: identity, startedAt: closedAt.addingTimeInterval(-3_600),
+                    lastActivityAt: closedAt, kind: .site, kit: .walkThrough,
+                    label: "Maple St"),
+                reason: .auto,
+                closedAt: closedAt)
+        }
+        let stale = notice(closedAt: now)
+        let fresh = notice(closedAt: now.addingTimeInterval(13 * 24 * 60 * 60))
+        defaults.set(try JSONEncoder().encode([stale, fresh]), forKey: "context.pending-ends")
+
+        let readAt = now.addingTimeInterval(CaptureSessionContextStore.pendingVisitEndTTL + 60)
+        #expect(readAt.timeIntervalSince(fresh.closedAt)
+                < CaptureSessionContextStore.pendingVisitEndTTL)
+
+        let pending = store.takePendingVisitEnds(identity: identity, now: readAt)
+        #expect(pending.count == 1)
+        #expect(pending.first?.context.visitID == fresh.context.visitID)
+
+        // A day earlier both are still owed an event — the TTL is the only
+        // reason the first one went.
+        defaults.set(try JSONEncoder().encode([stale, fresh]), forKey: "context.pending-ends")
+        #expect(store.takePendingVisitEnds(
+            identity: identity,
+            now: now.addingTimeInterval(CaptureSessionContextStore.pendingVisitEndTTL - 60)
+        ).count == 2)
+    }
+
+    /// One unreadable entry must not take the queue with it. `try?` on the
+    /// whole array returned nil for all eight whenever a single element failed
+    /// to decode — a truncated write, or a shape change in
+    /// `CaptureSessionContext`, silently discarded every close waiting.
+    @Test @MainActor func oneMalformedEntryIsSkippedRatherThanStrandingTheQueue() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let context = CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            kind: .site, kit: .walkThrough, label: "Maple St")
+        let notice = FieldVisitEndNotice(context: context, reason: .auto, closedAt: now)
+
+        var blob = Data(#"[{"broken":true},"#.utf8)
+        blob.append(try JSONEncoder().encode(notice))
+        blob.append(Data("]".utf8))
+        defaults.set(blob, forKey: "context.pending-ends")
+
+        let pending = store.takePendingVisitEnds(identity: identity, now: now)
+        #expect(pending.count == 1)
+        #expect(pending.first?.context.visitID == context.visitID)
+        #expect(pending.first?.reason == .auto)
+    }
+
+    /// The limit of that tolerance, pinned so the comment above
+    /// `pendingVisitEnds` cannot overclaim again. Element-level leniency does
+    /// NOTHING for a blob that stopped mid-write: the outer array is still
+    /// decoded in one piece, and JSON that never closes fails wholesale.
+    @Test @MainActor func aTruncatedQueueIsNotSurvivable_onlyAMalformedElementIs() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let context = CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            kind: .site, kit: .walkThrough, label: "Maple St")
+        let whole = try JSONEncoder().encode(
+            [FieldVisitEndNotice(context: context, reason: .auto, closedAt: now)])
+        var truncated = Data("[".utf8)
+        truncated.append(whole.dropFirst().dropLast(4))   // no closing brace, no "]"
+        defaults.set(truncated, forKey: "context.pending-ends")
+
+        #expect(store.takePendingVisitEnds(identity: identity, now: now).isEmpty)
+    }
+
+    /// The happy path is unchanged: a visit idle 10 minutes resumes with its
+    /// visitID, kind and label intact, and nothing is reaped or announced.
+    @Test @MainActor func aVisitIdleTenMinutesResumesUnchangedThroughCurrent() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let opened = store.startVisit(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+            identity: identity, now: now)
+        let soon = now.addingTimeInterval(10 * 60)
+
+        var closeCount = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: CaptureSessionContextStore.visitDidChange, object: nil, queue: nil
+        ) { _ in closeCount += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let resolved = store.current(identity: identity, now: soon, calendar: calendar)
+
+        #expect(closeCount == 0)
+        #expect(resolved.visitID == opened.visitID)
+        #expect(resolved.kind == .site)
+        #expect(resolved.label == "Maple St")
+        #expect(resolved.lastActivityAt == soon)
     }
 
     // MARK: - The capture inherits the visit (task 7)

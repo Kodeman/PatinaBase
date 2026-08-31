@@ -689,6 +689,10 @@ public struct SiteDeliveryReceipt: Codable, Hashable, Sendable {
 
 public protocol SiteRequestService: Sendable {
     func hub(projectID: String) async throws -> SiteProjectHub
+    /// Every project party, unfiltered. `SiteRequestAssignee` drops a party with
+    /// no phone; `PunchCourtResolver` must see it anyway, because a GC with no
+    /// phone number is still the reason a punch item is not somebody else's.
+    func fieldParties(projectID: String) async throws -> [FieldPartyRef]
     func createDraft(_ draft: SiteRequestDraft) async throws -> String
     func reviseItem(requestID: String, itemID: String,
                     revision: SiteRequestDraftItem) async throws -> String
