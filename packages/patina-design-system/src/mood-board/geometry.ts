@@ -739,6 +739,9 @@ export function computeBoardAutoGrow(
   // canvas_height are `integer`, and apply_board_room_state rejects anything
   // that is not `^[0-9]+$`). Growth derived from rotated/fractional content
   // bounds is not, so it is rounded up here rather than at each consumer.
+  // The item translation below deliberately stays fractional: the same RPC
+  // accepts decimal item coordinates (`^[0-9]+([.][0-9]+)?$`), and rounding
+  // them would shift pins away from where the gesture left them.
   return {
     grew,
     canvas: {

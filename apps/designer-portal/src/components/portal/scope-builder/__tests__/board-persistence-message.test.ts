@@ -1,85 +1,110 @@
-import { boardPersistenceMessage } from '../board-room-controller';
+import {
+  BOARD_SAVE_MESSAGES,
+  boardPersistenceMessage,
+} from '../board-room-controller';
+
+/** A PostgREST rejection: a plain object carrying the RAISE's SQLSTATE. */
+function postgrest(code: string, message: string) {
+  return { code, message, details: null, hint: null };
+}
 
 describe('boardPersistenceMessage', () => {
-  it('never repeats a backend message to the reader', () => {
-    const backendMessages = [
-      'Project board changes require apply_board_room_state',
-      'invalid board fields',
-      'invalid board item',
-      'invalid board sections',
-      'board item geometry is out of range',
-      'board unavailable',
-      'project board unavailable',
-      'board item limit exceeded',
-      'project not found or access denied',
-    ];
-    for (const message of backendMessages) {
-      const copy = boardPersistenceMessage(new Error(message));
-      expect(copy).not.toContain(message);
-      expect(copy).not.toMatch(/apply_board_room_state|jsonb|rpc|errcode/i);
-    }
-  });
-
-  it('names the access class when the board is no longer writable', () => {
-    for (const message of [
-      'board unavailable',
-      'project board unavailable',
-      'project not found or access denied',
-      'proposal not found or not accessible',
-      'board selection does not belong to project',
-      'authentication required',
-    ]) {
-      expect(boardPersistenceMessage(new Error(message))).toBe(
-        'That change was reverted — this board is no longer open for editing here. Reopen it from the project and try again.',
-      );
-    }
-  });
-
-  it('names the pin ceiling', () => {
-    expect(boardPersistenceMessage(new Error('board item limit exceeded'))).toBe(
-      'That change was reverted — this board is already holding as many pins as it can.',
+  it('dispatches on the SQLSTATE the board RPCs raise, not on their wording', () => {
+    // Same code, deliberately reworded sentences — the copy must not move.
+    expect(boardPersistenceMessage(postgrest('42501', 'board unavailable'))).toBe(
+      BOARD_SAVE_MESSAGES.access,
     );
+    expect(
+      boardPersistenceMessage(postgrest('42501', 'a completely different sentence')),
+    ).toBe(BOARD_SAVE_MESSAGES.access);
+
+    expect(
+      boardPersistenceMessage(postgrest('54000', 'board item limit exceeded')),
+    ).toBe(BOARD_SAVE_MESSAGES.limit);
+    expect(boardPersistenceMessage(postgrest('54000', 'reworded ceiling'))).toBe(
+      BOARD_SAVE_MESSAGES.limit,
+    );
+
+    expect(boardPersistenceMessage(postgrest('23514', 'invalid board item'))).toBe(
+      BOARD_SAVE_MESSAGES.layout,
+    );
+    expect(boardPersistenceMessage(postgrest('23514', 'reworded refusal'))).toBe(
+      BOARD_SAVE_MESSAGES.layout,
+    );
+    expect(
+      boardPersistenceMessage(
+        postgrest('23000', 'board item id belongs to another board'),
+      ),
+    ).toBe(BOARD_SAVE_MESSAGES.layout);
   });
 
-  it('folds every validation refusal into one layout sentence', () => {
+  it('classifies by message only when no SQLSTATE is carried', () => {
+    expect(boardPersistenceMessage(new Error('project board unavailable'))).toBe(
+      BOARD_SAVE_MESSAGES.access,
+    );
+    expect(
+      boardPersistenceMessage(
+        new Error('Project board changes require apply_board_room_state'),
+      ),
+    ).toBe(BOARD_SAVE_MESSAGES.layout);
+    expect(boardPersistenceMessage(new Error('board item limit exceeded'))).toBe(
+      BOARD_SAVE_MESSAGES.limit,
+    );
     for (const message of [
-      'invalid board fields',
-      'invalid board item',
-      'invalid board sections',
-      'board item geometry is out of range',
-      'Project board changes require apply_board_room_state',
+      'Failed to fetch',
+      'NetworkError when attempting to fetch',
+      'Load failed',
     ]) {
       expect(boardPersistenceMessage(new Error(message))).toBe(
-        'That change was reverted — the board could not accept that layout.',
+        BOARD_SAVE_MESSAGES.offline,
       );
     }
   });
 
-  it('separates a dropped connection from a refusal', () => {
-    for (const message of ['Failed to fetch', 'NetworkError when attempting to fetch', 'Load failed']) {
-      expect(boardPersistenceMessage(new Error(message))).toBe(
-        'That change was reverted — the connection dropped before it could be saved.',
-      );
-    }
-  });
-
-  it('reads a PostgREST rejection, which is a plain object and not an Error', () => {
+  it('prefers the SQLSTATE over a message that reads like another class', () => {
+    // A privilege refusal whose sentence happens to say "invalid board".
     expect(
-      boardPersistenceMessage({
-        code: '23514',
-        message: 'invalid board item',
-        details: null,
-        hint: null,
-      }),
-    ).toBe('That change was reverted — the board could not accept that layout.');
+      boardPersistenceMessage(postgrest('42501', 'invalid board fields')),
+    ).toBe(BOARD_SAVE_MESSAGES.access);
+  });
+
+  it('never repeats a backend message or an internal name to the reader', () => {
+    const rejections = [
+      postgrest('42501', 'board unavailable'),
+      postgrest('42501', 'project not found or access denied'),
+      postgrest('23514', 'invalid board fields'),
+      postgrest('23514', 'invalid board item'),
+      postgrest('23514', 'invalid board sections'),
+      postgrest('23514', 'board item geometry is out of range'),
+      postgrest('23000', 'board item id belongs to another board'),
+      postgrest('54000', 'board item limit exceeded'),
+      new Error('Project board changes require apply_board_room_state'),
+    ];
+    for (const rejection of rejections) {
+      const copy = boardPersistenceMessage(rejection);
+      const backendText =
+        rejection instanceof Error ? rejection.message : rejection.message;
+      expect(copy).not.toContain(backendText);
+      expect(copy).not.toMatch(/apply_board_room_state|jsonb|rpc|errcode|sqlstate/i);
+      expect(Object.values(BOARD_SAVE_MESSAGES)).toContain(copy);
+    }
   });
 
   it('falls back to a plain sentence for anything unrecognised', () => {
     expect(boardPersistenceMessage(new Error('kaboom'))).toBe(
-      'That change was reverted because it could not be saved.',
+      BOARD_SAVE_MESSAGES.unknown,
     );
-    expect(boardPersistenceMessage(undefined)).toBe(
-      'That change was reverted because it could not be saved.',
+    expect(boardPersistenceMessage(postgrest('P0001', 'kaboom'))).toBe(
+      BOARD_SAVE_MESSAGES.unknown,
     );
+    expect(boardPersistenceMessage(undefined)).toBe(BOARD_SAVE_MESSAGES.unknown);
+    expect(boardPersistenceMessage('board unavailable')).toBe(
+      BOARD_SAVE_MESSAGES.access,
+    );
+  });
+
+  it('keeps every class distinguishable', () => {
+    const values = Object.values(BOARD_SAVE_MESSAGES);
+    expect(new Set(values).size).toBe(values.length);
   });
 });
