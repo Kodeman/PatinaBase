@@ -1,4 +1,4 @@
--- Project-owned board share links (00545): mint, resolve, revoke.
+-- Project-owned board share links (00548): mint, resolve, revoke.
 -- Run after a fresh reset:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 \

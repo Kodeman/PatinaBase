@@ -57,7 +57,7 @@ BEGIN
     WHERE template.id IS NULL
   ), 'Patina starter UUID/key mappings must remain stable';
 
-  -- D10 (board-paths audit 2026-08-31, fixed by 00544): the zoned-furniture-plan
+  -- D10 (board-paths audit 2026-08-31, fixed by 00547): the zoned-furniture-plan
   -- starter's full-width reference band must no longer be a bare, unlabeled
   -- `image` placeholder with no rendered guidance — it was converted to a
   -- `note` with real instructional copy, geometry otherwise unchanged.

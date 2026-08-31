@@ -1,10 +1,10 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00543 — Review-derivative reuse is content-addressed, not source-addressed
--- Lineage: public.prepare_project_review_media_asset — 00454 → 00543 (this file)
+-- 00546 — Review-derivative reuse is content-addressed, not source-addressed
+-- Lineage: public.prepare_project_review_media_asset — 00454 → 00546 (this file)
 --          public.apply_board_room_state — 00411 → 00435 → 00445 → 00449 →
---            00454 → 00457 → 00543 (this file; grep confirms 00457 is head)
+--            00454 → 00457 → 00546 (this file; grep confirms 00457 is head)
 --          public.board_media_reference_has_live_source — 00462 → 00473 →
---            00543 (this file; grep confirms 00473 is head)
+--            00546 (this file; grep confirms 00473 is head)
 --
 -- THE BUG (D6, board-paths audit 2026-08-31). Prod logs on Strata
 -- (function_edge_logs + postgres_logs, 2026-08-31 16:58 and 17:02 UTC) show the
@@ -345,7 +345,7 @@ BEGIN
   -- CONTENT-addressed match (see header): a derivative shares this source's
   -- bytes when it shares its project and checksum, regardless of which
   -- specific working-media upload the derivative's own source_asset_id points
-  -- at (00543 — byte-identical uploads under two different paths dedup onto
+  -- at (00546 — byte-identical uploads under two different paths dedup onto
   -- one derivative row).
   IF EXISTS (
     SELECT 1

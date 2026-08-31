@@ -157,11 +157,11 @@ BEGIN
     RAISE EXCEPTION 'mismatched derivative checksum was accepted';
   EXCEPTION WHEN check_violation THEN NULL; END;
 
-  -- D6 (board-paths audit 2026-08-31, fixed by 00543): a SECOND, DIFFERENT
+  -- D6 (board-paths audit 2026-08-31, fixed by 00546): a SECOND, DIFFERENT
   -- working-media upload with byte-identical content (same checksum/size/
   -- content type as the source.pdf above) must still resolve to the SAME
   -- content-addressed derivative as a reuse, not a hard mismatch. Before
-  -- 00543 this raised 'review derivative registration does not match
+  -- 00546 this raised 'review derivative registration does not match
   -- verified stored bytes' — reproduced verbatim in Strata's prod logs when
   -- a forced board-cover exit-write re-uploaded an unchanged cover under a
   -- fresh random path (mood-board cover-generation D6).
@@ -192,7 +192,7 @@ BEGIN
     'the response must echo the CALLING request''s own source, not the derivative''s original lineage';
 
   -- Same lineage gap, one level up (adversarial review finding, D6 fixed by
-  -- 00543): board_media_reference_has_live_source's FF&E lane resolved this
+  -- 00546): board_media_reference_has_live_source's FF&E lane resolved this
   -- exact cross-source pairing via the identical source_asset_id identity
   -- that just got dropped above. A reference naming a SECOND, byte-identical
   -- source path must still be recognized as having a live source, even when

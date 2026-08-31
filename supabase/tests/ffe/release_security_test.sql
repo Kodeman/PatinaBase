@@ -34,8 +34,8 @@ INSERT INTO public.purchase_orders(id,designer_id,project_id,vendor_id,payment_p
 INSERT INTO public.project_ffe_media_assets(id,project_id,storage_path,media_kind,checksum_sha256,size_bytes,content_type,created_by) VALUES
 ('fa400000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001/source/chair.pdf','source_document',repeat('d',64),1000,'application/pdf','fa000000-0000-4000-8000-000000000001');
 -- Derivative checksum matches its source's (repeat('d',64)): review-media
--- preparation copies working bytes verbatim (see 00543's header), and
--- apply_board_room_state's cover guard (00543) now matches source<->derivative
+-- preparation copies working bytes verbatim (see 00546's header), and
+-- apply_board_room_state's cover guard (00546) now matches source<->derivative
 -- by project + checksum rather than by source_asset_id identity, so a fixture
 -- pairing them with different checksums no longer describes a real pairing.
 INSERT INTO public.project_review_media_assets(id,project_id,source_asset_id,storage_path,derivative_kind,checksum_sha256,size_bytes,content_type,prepared_by) VALUES

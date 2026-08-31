@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00544 — Fix the broken reference item in the "Furniture plan by zone" starter
+-- 00547 — Fix the broken reference item in the "Furniture plan by zone" starter
 -- (D10, board-paths audit 2026-08-31)
 --
 -- THE BUG. 00409 seeded four Patina starter board templates. Every `image`-type
