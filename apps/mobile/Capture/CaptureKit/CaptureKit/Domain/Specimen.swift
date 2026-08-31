@@ -145,6 +145,20 @@ public final class Specimen {
     public var placementLastError: String?
     public var placementRetryCount: Int?
 
+    // ── Margin-note lane (wave 4, FC-R4) — a post-commit write, exactly the
+    //    shape of the placement lane above. marginNoteId is the client-minted
+    //    margin_notes.id AND the idempotency key.
+    //
+    //    marginNoteBodyRaw is set ONLY by the FC-R8 degrade (ruling 3): the
+    //    ordinary note's body is the transcript and is composed at drain time,
+    //    but a refused task's body is the task's own words plus the reason, and
+    //    that has to survive the relaunch between the refusal and the write.
+    public var marginNoteId: String?
+    public var marginNoteBodyRaw: String?
+    public var marginNoteStateRaw: String?
+    public var marginNoteLastError: String?
+    public var marginNoteRetryCount: Int?
+
     // ── The visit (Field Companion wave 3). All additive optionals. ──
     // captureSessionID already carries the visitID; these carry what
     // field_captures' visit/suggestion columns need.

@@ -751,6 +751,7 @@ public final class CaptureStore {
             // project_id NULL forever, with nothing on screen to say so.
             if $0.placementNeedsReplay { return true }
             if $0.needsProjectPlacement { return true }
+            if $0.needsMarginNote { return true }
             return ($0.remoteId ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .isEmpty

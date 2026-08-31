@@ -265,6 +265,86 @@ public extension Specimen {
         placementLastError = nil
         touch()
     }
+
+    // MARK: - Margin-note lane (wave 4)
+
+    var marginNoteState: FieldWriteState? {
+        get { marginNoteStateRaw.flatMap(FieldWriteState.init(rawValue:)) }
+        set { marginNoteStateRaw = newValue?.rawValue }
+    }
+
+    /// `.refused` closes the lane as firmly as `.written`: a 42501 is a fact
+    /// about who owns this project, not a transient error (FC-R8).
+    var needsMarginNote: Bool {
+        guard marginNoteId?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty == false else { return false }
+        return marginNoteState != .written && marginNoteState != .refused
+    }
+
+    /// `body: nil` means "compose it from the transcript at drain time" — the
+    /// ordinary case, including the automatic in-visit note (ruling 1). A body
+    /// is passed only by FC-R8's degrade (ruling 3), which has words of its own.
+    ///
+    /// Re-requesting an OPEN lane is a no-op on the id: the id is the
+    /// idempotency key, and re-minting it mid-flight would write the note
+    /// twice. A lane whose note has already landed is FREE, and re-requesting
+    /// it starts a second note — which is how FC-R8's degrade (ruling 3) still
+    /// files its words on a capture that already auto-filed its transcript.
+    /// The degrade passes a deterministic id (the refused task's own UUID), so
+    /// that second note is replay-safe exactly like the first.
+    func requestMarginNote(noteID: UUID, body: String? = nil) {
+        guard marginNoteId == nil || marginNoteState == .written else { return }
+        marginNoteId = noteID.uuidString
+        marginNoteBodyRaw = body
+        marginNoteState = .pending
+        marginNoteLastError = nil
+        marginNoteRetryCount = 0
+        touch()
+    }
+
+    func markMarginNotePending() {
+        guard marginNoteId != nil else { return }
+        marginNoteState = .pending
+        marginNoteLastError = nil
+        touch()
+    }
+
+    func markMarginNoteStarted() {
+        guard marginNoteId != nil else { return }
+        marginNoteState = .writing
+        marginNoteLastError = nil
+        touch()
+    }
+
+    func markMarginNoteWritten() {
+        guard marginNoteId != nil else { return }
+        marginNoteState = .written
+        marginNoteLastError = nil
+        touch()
+    }
+
+    func markMarginNoteFailed(_ message: String) {
+        marginNoteState = .failed
+        marginNoteLastError = message
+        marginNoteRetryCount = (marginNoteRetryCount ?? 0) + 1
+        touch()
+    }
+
+    func markMarginNoteRefused(_ message: String) {
+        marginNoteState = .refused
+        marginNoteLastError = message
+        touch()
+    }
+
+    func clearMarginNote() {
+        marginNoteId = nil
+        marginNoteBodyRaw = nil
+        marginNoteState = nil
+        marginNoteLastError = nil
+        marginNoteRetryCount = nil
+        touch()
+    }
 }
 
 // MARK: - The visit (Field Companion wave 3)
