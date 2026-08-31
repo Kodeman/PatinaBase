@@ -8,7 +8,7 @@ import { summarizeBoardCoverUrls } from './use-boards';
 import {
   summarizeBoardVerdicts,
   type BoardItemVerdictProjection,
-  type BoardVerdictCounts,
+  type BoardVerdictBreakdown,
 } from './board-verdicts';
 
 const getSupabase = () => createBrowserClient();
@@ -21,7 +21,7 @@ export interface RecentBoard {
   roomName: string | null;
   coverImageUrl: string | null;
   coverFallbackUrls: string[];
-  verdictCounts: BoardVerdictCounts;
+  verdictCounts: BoardVerdictBreakdown;
   updatedAt: string;
 }
 

@@ -16,7 +16,7 @@ import {
 import {
   summarizeBoardVerdicts,
   type BoardItemVerdictProjection,
-  type BoardVerdictCounts,
+  type BoardVerdictBreakdown,
 } from './board-verdicts';
 
 const getSupabase = () => createBrowserClient();
@@ -110,7 +110,7 @@ export interface ProposalBoard {
 export interface ProposalBoardSummary extends ProposalBoard {
   item_count: number;
   /** Current, RLS-visible client verdicts grouped for cover-card badges. */
-  verdict_counts: BoardVerdictCounts;
+  verdict_counts: BoardVerdictBreakdown;
   /**
    * Backward-compatible first mosaic image. New cover surfaces should render
    * `cover_fallback_urls`.
