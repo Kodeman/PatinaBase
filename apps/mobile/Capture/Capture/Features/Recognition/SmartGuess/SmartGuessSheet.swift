@@ -91,6 +91,14 @@ struct SmartGuessSheet: View {
             }
             if hasProject {
                 Button("Make it a task") { makeTask() }
+                if currentSpecimen()?.punchTaskState == .written {
+                    // The lane re-opens for a deliberate second item, which is
+                    // right — but silently, so the first filing had to be
+                    // remembered rather than read. Same shape as the note
+                    // branch's landed row, above.
+                    Label(PunchCourtCopy.punchFiledMenuRow, systemImage: "checkmark")
+                        .labelStyle(.titleAndIcon)
+                }
                 Button("Make it a punch item") { beginPunchItem() }
             } else {
                 // Both writes need a project_id. Said plainly rather than shown

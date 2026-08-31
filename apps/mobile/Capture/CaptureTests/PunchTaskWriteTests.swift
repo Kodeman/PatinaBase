@@ -305,10 +305,16 @@ struct PunchTaskWriteTests {
         #expect(specimen.punchTaskPartyId == "party-gc")
     }
 
-    @Test func aWrittenPunchLaneReOpensForADeliberateSecondItem() {
+    @Test func aWrittenPunchLaneReOpensForADeliberateSecondItem_andTheMenuSaysSo() {
         let specimen = Specimen()
         specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
         specimen.markPunchTaskWritten()
+
+        // The re-open is deliberate, and it is also invisible: nothing in the
+        // verb menu acknowledged the first item, so a second filing read as the
+        // tap doing nothing. `.written` is exactly the state SmartGuessSheet
+        // shows this row on.
+        #expect(PunchCourtCopy.punchFiledMenuRow == "Punch item filed — file another?")
 
         let second = UUID()
         specimen.requestPunchTask(taskID: second, owner: "designer", partyID: nil)

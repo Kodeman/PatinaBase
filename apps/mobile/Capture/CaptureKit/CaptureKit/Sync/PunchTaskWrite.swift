@@ -300,6 +300,14 @@ public enum PunchCourtCopy {
     public static let refusedTask =
         "Tasks on this project belong to its designer of record. "
         + "Saved as a note in the Document instead."
+
+    /// The menu row for a lane whose punch item has already landed.
+    /// `requestPunchTask` deliberately re-opens a written lane so a second
+    /// deliberate item can be filed — but the menu said nothing about the
+    /// first, so the verb read as an unchanged row and the second filing looked
+    /// like the tap doing nothing. This says what happened and offers the
+    /// re-open in the same breath; it does not change the re-open.
+    public static let punchFiledMenuRow = "Punch item filed — file another?"
 }
 
 public protocol PunchTaskGateway: Sendable {
