@@ -1,7 +1,7 @@
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 import { adminDb } from '../helpers/supabase-admin';
 import { quiet, scrollTo, settle } from '../helpers/lens';
-import { psqlRun } from '../helpers/psql';
+import { psqlRun, psqlScalar } from '../helpers/psql';
 
 const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
 /**
@@ -594,42 +594,94 @@ test.describe('the mobile bar publishes its height (D-B47)', () => {
  * on a cold, single-document session, where `offer` is always null: the state
  * the designer is in the moment he has been working was never once executed.
  *
- * This is that state. A running timer on `…d1` is seeded straight into
- * `project_time_entries` (`duration_minutes IS NULL`), then `…d5` is opened at
- * 390 — `hold()` chains the `…d1` timer out into a cross-project offer, and
- * the bar must still print.
+ * This is that state, and — W7-C3 — the spec PROVES the state stood rather
+ * than assuming it. A no-offer session satisfies "bar visible, one edge
+ * owner" too, so two further facts are asserted at the same moment:
+ *
+ *   · the seeded `…d1` row was CHAINED OUT (`duration_minutes IS NOT NULL`),
+ *     which is the offer being created, read straight out of Postgres; and
+ *   · the log strip is ABSENT, which is that offer being refused.
+ *
+ * Together they mean "an offer stood and the strip would not paint it" — the
+ * exact condition under which the old bar disappeared. A control case follows:
+ * with the timer on THIS project the strip's own rule is the other way, the
+ * offer owns the edge, and the bar yields.
  */
 const OTHER_PROJECT_ID = 'b0000000-0000-0000-0000-0000000000d1';
 const LONG_PAPER_PROJECT_ID = 'b0000000-0000-0000-0000-0000000000d5';
 const DESIGNER_ID = 'a0000000-0000-0000-0000-000000000004'; // designer@patina.dev
 
-test.describe('D-B54 · the thumb edge with a cross-project offer standing', () => {
-  test.beforeAll(() => {
-    // Any leftover open timer for this designer would confound the setup.
-    psqlRun(
-      `DELETE FROM project_time_entries
-        WHERE user_id = '${DESIGNER_ID}'::uuid AND duration_minutes IS NULL`,
-    );
-    psqlRun(
-      `INSERT INTO project_time_entries (project_id, user_id, started_at, duration_minutes, source, activity)
-       VALUES ('${OTHER_PROJECT_ID}'::uuid, '${DESIGNER_ID}'::uuid, now() - interval '20 minutes', NULL, 'timer_manual', 'design')`,
-    );
+/**
+ * W7-C4 — a FIXED id per row, so teardown only ever removes what this file
+ * inserted. The first draft DELETED every open timer for the shared
+ * `designer@patina.dev`, which under `fullyParallel: true` would destroy a row
+ * a concurrent spec had just opened.
+ *
+ * Full isolation is not reachable here and the schema is why:
+ * `uniq_project_time_entries_running_timer` is a UNIQUE index on `user_id`
+ * over open rows, so this designer can hold exactly ONE running timer at a
+ * time — an insert cannot proceed while any other open row exists. The
+ * fixture therefore CLOSES a pre-existing open row (stamping it the way
+ * `hold()` itself would) instead of deleting it: the other spec's data
+ * survives as a logged entry, the unique index is freed, and nothing this
+ * file did not create is ever destroyed. A dedicated designer would be the
+ * complete answer; that needs a second auth fixture and its own seeded
+ * documents, which is more than D-B54's falsifier is worth.
+ */
+const SEEDED_ENTRY_ID = 'e7000000-0000-0000-0000-0000000000d1';
+const CONTROL_ENTRY_ID = 'e7000000-0000-0000-0000-0000000000d5';
+
+/** Free the per-user unique index without deleting anyone's row. One minute,
+ *  the smallest the `duration_minutes > 0` check constraint allows. */
+const closeForeignOpenTimers = () =>
+  psqlRun(
+    `UPDATE project_time_entries
+        SET duration_minutes = 1
+      WHERE user_id = '${DESIGNER_ID}'::uuid
+        AND duration_minutes IS NULL
+        AND id NOT IN ('${SEEDED_ENTRY_ID}'::uuid, '${CONTROL_ENTRY_ID}'::uuid)`,
+  );
+
+const seedTimer = (entryId: string, projectId: string) => {
+  closeForeignOpenTimers();
+  psqlRun(
+    `INSERT INTO project_time_entries
+       (id, project_id, user_id, started_at, duration_minutes, source, activity)
+     VALUES ('${entryId}'::uuid, '${projectId}'::uuid, '${DESIGNER_ID}'::uuid,
+             now() - interval '20 minutes', NULL, 'timer_manual', 'design')`,
+  );
+};
+
+/** `''` when the row is gone, `'open'` while it still runs, `'closed'` once
+ *  `hold()` has chained it out — the offer's own proof, read from Postgres. */
+const timerState = (entryId: string) =>
+  psqlScalar(
+    `SELECT CASE WHEN duration_minutes IS NULL THEN 'open' ELSE 'closed' END
+       FROM project_time_entries WHERE id = '${entryId}'::uuid`,
+  );
+
+/** Only ever this file's own rows, by id. */
+const dropSeeded = () =>
+  psqlRun(
+    `DELETE FROM project_time_entries
+      WHERE id IN ('${SEEDED_ENTRY_ID}'::uuid, '${CONTROL_ENTRY_ID}'::uuid)`,
+  );
+
+test.describe('D-B54 · who owns the thumb edge when an offer stands', () => {
+  test.afterEach(() => {
+    // This fixture's own rows go; the timer `hold()` opened on the paper under
+    // test is CLOSED, not deleted — same rule as the setup (W7-C4).
+    dropSeeded();
+    closeForeignOpenTimers();
   });
 
-  test.afterAll(() => {
-    // Both the seeded row and whatever `hold()` opened for the paper under
-    // test: the suite leaves the database exactly as it found it.
-    psqlRun(
-      `DELETE FROM project_time_entries
-        WHERE user_id = '${DESIGNER_ID}'::uuid
-          AND duration_minutes IS NULL
-          AND project_id IN ('${OTHER_PROJECT_ID}'::uuid, '${LONG_PAPER_PROJECT_ID}'::uuid)`,
-    );
-  });
-
-  test('the bar still owns the edge at 390 while a timer runs on another project', async ({
+  test('a CROSS-project offer does not take the edge — the bar still prints at 390', async ({
     authenticatedPage: page,
   }) => {
+    dropSeeded();
+    seedTimer(SEEDED_ENTRY_ID, OTHER_PROJECT_ID);
+    expect(timerState(SEEDED_ENTRY_ID), 'the fixture did not seed').toBe('open');
+
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/doc/${LONG_PAPER_PROJECT_ID}`, {
       waitUntil: 'domcontentloaded',
@@ -639,9 +691,27 @@ test.describe('D-B54 · the thumb edge with a cross-project offer standing', () 
     });
     await settle(page);
 
+    // (1) The offer STOOD: `hold()` chained the foreign timer out. Without
+    // this the test is green on a no-offer session and measures nothing.
+    await expect
+      .poll(() => timerState(SEEDED_ENTRY_ID), {
+        timeout: 20_000,
+        message: 'the foreign timer was never chained out — no offer stood',
+      })
+      .toBe('closed');
+
+    // (2) The strip REFUSED it — the other half of the state that used to
+    // leave the phone with no bottom chrome at all.
+    await expect(
+      page.locator('[data-mobile-edge-owner="log-offer"]'),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('region', { name: 'Log time offer' }),
+    ).toHaveCount(0);
+
+    // (3) And so the bar keeps the edge, alone, publishing its box.
     await expect(page.getByTestId('mobile-bar')).toBeVisible();
     await expect(page.locator('[data-mobile-edge-owner]')).toHaveCount(1);
-
     const published = await page.evaluate(() =>
       document.documentElement.style.getPropertyValue('--doc-mobile-bar-height'),
     );
@@ -650,5 +720,33 @@ test.describe('D-B54 · the thumb edge with a cross-project offer standing', () 
       'the bar must publish its box — an unset token means no bottom chrome at all',
     ).not.toBe('');
     await expectNoHorizontalOverflow(page);
+  });
+
+  test('the control: a SAME-project timer is adopted, so no offer stands and the bar prints', async ({
+    authenticatedPage: page,
+  }) => {
+    // The other arm of the one variable. `hold()` adopts a timer already on
+    // the document in hand (`timer?.project_id === doc.projectId → return`),
+    // so no offer is created at all — and the bar prints for the ordinary
+    // reason, not the cross-project one. Read together with the case above,
+    // this pins the seeded row as the variable that moves the outcome.
+    dropSeeded();
+    seedTimer(CONTROL_ENTRY_ID, LONG_PAPER_PROJECT_ID);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/doc/${LONG_PAPER_PROJECT_ID}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await expect(page.locator('[data-document-shell]')).toBeVisible({
+      timeout: 30_000,
+    });
+    await settle(page);
+
+    expect(
+      timerState(CONTROL_ENTRY_ID),
+      'a timer on the document in hand is adopted, never chained out',
+    ).toBe('open');
+    await expect(page.getByTestId('mobile-bar')).toBeVisible();
+    await expect(page.locator('[data-mobile-edge-owner]')).toHaveCount(1);
   });
 });

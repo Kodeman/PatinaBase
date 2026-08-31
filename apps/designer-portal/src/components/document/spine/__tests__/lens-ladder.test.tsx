@@ -189,6 +189,10 @@ describe('the ladder’s stops', () => {
     const track = ladderNav().querySelector('[data-lens-track]') as HTMLElement;
     expect(track.style.flexBasis).toBe('auto');
     expect(track.style.flexGrow).toBe('0');
+    // B4's other half survives D-B52: an EMPTY track may not be shrunk under
+    // the one line it prints, or `overflow-y-auto` clips OD-2's sentence out
+    // of sight again and the pre-work rail says nothing at all.
+    expect(track.style.flexShrink).toBe('0');
 
     const line = screen.getByText('Nothing on this paper yet');
     expect(screen.getAllByText('Nothing on this paper yet')).toHaveLength(1);
@@ -211,6 +215,46 @@ describe('the ladder’s stops', () => {
     expect(track.style.getPropertyValue('--track-floor-full')).toBe('');
     expect(track.style.getPropertyValue('--track-floor-narrow')).toBe('');
     expect(track.className).not.toContain('--track-floor');
+  });
+
+  /**
+   * W7-C6 — the reading window had no falsifier at all: `data-lens-window`
+   * appeared nowhere outside the component. jsdom cannot measure `offsetTop`,
+   * so the geometry is the e2e's (`lens-rail-budget.spec.ts`); what IS
+   * assertable here is the branch — printed with a reading stop, hidden and
+   * unstamped without one — and that it stays out of the accessibility tree.
+   */
+  describe('the reading window', () => {
+    const bracketEl = () =>
+      ladderNav().querySelector<HTMLElement>('[data-lens-track] > span');
+
+    it('prints and stamps its box while a stop is being read', () => {
+      mount({ activeKey: 'ffe' });
+      const bracket = bracketEl();
+      expect(bracket).not.toBeNull();
+      expect(bracket!.hidden).toBe(false);
+      expect(bracket).toHaveAttribute('data-lens-window');
+      // `<top>:<height>` — the two numbers the rAF write publishes.
+      expect(bracket!.getAttribute('data-lens-window')).toMatch(/^-?\d+(\.\d+)?:-?\d+(\.\d+)?$/);
+      expect(bracket).toHaveAttribute('aria-hidden');
+    });
+
+    it('hides and un-stamps itself where there is no reading stop', () => {
+      // The bracket may never sit on rail the reader is not standing in: no
+      // index, no window — the union with `headInFrame` is anchored on the
+      // reading stop precisely so this stays true.
+      mount({ activeKey: null, headInFrame: 'ffe' });
+      const bracket = bracketEl();
+      expect(bracket).not.toBeNull();
+      expect(bracket!.hidden).toBe(true);
+      expect(bracket).not.toHaveAttribute('data-lens-window');
+    });
+
+    it('stays printed when a head crosses the frame under the reading stop', () => {
+      mount({ activeKey: 'ffe', headInFrame: 'money' });
+      expect(bracketEl()!.hidden).toBe(false);
+      expect(bracketEl()).toHaveAttribute('data-lens-window');
+    });
   });
 
   it('marks exactly one stop current, and jumps from any of them', () => {

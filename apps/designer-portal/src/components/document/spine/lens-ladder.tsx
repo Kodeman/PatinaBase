@@ -123,6 +123,11 @@ export function LensLadder({
   // server and the first client paint agree. The rest collapse to one `+N`
   // line rather than overprinting the doors beneath them.
   const [rungCap, setRungCap] = useState(Number.POSITIVE_INFINITY);
+  // The cap is a question about the column's height, so it has to be re-asked
+  // when the column changes height. The measurement is ratchet-proof in both
+  // directions (it reads the NAV's free space, not the track's own box), so a
+  // window enlarged after being shrunk gets its rungs back.
+  const [measureTick, setMeasureTick] = useState(0);
 
   const roomCount = segments.reduce(
     (n, segment) => n + (segment.rooms?.length ?? 0),
@@ -179,7 +184,7 @@ export function LensLadder({
     // One of the slots goes to the `+N` line itself when there is one.
     const fits = roomCount <= slots ? roomCount : Math.max(0, slots - 1);
     setRungCap((previous) => (previous === fits ? previous : fits));
-  }, [segments, roomCount, printRooms]);
+  }, [segments, roomCount, printRooms, measureTick]);
 
   /** The bracket, measured off the active row and written imperatively: React
    *  owns the rows, the rAF handler owns the bracket, and neither re-renders
@@ -244,6 +249,20 @@ export function LensLadder({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [place]);
+
+  useEffect(() => {
+    let queued = false;
+    const onResize = () => {
+      if (queued) return;
+      queued = true;
+      window.requestAnimationFrame(() => {
+        queued = false;
+        setMeasureTick((n) => n + 1);
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Tab reaches the ladder once; the arrows walk it (proposal §4, "tab order,
   // stated"). The rows are read from the DOM, and a row the narrow tier hides
@@ -311,7 +330,12 @@ export function LensLadder({
           {
             flexBasis: 'auto',
             flexGrow: 0,
-            flexShrink: 1,
+            // B4's other half, kept: a pre-work track prints ONE line and must
+            // never be shrunk under it — `overflow-y-auto` would clip OD-2's
+            // sentence out of sight and the empty track would say nothing at
+            // all under a head that is still speaking. A track with stops may
+            // shrink, and then it scrolls.
+            flexShrink: segments.length > 0 ? 1 : 0,
           } as CSSProperties
         }
       >

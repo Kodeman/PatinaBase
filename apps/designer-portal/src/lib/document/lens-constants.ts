@@ -64,5 +64,6 @@ export const LENS_VALUE_MAX_CHARS = 30;
 /** A quiet region's count line, and the ladder's `countLine` with it. */
 export const LENS_COUNT_MAX_CHARS = 40;
 
-/** The floor every ladder segment takes before extent distributes the rest. */
+/** The minimum height a ladder segment row takes; it is otherwise natural
+ *  height (D-B52 deleted the extent distribution this used to be a floor for). */
 export const LADDER_SEGMENT_MIN_PX = 36;

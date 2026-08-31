@@ -206,6 +206,64 @@ test.describe('the rail budget', () => {
   });
 
   /**
+   * W7-C6 — the reading window's geometry, which had no falsifier anywhere.
+   *
+   * THE FALSIFIABLE SENTENCE: at a settled offset deep enough to hold a
+   * reading stop, the bracket's painted box COVERS the row of the stop
+   * `aria-current` names — its top is at or above that row's top, its bottom
+   * at or below that row's bottom — and it is at least one rung (27px) tall.
+   * D-B52 removed the extent shares the window used to map onto; this is what
+   * replaced them, and until now nothing read `data-lens-window` at all.
+   */
+  test('W7-C6 — the reading window covers the row of the stop it names', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page, LONG_PAPER_ID);
+    await quiet(page);
+    await scrollTo(page, 0);
+    // s2: far enough in that a stop is being read, not the letterhead.
+    await scrollTo(page, 1200);
+    await settle(page);
+
+    const shape = await page.evaluate(() => {
+      const track = document.querySelector<HTMLElement>('[data-lens-track]');
+      const bracket = track?.querySelector<HTMLElement>('[data-lens-window]');
+      const current = track?.querySelector<HTMLElement>(
+        '[data-ladder-stop][aria-current="true"]',
+      );
+      if (!track || !bracket || !current) {
+        return {
+          hasBracket: Boolean(bracket),
+          hasCurrent: Boolean(current),
+          stamp: bracket?.getAttribute('data-lens-window') ?? null,
+        };
+      }
+      const round = (n: number) => Math.round(n * 100) / 100;
+      const b = bracket.getBoundingClientRect();
+      const r = current.getBoundingClientRect();
+      return {
+        hasBracket: true,
+        hasCurrent: true,
+        stop: current.getAttribute('data-ladder-stop'),
+        stamp: bracket.getAttribute('data-lens-window'),
+        bracket: { top: round(b.top), bottom: round(b.bottom), height: round(b.height) },
+        row: { top: round(r.top), bottom: round(r.bottom), height: round(r.height) },
+      };
+    });
+    console.log(`W7-C6 · reading window ${JSON.stringify(shape)}`);
+
+    expect(shape.hasCurrent, 'no stop carried aria-current at s2').toBe(true);
+    expect(shape.hasBracket, 'the reading window was not printed').toBe(true);
+    expect(shape.stamp, 'the bracket published no box').not.toBeNull();
+    // Covers the row it names, in both directions, with a 0.5px tolerance for
+    // subpixel layout.
+    expect(shape.bracket!.top).toBeLessThanOrEqual(shape.row!.top + 0.5);
+    expect(shape.bracket!.bottom).toBeGreaterThanOrEqual(shape.row!.bottom - 0.5);
+    // The 27px floor: a short row still prints a readable bracket.
+    expect(shape.bracket!.height).toBeGreaterThanOrEqual(27);
+  });
+
+  /**
    * W7-R1 §2 — a SHORT viewport: the doors still print whole, with a breath.
    *
    * `mt-auto` collapses toward zero when the column has no free space; the
