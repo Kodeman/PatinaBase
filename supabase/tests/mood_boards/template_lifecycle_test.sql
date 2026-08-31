@@ -57,6 +57,37 @@ BEGIN
     WHERE template.id IS NULL
   ), 'Patina starter UUID/key mappings must remain stable';
 
+  -- D10 (board-paths audit 2026-08-31, fixed by 00544): the zoned-furniture-plan
+  -- starter's full-width reference band must no longer be a bare, unlabeled
+  -- `image` placeholder with no rendered guidance — it was converted to a
+  -- `note` with real instructional copy, geometry otherwise unchanged.
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM public.board_templates AS template,
+         jsonb_array_elements(template.items) AS item
+    WHERE template.template_key = 'patina.zoned-furniture-plan'
+      AND item->>'type' = 'image'
+      AND item->'data'->>'name' = 'Plan, elevation, or room reference'
+  ), 'zoned-furniture-plan must not ship the broken unlabeled image placeholder (D10)';
+
+  ASSERT EXISTS (
+    SELECT 1
+    FROM public.board_templates AS template,
+         jsonb_array_elements(template.items) AS item
+    WHERE template.template_key = 'patina.zoned-furniture-plan'
+      AND item->>'type' = 'note'
+      AND (item->>'x')::numeric = 52 AND (item->>'y')::numeric = 520
+      AND (item->>'width')::numeric = 1296 AND (item->>'height')::numeric = 310
+      AND item->>'content' <> ''
+  ), 'zoned-furniture-plan must carry the corrected full-width reference note at its original geometry (D10)';
+
+  ASSERT (
+    SELECT count(*)
+    FROM public.board_templates AS template,
+         jsonb_array_elements(template.items) AS item
+    WHERE template.template_key = 'patina.zoned-furniture-plan'
+  ) = 8, 'zoned-furniture-plan item count must be unchanged by the D10 fix';
+
   ASSERT NOT has_table_privilege(
     'authenticated',
     'public.board_templates',
