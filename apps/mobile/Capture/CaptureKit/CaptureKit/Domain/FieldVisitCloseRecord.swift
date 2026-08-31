@@ -92,10 +92,28 @@ public extension FieldVisitCloseRecord {
     /// the three is ever tried again. Leaving `unwritable` out would turn the
     /// ceiling above into a permanent one-hour loop rather than a stop.
     func isDue(at now: Date) -> Bool {
+        isDue(at: now, trigger: .automatic)
+    }
+
+    /// The backoff belongs to the TIMER, not to her thumb. A `.failed` record
+    /// carries a `nextAttemptAt` up to an hour out, so a retry tap routed
+    /// through the automatic rule selected nothing at all and the offer sat
+    /// there saying "Logging these hours." while doing nothing. A tap ignores
+    /// `nextAttemptAt`; it changes neither the delay a failure schedules nor
+    /// what the automatic pass will pick up next.
+    func isDue(at now: Date, trigger: VisitCloseDrainTrigger) -> Bool {
         guard state != .written, state != .refused, state != .unwritable else { return false }
+        guard trigger == .automatic else { return true }
         guard let nextAttemptAt else { return true }
         return nextAttemptAt <= now
     }
+}
+
+/// Why a drain pass is running: the relaunch/foreground timer serving the
+/// backoff, or the designer tapping the Hours offer and asking for it now.
+public enum VisitCloseDrainTrigger: Equatable, Sendable {
+    case automatic
+    case userInitiated
 }
 
 /// The Hours entry the close offers — FC-R3's billing shadow of the Visits row.
@@ -172,6 +190,16 @@ public protocol TimeEntryGateway: Sendable {
 /// `PunchTaskOrchestrator` and `MarginNoteOrchestrator` already make — and the
 /// SwiftData fetch and PostgREST call stay app-side.
 public enum VisitCloseOrchestrator {
+    /// Which of the standing closes this pass may send. Held here rather than
+    /// inside the app-side drainer because the trigger is the whole of I-12's
+    /// bug: the same filter served both the timer and her tap, and only one of
+    /// them may honour the backoff.
+    public static func drainable(_ standing: [FieldVisitCloseRecord],
+                                 at now: Date,
+                                 trigger: VisitCloseDrainTrigger) -> [FieldVisitCloseRecord] {
+        standing.filter { $0.isDue(at: now, trigger: trigger) }
+    }
+
     /// The state an outcome lands the close on.
     ///
     /// `.alreadyWritten` closes exactly as `.written` does: the id is

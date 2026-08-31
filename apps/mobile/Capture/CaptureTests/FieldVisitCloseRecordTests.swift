@@ -79,6 +79,66 @@ struct FieldVisitCloseRecordTests {
         #expect(r.isDue(at: now.addingTimeInterval(365 * 86_400)) == false)
     }
 
+    // MARK: - Her tap steps over the backoff; the timer does not
+
+    /// I-12 gave the offer a retry, and the retry was a no-op: it ran the same
+    /// `isDue` the timer runs, and a `.failed` record's `nextAttemptAt` is up to
+    /// an hour out — so the pass selected NOTHING and the label sat on "Logging
+    /// these hours." while the button looked alive.
+    @Test func aBackingOffCloseIsSelectedByHerTapAndNotByTheTimer() {
+        let r = record()
+        r.markFailed("offline", now: now)
+        let midBackoff = now.addingTimeInterval(1)
+        #expect(r.nextAttemptAt.map { $0 > midBackoff } == true)
+
+        #expect(r.isDue(at: midBackoff) == false)
+        #expect(r.isDue(at: midBackoff, trigger: .automatic) == false)
+        #expect(r.isDue(at: midBackoff, trigger: .userInitiated))
+
+        // And through the selection the drainer itself walks, not just the
+        // predicate underneath it.
+        #expect(VisitCloseOrchestrator.drainable([r], at: midBackoff,
+                                                 trigger: .automatic).isEmpty)
+        #expect(VisitCloseOrchestrator.drainable([r], at: midBackoff,
+                                                 trigger: .userInitiated)
+                    .map(\.visitID) == [r.visitID])
+    }
+
+    /// The backoff itself is untouched: a tap does not shorten the delay the
+    /// NEXT automatic pass serves, and does not spend or refund an attempt.
+    @Test func aTapDoesNotWeakenTheBackoffTheTimerServes() {
+        let r = record()
+        r.markFailed("offline", now: now)
+        let scheduled = r.nextAttemptAt
+        let retries = r.retryCount
+
+        _ = r.isDue(at: now.addingTimeInterval(1), trigger: .userInitiated)
+
+        #expect(r.nextAttemptAt == scheduled)
+        #expect(r.retryCount == retries)
+        #expect(r.isDue(at: now.addingTimeInterval(1), trigger: .automatic) == false)
+        #expect(r.isDue(at: now.addingTimeInterval(5), trigger: .automatic))
+    }
+
+    /// A tap is not a resurrection. `written` is done, `refused` is FC-R8's
+    /// per-designer fact, and `unwritable` is the retry ceiling's stop — tapping
+    /// past any of the three would send a row the server has already answered.
+    @Test func noTapRevivesACloseThatIsFinishedForGood() {
+        let written = record()
+        written.markDelivered()
+        let refused = record()
+        VisitCloseOrchestrator.apply(.refused("row-level security"), to: refused, now: now)
+        let unwritable = record()
+        for _ in 0..<FieldWriteGate.retryCeiling { unwritable.markFailed("500", now: now) }
+
+        for r in [written, refused, unwritable] {
+            #expect(r.isDue(at: now, trigger: .userInitiated) == false)
+        }
+        #expect(VisitCloseOrchestrator.drainable([written, refused, unwritable],
+                                                 at: now,
+                                                 trigger: .userInitiated).isEmpty)
+    }
+
     // MARK: - The floor that protects the desk timer
 
     @Test func aZeroDurationIsFlooredToOneBillableMinute() {

@@ -31,11 +31,12 @@ final class VisitCloseOutboxDrainer {
         self.session = session
     }
 
-    func resume(now: Date = Date()) async {
+    func resume(now: Date = Date(),
+                trigger: VisitCloseDrainTrigger = .automatic) async {
         guard !isDraining else { return }
         isDraining = true
         defer { isDraining = false }
-        for record in due(at: now) {
+        for record in due(at: now, trigger: trigger) {
             await drain(record, now: now)
         }
     }
@@ -45,7 +46,8 @@ final class VisitCloseOutboxDrainer {
     /// designer's close under the current designer's JWT after an account
     /// switch, and `project_time_entries.user_id` is carried in the record, not
     /// taken from the session — so the row lands against the wrong account.
-    private func due(at now: Date) -> [FieldVisitCloseRecord] {
+    private func due(at now: Date,
+                     trigger: VisitCloseDrainTrigger) -> [FieldVisitCloseRecord] {
         let standing: [FieldVisitCloseRecord]
         switch CaptureOwnerProjectionPolicy.resolve(
             runsRealServices: AppConfiguration.runsRealServices,
@@ -56,7 +58,7 @@ final class VisitCloseOutboxDrainer {
         case .owner(let owner): standing = store.visitCloseOutbox(owner: owner)
         case .unavailable:      standing = []
         }
-        return standing.filter { $0.isDue(at: now) }
+        return VisitCloseOrchestrator.drainable(standing, at: now, trigger: trigger)
     }
 
     private func drain(_ record: FieldVisitCloseRecord, now: Date) async {
