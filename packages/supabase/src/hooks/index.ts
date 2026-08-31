@@ -1668,6 +1668,7 @@ export {
   useProposalFeedback,
   useClientProposalFeedback,
   useBoardFeedback,
+  useBoardPinFeedback,
   useClientBoardFeedback,
   useItemFeedbackThread,
   useSubmitVerdict,

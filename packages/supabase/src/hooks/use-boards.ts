@@ -337,7 +337,7 @@ export function useBoards(ownerInput: BoardOwnerInput) {
       const { data, error } = await supabase
         .from('proposal_boards')
         .select(
-          '*, proposal_board_items(type, image_url, data, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
+          '*, proposal_board_items(type, image_url, data, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, guest_share_id, verdict, created_at))',
         )
         .eq(owner!.kind === 'proposal' ? 'proposal_id' : 'project_id', owner!.id)
         .order('sort_order', { ascending: true })
@@ -1088,7 +1088,7 @@ export function useProjectOwnedBoards(projectId: string | null | undefined) {
       const { data, error } = await supabase
         .from('proposal_boards')
         .select(
-          '*, proposal_board_items(type, image_url, data, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
+          '*, proposal_board_items(type, image_url, data, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, guest_share_id, verdict, created_at))',
         )
         .eq('project_id', projectId)
         .order('sort_order', { ascending: true })

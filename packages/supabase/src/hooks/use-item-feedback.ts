@@ -19,7 +19,9 @@ export interface ItemFeedback {
   proposal_item_id: string | null;
   ffe_item_id: string | null;
   board_item_id: string | null;
-  client_id: string;
+  /** Null on a guest-link reaction (00546); guest_share_id carries it instead. */
+  client_id: string | null;
+  guest_share_id?: string | null;
   verdict: Verdict;
   body: string | null;
   resolved_at: string | null;
@@ -33,7 +35,8 @@ export interface ItemFeedback {
 export interface ItemFeedbackEvent {
   id: string;
   feedback_id: string;
-  actor: string;
+  /** Null when the event came from a guest link, which has no user. */
+  actor: string | null;
   kind: 'created' | 'replied' | 'resolved' | 'reopened';
   body: string | null;
   created_at: string;
@@ -97,6 +100,31 @@ export function useBoardFeedback(proposalId: string | undefined) {
         .from('item_feedback')
         .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, verdict, body, resolved_at, resolved_by, created_at, updated_at, proposal_board_items!inner(board_id, proposal_boards!inner(proposal_id))')
         .eq('proposal_board_items.proposal_boards.proposal_id', proposalId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ItemFeedback[];
+    },
+  });
+}
+
+/**
+ * Every verdict on ONE board's pins, whichever document owns the board. The
+ * proposal-scoped feed above cannot see a project-owned board (its join runs
+ * through proposal_boards.proposal_id, which is NULL there), and guest-link
+ * reactions land on exactly those boards. RLS (00546) still decides the rows:
+ * a studio co-member of the board's owner sees them, nobody else does.
+ */
+export function useBoardPinFeedback(boardId: string | undefined) {
+  return useQuery({
+    queryKey: ['board-pin-feedback', boardId],
+    enabled: !!boardId,
+    queryFn: async (): Promise<ItemFeedback[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('item_feedback')
+        .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, guest_share_id, verdict, body, resolved_at, resolved_by, created_at, updated_at, proposal_board_items!inner(board_id)')
+        .eq('proposal_board_items.board_id', boardId)
         .order('created_at', { ascending: true });
       if (error) throw error;
       return (data ?? []) as ItemFeedback[];

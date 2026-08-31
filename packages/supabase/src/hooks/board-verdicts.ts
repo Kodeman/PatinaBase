@@ -11,7 +11,9 @@ export interface BoardVerdictCounts {
 /** Minimal RLS-filtered feedback projection nested under a board item. */
 export interface BoardVerdictProjection {
   id: string;
-  client_id: string;
+  /** Null on a guest-link reaction, which attributes to the share instead. */
+  client_id: string | null;
+  guest_share_id?: string | null;
   verdict: string;
   created_at: string;
 }
@@ -40,11 +42,18 @@ function isLaterVerdict(
   return candidate.id > current.id;
 }
 
+/** A signed-in client, or the guest link a reaction arrived on (00546). */
+function verdictAuthor(feedback: BoardVerdictProjection): string | null {
+  if (feedback.client_id) return `client:${feedback.client_id}`;
+  if (feedback.guest_share_id) return `share:${feedback.guest_share_id}`;
+  return null;
+}
+
 /**
- * Count the current verdict for each client on each pin. item_feedback keeps an
+ * Count the current verdict for each author on each pin. item_feedback keeps an
  * append-only history, so counting every visible row would inflate cover
  * totals after a client changes their mind. The nested rows have already been
- * RLS-filtered by PostgREST; this fold only chooses each anchor/client's latest
+ * RLS-filtered by PostgREST; this fold only chooses each anchor/author's latest
  * entry and never broadens access.
  */
 export function summarizeBoardVerdicts(
@@ -53,16 +62,18 @@ export function summarizeBoardVerdicts(
   const counts = emptyBoardVerdictCounts();
 
   for (const item of items) {
-    const latestByClient = new Map<string, BoardVerdictProjection>();
+    const latestByAuthor = new Map<string, BoardVerdictProjection>();
     for (const feedback of item.verdicts ?? []) {
       if (!isVerdict(feedback.verdict)) continue;
-      const current = latestByClient.get(feedback.client_id);
+      const author = verdictAuthor(feedback);
+      if (!author) continue;
+      const current = latestByAuthor.get(author);
       if (isLaterVerdict(feedback, current)) {
-        latestByClient.set(feedback.client_id, feedback);
+        latestByAuthor.set(author, feedback);
       }
     }
 
-    for (const feedback of latestByClient.values()) {
+    for (const feedback of latestByAuthor.values()) {
       counts[feedback.verdict as Verdict] += 1;
       counts.total += 1;
     }

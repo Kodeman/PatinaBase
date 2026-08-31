@@ -44,7 +44,7 @@ export function useRecentBoards(limit = 8) {
       const { data, error } = await supabase
         .from('proposal_boards')
         .select(
-          'id, name, proposal_id, project_id, cover_image_url, updated_at, proposal:proposals(title), project:projects(name), room:proposal_scope_rooms(name), proposal_board_items(image_url, data, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
+          'id, name, proposal_id, project_id, cover_image_url, updated_at, proposal:proposals(title), project:projects(name), room:proposal_scope_rooms(name), proposal_board_items(image_url, data, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, guest_share_id, verdict, created_at))',
         )
         .eq('status', 'active')
         .order('updated_at', { ascending: false })
