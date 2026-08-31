@@ -181,39 +181,52 @@ $postcondition$;
 -- ⚠ F4: the check above only proves a constraint NAMED
 -- project_time_entries_source_ck exists whose pg_get_constraintdef() text
 -- happens to mention 'field_visit' — that is satisfied by a constraint whose
--- CHECK expression is syntactically broken, disjoint from `source`, or
--- otherwise inert, as long as the string 'field_visit' appears in it
--- somewhere. It is not proof an actual INSERT with source = 'field_visit'
--- succeeds. This is the behavioural proof: inside a SAVEPOINT (so it leaves
--- no trace and the fixture rows never reach the committed migration), insert
--- a real row with source = 'field_visit' and roll back to the savepoint. If
--- the widening did not really take, this INSERT raises a check_violation and
--- the whole migration fails loudly here, at apply time, instead of silently
--- rejecting Field's first V4 write on prod.
-SAVEPOINT f4_field_visit_behavioural_check;
-
-DO $behavioural_check$
+-- CHECK expression is disjoint from `source`, or that has quietly lost one of
+-- the three values 00198 admitted, as long as the string 'field_visit'
+-- appears in it somewhere. This block reads the CONSTRAINT DEFINITION itself
+-- and pins both halves: the expression is keyed on the `source` column
+-- (conkey, not a text match — Postgres canonicalizes `source IN (...)` to
+-- `CHECK ((source = ANY (ARRAY[...])))`, so "(source)" never appears in the
+-- definition text), and all FOUR admitted values are present in it.
+--
+-- ⚠ A fixture INSERT is deliberately NOT the proof here. Reaching
+-- project_time_entries needs a real user_id and project_id, and minting those
+-- means writing to auth.users — which fires on_auth_user_created, depends on
+-- GoTrue's column shape at apply time, and (inside a SAVEPOINT whose recovery
+-- path swallows the failure) can let the DDL commit after a failed check. The
+-- behavioural INSERT lives in the test file instead
+-- (supabase/tests/field/time_entry_field_visit_source_test.sql, cases 1-3),
+-- where fixtures are cheap and the whole transaction rolls back.
+DO $constraint_definition_check$
 DECLARE
-  v_user_id    uuid := gen_random_uuid();
-  v_project_id uuid;
+  v_def text;
+  v_val text;
 BEGIN
-  INSERT INTO auth.users (
-    id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
-    instance_id, aud, role)
-  VALUES (
-    v_user_id, 'f4-behavioural-check@migration.invalid', '', now(), now(), now(),
-    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  SELECT pg_get_constraintdef(oid) INTO v_def
+  FROM pg_constraint
+  WHERE conrelid = 'public.project_time_entries'::regclass
+    AND contype = 'c'
+    AND conname = 'project_time_entries_source_ck'
+    AND conkey = ARRAY[(
+      SELECT attnum FROM pg_attribute
+       WHERE attrelid = 'public.project_time_entries'::regclass
+         AND attname = 'source'
+    )];
 
-  INSERT INTO public.projects (id, name, designer_id, created_by)
-  VALUES (gen_random_uuid(), 'F4 behavioural check (rolled back)', v_user_id, v_user_id)
-  RETURNING id INTO v_project_id;
+  IF v_def IS NULL THEN
+    RAISE EXCEPTION
+      'time-entry migration: project_time_entries_source_ck is missing or is not keyed on the source column';
+  END IF;
 
-  INSERT INTO public.project_time_entries (
-    project_id, user_id, duration_minutes, source, activity)
-  VALUES (v_project_id, v_user_id, 5, 'field_visit', 'site_visit');
+  FOREACH v_val IN ARRAY ARRAY['timer_auto', 'timer_manual', 'manual_entry', 'field_visit']
+  LOOP
+    IF v_def NOT LIKE '%''' || v_val || '''%' THEN
+      RAISE EXCEPTION
+        'time-entry migration: project_time_entries_source_ck does not admit %, got %',
+        v_val, v_def;
+    END IF;
+  END LOOP;
 END
-$behavioural_check$;
-
-ROLLBACK TO SAVEPOINT f4_field_visit_behavioural_check;
+$constraint_definition_check$;
 
 COMMIT;
