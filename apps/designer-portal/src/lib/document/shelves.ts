@@ -161,3 +161,11 @@ export function requestShelfClose(): void {
  *  shelf. The shelf may be closed — the page catches it, opens the shelf, and
  *  re-fires once the room inside is listening. */
 export const NEW_BOARD_EVENT = 'document:new-project-board';
+
+/** D4' — ⌘K's "Start a board…" command routes to a project's Boards page
+ *  (`boardsRoutePath`) before it can fire {@link NEW_BOARD_EVENT} into it —
+ *  the event fires before that page's own listener exists on a fresh
+ *  navigation, so this flag carries the intent across, mirroring
+ *  `command-bar.tsx`'s `callSheetPending`. The Boards page reads and clears
+ *  it on mount. */
+export const startBoardPending = { value: false };

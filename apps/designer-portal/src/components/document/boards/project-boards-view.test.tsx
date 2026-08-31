@@ -37,6 +37,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
 
 import { ProjectBoardsView } from './project-boards-view';
 import ProjectBoardsPage from '@/app/(document)/doc/[id]/boards/page';
+import { startBoardPending } from '@/lib/document/shelves';
 
 function engagement(over: Record<string, unknown> = {}) {
   return {
@@ -56,6 +57,7 @@ function engagement(over: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  startBoardPending.value = false;
   mockReplace.mockClear();
   mockEngagement.mockReturnValue(engagement());
   mockLive.mockReturnValue({
@@ -110,6 +112,22 @@ describe('the boards page', () => {
     });
 
     expect(screen.getByTestId('boards-builder')).toBeInTheDocument();
+  });
+
+  // D4' — ⌘K's "Start a board…" command navigates here before the event it
+  // would fire has a listener; the pending flag carries the intent across
+  // that navigation instead, same pattern as command-bar.tsx's callSheetPending.
+  it('opens the builder immediately when it lands carrying the Start-a-board pending flag', () => {
+    startBoardPending.value = true;
+    render(<ProjectBoardsView routeId="eng-1" />);
+
+    expect(screen.getByTestId('boards-builder')).toBeInTheDocument();
+    expect(startBoardPending.value).toBe(false);
+  });
+
+  it('does not auto-open the builder when no pending flag was set', () => {
+    render(<ProjectBoardsView routeId="eng-1" />);
+    expect(screen.queryByTestId('boards-builder')).toBeNull();
   });
 
   it('says so plainly when there are none', () => {

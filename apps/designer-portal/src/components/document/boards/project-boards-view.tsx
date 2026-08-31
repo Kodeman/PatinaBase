@@ -19,7 +19,7 @@ import {
 } from '@patina/supabase';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { boardsRoutePath } from '@/lib/document/registry';
-import { NEW_BOARD_EVENT } from '@/lib/document/shelves';
+import { NEW_BOARD_EVENT, startBoardPending } from '@/lib/document/shelves';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { BoardsBuilder } from '@/components/portal/scope-builder/boards-builder';
 import { DocumentAction, DocumentActionRow } from '../document-action';
@@ -85,6 +85,15 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
     const open = () => setStarting(true);
     window.addEventListener(NEW_BOARD_EVENT, open);
     return () => window.removeEventListener(NEW_BOARD_EVENT, open);
+  }, []);
+
+  // D4' — ⌘K's "Start a board…" command lands here after a navigation, so the
+  // intent has to be read off the pending flag rather than the live event
+  // (this page did not exist yet when the command fired it).
+  useEffect(() => {
+    if (!startBoardPending.value) return;
+    startBoardPending.value = false;
+    setStarting(true);
   }, []);
 
   const live = useProjectOwnedBoards(projectId ?? '');

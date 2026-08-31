@@ -68,6 +68,7 @@ jest.mock('./overlays/post-sheet', () => ({ openPost: jest.fn() }));
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 
 import { callSheetPending, CommandBar, openCommandBar } from './command-bar';
+import { startBoardPending } from '@/lib/document/shelves';
 import { DocumentAction } from './document-action';
 import { PLAN_ROOM_SURFACE } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
@@ -104,6 +105,7 @@ beforeEach(() => {
   mockDeskData.mockReturnValue({ folders: [], chips: [] });
   mockPush.mockClear();
   window.localStorage.clear();
+  startBoardPending.value = false;
 });
 
 /** The Desk header's actual control (desk/page.tsx:225-237), reproduced
@@ -643,6 +645,76 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
 
     expect(dispatched).toHaveLength(1);
     expect(callSheetPending.value).toBe(false);
+  });
+});
+
+describe('D4\' — ⌘K offers a Start a board… command', () => {
+  it('prints it in This surface with a project document in hand', () => {
+    mockPathname.mockReturnValue('/doc/eng-1');
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
+
+    openPalette();
+
+    expect(screen.getByText('Start a board…')).toBeInTheDocument();
+    expect(screen.getByText('Ellsworth · new mood board')).toBeInTheDocument();
+  });
+
+  it('routes to the project’s Boards page and sets the pending flag so the picker opens there', () => {
+    mockPathname.mockReturnValue('/doc/eng-1');
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
+
+    openPalette();
+    fireEvent.click(screen.getByText('Start a board…').closest('button')!);
+
+    expect(mockPush).toHaveBeenCalledWith('/doc/proj-1/boards');
+    expect(startBoardPending.value).toBe(true);
+  });
+
+  it('is reachable by typing "start a board" or "new board"', () => {
+    mockPathname.mockReturnValue('/doc/eng-1');
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
+
+    openPalette();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+      target: { value: 'new board' },
+    });
+
+    expect(screen.getByText('Start a board…')).toBeInTheDocument();
+  });
+
+  it('pairs with the most recent project when off any document', () => {
+    mockPathname.mockReturnValue('/desk');
+    mockDeskData.mockReturnValue({
+      folders: [
+        {
+          row: deskRow({
+            engagement_id: 'eng-v',
+            project_id: 'proj-v',
+            client_name: 'Vandersteen',
+            title: 'Vandersteen residence',
+          }),
+        },
+      ],
+      chips: [],
+    } as never);
+
+    openPalette();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+      target: { value: 'start a board' },
+    });
+
+    expect(screen.getByText('Start a board…')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Start a board…').closest('button')!);
+    expect(mockPush).toHaveBeenCalledWith('/doc/proj-v/boards');
+  });
+
+  it('does not offer it without any project context at all', () => {
+    mockPathname.mockReturnValue('/desk');
+    mockDeskData.mockReturnValue({ folders: [], chips: [] });
+
+    openPalette();
+
+    expect(screen.queryByText('Start a board…')).not.toBeInTheDocument();
   });
 });
 

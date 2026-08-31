@@ -72,7 +72,11 @@ import {
 import { authEvents } from '@/lib/analytics/events';
 import { StrataMark } from './strata-mark';
 import { EngineResults, type InDocument } from './engine/engine-results';
-import { recentBoardCommandDescriptor } from '@/lib/mood-board/navigation';
+import {
+  recentBoardCommandDescriptor,
+  startBoardCommandDescriptor,
+} from '@/lib/mood-board/navigation';
+import { startBoardPending } from '@/lib/document/shelves';
 
 /** One selectable line. `match` is the lowercased filter text (label + aliases
  *  or keywords); registry surfaces additionally carry their icon + wayfinding
@@ -128,6 +132,9 @@ interface PaletteSection {
 // can never drift from the canonical verb/room marks.
 const DRAW_INVOICE_ICON = STUDIO_VERBS.find((v) => v.key === 'draw-invoice')!.icon;
 const DRAFTING_ROOM_ICON = STUDIO_ROOMS.find((r) => r.key === 'drafting-room')!.icon;
+// D4' — the ⌘K "Start a board…" creation command borrows the same glyph the
+// Boards door itself wears, so a designer sees one icon for boards throughout.
+const START_BOARD_ICON = DOCUMENT_SCOPED_SURFACES.find((s) => s.key === 'boards')!.icon;
 
 /** F04 — how each live stage is named in `Where the work stands`. Five of the
  *  seven print the direction's own words; brief and care take the same shape. */
@@ -693,6 +700,32 @@ export function CommandBar() {
       (surface) => surface.key !== 'call-sheet' || callSheetOn,
     );
 
+    // D4' — the creation front door, pre-addressed with the same current/
+    // most-recent project every other document-scoped surface pairs to
+    // (`pairedDoc`, above). It always routes to the project's Boards page and
+    // carries the pending flag that page reads to open the builder itself,
+    // rather than a board room — a board has no id until one exists.
+    const startBoardRow: PaletteRow | null = pairedDoc?.project_id
+      ? (() => {
+          const command = startBoardCommandDescriptor({
+            projectId: pairedDoc!.project_id!,
+            projectName: folderTab(pairedDoc!),
+          });
+          return {
+            kind: 'verb',
+            key: command.key,
+            label: command.label,
+            sub: command.sub,
+            icon: START_BOARD_ICON,
+            run: () => {
+              startBoardPending.value = true;
+              router.push(command.href);
+            },
+            match: command.match,
+          };
+        })()
+      : null;
+
     const q = query.trim().toLowerCase();
     let sections: PaletteSection[];
     let matches = 0;
@@ -746,6 +779,10 @@ export function CommandBar() {
           match: '',
         });
       }
+      // D4' — the creation front door, same in-hand gate as the four document
+      // surfaces just below (an "open" row and a "start one" row obey the
+      // same in-hand rule for what "This surface" may claim).
+      if (inHandProjectRow && startBoardRow) thisSurface.push(startBoardRow);
       // F29/F48/F50/F82 — all four document-scoped surfaces, never in the
       // unfiltered Rooms & ledgers group below, and only once a project doc is
       // in hand. The call sheet is additionally gated on its own flag.
@@ -781,6 +818,10 @@ export function CommandBar() {
       list.push(...liveRows.map((r) => documentRow(r)).filter((r) => r.match.includes(q)));
       if (addToProjectRow?.match.includes(q)) list.push(addToProjectRow);
       if (addChangeRow?.match.includes(q)) list.push(addChangeRow);
+      // D4' — typed reach is the current/most-recent project (`pairedDoc`),
+      // the same fallback the four document-scoped surfaces use below, not
+      // the stricter in-hand-only gate "This surface" enforces above.
+      if (startBoardRow?.match.includes(q)) list.push(startBoardRow);
       // Document-scoped registry surfaces (scope: 'document' — registry.tsx's
       // own canon: "only reachable with a document in hand") must pass the
       // same in-hand gate their "This surface" row above is gated on, or a
