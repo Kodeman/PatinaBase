@@ -36,14 +36,23 @@ function fmtDay(iso: string, timeZone: string | null): string {
   // not the VISIT's — a visit ending 19:30 CDT is 00:30Z and prints as
   // tomorrow for anyone east of Chicago. `timeZone` falls back to the
   // reader's own zone only when the capture never recorded one.
-  return new Date(iso)
-    .toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      ...(timeZone ? { timeZone } : {}),
-    })
-    .replace(',', '');
+  const opts: Intl.DateTimeFormatOptions = {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  };
+  const day = new Date(iso);
+  if (timeZone) {
+    try {
+      return day.toLocaleDateString('en-US', { ...opts, timeZone }).replace(',', '');
+    } catch {
+      // captured_timezone is device-supplied and never validated on the way
+      // in. An id ICU does not recognise makes toLocaleDateString throw
+      // RangeError, and the /doc/[id] route group has no error boundary — an
+      // unreadable zone must cost the reader her own zone, not the spread.
+    }
+  }
+  return day.toLocaleDateString('en-US', opts).replace(',', '');
 }
 
 function lede(v: ProjectVisit): string {
