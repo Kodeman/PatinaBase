@@ -37,6 +37,7 @@ import {
 import { useEscalateNoteToDecision } from '@/hooks/use-margin-notes';
 import { AmendmentSheet } from '@/components/document/overlays/amendment-sheet';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
+import { readFieldNotePayload } from '@/lib/document/field-note-payload';
 import { extendRevivesDecision } from '@/lib/document/decision-edges';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd, tomorrowYmd } from '@/lib/document/format';
@@ -834,8 +835,24 @@ export function NoteBody({
     return <Quiet>Escalated — now {became}. The note rests here.</Quiet>;
   }
 
+  const field = readFieldNotePayload(row);
+
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
+      <p className="mb-2 whitespace-pre-wrap text-[11.5px] leading-[1.55] text-[var(--color-charcoal)]">
+        {field.body}
+      </p>
+      {/* §8.5 — the transcript is labelled a draft ONCE, where she reads it.
+          No mechanism talk, and never the word "AI". */}
+      {field.fieldCaptureId && field.captureVisible && field.hasAudio ? (
+        <Quiet>A first reading. The recording is here.</Quiet>
+      ) : null}
+      {/* FC-R8 / §9.4 — margin_items is security_invoker, so a studio
+          co-member reads the note and not the capture. Say so, rather than
+          showing her a note with a missing play button and no explanation. */}
+      {field.fieldCaptureId && !field.captureVisible ? (
+        <Quiet>The recording is the author&rsquo;s.</Quiet>
+      ) : null}
       {row.payload.author_name ? (
         <p className="mb-2 text-[11px] text-[var(--text-muted)]">
           {String(row.payload.author_name)}
