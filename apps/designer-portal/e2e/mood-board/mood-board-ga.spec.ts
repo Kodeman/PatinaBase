@@ -15,8 +15,40 @@ const SOURCE_SWATCH_ID = "e2e00000-0000-4000-8000-000000000022";
 const PRODUCT_FEEDBACK_ID = "e2e00000-0000-4000-8000-000000000031";
 const NOTE_FEEDBACK_ID = "e2e00000-0000-4000-8000-000000000032";
 const FEEDBACK_CLIENT_ID = "a0000000-0000-0000-0000-000000000005";
-const PIXEL =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+// migration 00462's guard_proposal_board_item_media_reference trigger rejects
+// any image_url that resolves to a proposal-mood-boards Storage path the
+// board's own design studio doesn't own (public.board_storage_reference_path
+// in 00462_workflow_privacy_authority.sql). A `data:` URI has no scheme the
+// guard recognizes as external, so it falls through to the private-bucket
+// ownership check and is rejected outright — that's the exact failure this
+// fixture works around. `board_storage_reference_path` explicitly exempts
+// any `^https?://` reference that isn't one of the recognized
+// proposal-mood-boards Storage URL shapes (its own comment: "Empty and
+// external HTTPS media never crosses this private bucket boundary"), the
+// same exemption a designer pasting an external image URL onto a board relies
+// on in production. PIXEL_IMAGE_URL below takes that exact path: it's an
+// https:// URL on a fixture-only host that never touches DNS, because
+// mockBoardImages() below intercepts it at the Playwright network layer and
+// fulfills it with real PNG bytes — so the guard is satisfied exactly as it
+// would be for a legitimate external board image, and the pins still render
+// an actual decodable image for the visual assertions to mean something.
+const PIXEL_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+const PIXEL_IMAGE_URL = "https://e2e-fixtures.patina.test/mood-board/pixel.png";
+
+/** Serves PIXEL_IMAGE_URL from the Playwright network layer — never a real
+ *  request — with real, decodable PNG bytes, so every seeded pin renders an
+ *  actual image instead of a broken-image icon. Must be registered before
+ *  the board is opened. */
+async function mockBoardImages(page: AuthenticatedPage): Promise<void> {
+  await page.route(`${PIXEL_IMAGE_URL}*`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "image/png",
+      body: Buffer.from(PIXEL_PNG_BASE64, "base64"),
+    }),
+  );
+}
 
 function seedBoard(): void {
   psqlRun(`
@@ -100,7 +132,7 @@ INSERT INTO public.proposal_board_items (
     1,
     0,
     false,
-    '${PIXEL}',
+    '${PIXEL_IMAGE_URL}',
     NULL,
     '{"name":"Heirloom lounge chair","vendor_name":"Patina Workshop","price_cents":245000,"section_id":"foundation"}'::jsonb
   ),
@@ -115,7 +147,7 @@ INSERT INTO public.proposal_board_items (
     2,
     0,
     false,
-    '${PIXEL}',
+    '${PIXEL_IMAGE_URL}',
     NULL,
     '{"name":"Curated capture","vendor_name":"Extension source","price_cents":89000,"section_id":"foundation"}'::jsonb
   ),
@@ -145,7 +177,7 @@ INSERT INTO public.proposal_board_items (
     4,
     0,
     false,
-    '${PIXEL}',
+    '${PIXEL_IMAGE_URL}',
     NULL,
     '{"name":"Visual reference","section_id":"details"}'::jsonb
   ),
@@ -175,7 +207,7 @@ INSERT INTO public.proposal_board_items (
     6,
     0,
     false,
-    '${PIXEL}',
+    '${PIXEL_IMAGE_URL}',
     NULL,
     '{"name":"North wall scan","room_type":"Living room","section_id":"details"}'::jsonb
   );
@@ -225,6 +257,7 @@ function boardItemScalar(selectExpression: string, itemId: string): string {
 }
 
 async function openBoard(page: AuthenticatedPage): Promise<void> {
+  await mockBoardImages(page);
   await page.goto(`/board/${BOARD_ID}?from=%2Fdesk&source=recent_boards`, {
     waitUntil: "domcontentloaded",
   });
