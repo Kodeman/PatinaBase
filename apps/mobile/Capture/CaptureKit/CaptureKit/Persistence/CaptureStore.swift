@@ -80,7 +80,8 @@ public final class CaptureStore {
     public static let schema = Schema([
         Specimen.self, CapturePhoto.self, CaptureMeasurement.self, CaptureProjectRef.self,
         ScanUploadRecord.self,  // item 8 — durable resumable upload state (additive)
-        SiteRequestOutboxRecord.self
+        SiteRequestOutboxRecord.self,
+        FieldVisitCloseRecord.self  // wave 4 — the visit close's time entry (additive)
     ])
 
     public let container: ModelContainer
