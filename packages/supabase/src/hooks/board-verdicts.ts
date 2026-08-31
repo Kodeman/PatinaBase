@@ -11,7 +11,9 @@ export interface BoardVerdictCounts {
 /** Minimal RLS-filtered feedback projection nested under a board item. */
 export interface BoardVerdictProjection {
   id: string;
-  client_id: string;
+  /** Null on a guest-link reaction (W2a, 00546); guest_share_id carries it instead. */
+  client_id: string | null;
+  guest_share_id?: string | null;
   verdict: string;
   created_at: string;
 }
@@ -41,11 +43,43 @@ function isLaterVerdict(
 }
 
 /**
- * Count the current verdict for each client on each pin. item_feedback keeps an
- * append-only history, so counting every visible row would inflate cover
- * totals after a client changes their mind. The nested rows have already been
- * RLS-filtered by PostgREST; this fold only chooses each anchor/client's latest
- * entry and never broadens access.
+ * A signed-in client, or the guest link a reaction arrived on (W2a, 00546).
+ * Null when a row carries neither — such a row is dropped rather than
+ * silently pooled under one shared key (an unattributed row is not "the same
+ * author" as every other unattributed row).
+ */
+export function verdictAuthor(feedback: BoardVerdictProjection): string | null {
+  if (feedback.client_id) return `client:${feedback.client_id}`;
+  if (feedback.guest_share_id) return `share:${feedback.guest_share_id}`;
+  return null;
+}
+
+/**
+ * Fold a list of feedback rows down to each author's single latest verdict.
+ * item_feedback keeps an append-only history, so counting every visible row
+ * would inflate totals after an author changes their mind. Shared by
+ * summarizeBoardVerdicts (per-item counts) and deriveApprovedBoardItemIds
+ * (per-item approval) so both apply the exact same precedence rule and the
+ * exact same client/guest author key.
+ */
+export function latestVerdictByAuthor(
+  feedback: readonly BoardVerdictProjection[],
+): BoardVerdictProjection[] {
+  const latestByAuthor = new Map<string, BoardVerdictProjection>();
+  for (const entry of feedback) {
+    if (!isVerdict(entry.verdict)) continue;
+    const author = verdictAuthor(entry);
+    if (!author) continue;
+    const current = latestByAuthor.get(author);
+    if (isLaterVerdict(entry, current)) latestByAuthor.set(author, entry);
+  }
+  return [...latestByAuthor.values()];
+}
+
+/**
+ * Count the current verdict for each author on each pin. The nested rows
+ * have already been RLS-filtered by PostgREST; this fold only chooses each
+ * anchor/author's latest entry and never broadens access.
  */
 export function summarizeBoardVerdicts(
   items: BoardItemVerdictProjection[],
@@ -53,16 +87,7 @@ export function summarizeBoardVerdicts(
   const counts = emptyBoardVerdictCounts();
 
   for (const item of items) {
-    const latestByClient = new Map<string, BoardVerdictProjection>();
-    for (const feedback of item.verdicts ?? []) {
-      if (!isVerdict(feedback.verdict)) continue;
-      const current = latestByClient.get(feedback.client_id);
-      if (isLaterVerdict(feedback, current)) {
-        latestByClient.set(feedback.client_id, feedback);
-      }
-    }
-
-    for (const feedback of latestByClient.values()) {
+    for (const feedback of latestVerdictByAuthor(item.verdicts ?? [])) {
       counts[feedback.verdict as Verdict] += 1;
       counts.total += 1;
     }
@@ -101,32 +126,35 @@ export function deriveBoardReactionStatus(input: {
 export interface BoardItemFeedbackRow {
   id: string;
   board_item_id: string | null;
-  client_id: string;
+  /** Null on a guest-link reaction (W2a, 00546); guest_share_id carries it instead. */
+  client_id: string | null;
+  guest_share_id?: string | null;
   verdict: string;
   created_at: string;
 }
 
 /**
- * The set of board_item_ids whose CURRENT verdict (latest per client, same
- * rule as summarizeBoardVerdicts) is 'approved' for at least one client — the
+ * The set of board_item_ids whose CURRENT verdict (latest per author, same
+ * rule as summarizeBoardVerdicts) is 'approved' for at least one author — the
  * population for the "approved pieces -> purchase pipeline" panel (board-paths
- * W2b #2). Rows with no board_item_id (line-anchored feedback) are ignored.
+ * W2b #2). Rows with no board_item_id (line-anchored feedback) are ignored;
+ * rows with neither client_id nor guest_share_id are dropped by
+ * latestVerdictByAuthor.
  */
 export function deriveApprovedBoardItemIds(
   rows: readonly BoardItemFeedbackRow[],
 ): Set<string> {
-  const latestByItem = new Map<string, Map<string, BoardVerdictProjection>>();
+  const rowsByItem = new Map<string, BoardVerdictProjection[]>();
   for (const row of rows) {
-    if (!row.board_item_id || !isVerdict(row.verdict)) continue;
-    const byClient = latestByItem.get(row.board_item_id) ?? new Map();
-    const current = byClient.get(row.client_id);
-    if (isLaterVerdict(row, current)) byClient.set(row.client_id, row);
-    latestByItem.set(row.board_item_id, byClient);
+    if (!row.board_item_id) continue;
+    const list = rowsByItem.get(row.board_item_id) ?? [];
+    list.push(row);
+    rowsByItem.set(row.board_item_id, list);
   }
 
   const approved = new Set<string>();
-  for (const [boardItemId, byClient] of latestByItem) {
-    for (const feedback of byClient.values()) {
+  for (const [boardItemId, itemRows] of rowsByItem) {
+    for (const feedback of latestVerdictByAuthor(itemRows)) {
       if (feedback.verdict === 'approved') {
         approved.add(boardItemId);
         break;

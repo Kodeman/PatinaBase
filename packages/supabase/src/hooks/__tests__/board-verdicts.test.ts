@@ -4,6 +4,7 @@ import {
   deriveBoardReactionStatus,
   deriveApprovedBoardItemIds,
   emptyBoardVerdictCounts,
+  verdictAuthor,
 } from '../board-verdicts';
 
 describe('summarizeBoardVerdicts', () => {
@@ -165,5 +166,61 @@ describe('deriveApprovedBoardItemIds', () => {
 
   it('boundary: an empty row list produces an empty set', () => {
     expect(deriveApprovedBoardItemIds([]).size).toBe(0);
+  });
+
+  it('counts multiple guests on one pin each (W2a guest verdicts, 00546)', () => {
+    // Two distinct guest-link reactions (client_id null, distinct guest_share_id)
+    // on the same pin must not collapse into one author — each guest approving
+    // is what makes the pin approved, and a dropped guest silently killing the
+    // pipeline moment is exactly the P1 this fix closes.
+    const ids = deriveApprovedBoardItemIds([
+      { id: 'f1', board_item_id: 'item-1', client_id: null, guest_share_id: 'share-a', verdict: 'approved', created_at: '2026-08-01T00:00:00Z' },
+      { id: 'f2', board_item_id: 'item-1', client_id: null, guest_share_id: 'share-b', verdict: 'rejected', created_at: '2026-08-01T00:00:00Z' },
+    ]);
+    expect(ids.has('item-1')).toBe(true);
+  });
+
+  it('mixes a signed-in client verdict and a guest-link verdict on the same pin', () => {
+    const ids = deriveApprovedBoardItemIds([
+      { id: 'f1', board_item_id: 'item-1', client_id: 'client-1', verdict: 'rejected', created_at: '2026-08-01T00:00:00Z' },
+      { id: 'f2', board_item_id: 'item-1', client_id: null, guest_share_id: 'share-a', verdict: 'approved', created_at: '2026-08-01T00:00:00Z' },
+    ]);
+    expect(ids.has('item-1')).toBe(true);
+  });
+
+  it('skips a row with neither client_id nor guest_share_id, without pooling it under a shared null key', () => {
+    const ids = deriveApprovedBoardItemIds([
+      { id: 'f1', board_item_id: 'item-1', client_id: null, verdict: 'approved', created_at: '2026-08-01T00:00:00Z' },
+      { id: 'f2', board_item_id: 'item-1', client_id: null, verdict: 'rejected', created_at: '2026-08-02T00:00:00Z' },
+    ]);
+    // Neither row has an author, so neither counts — the pin is NOT approved,
+    // and critically the two unattributed rows must not be treated as the
+    // same author (which would let the later 'rejected' row silently erase
+    // the earlier 'approved' one).
+    expect(ids.has('item-1')).toBe(false);
+    expect(ids.size).toBe(0);
+  });
+});
+
+describe('verdictAuthor / latestVerdictByAuthor (shared with summarizeBoardVerdicts)', () => {
+  it('keys a signed-in client by client_id and a guest by guest_share_id', () => {
+    expect(verdictAuthor({ id: 'f1', client_id: 'client-1', verdict: 'approved', created_at: '2026-08-01T00:00:00Z' })).toBe('client:client-1');
+    expect(verdictAuthor({ id: 'f2', client_id: null, guest_share_id: 'share-a', verdict: 'approved', created_at: '2026-08-01T00:00:00Z' })).toBe('share:share-a');
+  });
+
+  it('returns null for a row with neither client_id nor guest_share_id', () => {
+    expect(verdictAuthor({ id: 'f1', client_id: null, verdict: 'approved', created_at: '2026-08-01T00:00:00Z' })).toBeNull();
+  });
+
+  it('summarizeBoardVerdicts counts a guest verdict once, same as a client verdict', () => {
+    expect(
+      summarizeBoardVerdicts([
+        {
+          verdicts: [
+            { id: 'f1', client_id: null, guest_share_id: 'share-a', verdict: 'approved', created_at: '2026-08-01T00:00:00Z' },
+          ],
+        },
+      ]),
+    ).toEqual({ approved: 1, rejected: 0, comment: 0, total: 1 });
   });
 });

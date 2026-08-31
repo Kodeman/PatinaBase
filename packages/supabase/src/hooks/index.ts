@@ -1484,6 +1484,8 @@ export {
   summarizeBoardVerdicts,
   deriveBoardReactionStatus,
   deriveApprovedBoardItemIds,
+  verdictAuthor,
+  latestVerdictByAuthor,
 } from "./board-verdicts";
 export type {
   BoardVerdictCounts,

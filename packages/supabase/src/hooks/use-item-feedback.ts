@@ -19,7 +19,9 @@ export interface ItemFeedback {
   proposal_item_id: string | null;
   ffe_item_id: string | null;
   board_item_id: string | null;
-  client_id: string;
+  /** Null on a guest-link reaction (W2a, 00546); guest_share_id carries it instead. */
+  client_id: string | null;
+  guest_share_id?: string | null;
   verdict: Verdict;
   body: string | null;
   resolved_at: string | null;
@@ -122,7 +124,7 @@ export function useBoardItemFeedbackByBoard(boardId: string | undefined) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('item_feedback')
-        .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, verdict, body, resolved_at, resolved_by, created_at, updated_at, proposal_board_items!inner(board_id)')
+        .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, guest_share_id, verdict, body, resolved_at, resolved_by, created_at, updated_at, proposal_board_items!inner(board_id)')
         .eq('proposal_board_items.board_id', boardId)
         .order('created_at', { ascending: true });
       if (error) throw error;
