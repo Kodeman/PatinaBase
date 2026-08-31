@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00543 — Board share links work on project-owned boards
+-- 00545 — Board share links work on project-owned boards
 --
 -- 00462 closed token sharing to proposal-owned boards only ("Project-board
 -- token sharing kept closed per 2026-08-12 ruling"), which is why the room's
