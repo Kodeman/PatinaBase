@@ -254,6 +254,7 @@ describe('VisitsBlock', () => {
   // /doc/[id] route group has no error boundary — so an unrecognised zone
   // would have taken the whole document page down, not just this row.
   it('still renders the row when the device recorded a zone ICU cannot read', () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     visits.mockReturnValue({
       data: [visit({ timezone: 'Not/A_Real_Zone; drop table' })],
       isLoading: false,
@@ -262,13 +263,34 @@ describe('VisitsBlock', () => {
     expect(screen.getByText('Visits')).toBeInTheDocument();
     // Degraded to the reader's own zone, which is what a missing zone gets.
     expect(screen.getByText('Tue Aug 25 · Living, Dining')).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
   });
 
-  it('does not throw on an empty-string zone either', () => {
-    visits.mockReturnValue({ data: [visit({ timezone: '' })], isLoading: false });
-    expect(() => render(<VisitsBlock projectId="project-1" />)).not.toThrow();
-    expect(screen.getByText('Tue Aug 25 · Living, Dining')).toBeInTheDocument();
-  });
+  // The zone that matters is a TRUTHY invalid one. An empty-string fixture
+  // never enters the try block at all — `if (timeZone)` short-circuits on ''
+  // — so it passed before the fallback existed and proved nothing. Each zone
+  // below is asserted to really raise, so the case cannot go decorative again.
+  it.each(['   ', 'Not/AZone'])(
+    'falls back to the reader’s zone, and says so once, on the invalid zone %p',
+    (timezone) => {
+      expect(() =>
+        new Date().toLocaleDateString('en-US', { timeZone: timezone }),
+      ).toThrow(RangeError);
+
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      visits.mockReturnValue({ data: [visit({ timezone })], isLoading: false });
+      expect(() => render(<VisitsBlock projectId="project-1" />)).not.toThrow();
+      expect(screen.getByText('Tue Aug 25 · Living, Dining')).toBeInTheDocument();
+      // R-19: reported, and reported ONCE — fmtDay runs per row per render.
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError).toHaveBeenCalledWith(
+        '[VisitsBlock] unreadable captured_timezone',
+        timezone,
+      );
+      consoleError.mockRestore();
+    },
+  );
 
   // F10 — a voice note whose transcription failed has neither a transcript
   // line nor a photo. "Photo" would be a lie for it.

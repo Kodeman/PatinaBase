@@ -28,6 +28,12 @@ import {
   type ProjectVisitCapture,
 } from '@patina/supabase';
 
+// One line per distinct bad zone, for the life of the tab. fmtDay runs per row
+// per render, so an ungated log would be its own outage; but a silent fallback
+// means a fleet-wide bad captured_timezone degrades every visit's day for ever
+// with nobody ever finding out.
+const reportedBadZones = new Set<string>();
+
 function fmtDay(iso: string, timeZone: string | null): string {
   // toLocaleDateString inserts a comma after the weekday ("Tue, Aug 25") in
   // this runtime's ICU data; the copy table wants "Tue Aug 25".
@@ -50,6 +56,10 @@ function fmtDay(iso: string, timeZone: string | null): string {
       // in. An id ICU does not recognise makes toLocaleDateString throw
       // RangeError, and the /doc/[id] route group has no error boundary — an
       // unreadable zone must cost the reader her own zone, not the spread.
+      if (!reportedBadZones.has(timeZone)) {
+        reportedBadZones.add(timeZone);
+        console.error('[VisitsBlock] unreadable captured_timezone', timeZone);
+      }
     }
   }
   return day.toLocaleDateString('en-US', opts).replace(',', '');
