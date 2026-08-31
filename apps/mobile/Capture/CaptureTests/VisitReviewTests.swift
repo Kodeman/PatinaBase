@@ -136,5 +136,47 @@ struct VisitReviewTests {
         #expect(VisitReviewComposer.timeOffer(minutes: -30) == "Log 1m as a site visit")
     }
 
+    // MARK: - Whether the offer can still be tapped
+
+    /// `.disabled(closeState != nil)` killed the button the instant ANY record
+    /// existed. A close that has not landed yet — pending, or serving a backoff
+    /// because she has no signal, which is the normal case in a house — then
+    /// had no way back: the hours were owed and the only control that could ask
+    /// for them again was dead for the life of the screen.
+    @Test func aCloseStillOwedASendKeepsTheOfferLive() {
+        #expect(VisitReviewComposer.timeOfferEnabled(closeState: nil))
+        #expect(VisitReviewComposer.timeOfferEnabled(closeState: .pending))
+        #expect(VisitReviewComposer.timeOfferEnabled(closeState: .failed))
+    }
+
+    /// And the states nothing a second tap can change. `.writing` is in flight;
+    /// the other three are exactly the states `isDue` refuses to hand back to
+    /// the drainer, so an enabled button there would promise a retry that no
+    /// code path performs.
+    @Test func aFinishedOrInFlightCloseLeavesTheOfferDead() {
+        #expect(!VisitReviewComposer.timeOfferEnabled(closeState: .writing))
+        #expect(!VisitReviewComposer.timeOfferEnabled(closeState: .written))
+        #expect(!VisitReviewComposer.timeOfferEnabled(closeState: .refused))
+        #expect(!VisitReviewComposer.timeOfferEnabled(closeState: .unwritable))
+    }
+
+    /// The button and the record agree about what is retryable — stated against
+    /// `isDue` rather than restated as a second list that can drift from it.
+    @Test func theOfferIsLiveForExactlyTheStatesTheDrainerWillTryAgain() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        for state in [FieldWriteState.pending, .writing, .written, .refused,
+                      .unwritable, .failed] {
+            let record = FieldVisitCloseRecord(
+                visitID: UUID(), timeEntryID: UUID(), projectID: "p",
+                ownerUserID: "u", startedAt: now, endedAt: now, durationMinutes: 30)
+            record.state = state
+            // `.writing` is the one divergence, and it is deliberate: the
+            // drainer owns an in-flight record, so the button must not.
+            let retryable = record.isDue(at: now) && state != .writing
+            #expect(VisitReviewComposer.timeOfferEnabled(closeState: state) == retryable,
+                    "\(state) disagrees with the record's own isDue")
+        }
+    }
+
     // The close record's backoff is pinned once, in FieldVisitCloseRecordTests.
 }

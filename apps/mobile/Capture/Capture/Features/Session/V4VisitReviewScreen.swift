@@ -28,8 +28,22 @@ struct V4VisitReviewScreen: View {
     let session: any SessionProviding
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
+    /// Nil in mock mode, exactly as `AppContainer` holds it.
+    let visitCloseDrainer: VisitCloseOutboxDrainer?
 
     @State private var specimens: [Specimen] = []
+    /// Paired ONCE, on load. Read by four computed properties, each of which the
+    /// body evaluates — re-pairing per read built a VisitReviewRow per capture
+    /// roughly six times per body pass.
+    @State private var paired: [(specimen: Specimen, row: VisitReviewRow)] = []
+    /// The playable segments per capture, stat'ed once on load rather than on
+    /// every body pass: `playableSegments` touches the filesystem per row.
+    @State private var playable: [UUID: [URL]] = [:]
+    #if canImport(UIKit)
+    /// Decoded thumbnails, keyed by capture. Filled by the row's own `.task`,
+    /// never inside `body`.
+    @State private var thumbnails: [UUID: UIImage] = [:]
+    #endif
     @State private var startedAt = Date()
     /// Snapshotted on appear: the offered minutes must not tick while she reads.
     @State private var closedAt = Date()
@@ -62,14 +76,6 @@ struct V4VisitReviewScreen: View {
     }
 
     // MARK: - What the visit produced
-
-    /// Paired so the screen's grouping uses the same judgement the mapper is
-    /// tested on, rather than a second opinion about what a note is.
-    private var paired: [(specimen: Specimen, row: VisitReviewRow)] {
-        specimens
-            .sorted { $0.createdAt < $1.createdAt }
-            .map { ($0, VisitReviewRow(specimen: $0)) }
-    }
 
     private var captures: [Specimen] { paired.filter(\.row.hasPhoto).map(\.specimen) }
 
@@ -127,7 +133,7 @@ struct V4VisitReviewScreen: View {
     }
 
     private func rowBody(_ specimen: Specimen) -> some View {
-        let playable = playableSegments(specimen)
+        let playable = playable[specimen.id] ?? []
         return HStack(spacing: 12) {
             glyph(specimen)
             VStack(alignment: .leading, spacing: 3) {
@@ -155,7 +161,7 @@ struct V4VisitReviewScreen: View {
         ZStack {
             RoundedRectangle(cornerRadius: 6).fill(CaptureColor.paper2)
             #if canImport(UIKit)
-            if let image = thumbnail(specimen) {
+            if let image = thumbnails[specimen.id] {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -168,6 +174,7 @@ struct V4VisitReviewScreen: View {
             #endif
         }
         .frame(width: 40, height: 40)
+        .task(id: specimen.id) { await loadThumbnail(specimen) }
     }
 
     private var micGlyph: some View {
@@ -176,14 +183,23 @@ struct V4VisitReviewScreen: View {
             .foregroundStyle(CaptureColor.inkSoft)
     }
 
-    #if canImport(UIKit)
-    private func thumbnail(_ specimen: Specimen) -> UIImage? {
-        let photo = specimen.photos.first { $0.isPrimary } ?? specimen.photos.first
-        return photo.flatMap {
-            UIImage(contentsOfFile: store.mediaURL(for: $0.thumbnailFilename ?? $0.filename).path)
-        }
+    /// Decoding a JPEG is not a view's work. Off the main actor, once per
+    /// capture, cached for the life of the screen — the same image read that
+    /// used to run inside `body`, and therefore on every pass.
+    private func loadThumbnail(_ specimen: Specimen) async {
+        #if canImport(UIKit)
+        guard thumbnails[specimen.id] == nil,
+              let photo = specimen.photos.first(where: { $0.isPrimary })
+                  ?? specimen.photos.first
+        else { return }
+        let path = store.mediaURL(for: photo.thumbnailFilename ?? photo.filename).path
+        let decoded = await Task.detached(priority: .utility) {
+            UIImage(contentsOfFile: path)
+        }.value
+        guard !Task.isCancelled, let decoded else { return }
+        thumbnails[specimen.id] = decoded
+        #endif
     }
-    #endif
 
     private func rowTitle(_ specimen: Specimen) -> String {
         if let title = specimen.title?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -286,7 +302,7 @@ struct V4VisitReviewScreen: View {
             RouteActionButton(offerLabel, systemImage: "clock", kind: .secondary) {
                 logTheHours(projectID: projectID, ownerUserID: ownerUserID)
             }
-            .disabled(closeState != nil)
+            .disabled(!VisitReviewComposer.timeOfferEnabled(closeState: closeState))
         }
     }
 
@@ -324,7 +340,11 @@ struct V4VisitReviewScreen: View {
         // minted timeEntryID — and reset it to pending, which is exactly how one
         // visit ends up as two project_time_entries rows.
         guard standingClose() == nil else {
+            // A standing record the offer let her tap again is one still owed a
+            // send (pending or backing off), so the tap is a retry, not a
+            // second entry.
             closeState = standingClose()?.state
+            resumeCloseOutbox()
             return
         }
         store.context.insert(FieldVisitCloseRecord(
@@ -337,6 +357,19 @@ struct V4VisitReviewScreen: View {
             durationMinutes: summary.elapsedMinutes))
         try? store.save()
         closeState = standingClose()?.state
+        resumeCloseOutbox()
+    }
+
+    /// The record is durable, but nothing sends it until a drainer runs — and
+    /// `RootView` resumes this one once per owner per launch, so without a kick
+    /// from here the hours land at the NEXT cold launch rather than now.
+    /// `SiteRequestScreens` resumes its own drainer from the feature path for
+    /// exactly this reason.
+    private func resumeCloseOutbox() {
+        Task { @MainActor in
+            await visitCloseDrainer?.resume()
+            closeState = standingClose()?.state
+        }
     }
 
     private func standingClose() -> FieldVisitCloseRecord? {
@@ -377,6 +410,14 @@ struct V4VisitReviewScreen: View {
         case .unavailable:
             specimens = []
         }
+        // Paired so the screen's grouping uses the same judgement the mapper is
+        // tested on, rather than a second opinion about what a note is.
+        paired = specimens
+            .sorted { $0.createdAt < $1.createdAt }
+            .map { ($0, VisitReviewRow(specimen: $0)) }
+        playable = Dictionary(uniqueKeysWithValues: specimens.map {
+            ($0.id, playableSegments($0))
+        })
     }
 
     private var visitEndEmitter: FieldVisitEndEmitter {
@@ -409,7 +450,8 @@ enum VisitReviewScreens {
             guard case let .visitReview(visitID) = route else { return AnyView(EmptyView()) }
             return AnyView(V4VisitReviewScreen(
                 visitID: visitID, store: container.store, session: container.session,
-                coordinator: coordinator, analytics: container.analytics))
+                coordinator: coordinator, analytics: container.analytics,
+                visitCloseDrainer: container.visitCloseOutboxDrainer))
         }
     }
 }

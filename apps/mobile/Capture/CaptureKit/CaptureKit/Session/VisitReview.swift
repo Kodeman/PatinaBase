@@ -107,6 +107,25 @@ public enum VisitReviewComposer {
         }
         return "Log \(span) as a site visit"
     }
+
+    /// Whether the Hours offer is still tappable, given the standing close
+    /// record's state (nil = no record).
+    ///
+    /// `.disabled(closeState != nil)` killed the button the instant ANY record
+    /// existed — including one waiting out a backoff, which is the state a
+    /// designer with no signal is in at the moment she taps. The three states
+    /// the record's own `isDue` will hand back to the drainer are the three
+    /// that keep the offer live; `.writing` is in flight, and `.written`,
+    /// `.refused` and `.unwritable` are done for good — nothing a second tap
+    /// can change.
+    public static func timeOfferEnabled(closeState: FieldWriteState?) -> Bool {
+        switch closeState {
+        case .none, .pending, .failed:
+            return true
+        case .writing, .written, .refused, .unwritable:
+            return false
+        }
+    }
 }
 
 public extension VisitReviewRow {
