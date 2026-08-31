@@ -8,6 +8,10 @@
  * sees — under the share's per-field visibility, feedback OFF, no sign/verdict
  * affordances. Any invalid / revoked / expired token lands on a calm dead-link
  * page that does not leak whether a link ever existed.
+ *
+ * One exception, and only one: a BOARD token minted with the reaction opt-in
+ * (00546) renders per-pin approve/pass. resolve_board_share() decides that, not
+ * this file — a link without the opt-in resolves without the capability at all.
  */
 
 import type { ComponentProps } from 'react';
@@ -32,6 +36,7 @@ import {
   signServiceAuthorizedBoards,
 } from '@/lib/guest-proposal-document';
 import { captureMoodBoardShareViewed } from '@/lib/analytics/mood-board-server';
+import { BoardReactions, parseGuestReactions } from './board-reactions';
 
 // The token is resolved per request (and bumps view stats) — never static.
 export const dynamic = 'force-dynamic';
@@ -95,14 +100,25 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
           </div>
         </header>
         <div className="min-h-0 flex-1 p-3 sm:p-6">
-          <BoardComposition
-            board={board}
-            fit="contain"
-            fullBleed
-            showNotes
-            interactive={false}
-            className="h-full"
-          />
+          {resolvedBoard.reactionsEnabled === true ? (
+            // The capability rides the resolve payload, and the payload only
+            // carries it when the link was minted with the opt-in. A view-only
+            // link therefore has nothing to hang a reaction affordance on.
+            <BoardReactions
+              token={token}
+              board={board}
+              reactions={parseGuestReactions(resolvedBoard.reactions)}
+            />
+          ) : (
+            <BoardComposition
+              board={board}
+              fit="contain"
+              fullBleed
+              showNotes
+              interactive={false}
+              className="h-full"
+            />
+          )}
         </div>
       </main>
     );
