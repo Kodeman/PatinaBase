@@ -160,6 +160,20 @@ public extension Specimen {
         guessConfidenceRaw[key.rawValue] = confidence
     }
 
+    /// Write a batch of smart-guess suggestions and confidence-gate them in one
+    /// pass — the shared source of truth for C1's post-shutter read and N5's
+    /// mirrored test loop. `setValue` refuses to overwrite what a tag, a scan,
+    /// a measure or she already set; never pin a confidence to a value we
+    /// didn't write.
+    @MainActor
+    func recordSmartGuess(_ suggestions: [FieldSuggestion]) {
+        for suggestion in suggestions {
+            setValue(suggestion.value, for: suggestion.key, source: suggestion.source)
+            guard provenance(for: suggestion.key) == suggestion.source else { continue }
+            setConfidence(suggestion.confidence, for: suggestion.key)
+        }
+    }
+
     func addMeasurement(axis: MeasurementAxis, millimeters: Double, source: MeasureSource) {
         let m = CaptureMeasurement(axisRaw: axis.rawValue, millimeters: millimeters, sourceRaw: source.rawValue)
         m.specimen = self
@@ -250,5 +264,153 @@ public extension Specimen {
         placementSpecId = receipt.specID.uuidString
         placementLastError = nil
         touch()
+    }
+}
+
+// MARK: - The visit (Field Companion wave 3)
+
+public extension Specimen {
+    var visitKind: FieldVisitKind? {
+        get { visitKindRaw.flatMap(FieldVisitKind.init(rawValue:)) }
+        set { visitKindRaw = newValue?.rawValue }
+    }
+    var visitKit: FieldVisitKit? {
+        get { visitKitRaw.flatMap(FieldVisitKit.init(rawValue:)) }
+        set { visitKitRaw = newValue?.rawValue }
+    }
+    var noteSetting: FieldNoteSetting? {
+        get { noteSettingRaw.flatMap(FieldNoteSetting.init(rawValue:)) }
+        set { noteSettingRaw = newValue?.rawValue }
+    }
+    var suggestionBasis: FieldSuggestionBasis? {
+        get { suggestionBasisRaw.flatMap(FieldSuggestionBasis.init(rawValue:)) }
+        set { suggestionBasisRaw = newValue?.rawValue }
+    }
+
+    /// The basis in WORDS. Never a number, never a mechanism.
+    var suggestionReason: String? { suggestionReasonRaw }
+
+    /// Write a SUGGESTION — WE THINK SO, never SHE SAID SO. This function must
+    /// never write `venue.projectId` / `venue.projectRoomId`: that is the fact,
+    /// and only `place(…)` may set it. Passing nil clears the question and
+    /// leaves the fact exactly as it stood.
+    func apply(_ suggestion: CaptureSuggestion?) {
+        suggestedProjectID = suggestion?.projectID
+        suggestedProjectRoomID = suggestion?.projectRoomID
+        suggestionBasis = suggestion?.basis
+        suggestionConfidence = suggestion?.confidence
+        suggestionReasonRaw = suggestion?.reason
+    }
+
+    /// Whether this capture's destination is one that OWES a project.
+    /// Spec Flow 6: an un-chipped market find filed to the Library shelf is
+    /// DONE — only a chipped one takes `place_product_in_project` — so a
+    /// `.library` capture is never waiting to be placed. `.undecided` is the
+    /// default a fresh draft carries and still owes a decision, so it counts.
+    /// Switched, not compared, so a fourth destination has to choose a side.
+    var destinationRequiresProject: Bool {
+        switch destination {
+        case .library: return false
+        case .inbox, .undecided: return true
+        }
+    }
+
+    /// "Placed" is `venue.projectId is not null` — the same rule the server uses
+    /// (`project_id IS NOT NULL`) — for a destination that owes a project at all.
+    /// There is no new status value, ever, and SYNC STATE IS IRRELEVANT: a
+    /// capture that committed hours ago and still has no project is unplaced, and
+    /// FC-R6 says it waits on Today until she files it. This narrows on
+    /// DESTINATION, never on sync — the two are different axes and only one moves.
+    ///
+    /// The SINGLE shared predicate: Today's count and the tray's list both read
+    /// it, so R98's "they agree" holds by construction rather than by discipline.
+    var isUnplaced: Bool {
+        guard destinationRequiresProject else { return false }
+        return (venue?.projectId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
+    }
+
+    /// FC-R6: a capture that was placed AFTER it committed. The server learns the
+    /// project on the next drain; until then the tray shows `placed · syncing`.
+    var placementNeedsReplay: Bool { placementReplayPending == true }
+
+    /// The sync path may short-circuit on a receipt it already holds ONLY while
+    /// nothing new has to reach the server. A capture placed after it committed
+    /// has something new, so it must re-run `commit_field_capture` instead —
+    /// idempotent on `client_capture_id`, and 00530's inbox branch is what
+    /// persists the project.
+    var canReuseConfirmedReceipt: Bool {
+        hasConfirmedCaptureReceipt && !placementNeedsReplay
+    }
+
+    /// A receipt just landed for the placement named in `sent`. If the record
+    /// still says what went out, the server is current and the replay bit is let
+    /// go of — it replays once, not forever. If she re-placed WHILE the RPC was
+    /// in flight, what went out is already stale, so the bit is raised instead
+    /// and the ordinary drain carries the newer project.
+    ///
+    /// Raising, not merely declining to clear, is what closes the hole: during a
+    /// drain the row is `.uploading`, so `place(…)` sets no bit of its own, and a
+    /// receipt for the OLDER placement would otherwise clear the bit and strand
+    /// the newer one — the same silent divergence one layer in.
+    /// Returns whether the bit changed.
+    @discardableResult
+    func reconcilePlacementReplay(sentProjectID: String?,
+                                  sentProjectRoomID: String?) -> Bool {
+        func trimmed(_ value: String?) -> String {
+            (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let stillCurrent = trimmed(sentProjectID) == trimmed(venue?.projectId)
+            && trimmed(sentProjectRoomID) == trimmed(venue?.projectRoomId)
+        let desired: Bool? = stillCurrent ? nil : true
+        guard placementReplayPending != desired else { return false }
+        placementReplayPending = desired
+        return true
+    }
+
+    /// Place this capture — write the FACT. Never touches `suggested_*`.
+    /// A capture that has not committed yet needs nothing more: its routing rides
+    /// the FIRST commit, exactly as a capture taken inside a visit does. One that
+    /// HAS committed needs the outbox to re-run `commit_field_capture`, so it is
+    /// flagged for replay here and the ordinary drain does the rest.
+    /// The two ids are written unconditionally, but `room: nil` means KEEP THE
+    /// EXISTING LABEL, not clear it — so placing into a project with no room
+    /// leaves the old room name standing beside a nil `projectRoomId`. Callers
+    /// that mean "no room" must pass the replacement label themselves.
+    func place(projectID: String?, projectRoomID: String?, room: String?) {
+        var stamp = venue ?? VenueStamp()
+        stamp.projectId = projectID
+        stamp.projectRoomId = projectRoomID
+        if let room { stamp.room = room }
+        venue = stamp
+        if status == .committed { placementReplayPending = true }
+        touch()
+    }
+
+    func inherit(_ context: CaptureSessionContext) {
+        visitKind = context.kind
+        visitKit = context.kit
+        visitLabel = context.label
+        visitStartedAt = context.kind == nil ? nil : context.startedAt
+        visitEndedAt = context.endedAt
+        if noteSettingRaw == nil, let kind = context.kind {
+            noteSetting = CaptureVisitDraft(kind: kind, kit: context.kit).defaultNoteSetting
+        }
+    }
+}
+
+/// Orders a tray so the strongest suggestions surface first. The CONFIDENCE
+/// NEVER LEAVES THIS TYPE: it decides sequence and is never handed to a view,
+/// which is the whole of Principle 4's "orders, never renders". A record with no
+/// suggestion sorts below every record that has one, and ties fall back to the
+/// tray's ordinary newest-first order so the sequence is total and stable.
+public enum FieldTraySuggestionOrder {
+    @MainActor
+    public static func ordered(_ specimens: [Specimen]) -> [Specimen] {
+        specimens.sorted { lhs, rhs in
+            let left = lhs.suggestionConfidence ?? -1
+            let right = rhs.suggestionConfidence ?? -1
+            if left != right { return left > right }
+            return lhs.createdAt > rhs.createdAt
+        }
     }
 }

@@ -13,6 +13,10 @@ struct WorkDashboardScreen: View {
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator
     let companion: FieldCompanionController
+    /// Only for `FieldVisitEndCounts.compute` on the stale prompt's "End visit"
+    /// — the five §14 numbers are read from the store, not from the model's
+    /// display projections.
+    private let store: CaptureStore
 
     @State private var model: WorkDashboardModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,6 +27,7 @@ struct WorkDashboardScreen: View {
         analytics = container.analytics
         self.coordinator = coordinator
         companion = container.companion
+        store = container.store
         _model = State(wrappedValue: WorkDashboardModel(container: container))
     }
 
@@ -33,6 +38,43 @@ struct WorkDashboardScreen: View {
                 if !model.loadIssues.isEmpty {
                     loadIssues
                 }
+                WorkTodayBand(
+                    band: model.todayBand,
+                    onCamera: {
+                        analytics.event("work.switch_to_camera", ["source": "visit"])
+                        coordinator.switchRealm(.camera)
+                    },
+                    onStartVisit: { coordinator.present(.visit) },
+                    onResume: {
+                        analytics.emit(FieldVisitTelemetry.stalePrompt(answer: "resume"))
+                        _ = CaptureSessionContextStore.shared.remember(
+                            model.visitState.context?.routing ?? .empty, identity: identity)
+                        model.refreshVisit()
+                    },
+                    onEndVisit: {
+                        analytics.emit(FieldVisitTelemetry.stalePrompt(answer: "end"))
+                        // Site 4 of 4 (spec §14): the stale prompt's "End
+                        // visit" is the same act as the other three and does not
+                        // route through any of them, so it emits `visit.end`
+                        // here too — through the SHARED helper. It used to
+                        // re-implement the notes filter and substitute
+                        // `model.unplaced` / `model.scanUploads`, which agreed
+                        // with the other three by coincidence and had nothing
+                        // holding them in step; `unplaced` in particular must be
+                        // the tray-wide `unfiled(owner:)` count, not this
+                        // screen's display-deduped projection of it. Read BEFORE
+                        // `endVisit` closes the context — afterwards
+                        // `visitState` reads `.none` and the counts are gone.
+                        if let context = model.visitState.context {
+                            visitEndEmitter.emit(.explicit, context: context)
+                        }
+                        _ = CaptureSessionContextStore.shared.endVisit(identity: identity)
+                        model.refreshVisit()
+                    },
+                    onOpenUnplaced: {
+                        coordinator.switchRealm(.camera)
+                        coordinator.navigate(to: .session)
+                    })
                 attentionSection(
                     title: "Needs you",
                     identifier: "work.section.needs-you",
@@ -61,7 +103,7 @@ struct WorkDashboardScreen: View {
             .padding(.bottom, 40)
         }
         .background(CaptureColor.paper)
-        .navigationTitle("Work")
+        .navigationTitle("Today")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             analytics.event("work.refresh")
@@ -69,6 +111,11 @@ struct WorkDashboardScreen: View {
         }
         .task {
             analytics.screen(CaptureScreenID.w1Work.rawValue)
+            // FC-R21 part 3: W1 is where she lands when Today is home, so it is
+            // often the first surface to see a visit that expired overnight.
+            // Only the first noticer emits — the reap stamps `endedAt`.
+            visitEndEmitter.reapExpired()
+            model.refreshVisit()
             await model.loadAll()
             updateCompanionHint()
         }
@@ -80,6 +127,15 @@ struct WorkDashboardScreen: View {
             value: contentRevision
         )
         .accessibilityIdentifier(CaptureScreenID.w1Work.rawValue)
+    }
+
+    private var visitEndEmitter: FieldVisitEndEmitter {
+        FieldVisitEndEmitter(store: store, analytics: analytics,
+                             userID: session.userID, workspaceID: session.workspaceID)
+    }
+
+    private var identity: CaptureSessionIdentity {
+        CaptureSessionIdentity(userID: session.userID, workspaceID: session.workspaceID)
     }
 
     // MARK: - Realm header
@@ -119,7 +175,7 @@ struct WorkDashboardScreen: View {
 
     private var cameraRealmButton: some View {
         Button {
-            analytics.event("work.switch_to_camera")
+            analytics.event("work.switch_to_camera", ["source": "header"])
             coordinator.switchRealm(.camera)
         } label: {
             Group {
@@ -170,6 +226,11 @@ struct WorkDashboardScreen: View {
     }
 
     private func updateCompanionHint() {
+        if let visitHint = FieldTodayBand.companionHint(for: model.todayBand),
+           model.todayBand.visit != .none {
+            companion.send(.collapse(hint: visitHint.text, action: visitHint.action))
+            return
+        }
         let hint: String
         let needsYouCount = model.attention.needsYou.count
         if needsYouCount == 1 {

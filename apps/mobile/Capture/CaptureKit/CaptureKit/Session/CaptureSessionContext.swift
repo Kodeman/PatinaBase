@@ -53,18 +53,84 @@ public struct CaptureSessionContext: Codable, Equatable, Sendable {
     public var lastActivityAt: Date
     public var routing: CaptureRoutingMemory
 
+    // ── The visit (wave 3). FC-R2: nil kind IS the "no visit" state. ──
+    public var kind: FieldVisitKind?
+    public var kit: FieldVisitKit?
+    /// The visit's human label — the project name on a site visit, the venue on
+    /// a sourcing run. Lands in `field_captures.visit_label`.
+    public var label: String?
+    /// FC-R5 SCAN lane only: a `public.rooms` id. NEVER stamped into
+    /// `field_captures.project_room_id` — that is `routing.projectRoomID`.
+    public var scanRoomID: String?
+    /// Sourcing only, capped at `maxProjectsInMind`. Absent from a build-2 blob
+    /// — see `init(from:)`.
+    public var projectsInMind: [String]
+    public var endedAt: Date?
+
     public init(
         visitID: UUID = UUID(),
         identity: CaptureSessionIdentity,
         startedAt: Date,
         lastActivityAt: Date,
-        routing: CaptureRoutingMemory = .empty
+        routing: CaptureRoutingMemory = .empty,
+        kind: FieldVisitKind? = nil,
+        kit: FieldVisitKit? = nil,
+        label: String? = nil,
+        scanRoomID: String? = nil,
+        projectsInMind: [String] = [],
+        endedAt: Date? = nil
     ) {
         self.visitID = visitID
         self.identity = identity
         self.startedAt = startedAt
         self.lastActivityAt = lastActivityAt
         self.routing = routing
+        self.kind = kind
+        self.kit = kit
+        self.label = label
+        self.scanRoomID = scanRoomID
+        self.projectsInMind = Array(projectsInMind.prefix(Self.maxProjectsInMind))
+        self.endedAt = endedAt
+    }
+
+    public var isVisit: Bool { kind != nil && endedAt == nil }
+
+    public static let maxProjectsInMind = 4
+
+    /// Hand-written because this type is PERSISTED — to UserDefaults under an
+    /// unchanged key (`capture.session-context.v1`) — so a phone upgrading from
+    /// TestFlight build 2 hands wave 3's decoder a blob written before
+    /// `projectsInMind`, `kind`, `kit`, `label` and `scanRoomID` existed. Both
+    /// read sites `try?` the decode away, so a throw is SILENT: her routing
+    /// memory disappears and nothing says why.
+    ///
+    /// A declaration default does NOT reach the synthesized decoder — Swift's
+    /// synthesis calls `decode(_:forKey:)` for every non-Optional property
+    /// whatever its default, so `projectsInMind: [String] = []` still throws
+    /// `keyNotFound` against a build-2 blob. `decodeIfPresent` is the only thing
+    /// that makes an added non-Optional property absent-tolerant. Every property
+    /// that has a default in the memberwise initialiser gets one here, so the
+    /// NEXT added field is tolerant by the same rule rather than by memory.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        visitID = try container.decode(UUID.self, forKey: .visitID)
+        identity = try container.decode(CaptureSessionIdentity.self, forKey: .identity)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        lastActivityAt = try container.decode(Date.self, forKey: .lastActivityAt)
+        routing = try container.decodeIfPresent(CaptureRoutingMemory.self,
+                                                forKey: .routing) ?? .empty
+        kind = try container.decodeIfPresent(FieldVisitKind.self, forKey: .kind)
+        kit = try container.decodeIfPresent(FieldVisitKit.self, forKey: .kit)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        scanRoomID = try container.decodeIfPresent(String.self, forKey: .scanRoomID)
+        // NOT capped here, unlike the memberwise initialiser: an over-cap stored
+        // blob decodes long and `FieldVisitDoorModel` truncates on open, which is
+        // what `VisitDoorTests.anOverCapProjectsInMindArrivesLongAndOpensTruncated`
+        // pins. This initialiser exists to tolerate an ABSENT key and to change
+        // nothing else.
+        projectsInMind = try container.decodeIfPresent([String].self,
+                                                       forKey: .projectsInMind) ?? []
+        endedAt = try container.decodeIfPresent(Date.self, forKey: .endedAt)
     }
 }
 
@@ -74,16 +140,34 @@ public enum CaptureSessionContextPolicy {
     public static func resolve(
         existing: CaptureSessionContext?,
         identity: CaptureSessionIdentity,
-        now: Date
+        now: Date,
+        calendar: Calendar = .current
     ) -> CaptureSessionContext {
         guard let existing,
               existing.identity == identity,
+              existing.endedAt == nil,
               now.timeIntervalSince(existing.lastActivityAt) < inactivityWindow,
               now >= existing.lastActivityAt else {
             return CaptureSessionContext(
                 identity: identity,
                 startedAt: now,
                 lastActivityAt: now
+            )
+        }
+        // The visit's own rules outrank this 4-hour routing window, and `resolve`
+        // WRITES: `current` persists what it returns, so resuming a visit the
+        // rules have killed would both hand out its `visitID` (ViewfinderModel
+        // mints every draft's `sessionID` from it, so yesterday's visit would
+        // collect today's captures) and refresh its `lastActivityAt`, pushing the
+        // 12-hour auto-end out of reach forever. Routing memory has always been
+        // day-agnostic and survives; the visit fields and the grouping id do not.
+        if existing.kind != nil,
+           visitState(for: existing, now: now, calendar: calendar) == .none {
+            return CaptureSessionContext(
+                identity: identity,
+                startedAt: now,
+                lastActivityAt: now,
+                routing: existing.routing
             )
         }
         var resumed = existing
@@ -100,6 +184,17 @@ public enum CaptureSessionContextPolicy {
         updated.routing = routing
         updated.lastActivityAt = now
         return updated
+    }
+}
+
+/// What `reapExpiredVisit` found: the visit as it stood OPEN, and why it closed.
+public struct FieldVisitEndNotice: Equatable, Sendable {
+    public let context: CaptureSessionContext
+    public let reason: FieldVisitEndReason
+
+    public init(context: CaptureSessionContext, reason: FieldVisitEndReason) {
+        self.context = context
+        self.reason = reason
     }
 }
 
@@ -124,7 +219,8 @@ public final class CaptureSessionContextStore {
 
     public func current(
         identity: CaptureSessionIdentity,
-        now: Date = Date()
+        now: Date = Date(),
+        calendar: Calendar = .current
     ) -> CaptureSessionContext {
         let existing = defaults.data(forKey: key).flatMap {
             try? decoder.decode(CaptureSessionContext.self, from: $0)
@@ -132,7 +228,8 @@ public final class CaptureSessionContextStore {
         let resolved = CaptureSessionContextPolicy.resolve(
             existing: existing,
             identity: identity,
-            now: now
+            now: now,
+            calendar: calendar
         )
         persist(resolved)
         return resolved
@@ -154,23 +251,98 @@ public final class CaptureSessionContextStore {
         return updated
     }
 
+    public func visitState(
+        identity: CaptureSessionIdentity,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> CaptureVisitState {
+        let stored = defaults.data(forKey: key).flatMap {
+            try? decoder.decode(CaptureSessionContext.self, from: $0)
+        }
+        guard let stored, stored.identity == identity else { return .none }
+        return CaptureSessionContextPolicy.visitState(for: stored, now: now, calendar: calendar)
+    }
+
+    @discardableResult
+    public func startVisit(
+        _ draft: CaptureVisitDraft,
+        identity: CaptureSessionIdentity,
+        now: Date = Date()
+    ) -> CaptureSessionContext {
+        let context = CaptureSessionContextPolicy.started(draft, identity: identity, now: now)
+        persist(context)
+        NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
+        return context
+    }
+
+    /// Ends the OPEN visit rather than replacing it with a fresh one: the visit
+    /// keeps its `visitID` and gains an `endedAt`, so what just closed is still
+    /// readable and `visitState` reads `.none` from here on. The next capture
+    /// mints a kindless context through `resolve`.
     @discardableResult
     public func endVisit(
         identity: CaptureSessionIdentity,
         now: Date = Date()
     ) -> CaptureSessionContext {
-        let next = CaptureSessionContext(
-            identity: identity,
-            startedAt: now,
-            lastActivityAt: now
-        )
-        persist(next)
-        return next
+        let open = defaults.data(forKey: key).flatMap {
+            try? decoder.decode(CaptureSessionContext.self, from: $0)
+        }
+        guard let open, open.identity == identity else {
+            let fresh = CaptureSessionContext(identity: identity, startedAt: now,
+                                              lastActivityAt: now)
+            persist(fresh)
+            NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
+            return fresh
+        }
+        // A second "End visit" tap must not overwrite what the first one closed:
+        // the already-ended record IS the readable one.
+        guard open.endedAt == nil else { return open }
+        let closed = CaptureSessionContextPolicy.ended(open, now: now)
+        persist(closed)
+        NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
+        return closed
+    }
+
+    /// FC-R21 part 3: close a visit that expired without a tap, EXACTLY ONCE.
+    ///
+    /// The three computed ends (`CaptureSessionContextPolicy.expiry`) are
+    /// functions of time: they write nothing and post nothing, so a visit could
+    /// die in her pocket and no `visit.end` ever fired. This is what turns one
+    /// into a real close — it stamps `endedAt`, so the second caller to notice
+    /// the same expiry (another screen refreshing, a second foreground) gets
+    /// `nil` and cannot double-emit.
+    ///
+    /// Returns the still-OPEN context, not the closed one: the caller reads the
+    /// visit's own §14 counts from it, and `endedAt` would only tell it what it
+    /// already knows.
+    @discardableResult
+    public func reapExpiredVisit(
+        identity: CaptureSessionIdentity,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> FieldVisitEndNotice? {
+        let stored = defaults.data(forKey: key).flatMap {
+            try? decoder.decode(CaptureSessionContext.self, from: $0)
+        }
+        guard let open = stored, open.identity == identity,
+              let reason = CaptureSessionContextPolicy.expiry(for: open, now: now,
+                                                              calendar: calendar)
+        else { return nil }
+        persist(CaptureSessionContextPolicy.ended(open, now: now))
+        NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
+        return FieldVisitEndNotice(context: open, reason: reason)
     }
 
     public func reset() {
         defaults.removeObject(forKey: key)
     }
+
+    /// R119: a visit can begin or end from a surface that presents no sheet —
+    /// the Companion strip's "End visit" is inline — so a screen that names the
+    /// visit has nothing to hang a refresh on. Posted by `startVisit`/`endVisit`
+    /// only: the ordinary `current(…)` resolve persists on every draft and would
+    /// make this chatter.
+    public static let visitDidChange = Notification.Name("capture.visitDidChange")
 
     private func persist(_ context: CaptureSessionContext) {
         guard let data = try? encoder.encode(context) else { return }

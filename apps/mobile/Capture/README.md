@@ -1,7 +1,8 @@
 # Patina Field (T-03)
 
-**Patina Field** is a standalone camera-first iOS app — it turns a physical
-object in a showroom into a structured, located, synced **specimen**. Spec:
+**Patina Field** is a standalone iOS app. Today is home — the camera is one
+tap away, and it stays home inside a visit — turning a physical object in a
+showroom into a structured, located, synced **specimen**. Spec:
 `docs/design/ios-Capture/patina-mobile-ux-flow.html`. Plan:
 `~/.claude/plans/review-the-design-document-greedy-engelbart.md`.
 
@@ -11,7 +12,7 @@ read-only pending decisions, a messages inbox, on-site PO receiving,
 Face-ID-gated QR portal-login approval, and a pro LiDAR site-scan flow that
 attaches a scan to a project. The 8 Work flows (19 screens) sit alongside
 the original 8 capture flows (33 screens) — one `CaptureScreenID` enum, one
-harness, one set of dev-loop scripts drives all 72 built screens.
+harness, one set of dev-loop scripts drives all 74 built screens.
 
 ## Screens
 
@@ -36,7 +37,9 @@ harness, one set of dev-loop scripts drives all 72 built screens.
 | 16 | Site Request P1 | SR01 site-hub → SR12 Binder history · SR13 guest-landing → SR20 returned item |
 
 Flows 0–7 are the original 33 screens; flows 8–15 are the 19 Work-flow
-screens added in Phase 2 plus 20 P1 Site Request screens — 72 built — and three reserved visit-spine ids (75 total). Screen ids are defined once, in
+screens added in Phase 2 plus 20 P1 Site Request screens, plus the wave-3
+visit-spine screens V0.visit and C6.voice — 74 built — and one reserved
+visit-spine id, V4.visit-review, held for wave 4 (75 total). Screen ids are defined once, in
 `CaptureKit/CaptureKit/Support/CaptureScreenID.swift`, and are what
 `capture-run.sh`, `capture-shots.sh`, and the `-CaptureScreen` launch flag
 key off (see Dev loop, below).
@@ -116,7 +119,7 @@ scripts/capture-run.sh C5.specimen-sheet  # jump straight to any built screen
 CAPTURE_SIM="iPhone 17 Pro" scripts/capture-run.sh N3.measure
 
 # SWEEP — screenshot every screen (pure simctl, no MCP) → .build/shots/
-scripts/capture-shots.sh                  # all 72 built screens
+scripts/capture-shots.sh                  # all 74 built screens
 scripts/capture-shots.sh C5 N1 S3         # subset (prefix match)
 ```
 

@@ -27,6 +27,22 @@ struct RootView: View {
     @State private var reconciliationToken: UUID?
     @State private var ownerUIInvalidated = false
     @State private var readyRequested = false
+    /// Row 4 of §5.3's launch table. A `field://capture` entry asks for C1
+    /// whether or not a visit is open; `CaptureDeepLink` crosses to the camera
+    /// realm itself, and this records the intent so the launch table agrees
+    /// with it rather than racing it back to Today.
+    @State private var deepLinkedToCapture = false
+    /// `-CaptureScreen <id>` drives a named screen on launch. That harness picks
+    /// its own realm inside `.task`, and the two `.task`s resume in an order
+    /// SwiftUI does not promise — so the launch table stands down entirely
+    /// rather than landing a screenshot sweep on Today.
+    @State private var launchDestinationDeferredToHarness = AppConfiguration.initialScreenRaw != nil
+    /// One launch, one destination. Both `requestOwnerReady()` and the
+    /// `.ready(_)` branch can reach `applyLaunchDestination()` for a single
+    /// launching→ready edge; the destination is the same either way, but a
+    /// second pass would re-pop the realm to root under her and count
+    /// `field.launch` twice. Cleared with the rest of the owner-bound state.
+    @State private var launchDestinationApplied = false
     /// Runs `field://login` deep-link sign-in (portal QR handoff). Owned by the
     /// composition root so the deep-link handler, this shell, and Q1 share one
     /// instance; configured in `.task` once `coordinator` can be bound.
@@ -80,6 +96,10 @@ struct RootView: View {
             applyCompanionPlacement()
         }
         .onOpenURL { url in
+            if url.scheme == AppConfiguration.urlScheme,
+               url.host == "capture" || url.host == nil {
+                deepLinkedToCapture = true
+            }
             CaptureDeepLink.handle(
                 url,
                 coordinator: coordinator,
@@ -222,6 +242,26 @@ struct RootView: View {
             coordinator.switchRealm(.work)
         case "realm.camera":
             coordinator.switchRealm(.camera)
+        case FieldCompanionActionID.openVisit.rawValue:
+            coordinator.present(.visit)
+        case FieldCompanionActionID.endVisit.rawValue:
+            // Site 3 of 4 (spec §14) — the one reachable from every non-camera
+            // screen via the collapsed Companion strip, and the one it's
+            // cheapest for her to miss counting. Read the visit's own counts
+            // BEFORE `endVisit` closes the context: afterwards `visitState`
+            // reads `.none` and they are unrecoverable.
+            let identity = CaptureSessionIdentity(userID: container.session.userID,
+                                                  workspaceID: container.session.workspaceID)
+            if let context = CaptureSessionContextStore.shared.visitState(identity: identity).context {
+                FieldVisitEndEmitter(store: container.store,
+                                     analytics: container.analytics,
+                                     userID: container.session.userID,
+                                     workspaceID: container.session.workspaceID)
+                    .emit(.explicit, context: context)
+            }
+            // A visit started later mints a NEW visitID by design; this does not
+            // re-attribute anything already captured under the closed one.
+            _ = CaptureSessionContextStore.shared.endVisit(identity: identity)
         default:
             break
         }
@@ -282,6 +322,30 @@ struct RootView: View {
               ownerTracker.currentOwner == owner else { return }
         readyRequested = false
         coordinator.phase = .ready
+        applyLaunchDestination()
+    }
+
+    /// FC-R1 made real: where Field opens. Every decision lives in
+    /// `FieldLaunchPolicy`; this reads the visit and moves the coordinator.
+    private func applyLaunchDestination() {
+        guard !launchDestinationDeferredToHarness, !launchDestinationApplied else { return }
+        launchDestinationApplied = true
+        let identity = CaptureSessionIdentity(userID: container.session.userID,
+                                              workspaceID: container.session.workspaceID)
+        let state = CaptureSessionContextStore.shared.visitState(identity: identity)
+        let destination = FieldLaunchPolicy.destination(
+            visitState: state,
+            deepLinkedToCapture: deepLinkedToCapture)
+        // Both branches reset. The launch table names a ROOT — C1 or Today — so
+        // whatever either realm was carrying is not where this launch lands.
+        coordinator.switchRealm(destination.realm, reset: true)
+        // Consumed. The entry that asked for the camera has been answered, and
+        // a flag that outlives its launch is an input to the next one.
+        deepLinkedToCapture = false
+        container.analytics.event("field.launch", [
+            "destination": String(describing: destination),
+            "has_visit": state.isVisit ? "true" : "false"
+        ])
     }
 
     private func observeOwnerState(_ state: CaptureSessionOwnerState) async {
@@ -319,6 +383,7 @@ struct RootView: View {
             if shouldEnterReady || readyRequested {
                 readyRequested = false
                 coordinator.phase = .ready
+                applyLaunchDestination()
             }
 
             // Reconciliation is deliberately downstream of readiness. Background
@@ -342,6 +407,8 @@ struct RootView: View {
         reconciliationToken = nil
         ownerUIInvalidated = true
         readyRequested = false
+        deepLinkedToCapture = false
+        launchDestinationApplied = false
         CaptureSessionContextStore.shared.reset()
         container.companion.send(.collapse(hint: nil, action: nil))
     }
@@ -409,4 +476,94 @@ private enum FieldCompanionPlacement: Equatable {
     case hidden(FieldCompanionHiddenReason)
     case featureOwned
     case collapsed(FieldRealm, CaptureRoute?)
+}
+
+/// FC-R21 part 3: the ONE place `visit.end` is emitted, so no close can be
+/// added without a reason and no close can fire twice. The four tapped sites
+/// call `emit(.explicit, …)`; the Change path calls `emit(.change, …)`; the
+/// three computed ends go through `reapExpired`, which emits only if the reap
+/// actually closed something.
+@MainActor
+struct FieldVisitEndEmitter {
+    let store: CaptureStore
+    let analytics: any CaptureAnalytics
+    let userID: String?
+    let workspaceID: String?
+
+    func emit(_ reason: FieldVisitEndReason,
+              context: CaptureSessionContext,
+              now: Date = Date()) {
+        analytics.emit(FieldVisitTelemetry.visitEnd(
+            FieldVisitEndCounts.compute(
+                context: context, store: store,
+                runsRealServices: AppConfiguration.runsRealServices,
+                userID: userID, workspaceID: workspaceID, now: now),
+            reason: reason))
+    }
+
+    /// The 12-hour idle rule, a backwards clock and the calendar rollover all
+    /// close a visit without anyone tapping anything. Safe to call from every
+    /// surface that re-reads the visit: the reap stamps `endedAt`, so only the
+    /// first caller to notice a given expiry emits.
+    func reapExpired(now: Date = Date()) {
+        let identity = CaptureSessionIdentity(userID: userID, workspaceID: workspaceID)
+        guard let notice = CaptureSessionContextStore.shared.reapExpiredVisit(
+            identity: identity, now: now) else { return }
+        emit(notice.reason, context: notice.context, now: now)
+    }
+}
+
+/// Task 31: the exact five counts `FieldVisitTelemetry.visitEnd` needs, read
+/// from the OPEN visit's own context. Shared by all FOUR end-visit call sites
+/// (V0's door, V1's tray, this companion-strip action, and W1's stale prompt)
+/// so `notes` vs `captures` splits the same way `FieldTodayBandBuilder` already
+/// does, and `unplaced` reads the true tray-wide `unfiled(owner:)` count rather
+/// than any one screen's display-deduped projection of it. `scans` mirrors what
+/// `SupabaseSiteScanService.pendingUploads()` reports (it is a thin wrapper over
+/// `store.scanUploadRecords(owner:)`), read straight from the store since none
+/// of these four call sites hold a live `SiteScanService`.
+enum FieldVisitEndCounts {
+    @MainActor
+    static func compute(
+        context: CaptureSessionContext,
+        store: CaptureStore,
+        runsRealServices: Bool,
+        userID: String?,
+        workspaceID: String?,
+        now: Date = Date()
+    ) -> FieldVisitCounts {
+        let visitCaptures: [Specimen]
+        let allUnfiled: [Specimen]
+        let pendingScans: Int
+        switch CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: runsRealServices, userID: userID, workspaceID: workspaceID
+        ) {
+        case .globalFixtures:
+            visitCaptures = store.session(visitID: context.visitID)
+            allUnfiled = store.unfiled()
+            pendingScans = store.scanUploadRecords().count
+        case .owner(let owner):
+            visitCaptures = store.session(visitID: context.visitID, owner: owner)
+            allUnfiled = store.unfiled(owner: owner)
+            pendingScans = store.scanUploadRecords(owner: owner).count
+        case .unavailable:
+            visitCaptures = []
+            allUnfiled = []
+            pendingScans = 0
+        }
+        // Same split as `FieldTodayBandBuilder`: a "note" is a capture with a
+        // transcript or audio and no photo; a "capture" is everything else.
+        let notes = visitCaptures.filter { specimen in
+            specimen.photos.isEmpty
+                && ((specimen.voiceTranscript?.isEmpty == false)
+                    || specimen.voiceAudioFilename?.isEmpty == false)
+        }.count
+        return FieldVisitCounts(
+            duration: now.timeIntervalSince(context.startedAt),
+            captures: max(0, visitCaptures.count - notes),
+            notes: notes,
+            scans: pendingScans,
+            unplaced: allUnfiled.count
+        )
+    }
 }

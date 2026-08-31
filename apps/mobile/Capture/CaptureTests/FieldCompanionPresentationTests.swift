@@ -239,4 +239,26 @@ struct FieldCompanionPresentationTests {
         #expect(state.visitLabel == nil)
         #expect(state.captureCount == nil)
     }
+
+    @Test func theVisitActionsAreStableIdentifiers() {
+        // FieldCompanionActionID is the single source both RootView's
+        // handleCompanionAction switch and FieldTodayBand.companionHint's
+        // constructions read from — renaming a case here is a build break
+        // at every call site, not a silent divergence between what gets
+        // sent and what gets matched.
+        #expect(FieldCompanionActionID.openVisit.rawValue == "visit.open")
+        #expect(FieldCompanionActionID.endVisit.rawValue == "visit.end")
+
+        let noVisit = FieldTodayBand(visit: .none, unplacedCount: 0, queuedCount: 0,
+                                     isOffline: false)
+        #expect(FieldTodayBand.companionHint(for: noVisit)?.action.id
+                == FieldCompanionActionID.openVisit.rawValue)
+
+        let openVisit = FieldTodayBand(
+            visit: .open(label: "Maple St", startedAt: .now, captures: 1, notes: 0, scans: 0),
+            unplacedCount: 0, queuedCount: 0, isOffline: false)
+        let hint = FieldTodayBand.companionHint(for: openVisit)
+        #expect(hint?.action.id == FieldCompanionActionID.endVisit.rawValue)
+        #expect(hint?.action.role == .secondary)
+    }
 }

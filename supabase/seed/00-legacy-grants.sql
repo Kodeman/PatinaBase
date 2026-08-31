@@ -11714,6 +11714,12 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00532_field_capture_visit_and_suggestion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.field_captures_project_visit_columns() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00533_piece_detail_contract.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION get_recommendations(uuid, text, int, int) TO authenticated;

@@ -293,8 +293,15 @@ struct SiteScanContextControls: View {
             HStack(spacing: 14) {
                 pill("camera.fill", "Photo") { Task { await model.capturePhoto() } }
                 if model.voiceCaptureEnabled {
-                    pill(model.isRecordingVoice ? "stop.circle.fill" : "mic.fill",
-                         model.isRecordingVoice ? "Stop" : "Note") { model.toggleVoice() }
+                    // F-11 / R262: these came from the same two literals
+                    // `FieldVoiceModeCopy.toggleGlyph`/`toggleLabel` hold and
+                    // `VoiceModeTests.theToggleLabelsMatchTheShippedScanContextControl`
+                    // claims to guard — but it was guarding the constants
+                    // against themselves while this control kept its own copy.
+                    pill(FieldVoiceModeCopy.toggleGlyph(isRecording: model.isRecordingVoice),
+                         FieldVoiceModeCopy.toggleLabel(isRecording: model.isRecordingVoice)) {
+                        model.toggleVoice()
+                    }
                 }
             }
         }
@@ -324,6 +331,7 @@ struct SiteScanContextScreen: View {
     let container: AppContainer
     let projectID: String?
     let projectRoomID: String?
+    let visit: CaptureVisitState
     let onDone: () -> Void
 
     @State private var model: SiteScanContextModel?
@@ -386,13 +394,13 @@ struct SiteScanContextScreen: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("This iPhone can't measure a room.")
+            Text(FieldContextCaptureCopy.eyebrow)
                 .font(CaptureType.eyebrow).textCase(.uppercase)
                 .foregroundStyle(CaptureColor.paper3)
-            Text("Photos & notes for this room.")
+            Text(FieldContextCaptureCopy.title(visitLabel: visit.context?.label))
                 .font(CaptureType.title2)
                 .foregroundStyle(CaptureColor.paper)
-            Text("These reach the studio as soon as you have signal — they're notes, not a scan.")
+            Text(FieldContextCaptureCopy.detail)
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.paper2)
         }

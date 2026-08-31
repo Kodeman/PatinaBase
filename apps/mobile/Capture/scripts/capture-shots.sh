@@ -24,11 +24,11 @@ SETTLE="${CAPTURE_SHOT_SETTLE:-1.4}"   # seconds to let a screen render before t
 ALL_SCREENS=(
   O1.welcome O2.connect O3.camera-priming O4.ready
   E1.app-icon E2.system-entry E3.share-sheet
-  C1.viewfinder C2.framing C3.specimen-forms C4.multi-shot C5.specimen-sheet
+  C1.viewfinder C2.framing C3.specimen-forms C4.multi-shot C5.specimen-sheet C6.voice
   N1.tag-ocr N2.scan N3.measure N4.voice N5.smart-guess
   R1.low-light R2.ocr-fallback R3.denied R4.offline
   S1.assign S2.create-project S3.destination S4.saved S5.inbox
-  V1.session-tray V2.cull V3.detail
+  V0.visit V1.session-tray V2.cull V3.detail
   U1.sync U2.library-search T1.settings T2.account
   W1.work
   P1.project-list P2.project-detail
@@ -45,10 +45,14 @@ ALL_SCREENS=(
   SR17.guest-queue SR18.guest-receipt SR19.guest-done SR20.guest-returned
 )
 
-# Not swept: V0.visit, C6.voice and V4.visit-review. Their CaptureScreenID cases
-# exist (the enum is a frozen seam edited once, wave 2) but the screens behind
-# them are waves 3–4. Sweeping them would produce a PNG of C1 filed under
-# another screen's name, which is worse than a gap.
+# Not swept: V4.visit-review. Its CaptureScreenID case exists (the enum is a
+# frozen seam edited once, wave 2) but the screen behind it is wave 4. Sweeping
+# it would produce a PNG of C1 filed under another screen's name, which is worse
+# than a gap. V0.visit joined the sweep in wave 3 with the door itself; the
+# harness presents the `.visit` sheet for it. C6.voice joined in wave 3 too, but
+# it is neither a route nor a sheet — `CaptureDeepLink.drive` has nothing to
+# present for a camera MODE, so `ViewfinderScreen` reads the harness argument
+# itself and selects `.voice` after `model.start()`.
 
 # Optional filter: keep screens whose suffix starts with any given prefix (e.g. "C5", "N").
 SCREENS=()

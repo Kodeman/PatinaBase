@@ -932,4 +932,38 @@ struct DurableScanTransferTests {
         photo.remotePath = "remote/\(photoFilename)"
         try store.validateRequiredMedia(for: specimen)
     }
+
+    @MainActor
+    @Test func ownerScopingSurvivesTheVisitFields() throws {
+        let store = try CaptureStore.inMemory()
+        let mine = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let theirs = CaptureOwnerIdentity(userID: "u2", workspaceID: "w2")!
+        let identity = CaptureSessionIdentity(userID: "u1", workspaceID: "w1")
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let context = CaptureSessionContextPolicy.started(
+            CaptureVisitDraft(kind: .site, kit: .install, label: "Maple St",
+                              projectID: "p1", projectName: "Maple St"),
+            identity: identity, now: now)
+
+        let ours = store.newDraft(sessionID: context.visitID, owner: mine)
+        ours.inherit(context)
+        let notOurs = store.newDraft(sessionID: context.visitID, owner: theirs)
+        notOurs.inherit(context)
+        try store.save()
+
+        // What `inherit(_:)` actually writes (Specimen+Accessors.swift) — a
+        // no-op on any of these fields must redden this test, since they are
+        // the whole point of a specimen inheriting its visit.
+        #expect(ours.visitKind == context.kind)
+        #expect(ours.visitKit == context.kit)
+        #expect(ours.visitLabel == context.label)
+        #expect(ours.visitStartedAt == context.startedAt)
+        #expect(ours.visitEndedAt == context.endedAt)
+        #expect(ours.noteSetting != nil)
+
+        let scoped = store.session(visitID: context.visitID, owner: mine)
+        #expect(scoped.map(\.id) == [ours.id])
+        #expect(store.unfiled(owner: mine).isEmpty == false)
+        #expect(!store.unfiled(owner: mine).contains { $0.id == notOurs.id })
+    }
 }

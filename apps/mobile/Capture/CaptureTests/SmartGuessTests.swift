@@ -73,16 +73,11 @@ struct SmartGuessKeywordTests {
 
 struct UnconfirmedGuessTests {
 
-    /// The viewfinder's recording loop, mirrored: filter the read, write what
-    /// survives, and pin a confidence only where the write actually took.
-    /// `ViewfinderModel` itself is app-side and unreachable under C1, so the
-    /// loop is reproduced here rather than called.
+    /// The viewfinder's recording step: filter the read, then hand what
+    /// survives to `Specimen.recordSmartGuess`, the shared source of truth
+    /// `ViewfinderModel` (app-side, unreachable under C1) also calls.
     @MainActor private func record(_ guess: SmartGuess, onto specimen: Specimen) {
-        for suggestion in guess.fieldsWorthRecording {
-            specimen.setValue(suggestion.value, for: suggestion.key, source: suggestion.source)
-            guard specimen.provenance(for: suggestion.key) == suggestion.source else { continue }
-            specimen.setConfidence(suggestion.confidence, for: suggestion.key)
-        }
+        specimen.recordSmartGuess(guess.fieldsWorthRecording)
     }
 
     @Test @MainActor func aCaptureWithNoGuessHasNothingToConfirm() throws {
@@ -138,6 +133,25 @@ struct UnconfirmedGuessTests {
         #expect(s.provenance(for: .material) == .manual)
         #expect(s.guessConfidenceRaw[FieldKey.material.rawValue] == nil)
         #expect(s.hasUnconfirmedGuess == false)
+    }
+
+    @Test @MainActor func recordSmartGuessLeavesAnAlreadySetFieldAndItsConfidenceUntouched() throws {
+        // Calls `Specimen.recordSmartGuess` directly (not through the `record`
+        // wrapper above) to pin the extracted method's own guard: a field with
+        // non-smartGuess provenance keeps both its value AND its prior
+        // confidence — a refused write must not overwrite either.
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+        s.setValue("Walnut", for: .material, source: .manual)
+        s.setConfidence(0.99, for: .material)
+
+        s.recordSmartGuess([
+            FieldSuggestion(key: .material, value: "Oak", confidence: 0.55)
+        ])
+
+        #expect(s.materialNote == "Walnut")
+        #expect(s.provenance(for: .material) == .manual)
+        #expect(s.guessConfidenceRaw[FieldKey.material.rawValue] == 0.99)
     }
 
     @Test @MainActor func aShakyGuessIsUnconfirmed() throws {

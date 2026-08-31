@@ -23,7 +23,17 @@ final class ViewfinderModel {
     private let companion: FieldCompanionController
     private let sessionContext: CaptureSessionContextStore
     private let smartGuess: any SmartGuessService
+    private let voice: any VoiceNoteService
+    private let featureFlags: CaptureFeatureFlags
+    /// The learned filing places a suggestion is computed against, on device.
+    private let projectCache: CaptureProjectCache
     private var visitID: UUID?
+    /// R119: the Companion strip ends a visit INLINE, with no sheet, so the
+    /// `.onChange(of: coordinator.sheet)` hook never fires and the chip goes on
+    /// naming a visit that is over. The store says when a visit begins or ends.
+    /// `nonisolated(unsafe)`: written once in `init` on the main actor and read
+    /// only in `deinit`, which runs after the last reference is gone.
+    private nonisolated(unsafe) var visitObserver: NSObjectProtocol?
 
     // ── Mode + framing (C1/C2) ──
     var mode: CameraMode = .photo
@@ -41,8 +51,45 @@ final class ViewfinderModel {
     private(set) var cameraAuthorization: CameraAuthorization = .notDetermined
 
     // ── Venue (S1 stamp, auto) ──
-    var venueLabel: String?
     private var venueStamp: VenueStamp?
+    /// True once the location lookup has come BACK — success or nothing found.
+    /// `venueStamp != nil` cannot stand in for it: a lookup that finds no
+    /// placemark would otherwise leave the chip reading "Locating venue…" for
+    /// the rest of the session.
+    private var venueSettled = false
+
+    // ── The visit (Invariant V) ──
+    var visitChip: FieldVisitChip = FieldVisitChipBuilder.chip(for: .none, isLocating: true)
+    private(set) var visitState: CaptureVisitState = .none
+
+    /// The visit door closed. Refresh the chip, then let the capture still in
+    /// her hand keep the C3 line's promise: an unplaced draft adopts the visit
+    /// she just started at the door, so the card she returns to names where the
+    /// capture landed instead of still asking her to place it. FC-R6 is
+    /// untouched — an already-saved capture waits on Today.
+    func visitDoorClosed(now: Date = Date()) {
+        refreshVisit(now: now)
+        guard let draft = cardSpecimen,
+              FieldInHandPlacement.adopt(visitState, into: draft) else { return }
+        try? store.save()
+    }
+
+    func refreshVisit(now: Date = Date()) {
+        // FC-R21 part 3: this is the seam the foreground hook already re-reads
+        // through, and the 12-hour rule, a backwards clock and the calendar
+        // rollover all expire a visit with nobody tapping anything. Reap BEFORE
+        // reading, so the chip and the event agree, and only the first noticer
+        // of a given expiry emits.
+        FieldVisitEndEmitter(store: store, analytics: analytics,
+                             userID: session.userID,
+                             workspaceID: session.workspaceID).reapExpired(now: now)
+        visitState = sessionContext.visitState(
+            identity: CaptureSessionIdentity(userID: session.userID,
+                                             workspaceID: session.workspaceID),
+            now: now)
+        visitChip = FieldVisitChipBuilder.chip(for: visitState,
+                                               isLocating: !venueSettled && !visitState.isVisit)
+    }
 
     // ── Session tray (V1) ──
     var sessionCount: Int = 0
@@ -57,7 +104,7 @@ final class ViewfinderModel {
     var quickSaveTitle: String {
         switch cardSpecimen?.destination {
         case .library: return "Save to library"
-        case .inbox: return "Send to inbox"
+        case .inbox: return "Hold for later"
         default: return "Choose destination"
         }
     }
@@ -79,13 +126,42 @@ final class ViewfinderModel {
         self.session = container.session
         self.companion = container.companion
         self.smartGuess = container.smartGuess
+        self.featureFlags = container.featureFlags
+        self.projectCache = container.projectCache
+        self.voice = SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
+                                            analytics: container.analytics,
+                                            surface: "c3")
         self.sessionContext = .shared
+        observeVisitChanges()
+    }
+
+    deinit {
+        if let visitObserver { NotificationCenter.default.removeObserver(visitObserver) }
+    }
+
+    private func observeVisitChanges() {
+        visitObserver = NotificationCenter.default.addObserver(
+            forName: CaptureSessionContextStore.visitDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.refreshVisit() }
+        }
     }
 
     // MARK: Lifecycle
 
     func start() async {
         analytics.screen(CaptureScreenID.c1Viewfinder.rawValue)
+        // N-1: reap BEFORE resolving `currentSessionContext()`. `current()` is
+        // the destructive `resolve` path — on a cold launch straight into C1
+        // (deep-linked `field://capture`, or `todayIsHome = false`), this is
+        // the first thing that runs and `.onChange(of: scenePhase)` never fires
+        // for the initial value, so nothing else reaps first. Reaping here
+        // first means an overnight-expired visit closes with a real
+        // `visit.end` before `current()` can silently replace it with a fresh
+        // kindless context.
+        refreshVisit()
         visitID = currentSessionContext().visitID
         refreshSessionCount()
         mode = camera.currentMode
@@ -106,6 +182,7 @@ final class ViewfinderModel {
     }
 
     func stop() {
+        endCardNote()                        // FC-R9: never a live mic behind a gone screen
         frameTask?.cancel(); frameTask = nil
         burstTask?.cancel(); burstTask = nil
         holdTriggerTask?.cancel(); holdTriggerTask = nil
@@ -124,9 +201,9 @@ final class ViewfinderModel {
     }
 
     private func stampVenue() async {
-        guard let venue = await location.currentVenue() else { return }
-        venueStamp = venue
-        venueLabel = venue.placemarkName ?? venue.room ?? "Stamped here"
+        venueStamp = await location.currentVenue()
+        venueSettled = true
+        refreshVisit()
     }
 
     private func refreshSessionCount() {
@@ -245,6 +322,9 @@ final class ViewfinderModel {
     // MARK: Single frame → C3 card
 
     private func captureSingle() async {
+        // VOICE has no frame. This guard — not `nextStep(for:)`'s mapping — is
+        // what keeps the shutter honest now that `.voice` is a selectable pill.
+        guard SpecimenCapturePolicy.producesPhoto(mode) else { return }
         guard cardSpecimen == nil, !capturing, !isHolding else { return }
         capturing = true
         defer { capturing = false }
@@ -274,6 +354,7 @@ final class ViewfinderModel {
     // MARK: Multi-shot (C4) → C5 sheet on release
 
     private func beginMultiShot() async {
+        guard SpecimenCapturePolicy.producesPhoto(mode) else { return }
         guard !isHolding, cardSpecimen == nil else { return }
         guard let draft = makeDraft() else { return }
 
@@ -312,28 +393,43 @@ final class ViewfinderModel {
 
     func saveFromCard() {
         guard let specimen = cardSpecimen else { return }
+        endCardNote()
         CaptureHaptics.success()
         let id = specimen.id
         cardSpecimen = nil
-        guard specimen.destination != .undecided else {
+        if specimen.destination == .undecided {
+            let resolved = FieldDestinationPolicy.destination(for: visitState)
+            if resolved == .undecided {
+                // No visit: S3 still owns the choice.
+                specimen.status = .ready
+                try? store.save()
+                coordinator.present(.destination(id))
+                return
+            }
+            specimen.destination = resolved
             specimen.status = .ready
+            specimen.touch()
             try? store.save()
-            coordinator.present(.destination(id))
-            return
         }
         Task { @MainActor in
             do {
+                // The program's headline metric, read BEFORE the route: placement
+                // and sync are different axes (FC-R6), so whether this capture
+                // landed on a project does not wait on the server to answer.
+                // `has_room` is the ID lane (FC-R5): `project_rooms.id` is what
+                // reaches `field_captures.project_room_id`, and a typed room name
+                // can exist with no id.
+                //
+                // Task 31 dedupe: `placementEventEmitted` is set here so that when
+                // `route` throws below and hands off to S3, S3's `choose(_:)`
+                // sees the flag and skips its own emission instead of double-
+                // counting this one capture.
+                specimen.placementEventEmitted = true
+                try? store.save()
+                analytics.emit(FieldVisitTelemetry.placement(
+                    specimen, basis: visitState.isVisit ? "visit" : "manual",
+                    source: .capture))
                 try await sync.route(id, to: specimen.destination)
-                // The program's headline metric: whether a capture actually
-                // landed on a project (S1's persisted routing survives on
-                // `specimen.venue` by reference — the same object S1 mutated)
-                // or is committing roving.
-                if let venue = specimen.venue, venue.projectId != nil {
-                    analytics.event("capture.placed", ["basis": "manual",
-                                                        "has_room": String(venue.projectRoomId != nil)])
-                } else {
-                    analytics.event("capture.unplaced", [:])
-                }
                 coordinator.present(specimen.destination == .library
                     ? .savedTerminal(id)
                     : .inboxTerminal(id))
@@ -346,12 +442,14 @@ final class ViewfinderModel {
 
     func addDetailFromCard() {
         guard let specimen = cardSpecimen else { return }
+        endCardNote()
         let id = specimen.id
         cardSpecimen = nil
         coordinator.present(.specimenSheet(id))         // C5 full sheet
     }
 
     func dismissCard() {
+        endCardNote()
         cardSpecimen = nil
         CaptureHaptics.selection()
     }
@@ -364,6 +462,94 @@ final class ViewfinderModel {
         analytics.event("capture.place_tapped", ["surface": "c3"])
         UserDefaults.standard.set("card", forKey: "capture.routingSource")
         coordinator.present(.assignVenue(id))
+    }
+
+    // MARK: C3 inline mic (spec §7.5, wave 3)
+
+    private(set) var isRecordingCardNote = false
+    private(set) var cardTranscript = ""
+    private var cardVoiceTask: Task<Void, Never>?
+
+    var micIsAvailable: Bool { featureFlags.isEnabled("field-companion-voice") && mode != .voice }
+
+    func beginCardNote(affirmed: Bool) {
+        // `mode != .voice`: C6 builds its OWN recorder as a child of this
+        // screen, so a card still on screen when she swipes to VOICE puts two
+        // recorders on `AVAudioSession.sharedInstance()` — and whichever
+        // `finish()` lands second deactivates the session under the other.
+        guard micIsAvailable, !isRecordingCardNote, mode != .voice,
+              let specimen = cardSpecimen else { return }
+        // FC-R11 (Ruling 4): a conversation note does not start until she taps.
+        guard !FieldAffirmationPolicy.recordingIsBlocked(
+            noteSetting: specimen.noteSetting, affirmed: affirmed) else { return }
+        do {
+            // The recorder emits the ONE voice.start (it already carries
+            // surface "c3"); this is what stops that row asserting "solo" over
+            // a conversation note — FC-R11's only audit trail.
+            voice.setNoteSetting(specimen.noteSetting ?? .solo)
+            let stream = try voice.startLiveTranscription()
+            isRecordingCardNote = true
+            cardTranscript = ""
+            cardVoiceTask = Task { [weak self] in
+                do {
+                    for try await chunk in stream {
+                        guard !Task.isCancelled else { return }
+                        self?.cardTranscript = chunk.text
+                    }
+                } catch {
+                    // A stream that dies on its own leaves the mic glyph and
+                    // "Recording — release to keep it" describing a note that
+                    // has already ended. Recording chrome must never overstate
+                    // what is happening (FC-R11). `endCardNote` is reached only
+                    // from here — a cancel from `endCardNote` itself clears the
+                    // flag first, so this cannot re-enter.
+                    guard let self, self.isRecordingCardNote else { return }
+                    self.endCardNote()
+                    self.lastError = "The note stopped early. What you said up to then is saved."
+                }
+            }
+        } catch {
+            lastError = "The microphone didn't open. Your photo is safe."
+        }
+    }
+
+    func endCardNote() {
+        guard isRecordingCardNote else { return }
+        cardVoiceTask?.cancel()
+        isRecordingCardNote = false
+        let partial = cardTranscript
+        // FC-R9: `finish()` tears the audio session down, so it is awaited even
+        // when the card has already gone — resolving the subject BEFORE the
+        // await is what keeps a released hold from leaving the mic live.
+        let subject = cardSpecimen
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await self.voice.finish()
+            guard let specimen = subject else { return }
+            let transcript = result.transcript.isEmpty ? partial : result.transcript
+            let hasAudio = result.audioFilename != nil || !result.audioSegments.isEmpty
+            guard !transcript.isEmpty || hasAudio else {
+                self.analytics.event("voice.empty_transcript", ["had_audio": "false"])
+                self.lastError = "Nothing came through — try again when it's quieter."
+                return
+            }
+            if transcript.isEmpty {
+                self.analytics.event("voice.empty_transcript", ["had_audio": "true"])
+            }
+            specimen.voiceTranscript = transcript.isEmpty ? nil : transcript
+            specimen.voicePartialTranscript = partial.isEmpty ? nil : partial
+            specimen.voiceAudioFilename = result.audioFilename
+            specimen.voiceDurationSeconds = result.durationSeconds
+            specimen.voiceTranscriptSourceRaw = result.transcript.isEmpty
+                ? "device_partial" : "device"
+            specimen.voiceAudioSegmentsRaw = result.audioSegments.isEmpty
+                ? nil : result.audioSegments
+            specimen.touch()
+            try? self.store.save()
+            // No voice.finish here: `SpeechVoiceNoteService.emitFinish` is the
+            // one place it fires (Wave 1's P-1 ruling) and now carries the
+            // surface itself. A second row here double-counted every note.
+        }
     }
 
     // MARK: Plumbing
@@ -387,10 +573,33 @@ final class ViewfinderModel {
             return nil
         }
 
-        draft.venue = venueStamp
+        draft.venue = context.routing.stamped(onto: venueStamp ?? VenueStamp())
         draft.category = .unknown
-        draft.destination = context.routing.destination
-        draft.venue = context.routing.stamped(onto: draft.venue ?? VenueStamp())
+        // Asked of `context`, not the cached `visitState`: the draft is stamped
+        // from this context, so the two cannot disagree about whether the
+        // remembered `.library` still has an open sourcing visit behind it.
+        draft.destination = FieldDestinationPolicy.stamp(
+            remembered: context.routing.destination,
+            for: CaptureSessionContextPolicy.visitState(
+                for: context, now: Date(), calendar: .current))
+        draft.inherit(context)
+        // No visit open ⇒ the capture is born carrying a QUESTION. `apply` writes
+        // `suggested_*` only; the fact stays empty until she answers it in the tray.
+        if draft.isUnplaced, let owner = session.ownerIdentity {
+            let coordinate = venueStamp.flatMap { stamp -> CaptureCoordinate? in
+                guard let lat = stamp.latitude, let lng = stamp.longitude else { return nil }
+                return CaptureCoordinate(latitude: lat, longitude: lng)
+            }
+            let suggestion = CaptureSuggestionEngine.suggest(
+                coordinate: coordinate,
+                venueLabel: venueStamp?.placemarkName,
+                projects: projectCache.snapshots(owner: owner),
+                now: Date())
+            draft.apply(suggestion)
+            if let suggestion {
+                analytics.emit(FieldVisitTelemetry.suggestionShown(suggestion))
+            }
+        }
         return draft
     }
 
@@ -477,13 +686,7 @@ final class ViewfinderModel {
                   // She can route this record while the read is still running.
                   // Once it has left the device it must not be rewritten.
                   current.transferState.phase == .local else { return }
-            for suggestion in recordable {
-                current.setValue(suggestion.value, for: suggestion.key, source: suggestion.source)
-                // setValue refuses to overwrite what a tag, a scan, a measure or
-                // she already set. Never pin a confidence to a value we didn't write.
-                guard current.provenance(for: suggestion.key) == suggestion.source else { continue }
-                current.setConfidence(suggestion.confidence, for: suggestion.key)
-            }
+            current.recordSmartGuess(recordable)
             try? self.store.save()
         }
     }

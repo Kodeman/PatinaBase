@@ -1,0 +1,288 @@
+(progress.md:59)	CONFLICT-A — where a task's Files block omits a file the File Structure table assigns
+(progress.md:68)	CONFLICT-B — Task 9 copies the pre-authored SQL test into supabase/tests/field/ to get a
+(progress.md:74)	R1 — Task 0 additionally executes W2-01 (SmartGuessSheet.applyAsGuess F-1 read-back guard
+(progress.md:81)	R2 — Task 0 is dispatched on SONNET, not the plan's haiku. — Why: R1 adds a multi-file
+(progress.md:85)	R3 — the migration lands at supabase/migrations/00532_field_capture_visit_and_suggestion.sql,
+(progress.md:93)	R4 — the plan, its review, the spec, the rulings doc and plans/sql/ are UNTRACKED in the
+(progress.md:99)	R5 — Task 10 also regenerates packages/supabase/src/types/database.types.ts via the
+(progress.md:104)	R6 — all local database work (apply, reset, SQL runner) happens only while holding
+(progress.md:127)	R7 — Task 21 consumes `Specimen.hasUnconfirmedGuess` EXACTLY as it exists on main:
+(progress.md:138)	R8 — the sandbox denies `.env*` writes and CoreSimulator/log-store access, so worktree
+(progress.md:160)	R9 — the canonical iOS test count for this wave is the `xcodebuild test` summary line
+(progress.md:168)	R10 — regenerating the project commits `project.pbxproj` AND both shared xcschemes
+(progress.md:187)	R11 — Important #1 (CaptureCachedRoom duplicates ProjectsService's FieldProjectRoom):
+(progress.md:197)	R12 — Important #2 (decodeRooms returns [] on a corrupt blob, collapsing "never
+(progress.md:206)	R13 — Important #3 (the three encode/decode edge cases are untested) ENTERS the fix loop
+(progress.md:211)	R14 — reviewer's Minor #7 (distanceMeters exercised on latitude only) is PROMOTED into
+(progress.md:243)	R15 — ARTIFACT PATHS. `sdd-workspace` resolved the workspace from the plan file's repo
+(progress.md:255)	R16 — R10 is CORRECTED. `generate_project.rb` IS deterministic for a fixed file set; the
+(progress.md:283)	R17 — PLAN DEFECT in Task 2's Step 3. The brief's `ordered(_:now:)` body keys on
+(progress.md:294)	R18 — Ruling 5 ("eviction never deletes a CaptureProjectRef a Specimen or S1/S2 owns")
+(progress.md:304)	R19 — `maxCachedProjects` overflow WINS over `evictAfter`, as implemented; the doc comment
+(progress.md:317)	R20 — Important #1 is REAL and is a data-loss path; it enters the fix loop as the round's
+(progress.md:330)	R21 — Important #2 (plan-mandated) enters the fix loop. `lastVisitedAt ?? lastRefreshedAt`
+(progress.md:339)	R22 — reviewer Minors #4, #5, #6 and #9 are PROMOTED into the same fix round because each
+(progress.md:359)	R23 — CORRECTION to R21's prescribed fix. I told the implementer to key on
+(progress.md:368)	R24 — the bounded relaxation of the 60-row ceiling is ACCEPTED. With unsynced rows outside
+(progress.md:392)	R25 — the ownership guard subtracts THREE referents, not one, and all three are RATIFIED.
+(progress.md:404)	R26 — the learned centroid's running mean is weighted by `filedCaptureCount` rather than by
+(progress.md:425)	R27 — DISCOVERY, and it reaches past this task. The offline-created project this WAVE's
+(progress.md:440)	R28 — promoted into Task 3's fix round, all cheap and all in the two files already open:
+(progress.md:460)	R29 — SUPERSEDES R15. The canonical SDD workspace is now the WORKTREE's copy:
+(progress.md:489)	R30 — `refreshList`/`refreshDetail` return `true` when the NETWORK succeeded but the local
+(progress.md:521)	R31 — duplicate names WITHIN one lane resolve last-id-wins, as the brief's body writes it.
+(progress.md:529)	R32 — blank/whitespace-only room names are dropped from BOTH lanes (the brief's
+(progress.md:544)	R33 — the brief-mandated `try!` in the test fixtures ENTERS the fix loop.
+(progress.md:553)	R34 — reviewer Minor #2 is PROMOTED into the same fix round. Duplicate names within the
+(progress.md:583)	R35 — Task 4's implementer wrote an extra cross-lane test during the fix round and then
+(progress.md:629)	R36 — the `projectsInMind` cap question is CLOSED as "not a Task 5 defect; enforcement
+(progress.md:645)	R37 — reviewer Minor #1 (the diff's ONLY logic branch, the `prefix(maxProjectsInMind)`
+(progress.md:668)	R38 — BINDING ON TASK 7 AND EVERY LATER VISIT CONSUMER. `CaptureSessionContextPolicy.resolve`
+(progress.md:693)	R39 — **SUPERSEDES AND REVERSES R38.** I ruled that a doc comment plus consumer discipline
+(progress.md:731)	R40 — CONDUCTOR AMENDMENT to Task 5's Interfaces block. R39 changes `resolve`'s signature,
+(progress.md:744)	R41 — the fall-through context mints a NEW `visitID`. ACCEPTED. — Why: it is the only way
+(progress.md:752)	R42 — an EXPLICITLY ended visit (`existing.endedAt != nil`) keeps V1's shipped behaviour of
+(progress.md:799)	R43 — Task 0's delta-table row for `CaptureRoutingMemory.stamped(onto:)` was WRONG for this
+(progress.md:806)	R44 — the brief is SELF-INCONSISTENT on the optional count and the Interfaces block wins.
+(progress.md:815)	R45 — the deviation from the literal `makeDraft()` snippet is RATIFIED, and it prevented a
+(progress.md:832)	R46 — **CROSS-TASK DEFECT, routed to Task 15. `placementReplayPending` is currently INERT
+(progress.md:849)	R47 — reviewer Minor #7 is PROMOTED to a wave-report item and carried into Task 8's
+(progress.md:857)	R48 — reviewer Minor #9 carried into Task 8's dispatch as a mapping warning. The @Model has
+(progress.md:867)	R49 — Task 7's strengthened no-visit test seeds a FULL visit and asserts `inherit` CLEARS
+(progress.md:905)	R50 — the one-line edit to `CaptureTests/VoiceAudioWireTests.swift:74` (OUTSIDE Task 8's
+(progress.md:913)	R51 — the implementer wrote a full encode/decode round-trip test covering every new field
+(progress.md:922)	R52 — ⚠ TEST-COUNT METRIC AMBIGUITY, referred to the reviewer. `-quiet` suppressed the
+(progress.md:938)	R52 RESOLVED — the metric ambiguity is closed. The implementer's final report DID carry the
+(progress.md:944)	R53 — I am DECLINING the orchestrator's suggested form for the Wave 1 canary, and recording
+(progress.md:959)	R54 — **MY PROCESS ERROR, recorded as such.** I resumed the original Task 8 implementer
+(progress.md:1023)	R55 — **MY DISPATCH WAS WRONG AND THE IMPLEMENTER WAS RIGHT TO REFUSE IT.** I told it
+(progress.md:1037)	R56 — `authenticated` retaining EXECUTE on the trigger function is ACCEPTED. The plan's own
+(progress.md:1045)	R57 — types regeneration stays with Task 10, as R5 set out. The implementer correctly did NOT
+(progress.md:1065)	R58 — reviewer Important #1 ENTERS the fix loop. The two `EXISTS`-false suggestion drops
+(progress.md:1077)	R59 — reviewer Minor #2 is PROMOTED into the same fix round. The trigger re-projects on
+(progress.md:1092)	R60 — Task 9's fix round MAY add assertions to `supabase/tests/field/field_capture_visit_test.sql`
+(progress.md:1171)	R61 — **PROCEED with the reset.** I verified the two facts the ruling turns on, rather than
+(progress.md:1189)	R62 — Task 10 KEEPS Task 9's assertion group 13 in place, unrenumbered, and adds a header
+(progress.md:1203)	R63 — Task 10's three concerns, all accepted:
+(progress.md:1253)	R64 — **CORRECTS R63(2), which was WRONG.** I recorded the worktree test file as differing
+(progress.md:1262)	R65 — **CORRECTS R5/R63's types path in REVIEW_CONSTRAINTS.md.** That file named
+(progress.md:1313)	R66 — **MY BASELINE WAS STALE AND THE IMPLEMENTER MEASURED THE TRUTH.** I dispatched Task 11
+(progress.md:1321)	R67 — the Interfaces-block deviation is RATIFIED, consistent with R17's precedent. The block
+(progress.md:1332)	R68 — the single SwiftLint nesting finding on `VisitDoorTests.swift:19` is ACCEPTED as-is.
+(progress.md:1353)	R69 — TASK 28 PICKER, zero-rooms case. A project with NO rooms in either lane shows the
+(progress.md:1360)	R70 — TASK 28 PICKER, "Whole house" collision. A REAL room whose TRIMMED name equals
+(progress.md:1367)	R71 — TASK 12, two requirements. (a) `projectsInMind` decoded over the cap is **TRUNCATED ON
+(progress.md:1375)	R72 — `isOffline` being sticky within one opening of the door is ACCEPTED. `select()` can set
+(progress.md:1396)	R73 — **EXTENDS R71(b).** Task 12 must ALSO cover `toggleProjectInMind`'s cap with a test
+(progress.md:1403)	R74 — **CORRECTS Task 11's report text, which is canonical for Wave 4.** Its deviation table
+(progress.md:1466)	R75 — Task 12 concern 1 ACCEPTED, not fixed. An UNCACHED project makes the door claim she is
+(progress.md:1473)	R76 — Task 12 concern 2 CARRIED TO TASK 13. `prefillVenue` accepts an EMPTY
+(progress.md:1479)	R77 — Task 12 concern 3 RECORDED, no action. `isChangingAnOpenVisit` is true for a KINDLESS
+(progress.md:1489)	R78 — BINDING ON TASK 13's COPY. Task 13 binds the primary button to `canStart` alone (safe
+(progress.md:1510)	R79 — reviewer Minor #1 ENTERS A FIX ROUND. `restoreSelectedRoom()` consumes the pending
+(progress.md:1519)	R80 — reviewer Minor #2 ENTERS THE SAME FIX ROUND. `changingTheProjectDropsTheRoomTheOpenVisitStored`
+(progress.md:1543)	R81 — the implementer ADDED a clause to the restore guard, `selectedRoom == nil`, and it is
+(progress.md:1602)	R82 — the unbriefed edit to `Capture/App/DeepLinking/CaptureDeepLink.swift` (one case,
+(progress.md:1628)	R82 STRENGTHENED — the `CaptureDeepLink.swift` edit and the `capture-shots.sh` row are
+(progress.md:1635)	R83 — Task 13's choice on Ruling 6 (HOLD the primary rather than carry the pending lanes) is
+(progress.md:1644)	R84 — ⚠ **OPEN PRODUCT QUESTION FOR KODY, recorded in the wave report; NO code change this
+(progress.md:1685)	R85 — **I AM REOPENING THE CLOSED MODEL.** Reviewer Important #1 is correct:
+(progress.md:1699)	R86 — reviewer Minor #4 RATIFIED as a deviation, not a defect. The row note reads
+(progress.md:1705)	R87 — reviewer Minor #7 RATIFIED. Disabling and dimming the unselected fifth chip in
+(progress.md:1743)	R88 — the implementer ADDED a `kind == .site` guard to `isAwaitingRestoredRoom`, and it is
+(progress.md:1750)	R89 — gating the pending caption on `!roomOptions.isEmpty` ACCEPTED. It closes reviewer
+(progress.md:1754)	R90 — the "No workspace yet" empty-state copy ACCEPTED. It now points somewhere true and uses
+(progress.md:1758)	R91 — `FieldVisitDoorModel.swift` is **no longer byte-frozen**, as a consequence of R85's
+(progress.md:1762)	R92 — **SUPERSEDES R84's "open question" status. "Change" minting a new `visitID` is CORRECT
+(progress.md:1798)	R93 — the implementer ADDED a sixth test beyond the brief's literal five, and it is RATIFIED
+(progress.md:1808)	R94 — the narrow `// swiftlint:disable:next function_parameter_count` on
+(progress.md:1825)	R95 — the plan-mandated `"N queued"` fragment in `visitSubtitle`
+(progress.md:1836)	R96 — reviewer Minor #1 enters the same fix round. **The `.open` branch of `visitSubtitle` is
+(progress.md:1844)	R95 amended by orchestrator — **spec §7.1 governs the Syncing state.** My original R95 removed
+(progress.md:1908)	R97 — Task 15 concern 1 -> **WAVE 4 HAND-FORWARD.** S1 cannot re-place an already-committed
+(progress.md:1913)	R98 — Task 15 concern 2, **ROUTED, and the orchestrator's task guess is corrected.** The
+(progress.md:1922)	R99 — Task 15 concern 4 RECORDED: `WorkTodayBand` is SwiftUI in the app target, and
+(progress.md:1966)	R100 — reviewer Important #1 ENTERS A FIX ROUND. **A re-placement made while the drain is
+(progress.md:1975)	R101 — reviewer Important #2 ROUTED, not fixed here. **The closed defect is DORMANT**: grep
+(progress.md:1984)	R102 — reviewer Important #3 is a **PRODUCT QUESTION FOR KODY, recorded in the wave report;
+(progress.md:2005)	R102 RESOLVED by orchestrator — **"unplaced" = a capture whose DESTINATION REQUIRES A PROJECT
+(progress.md:2039)	R103 — `.undecided` counting as UNPLACED is ACCEPTED, and it **still owes a decision**.
+(progress.md:2048)	R104 — Task 15 concern 2 ACCEPTED. The reconcile compares the **placement pair**
+(progress.md:2054)	R105 — Task 15 concern 3 ROUTED TO TASK 27 AS A GUARD. A placement whose `projectId` is not
+(progress.md:2094)	R106 — concern 1(b) RATIFIED, and it is the FOURTH brief defect an implementer has caught
+(progress.md:2106)	R107 — concern 1(a) RATIFIED. `replacePath([.work], for: .work)` would have stacked a second
+(progress.md:2109)	R108 — concern 2's unrequested guard RATIFIED. `-CaptureScreen` drives its screen from
+(progress.md:2115)	R109 — concern 3 ACCEPTED AS WRITTEN, with a binding consequence. `.stale` + `field://capture`
+(progress.md:2143)	R110 — four Minors enter ONE fix round because they form a cluster, not because each earns a
+(progress.md:2205)	R111 — `companionHint`'s `.none` branch having NO live caller is ACCEPTED, not a defect.
+(progress.md:2227)	R112 — deviation 1(a) RATIFIED, and it is the **FIFTH brief defect an implementer has caught
+(progress.md:2237)	R113 — deviation 1(b) RATIFIED. `isLocating` is driven by a new `venueSettled` flag rather
+(progress.md:2260)	R114 — Important #1 ENTERS THE FIX ROUND and is the round's primary item. **The chip goes
+(progress.md:2270)	R115 — Important #2 ENTERS THE FIX ROUND. The secondary line uses `CaptureColor.inkSoft` ->
+(progress.md:2278)	R116 — Important #3 ENTERS THE FIX ROUND. **"Locating venue…" promises a venue the chip
+(progress.md:2286)	R117 — Important #4 ENTERS THE FIX ROUND. Three fallback strings ship unpinned ("Sourcing",
+(progress.md:2317)	R118 — the placemark-as-secondary-hint option was REJECTED by the implementer on contract
+(progress.md:2322)	R119 — **CARRIED IMPORTANT, owner named: TASK 20.** The Companion strip's `visit.end`
+(progress.md:2355)	R120 — concern 1 RATIFIED, and it is the **SIXTH brief defect caught by reading actual
+(progress.md:2380)	R121 — Important #1: **"tap to place" points at a door that does not place the capture.**
+(progress.md:2398)	R122 — Minor #2 enters the same fix round. The R120 guard keys on project **name**
+(progress.md:2412)	orchestrator overrule — **card placement is a promise the draft keeps on return.** R121 is
+(progress.md:2440)	R123 — **QUEUED AS TASK 19 FIX ROUND 2** (held until the in-flight re-review returns, so its
+(progress.md:2448)	R124 — `FieldInHandPlacement` as a FOURTH public type in `FieldVisitChip.swift` ACCEPTED.
+(progress.md:2452)	R125 — firing on ANY sheet dismissal ACCEPTED. The guard declines when the draft is already
+(progress.md:2456)	R126 — the scoped re-review must RUN the Finding-2 mutation (revert the guard to the
+(progress.md:2464)	R127 — **R126 IS WITHDRAWN, and the re-reviewer was RIGHT to refuse it.** I gave that agent
+(progress.md:2515)	R128 — deviation 1(a) RATIFIED. **SEVENTH brief defect caught by reading actual code, and
+(progress.md:2524)	R129 — deviation 1(b) RATIFIED, and it prevents an **FC-R9 violation**. The brief's
+(progress.md:2532)	R130 — R119's fix ACCEPTED as delivered, with one detail worth recording:
+(progress.md:2565)	R131 — Important #1 ENTERS A FIX ROUND. **Every C3 note emits TWO `voice.start` and TWO
+(progress.md:2575)	R132 — Minor #6 joins the same round. A stream error is swallowed by a bare `catch {}` without
+(progress.md:2580)	R133 — Minor #7 joins as a REPORT-ONLY amendment. `CaptureCardOverlay` gained
+(progress.md:2596)	R134 — adding `"surface"` to Wave 1's `emitFinish(reason:)` is ACCEPTED. It is **additive
+(progress.md:2602)	R135 — **BINDING ON TASK 23 (C6): it MUST call `setNoteSetting(_:)` before starting a note.**
+(progress.md:2642)	R136 — concerns 1, 2 and 3 all ROUTE TO TASK 31, which owns `FieldVisitTelemetry` and
+(progress.md:2666)	R137 — **Critical #1 ACCEPTED, and it is TASK 21's to close.** Routing memory pre-empts the
+(progress.md:2680)	R138 — the FIX, and why none of the reviewer's three suggestions is taken as offered. I
+(progress.md:2695)	R139 — Important #2 ACCEPTED and it is a REGRESSION THIS DIFF CREATED, not one it inherited:
+(progress.md:2699)	R140 — Important #3 (S3's early return can't tell "she chose Library" from "memory stamped
+(progress.md:2703)	R141 — Important #4 ACCEPTED, and it is the sharpest process finding of the wave: the
+(progress.md:2710)	R142 — Minors #5 (`.ready`/`touch()` parity on the visit branch), #6 (pin the kindless-context
+(progress.md:2713)	R143 — `Capture/FieldVisitChip.swift` is a CLOSED contract, and this fix touches it. Narrowly
+(progress.md:2724)	R144 (orchestrator) — S3's unconditional `remember(destination)` STAYS. R138 makes a stale
+(progress.md:2728)	R145 (orchestrator) — HAND-FORWARD to Wave 4 pre-flight, as a grep not a hope: **any new
+(progress.md:2755)	R146 — **I WAS WRONG, and the reviewer caught it.** My fix brief asserted the rule had to
+(progress.md:2764)	R147 — Minor #2 (pre-fix drafts already stamped `.library` are not migrated; a `.ready` one
+(progress.md:2769)	R148 — Minor #3 NO CHANGE. The reviewer proved the `Date()`/`.current` hardcode is not
+(progress.md:2775)	R149 — Minor #4 is a genuine WAVE 4 HAND-FORWARD, and it is a consequence of our own fix:
+(progress.md:2789)	R150 — the unreadable-mutation-bundle pattern is now EXPLAINED and closed as a process rule.
+(progress.md:2805)	R151 — the reviewer's near-redundancy note on `aSourcingVisitAtTheDoorStillInheritsItsLibrary`
+(progress.md:2817)	R152 — I PRE-VERIFIED Task 22's block against the real `VoiceRecordingPolicy` before
+(progress.md:2825)	R153 — three non-defects flagged to the implementer so they are not silently "improved":
+(progress.md:2843)	R154 — the harness accepted the resume as "queued for delivery at its next tool round",
+(progress.md:2850)	R155 — the regen modified TWO `.xcscheme` files as well as `project.pbxproj`, which the
+(progress.md:2853)	R156 — told it that if the red step did not happen as I INFERRED (implementation written
+(progress.md:2858)	R157 — R154 is REVERSED by evidence. The resumed agent never picked the message up: 28 min
+(progress.md:2866)	R158 — `TaskStop` CANNOT kill a subagent from here ("owned by <itself>; agent
+(progress.md:2878)	R159 — R150 just paid for itself as a POSITIVE signal, not merely an excuse. The green and
+(progress.md:2883)	R160 — the pbxproj churn is 838 insertions / 664 deletions for two added files. That is
+(progress.md:2907)	R161 — Important #1 ACCEPTED, and it is the best finding of this task. `VoiceNoteCopy`
+(progress.md:2918)	R162 — Minor #2 ACCEPTED, same class as R146: `line(for: .recording)` is the string on
+(progress.md:2924)	R163 — Minor #4 ACCEPTED in MINIMAL form only. A non-finite `elapsed` traps
+(progress.md:2929)	R164 — Minor #5 NO COPY CHANGE, and it becomes a Task 23 obligation instead. The reviewer is
+(progress.md:2937)	R165 — Minor #8 NO CHANGE. `case .interrupted: return .interrupted` is behaviourally
+(progress.md:2949)	R166 — I SUSPECTED AN FC-R5 LANE CROSSING IN THE PLAN AND I WAS WRONG. The supplied C6
+(progress.md:2962)	R167 — FOUR REAL DEFECTS in Task 23's supplied code, and they share ONE ROOT CAUSE: the
+(progress.md:2978)	R168 — the FIFTH defect, and the one the coordinator flagged: **the plan's `start()` never
+(progress.md:2995)	R169 — NO THIRD REVIEW ROUND on Task 22. The diff is 15 lines implementing three explicitly
+(progress.md:3015)	R170 — two stalls in three tasks, both on opus, both mid-task with work on disk. The cost
+(progress.md:3028)	R171 — **MY BRIEF'S PREMISE WAS STALE AND IT PROVED IT.** I asked whether an inbox row's
+(progress.md:3036)	R172 — the stale comment is a LIVE TRAP and gets fixed. `ContextCaptureProvenance.swift`'s
+(progress.md:3039)	R173 — HAND-FORWARD, and it is a real prod risk: 00530's inbox persistence holds only where
+(progress.md:3043)	R174 — DEVIATION 2 ACCEPTED, emphatically, and it is the best judgement call of the wave.
+(progress.md:3048)	R175 — DEVIATIONS 1 and 3 ACCEPTED. (1) It made the C6 screenshot reachable with a
+(progress.md:3054)	R176 — DEVIATION 4 ACCEPTED AS A NON-IMPLEMENTATION, and it is a **SPEC DEFECT to surface to
+(progress.md:3061)	R177 — DEVIATION 5 GOES INTO THE FIX ROUND, by consistency with R174. `ViewfinderFramingGuides`
+(progress.md:3066)	R178 — DEVIATION 6: KEEP the unused `coordinator`. It is in the plan's declared `init`
+(progress.md:3071)	R179 — REPORT ITEM 1 ACCEPTED INTO THE FIX ROUND: a null flag needs a visible state. Its
+(progress.md:3091)	R180 — **R157 WAS WRONG AND I ACTED ON IT TWICE.** I ruled that a frozen transcript plus no
+(progress.md:3097)	R181 — CONDUCTOR-VERIFIED that the incident left **NO TRACE IN ANY COMMIT.** At 44f683389:
+(progress.md:3103)	R182 — NEW STANDING RULES for Tasks 24–33, per the orchestrator, replacing R54/R157/R158:
+(progress.md:3113)	R183 — the duplicate's Task 22 caveat is ACCEPTED as a Wave 4 note, not a defect:
+(progress.md:3118)	R184 — the duplicate's own conduct is worth recording as the standard: it verified before
+(progress.md:3123)	R185 — Task 24's plan block contains THREE defects; pre-verified against source.
+(progress.md:3146)	R186 — a hazard Task 24 must not break, documented at `VoiceNoteSheet.swift:39-41`:
+(progress.md:3151)	R187 — note that `everyLongFormVoiceSurfaceUsesTheToggle` will PASS THE MOMENT IT IS WRITTEN
+(progress.md:3165)	R188 — **DEFECT 6, found by the duplicate, is the most serious bug either agent found.**
+(progress.md:3174)	R189 — R182's writer lock came ONE TASK TOO LATE. It is now mandatory for every remaining
+(progress.md:3186)	R190 — Important #1 ACCEPTED as the wave's worst defect by consequence: **there is no
+(progress.md:3195)	R191 — Important #2 ACCEPTED, plan-mandated. `scenePhase != .active` includes `.inactive`,
+(progress.md:3201)	R192 — Important #3 ACCEPTED: `affirmed` is never reset, so **only the FIRST conversation
+(progress.md:3207)	R193 — Minors #4, #5, #7, #8 INTO THE FIX ROUND (all cheap, all correct): the engine
+(progress.md:3213)	R194 — Minor #6 NO CHANGE, recorded as a Wave 4 note: `maxSegments` is functionally dead,
+(progress.md:3219)	R195 — Minor #9 is a SEVENTH falsified coordinator premise, and I want it recorded: I told
+(progress.md:3224)	R196 — Minor #10 goes in the WAVE REPORT as a known uncovered seam: `producesPhoto` is
+(progress.md:3239)	R197 — the unavailable copy satisfies R179 well and I am recording why, since it is the
+(progress.md:3257)	R198 — I COMMITTED WITHOUT RE-GATING, and here is the evidence chain, because that decision
+(progress.md:3266)	R199 — **THE STALLS HAVE ONE SHAPE AND IT IS FIXABLE.** Four writers stalled; every one of
+(progress.md:3292)	R200 — **THE STALL CAUSE IS FOUND, and it is the sandbox.** Running the gate myself returned
+(progress.md:3309)	R201 — Important #1 (unconditional specimen-field deletion in `discard()`): **NO CODE
+(progress.md:3320)	R202 — Important #2 ACCEPTED and it is the "test that cannot fail" class again, this time
+(progress.md:3328)	R203 — Minor #3 ACCEPTED: the new `"TAP TO TALK"` status copy was written inline in the view
+(progress.md:3331)	R204 — Minor #4 is an EIGHTH falsified coordinator premise: my brief cited the shipped
+(progress.md:3343)	R205 — the plan's Files list would have made Task 25 UNCOMPILABLE. It named only the
+(progress.md:3348)	R206 — the writer found a real defect I had not briefed, and it is R39's family again:
+(progress.md:3354)	R207 — its labelless-`.visit` choice is ACCEPTED: `context.label ?? "This visit"`, matching
+(progress.md:3357)	R208 — it flagged, correctly and without touching it, that the toolbar's
+(progress.md:3362)	R209 — THE WRITE-ONLY PATTERN WORKS AND IS NOW STANDARD FOR THE REST OF THE WAVE. After six
+(progress.md:3375)	R210 — R202 CLOSED WELL. `VoiceNoteSheet` now branches on
+(progress.md:3381)	R211 — its copy-enum choice is ACCEPTED and its reasoning is better than my brief's.
+(progress.md:3389)	R212 — R208 closed by HIDING the toolbar button, not relabelling it, and the reason is sound:
+(progress.md:3401)	R213 — the "learned centroid" is a MISNOMER in the plan and the writer was right to refuse
+(progress.md:3410)	R214 — ELEVENTH falsified coordinator premise, mine again: my brief listed
+(progress.md:3414)	R215 — three small findings ACCEPTED AS-IS, no change: the `count == 1 ? "capture"` branch is
+(progress.md:3419)	R216 — `confidence` is `min(0.95, …)` with a 0.5 floor for proximity, so it can never read as
+(progress.md:3425)	R217 — **I COMMITTED AN IMPLEMENTER'S WORKING TREE MID-RUN AND REMOVED ITS LOCK.** At
+(progress.md:3437)	R218 — **I RAN MULTIPLE WRITERS IN ONE WORKTREE.** I dispatched Task 24's implementer, then
+(progress.md:3449)	R219 — CONDUCTOR-VERIFIED THAT THE GREENS SURVIVE THE INTERFERENCE. Because R218 means every
+(progress.md:3457)	R220 — Task 23 fix 1 ACCEPTED as built: `.onDisappear` → `leave()` commits SILENTLY with
+(progress.md:3462)	R221 — Task 23 fix 6 has a RESIDUAL to close in the scoped re-review round, and both
+(progress.md:3468)	R222 — WAVE 4 TASK 0 HAND-FORWARD: `RootView.swift:81-82` carries the same `hasSuffix("")`
+(progress.md:3471)	R223 — recorded because it is the one nuance neither report agreed on: `stop()` sets `.idle`
+(progress.md:3482)	R224 — this fix rests on a DEVICE PASS, not on the suite, and that is recorded rather than
+(progress.md:3491)	R225 — TASK 27 PRE-VERIFICATION found a structural gap the plan cannot satisfy as written.
+(progress.md:3513)	R226 — the two files beyond the plan's list are LEGITIMATE WIRING, verified by reading the
+(progress.md:3527)	R227 — **THE "CRITICAL" RED TESTS ARE NOT REAL, and I settled it on HEAD rather than by
+(progress.md:3540)	R228 — LIVE-CHILD CENSUS: **zero implementers live, lock FREE, tree clean at 43e79edbb.**
+(progress.md:3550)	R229 — **TASK 25 SHIPPED INCOMPLETE AND THE FAULT IS MINE.** Its plan section runs lines
+(progress.md:3569)	R230 — SPEC §7.8 IS SATISFIED BY THE TWO-SECTION FORM, not by mutual exclusivity. It says the
+(progress.md:3581)	R231 — FIFTEENTH falsified premise, mine again and in the same family as R229. My fix brief
+(progress.md:3589)	R232 — its one judgement call is ACCEPTED: it suppresses the INNER "Not placed yet" section
+(progress.md:3595)	R233 — extracting `FieldTrayUnplacedFilter.excluding(_:visibleIn:)` into `FieldTrayScope.swift`
+(progress.md:3602)	R234 — the plan's central warning about Task 28 is **based on a false premise about the
+(progress.md:3610)	R235 — the plan's ⚠ offers to record the mis-worded offline case as a known limitation *if*
+(progress.md:3633)	R236 — **THE PLAN'S TABLE MISSES A STRING, and its own Step 4 predicted this would happen**
+(progress.md:3643)	R237 — **EVERY LINE NUMBER IN TASK 29'S TABLE IS STALE** after ~30 commits, and several are
+(progress.md:3655)	R238 — **THE IMPLEMENTER BACKGROUNDED ITS MUTATION GATE AND STALLED TWICE**, ending two turns
+(progress.md:3665)	R239 — the count reconciliation for the wave report, since §17.3 names a number that is
+(progress.md:3674)	R240 — **FIVE OF TASK 30'S SIX ITEMS ARE STALE. Three are ALREADY DONE and would have been
+(progress.md:3694)	R241 — the REAL remaining work is therefore narrower than the plan's file list implies:
+(progress.md:3715)	R242 — I asked the reviewer the question the task's own test cannot answer: **does the new
+(progress.md:3733)	R243 — **R242 IS CONFIRMED BY EVIDENCE AND IS NOW A HARD REQUIREMENT ON TASK 32.** The
+(progress.md:3740)	R244 — Minor #1 ACCEPTED AS A REAL COPY REGRESSION, to fold into the next available round.
+(progress.md:3747)	R245 — Minor #2 ACCEPTED, same round: `S1AssignVenueScreen:82`'s header *"Where this
+(progress.md:3766)	R246 — **A COPY LOSS TO PUT IN FRONT OF KODY, not to revert.** The plan told Task 30 to set
+(progress.md:3775)	R247 — residual found by Task 30 and deliberately left in scope-discipline: `README.md` still
+(progress.md:3780)	R248 — the visit-label wiring is ACCEPTED and is the right shape: it added
+(progress.md:3796)	R249 — GROUND TRUTH ON THE THREE END-VISIT SITES: only **one of three emits anything today**.
+(progress.md:3800)	R250 — **THE EXISTING `["reason": "door"]` CONFLICTS WITH SPEC §14** and must go: the
+(progress.md:3807)	R251 — **R136 IS FORMALLY TASK 31'S, and the code says so itself.** `ViewfinderModel:403-404`
+(progress.md:3814)	R252 — the second half of R136 also lands here: `S3DestinationScreen:166` hardcodes
+(progress.md:3825)	R253 — **IT FOUND A FOURTH END-VISIT SITE I DID NOT BRIEF.** `WorkDashboardScreen`'s
+(progress.md:3829)	R254 — **IT CAUGHT A REAL UNDERCOUNT BEFORE IT SHIPPED, and this one is subtle.**
+(progress.md:3836)	R255 — R251's dedupe ACCEPTED as built: `Specimen.placementEventEmitted: Bool?` — optional,
+(progress.md:3843)	R256 — R252's precedence is the implementer's judgement and I ACCEPT it, flagged for Kody:
+(progress.md:3863)	R257 — **A FALSE GREEN IN THE SQL EVIDENCE, AND THE FAULT IS MY BRIEF'S.** I wrote "from the
+(progress.md:3880)	R258 — **R257 IS WITHDRAWN. I WAS WRONG.** I re-established it myself rather than adopting
+(progress.md:3891)	R259 — **PLAN DEFECT, Task 32 Step 3:** it literally instructs
+(progress.md:3897)	R260 — **THE REPORT COLLISION WAS MINE.** a7ce754a6884dbf59 was NOT dead: it later completed
+(progress.md:3906)	R261 — **TASK 33 IS NOT DISPATCHED, BY DESIGN.** The phone is one shared resource and
+(progress.md:3927)	R262 — **THE WAVE GATE'S OWN TWO TESTS CANNOT FAIL, and that is the sharpest irony of the
+(progress.md:3944)	R263 — the honest fix for (a) is **not** a fake RootView test: `RootView` is app-target and
+(progress.md:3950)	R264 — Minor #1 recorded, no action: `suggestionAccepted(_ s: CaptureSuggestion)` now has
+(progress.md:3976)	R265 — three Minors ACCEPTED AS-IS, no further round. (a) `CaseIterable` on
+(progress.md:3998)	R266 — **THE MERGE PRODUCED A DEFECT NEITHER PARENT HAD, and it is the exact class merges
+(progress.md:4024)	R267 — **THE CRITICAL IS REAL AND IS THE WAVE'S OWN FAILURE MODE TURNED ON ITSELF.**
+(progress.md:4037)	R268 — ONE FIX DISPATCH, scoped to correctness and gate holes: the Critical (#1), C3's
+(progress.md:4044)	R269 — **#3 AND #4 ARE ROUTED TO KODY, NOT FIXED.** Both are real and both change the §14
+(progress.md:4053)	R270 — findings 8 and 13 CORRECTED IN PLACE, in my own records, because both were my
+(progress.md:4058)	R271 — findings deliberately NOT actioned, each with a reason: #9 `select(_:)` not calling
+(progress.md:4070)	R272 — **ITS DEVIATION IS ACCEPTED AND IS BETTER REASONED THAN MY BRIEF.** I prescribed
+(progress.md:4080)	R273 — it went further than either option and better: **it deleted `visit` from the model
+(progress.md:4084)	R274 — its one scope extension ACCEPTED: it flipped the `Site N of 3` markers in
+(progress.md:4088)	R275 — **it declined to fabricate a mutation, with the right reason.** `CaptureTests` gets
+(progress.md:4094)	R276 — the four new gate arms are PROVEN, not asserted. In an rsync'd scratch copy it
+(progress.md:4105)	R277 — **R272's deviation is CONFIRMED CORRECT ON THE CODE, not just in argument.** The
+(progress.md:4114)	R278 — **THE IMPORTANT RESIDUAL IS THE MIRROR IMAGE OF THE CRITICAL, and I closed it myself
+(progress.md:4125)	R279 — **KODY RULING NEEDED (reviewer Minor #2): FC-R11 consent carries across a visit
+(progress.md:4134)	R280 — remaining Minors recorded for wave 4, none actioned: the `.background` hooks spawn
+(progress.md:4142)	R281 — the reviewer's one DISAGREEMENT with the mutation skip is ACCEPTED as a wave-4 item:

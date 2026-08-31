@@ -2,14 +2,14 @@
 //  Capture
 //
 //  S3 · Destination. Makes the catch-vs-keep decision explicit. The recommendation
-//  is held at Inbox until wave 3's visit kinds can tell a sourcing day from a
-//  site walk (spec Flow 6, F-12).
+//  now asks FieldDestinationPolicy, which lifts the wave-2 hold at Inbox for
+//  exactly one case: an open sourcing visit (spec Flow 6, F-12).
 //  On success it hands off to the S4 (saved) or S5 (inbox) terminal.
-//  NOT the only caller of sync.route(): ViewfinderModel.saveFromCard() also
-//  commits a capture directly from the C3 card when a destination was already
-//  chosen. Both routes emit capture.placed / capture.unplaced with the same
-//  shape — this is the "Where should this go?" route, reached on the first
-//  capture of a session or any deliberate revisit.
+//  Retired from the DEFAULT path rather than deleted: inside a visit the door
+//  already answered "where", so ViewfinderModel.saveFromCard() commits straight
+//  from the C3 card. This screen is what she still reaches from V3, from a
+//  deliberate revisit, and from saveFromCard's catch — the recoverable-choice
+//  seam. Both routes emit capture.placed / capture.unplaced with the same shape.
 
 import SwiftUI
 import CaptureKit
@@ -60,14 +60,28 @@ private struct S3Content: View {
         if specimen.destination == .library || specimen.destination == .inbox {
             return specimen.destination
         }
-        // Held at Inbox on purpose (spec Flow 6), regardless of confidence — no
-        // confidence floor ships in wave 2. The hardcoded guess used to make
-        // hasUnconfirmedGuess always true; with a real reader, a photo the
-        // reader cannot place at all now records nothing, which reads as
-        // confirmed and would recommend Library — mint a product — for a photo
-        // of a damaged baseboard. Wave 3 gates Library on a sourcing visit, and
-        // this line goes away with it.
-        return .inbox
+        return FieldDestinationPolicy.recommendation(
+            for: sessionContext.visitState(
+                identity: CaptureSessionIdentity(userID: session.userID,
+                                                 workspaceID: session.workspaceID)),
+            hasUnconfirmedGuess: specimen.hasUnconfirmedGuess)
+    }
+
+    /// Task 31 fix: this was hardcoded `"manual"`. The real basis is whichever
+    /// fact actually decided the project on `specimen.venue` — an accepted
+    /// suggestion (the tray's `accept(_:projectID:)` writes `venue.projectId`
+    /// from `suggestedProjectID` but never clears the suggestion fields), an
+    /// open visit's own routing, or a genuinely manual pick — checked in that
+    /// order and matching `ViewfinderModel:409`'s visit/manual shape otherwise.
+    private var placementBasis: String {
+        if let suggestedProjectID = specimen.suggestedProjectID,
+           suggestedProjectID == specimen.venue?.projectId,
+           let basis = specimen.suggestionBasis {
+            return basis.rawValue
+        }
+        let identity = CaptureSessionIdentity(userID: session.userID,
+                                              workspaceID: session.workspaceID)
+        return sessionContext.visitState(identity: identity).isVisit ? "visit" : "manual"
     }
 
     var body: some View {
@@ -88,8 +102,8 @@ private struct S3Content: View {
             destinationCard(
                 destination: .inbox,
                 glyph: "tray.full.fill",
-                title: "Inbox — finish later",
-                blurb: "Smart guesses to confirm, a tag to verify, or a quick visit you’ll triage tonight."
+                title: "Hold it — finish later",
+                blurb: "Guesses to confirm, or a tag to verify. It waits on Today."
             )
 
             if let routeError {
@@ -165,11 +179,21 @@ private struct S3Content: View {
                 // (ViewfinderModel.saveFromCard() is the first): whether this
                 // capture actually landed on a project, via S1's persisted
                 // routing on `specimen.venue`, or is committing roving.
-                if let venue = specimen.venue, venue.projectId != nil {
-                    analytics.event("capture.placed", ["basis": "manual",
-                                                        "has_room": String(venue.projectRoomId != nil)])
-                } else {
-                    analytics.event("capture.unplaced", [:])
+                //
+                // Task 31 dedupe: when `saveFromCard()`'s pre-route emission
+                // already counted this capture and its `route` call then threw,
+                // it hands off here — `placementEventEmitted` is already true,
+                // so this success (the RETRY succeeding) must not count it again.
+                if specimen.placementEventEmitted != true {
+                    specimen.placementEventEmitted = true
+                    // FC-R21 / F-17: the predicate is `Specimen.isUnplaced`,
+                    // read from the shared factory. This route used to ask
+                    // `venue.projectId != nil` instead, which called a Library
+                    // capture with no project UNPLACED while its sibling
+                    // emitter called the same capture placed.
+                    analytics.emit(FieldVisitTelemetry.placement(
+                        specimen, basis: placementBasis, source: .capture))
+                    try? store.save()
                 }
                 routing = nil
                 coordinator.present(destination == .library

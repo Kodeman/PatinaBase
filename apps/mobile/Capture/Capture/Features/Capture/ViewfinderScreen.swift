@@ -3,7 +3,7 @@
 //
 //  C1 — the app's home. A live camera (a dark "scene" gradient when there are no
 //  frames, e.g. the simulator's MockCameraService) under five thumb-reach
-//  regions: the auto-stamped venue chip, the C2 framing guides, the mode
+//  regions: the visit chip, the C2 framing guides, the mode
 //  selector, the shutter, and the session-tray handle. Low light (R1) surfaces a
 //  torch + hint + Night chip without ever blocking the shutter. The shutter tap
 //  freezes the frame into a C3 card; a hold rolls a C4 multi-shot into one
@@ -17,10 +17,20 @@ import CaptureKitMocks   // #Preview only — MockCameraService for the low-ligh
 struct ViewfinderScreen: View {
     @State private var model: ViewfinderModel
     @State private var reachability = FieldReachability()
+    /// FC-R11 (Ruling 4). Held here rather than inside the card so the chip's
+    /// tap and the value handed to `beginCardNote(affirmed:)` are one fact; a
+    /// fresh card is a fresh note, so it resets with the card.
+    @State private var affirmed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    private let coordinator: CaptureCoordinator
+    /// C6 is a mode of this screen, so it is built here rather than routed to.
+    private let container: AppContainer
 
     init(container: AppContainer, coordinator: CaptureCoordinator) {
         _model = State(wrappedValue: ViewfinderModel(container: container, coordinator: coordinator))
+        self.coordinator = coordinator
+        self.container = container
     }
 
     var body: some View {
@@ -31,11 +41,16 @@ struct ViewfinderScreen: View {
                 .contentShape(Rectangle())
                 .gesture(navigationGesture)
 
-            ViewfinderFramingGuides(
-                roll: model.roll, isLevel: model.isLevel,
-                showGrid: model.gridOn, reduceMotion: reduceMotion
-            )
-            .allowsHitTesting(false)
+            // C1's photo chrome, and only C1's: VOICE frames nothing and
+            // levels nothing, so a rule-of-thirds grid and corner brackets over
+            // it are the same false promise the suppressed shutter row was.
+            if model.mode != .voice {
+                ViewfinderFramingGuides(
+                    roll: model.roll, isLevel: model.isLevel,
+                    showGrid: model.gridOn, reduceMotion: reduceMotion
+                )
+                .allowsHitTesting(false)
+            }
 
             VStack(spacing: 0) {
                 topBar
@@ -43,7 +58,15 @@ struct ViewfinderScreen: View {
                     OfflineQueueBanner(queuedCount: model.outboxDepth)
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                Spacer()
+                // C6 is a MODE of this screen — not a sheet and not a route —
+                // so it takes the space the shutter's breathing room occupied
+                // and inherits the chip, the banner and the selector unchanged.
+                if model.mode == .voice {
+                    C6VoiceScreen(container: container, coordinator: coordinator,
+                                  chip: model.visitChip, visit: model.visitState)
+                } else {
+                    Spacer()
+                }
                 bottomControls
             }
             .padding(.horizontal, 18)
@@ -61,7 +84,18 @@ struct ViewfinderScreen: View {
                     onSave: model.saveFromCard,
                     onAddDetail: model.addDetailFromCard,
                     onDismiss: model.dismissCard,
-                    onPlace: model.placeFromCard
+                    placementLine: FieldPlacementLine.text(for: specimen),
+                    placementIsUnplaced: FieldPlacementLine.isUnplaced(specimen),
+                    onPlacement: { coordinator.present(.visit) },
+                    micIsAvailable: model.micIsAvailable,
+                    isRecording: model.isRecordingCardNote,
+                    transcript: model.cardTranscript,
+                    noteSetting: specimen.noteSetting,
+                    onMicPressChanged: { isDown in
+                        isDown ? model.beginCardNote(affirmed: affirmed)
+                               : model.endCardNote()
+                    },
+                    affirmed: $affirmed
                 )
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .zIndex(2)
@@ -73,14 +107,55 @@ struct ViewfinderScreen: View {
         // values instead of inverting under system dark mode.
         .environment(\.colorScheme, .light)
         .animation(cardAnimation, value: model.cardSpecimen?.id)
+        .onChange(of: model.cardSpecimen?.id) { _, _ in affirmed = false }
         .animation(cardAnimation, value: model.isHolding)
         .task {
             await model.start()
+            // C6 is a camera MODE, not a route, so `CaptureDeepLink.drive` has
+            // no destination to present for it — without this hop the sweep
+            // would file a PNG of C1 under `screen.C6.voice`.
+            // Matched against the FULL harness token — the tail of
+            // `CaptureScreenID.c6Voice.rawValue`, which is what the sweep
+            // passes. `hasSuffix($0)` was true for the empty string, so a bare
+            // `-CaptureScreen` booted silently into voice mode.
+            if AppConfiguration.initialScreenRaw == "C6.voice" {
+                await model.select(.voice)
+            }
             reachability.start {
                 Task { @MainActor in
                     await model.drainOnReconnect()
                 }
             }
+        }
+        // V0 is a `.sheet` presented OVER C1 (RootView), so this screen never
+        // disappears while the door is open: `.task` does not re-run and the
+        // model would keep rendering the answer she gave BEFORE she answered it.
+        // The sheet closing is the signal. Reading the store on change rather
+        // than observing it is deliberate — CaptureSessionContextStore is a
+        // plain class over UserDefaults with nothing to observe, and making it
+        // observable would mean editing a closed contract.
+        .onChange(of: coordinator.sheet) { _, sheet in
+            if sheet == nil { model.visitDoorClosed() }
+        }
+        // The C3 card's mic has no `UIBackgroundModes` entry behind it, so iOS
+        // suspends the engine on backgrounding — but `stop()` (which is what
+        // calls `endCardNote()`) is wired only to `.onDisappear`, which does not
+        // fire. `finish()` never returned, so the transcript, the segments and
+        // the duration were never written to the Specimen, and on resume the
+        // card still read "Recording — release to keep it" over a dead mic:
+        // her words gone AND the chrome overstating what was happening, the
+        // exact thing `ViewfinderModel.endCardNote` exists to prevent.
+        // `.background` and NOT `!= .active`, for C6's reason: Control Center,
+        // the app switcher and a screenshot all produce `.inactive` and must
+        // not end a note.
+        // `.active` re-reads the visit: `CaptureVisitPolicy.visitState` is a
+        // function of TIME (12-hour idle, day rollover), and time expiring
+        // writes nothing and posts no `visitDidChange`. Without this the chip
+        // and C6's idle line keep naming a visit that ended while the phone was
+        // in her pocket — the same lie this wave removed from the model half.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { model.endCardNote() }
+            if phase == .active { model.refreshVisit() }
         }
         .onDisappear { model.stop() }
         .statusBarHidden(true)
@@ -113,13 +188,15 @@ struct ViewfinderScreen: View {
         }
     }
 
-    // MARK: Top bar — venue (left) + night/torch status (right)
+    // MARK: Top bar — the visit (left) + night/torch status (right)
 
     private var topBar: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 8) {
                 ViewfinderWorkButton(action: model.openWork)
-                ViewfinderVenueChip(label: model.venueLabel)
+                ViewfinderVisitChip(chip: model.visitChip) {
+                    coordinator.present(.visit)
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 8) {
@@ -136,27 +213,38 @@ struct ViewfinderScreen: View {
             if model.isLowLight {
                 ViewfinderLowLightHint(action: model.toggleTorch)
             }
-            ViewfinderLevelReadout(isLevel: model.isLevel)
+            if model.mode != .voice {
+                ViewfinderLevelReadout(isLevel: model.isLevel)
+            }
             ViewfinderModeSelector(mode: model.mode) { newMode in
                 Task { await model.select(newMode) }
             }
-            ZStack {
-                HStack(alignment: .center) {
-                    ViewfinderControlCluster(
-                        torchOn: model.torchOn, gridOn: model.gridOn,
-                        onTorch: model.toggleTorch, onGrid: model.toggleGrid
-                    )
-                    Spacer()
-                    ViewfinderSessionHandle(count: model.sessionCount, action: model.openSessionTray)
-                }
-                ViewfinderShutter(
-                    isHolding: model.isHolding, count: model.holdCount, capturing: model.capturing
-                )
-                .gesture(shutterPress)
+            // VOICE produces no frame, so C6 owns the shutter's place: a live
+            // shutter under a voice control, or a line promising a capture the
+            // guard in `captureSingle()` refuses, would be a new lie.
+            if model.mode != .voice {
+                shutterRow
+                Text("Tap to capture · hold for multi-shot")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.paper.opacity(0.55))
             }
-            Text("Tap to capture · hold for multi-shot")
-                .font(CaptureType.footnote)
-                .foregroundStyle(CaptureColor.paper.opacity(0.55))
+        }
+    }
+
+    private var shutterRow: some View {
+        ZStack {
+            HStack(alignment: .center) {
+                ViewfinderControlCluster(
+                    torchOn: model.torchOn, gridOn: model.gridOn,
+                    onTorch: model.toggleTorch, onGrid: model.toggleGrid
+                )
+                Spacer()
+                ViewfinderSessionHandle(count: model.sessionCount, action: model.openSessionTray)
+            }
+            ViewfinderShutter(
+                isHolding: model.isHolding, count: model.holdCount, capturing: model.capturing
+            )
+            .gesture(shutterPress)
         }
     }
 

@@ -9,9 +9,10 @@
 //  Phase 2 designer/pro seams (projects/leads/decisions/messaging/receiving/
 //  portalAuth/siteScan): mock mode wires the CaptureKitMocks conformers; real
 //  mode calls each flow's own `<Flow>ServiceFactory.make(deps:)`, and every one
-//  of the eight now returns a real Supabase concrete. Field Companion wave 2
-//  added `smartGuess` and `featureFlags` as the last two composition seams; the
-//  rest of this file stays foundation-owner-only.
+//  of the eight now returns a real Supabase concrete. This file is owned by
+//  whichever wave is landing composition-root work; additive DI properties
+//  (wave 2's `smartGuess`/`featureFlags`, wave 3's `projectCache`) land with
+//  the wave that needs them, not on a fixed, closed list.
 //   • Real mode (physical device, or sim with -CaptureForceReal): Supabase
 //     session, persistent store (with graceful fallback), the local sync outbox
 //     wired to real capture-media upload + the commit RPC, the offline-sync Live
@@ -43,6 +44,8 @@ public final class AppContainer {
     /// Remote flags, fail-closed. `.allOff` in mock mode: the harness and the
     /// previews must never light a gated surface.
     public let featureFlags: CaptureFeatureFlags
+    /// The offline project + room cache the door and the suggestion lane share.
+    public let projectCache: CaptureProjectCache
     public let companion = FieldCompanionController(
         initialPresentation: .hidden(reason: .cameraActive),
         defaultHint: "Next steps"
@@ -72,15 +75,24 @@ public final class AppContainer {
     /// the coordinator; unconfigured it simply buffers an incoming link.
     let portalLogin = PortalLoginController()
 
+    /// The store ladder, lifted out of `init()` so it stays under
+    /// `function_body_length` — the same reason `makeWorkServices` exists. The
+    /// merge of wave 3's `projectCache` and main's resilient-store ladder put
+    /// `init()` two lines over on its own.
+    ///
+    /// iOS relaunches Field in the background for the site-scan upload session,
+    /// so the ladder can run before the first unlock, where a good store simply
+    /// cannot be decrypted. UIKit lives app-side; CaptureKit takes the answer as
+    /// a closure.
+    private static func makeResilientStore(persistent: Bool) -> CaptureStore {
+        CaptureStore.resilient(
+            persistent: persistent,
+            isProtectedDataAvailable: { UIApplication.shared.isProtectedDataAvailable })
+    }
+
     public init() {
         let real = AppConfiguration.runsRealServices
-        // iOS relaunches Field in the background for the site-scan upload
-        // session, so the ladder can run before the first unlock, where a good
-        // store simply cannot be decrypted. UIKit lives app-side; CaptureKit
-        // takes the answer as a closure.
-        let store = CaptureStore.resilient(
-            persistent: real,
-            isProtectedDataAvailable: { UIApplication.shared.isProtectedDataAvailable })
+        let store = Self.makeResilientStore(persistent: real)
         self.store = store
 
         if real {
@@ -97,17 +109,11 @@ public final class AppContainer {
             self.session = session
             self.authorizer = SupabaseWorkspaceAuthorizer(session: session)
 
-            let liveActivity = CaptureLiveActivityController()
-            let gateway = SupabaseCaptureGateway(client: client,
-                                                 bucket: AppConfiguration.captureMediaBucket)
-            self.sync = LocalCaptureSyncService(store: store, analytics: analytics,
-                                                liveActivity: liveActivity,
-                                                session: session, remote: gateway)
-            self.projectCreator = SupabaseProjectCreator(client: client, session: session)
-
             // Phase 2 seams — each flow owns a `<Flow>ServiceFactory.make(deps:)`,
             // and all eight now hand back a real Supabase service. Mock mode never
             // reaches this branch; it wires the CaptureKitMocks conformers below.
+            // Built BEFORE sync: the cache the sync service teaches is built on
+            // `projects`, so the order here is a dependency, not a preference.
             let work = Self.makeWorkServices(deps: WorkServiceDependencies(
                 client: client, session: session, store: store))
             self.projects = work.projects; self.leads = work.leads; self.decisions = work.decisions
@@ -115,6 +121,15 @@ public final class AppContainer {
             self.portalAuth = work.portalAuth; self.siteScan = work.siteScan
             self.siteRequests = work.siteRequests; self.guestSiteRequests = work.siteRequests
             self.siteRequestOutboxDrainer = work.drainer
+
+            let cache = CaptureProjectCache(store: store, projects: work.projects); self.projectCache = cache
+            let liveActivity = CaptureLiveActivityController()
+            let gateway = SupabaseCaptureGateway(client: client,
+                                                 bucket: AppConfiguration.captureMediaBucket)
+            self.sync = LocalCaptureSyncService(store: store, analytics: analytics,
+                                                liveActivity: liveActivity,
+                                                session: session, remote: gateway, projectCache: cache)
+            self.projectCreator = SupabaseProjectCreator(client: client, session: session)
 
             #if targetEnvironment(simulator)
             self.camera = MockCameraService()
@@ -151,6 +166,7 @@ public final class AppContainer {
             self.siteRequests = siteRequests
             self.guestSiteRequests = siteRequests
             self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
+            self.projectCache = CaptureProjectCache(store: store, projects: projects)
         }
 
         // The ladder runs before analytics exists, so it reports rather than

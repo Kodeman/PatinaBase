@@ -32,8 +32,8 @@ enum RouteSessionScreens {
         }
 
         r.registerRoute(CaptureRoute.session.registryKey) { _ in
-            AnyView(V1SessionTrayScreen(
-                store: store, session: session, coordinator: coordinator))
+            AnyView(V1SessionTrayScreen(store: store, session: session,
+                                        coordinator: coordinator, analytics: analytics, sync: sync))
         }
         r.registerRoute(CaptureRoute.specimen(UUID()).registryKey) { route in
             guard case let .specimen(id) = route else { return AnyView(EmptyView()) }
@@ -77,5 +77,9 @@ enum RouteSessionScreens {
                 store: store, sync: sync, session: session,
                 coordinator: coordinator))
         }
+
+        // V0 — the door. One line rather than three: `register` sits on
+        // SwiftLint's function_body_length limit for this file.
+        r.registerSheet(CaptureSheet.visit.registryKey) { _ in AnyView(V0VisitSheet(container: container, coordinator: coordinator)) }
     }
 }

@@ -136,6 +136,12 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// Threaded at all three construction sites so the unified finish emission
     /// (emitFinish(reason:)) and voice.start can both read it.
     private let surface: String
+    /// FC-R11: set PER NOTE by the surface that knows the posture, because
+    /// `voice.start` is the consent rule's audit trail and a hardcoded "solo"
+    /// made every conversation note answer "how many were recorded?" wrongly.
+    /// Defaults to `.solo` — the only posture the surfaces that never offer the
+    /// choice can be in.
+    private var noteSetting: FieldNoteSetting = .solo
     /// Minted PER NOTE in startLiveTranscription(), never at init: this service
     /// is constructed once per SCREEN (SiteScanContextCapture.swift,
     /// SiteScanHostScreen.swift) and toggleVoice() starts arbitrarily many
@@ -262,11 +268,15 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
 
     @MainActor public var isTranscribing: Bool { transcribing }
 
+    @MainActor public func setNoteSetting(_ setting: FieldNoteSetting) {
+        noteSetting = setting
+    }
+
     @MainActor
     public func startLiveTranscription() throws -> AsyncThrowingStream<TranscriptChunk, Error> {
         let available = recognitionIsAvailable
         analytics.event("voice.start", ["surface": surface,
-                                        "note_setting": "solo",
+                                        "note_setting": noteSetting.rawValue,
                                         "transcribing": String(available)])
         let generation = beginTranscriptGeneration()
         startedAt = Date()
@@ -392,6 +402,10 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// sees two disjoint property shapes.
     private func emitFinish(reason: String) {
         analytics.event("voice.finish", [
+            // Carried here so the one finish row is attributable to a surface,
+            // the way voice.start already was. Every caller gains it; no
+            // existing property changes meaning.
+            "surface": surface,
             "duration_s": String(Int(recordedDuration)),
             "segments": String(audioSegments.count),
             "transcript_chars": String(latestTranscript.count),

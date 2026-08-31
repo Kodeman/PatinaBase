@@ -207,7 +207,7 @@ struct V2CullDeckScreen: View {
 
             HStack(spacing: 10) {
                 RouteActionButton(
-                    isSendingAll ? "Sending…" : "Send all to inbox",
+                    isSendingAll ? "Sending…" : "Hold all for later",
                     systemImage: "tray.and.arrow.down",
                     kind: .danger
                 ) {

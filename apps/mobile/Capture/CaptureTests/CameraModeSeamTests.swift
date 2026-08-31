@@ -4,11 +4,11 @@
 //  CameraMode is CaseIterable. Before this wave, three views rendered
 //  `ForEach(CameraMode.allCases)` (ViewfinderControls.swift:191,
 //  ViewfinderPlaceholder.swift:38, CameraPrimingScreen.swift:79 — pre-wave state);
-//  they now read `ForEach(CameraMode.viewfinderSelectable)` instead. If `.voice`
-//  were added back to the selector, it would put a fifth VOICE pill in the C1
-//  selector whose shutter takes a photo — precisely the class of lie this wave
-//  exists to remove. The case lands now because the enum is a frozen seam edited
-//  once; the pill waits for C6 (wave 3).
+//  they now read `ForEach(CameraMode.viewfinderSelectable)` instead. Wave 2 held
+//  `.voice` off that array because a fifth VOICE pill whose shutter takes a
+//  photo would be a new lie. Wave 3 built C6 and appended `.voice`, and what
+//  keeps the shutter honest is `SpecimenCapturePolicy.producesPhoto(_:)`
+//  guarding `captureSingle()` / `beginMultiShot()` — not the absent pill.
 
 import Foundation
 import Testing
@@ -21,9 +21,11 @@ struct CameraModeSeamTests {
         #expect(CameraMode.allCases.contains(.voice))
     }
 
-    @Test func voiceIsNotOfferedInTheViewfinderUntilC6Exists() {
-        #expect(CameraMode.viewfinderSelectable.contains(.voice) == false)
-        #expect(CameraMode.viewfinderSelectable == [.photo, .tag, .measure, .scan])
+    @Test func voiceIsOfferedInTheViewfinderNowThatC6Exists() {
+        #expect(CameraMode.viewfinderSelectable.contains(.voice) == true)
+        // Appended, never reordered: the other four keep their display order,
+        // which this assertion has pinned since wave 2.
+        #expect(CameraMode.viewfinderSelectable == [.photo, .tag, .measure, .scan, .voice])
     }
 
     @Test func everyModeStillHasANextStep() {

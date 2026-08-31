@@ -7,11 +7,12 @@
 
 import Foundation
 
-/// The ways the viewfinder can read a thing (C1 mode selector), plus `voice`.
-/// `voice` is a RESERVED case: it exists so this frozen enum is edited exactly
-/// once, and it is deliberately kept out of `viewfinderSelectable` until wave 3
-/// builds C6 — a VOICE pill whose shutter takes a photo would be a new lie in
-/// the wave that removes the old ones.
+/// The ways the viewfinder can read a thing (C1 mode selector), including
+/// `voice`. `voice` was a RESERVED case through wave 2 — it exists so this
+/// frozen enum is edited exactly once — and wave 3 admitted it to
+/// `viewfinderSelectable` when C6 was built. What keeps a VOICE pill from
+/// being a shutter that takes a photo is `SpecimenCapturePolicy.producesPhoto(_:)`
+/// guarding the capture paths, not the case's absence from that array.
 public enum CameraMode: String, Codable, CaseIterable, Sendable {
     case photo, tag, measure, scan, voice
 }
@@ -19,11 +20,12 @@ public enum CameraMode: String, Codable, CaseIterable, Sendable {
 public extension CameraMode {
     /// The modes C1 actually offers, in display order — a literal, not a
     /// predicate over `allCases`. A future non-selectable case can't silently
-    /// admit itself here the way a filter would; adding one is Wave 3's own
-    /// one-token edit, not a rule to re-derive. Wave 3 appends `.voice` when
-    /// C6 exists.
+    /// admit itself here the way a filter would; adding one is a deliberate
+    /// one-token edit, not a rule to re-derive. Wave 3 APPENDED `.voice` when
+    /// C6 shipped — appended, never reordered: the first four are pinned in
+    /// display order by `CameraModeSeamTests`.
     static var viewfinderSelectable: [CameraMode] {
-        [.photo, .tag, .measure, .scan]
+        [.photo, .tag, .measure, .scan, .voice]
     }
 }
 

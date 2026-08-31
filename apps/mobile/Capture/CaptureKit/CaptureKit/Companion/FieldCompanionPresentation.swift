@@ -41,6 +41,18 @@ public struct FieldCompanionAction: Equatable, Identifiable, Sendable {
     }
 }
 
+/// The visit-spine action ids (spec §14, site 3 of 3): the strip's "Start a
+/// visit" / "End visit" affordance, reachable from every non-camera screen.
+/// `FieldTodayBand.companionHint` constructs `FieldCompanionAction`s from
+/// these, and `RootView.handleCompanionAction` switches on them — one shared
+/// source so renaming an id is a compile error at every call site, not a
+/// silent mismatch between the string that gets sent and the string that
+/// gets matched.
+public enum FieldCompanionActionID: String, CaseIterable, Sendable {
+    case openVisit = "visit.open"
+    case endVisit = "visit.end"
+}
+
 public struct FieldCompanionCollapsedPresentation: Equatable, Sendable {
     public let hint: String
     public let action: FieldCompanionAction?

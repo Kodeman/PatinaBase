@@ -31,35 +31,54 @@ struct ViewfinderSceneBackdrop: View {
     }
 }
 
-// MARK: - Venue chip (auto-stamped, top-left)
+// MARK: - Visit chip (top-left)
 
-struct ViewfinderVenueChip: View {
-    let label: String?
+/// The visit chip (spec §7.2). Two lines, tappable → V0. Invariant V.
+/// A thin renderer: every word it shows was decided by FieldVisitChipBuilder.
+struct ViewfinderVisitChip: View {
+    let chip: FieldVisitChip
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "mappin.and.ellipse")
-                .font(CaptureType.footnote)
-            Text(label ?? "Locating venue…")
-                .font(CaptureType.eyebrow)
-                .textCase(.uppercase)
-                .lineLimit(1)
-            Text("· auto")
-                .font(CaptureType.eyebrow)
-                .foregroundStyle(CaptureColor.goldenHour)
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(chip.primary)
+                    .font(CaptureType.footnote)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                if !chip.secondary.isEmpty {
+                    Text(chip.secondary)
+                        .font(CaptureType.monoSmall)
+                        // `paper` at 75%, not `inkSoft`: this chrome sits on an
+                        // arbitrary camera scene under a pinned light colorScheme,
+                        // where inkSoft's aged-oak brown is close to unreadable at
+                        // 12 pt in a bright interior. Every other viewfinder pill
+                        // is `paper`; the ROOM line is the last one that can afford
+                        // to be the outlier.
+                        .foregroundStyle(chip.isUnplaced
+                                         ? CaptureColor.terracotta
+                                         : CaptureColor.paper.opacity(0.75))
+                        .lineLimit(1)
+                }
+            }
+            .foregroundStyle(chip.isUnplaced ? CaptureColor.terracotta : CaptureColor.paper)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 12))
+            .frame(minHeight: 44)
         }
-        .foregroundStyle(CaptureColor.paper)
-        .padding(.horizontal, 10).padding(.vertical, 7)
-        .background(.black.opacity(0.42), in: Capsule())
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Venue, auto-stamped: \(label ?? "locating")")
+        .accessibilityLabel("Visit: \(chip.primary), \(chip.secondary)")
+        .accessibilityHint("Opens the visit")
+        .accessibilityIdentifier("field.visit.chip")
     }
 }
 
-// MARK: - Work affordance (W1 entry, top-leading)
+// MARK: - Today affordance (W1 entry, top-leading)
 
-/// Small briefcase pill that opens the designer/pro Work dashboard. Sits above the
-/// venue chip so it never crowds the shutter or mode selector.
+/// Small briefcase pill that opens Today. Sits above the visit chip so it never
+/// crowds the shutter or mode selector. The identifier stays `field.realm.work`:
+/// the sim-walk harness and analytics key on it (§7.2).
 struct ViewfinderWorkButton: View {
     let action: () -> Void
 
@@ -68,7 +87,7 @@ struct ViewfinderWorkButton: View {
             HStack(spacing: 6) {
                 Image(systemName: "briefcase.fill")
                     .font(CaptureType.footnote)
-                Text("Work")
+                Text("Today")
                     .font(CaptureType.eyebrow)
                     .textCase(.uppercase)
             }
@@ -77,8 +96,8 @@ struct ViewfinderWorkButton: View {
             .background(.black.opacity(0.42), in: Capsule())
             .frame(minHeight: 44)
         }
-        .accessibilityLabel("Work")
-        .accessibilityHint("Switches to Work and keeps your place in Camera")
+        .accessibilityLabel("Today")
+        .accessibilityHint("Switches to Today and keeps your place in Camera")
         .accessibilityIdentifier("field.realm.work")
     }
 }

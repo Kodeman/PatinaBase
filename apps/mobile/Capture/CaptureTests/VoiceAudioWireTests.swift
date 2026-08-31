@@ -71,7 +71,9 @@ struct VoiceAudioWireTests {
     }
 
     @Test func schemaVersionIsBumpedForTheNewReaderSideKeys() {
-        #expect(FieldCapturePayload.currentSchemaVersion == 2)
+        // Wave 3 (Task 8) bumped this again, 2 -> 3, to add the visit/suggestion
+        // envelopes and voice.noteSetting.
+        #expect(FieldCapturePayload.currentSchemaVersion == 3)
     }
 
     @Test @MainActor func missingRequiredMediaChecksEverySegmentInOrder() throws {

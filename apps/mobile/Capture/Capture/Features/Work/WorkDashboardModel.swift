@@ -73,6 +73,7 @@ final class WorkDashboardModel {
     private let siteScanService: any SiteScanService
     private let store: CaptureStore
     private let session: any SessionProviding
+    private let sessionContext = CaptureSessionContextStore.shared
 
     var projects: WorkSectionState<FieldProject> = .loading
     var leads: WorkSectionState<FieldLead> = .loading
@@ -81,6 +82,9 @@ final class WorkDashboardModel {
     var arrivingPOs: WorkSectionState<FieldArrivingPO> = .loading
     private(set) var captures: [FieldCaptureActivity] = []
     private(set) var scanUploads: [FieldScanPendingUpload] = []
+    private(set) var visitState: CaptureVisitState = .none
+    private(set) var unplaced: [Specimen] = []
+    private(set) var visitCaptures: [Specimen] = []
 
     init(container: AppContainer) {
         projectsService = container.projects
@@ -92,6 +96,39 @@ final class WorkDashboardModel {
         store = container.store
         session = container.session
         refreshLocalCaptures()
+        refreshVisit()
+    }
+
+    /// Spec §7.1. Built from the local store, so it is right with no signal.
+    var todayBand: FieldTodayBand {
+        FieldTodayBandBuilder.build(
+            visitState: visitState,
+            visitCaptures: visitCaptures,
+            unplaced: unplaced,
+            pendingScanUploads: scanUploads.count,
+            queued: captures.filter { $0.status == .queued }.count,
+            isOffline: !loadIssues.isEmpty,
+            now: Date())
+    }
+
+    /// FC-R6: `unplaced` is read straight off `CaptureStore.unfiled`, which has no
+    /// status filter — the tray empties on placement, never on sync.
+    func refreshVisit() {
+        let identity = CaptureSessionIdentity(userID: session.userID,
+                                              workspaceID: session.workspaceID)
+        visitState = sessionContext.visitState(identity: identity)
+        switch localListScope {
+        case .globalFixtures:
+            unplaced = store.unfiled()
+            visitCaptures = visitState.context.map { store.session(visitID: $0.visitID) } ?? []
+        case .owner(let owner):
+            unplaced = store.unfiled(owner: owner)
+            visitCaptures = visitState.context
+                .map { store.session(visitID: $0.visitID, owner: owner) } ?? []
+        case .unavailable:
+            unplaced = []
+            visitCaptures = []
+        }
     }
 
     var attention: FieldAttentionSnapshot {
@@ -125,6 +162,7 @@ final class WorkDashboardModel {
     /// run concurrently; local capture activity is a single store read.
     func loadAll() async {
         refreshLocalCaptures()
+        refreshVisit()
         async let p: Void = loadProjects()
         async let l: Void = loadLeads()
         async let d: Void = loadDecisions()

@@ -81,7 +81,10 @@ app.build_configurations.each do |c|
   s['INFOPLIST_FILE'] = 'Capture/Info.plist'
   s['CODE_SIGN_ENTITLEMENTS'] = 'Capture/Capture.entitlements'
   s['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
-  s['CURRENT_PROJECT_VERSION'] = '1'
+  # CFBundleVersion. TestFlight build 2 is already in App Store Connect, and ASC
+  # rejects a re-used build number — so this MUST be bumped before every upload,
+  # and a device pass cannot tell two builds apart while it is not.
+  s['CURRENT_PROJECT_VERSION'] = '3'
   s['MARKETING_VERSION'] = '0.1'
   # POSTHOG_API_KEY itself is NOT set here: Xcode's GENERATE_INFOPLIST_FILE
   # only auto-emits INFOPLIST_KEY_* for its own known/recognized Info.plist

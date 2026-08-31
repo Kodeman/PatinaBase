@@ -101,11 +101,19 @@ public protocol VoiceNoteService: Sendable {
     /// still records, and the surface says the honest line instead of a
     /// placeholder promising words that are never coming.
     @MainActor var isTranscribing: Bool { get }
+    /// FC-R11: the consent posture the NEXT note starts under. The recorder's
+    /// own `voice.start` is the consent rule's ONLY audit trail, so the surface
+    /// that knows the posture has to tell the recorder before it starts —
+    /// otherwise every conversation note is logged as a solo one.
+    @MainActor func setNoteSetting(_ setting: FieldNoteSetting)
 }
 
 public extension VoiceNoteService {
     /// A conformer that always transcribes need say nothing.
     @MainActor var isTranscribing: Bool { true }
+    /// A surface that never offers the choice records nothing but solo notes,
+    /// and a conformer that keeps no telemetry has nothing to record it in.
+    @MainActor func setNoteSetting(_ setting: FieldNoteSetting) {}
 }
 
 // ── N5 Smart field guess (STUB now; Core ML later) ──

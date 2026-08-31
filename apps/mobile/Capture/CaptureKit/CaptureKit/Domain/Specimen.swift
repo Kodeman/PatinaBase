@@ -145,6 +145,40 @@ public final class Specimen {
     public var placementLastError: String?
     public var placementRetryCount: Int?
 
+    // ── The visit (Field Companion wave 3). All additive optionals. ──
+    // captureSessionID already carries the visitID; these carry what
+    // field_captures' visit/suggestion columns need.
+    public var visitKindRaw: String?
+    public var visitKitRaw: String?
+    public var visitLabel: String?
+    public var visitStartedAt: Date?
+    public var visitEndedAt: Date?
+    public var noteSettingRaw: String?
+    // The SUGGESTION is always distinct from the fact. Nothing reads these as truth.
+    public var suggestedProjectID: String?
+    public var suggestedProjectRoomID: String?
+    public var suggestionBasisRaw: String?
+    /// Orders the tray. NEVER RENDERED (Principle 4).
+    public var suggestionConfidence: Double?
+    /// The basis in WORDS — the only suggestion value a designer ever sees.
+    /// DEVICE-ONLY ON PURPOSE: the unplaced tray is device-side SwiftData, so the
+    /// sentence is composed here and rendered here. `FieldCapturePayload` omits it
+    /// and migration 00532 has no column for it; neither is an oversight, and
+    /// neither should be "fixed" to carry it.
+    public var suggestionReasonRaw: String?
+    /// FC-R6: placed AFTER the capture committed, so the routing the server
+    /// already stored is stale until the outbox re-runs `commit_field_capture`.
+    public var placementReplayPending: Bool?
+    /// Task 31: set the moment EITHER emitter — `ViewfinderModel.saveFromCard()`'s
+    /// pre-route emission or `S3DestinationScreen`'s post-route one — counts this
+    /// capture toward `capture.placed` / `capture.unplaced`. The pre-route
+    /// emission must fire before `sync.route` (FC-R6: placement doesn't wait on
+    /// the server), so when that route throws and hands off to S3, S3 checks this
+    /// flag rather than re-counting a capture that was already counted. Also
+    /// protects a later deliberate re-file (V3) from minting a second event for
+    /// a capture that already has one.
+    public var placementEventEmitted: Bool?
+
     public init(
         id: UUID = UUID(),
         clientToken: UUID = UUID(),
@@ -259,6 +293,19 @@ public final class CaptureProjectRef {
     public private(set) var ownerUserID: String?
     public private(set) var ownerWorkspaceID: String?
 
+    // ── Offline cache (Field Companion wave 3 · package 3-1) ──
+    // All additive optionals → SwiftData migrates lightweight. Room lists are
+    // JSON Data, not stored arrays of a Codable struct, so no composite type
+    // enters the schema. lastFiledCoordinate is a computed pair: SwiftData
+    // cannot persist a tuple.
+    public var specRoomsData: Data?
+    public var roomsData: Data?
+    public var lastRefreshedAt: Date?
+    public var lastVisitedAt: Date?
+    public var lastFiledLatitude: Double?
+    public var lastFiledLongitude: Double?
+    public var filedCaptureCount: Int?
+
     public init(
         id: UUID = UUID(),
         remoteId: String? = nil,
@@ -276,5 +323,37 @@ public final class CaptureProjectRef {
 
     public func belongs(to owner: CaptureOwnerIdentity) -> Bool {
         owner.matches(userID: ownerUserID, workspaceID: ownerWorkspaceID)
+    }
+
+    /// FC-R5: the `project_rooms` lane. Never derived from, nor fallen back to, `rooms`.
+    public var specRooms: [CaptureCachedRoom] {
+        get { CaptureProjectRef.decodeRooms(specRoomsData) }
+        set { specRoomsData = CaptureProjectRef.encodeRooms(newValue) }
+    }
+
+    /// FC-R5: the `public.rooms` lane. Never derived from, nor fallen back to, `specRooms`.
+    public var rooms: [CaptureCachedRoom] {
+        get { CaptureProjectRef.decodeRooms(roomsData) }
+        set { roomsData = CaptureProjectRef.encodeRooms(newValue) }
+    }
+
+    public var lastFiledCoordinate: CaptureCoordinate? {
+        get {
+            guard let lastFiledLatitude, let lastFiledLongitude else { return nil }
+            return CaptureCoordinate(latitude: lastFiledLatitude, longitude: lastFiledLongitude)
+        }
+        set {
+            lastFiledLatitude = newValue?.latitude
+            lastFiledLongitude = newValue?.longitude
+        }
+    }
+
+    private static func decodeRooms(_ data: Data?) -> [CaptureCachedRoom] {
+        guard let data else { return [] }
+        return (try? JSONDecoder().decode([CaptureCachedRoom].self, from: data)) ?? []
+    }
+
+    private static func encodeRooms(_ rooms: [CaptureCachedRoom]) -> Data? {
+        rooms.isEmpty ? nil : try? JSONEncoder().encode(rooms)
     }
 }

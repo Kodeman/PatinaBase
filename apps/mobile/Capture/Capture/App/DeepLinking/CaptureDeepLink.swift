@@ -83,11 +83,16 @@ enum CaptureDeepLink {
         switch id {
         case .c1Viewfinder, .c2Framing, .c3Specimen, .c4MultiShot,
              .e1AppIcon, .e2SystemEntry, .r1LowLight,
-             // Reserved ids: V0/C6 are wave 3, V4 is wave 4. They have no
+             // C6 is a camera MODE of C1, not a route or a sheet, so there is
+             // nothing to present for it — `ViewfinderScreen` reads the harness
+             // argument itself and selects `.voice`. V4 is wave 4 and has no
              // destination yet, so the harness stays on C1 rather than
              // screenshotting a screen that does not exist.
-             .v0Visit, .c6Voice, .v4VisitReview:
+             .c6Voice, .v4VisitReview:
             break
+        // V0 is a SHEET, not a route: without this the sweep would file a PNG
+        // of C1 under `screen.V0.visit`.
+        case .v0Visit:          coordinator.present(.visit)
         case .c5SpecimenSheet:  withSample { coordinator.present(.specimenSheet($0)) }
         case .n1TagOCR:         withSample { coordinator.present(.ocr($0)) }
         case .n2Scan:           withSample { coordinator.present(.code($0)) }

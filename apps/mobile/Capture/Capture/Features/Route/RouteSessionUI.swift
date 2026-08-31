@@ -148,7 +148,7 @@ enum RouteRowKind {
     var label: String {
         switch self {
         case .ready: return "ready"
-        case .inbox: return "inbox"
+        case .inbox: return "held"
         case .guess: return "guess"
         }
     }

@@ -702,6 +702,30 @@ public final class CaptureStore {
         }
     }
 
+    /// "Unplaced" — no project on the record. FC-R6: nothing is lost; only the
+    /// FILING waits, on the surface she opens every morning. This is the tray's
+    /// wave-3 scope, widened from one visit (spec §7.8).
+    ///
+    /// NO STATUS FILTER. `.committed` is the normal successful end of a drain, not
+    /// a disposal, so filtering it out would empty the tray on SYNC instead of on
+    /// PLACEMENT — which is the opposite of what FC-R6 asks for. Placement is the
+    /// only thing that removes a row from this list.
+    public func unfiled() -> [Specimen] {
+        let descriptor = FetchDescriptor<Specimen>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        let all = (try? context.fetch(descriptor)) ?? []
+        return all.filter(\.isUnplaced)
+    }
+
+    public func unfiled(owner: CaptureOwnerIdentity) -> [Specimen] {
+        unfiled().filter {
+            owner.matches(
+                userID: $0.ownerUserID,
+                workspaceID: $0.ownerWorkspaceID
+            )
+        }
+    }
+
     /// Everything awaiting/failing sync — drained oldest-first (R4/U1).
     public func outbox() -> [Specimen] {
         let ready = CaptureStatus.ready.rawValue
@@ -720,6 +744,12 @@ public final class CaptureStore {
         let records = (try? context.fetch(descriptor)) ?? []
         return records.filter {
             guard $0.statusRaw == committed else { return true }
+            // FC-R6: placed AFTER it committed. `needsProjectPlacement` below is
+            // the FF&E lane (`placementProjectId`/`placementState`), which
+            // `Specimen.place(…)` never writes — without this line a placed
+            // committed row never re-enters the drain and the server keeps
+            // project_id NULL forever, with nothing on screen to say so.
+            if $0.placementNeedsReplay { return true }
             if $0.needsProjectPlacement { return true }
             return ($0.remoteId ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)

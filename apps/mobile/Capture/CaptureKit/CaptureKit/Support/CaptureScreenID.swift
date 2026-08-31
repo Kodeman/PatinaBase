@@ -3,9 +3,9 @@
 //
 //  Frozen per-screen accessibility identifiers (75 entries) — the deterministic
 //  handles XCUITest, capture-shots.sh and MobAI use to drive and assert every
-//  screen. 72 of them reach a built screen today; v0Visit, c6Voice and
-//  v4VisitReview are reserved ids for the visit spine (waves 3–4) and are held
-//  out of the sweep until the screens behind them exist.
+//  screen. 74 of them reach a built screen today; wave 3 built v0Visit and
+//  c6Voice. v4VisitReview is the one remaining reserved id, held out of the
+//  sweep until the screen behind it exists (wave 4).
 
 import Foundation
 
