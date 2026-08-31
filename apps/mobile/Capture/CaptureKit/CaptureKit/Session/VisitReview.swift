@@ -104,3 +104,23 @@ public enum VisitReviewComposer {
         return "Log \(span) as a site visit"
     }
 }
+
+public extension VisitReviewRow {
+    /// "Filed" is project_id IS NOT NULL (§9.2) — there is deliberately no
+    /// terminal field_captures.status for it, because introducing one would
+    /// silently revoke studio read (field_captures_org_inbox_select keys on
+    /// status='inbox', 00233:175-186).
+    init(specimen: Specimen) {
+        let words = (specimen.voiceTranscript ?? specimen.voicePartialTranscript ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        self.init(
+            specimenID: specimen.id,
+            hasPhoto: !specimen.photos.isEmpty,
+            hasTranscript: !words.isEmpty,
+            roomName: specimen.venue?.room,
+            isPlaced: specimen.venue?.projectId?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty == false,
+            createdAt: specimen.createdAt)
+    }
+}

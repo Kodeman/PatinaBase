@@ -392,23 +392,20 @@ struct V1SessionTrayScreen: View {
         }
     }
 
+    /// "End visit" now OPENS the close rather than being it: V4 is a receipt
+    /// for what the visit produced (§7.9, Flow 7), and its Done is the only
+    /// thing that calls `endVisit`. Site 2 of 4's §14 emission moved there with
+    /// the close, so the counts are still read while the context is open.
+    ///
+    /// A tray with no open visit has nothing to review; the toolbar hides this
+    /// button in that scope, and the fallback keeps the old exit rather than
+    /// pushing an empty screen.
     private func endVisit() {
-        // Site 2 of 4 (spec §14): read the visit's own counts BEFORE `endVisit`
-        // closes the context — afterwards `visitState` reads `.none` and they
-        // are unrecoverable. `unplaced` (the @State array) has already had this
-        // visit's own unplaced rows excluded for display, so the count comes
-        // fresh from the store instead of undercounting them.
-        if let context = sessionContext.visitState(identity: identity).context {
-            visitEndEmitter.emit(.explicit, context: context)
+        guard let context = sessionContext.visitState(identity: identity).context else {
+            coordinator.popToRoot()
+            return
         }
-        _ = sessionContext.endVisit(identity: identity)
-        reload()
-        coordinator.popToRoot()
-    }
-
-    private var visitEndEmitter: FieldVisitEndEmitter {
-        FieldVisitEndEmitter(store: store, analytics: analytics,
-                             userID: session.userID, workspaceID: session.workspaceID)
+        coordinator.navigate(to: .visitReview(visitID: context.visitID))
     }
 
     private var identity: CaptureSessionIdentity {
