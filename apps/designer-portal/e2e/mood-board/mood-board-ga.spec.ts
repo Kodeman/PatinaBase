@@ -1122,11 +1122,13 @@ test.describe("MoodBoard GA browser acceptance", () => {
     );
   });
 
-  // Deferred to slice W2c: the first-clicked item's aria-pressed stays "false"
-  // after a Shift-click extends the selection (product never flips to "true"
-  // below), a pre-existing shift-click multi-select regression in
-  // BoardRoomCanvas — not something this integration wave fixes.
-  test.fixme("dragging a multi-selection moves every selected item by the same delta", async ({
+  // W2c: fixed the aria-pressed multi-select regression — the shift-click
+  // branch in BoardRoomCanvas read the `selectedItemIds` prop directly, which
+  // could still carry the pre-first-click value if the parent hadn't
+  // re-rendered yet. It now reads a ref the component's own selection setter
+  // updates eagerly. See BoardRoomCanvas.test.tsx for the unit-level
+  // regression coverage.
+  test("dragging a multi-selection moves every selected item by the same delta", async ({
     authenticatedPage: page,
   }) => {
     await openBoard(page);
