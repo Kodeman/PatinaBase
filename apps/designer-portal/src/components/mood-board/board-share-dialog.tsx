@@ -61,6 +61,7 @@ export function BoardShareDialog({
   const revokeShare = useRevokeShare();
   const [label, setLabel] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
+  const [allowReactions, setAllowReactions] = useState(false);
   const [created, setCreated] = useState<{ id: string; url: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +71,7 @@ export function BoardShareDialog({
     setCreated(null);
     setCopied(false);
     setError(null);
+    setAllowReactions(false);
   }, [open]);
 
   const activeShares = useMemo(
@@ -98,6 +100,7 @@ export function BoardShareDialog({
         boardId,
         label: label.trim() || null,
         expiresAt: expiresAtFromDate(expiryDate),
+        reactionsEnabled: allowReactions,
       });
       const url = guestProposalShareUrl(
         result.token,
@@ -106,6 +109,7 @@ export function BoardShareDialog({
       setCreated({ id: result.id, url });
       setLabel('');
       setExpiryDate('');
+      setAllowReactions(false);
       moodBoardEvents.shared({
         board_id: boardId,
         scope: 'board',
@@ -138,7 +142,9 @@ export function BoardShareDialog({
         <DialogHeader>
           <DialogTitle>Share {boardName}</DialogTitle>
           <DialogDescription>
-            Anyone with the link can view this board only. They cannot edit it or leave feedback.
+            Anyone with the link can view this board only. They cannot edit it. Reactions are
+            off unless you turn them on for a new link — a link&rsquo;s power never changes
+            once it is made.
           </DialogDescription>
         </DialogHeader>
 
@@ -187,6 +193,7 @@ export function BoardShareDialog({
                       {shortDate(share.created_at)} · {share.view_count} {share.view_count === 1 ? 'view' : 'views'}
                       {share.last_viewed_at ? ` · last ${shortDate(share.last_viewed_at)}` : ''}
                       {share.expires_at ? ` · expires ${shortDate(share.expires_at)}` : ''}
+                      {share.board_reactions_enabled ? ' · reactions on' : ''}
                     </p>
                   </div>
                   <Button
@@ -228,6 +235,19 @@ export function BoardShareDialog({
               />
             </label>
           </div>
+          <label className="mt-3 flex items-start gap-2 text-[11px] text-[var(--text-muted)]">
+            <input
+              type="checkbox"
+              checked={allowReactions}
+              onChange={(event) => setAllowReactions(event.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-clay)]"
+            />
+            <span>
+              <span className="text-[var(--text-primary)]">Allow reactions</span> — the reader
+              can tap approve or pass on each piece and leave a short note. Fixed when the link
+              is made; make a fresh link to change it.
+            </span>
+          </label>
           <Button
             variant="primary"
             className="mt-4"

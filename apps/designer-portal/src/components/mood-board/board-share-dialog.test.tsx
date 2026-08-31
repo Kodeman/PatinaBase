@@ -121,6 +121,7 @@ describe('BoardShareDialog', () => {
         boardId: 'board-1',
         label: 'Design review',
         expiresAt: null,
+        reactionsEnabled: false,
       }),
     );
     expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/\/share\/raw-token$/));
@@ -140,5 +141,30 @@ describe('BoardShareDialog', () => {
       const link = screen.getByLabelText('Board share link') as HTMLInputElement;
       expect(link.value).toMatch(/\/share\/raw-token$/);
     });
+  });
+
+  it('mints a reaction-capable link only when the designer opts in', async () => {
+    create.mockResolvedValue({ id: 'share-new', token: 'raw-token' });
+    render(
+      <BoardShareDialog
+        boardId="board-1"
+        boardName="Living room"
+        owner={{ kind: 'project', id: 'project-1' }}
+        open
+        onOpenChange={jest.fn()}
+      />,
+    );
+
+    const toggle = screen.getByRole('checkbox', { name: /Allow reactions/ });
+    expect(toggle).not.toBeChecked();
+
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'Create and copy link' }));
+
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({ reactionsEnabled: true }),
+      ),
+    );
   });
 });
