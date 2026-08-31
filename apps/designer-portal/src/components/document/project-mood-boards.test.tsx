@@ -147,10 +147,19 @@ describe('ProjectMoodBoards', () => {
     useProjectBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
     render(<ProjectMoodBoards projectId="project-1" />);
 
-    // Boards are empty, so the region defaults folded shut — unfold the seam first.
-    fireEvent.click(screen.getByRole('button', { name: /^Boards/ }));
+    // D4' — an empty Boards region defaults OPEN (no seam to unfold first),
+    // so "Start a board" is on the page from the first paint.
     fireEvent.click(screen.getAllByRole('button', { name: 'Start a board' })[0]);
     expect(screen.getByTestId('boards-builder')).toHaveTextContent('Boards for project-1');
+  });
+
+  it('D4’ — an empty project surfaces its create act unfolded, not behind a seam', () => {
+    useProjectBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
+    const { container } = render(<ProjectMoodBoards projectId="project-1" />);
+
+    expect(container.querySelector('[data-fold-seam]')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Boards' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Start a board' }).length).toBeGreaterThan(0);
   });
 
   it('opens the canonical board builder from the working-boards surface', () => {

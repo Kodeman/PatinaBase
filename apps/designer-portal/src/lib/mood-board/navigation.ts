@@ -1,4 +1,5 @@
 import type { BoardOwnerRef } from '@patina/types';
+import { boardsRoutePath } from '@/lib/document/registry';
 
 export type MoodBoardOpenSource =
   | 'drafting_strip'
@@ -59,6 +60,30 @@ export function recentBoardCommandDescriptor(
       from,
       source: 'command_bar',
     }),
+  };
+}
+
+export interface StartBoardCommandInput {
+  projectId: string;
+  projectName: string;
+}
+
+/**
+ * D4' — ⌘K's creation front door, beside {@link recentBoardCommandDescriptor}
+ * (same descriptor shape: key/label/sub/match/href, no component or event
+ * concerns baked in). It always routes to the project's own Boards page
+ * (`boardsRoutePath` — the address every width resolves to, and where the
+ * "Start a board" act is now a persistent, unfolded control), never a board
+ * room directly, since starting one has no id yet.
+ */
+export function startBoardCommandDescriptor(input: StartBoardCommandInput) {
+  return {
+    key: `start-board:${input.projectId}`,
+    label: 'Start a board…',
+    sub: `${input.projectName} · new mood board`,
+    match:
+      `start a board new board create board begin a board moodboard mood board ${input.projectName}`.toLowerCase(),
+    href: boardsRoutePath(input.projectId),
   };
 }
 
