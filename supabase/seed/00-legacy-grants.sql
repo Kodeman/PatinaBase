@@ -6892,12 +6892,6 @@ END $g$;
 
 -- 00406_mood_board_storage_and_shares.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.create_board_share(uuid, text, timestamptz) FROM PUBLIC, anon;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00406_mood_board_storage_and_shares.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.resolve_board_share(text) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -6905,12 +6899,6 @@ END $g$;
 -- 00406_mood_board_storage_and_shares.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.revoke_document_share(uuid) FROM PUBLIC, anon;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00406_mood_board_storage_and_shares.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.create_board_share(uuid, text, timestamptz) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -9046,18 +9034,6 @@ END $g$;
 
 -- 00434_ffe_privacy_domain_foundation.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.create_board_share(uuid, text, timestamptz), public.resolve_board_share(text) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00434_ffe_privacy_domain_foundation.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.create_board_share(uuid, text, timestamptz) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00434_ffe_privacy_domain_foundation.sql
-DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.resolve_board_share(text) TO anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -9977,18 +9953,6 @@ END $g$;
 -- 00462_workflow_privacy_authority.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.guard_document_share_board_payload() FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00462_workflow_privacy_authority.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.create_board_share(uuid, text, timestamptz) FROM PUBLIC, anon;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00462_workflow_privacy_authority.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.create_board_share(uuid, text, timestamptz) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -11939,5 +11903,119 @@ END $g$;
 -- 00540_direct_orders_attribution.sql
 DO $g$ BEGIN
   GRANT SELECT ( id, order_id, product_id, item_name, qty, unit_price_cents, line_state, line_state_entered_at, line_index, created_at, updated_at ) ON public.fulfillment_order_items TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00543_review_media_content_addressed_reuse.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.prepare_project_review_media_asset( uuid, uuid, text, text, text, bigint, text, text, text, text, bigint, text, integer, integer ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00543_review_media_content_addressed_reuse.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.prepare_project_review_media_asset( uuid, uuid, text, text, text, bigint, text, text, text, text, bigint, text, integer, integer ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00543_review_media_content_addressed_reuse.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_board_room_state(uuid, text, uuid, jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00543_review_media_content_addressed_reuse.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_board_room_state(uuid, text, uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00543_review_media_content_addressed_reuse.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_media_reference_has_live_source(text, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00545_project_board_share_links.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_board_share(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00545_project_board_share_links.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_board_share(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00545_project_board_share_links.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_board_share(text) TO anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_manage_board_item_feedback(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_manage_board_item_feedback(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_document_share_board_payload() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.submit_board_share_reaction(text, uuid, text, text) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.submit_board_share_reaction(text, uuid, text, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.submit_board_share_reaction(text, uuid, text, text) TO anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_board_share(uuid, text, timestamptz, boolean) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_board_share(uuid, text, timestamptz, boolean) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_board_share(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_board_share(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00546_guest_board_share_reactions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_board_share(text) TO anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
