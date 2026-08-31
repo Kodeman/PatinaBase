@@ -12,7 +12,11 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { groupCapturesIntoVisits, type ProjectVisitRow } from '../use-project-visits';
+import {
+  groupCapturesIntoVisits,
+  VISIT_CAPTURE_SELECT,
+  type ProjectVisitRow,
+} from '../use-project-visits';
 
 function row(over: Partial<ProjectVisitRow>): ProjectVisitRow {
   return {
@@ -27,7 +31,7 @@ function row(over: Partial<ProjectVisitRow>): ProjectVisitRow {
     voice_transcript: null,
     voice_duration_seconds: null,
     photos: [],
-    primary_photo_path: null,
+    captured_timezone: null,
     margin_notes: [],
     ...over,
   };
@@ -43,13 +47,16 @@ describe('groupCapturesIntoVisits', () => {
   });
 
   it('counts photos and notes off the schema, not off a heuristic', () => {
+    // W4-C10: photoCount is a photograph TALLY — c2 alone holds two, so the
+    // three files across two captures must read 3, never "2 photo-bearing
+    // captures".
     const visits = groupCapturesIntoVisits([
       row({ id: 'c1', photos: [{ path: 'a.heic' }] }),
       row({ id: 'c2', photos: [{ path: 'b.heic' }, { path: 'c.heic' }] }),
       row({ id: 'c3', capture_kind: 'note', voice_transcript: 'the alcove reads forty-two' }),
     ]);
     expect(visits).toHaveLength(1);
-    expect(visits[0].photoCount).toBe(2);
+    expect(visits[0].photoCount).toBe(3);
     expect(visits[0].noteCount).toBe(1);
   });
 
@@ -90,10 +97,13 @@ describe('groupCapturesIntoVisits', () => {
   });
 
   it('orders visits newest first and their captures newest first', () => {
+    // F14: PostgREST's real shape is `+00:00`, not always `Z` — b2 uses it so
+    // the ordering path (now plain `<`, not `localeCompare`) is exercised
+    // against the actual wire format at least once.
     const visits = groupCapturesIntoVisits([
       row({ id: 'a1', visit_id: 'v1', created_at: '2026-08-15T09:00:00Z', visit_label: 'Whole house' }),
       row({ id: 'b1', visit_id: 'v2', created_at: '2026-08-25T15:00:00Z' }),
-      row({ id: 'b2', visit_id: 'v2', created_at: '2026-08-25T17:00:00Z' }),
+      row({ id: 'b2', visit_id: 'v2', created_at: '2026-08-25T17:00:00+00:00' }),
     ]);
     expect(visits.map((v) => v.visitId)).toEqual(['v2', 'v1']);
     expect(visits[0].captures.map((c) => c.id)).toEqual(['b2', 'b1']);
@@ -118,5 +128,33 @@ describe('groupCapturesIntoVisits', () => {
       .toBeNull();
     expect(groupCapturesIntoVisits([row({ margin_notes: null })])[0].captures[0].marginNoteId)
       .toBeNull();
+  });
+
+  // W4-C11: the visit's day is read in the zone it happened in, not the
+  // reader's. That zone travels on the ROW that ends the visit (endedAt) —
+  // it is where fmtDay reads it from.
+  it('carries the ending row’s captured_timezone onto the visit', () => {
+    const visits = groupCapturesIntoVisits([
+      row({ id: 'c1', created_at: '2026-08-25T15:00:00Z', captured_timezone: 'America/New_York' }),
+      row({ id: 'c2', created_at: '2026-08-25T17:30:00Z', captured_timezone: 'America/Chicago' }),
+    ]);
+    expect(visits[0].timezone).toBe('America/Chicago');
+  });
+
+  it('is null when nothing on the visit recorded a timezone', () => {
+    expect(groupCapturesIntoVisits([row({ captured_timezone: null })])[0].timezone).toBeNull();
+  });
+});
+
+// FIX 3: a tripwire, not proof — it only catches an accidental future edit
+// to the select string; it proves nothing about whether the string is
+// actually valid against the live schema. The live check (against a real
+// Postgres + PostgREST) is Task 18's.
+describe('VISIT_CAPTURE_SELECT — the only thing at real risk in this hook', () => {
+  it('disambiguates the room embed to the assignment FK, never the suggestion one', () => {
+    expect(VISIT_CAPTURE_SELECT).toContain(
+      'room:project_rooms!field_captures_project_room_id_fkey(name)',
+    );
+    expect(VISIT_CAPTURE_SELECT).not.toContain('suggested_project_room_id');
   });
 });

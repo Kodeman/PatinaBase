@@ -25,6 +25,7 @@ function visit(over: Partial<ProjectVisit> = {}): ProjectVisit {
     photoCount: 12,
     noteCount: 3,
     rooms: ['Living', 'Dining'],
+    timezone: null,
     captures: [
       {
         id: 'c1',
@@ -48,10 +49,32 @@ describe('VisitsBlock', () => {
     signed.mockReturnValue({ data: {}, isLoading: false });
   });
 
-  it('renders nothing on a project with no field data', () => {
+  it('renders nothing on a project with no field data, and says nothing to the console', () => {
     visits.mockReturnValue({ data: [], isLoading: false });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     const { container } = render(<VisitsBlock projectId="project-1" />);
     expect(container).toBeEmptyDOMElement();
+    // FIX 2: a genuinely empty project must stay silent — only a THROWN
+    // query gets the console.error, or the two are indistinguishable again.
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  // FIX 2: FC-R10's render-nothing posture makes a broken read indistinguishable
+  // from an empty one unless the failure is surfaced somewhere a QA pass can
+  // see it. Render stays null either way — only the console tells them apart.
+  it('renders nothing on a THROWN query too, but says so to the console', () => {
+    const queryError = new Error('PGRST201');
+    visits.mockReturnValue({ data: undefined, isLoading: false, isError: true, error: queryError });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { container } = render(<VisitsBlock projectId="project-1" />);
+    expect(container).toBeEmptyDOMElement();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[VisitsBlock] useProjectVisits failed',
+      'project-1',
+      queryError,
+    );
+    consoleError.mockRestore();
   });
 
   it('renders nothing while the read is still in flight', () => {
@@ -189,5 +212,89 @@ describe('VisitsBlock', () => {
     const lastCall = signed.mock.calls[signed.mock.calls.length - 1][0];
     expect(lastCall).toEqual(['a.heic', 'c.heic']);
     expect(screen.getAllByRole('img')).toHaveLength(1);
+  });
+
+  // FIX 4 / W4-C9 — below 1440px the margin rail is either fully hidden or a
+  // closed `inert` sheet, so the anchor the link points at is unreachable.
+  // The link may still print (a laptop reader can widen past 1440px without
+  // reloading) but must stay display:none until that breakpoint.
+  it('hides the margin deep link below the full-rail breakpoint (1440px)', () => {
+    visits.mockReturnValue({
+      data: [visit({ captures: [{ ...visit().captures[0], marginNoteId: 'note-1' }] })],
+      isLoading: false,
+    });
+    render(<VisitsBlock projectId="project-1" />);
+    fireEvent.click(screen.getByText('Tue Aug 25 · Living, Dining'));
+    const link = screen.getByRole('link', { name: 'Read it in the margin' });
+    expect(link).toHaveClass('hidden', 'min-[1440px]:inline-flex');
+  });
+
+  // W4-C11 — the day belongs to the visit, not the reader. 00:30Z is 19:30
+  // the PREVIOUS day in America/Chicago (CDT, UTC-5); a UTC/ambient-TZ reader
+  // must not see the visit land on the wrong calendar day. The zone comes
+  // from the fixture explicitly, never from the test runner's ambient TZ.
+  it('reads the day off the visit’s own zone, not the reader’s', () => {
+    visits.mockReturnValue({
+      data: [visit({ endedAt: '2026-08-26T00:30:00Z', timezone: 'America/Chicago' })],
+      isLoading: false,
+    });
+    render(<VisitsBlock projectId="project-1" />);
+    expect(screen.getByText('Tue Aug 25 · Living, Dining')).toBeInTheDocument();
+    expect(screen.queryByText('Wed Aug 26 · Living, Dining')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the reader’s own zone when the visit recorded none', () => {
+    visits.mockReturnValue({ data: [visit({ timezone: null })], isLoading: false });
+    render(<VisitsBlock projectId="project-1" />);
+    expect(screen.getByText('Tue Aug 25 · Living, Dining')).toBeInTheDocument();
+  });
+
+  // F10 — a voice note whose transcription failed has neither a transcript
+  // line nor a photo. "Photo" would be a lie for it.
+  it('gives an honest fallback to a capture with neither a transcript nor a photo', () => {
+    visits.mockReturnValue({
+      data: [
+        visit({
+          captures: [
+            {
+              id: 'c1',
+              captureKind: 'note',
+              createdAt: '2026-08-25T17:30:00Z',
+              roomName: 'Dining',
+              transcript: null,
+              durationSeconds: 40,
+              photoPaths: [],
+              marginNoteId: null,
+            },
+          ],
+        }),
+      ],
+      isLoading: false,
+    });
+    render(<VisitsBlock projectId="project-1" />);
+    fireEvent.click(screen.getByText('Tue Aug 25 · Living, Dining'));
+    expect(screen.queryByText('Photo')).not.toBeInTheDocument();
+    expect(screen.getByText('No transcript')).toBeInTheDocument();
+  });
+
+  // F11 — an empty tally is an omitted element, not an empty <span>.
+  it('omits the tally element entirely when both lanes are empty', () => {
+    visits.mockReturnValue({ data: [visit({ photoCount: 0, noteCount: 0 })], isLoading: false });
+    render(<VisitsBlock projectId="project-1" />);
+    const button = screen.getByText('Tue Aug 25 · Living, Dining').closest('button')!;
+    expect(button.querySelectorAll('span')).toHaveLength(1);
+  });
+
+  // F16 — the disclosure toggle names the list it discloses.
+  it('associates the toggle with the capture list via aria-controls', () => {
+    visits.mockReturnValue({ data: [visit()], isLoading: false });
+    render(<VisitsBlock projectId="project-1" />);
+    const button = screen.getByText('Tue Aug 25 · Living, Dining').closest('button')!;
+    const controlsId = button.getAttribute('aria-controls');
+    expect(controlsId).toBeTruthy();
+    fireEvent.click(button);
+    const list = document.getElementById(controlsId!);
+    expect(list).not.toBeNull();
+    expect(list?.tagName).toBe('UL');
   });
 });
