@@ -26,6 +26,7 @@ import UIKit
 import CaptureKit
 import CaptureKitMocks
 import PostHog
+import Supabase
 
 @Observable
 @MainActor
@@ -66,6 +67,11 @@ public final class AppContainer {
     /// S2 inline project creation (real PostgREST insert vs. local-only). App
     /// -internal; nil in mock mode.
     let projectCreator: (any CaptureProjectCreating)?
+    /// V4 Task 16's queued visit-close drain (FC-R3). App-internal, resumed
+    /// from RootView's reconcileQueues alongside sync/siteScan — same
+    /// lifecycle, no per-record secret to wait on a screen for. Nil in mock
+    /// mode: TimeEntryGateway has no mock conformer.
+    let visitCloseOutboxDrainer: VisitCloseOutboxDrainer?
     /// O2 "Continue with Patina" seam (real OAuth vs. stub). App-internal — the
     /// existential lives app-side; feature teams never touch it.
     let authorizer: any WorkspaceAuthorizing
@@ -88,6 +94,22 @@ public final class AppContainer {
         CaptureStore.resilient(
             persistent: persistent,
             isProtectedDataAvailable: { UIApplication.shared.isProtectedDataAvailable })
+    }
+
+    /// Sync and the visit-close drain share one field-write gateway — the same
+    /// authenticated writer margin notes and punch tasks already use — so they
+    /// are built together and lifted out of `init()` for `function_body_length`.
+    private static func makeSyncAndDrainer(
+        store: CaptureStore, analytics: any CaptureAnalytics, session: SupabaseSessionService,
+        client: SupabaseClient, cache: CaptureProjectCache
+    ) -> (sync: any CaptureSyncService, drainer: VisitCloseOutboxDrainer) {
+        let liveActivity = CaptureLiveActivityController()
+        let gateway = SupabaseCaptureGateway(client: client, bucket: AppConfiguration.captureMediaBucket)
+        let fieldWrites = SupabaseFieldWriteGateway(client: client)
+        let sync = LocalCaptureSyncService(store: store, analytics: analytics,
+                                           liveActivity: liveActivity, session: session, remote: gateway,
+                                           projectCache: cache, fieldWrites: fieldWrites)
+        return (sync, VisitCloseOutboxDrainer(store: store, gateway: fieldWrites))
     }
 
     public init() {
@@ -123,12 +145,10 @@ public final class AppContainer {
             self.siteRequestOutboxDrainer = work.drainer
 
             let cache = CaptureProjectCache(store: store, projects: work.projects); self.projectCache = cache
-            let liveActivity = CaptureLiveActivityController()
-            let gateway = SupabaseCaptureGateway(client: client,
-                                                 bucket: AppConfiguration.captureMediaBucket)
-            self.sync = LocalCaptureSyncService(store: store, analytics: analytics,
-                                                liveActivity: liveActivity, session: session, remote: gateway,
-                                                projectCache: cache, fieldWrites: SupabaseFieldWriteGateway(client: client))
+            let (sync, drainer) = Self.makeSyncAndDrainer(
+                store: store, analytics: analytics, session: session, client: client, cache: cache)
+            self.sync = sync
+            self.visitCloseOutboxDrainer = drainer
             self.projectCreator = SupabaseProjectCreator(client: client, session: session)
 
             #if targetEnvironment(simulator)
@@ -151,6 +171,7 @@ public final class AppContainer {
             self.authorizer = StubWorkspaceAuthorizer()
             self.sync = InMemoryCaptureSyncService()
             self.projectCreator = nil
+            self.visitCloseOutboxDrainer = nil
             self.camera = MockCameraService()
             self.location = MockLocationService()
 

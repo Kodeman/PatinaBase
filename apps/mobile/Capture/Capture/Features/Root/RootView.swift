@@ -429,6 +429,10 @@ struct RootView: View {
         guard !Task.isCancelled,
               reconciliationToken == token,
               container.session.ownerIdentity == owner else { return }
+        await container.visitCloseOutboxDrainer?.resume()
+        guard !Task.isCancelled,
+              reconciliationToken == token,
+              container.session.ownerIdentity == owner else { return }
         lastReconciledOwner = owner
     }
 
