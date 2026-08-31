@@ -97,6 +97,77 @@ describe('warmPresentImages', () => {
     created[1]!.onerror?.(); // a failed load still counts toward progress
     expect(onProgress).toHaveBeenCalledWith(2, 2);
     expect(onSettled).toHaveBeenCalledTimes(1);
+    expect(onSettled).toHaveBeenCalledWith(1); // one of the two failed
+  });
+
+  it('reports zero failures when every target loads successfully', () => {
+    const { created, createImage } = fakeImageFactory();
+    const onSettled = jest.fn();
+
+    warmPresentImages(
+      [
+        { key: 'a', url: 'https://cdn.example/a.jpg' },
+        { key: 'b', url: 'https://cdn.example/b.jpg' },
+      ],
+      new Set(),
+      { onSettled, createImage },
+    );
+    created[0]!.onload?.();
+    created[1]!.onload?.();
+
+    expect(onSettled).toHaveBeenCalledWith(0);
+  });
+
+  it('reports every failure when every target errors', () => {
+    const { created, createImage } = fakeImageFactory();
+    const onSettled = jest.fn();
+
+    warmPresentImages(
+      [
+        { key: 'a', url: 'https://cdn.example/a.jpg' },
+        { key: 'b', url: 'https://cdn.example/b.jpg' },
+        { key: 'c', url: 'https://cdn.example/c.jpg' },
+      ],
+      new Set(),
+      { onSettled, createImage },
+    );
+    created[0]!.onerror?.();
+    created[1]!.onerror?.();
+    created[2]!.onerror?.();
+
+    expect(onSettled).toHaveBeenCalledTimes(1);
+    expect(onSettled).toHaveBeenCalledWith(3);
+  });
+
+  it('reports zero failures for the total===0 (already-warmed) settle path', () => {
+    const onSettled = jest.fn();
+    warmPresentImages(
+      [{ key: 'a', url: 'https://cdn.example/a.jpg' }],
+      new Set(['https://cdn.example/a.jpg']),
+      { onSettled },
+    );
+    expect(onSettled).toHaveBeenCalledWith(0);
+  });
+
+  it('still counts a failed load toward `warmed` so it is not retried on re-entry', () => {
+    const { created, createImage } = fakeImageFactory();
+    const warmed = new Set<string>();
+
+    const first = warmPresentImages(
+      [{ key: 'a', url: 'https://cdn.example/a.jpg' }],
+      warmed,
+      { createImage },
+    );
+    created[0]!.onerror?.();
+    expect(first.total).toBe(1);
+
+    const second = warmPresentImages(
+      [{ key: 'a', url: 'https://cdn.example/a.jpg' }],
+      warmed,
+      { createImage },
+    );
+    expect(second.total).toBe(0);
+    expect(created).toHaveLength(1); // no re-request of the previously-failed URL
   });
 
   it('never blocks the caller — the handle returns synchronously before any image settles', () => {

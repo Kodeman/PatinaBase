@@ -61,8 +61,15 @@ export interface PrefetchImageLike {
 
 export interface WarmPresentImagesOptions {
   onProgress?: (loaded: number, total: number) => void;
-  /** Fires once every pending target has settled (loaded or errored) — including total===0. */
-  onSettled?: () => void;
+  /**
+   * Fires once every pending target has settled (loaded or errored) —
+   * including total===0. `failed` is how many of those settled via
+   * `onerror` — a 404/expired-signed-URL/network failure still "completes"
+   * the warm so the affordance always resolves, but it did not actually
+   * warm the browser cache, so the caller surfaces that distinctly instead
+   * of reporting a silent full success.
+   */
+  onSettled?: (failed: number) => void;
   createImage?: () => PrefetchImageLike;
 }
 
@@ -71,8 +78,10 @@ export interface WarmPresentImagesOptions {
  * throws and never blocks the caller — Present must switch immediately
  * regardless of network conditions; this only shortens the window where a
  * pin's image is still a gray box after the switch. A failed load still
- * counts toward progress so the affordance always resolves and degrades to
- * today's stream-in behavior for that one image.
+ * counts toward progress (and toward `warmed`, so it isn't retried on
+ * re-entry) so the affordance always resolves and degrades to today's
+ * stream-in behavior for that one image — the caller's `onSettled` failure
+ * count is what lets the UI distinguish that from a real full warm.
  *
  * `warmed` is caller-owned and persists across calls (one per board-room
  * session) so re-entering Present never re-requests an already-warmed URL.
@@ -86,25 +95,27 @@ export function warmPresentImages(
   const total = pending.length;
 
   if (total === 0) {
-    options.onSettled?.();
+    options.onSettled?.(0);
     return { total: 0, cancel: () => {} };
   }
 
   let cancelled = false;
   let loaded = 0;
+  let failed = 0;
   const createImage = options.createImage ?? (() => new Image());
 
   for (const target of pending) {
     warmed.add(target.url);
     const image = createImage();
-    const settle = () => {
+    const settle = (ok: boolean) => {
       if (cancelled) return;
       loaded += 1;
+      if (!ok) failed += 1;
       options.onProgress?.(loaded, total);
-      if (loaded >= total) options.onSettled?.();
+      if (loaded >= total) options.onSettled?.(failed);
     };
-    image.onload = settle;
-    image.onerror = settle;
+    image.onload = () => settle(true);
+    image.onerror = () => settle(false);
     image.src = target.url;
   }
 
