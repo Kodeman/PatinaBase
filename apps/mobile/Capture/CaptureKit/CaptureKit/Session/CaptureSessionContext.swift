@@ -222,8 +222,36 @@ public final class CaptureSessionContextStore {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> CaptureSessionContext {
-        let existing = defaults.data(forKey: key).flatMap {
+        var existing = defaults.data(forKey: key).flatMap {
             try? decoder.decode(CaptureSessionContext.self, from: $0)
+        }
+        // FC-R21 N-2: `resolve`'s FIRST guard fires on ELAPSED TIME alone
+        // (its own 4-hour routing window, `inactivityWindow`) and returns a
+        // fresh, kindless context the moment that fails — before the
+        // visit-aware branch ever runs. A visit idle 4-12 hours on the same
+        // calendar day is still "live" by `CaptureVisitPolicy`'s own longer
+        // rules (`autoEndWindow`, 12 hours + same day), so that guard would
+        // otherwise destroy it with no `endVisit`, no reap, and no
+        // `visit.end` — `expiry()` alone would miss this exact window too
+        // (it stays nil while the visit is still alive by ITS rules), so the
+        // reap below fires on the SAME time-based condition `resolve`'s own
+        // guard uses, not on `expiry()`'s narrower one. Deliberately left
+        // alone: `resolve`'s SECOND branch (a same-day rollover reached with
+        // under 4 hours idle), which already preserves routing memory
+        // correctly on its own and must keep doing so — reaping first there
+        // would force `resolve` into its routing-losing FIRST branch
+        // instead. Mirrors the persist(ended())+notify sequence
+        // `reapExpiredVisit` already makes, so the close is recorded before
+        // the replace happens rather than lost.
+        if let open = existing, open.identity == identity, open.kind != nil, open.endedAt == nil {
+            let withinRoutingWindow = now >= open.lastActivityAt &&
+                now.timeIntervalSince(open.lastActivityAt) < CaptureSessionContextPolicy.inactivityWindow
+            if !withinRoutingWindow {
+                let closed = CaptureSessionContextPolicy.ended(open, now: now)
+                persist(closed)
+                NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
+                existing = closed
+            }
         }
         let resolved = CaptureSessionContextPolicy.resolve(
             existing: existing,
