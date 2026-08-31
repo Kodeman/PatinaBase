@@ -170,6 +170,13 @@ export interface BoardRoomCanvasProps extends Omit<
   onCanvasGrow?: (commit: BoardCanvasGrowCommit) => void
   onItemActivate?: (item: EditableMoodBoardItem) => void
   onContextMenuRequest?: (request: BoardContextMenuRequest) => void
+  /**
+   * Fires whenever a pointer gesture (move/resize/rotate/section-move/
+   * marquee/pan) starts or ends. A host uses this to suspend anything that
+   * shouldn't fire mid-gesture — e.g. window-level edit shortcuts that would
+   * otherwise race a held modifier key against stale gesture state.
+   */
+  onGestureActiveChange?: (active: boolean) => void
   renderItem: (item: EditableMoodBoardItem) => React.ReactNode
   showGrid?: boolean
   snapToGrid?: boolean
@@ -592,6 +599,7 @@ export const BoardRoomCanvas = React.forwardRef<
       onCanvasGrow,
       onItemActivate,
       onContextMenuRequest,
+      onGestureActiveChange,
       renderItem,
       showGrid = false,
       snapToGrid = false,
@@ -624,6 +632,20 @@ export const BoardRoomCanvas = React.forwardRef<
       null,
     )
     const gestureRef = React.useRef<CanvasGesture | null>(null)
+    // Every reassignment of gestureRef.current goes through here so a host
+    // (the board-room controller) can suspend window-level edit shortcuts
+    // for as long as a pointer gesture is in flight — see
+    // onGestureActiveChange. In-place mutation of the current gesture object
+    // (e.g. gesture.didMove, gesture.latest) does not call this.
+    const setGesture = React.useCallback(
+      (next: CanvasGesture | null) => {
+        const wasActive = gestureRef.current !== null
+        gestureRef.current = next
+        const isActive = next !== null
+        if (wasActive !== isActive) onGestureActiveChange?.(isActive)
+      },
+      [onGestureActiveChange],
+    )
     const longPressRef = React.useRef<{
       pointerId: number
       itemId: string
@@ -809,7 +831,7 @@ export const BoardRoomCanvas = React.forwardRef<
         pending.timer = setTimeout(() => {
           if (longPressRef.current !== pending) return
           longPressRef.current = null
-          gestureRef.current = null
+          setGesture(null)
           const suppressUntil = Date.now() + BOARD_LONG_PRESS_SUPPRESSION_MS
           suppressClickUntilRef.current = suppressUntil
           suppressContextMenuUntilRef.current = suppressUntil
@@ -826,7 +848,7 @@ export const BoardRoomCanvas = React.forwardRef<
         }, BOARD_LONG_PRESS_MS)
         longPressRef.current = pending
       },
-      [cancelLongPress, onContextMenuRequest],
+      [cancelLongPress, onContextMenuRequest, setGesture],
     )
 
     const handleItemPointerDown = (
@@ -882,7 +904,7 @@ export const BoardRoomCanvas = React.forwardRef<
         (candidate) => candidate.id === itemId,
       )?.aabb
       if (!leadBounds) return
-      gestureRef.current = {
+      setGesture({
         kind: 'move',
         pointerId: event.pointerId,
         startScreen: eventPoint(event, viewport),
@@ -898,7 +920,7 @@ export const BoardRoomCanvas = React.forwardRef<
           id,
           bounds,
         })),
-      }
+      })
       if (duplicate) setAltDragPreview(before)
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
@@ -946,7 +968,7 @@ export const BoardRoomCanvas = React.forwardRef<
             height: selectionBounds.height,
             resolvedHeight: selectionBounds.height,
           }
-      gestureRef.current = {
+      setGesture({
         kind: 'resize',
         pointerId: event.pointerId,
         startScreen: eventPoint(event, viewport),
@@ -958,7 +980,7 @@ export const BoardRoomCanvas = React.forwardRef<
         latestBounds: boundsBefore,
         guides: [],
         preserveAspectByDefault: sources.length > 1 || ASPECT_LOCKED_TYPES.has(sources[0]!.type),
-      }
+      })
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
 
@@ -975,7 +997,7 @@ export const BoardRoomCanvas = React.forwardRef<
         .filter((item) => item.data?.section_id === sectionId)
         .map((item) => ({ id: item.id, x: item.x, y: item.y }))
       if (before.length === 0) return
-      gestureRef.current = {
+      setGesture({
         kind: 'section-move',
         pointerId: event.pointerId,
         startScreen: eventPoint(event, viewport),
@@ -983,7 +1005,7 @@ export const BoardRoomCanvas = React.forwardRef<
         itemIds: before.map((item) => item.id),
         before,
         latest: before,
-      }
+      })
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
 
@@ -1001,7 +1023,7 @@ export const BoardRoomCanvas = React.forwardRef<
         activeView.pan,
         activeView.zoom,
       )
-      gestureRef.current = {
+      setGesture({
         kind: 'rotate',
         pointerId: event.pointerId,
         itemId,
@@ -1012,7 +1034,7 @@ export const BoardRoomCanvas = React.forwardRef<
         ),
         before: item.rotation,
         latest: item.rotation,
-      }
+      })
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
 
@@ -1026,25 +1048,25 @@ export const BoardRoomCanvas = React.forwardRef<
       const screen = eventPoint(event, viewport)
       if (spaceHeld || event.button === 1) {
         event.preventDefault()
-        gestureRef.current = {
+        setGesture({
           kind: 'pan',
           pointerId: event.pointerId,
           startScreen: screen,
           startPan: activeView.pan,
-        }
+        })
       } else if (!readOnly) {
         const logical = screenPointToBoard(
           screen,
           activeView.pan,
           activeView.zoom,
         )
-        gestureRef.current = {
+        setGesture({
           kind: 'marquee',
           pointerId: event.pointerId,
           start: logical,
           current: logical,
           additive: event.shiftKey,
-        }
+        })
         setMarquee({ ...logical, width: 0, height: 0 })
       }
       event.currentTarget.setPointerCapture?.(event.pointerId)
@@ -1264,7 +1286,7 @@ export const BoardRoomCanvas = React.forwardRef<
       cancelLongPress(event.pointerId)
       const gesture = gestureRef.current
       if (!gesture || gesture.pointerId !== event.pointerId) return
-      gestureRef.current = null
+      setGesture(null)
 
       if (gesture.kind === 'marquee') {
         const box = rectFromPoints(gesture.start, gesture.current)
@@ -1459,7 +1481,7 @@ export const BoardRoomCanvas = React.forwardRef<
 
     const cancelGesture = () => {
       cancelLongPress()
-      gestureRef.current = null
+      setGesture(null)
       setPreview({})
       setAltDragPreview(null)
       setGuides([])
@@ -1709,6 +1731,10 @@ export const BoardRoomCanvas = React.forwardRef<
       gestureRef.current?.kind === 'move' && !gestureRef.current.duplicate
         ? gestureRef.current.itemIds
         : null
+    // The alignment cluster sits at the bottom-center and is unusable mid-
+    // gesture anyway; hiding it (rather than out-z-indexing it) keeps a
+    // dragged item from painting over it.
+    const gestureInFlight = gestureRef.current !== null
 
     return (
       <div
@@ -1830,7 +1856,7 @@ export const BoardRoomCanvas = React.forwardRef<
           </div>
         )}
 
-        {showAlignmentControls && !readOnly && selectedItemIds.length >= 2 && (
+        {showAlignmentControls && !readOnly && !gestureInFlight && selectedItemIds.length >= 2 && (
           <div
             role="toolbar"
             aria-label="Board alignment"

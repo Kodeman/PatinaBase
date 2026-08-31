@@ -800,6 +800,63 @@ describe('BoardRoomCanvas semantic commits', () => {
     )
   })
 
+  it('reports gesture-active transitions via onGestureActiveChange, once per start/end (not per pointermove)', () => {
+    const onGestureActiveChange = vi.fn()
+    renderCanvas({
+      selectedItemIds: ['chair'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onGestureActiveChange,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]') as HTMLElement
+    fireEvent.pointerDown(chair, {
+      button: 0,
+      pointerId: 95,
+      clientX: 100,
+      clientY: 100,
+    })
+    expect(onGestureActiveChange).toHaveBeenCalledTimes(1)
+    expect(onGestureActiveChange).toHaveBeenLastCalledWith(true)
+    fireEvent.pointerMove(application, {
+      pointerId: 95,
+      clientX: 110,
+      clientY: 100,
+    })
+    // A pointermove within the same gesture doesn't re-fire the transition.
+    expect(onGestureActiveChange).toHaveBeenCalledTimes(1)
+    fireEvent.pointerUp(application, {
+      pointerId: 95,
+      clientX: 110,
+      clientY: 100,
+    })
+    expect(onGestureActiveChange).toHaveBeenCalledTimes(2)
+    expect(onGestureActiveChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('reports the gesture ending on pointer-cancel too', () => {
+    const onGestureActiveChange = vi.fn()
+    renderCanvas({
+      selectedItemIds: ['chair'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onGestureActiveChange,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]') as HTMLElement
+    fireEvent.pointerDown(chair, {
+      button: 0,
+      pointerId: 96,
+      clientX: 100,
+      clientY: 100,
+    })
+    expect(onGestureActiveChange).toHaveBeenLastCalledWith(true)
+    fireEvent.pointerCancel(application, { pointerId: 96 })
+    expect(onGestureActiveChange).toHaveBeenLastCalledWith(false)
+  })
+
   it('evaluates section membership against the section bounds captured before a move', () => {
     const onSectionMembership = vi.fn()
     renderCanvas({
@@ -1262,6 +1319,43 @@ describe('BoardRoomCanvas semantic commits', () => {
       screen.getByRole('button', { name: 'Distribute horizontal centers' }),
     )
     expect(onItemsMoved.mock.lastCall?.[0].reason).toBe('distribute')
+  })
+
+  it('hides the bottom-center alignment cluster while a gesture is in flight, so a dragged item never paints over it', () => {
+    renderCanvas({
+      selectedItemIds: ['chair', 'image'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      showGuides: false,
+    })
+    expect(
+      screen.getByRole('toolbar', { name: 'Board alignment' }),
+    ).toBeInTheDocument()
+
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]') as HTMLElement
+    fireEvent.pointerDown(chair, {
+      button: 0,
+      pointerId: 97,
+      clientX: 100,
+      clientY: 100,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 97,
+      clientX: 110,
+      clientY: 100,
+    })
+    expect(
+      screen.queryByRole('toolbar', { name: 'Board alignment' }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.pointerUp(application, {
+      pointerId: 97,
+      clientX: 110,
+      clientY: 100,
+    })
+    expect(
+      screen.getByRole('toolbar', { name: 'Board alignment' }),
+    ).toBeInTheDocument()
   })
 
   it('reports auto-grow separately after a committed move', () => {
