@@ -11941,3 +11941,9 @@ DO $g$ BEGIN
   GRANT SELECT ( id, order_id, product_id, item_name, qty, unit_price_cents, line_state, line_state_entered_at, line_index, created_at, updated_at ) ON public.fulfillment_order_items TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00543_margin_notes_field_capture.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.field_captures TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

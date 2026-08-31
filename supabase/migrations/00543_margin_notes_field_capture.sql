@@ -62,7 +62,10 @@
 -- against whatever schema happens to be first on it. Everything else in this
 -- file is already qualified (public.margin_notes, public.field_captures,
 -- pg_get_viewdef('public.margin_items'::regclass)); this makes the view itself
--- match. The DO $postcondition$ block at the end is the belt: it resolves
+-- match. The DO postcondition block at the end is the belt: it resolves
+-- (the tag is spelled out rather than quoted: scripts/generate-legacy-grants.py
+-- strips dollar-quoted bodies BEFORE comments, so a bare dollar tag in prose
+-- pairs with the real block below and swallows every GRANT between them)
 -- 'public.margin_items'::regclass and asserts the new definition, so a view
 -- created in the wrong schema fails loudly INSIDE the transaction.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -343,9 +346,12 @@ select
     'escalated_to_decision_id', n.escalated_to_decision_id,
     'escalated_to_scope_change_id', n.escalated_to_scope_change_id,
     'author_name', ap.full_name,
-    -- The full note. Every consumer that needs the words reads this key; the
-    -- escalation hooks stop forwarding the 80-character title.
-    'body', n.body,
+    -- The full note — FIELD NOTES ONLY. W4-C8 explicitly does NOT take a full
+    -- body for typed R14 notes this wave: readFieldNotePayload falls back to
+    -- row.title (left(body, 80)) when this key is null, which is byte-for-byte
+    -- the pre-wave escalation and amendment seed. Emitting n.body
+    -- unconditionally would have changed the typed-note escalation silently.
+    'body', case when n.field_capture_id is not null then n.body else null end,
     -- The field lane. All NULL/false/[] on a typed R14 note, so nothing about
     -- a field-less project changes shape (FC-R10's browser-verified criterion).
     'field_capture_id', n.field_capture_id,
@@ -458,6 +464,22 @@ comment on view public.margin_items is
 
 grant select on public.margin_items to authenticated;
 grant select on public.margin_items to service_role;
+
+-- ⚠ The view is `security_invoker` and its note branch now LEFT JOINs
+-- public.field_captures, so every SELECT on margin_items needs table-level
+-- SELECT on field_captures as the CALLING role. 00233 created that table under
+-- the pre-2026-05-30 creation-time defaults and no migration has ever granted
+-- it explicitly (verified: no GRANT naming public.field_captures exists in
+-- supabase/migrations/). If prod's grant is absent or ever narrowed, the join
+-- 42501s and takes down EVERY margin kind for that designer, not just the
+-- note. Idempotent, and additive to RLS — 00233's owner/inbox policies remain
+-- the enforcement layer.
+--
+-- Written UPPERCASE, unlike the two lines above it: those are 00282:908-909's
+-- restatement and keep 00282's casing, while scripts/generate-legacy-grants.py
+-- matches GRANT/REVOKE case-sensitively and would skip a lowercase one when it
+-- regenerates supabase/seed/00-legacy-grants.sql.
+GRANT SELECT ON public.field_captures TO authenticated;
 
 -- ── (c) postcondition — the house self-verification block (00513's pattern) ──
 DO $postcondition$
