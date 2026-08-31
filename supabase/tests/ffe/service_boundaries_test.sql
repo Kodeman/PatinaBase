@@ -191,6 +191,40 @@ BEGIN
   ASSERT v_prepared_cross_source->>'sourceAssetId' = v_registered_other_source->>'sourceAssetId',
     'the response must echo the CALLING request''s own source, not the derivative''s original lineage';
 
+  -- Same lineage gap, one level up (adversarial review finding, D6 fixed by
+  -- 00543): board_media_reference_has_live_source's FF&E lane resolved this
+  -- exact cross-source pairing via the identical source_asset_id identity
+  -- that just got dropped above. A reference naming a SECOND, byte-identical
+  -- source path must still be recognized as having a live source, even when
+  -- the derivative's persisted source_asset_id points at a DIFFERENT source
+  -- row entirely.
+  --
+  -- The existing v_prepared/v_prepared_cross_source derivative above cannot
+  -- exercise this: its fixture deliberately gives the derivative a checksum
+  -- (repeat('d',64)) distinct from its source's (repeat('b',64)) to test
+  -- prepare_project_review_media_asset's OWN mismatch guard in isolation,
+  -- which never compares source-vs-derivative checksums directly. The real
+  -- invariant this migration's header documents — review-media preparation
+  -- copies working bytes verbatim, so a derivative's checksum equals its
+  -- source's — is constructed explicitly here instead.
+  INSERT INTO public.project_review_media_assets(
+    id,project_id,source_asset_id,storage_path,derivative_kind,
+    checksum_sha256,size_bytes,content_type,prepared_by
+  ) VALUES (
+    'f7900000-0000-4000-8000-000000000001','f7100000-0000-4000-8000-000000000001',
+    'f7400000-0000-4000-8000-000000000001',
+    'f7100000-0000-4000-8000-000000000001/reviews/verbatim.webp','display',
+    repeat('b',64),4096,'image/webp','f7000000-0000-4000-8000-000000000001'
+  );
+  ASSERT public.board_media_reference_has_live_source(
+    'f7100000-0000-4000-8000-000000000001/specifications/source.pdf',
+    NULL, 'f7400000-0000-4000-8000-000000000001'
+  ), 'FF&E lane must still recognize the derivative''s OWN source (sanity check before the cross-source case)';
+  ASSERT public.board_media_reference_has_live_source(
+    'f7100000-0000-4000-8000-000000000001/specifications/source-retry.pdf',
+    NULL, 'f7400000-0000-4000-8000-000000000001'
+  ), 'FF&E lane must recognize a cross-source, content-identical reference as having a live source';
+
   v_selection := public.place_product_in_project_v2(jsonb_build_object(
     'projectId','f7100000-0000-4000-8000-000000000001',
     'productId','f7300000-0000-4000-8000-000000000001',

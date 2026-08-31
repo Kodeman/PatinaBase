@@ -3,6 +3,8 @@
 -- Lineage: public.prepare_project_review_media_asset — 00454 → 00543 (this file)
 --          public.apply_board_room_state — 00411 → 00435 → 00445 → 00449 →
 --            00454 → 00457 → 00543 (this file; grep confirms 00457 is head)
+--          public.board_media_reference_has_live_source — 00462 → 00473 →
+--            00543 (this file; grep confirms 00473 is head)
 --
 -- THE BUG (D6, board-paths audit 2026-08-31). Prod logs on Strata
 -- (function_edge_logs + postgres_logs, 2026-08-31 16:58 and 17:02 UTC) show the
@@ -70,6 +72,22 @@
 -- a registered working asset for this project whose checksum matches the
 -- named derivative's checksum, rather than requiring it be the exact row the
 -- derivative happens to store as `source_asset_id`.
+--
+-- THIRD FIX, same lineage gap, found on adversarial review.
+-- `board_media_reference_has_live_source` (00473, current head) recognizes an
+-- FF&E-sourced cover's live source via the identical rejected identity:
+-- `derivative.source_asset_id = ffe_source.id` where `ffe_source.storage_path
+-- = v_path` (the reference actually being checked). For an FF&E-sourced cover
+-- that dedup'd onto an existing derivative (D6's exact scenario — a second,
+-- byte-identical working-media upload under a fresh path), `v_path` names the
+-- SECOND source row, but the derivative's persisted `source_asset_id` still
+-- points at the FIRST — so this function would wrongly return false and any
+-- caller relying on it to admit a legitimately-shared FF&E cover reference
+-- (it backs privacy/read-authorization checks; contrast the write-side guards
+-- above) would raise the exact failure class D6 set out to eliminate, just on
+-- the read path instead of the write path. Restated on the same content match:
+-- `derivative.project_id = ffe_source.project_id AND derivative.checksum_sha256
+-- = ffe_source.checksum_sha256`, project_id ownership resolution unchanged.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public.prepare_project_review_media_asset(
@@ -292,3 +310,108 @@ REVOKE ALL ON FUNCTION public.apply_board_room_state(uuid, text, uuid, jsonb)
 
 GRANT EXECUTE ON FUNCTION public.apply_board_room_state(uuid, text, uuid, jsonb)
   TO authenticated;
+
+-- Body copied verbatim from 00473 (current head); only the FF&E-lane EXISTS
+-- guard's JOIN condition changes (source_asset_id identity → project +
+-- checksum content match), per the header above. Every other branch (the
+-- proposal `boards`/`palettes` lanes, the empty/external-media short-circuit,
+-- the p_target_designer/p_target_studio XOR guard) is untouched.
+CREATE OR REPLACE FUNCTION public.board_media_reference_has_live_source(
+  p_reference text,
+  p_target_designer uuid DEFAULT NULL,
+  p_target_studio uuid DEFAULT NULL
+)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, storage, pg_temp
+AS $$
+DECLARE
+  v_path text := public.board_storage_reference_path(p_reference);
+  v_parts text[];
+BEGIN
+  -- Empty and external HTTPS media never crosses this private bucket boundary.
+  IF v_path IS NULL THEN
+    RETURN true;
+  END IF;
+  IF num_nonnulls(p_target_designer, p_target_studio) <> 1 THEN
+    RETURN false;
+  END IF;
+
+  -- FF&E lane (00457): a project board cover names the working source asset,
+  -- never the derivative. Its folder shape is `<project_id>/…`, which carries no
+  -- 'boards'/'palettes' segment, so it is settled before the segment branches.
+  -- CONTENT-addressed match (see header): a derivative shares this source's
+  -- bytes when it shares its project and checksum, regardless of which
+  -- specific working-media upload the derivative's own source_asset_id points
+  -- at (00543 — byte-identical uploads under two different paths dedup onto
+  -- one derivative row).
+  IF EXISTS (
+    SELECT 1
+    FROM public.project_ffe_media_assets AS ffe_source
+    JOIN public.project_review_media_assets AS derivative
+      ON derivative.project_id = ffe_source.project_id
+     AND derivative.checksum_sha256 = ffe_source.checksum_sha256
+    JOIN public.projects AS source_project
+      ON source_project.id = ffe_source.project_id
+    WHERE ffe_source.storage_path = v_path
+      AND public.board_media_owners_share_studio(
+        source_project.designer_id, p_target_designer, p_target_studio
+      )
+  ) THEN
+    RETURN true;
+  END IF;
+
+  v_parts := storage.foldername(v_path);
+  IF array_length(v_parts, 1) < 3 THEN
+    RETURN false;
+  END IF;
+
+  IF v_parts[2] = 'boards' AND EXISTS (
+    SELECT 1
+    FROM public.proposal_boards AS source_board
+    LEFT JOIN public.proposals AS source_proposal
+      ON source_proposal.id = source_board.proposal_id
+    LEFT JOIN public.projects AS source_project
+      ON source_project.id = source_board.project_id
+    LEFT JOIN public.profiles AS media_owner
+      ON media_owner.id::text = v_parts[1]
+    WHERE source_board.id::text = v_parts[3]
+      AND (
+        v_parts[1] = COALESCE(
+          source_board.proposal_id, source_board.project_id
+        )::text
+        OR public.board_media_owners_share_studio(
+          media_owner.id,
+          COALESCE(source_proposal.designer_id, source_project.designer_id),
+          NULL
+        )
+      )
+      AND public.board_media_owners_share_studio(
+        COALESCE(source_proposal.designer_id, source_project.designer_id),
+        p_target_designer,
+        p_target_studio
+      )
+  ) THEN
+    RETURN true;
+  END IF;
+
+  IF v_parts[2] = 'palettes' AND EXISTS (
+    SELECT 1
+    FROM public.proposals AS source_proposal
+    WHERE source_proposal.id::text = v_parts[1]
+      AND public.board_media_owners_share_studio(
+        source_proposal.designer_id, p_target_designer, p_target_studio
+      )
+  ) THEN
+    RETURN true;
+  END IF;
+
+  RETURN false;
+END;
+$$;
+
+-- Same lockdown 00473 applied: reachable only through the definer guards.
+REVOKE ALL ON FUNCTION public.board_media_reference_has_live_source(text, uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
