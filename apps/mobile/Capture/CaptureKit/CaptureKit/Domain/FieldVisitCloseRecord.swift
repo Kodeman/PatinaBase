@@ -57,3 +57,93 @@ public final class FieldVisitCloseRecord {
         min(3_600, pow(2, Double(max(0, attempt - 1))) * 5)
     }
 }
+
+public extension FieldVisitCloseRecord {
+    var state: FieldWriteState {
+        get { FieldWriteState(rawValue: stateRaw) ?? .failed }
+        set { stateRaw = newValue.rawValue }
+    }
+
+    func markDelivered() {
+        state = .written
+        lastError = nil
+        nextAttemptAt = nil
+    }
+
+    func markFailed(_ message: String, now: Date) {
+        state = .failed
+        lastError = message
+        retryCount += 1
+        nextAttemptAt = now.addingTimeInterval(Self.retryDelay(attempt: retryCount))
+    }
+
+    /// `written` is done and `refused` is a fact about this designer and this
+    /// project (FC-R8), so neither is ever tried again.
+    func isDue(at now: Date) -> Bool {
+        guard state != .written, state != .refused else { return false }
+        guard let nextAttemptAt else { return true }
+        return nextAttemptAt <= now
+    }
+}
+
+/// The Hours entry the close offers — FC-R3's billing shadow of the Visits row.
+///
+/// ⚠ `durationMinutes` is NOT Optional, and that is the whole point.
+/// `project_time_entries` has CHECK (duration_minutes IS NULL OR
+/// duration_minutes > 0) (00177:20), and uniq_project_time_entries_running_timer
+/// (00177:39-41) is a partial UNIQUE index on (user_id) WHERE duration_minutes
+/// IS NULL — the designer's ONE desk-timer slot. A nil from Field would either
+/// take that slot or collide on that index. Field logs completed hours and
+/// never starts a timer, so no code path here can express one.
+public struct TimeEntryWriteRequest: Encodable, Equatable, Sendable {
+    public let id: UUID
+    public let projectID: UUID
+    public let userID: UUID
+    public let startedAt: Date
+    public let durationMinutes: Int
+    /// Always "field_visit" — the source 00545 admits.
+    public let source: String
+    /// Always "site_visit".
+    public let activity: String
+    /// The visit's label and rooms, so the Visits block and the Hours entry
+    /// read as one event: "Maple St · Living, Dining".
+    public let notes: String?
+
+    public init(
+        id: UUID,
+        projectID: UUID,
+        userID: UUID,
+        startedAt: Date,
+        durationMinutes: Int,
+        source: String = "field_visit",
+        activity: String = "site_visit",
+        notes: String?
+    ) {
+        self.id = id
+        self.projectID = projectID
+        self.userID = userID
+        self.startedAt = startedAt
+        self.durationMinutes = durationMinutes
+        self.source = source
+        self.activity = activity
+        self.notes = notes
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case source
+        case activity
+        case notes
+        case projectID = "project_id"
+        case userID = "user_id"
+        case startedAt = "started_at"
+        case durationMinutes = "duration_minutes"
+    }
+}
+
+public protocol TimeEntryGateway: Sendable {
+    /// True when an entry with this client-minted id already landed. Closes the
+    /// response-loss gap one round-trip before the primary key does.
+    func existingTimeEntry(id: UUID) async throws -> Bool
+    func insertTimeEntry(_ request: TimeEntryWriteRequest) async throws
+}

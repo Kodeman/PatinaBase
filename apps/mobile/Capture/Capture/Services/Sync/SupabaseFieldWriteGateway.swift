@@ -20,7 +20,8 @@ import Foundation
 import CaptureKit
 import Supabase
 
-final class SupabaseFieldWriteGateway: MarginNoteGateway, PunchTaskGateway, @unchecked Sendable {
+final class SupabaseFieldWriteGateway: MarginNoteGateway, PunchTaskGateway,
+                                       TimeEntryGateway, @unchecked Sendable {
     private let client: SupabaseClient
 
     init(client: SupabaseClient) {
@@ -53,6 +54,20 @@ final class SupabaseFieldWriteGateway: MarginNoteGateway, PunchTaskGateway, @unc
 
     func insertProjectTask(_ request: PunchTaskWriteRequest) async throws {
         try await client.from("project_tasks").insert(request).execute()
+    }
+
+    // MARK: - TimeEntryGateway
+
+    /// The visit close's Hours entry (FC-R3). Always a COMPLETED entry:
+    /// duration_minutes IS NULL is reserved for the designer's one running desk
+    /// timer (uniq_project_time_entries_running_timer, 00177:39-41), and
+    /// TimeEntryWriteRequest cannot express a nil duration.
+    func existingTimeEntry(id: UUID) async throws -> Bool {
+        try await rowExists(table: "project_time_entries", id: id)
+    }
+
+    func insertTimeEntry(_ request: TimeEntryWriteRequest) async throws {
+        try await client.from("project_time_entries").insert(request).execute()
     }
 
     // MARK: -

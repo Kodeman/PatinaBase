@@ -14,6 +14,7 @@
 //  spec §14 explicit-end emission moved here with it.
 
 import Foundation
+import SwiftData
 import SwiftUI
 import CaptureKit
 import PatinaDesignKit
@@ -34,6 +35,8 @@ struct V4VisitReviewScreen: View {
     @State private var closedAt = Date()
     @State private var player = VoiceSegmentPlayer()
     @State private var playingSpecimenID: UUID?
+    @State private var offerAccepted = false
+    @State private var projectID: String?
     private let sessionContext = CaptureSessionContextStore.shared
 
     var body: some View {
@@ -242,6 +245,7 @@ struct V4VisitReviewScreen: View {
 
     private var footer: some View {
         VStack(spacing: 10) {
+            timeOffer
             if let caption = VisitReviewComposer.doneCaption(unplacedCount: summary.unplacedCount) {
                 Text(caption)
                     .font(CaptureType.footnote)
@@ -254,6 +258,41 @@ struct V4VisitReviewScreen: View {
         .padding(.top, 12)
         .padding(.bottom, 8)
         .background(.ultraThinMaterial)
+    }
+
+    /// One tap logs the visit as the hours it took. The offer is hidden
+    /// entirely when the visit has no project — project_time_entries.project_id
+    /// is NOT NULL, so there would be nothing to log it against.
+    @ViewBuilder
+    private var timeOffer: some View {
+        if let projectID, !projectID.isEmpty {
+            RouteActionButton(
+                offerAccepted
+                    ? "Logged."
+                    : VisitReviewComposer.timeOffer(minutes: summary.elapsedMinutes),
+                systemImage: "clock",
+                kind: .secondary) {
+                    logTheHours(projectID: projectID)
+                }
+                .disabled(offerAccepted)
+        }
+    }
+
+    /// The row is written locally and drained later: she is standing in a house
+    /// with one bar, and the hours should not depend on her having signal at the
+    /// moment she taps. Always a completed entry — never a running timer.
+    private func logTheHours(projectID: String) {
+        guard !offerAccepted else { return }
+        offerAccepted = true
+        store.context.insert(FieldVisitCloseRecord(
+            visitID: visitID,
+            timeEntryID: UUID(),
+            projectID: projectID,
+            ownerUserID: identity.userID,
+            startedAt: startedAt,
+            endedAt: closedAt,
+            durationMinutes: summary.elapsedMinutes))
+        try? store.save()
     }
 
     private func done() {
@@ -274,7 +313,14 @@ struct V4VisitReviewScreen: View {
         closedAt = Date()
         if let context = sessionContext.visitState(identity: identity).context {
             startedAt = context.startedAt
+            projectID = context.routing.projectID
         }
+        // Re-entering the screen must not offer the hours a second time; the
+        // record's visitID is unique, so a second insert would fail anyway.
+        let id = visitID
+        let already = FetchDescriptor<FieldVisitCloseRecord>(
+            predicate: #Predicate { $0.visitID == id })
+        offerAccepted = ((try? store.context.fetch(already)) ?? []).isEmpty == false
         switch localListScope {
         case .globalFixtures:
             specimens = store.session(visitID: visitID)
