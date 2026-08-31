@@ -13,8 +13,10 @@ import { useRouter } from 'next/navigation';
 import {
   BoardComposition,
   BoardRoomCanvas,
+  findBoardCascadePlacement,
   fitBoardGeometry,
   resolveMoodBoardGeometry,
+  zoomBoardViewAtPoint,
   type BoardItemsDroppedCommit,
   type MoodBoardRasterInput,
 } from '@patina/design-system';
@@ -791,12 +793,28 @@ function BoardRoomSurface({
   const state = api.state;
   const nextPoint = (): BoardPoint => {
     const rect = workspaceRef.current?.getBoundingClientRect();
-    return {
+    const base = {
       x: ((rect?.width ?? 800) / 2 - api.view.pan.x) / api.view.zoom - 130,
       y: ((rect?.height ?? 600) / 2 - api.view.pan.y) / api.view.zoom - 150,
     };
+    // Cascades by (24, 24) past whatever already occupies the centre point,
+    // so repeated click-adds don't stack invisibly on top of each other (CI-11).
+    return findBoardCascadePlacement(
+      base,
+      state.items.map((item) => ({ x: item.x, y: item.y })),
+    );
   };
   const nextZ = () => Math.max(-1, ...state.items.map((item) => item.zIndex ?? 0)) + 1;
+  const zoomBy = (delta: number) => {
+    const rect = workspaceRef.current?.getBoundingClientRect();
+    const size = { width: rect?.width ?? 800, height: rect?.height ?? 600 };
+    const next = zoomBoardViewAtPoint(
+      api.view,
+      { x: size.width / 2, y: size.height / 2 },
+      api.view.zoom + delta,
+    );
+    api.canvasProps?.onViewChange?.(next, 'zoom');
+  };
 
   const addFromRail = (items: readonly EditableMoodBoardItem[], addSource: BoardAddSource) => {
     api.addItems(items, { source: addSource });
@@ -892,8 +910,12 @@ function BoardRoomSurface({
             </button>
             <button type="button" disabled={!api.canUndo} onClick={api.undo} className="hidden min-h-11 min-w-11 px-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30 sm:block" aria-label="Undo">↶</button>
             <button type="button" disabled={!api.canRedo} onClick={api.redo} className="hidden min-h-11 min-w-11 px-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30 sm:block" aria-label="Redo">↷</button>
-            <span className="hidden min-w-10 text-center font-mono text-[9px] tabular-nums text-[var(--text-muted)] lg:block">{Math.round(api.view.zoom * 100)}%</span>
-            <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 lg:inline-flex" onClick={fit}>Fit</Button>
+            {/* Zoom/Fit stay visible at every viewport width (CI-02) — only
+                Grid/Snap/Tidy below keep their lg:/xl: gating. */}
+            <button type="button" aria-label="Zoom out" onClick={() => zoomBy(-0.1)} className="flex min-h-11 min-w-8 items-center justify-center text-sm text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">−</button>
+            <span className="min-w-10 text-center font-mono text-[9px] tabular-nums text-[var(--text-muted)]">{Math.round(api.view.zoom * 100)}%</span>
+            <button type="button" aria-label="Zoom in" onClick={() => zoomBy(0.1)} className="flex min-h-11 min-w-8 items-center justify-center text-sm text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">+</button>
+            <Button variant="ghost" size="sm" className="min-h-11 min-w-11 inline-flex" onClick={fit}>Fit</Button>
             <button type="button" aria-pressed={showGrid} onClick={toggleGrid} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Grid</button>
             <button type="button" aria-pressed={snapToGrid} onClick={toggleSnap} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Snap</button>
             <Button
