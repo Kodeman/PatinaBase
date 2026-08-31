@@ -53,6 +53,10 @@ export function BoardApprovedPinsPanel({
   const [error, setError] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
+  const [batchResult, setBatchResult] = useState<{
+    attempted: number;
+    failures: ReadonlyArray<{ id: string; name: string; message: string }>;
+  } | null>(null);
 
   const approvedIds = useMemo(
     () => deriveApprovedBoardItemIds(feedbackQuery.data ?? []),
@@ -74,9 +78,12 @@ export function BoardApprovedPinsPanel({
 
   const eligible = approvedPins.filter((pin) => !pin.scheduled);
 
-  const sendOne = async (item: EditableMoodBoardItem) => {
-    setError(null);
-    setSendingId(item.id);
+  /** The bare network call + local state update, with no shared-error side
+   * effects — both sendOne and sendAll build their own error presentation on
+   * top of this so a batch's per-item outcomes never clobber each other. */
+  const promoteOne = async (
+    item: EditableMoodBoardItem,
+  ): Promise<{ ok: true } | { ok: false; message: string }> => {
     try {
       const result = await promote.mutateAsync({
         projectId,
@@ -89,8 +96,21 @@ export function BoardApprovedPinsPanel({
       });
       if (!result.selectionId) throw new Error('Promotion did not return a selection.');
       onPromoted(item.id, result.selectionId);
+      return { ok: true };
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'This pin could not be sent to the schedule.');
+      return {
+        ok: false,
+        message: cause instanceof Error ? cause.message : 'This pin could not be sent to the schedule.',
+      };
+    }
+  };
+
+  const sendOne = async (item: EditableMoodBoardItem) => {
+    setError(null);
+    setSendingId(item.id);
+    try {
+      const outcome = await promoteOne(item);
+      if (!outcome.ok) setError(outcome.message);
     } finally {
       setSendingId(null);
     }
@@ -98,16 +118,32 @@ export function BoardApprovedPinsPanel({
 
   const sendAll = async () => {
     setError(null);
+    // Cleared only here, at the start of a new batch — a per-item failure
+    // accumulated below must survive every later item's success in the same
+    // batch, and must keep showing until the NEXT "Send all approved" run.
+    setBatchResult(null);
     setSendingAll(true);
+    // Snapshot the attempt list up front: onPromoted mutates the parent's
+    // item state as each pin succeeds, which would otherwise shrink
+    // `eligible` mid-loop and corrupt both the iteration and the final
+    // "N of M" count.
+    const attempted = eligible;
+    const failures: Array<{ id: string; name: string; message: string }> = [];
     try {
-      for (const pin of eligible) {
+      for (const pin of attempted) {
         // Sequential on purpose: each call updates local editor state
         // (onPromoted) that the next iteration's render should already see,
         // and the twin/idempotency key is per-pin, not batched server-side.
-        await sendOne(pin.item);
+        setSendingId(pin.item.id);
+        const outcome = await promoteOne(pin.item);
+        if (!outcome.ok) {
+          failures.push({ id: pin.item.id, name: pinName(pin.item), message: outcome.message });
+        }
       }
     } finally {
+      setSendingId(null);
       setSendingAll(false);
+      setBatchResult({ attempted: attempted.length, failures });
     }
   };
 
@@ -164,6 +200,12 @@ export function BoardApprovedPinsPanel({
       {error && (
         <p role="alert" className="mt-2 text-[11px] text-[var(--color-clay-ink)]">
           {error}
+        </p>
+      )}
+      {batchResult && batchResult.failures.length > 0 && (
+        <p role="alert" className="mt-2 text-[11px] text-[var(--color-clay-ink)]">
+          {batchResult.failures.length} of {batchResult.attempted} could not be sent:{' '}
+          {batchResult.failures.map((failure) => failure.name).join(', ')}
         </p>
       )}
     </div>
