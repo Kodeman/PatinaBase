@@ -4,6 +4,7 @@ import {
   computeBoardAutoGrow,
   distributeBoardItems,
   findBoardAlignmentGuides,
+  findBoardCascadePlacement,
   findBoardSmartGuides,
   fitBoardGeometry,
   marqueeIntersections,
@@ -213,5 +214,37 @@ describe('canvas auto-grow', () => {
     // integer columns and apply_board_room_state rejects anything else.
     expect(Number.isInteger(growth.canvas.width)).toBe(true)
     expect(Number.isInteger(growth.canvas.height)).toBe(true)
+  })
+})
+
+describe('findBoardCascadePlacement (CI-11)', () => {
+  it('returns the base point untouched when nothing occupies it', () => {
+    const point = findBoardCascadePlacement({ x: 100, y: 200 }, [])
+    expect(point).toEqual({ x: 100, y: 200 })
+  })
+
+  it('steps by (24, 24) past every occupied slot until a free one is found', () => {
+    const base = { x: 100, y: 200 }
+    const occupied = [
+      { x: 100, y: 200 },
+      { x: 124, y: 224 },
+      { x: 148, y: 248 },
+    ]
+    const point = findBoardCascadePlacement(base, occupied)
+    expect(point).toEqual({ x: 172, y: 272 })
+  })
+
+  it('is insensitive to sub-pixel drift within tolerance, so re-adding near a prior slot still cascades', () => {
+    const base = { x: 100, y: 200 }
+    const occupied = [{ x: 100.5, y: 199.7 }]
+    const point = findBoardCascadePlacement(base, occupied)
+    expect(point).toEqual({ x: 124, y: 224 })
+  })
+
+  it('honors a custom step and tolerance', () => {
+    const base = { x: 0, y: 0 }
+    const occupied = [{ x: 0, y: 0 }]
+    const point = findBoardCascadePlacement(base, occupied, { step: 10 })
+    expect(point).toEqual({ x: 10, y: 10 })
   })
 })

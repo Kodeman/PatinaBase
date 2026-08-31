@@ -720,6 +720,47 @@ export function distributeBoardItems(
   return distributeGaps(selected, 'y')
 }
 
+export interface BoardCascadePlacementOptions {
+  /** Board-space distance between cascade steps on each axis. */
+  step?: number
+  /** How close two points must be to count as the same occupied slot. */
+  tolerance?: number
+  maxAttempts?: number
+}
+
+/**
+ * Walks a diagonal cascade from `basePoint` — (step, step), (2*step, 2*step),
+ * … — and returns the first point not already occupied. Click-add (note,
+ * product, palette, scan, project selection, single uploads) shares one
+ * base anchor; without this, every add would land on the exact same board
+ * point and stack invisibly (CI-11).
+ */
+export function findBoardCascadePlacement(
+  basePoint: BoardPoint,
+  occupied: readonly BoardPoint[],
+  options: BoardCascadePlacementOptions = {},
+): BoardPoint {
+  const step = options.step ?? 24
+  const tolerance = options.tolerance ?? 4
+  const maxAttempts = options.maxAttempts ?? 500
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const candidate = {
+      x: basePoint.x + step * attempt,
+      y: basePoint.y + step * attempt,
+    }
+    const collides = occupied.some(
+      (point) =>
+        Math.abs(point.x - candidate.x) <= tolerance &&
+        Math.abs(point.y - candidate.y) <= tolerance,
+    )
+    if (!collides) return candidate
+  }
+  return {
+    x: basePoint.x + step * maxAttempts,
+    y: basePoint.y + step * maxAttempts,
+  }
+}
+
 export function computeBoardAutoGrow(
   geometry: BoardGeometrySnapshot,
   margin = MOOD_BOARD_CANVAS_GROW_MARGIN,
