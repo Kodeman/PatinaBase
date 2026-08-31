@@ -48,4 +48,12 @@ describe('photoPathsByCapture', () => {
       ]),
     ).toEqual({});
   });
+
+  it('omits a capture whose photos array holds bare strings rather than {path} objects', () => {
+    expect(
+      photoPathsByCapture([
+        { id: 'cap-1', photos: ['a.heic', 'b.heic'], primary_photo_path: null },
+      ]),
+    ).toEqual({});
+  });
 });

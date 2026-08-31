@@ -38,6 +38,17 @@ export function photoPathsByCapture(
     if (paths.length === 0) continue;
 
     const primary = row.primary_photo_path;
+    // Divergence, recorded rather than fixed here: the margin's own photo
+    // strip for this same capture (00543:377-385, `select ... order by
+    // ph_ord`) orders strictly by capture order and never consults
+    // primary_photo_path, while this punch thumbnail and
+    // capture-context-section.tsx both lead with the primary. A designer who
+    // marks a non-first photo primary sees a different lead photo on the
+    // margin than on the punch item and the context section. Ruling: keep
+    // primary-first HERE — it's the designer's own choice of evidence lead,
+    // and it's what two of the three field-capture surfaces already do.
+    // Aligning the margin's `photo_paths` ordering to match is owed, not
+    // done in this change.
     out[row.id] =
       primary && paths.includes(primary)
         ? [primary, ...paths.filter((p) => p !== primary)]

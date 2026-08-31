@@ -102,10 +102,13 @@ export function leadPhotoUrls(
 export function PunchPhoto({ url }: { url: string | null }) {
   if (!url) return null;
   return (
+    // The alt is the row's only signal that this punch item carries a
+    // photo — there is no adjacent "N photos" text the way
+    // capture-context-section.tsx has, so it has to say something real.
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={url}
-      alt=""
+      alt="The photo this task was raised from"
       className="h-8 w-8 flex-shrink-0 rounded-[3px] object-cover"
     />
   );
@@ -282,20 +285,27 @@ export function WorkBlock({
               <button
                 type="button"
                 onClick={() => toggleTask.mutate(t)}
-                className="grid w-full grid-cols-[auto_auto_1fr_auto] items-baseline gap-2.5 px-1 py-1.5 text-left hover:bg-[rgba(196,165,123,0.04)]"
+                className={`grid w-full ${
+                  t.field_capture_id ? 'grid-cols-[auto_auto_1fr_auto]' : 'grid-cols-[auto_1fr_auto]'
+                } items-baseline gap-2.5 px-1 py-1.5 text-left hover:bg-[rgba(196,165,123,0.04)]`}
               >
                 {/* FC-R15: a punch item raised from Field carries the photo
-                    it was taken from, at the head of its line. This span is
-                    always the grid's first track — a wrapper element, not
-                    PunchPhoto itself — so the tick/title/meta columns keep
-                    their assigned tracks whether or not it has content;
-                    PunchPhoto stays purely presentational and renders
-                    nothing for a task typed at the desk. */}
-                <span className="flex items-center">
-                  <PunchPhoto
-                    url={t.field_capture_id ? (byTaskCapture[t.field_capture_id] ?? null) : null}
-                  />
-                </span>
+                    it was taken from, at the head of its line. The photo's
+                    wrapper span — and the extra grid track it needs — renders
+                    ONLY when this row actually has a field_capture_id.
+                    CSS Grid's `gap` applies between every DECLARED track
+                    whether or not that track carries content, so a fixed
+                    four-track template would widen every task row on the
+                    section — including every row on a field-less project —
+                    by one unconditional gap even though the wrapper span
+                    itself collapses to 0 width. Confining the wider template
+                    to punch rows (conductor ruling W4-C13) keeps a
+                    desk-typed row byte-for-byte what it always was. */}
+                {t.field_capture_id && (
+                  <span className="flex items-center">
+                    <PunchPhoto url={byTaskCapture[t.field_capture_id] ?? null} />
+                  </span>
+                )}
                 {/* The tick is a stamp, not a SaaS checkbox: sage-wash fill
                     + a sage ✓ when done (HTML §1 .tick.done). */}
                 <span
