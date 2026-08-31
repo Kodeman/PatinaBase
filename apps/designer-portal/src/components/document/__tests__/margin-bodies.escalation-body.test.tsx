@@ -1,9 +1,16 @@
 /**
- * Escalating a field note must carry the whole note. Today NoteBody forwards
- * `body: row.title` (margin-bodies.tsx:854-860), and the view truncates title
- * to left(body, 80) — so escalating a one-minute transcript produced a client
- * decision whose text was its first eighty characters. §9.4 calls that "the
- * difference between 'works for free' and 'works'".
+ * Escalating a field note must carry the whole note. Before this wave NoteBody
+ * forwarded `body: row.title`, and the view truncates title to left(body, 80)
+ * — so escalating a one-minute transcript produced a client decision whose
+ * text was its first eighty characters. §9.4 calls that "the difference
+ * between 'works for free' and 'works'".
+ *
+ * W4-C8 confines that to FIELD notes. The view emits payload.body only when
+ * margin_notes.field_capture_id is set; on a TYPED desk note the key is null,
+ * readFieldNotePayload falls back to row.title, and both escalations stay
+ * byte-identical to their pre-wave behaviour. Both branches are pinned below —
+ * the field one because it is the point of the wave, the typed one because
+ * widening it is an undeclared behaviour change W4-C8 refuses.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
@@ -90,5 +97,56 @@ describe('NoteBody escalation', () => {
     const seed = amendmentSeed.mock.calls[0][0] as { title: string };
     expect(seed.title.length).toBeLessThanOrEqual(70);
     expect(seed.title.endsWith('…')).toBe(true);
+  });
+});
+
+// ── W4-C8: the typed desk note is the OTHER branch, and it must not have moved.
+// The view emits a null payload.body for it, so escalating and amending both
+// carry left(body, 80) — the eighty-character title — exactly as before the
+// wave. A regression here is the view emitting `n.body` unconditionally again.
+describe('NoteBody escalation — a typed desk note (W4-C8)', () => {
+  const typedNote: MarginItemRow = {
+    ...fieldNote,
+    item_id: 'note-2',
+    title: LONG.slice(0, 80),
+    // The margin migration's note branch: body is null unless
+    // field_capture_id is set, and the whole field lane reads null/false/[].
+    payload: {
+      body: null,
+      field_capture_id: null,
+      capture_visible: false,
+      has_audio: false,
+      photo_paths: [],
+    },
+  };
+
+  beforeEach(() => {
+    escalate.mockReset();
+    amendmentSeed.mockReset();
+  });
+
+  it('sends the eighty-character title to the client decision, not a full body', () => {
+    render(<NoteBody row={typedNote} projectId="project-1" />);
+    fireEvent.click(screen.getByText('→ Client decision'));
+    expect(escalate).toHaveBeenCalledWith({
+      noteId: 'note-2',
+      projectId: 'project-1',
+      body: LONG.slice(0, 80),
+    });
+    expect(escalate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ body: LONG }),
+    );
+  });
+
+  it('seeds the amendment from the title too', () => {
+    render(<NoteBody row={typedNote} projectId="project-1" />);
+    expect(amendmentSeed).toHaveBeenCalledWith(
+      expect.objectContaining({ description: LONG.slice(0, 80), noteId: 'note-2' }),
+    );
+  });
+
+  it('renders no body paragraph — a typed note would print its text twice', () => {
+    render(<NoteBody row={typedNote} projectId="project-1" />);
+    expect(screen.queryByText(LONG.slice(0, 80))).not.toBeInTheDocument();
   });
 });
