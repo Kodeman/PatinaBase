@@ -312,6 +312,11 @@ BEGIN
     SELECT board_reactions_enabled
     FROM public.document_shares WHERE id = v_share.id
   ), 'the opt-in must persist on the share row';
+  -- The two columns that describe the same capability must never disagree.
+  ASSERT (
+    SELECT visibility = '{"feedbackEnabled":true}'::jsonb
+    FROM public.document_shares WHERE id = v_share.id
+  ), 'visibility must agree with board_reactions_enabled';
 
   PERFORM set_config('request.jwt.claims', NULL, true);
   PERFORM set_config('request.jwt.claim.sub', '', true);
@@ -527,6 +532,407 @@ BEGIN
   ASSERT (
     SELECT count(*) FROM public.item_feedback WHERE guest_share_id = v_share.id
   ) = 200, 'the cap must not be crossed by an update';
+END;
+$$;
+
+-- ── A pin added after the mint is outside the frozen edition ───────────────
+DO $$
+DECLARE
+  v_share record;
+  v_late_pin uuid := 'a5436000-0000-4000-8000-000000000001';
+  v_err text := '';
+BEGIN
+  INSERT INTO public.proposal_boards (
+    id, proposal_id, project_id, name, canvas_width, canvas_height,
+    background_color, sections, status, sort_order
+  ) VALUES (
+    'a5432000-0000-4000-8000-000000000004', NULL,
+    'a5431000-0000-4000-8000-000000000001',
+    'Edition board', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 3
+  );
+  INSERT INTO public.proposal_board_items (
+    id, board_id, type, x, y, width, height, z_index, rotation, content, data
+  ) VALUES (
+    'a5436000-0000-4000-8000-000000000000',
+    'a5432000-0000-4000-8000-000000000004',
+    'note', 10, 10, 200, 100, 0, 0, 'Present at mint', '{}'::jsonb
+  );
+
+  PERFORM pg_temp.assume_share_actor('a5430000-0000-4000-8000-000000000001');
+  SET LOCAL ROLE authenticated;
+  SELECT * INTO v_share
+  FROM public.create_board_share(
+    'a5432000-0000-4000-8000-000000000004', 'Edition probe', NULL, true
+  );
+  RESET ROLE;
+
+  -- Added AFTER the token froze its edition.
+  INSERT INTO public.proposal_board_items (
+    id, board_id, type, x, y, width, height, z_index, rotation, content, data
+  ) VALUES (
+    v_late_pin, 'a5432000-0000-4000-8000-000000000004',
+    'note', 300, 10, 200, 100, 1, 0, 'Added later', '{}'::jsonb
+  );
+
+  PERFORM set_config('request.jwt.claims', NULL, true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  SET LOCAL ROLE anon;
+  BEGIN
+    PERFORM public.submit_board_share_reaction(
+      v_share.token, v_late_pin, 'approved', NULL
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'this link cannot take reactions',
+    format('a pin outside the frozen edition must be refused, got: %s', v_err);
+
+  -- A pin that WAS in the edition still works on the same token.
+  PERFORM public.submit_board_share_reaction(
+    v_share.token, 'a5436000-0000-4000-8000-000000000000', 'approved', NULL
+  );
+  RESET ROLE;
+  ASSERT (
+    SELECT count(*) FROM public.item_feedback WHERE guest_share_id = v_share.id
+  ) = 1, 'the frozen-edition check must not block a pin the reader was shown';
+
+  -- 'comment' is not a guest reaction — approve or pass, nothing else.
+  v_err := '';
+  SET LOCAL ROLE anon;
+  BEGIN
+    PERFORM public.submit_board_share_reaction(
+      v_share.token, 'a5436000-0000-4000-8000-000000000000', 'comment', 'note only'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_err := SQLERRM;
+  END;
+  RESET ROLE;
+  ASSERT v_err = 'a reaction is approved or rejected',
+    format('a comment-only verdict must be refused, got: %s', v_err);
+
+  -- An expired link is as dead as a revoked one, for read AND write.
+  UPDATE public.document_shares
+     SET expires_at = now() - interval '1 hour'
+   WHERE id = v_share.id;
+  PERFORM set_config('request.jwt.claims', NULL, true);
+  ASSERT public.resolve_board_share(v_share.token) IS NULL,
+    'an expired reaction link must stop resolving';
+  v_err := '';
+  SET LOCAL ROLE anon;
+  BEGIN
+    PERFORM public.submit_board_share_reaction(
+      v_share.token, 'a5436000-0000-4000-8000-000000000000', 'rejected', NULL
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_err := SQLERRM;
+  END;
+  RESET ROLE;
+  ASSERT v_err = 'this link cannot take reactions',
+    format('an expired reaction link must stop writing, got: %s', v_err);
+END;
+$$;
+
+-- ── A row names exactly one author ─────────────────────────────────────────
+DO $$
+DECLARE
+  v_share_id uuid;
+  v_err text := '';
+BEGIN
+  SELECT id INTO v_share_id FROM public.document_shares
+  WHERE board_id = 'a5432000-0000-4000-8000-000000000004' LIMIT 1;
+
+  BEGIN
+    INSERT INTO public.item_feedback (
+      board_item_id, client_id, guest_share_id, verdict
+    ) VALUES (
+      'a5436000-0000-4000-8000-000000000000',
+      'a5430000-0000-4000-8000-000000000002',
+      v_share_id, 'approved'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_err := SQLERRM;
+  END;
+  ASSERT v_err LIKE '%item_feedback_one_author%',
+    format('a verdict may not name both a client and a share, got: %s', v_err);
+
+  v_err := '';
+  BEGIN
+    INSERT INTO public.item_feedback (board_item_id, client_id, verdict)
+    VALUES ('a5436000-0000-4000-8000-000000000000', NULL, 'approved');
+  EXCEPTION WHEN OTHERS THEN
+    v_err := SQLERRM;
+  END;
+  ASSERT v_err LIKE '%item_feedback_one_author%',
+    format('a verdict must name an author at all, got: %s', v_err);
+END;
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The four verdict RPCs: cross-studio refused, studio co-member allowed —
+-- on BOTH owner kinds. (RULED: the proposal-leg widening from designer_id
+-- equality to studio co-membership is the intended posture.)
+-- ═══════════════════════════════════════════════════════════════════════════
+
+INSERT INTO auth.users (
+  id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+  instance_id, aud, role
+) VALUES (
+  'a5430000-0000-4000-8000-000000000004', 'share-comember@test.invalid', '', NOW(), NOW(), NOW(),
+  '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'
+);
+
+INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
+VALUES ('a5430000-0000-4000-8000-000000000004', 'share-comember@test.invalid', 'Studio Co-member', NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES (
+  'a5437000-0000-4000-8000-000000000001',
+  'design_studio', 'Share Test Studio', 'share-test-studio', 'active'
+);
+
+INSERT INTO public.organization_members (organization_id, user_id, role, status)
+VALUES
+  ('a5437000-0000-4000-8000-000000000001', 'a5430000-0000-4000-8000-000000000001', 'owner', 'active'),
+  ('a5437000-0000-4000-8000-000000000001', 'a5430000-0000-4000-8000-000000000004', 'member', 'active');
+
+-- A PROPOSAL-owned board, so the widening is exercised on the leg that always
+-- had a designer_id to compare against.
+-- A proposal that is already 'sent' (the state the client verdict gate wants).
+-- Its children are written under session_replication_role='replica' because
+-- guard_proposal_child_draft_only() refuses children on a sent proposal and
+-- guard_proposal_authority() reserves the sent transition for send_proposal();
+-- the whole dispatch rail is beside the point for a verdict-authority fixture.
+INSERT INTO public.proposals (id, designer_id, client_id, title, status)
+VALUES (
+  'a5438000-0000-4000-8000-000000000001',
+  'a5430000-0000-4000-8000-000000000001',
+  'a5430000-0000-4000-8000-000000000002',
+  'Share leg proposal', 'sent'
+);
+
+SET LOCAL session_replication_role = 'replica';
+
+INSERT INTO public.proposal_items (
+  id, proposal_id, name, unit_price, unit_sell_price, line_total_cents
+) VALUES (
+  'a5439000-0000-4000-8000-000000000001',
+  'a5438000-0000-4000-8000-000000000001',
+  'A proposal line', 0, 0, 0
+);
+
+INSERT INTO public.proposal_boards (
+  id, proposal_id, project_id, name, canvas_width, canvas_height,
+  background_color, sections, status, sort_order
+) VALUES (
+  'a5432000-0000-4000-8000-000000000005',
+  'a5438000-0000-4000-8000-000000000001', NULL,
+  'Proposal share board', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 0
+);
+
+INSERT INTO public.proposal_board_items (
+  id, board_id, type, x, y, width, height, z_index, rotation, content, data
+) VALUES (
+  'a5433000-0000-4000-8000-000000000021',
+  'a5432000-0000-4000-8000-000000000005',
+  'note', 40, 60, 220, 120, 0, 0, 'Proposal board note', '{}'::jsonb
+);
+
+SET LOCAL session_replication_role = 'origin';
+
+DO $$
+DECLARE
+  v_project_fb uuid;
+  v_proposal_fb uuid;
+  v_err text := '';
+BEGIN
+  INSERT INTO public.item_feedback (board_item_id, client_id, verdict, body)
+  VALUES (
+    'a5433000-0000-4000-8000-000000000011',
+    'a5430000-0000-4000-8000-000000000002', 'rejected', 'please revisit'
+  ) RETURNING id INTO v_project_fb;
+
+  INSERT INTO public.item_feedback (board_item_id, client_id, verdict, body)
+  VALUES (
+    'a5433000-0000-4000-8000-000000000021',
+    'a5430000-0000-4000-8000-000000000002', 'rejected', 'please revisit'
+  ) RETURNING id INTO v_proposal_fb;
+
+  -- ── A designer outside the studio: refused on every RPC, both owner kinds.
+  PERFORM pg_temp.assume_share_actor('a5430000-0000-4000-8000-000000000003');
+  SET LOCAL ROLE authenticated;
+
+  FOR v_err IN
+    SELECT unnest(ARRAY[v_project_fb::text, v_proposal_fb::text])
+  LOOP
+    DECLARE
+      v_target uuid := v_err::uuid;
+      v_caught text;
+    BEGIN
+      v_caught := '';
+      BEGIN PERFORM public.resolve_item_feedback(v_target);
+      EXCEPTION WHEN OTHERS THEN v_caught := SQLERRM; END;
+      ASSERT v_caught = 'only the owning designer may resolve',
+        format('outside designer must not resolve (%s): %s', v_target, v_caught);
+
+      v_caught := '';
+      BEGIN PERFORM public.reopen_item_feedback(v_target);
+      EXCEPTION WHEN OTHERS THEN v_caught := SQLERRM; END;
+      ASSERT v_caught = 'only the owning designer may reopen',
+        format('outside designer must not reopen (%s): %s', v_target, v_caught);
+
+      v_caught := '';
+      BEGIN PERFORM public.reply_to_item_feedback(v_target, 'sneaking in');
+      EXCEPTION WHEN OTHERS THEN v_caught := SQLERRM; END;
+      ASSERT v_caught = 'not authorized to reply',
+        format('outside designer must not reply (%s): %s', v_target, v_caught);
+
+      v_caught := '';
+      BEGIN
+        PERFORM public.escalate_item_feedback_to_decision(
+          v_target, 'a543a000-0000-4000-8000-000000000001'
+        );
+      EXCEPTION WHEN OTHERS THEN v_caught := SQLERRM; END;
+      ASSERT v_caught = 'only the owning designer may escalate',
+        format('outside designer must not escalate (%s): %s', v_target, v_caught);
+    END;
+  END LOOP;
+  RESET ROLE;
+
+  ASSERT (
+    SELECT count(*) FROM public.item_feedback
+    WHERE id IN (v_project_fb, v_proposal_fb) AND resolved_at IS NOT NULL
+  ) = 0, 'a refused resolve must not have landed';
+  ASSERT (
+    SELECT count(*) FROM public.item_feedback_events
+    WHERE feedback_id IN (v_project_fb, v_proposal_fb) AND kind = 'replied'
+  ) = 0, 'a refused reply must not have threaded an event';
+  ASSERT (
+    SELECT count(*) FROM public.item_feedback
+    WHERE id IN (v_project_fb, v_proposal_fb) AND decision_id IS NOT NULL
+  ) = 0, 'a refused escalation must not have stamped a decision';
+
+  -- ── A studio co-member: allowed on both owner kinds.
+  PERFORM pg_temp.assume_share_actor('a5430000-0000-4000-8000-000000000004');
+  SET LOCAL ROLE authenticated;
+
+  PERFORM public.resolve_item_feedback(v_project_fb);
+  PERFORM public.resolve_item_feedback(v_proposal_fb);
+  PERFORM public.reopen_item_feedback(v_project_fb);
+  PERFORM public.reply_to_item_feedback(v_proposal_fb, 'On it.');
+
+  -- Escalation clears the authority guard and stops at the decision-ownership
+  -- one, which is the wall that stays regardless of studio membership.
+  v_err := '';
+  BEGIN
+    PERFORM public.escalate_item_feedback_to_decision(
+      v_proposal_fb, 'a543a000-0000-4000-8000-000000000001'
+    );
+  EXCEPTION WHEN OTHERS THEN v_err := SQLERRM; END;
+  ASSERT v_err LIKE 'decision % not found or not owned',
+    format('a co-member must clear the escalate authority guard, got: %s', v_err);
+  RESET ROLE;
+
+  ASSERT (
+    SELECT resolved_at IS NOT NULL FROM public.item_feedback WHERE id = v_proposal_fb
+  ), 'a studio co-member must resolve a proposal-board verdict';
+  ASSERT (
+    SELECT resolved_at IS NULL FROM public.item_feedback WHERE id = v_project_fb
+  ), 'a studio co-member must reopen a project-board verdict';
+  ASSERT (
+    SELECT count(*) FROM public.item_feedback_events
+    WHERE feedback_id = v_proposal_fb AND kind = 'replied'
+  ) = 1, 'a studio co-member must reply on a proposal-board verdict';
+END;
+$$;
+
+-- ── The signed-in client still writes her own verdicts (client_id nullable) ─
+DO $$
+DECLARE v_id uuid;
+BEGIN
+  PERFORM pg_temp.assume_share_actor('a5430000-0000-4000-8000-000000000002');
+  SET LOCAL ROLE authenticated;
+  INSERT INTO public.item_feedback (proposal_item_id, verdict, body)
+  VALUES ('a5439000-0000-4000-8000-000000000001', 'approved', 'happy with this')
+  RETURNING id INTO v_id;
+  ASSERT (
+    SELECT client_id FROM public.item_feedback WHERE id = v_id
+  ) = 'a5430000-0000-4000-8000-000000000002'::uuid,
+    'the client_id default must still pin a signed-in verdict to its author';
+  RESET ROLE;
+END;
+$$;
+
+-- ── The guest loop actually reaches the designer ───────────────────────────
+DO $$
+DECLARE
+  v_share record;
+  v_meta jsonb;
+BEGIN
+  PERFORM pg_temp.assume_share_actor('a5430000-0000-4000-8000-000000000001');
+  SET LOCAL ROLE authenticated;
+  SELECT * INTO v_share
+  FROM public.create_board_share(
+    'a5432000-0000-4000-8000-000000000005', 'Notify probe', NULL, true
+  );
+  RESET ROLE;
+
+  PERFORM set_config('request.jwt.claims', NULL, true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  SET LOCAL ROLE anon;
+  PERFORM public.submit_board_share_reaction(
+    v_share.token, 'a5433000-0000-4000-8000-000000000021', 'approved', NULL
+  );
+  RESET ROLE;
+
+  SELECT metadata INTO v_meta
+  FROM public.notification_log
+  WHERE type = 'client_feedback'
+    AND user_id = 'a5430000-0000-4000-8000-000000000001'
+    AND metadata->>'source' = 'guest_link'
+  ORDER BY created_at DESC LIMIT 1;
+  ASSERT v_meta IS NOT NULL,
+    'a guest reaction must notify the owning designer';
+  ASSERT v_meta->>'headline' = 'A guest approved Proposal board note',
+    format('the headline must read as a guest''s, got: %s', v_meta->>'headline');
+END;
+$$;
+
+-- The same, on a PROJECT-owned board — the case that never notified at all
+-- before 00546, because the proposal-anchored gate returns no designer there.
+DO $$
+DECLARE
+  v_share record;
+  v_meta jsonb;
+BEGIN
+  PERFORM pg_temp.assume_share_actor('a5430000-0000-4000-8000-000000000001');
+  SET LOCAL ROLE authenticated;
+  SELECT * INTO v_share
+  FROM public.create_board_share(
+    'a5432000-0000-4000-8000-000000000001', 'Project notify probe', NULL, true
+  );
+  RESET ROLE;
+
+  PERFORM set_config('request.jwt.claims', NULL, true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  SET LOCAL ROLE anon;
+  PERFORM public.submit_board_share_reaction(
+    v_share.token, 'a5433000-0000-4000-8000-000000000001', 'rejected', NULL
+  );
+  RESET ROLE;
+
+  SELECT metadata INTO v_meta
+  FROM public.notification_log
+  WHERE type = 'client_feedback'
+    AND user_id = 'a5430000-0000-4000-8000-000000000001'
+    AND metadata->>'boardId' = 'a5432000-0000-4000-8000-000000000001'
+  ORDER BY created_at DESC LIMIT 1;
+  ASSERT v_meta IS NOT NULL,
+    'a project-owned board must notify its own designer';
+  ASSERT v_meta->>'headline' = 'A guest flagged Shared note',
+    format('the project-board headline drifted: %s', v_meta->>'headline');
+  ASSERT v_meta->>'deep_link' = '/board/a5432000-0000-4000-8000-000000000001',
+    format('a project-board notification must land in the room: %s', v_meta->>'deep_link');
 END;
 $$;
 
