@@ -179,4 +179,50 @@ struct VisitReviewTests {
     }
 
     // The close record's backoff is pinned once, in FieldVisitCloseRecordTests.
+
+    // MARK: - The offer cannot mint a close nothing will ever drain
+
+    private let owner = "6b1f0a3c-0000-4000-8000-000000000001"
+
+    /// The gate used to ask only whether her user id parsed as a uuid. The
+    /// DRAINER resolves a whole `CaptureOwnerIdentity` before it fetches, so a
+    /// missing workspace left the offer visible, minted a durable close, and
+    /// then handed the drainer `.unavailable` — a record nothing would ever
+    /// select, under a button reading "Logging these hours." for good.
+    @Test func aMissingWorkspaceHidesTheOfferRatherThanMintingAnUndrainableClose() {
+        #expect(VisitReviewComposer.closeOwnerUserID(
+            runsRealServices: true, userID: owner, workspaceID: nil) == nil)
+        #expect(VisitReviewComposer.closeOwnerUserID(
+            runsRealServices: true, userID: owner, workspaceID: "   ") == nil)
+        // The falsifier: the user id in all three calls is the same good uuid,
+        // so it is the workspace — the drainer's half of the identity — that
+        // decides, and with one present the offer stands.
+        #expect(VisitReviewComposer.closeOwnerUserID(
+            runsRealServices: true, userID: owner, workspaceID: "workspace-a")
+            == UUID(uuidString: owner))
+    }
+
+    /// `project_time_entries.user_id` is a NOT NULL uuid, so the older half of
+    /// the gate stands: "anonymous" — what `CaptureSessionIdentity` substitutes
+    /// — could only ever mint a record that fails.
+    @Test func aUserIDThatIsNotAUUIDStillHidesTheOffer() {
+        #expect(VisitReviewComposer.closeOwnerUserID(
+            runsRealServices: true, userID: "anonymous",
+            workspaceID: "workspace-a") == nil)
+        #expect(VisitReviewComposer.closeOwnerUserID(
+            runsRealServices: true, userID: nil, workspaceID: "workspace-a") == nil)
+        #expect(VisitReviewComposer.closeOwnerUserID(
+            runsRealServices: true, userID: "", workspaceID: "workspace-a") == nil)
+    }
+
+    /// Mock mode reads the store unscoped (`.globalFixtures`), so a close minted
+    /// there IS drainable and the workspace is not the drainer's business. The
+    /// uuid is still required — the row's shape does not change with the mode.
+    @Test func mockModeNeedsNoWorkspaceBecauseItsDrainIsUnscoped() {
+        #expect(VisitReviewComposer.closeOwnerUserID(
+            runsRealServices: false, userID: owner, workspaceID: nil)
+            == UUID(uuidString: owner))
+        #expect(VisitReviewComposer.closeOwnerUserID(
+            runsRealServices: false, userID: "anonymous", workspaceID: nil) == nil)
+    }
 }

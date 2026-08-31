@@ -126,6 +126,30 @@ public enum VisitReviewComposer {
             return false
         }
     }
+
+    /// The account a close may be minted against, or nil — in which case the
+    /// Hours offer must not be shown at all.
+    ///
+    /// TWO conditions, because two different things read the close. The row
+    /// needs a uuid for `project_time_entries.user_id`, which is NOT NULL. The
+    /// DRAINER needs a whole `CaptureOwnerIdentity` to scope its fetch, and a
+    /// missing workspace resolves `.unavailable` — so gating on the user id
+    /// alone minted a record the drainer could never select, and the offer sat
+    /// on "Logging these hours." for good.
+    public static func closeOwnerUserID(
+        runsRealServices: Bool,
+        userID: String?,
+        workspaceID: String?
+    ) -> UUID? {
+        guard CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: runsRealServices,
+            userID: userID,
+            workspaceID: workspaceID) != .unavailable
+        else { return nil }
+        return userID
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap(UUID.init(uuidString:))
+    }
 }
 
 public extension VisitReviewRow {

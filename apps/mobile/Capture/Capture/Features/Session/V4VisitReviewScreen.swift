@@ -13,6 +13,7 @@
 //  This screen is now the ONLY caller of endVisit on the tray path, so the
 //  spec §14 explicit-end emission moved here with it.
 
+import Combine
 import Foundation
 import SwiftData
 import SwiftUI
@@ -32,11 +33,11 @@ struct V4VisitReviewScreen: View {
     let visitCloseDrainer: VisitCloseOutboxDrainer?
 
     @State private var specimens: [Specimen] = []
-    /// Paired ONCE, on load. Read by four computed properties, each of which the
-    /// body evaluates — re-pairing per read built a VisitReviewRow per capture
-    /// roughly six times per body pass.
+    /// Paired once per CHANGE, not per body pass. Read by four computed
+    /// properties, each of which the body evaluates — re-pairing per read built
+    /// a VisitReviewRow per capture roughly six times per pass.
     @State private var paired: [(specimen: Specimen, row: VisitReviewRow)] = []
-    /// The playable segments per capture, stat'ed once on load rather than on
+    /// The playable segments per capture, stat'ed once per change rather than on
     /// every body pass: `playableSegments` touches the filesystem per row.
     @State private var playable: [UUID: [URL]] = [:]
     #if canImport(UIKit)
@@ -72,6 +73,13 @@ struct V4VisitReviewScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier(CaptureScreenID.v4VisitReview.rawValue)
         .onAppear(perform: load)
+        // A placement landing (S1, presented over this screen) or a transcript
+        // finishing while she reads must show. Memoizing at `.onAppear` alone
+        // made the rows a snapshot of the moment the screen opened. Every one of
+        // those lands as a store save, and the thumbnail cache is keyed by
+        // capture, so the decode still never re-runs and never enters `body`.
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)
+            .receive(on: RunLoop.main)) { _ in refreshRows() }
         .onDisappear { player.stop() }
     }
 
@@ -295,7 +303,8 @@ struct V4VisitReviewScreen: View {
     /// One tap logs the visit as the hours it took. The offer is hidden
     /// entirely when the visit has no project — project_time_entries.project_id
     /// is NOT NULL, so there would be nothing to log it against — and equally
-    /// when her user id will not resolve, because `user_id` is NOT NULL too.
+    /// when the close has no owner to be drained under
+    /// (`VisitReviewComposer.closeOwnerUserID`).
     @ViewBuilder
     private var timeOffer: some View {
         if let projectID, !projectID.isEmpty, let ownerUserID {
@@ -325,9 +334,10 @@ struct V4VisitReviewScreen: View {
     /// The sibling write lanes guard the owner id at composition time for the
     /// same reason (LocalCaptureSyncService); this never queues a doomed close.
     private var ownerUserID: UUID? {
-        session.userID
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .flatMap(UUID.init(uuidString:))
+        VisitReviewComposer.closeOwnerUserID(
+            runsRealServices: AppConfiguration.runsRealServices,
+            userID: session.userID,
+            workspaceID: session.workspaceID)
     }
 
     /// The row is written locally and drained later: she is standing in a house
@@ -365,9 +375,14 @@ struct V4VisitReviewScreen: View {
     /// from here the hours land at the NEXT cold launch rather than now.
     /// `SiteRequestScreens` resumes its own drainer from the feature path for
     /// exactly this reason.
+    ///
+    /// `.userInitiated`: a `.failed` record is backing off for up to an hour,
+    /// and an automatic pass selects nothing at all — which made this tap a
+    /// button that looked alive and did nothing. The delay a failure schedules
+    /// is unchanged; only her own tap steps over it.
     private func resumeCloseOutbox() {
         Task { @MainActor in
-            await visitCloseDrainer?.resume()
+            await visitCloseDrainer?.resume(trigger: .userInitiated)
             closeState = standingClose()?.state
         }
     }
@@ -402,6 +417,13 @@ struct V4VisitReviewScreen: View {
         // Re-entering the screen must not offer the hours a second time, and
         // the button says what the standing record actually is.
         closeState = standingClose()?.state
+        refreshRows()
+    }
+
+    /// Everything derived from the visit's captures. Separate from `load` so a
+    /// change can re-run it without also re-stamping `closedAt`, which would
+    /// make the offered minutes tick while she reads.
+    private func refreshRows() {
         switch localListScope {
         case .globalFixtures:
             specimens = store.session(visitID: visitID)
@@ -415,9 +437,11 @@ struct V4VisitReviewScreen: View {
         paired = specimens
             .sorted { $0.createdAt < $1.createdAt }
             .map { ($0, VisitReviewRow(specimen: $0)) }
-        playable = Dictionary(uniqueKeysWithValues: specimens.map {
-            ($0.id, playableSegments($0))
-        })
+        // `uniquingKeysWith`, not `uniqueKeysWithValues`: the latter TRAPS on a
+        // duplicate id, and the fetch's uniqueness is not this view's to promise.
+        playable = Dictionary(
+            specimens.map { ($0.id, playableSegments($0)) },
+            uniquingKeysWith: { first, _ in first })
     }
 
     private var visitEndEmitter: FieldVisitEndEmitter {
