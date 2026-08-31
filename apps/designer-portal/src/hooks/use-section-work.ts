@@ -97,7 +97,7 @@ export function useSectionTasks(projectId: string | null) {
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
       if (error) throw error;
-      return (data ?? []) as SectionTask[];
+      return data ?? [];
     },
   });
 }

@@ -161,18 +161,20 @@ export function groupCapturesIntoVisits(
  * and PostgREST refuses it (PGRST201) on every call. FC-R5: the suggestion
  * lane must never be cross-assigned, so the disambiguation hint always
  * resolves to `field_captures_project_room_id_fkey`.
+ *
+ * `margin_notes(id)` is the margin note this capture filed itself as
+ * (ruling 1). The relationship is margin_notes.field_capture_id →
+ * field_captures.id, created by the margin migration; margin_items is a view
+ * and cannot be embedded, so the base table is read directly. RLS applies:
+ * margin_notes_designer_all is the author's own, so a studio co-member reads
+ * no id and the row simply does not link.
+ *
+ * ⚠ ONE string literal, never a concatenation: supabase-js parses the select
+ * at the type level, and `'a' + 'b'` widens to `string`, which makes the read
+ * come back as GenericStringError[] and forces an `any` on the client.
  */
 export const VISIT_CAPTURE_SELECT =
-  'id, visit_id, visit_label, visit_kind, capture_kind, created_at, ' +
-  'project_room_id, captured_timezone, voice_transcript, voice_duration_seconds, ' +
-  'photos, room:project_rooms!field_captures_project_room_id_fkey(name), ' +
-  // The margin note this capture filed itself as (ruling 1). The
-  // relationship is margin_notes.field_capture_id → field_captures.id,
-  // created by the margin migration; margin_items is a view and cannot
-  // be embedded, so the base table is read directly. RLS applies:
-  // margin_notes_designer_all is the author's own, so a studio
-  // co-member reads no id and the row simply does not link.
-  'margin_notes(id)';
+  'id, visit_id, visit_label, visit_kind, capture_kind, created_at, project_room_id, captured_timezone, voice_transcript, voice_duration_seconds, photos, room:project_rooms!field_captures_project_room_id_fkey(name), margin_notes(id)';
 
 export function useProjectVisits(
   projectId: string | null,
@@ -181,11 +183,12 @@ export function useProjectVisits(
     queryKey: ['project-visits', projectId],
     enabled: Boolean(projectId),
     staleTime: 30_000,
+    // The Visits block degrades to nothing on a failed read (FC-R10); a red
+    // toast on every project spread is the wrong surface for that.
+    meta: { errorSurface: 'silent' },
     queryFn: async (): Promise<ProjectVisit[]> => {
       if (!projectId) return [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from('field_captures')
         .select(VISIT_CAPTURE_SELECT)
         .eq('project_id', projectId)
@@ -198,7 +201,7 @@ export function useProjectVisits(
         console.error('[useProjectVisits] field_captures read failed', error);
         throw error;
       }
-      return groupCapturesIntoVisits((data ?? []) as ProjectVisitRow[]);
+      return groupCapturesIntoVisits(data ?? []);
     },
   });
 }

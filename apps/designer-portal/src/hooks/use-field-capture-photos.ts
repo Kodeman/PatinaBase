@@ -65,15 +65,16 @@ export function useFieldCapturePhotoPaths(
     queryKey: ['field-capture-photos', ids],
     enabled: ids.length > 0,
     staleTime: 60_000,
+    // A punch thumbnail is supporting context: a failed read leaves the row
+    // without its photo, and must not raise a toast on the whole spread.
+    meta: { errorSurface: 'silent' },
     queryFn: async (): Promise<Record<string, string[]>> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from('field_captures')
         .select('id, photos, primary_photo_path')
         .in('id', ids);
       if (error) throw error;
-      return photoPathsByCapture((data ?? []) as CapturePhotoRow[]);
+      return photoPathsByCapture(data ?? []);
     },
   });
 }

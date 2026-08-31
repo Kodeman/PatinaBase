@@ -8440,6 +8440,7 @@ export type Database = {
           due_date: string | null
           escalated_to_decision_id: string | null
           escalated_to_scope_change_id: string | null
+          field_capture_id: string | null
           id: string
           project_id: string | null
           proposal_id: string | null
@@ -8455,6 +8456,7 @@ export type Database = {
           due_date?: string | null
           escalated_to_decision_id?: string | null
           escalated_to_scope_change_id?: string | null
+          field_capture_id?: string | null
           id?: string
           project_id?: string | null
           proposal_id?: string | null
@@ -8470,6 +8472,7 @@ export type Database = {
           due_date?: string | null
           escalated_to_decision_id?: string | null
           escalated_to_scope_change_id?: string | null
+          field_capture_id?: string | null
           id?: string
           project_id?: string | null
           proposal_id?: string | null
@@ -8516,6 +8519,13 @@ export type Database = {
             columns: ["escalated_to_scope_change_id"]
             isOneToOne: false
             referencedRelation: "scope_change_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "margin_notes_field_capture_id_fkey"
+            columns: ["field_capture_id"]
+            isOneToOne: false
+            referencedRelation: "field_captures"
             referencedColumns: ["id"]
           },
           {
@@ -16366,6 +16376,7 @@ export type Database = {
           description: string | null
           due_date: string | null
           estimate_minutes: number | null
+          field_capture_id: string | null
           id: string
           owner: string
           owner_party_id: string | null
@@ -16387,6 +16398,7 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           estimate_minutes?: number | null
+          field_capture_id?: string | null
           id?: string
           owner?: string
           owner_party_id?: string | null
@@ -16408,6 +16420,7 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           estimate_minutes?: number | null
+          field_capture_id?: string | null
           id?: string
           owner?: string
           owner_party_id?: string | null
@@ -16448,6 +16461,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_field_capture_id_fkey"
+            columns: ["field_capture_id"]
+            isOneToOne: false
+            referencedRelation: "field_captures"
             referencedColumns: ["id"]
           },
           {
