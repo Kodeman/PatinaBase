@@ -323,6 +323,111 @@ describe('BoardRoomCanvas selection', () => {
     })
     expect(onSelectionChange.mock.lastCall?.[0]).toEqual(['image', 'chair'])
   })
+
+  it('keeps the first click in an immediately-following shift-click, even before the controlled prop echoes back (aria-pressed regression)', () => {
+    // Root cause: the shift-click branch used to read the `selectedItemIds`
+    // PROP directly. A parent that has not yet re-rendered with the first
+    // click's selection (no intervening render here — no `rerender()` call)
+    // would still see the pre-click value, so the shift-click's "add to
+    // selection" silently dropped the first item. The fix mirrors the prop
+    // into a ref that this component's own `setSelection` updates eagerly.
+    const onSelectionChange = vi.fn()
+    renderCanvas({ onSelectionChange })
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+    const image = document.querySelector('[data-board-item-id="image"]')!
+    fireEvent.pointerDown(chair, {
+      button: 0,
+      pointerId: 90,
+      clientX: 100,
+      clientY: 100,
+    })
+    fireEvent.pointerUp(chair, { pointerId: 90, clientX: 100, clientY: 100 })
+    // No rerender: the parent has not echoed the updated selectedItemIds prop.
+    fireEvent.pointerDown(image, {
+      button: 0,
+      pointerId: 91,
+      shiftKey: true,
+      clientX: 400,
+      clientY: 150,
+    })
+    expect(onSelectionChange).toHaveBeenLastCalledWith(['chair', 'image'], {
+      reason: 'item',
+    })
+  })
+
+  it('marks every item selected by click + shift-click as pressed, including after a subsequent marquee extends it', () => {
+    const onSelectionChange = vi.fn()
+    const { rerender } = renderCanvas({ onSelectionChange, showViewControls: false })
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+    fireEvent.pointerDown(chair, { button: 0, pointerId: 92, clientX: 100, clientY: 100 })
+    fireEvent.pointerUp(chair, { pointerId: 92, clientX: 100, clientY: 100 })
+
+    rerender(
+      <BoardRoomCanvas
+        boardName="Living Room"
+        items={ITEMS}
+        sections={SECTIONS}
+        selectedItemIds={['chair']}
+        onSelectionChange={onSelectionChange}
+        showViewControls={false}
+        renderItem={(item) => <span>{item.id}</span>}
+      />,
+    )
+    expect(chair).toHaveAttribute('aria-pressed', 'true')
+
+    const image = document.querySelector('[data-board-item-id="image"]')!
+    fireEvent.pointerDown(image, {
+      button: 0,
+      pointerId: 93,
+      shiftKey: true,
+      clientX: 400,
+      clientY: 150,
+    })
+    fireEvent.pointerUp(image, { pointerId: 93, clientX: 400, clientY: 150 })
+    expect(onSelectionChange).toHaveBeenLastCalledWith(['chair', 'image'], {
+      reason: 'item',
+    })
+
+    rerender(
+      <BoardRoomCanvas
+        boardName="Living Room"
+        items={ITEMS}
+        sections={SECTIONS}
+        selectedItemIds={['chair', 'image']}
+        onSelectionChange={onSelectionChange}
+        view={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+        showViewControls={false}
+        renderItem={(item) => <span>{item.id}</span>}
+      />,
+    )
+    expect(chair).toHaveAttribute('aria-pressed', 'true')
+    expect(image).toHaveAttribute('aria-pressed', 'true')
+
+    const application = screen.getByRole('application')
+    // Shift-marquee (additive) over empty space must still preserve the
+    // prior click + shift-click selection — the same ref-based fix as the
+    // item-click path above, applied to the marquee's additive union.
+    fireEvent.pointerDown(application, {
+      button: 0,
+      pointerId: 94,
+      shiftKey: true,
+      clientX: 900,
+      clientY: 700,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 94,
+      shiftKey: true,
+      clientX: 950,
+      clientY: 750,
+    })
+    fireEvent.pointerUp(application, {
+      pointerId: 94,
+      shiftKey: true,
+      clientX: 950,
+      clientY: 750,
+    })
+    expect(onSelectionChange.mock.lastCall?.[0]).toEqual(['chair', 'image'])
+  })
 })
 
 describe('BoardRoomCanvas semantic commits', () => {
@@ -579,7 +684,7 @@ describe('BoardRoomCanvas semantic commits', () => {
     expect(document.querySelector('[data-alt-drag-copy-of]')).toBeNull()
   })
 
-  it('promotes the dragged selection once in the same move commit', () => {
+  it('never re-stacks the dragged item: no zIndexPatches in the move commit, but it renders on top mid-drag (CI-03)', () => {
     const onItemsMoved = vi.fn()
     renderCanvas({
       selectedItemIds: ['image'],
@@ -589,7 +694,10 @@ describe('BoardRoomCanvas semantic commits', () => {
       showViewControls: false,
     })
     const application = screen.getByRole('application')
-    const image = document.querySelector('[data-board-item-id="image"]')!
+    const image = document.querySelector('[data-board-item-id="image"]') as HTMLElement
+    // 'image' starts at zIndex 1, below 'note' (3) — confirm it renders under
+    // note before the drag begins.
+    expect(Number(image.style.zIndex)).toBeLessThan(3)
     fireEvent.pointerDown(image, {
       button: 0,
       pointerId: 32,
@@ -601,6 +709,8 @@ describe('BoardRoomCanvas semantic commits', () => {
       clientX: 410,
       clientY: 150,
     })
+    // Mid-drag: a render-only boost puts it above every sibling.
+    expect(Number(image.style.zIndex)).toBeGreaterThan(9000)
     fireEvent.pointerUp(application, {
       pointerId: 32,
       clientX: 410,
@@ -608,12 +718,85 @@ describe('BoardRoomCanvas semantic commits', () => {
     })
 
     expect(onItemsMoved).toHaveBeenCalledTimes(1)
-    expect(onItemsMoved).toHaveBeenCalledWith(
+    const commit = onItemsMoved.mock.calls[0]![0]
+    expect(commit).toEqual(
       expect.objectContaining({
         reason: 'drag',
         after: [{ id: 'image', x: 350, y: 100 }],
-        zIndexPatches: [{ id: 'image', zIndex: 4 }],
       }),
+    )
+    expect(commit.zIndexPatches).toBeUndefined()
+    // After release, it settles back to its real (unchanged) stacking order.
+    expect(Number(image.style.zIndex)).toBe(1)
+  })
+
+  it('arms a move only past a 3-4px screen-space threshold: a 3px wobble is a click-select, not a move (CI-04)', () => {
+    const onItemsMoved = vi.fn()
+    const onSelectionChange = vi.fn()
+    renderCanvas({
+      selectedItemIds: [],
+      onSelectionChange,
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onItemsMoved,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]') as HTMLElement
+    fireEvent.pointerDown(chair, {
+      button: 0,
+      pointerId: 50,
+      clientX: 100,
+      clientY: 100,
+    })
+    // Sub-threshold travel: no visual move, no history entry, no write.
+    fireEvent.pointerMove(application, {
+      pointerId: 50,
+      clientX: 103,
+      clientY: 100,
+    })
+    expect(chair.style.left).toBe('40px')
+    fireEvent.pointerUp(application, {
+      pointerId: 50,
+      clientX: 103,
+      clientY: 100,
+    })
+    expect(onItemsMoved).not.toHaveBeenCalled()
+    // The click-select still happened.
+    expect(onSelectionChange).toHaveBeenCalledWith(['chair'], { reason: 'item' })
+  })
+
+  it('arms a move once travel clears the threshold (CI-04)', () => {
+    const onItemsMoved = vi.fn()
+    renderCanvas({
+      selectedItemIds: ['chair'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onItemsMoved,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]') as HTMLElement
+    fireEvent.pointerDown(chair, {
+      button: 0,
+      pointerId: 51,
+      clientX: 100,
+      clientY: 100,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 51,
+      clientX: 105,
+      clientY: 100,
+    })
+    expect(chair.style.left).toBe('45px')
+    fireEvent.pointerUp(application, {
+      pointerId: 51,
+      clientX: 105,
+      clientY: 100,
+    })
+    expect(onItemsMoved).toHaveBeenCalledTimes(1)
+    expect(onItemsMoved).toHaveBeenCalledWith(
+      expect.objectContaining({ after: [{ id: 'chair', x: 45, y: 80 }] }),
     )
   })
 
@@ -740,7 +923,8 @@ describe('BoardRoomCanvas semantic commits', () => {
       name: /Resize selection/,
     })
     expect(handles).toHaveLength(8)
-    expect(handles[0]).toHaveStyle({ width: '10px', height: '10px' })
+    // 24px screen hit area / zoom 2 (CI-10) — the painted dot stays smaller.
+    expect(handles[0]).toHaveStyle({ width: '12px', height: '12px' })
     expect(screen.queryByRole('button', { name: 'Rotate item' })).toBeNull()
 
     const southeast = screen.getByRole('button', {
@@ -772,7 +956,7 @@ describe('BoardRoomCanvas semantic commits', () => {
     expect(image).toMatchObject({ x: 490, y: 110, width: 330, resolvedHeight: 240 })
   })
 
-  it('shows equal-spacing guides while resizing, snaps the edge, and lets Alt suppress both', () => {
+  it('shows equal-spacing guides while resizing, snaps the edge, and lets Ctrl/Cmd suppress both (CI-09)', () => {
     const guideItems: EditableMoodBoardItem[] = [
       { id: 'a', type: 'image', x: 0, y: 100, width: 100, height: 100, data: {} },
       { id: 'b', type: 'image', x: 200, y: 100, width: 100, height: 100, data: {} },
@@ -830,22 +1014,189 @@ describe('BoardRoomCanvas semantic commits', () => {
       pointerId: 35,
       clientX: 490,
       clientY: 150,
-      altKey: true,
+      ctrlKey: true,
     })
     fireEvent.pointerMove(application, {
       pointerId: 35,
       clientX: 496,
       clientY: 150,
-      altKey: true,
+      ctrlKey: true,
     })
     expect(document.querySelector('[data-board-guide]')).toBeNull()
     fireEvent.pointerUp(application, {
       pointerId: 35,
       clientX: 496,
       clientY: 150,
-      altKey: true,
+      ctrlKey: true,
     })
     expect(onItemResized.mock.lastCall?.[0].after.width).toBe(96)
+  })
+
+  it('Shift imposes aspect lock on an item with no default lock (revises AC1.13, CI-08)', () => {
+    const stickyItems: EditableMoodBoardItem[] = [
+      { id: 'sticky', type: 'note', x: 0, y: 0, width: 200, height: 100, data: {} },
+    ]
+    const onItemResized = vi.fn()
+    const { rerender } = renderCanvas({
+      items: stickyItems,
+      sections: [],
+      selectedItemIds: ['sticky'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onItemResized,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const east = screen.getByRole('button', { name: 'Resize e' })
+    // Without Shift, a note has no default aspect lock — width moves freely.
+    fireEvent.pointerDown(east, { button: 0, pointerId: 60, clientX: 200, clientY: 50 })
+    fireEvent.pointerMove(application, { pointerId: 60, clientX: 260, clientY: 50 })
+    fireEvent.pointerUp(application, { pointerId: 60, clientX: 260, clientY: 50 })
+    expect(onItemResized.mock.lastCall?.[0].after).toMatchObject({
+      width: 260,
+      resolvedHeight: 100,
+    })
+
+    onItemResized.mockClear()
+    rerender(
+      <BoardRoomCanvas
+        boardName="Living Room"
+        items={stickyItems}
+        sections={[]}
+        selectedItemIds={['sticky']}
+        view={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+        onItemResized={onItemResized}
+        showGuides={false}
+        showViewControls={false}
+        renderItem={(item) => <span>{item.id}</span>}
+      />,
+    )
+    const eastAgain = screen.getByRole('button', { name: 'Resize e' })
+    // Holding Shift now imposes the lock — the opposite of the old
+    // Shift-releases behaviour.
+    fireEvent.pointerDown(eastAgain, {
+      button: 0,
+      pointerId: 61,
+      clientX: 200,
+      clientY: 50,
+      shiftKey: true,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 61,
+      clientX: 260,
+      clientY: 50,
+      shiftKey: true,
+    })
+    fireEvent.pointerUp(application, {
+      pointerId: 61,
+      clientX: 260,
+      clientY: 50,
+      shiftKey: true,
+    })
+    const shiftCommit = onItemResized.mock.lastCall?.[0].after
+    expect(shiftCommit.width).toBe(260)
+    expect(shiftCommit.resolvedHeight).toBeCloseTo(130, 5)
+  })
+
+  it('an aspect-locked-by-default item ignores Shift — no gesture-time release exists (CI-08)', () => {
+    const photoItems: EditableMoodBoardItem[] = [
+      { id: 'photo', type: 'image', x: 0, y: 0, width: 200, height: 100, data: {} },
+    ]
+    const onItemResized = vi.fn()
+    const { rerender } = renderCanvas({
+      items: photoItems,
+      sections: [],
+      selectedItemIds: ['photo'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onItemResized,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const east = screen.getByRole('button', { name: 'Resize e' })
+    fireEvent.pointerDown(east, { button: 0, pointerId: 70, clientX: 200, clientY: 50 })
+    fireEvent.pointerMove(application, { pointerId: 70, clientX: 260, clientY: 50 })
+    fireEvent.pointerUp(application, { pointerId: 70, clientX: 260, clientY: 50 })
+    const withoutShift = onItemResized.mock.lastCall?.[0].after
+
+    onItemResized.mockClear()
+    rerender(
+      <BoardRoomCanvas
+        boardName="Living Room"
+        items={photoItems}
+        sections={[]}
+        selectedItemIds={['photo']}
+        view={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+        onItemResized={onItemResized}
+        showGuides={false}
+        showViewControls={false}
+        renderItem={(item) => <span>{item.id}</span>}
+      />,
+    )
+    const eastAgain = screen.getByRole('button', { name: 'Resize e' })
+    fireEvent.pointerDown(eastAgain, {
+      button: 0,
+      pointerId: 71,
+      clientX: 200,
+      clientY: 50,
+      shiftKey: true,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 71,
+      clientX: 260,
+      clientY: 50,
+      shiftKey: true,
+    })
+    fireEvent.pointerUp(application, {
+      pointerId: 71,
+      clientX: 260,
+      clientY: 50,
+      shiftKey: true,
+    })
+    const withShift = onItemResized.mock.lastCall?.[0].after
+    expect(withShift).toEqual(withoutShift)
+    expect(withShift.resolvedHeight).toBeCloseTo(130, 5)
+  })
+
+  it('keeps smart guides active during an Alt-drag duplicate — Alt means duplicate only (CI-09)', () => {
+    const onItemsAltDragged = vi.fn(() => ['mover-copy'])
+    const alignedItems: EditableMoodBoardItem[] = [
+      { id: 'anchor', type: 'image', x: 0, y: 100, width: 100, height: 100, data: {} },
+      { id: 'mover', type: 'image', x: 400, y: 100, width: 100, height: 100, data: {} },
+    ]
+    renderCanvas({
+      items: alignedItems,
+      sections: [],
+      selectedItemIds: ['mover'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onItemsAltDragged,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const mover = document.querySelector('[data-board-item-id="mover"]')!
+    fireEvent.pointerDown(mover, {
+      button: 0,
+      pointerId: 80,
+      altKey: true,
+      clientX: 450,
+      clientY: 150,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 80,
+      altKey: true,
+      clientX: 445,
+      clientY: 150,
+    })
+    // Alt used to also suppress guides; now it's duplicate-only, so the
+    // aligned edge still snaps a guide into view mid-drag.
+    expect(document.querySelector('[data-board-guide]')).not.toBeNull()
+    fireEvent.pointerUp(application, {
+      pointerId: 80,
+      altKey: true,
+      clientX: 445,
+      clientY: 150,
+    })
+    expect(onItemsAltDragged).toHaveBeenCalledTimes(1)
   })
 
   it('snaps rotation to 15 degrees while Shift is held', () => {
