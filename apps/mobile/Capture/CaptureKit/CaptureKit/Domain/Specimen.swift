@@ -159,6 +159,16 @@ public final class Specimen {
     public var marginNoteLastError: String?
     public var marginNoteRetryCount: Int?
 
+    // ── Task/punch lane (wave 4, FC-R7) — punchTaskId is the client-minted
+    //    project_tasks.id AND the idempotency key. punchTaskOwnerRaw is
+    //    'designer' for a task and 'gc' for a punch item.
+    public var punchTaskId: String?
+    public var punchTaskPartyId: String?
+    public var punchTaskOwnerRaw: String?
+    public var punchTaskStateRaw: String?
+    public var punchTaskLastError: String?
+    public var punchTaskRetryCount: Int?
+
     // ── The visit (Field Companion wave 3). All additive optionals. ──
     // captureSessionID already carries the visitID; these carry what
     // field_captures' visit/suggestion columns need.

@@ -345,6 +345,74 @@ public extension Specimen {
         marginNoteRetryCount = nil
         touch()
     }
+
+    // MARK: - Task/punch lane (wave 4)
+
+    var punchTaskState: FieldWriteState? {
+        get { punchTaskStateRaw.flatMap(FieldWriteState.init(rawValue:)) }
+        set { punchTaskStateRaw = newValue?.rawValue }
+    }
+
+    var needsPunchTask: Bool {
+        guard punchTaskId?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty == false else { return false }
+        return punchTaskState != .written && punchTaskState != .refused
+    }
+
+    func requestPunchTask(taskID: UUID, owner: String, partyID: String?) {
+        punchTaskId = taskID.uuidString
+        punchTaskOwnerRaw = owner
+        punchTaskPartyId = partyID
+        punchTaskState = .pending
+        punchTaskLastError = nil
+        punchTaskRetryCount = 0
+        touch()
+    }
+
+    func markPunchTaskPending() {
+        guard punchTaskId != nil else { return }
+        punchTaskState = .pending
+        punchTaskLastError = nil
+        touch()
+    }
+
+    func markPunchTaskStarted() {
+        guard punchTaskId != nil else { return }
+        punchTaskState = .writing
+        punchTaskLastError = nil
+        touch()
+    }
+
+    func markPunchTaskWritten() {
+        guard punchTaskId != nil else { return }
+        punchTaskState = .written
+        punchTaskLastError = nil
+        touch()
+    }
+
+    func markPunchTaskFailed(_ message: String) {
+        punchTaskState = .failed
+        punchTaskLastError = message
+        punchTaskRetryCount = (punchTaskRetryCount ?? 0) + 1
+        touch()
+    }
+
+    func markPunchTaskRefused(_ message: String) {
+        punchTaskState = .refused
+        punchTaskLastError = message
+        touch()
+    }
+
+    func clearPunchTask() {
+        punchTaskId = nil
+        punchTaskPartyId = nil
+        punchTaskOwnerRaw = nil
+        punchTaskState = nil
+        punchTaskLastError = nil
+        punchTaskRetryCount = nil
+        touch()
+    }
 }
 
 // MARK: - The visit (Field Companion wave 3)
