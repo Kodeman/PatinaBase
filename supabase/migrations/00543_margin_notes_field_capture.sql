@@ -62,10 +62,7 @@
 -- against whatever schema happens to be first on it. Everything else in this
 -- file is already qualified (public.margin_notes, public.field_captures,
 -- pg_get_viewdef('public.margin_items'::regclass)); this makes the view itself
--- match. The DO postcondition block at the end is the belt: it resolves
--- (the tag is spelled out rather than quoted: scripts/generate-legacy-grants.py
--- strips dollar-quoted bodies BEFORE comments, so a bare dollar tag in prose
--- pairs with the real block below and swallows every GRANT between them)
+-- match. The DO $postcondition$ block at the end is the belt: it resolves
 -- 'public.margin_items'::regclass and asserts the new definition, so a view
 -- created in the wrong schema fails loudly INSIDE the transaction.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -475,11 +472,12 @@ grant select on public.margin_items to service_role;
 -- note. Idempotent, and additive to RLS — 00233's owner/inbox policies remain
 -- the enforcement layer.
 --
--- Written UPPERCASE, unlike the two lines above it: those are 00282:908-909's
--- restatement and keep 00282's casing, while scripts/generate-legacy-grants.py
--- matches GRANT/REVOKE case-sensitively and would skip a lowercase one when it
--- regenerates supabase/seed/00-legacy-grants.sql.
+-- BOTH roles, matching the two margin_items grants above. service_role
+-- bypasses RLS but not table privileges, so a server-side reader of
+-- margin_items runs the same security_invoker join and 42501s on exactly the
+-- same missing grant.
 GRANT SELECT ON public.field_captures TO authenticated;
+GRANT SELECT ON public.field_captures TO service_role;
 
 -- ── (c) postcondition — the house self-verification block (00513's pattern) ──
 DO $postcondition$
