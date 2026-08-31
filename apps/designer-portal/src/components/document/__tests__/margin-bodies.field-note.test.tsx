@@ -91,17 +91,44 @@ describe('NoteBody — the field note', () => {
     expect(screen.queryByText('A first reading. The recording is here.')).not.toBeInTheDocument();
   });
 
-  it('leaves a typed R14 note exactly as it was — no draft line, no field chrome', () => {
+  it('leaves a typed R14 note exactly as it was — no body paragraph, no field chrome', () => {
     render(
       <NoteBody
         row={row({ author_name: 'Leah Kochaver' }, 'Ask about the runner.')}
         projectId="project-1"
       />,
     );
-    expect(screen.getByText('Ask about the runner.')).toBeInTheDocument();
+    // FC-R10: a field-less note renders byte-identically to how it did before
+    // this wave — no body paragraph. Without the field.fieldCaptureId gate,
+    // NoteBody prints <p>{field.body}</p> unconditionally and field.body falls
+    // back to row.title, so this exact text would appear; this assertion
+    // fails the moment that gate is reverted.
+    expect(screen.queryByText('Ask about the runner.')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(/field-note-audio-/)).not.toBeInTheDocument();
     expect(screen.queryByText('A first reading. The recording is here.')).not.toBeInTheDocument();
     expect(screen.queryByText('The recording is the author’s.')).not.toBeInTheDocument();
     expect(screen.getByText('Leah Kochaver')).toBeInTheDocument();
+  });
+
+  it('shows a photo-only field note today: media renders, no first-reading line', () => {
+    render(
+      <NoteBody
+        row={row(
+          {
+            body: LONG,
+            field_capture_id: 'capture-1',
+            capture_visible: true,
+            has_audio: false,
+            photo_paths: ['a/photo-0.heic'],
+          },
+          LONG.slice(0, 80),
+        )}
+        projectId="project-1"
+      />,
+    );
+    expect(screen.getByText(LONG)).toBeInTheDocument();
+    expect(screen.queryByText('A first reading. The recording is here.')).not.toBeInTheDocument();
+    expect(screen.queryByText('The recording is the author’s.')).not.toBeInTheDocument();
   });
 
   it('still renders the escalated line rather than a body', () => {

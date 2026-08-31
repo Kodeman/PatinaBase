@@ -96,4 +96,43 @@ describe('FieldNoteMedia', () => {
     expect(screen.getByText('Fetching the recording…')).toBeInTheDocument();
     expect(screen.queryByTestId('field-note-audio-0')).not.toBeInTheDocument();
   });
+
+  it('says it is still fetching for a photo-only note too, not an empty strip', () => {
+    signed.mockReturnValue({ data: undefined, isLoading: true });
+    render(
+      <FieldNoteMedia audioPaths={[]} photoPaths={['a/photo-0.heic']} durationSeconds={null} />,
+    );
+    expect(screen.getByText('Fetching the recording…')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('states an audio segment that failed to sign instead of dropping it', () => {
+    signed.mockReturnValue({ data: {}, isLoading: false });
+    render(
+      <FieldNoteMedia audioPaths={['a/voice-000.m4a']} photoPaths={[]} durationSeconds={null} />,
+    );
+    expect(screen.queryByTestId('field-note-audio-0')).not.toBeInTheDocument();
+    expect(screen.getByText('1 recording needs signal.')).toBeInTheDocument();
+  });
+
+  it('states the note duration once even when the first segment fails to sign', () => {
+    signed.mockReturnValue({
+      data: { 'a/voice-001.m4a': 'https://signed/voice-001' },
+      isLoading: false,
+    });
+    render(
+      <FieldNoteMedia
+        audioPaths={['a/voice-000.m4a', 'a/voice-001.m4a']}
+        photoPaths={[]}
+        durationSeconds={64.5}
+      />,
+    );
+    expect(screen.queryByTestId('field-note-audio-0')).not.toBeInTheDocument();
+    expect(screen.getByTestId('field-note-audio-1')).toHaveAttribute(
+      'src',
+      'https://signed/voice-001',
+    );
+    expect(screen.getByText('1:04')).toBeInTheDocument();
+    expect(screen.getByText('1 recording needs signal.')).toBeInTheDocument();
+  });
 });

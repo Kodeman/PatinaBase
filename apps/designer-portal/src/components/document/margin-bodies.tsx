@@ -840,9 +840,11 @@ export function NoteBody({
 
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
-      <p className="mb-2 whitespace-pre-wrap text-[11.5px] leading-[1.55] text-[var(--color-charcoal)]">
-        {field.body}
-      </p>
+      {field.fieldCaptureId ? (
+        <p className="mb-2 whitespace-pre-wrap text-[11.5px] leading-[1.55] text-[var(--color-charcoal)]">
+          {field.body}
+        </p>
+      ) : null}
       {field.captureVisible ? (
         <FieldNoteMedia
           audioPaths={field.audioPaths}

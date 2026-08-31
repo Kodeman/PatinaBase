@@ -101,4 +101,19 @@ describe('formatNoteDuration', () => {
     expect(formatNoteDuration(null)).toBeNull();
     expect(formatNoteDuration(0)).toBeNull();
   });
+
+  it('floors a sub-second note to a minimum of one second, never "0:00"', () => {
+    expect(formatNoteDuration(0.4)).toBe('0:01');
+  });
+
+  it('floors down within a minute and across a minute boundary', () => {
+    expect(formatNoteDuration(59.9)).toBe('0:59');
+    expect(formatNoteDuration(119.6)).toBe('1:59');
+  });
+
+  it('returns null for a negative or non-finite duration', () => {
+    expect(formatNoteDuration(-5)).toBeNull();
+    expect(formatNoteDuration(Infinity)).toBeNull();
+    expect(formatNoteDuration(NaN)).toBeNull();
+  });
 });

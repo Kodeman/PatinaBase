@@ -28,24 +28,34 @@ export function FieldNoteMedia({
 
   if (paths.length === 0) return null;
 
+  if (isLoading) {
+    return (
+      <div className="mb-2.5">
+        <p className="py-1 text-[10.5px] italic text-[var(--text-muted)]">
+          Fetching the recording…
+        </p>
+      </div>
+    );
+  }
+
   const urls = signed ?? {};
   const audio = audioPaths.map((p) => urls[p] ?? null);
   const photos = photoPaths.map((p) => urls[p] ?? null);
+  const unsignedAudio = audio.filter((u) => u === null).length;
   const unsignedPhotos = photos.filter((u) => u === null).length;
   const duration = formatNoteDuration(durationSeconds);
 
   return (
     <div className="mb-2.5">
-      {isLoading && audioPaths.length > 0 ? (
-        <p className="py-1 text-[10.5px] italic text-[var(--text-muted)]">
-          Fetching the recording…
+      {duration ? (
+        <p className="mb-1 font-mono text-[9.5px] tracking-[0.1em] text-[var(--text-muted)]">
+          {duration}
         </p>
       ) : null}
 
       {audio.map((url, i) =>
         url ? (
-          <div key={audioPaths[i]} className="mb-1.5 flex items-center gap-2">
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <div key={`${audioPaths[i]}-${i}`} className="mb-1.5 flex items-center gap-2">
             <audio
               data-testid={`field-note-audio-${i}`}
               src={url}
@@ -53,11 +63,6 @@ export function FieldNoteMedia({
               preload="none"
               className="h-7 w-full max-w-[240px]"
             />
-            {i === 0 && duration ? (
-              <span className="font-mono text-[9.5px] tracking-[0.1em] text-[var(--text-muted)]">
-                {duration}
-              </span>
-            ) : null}
           </div>
         ) : null,
       )}
@@ -66,16 +71,22 @@ export function FieldNoteMedia({
         <div className="mt-1 flex flex-wrap gap-1.5">
           {photos.map((url, i) =>
             url ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
-                key={photoPaths[i]}
+                key={`${photoPaths[i]}-${i}`}
                 src={url}
-                alt=""
+                alt={`Photo ${i + 1} from this note`}
                 className="h-14 w-14 rounded-[3px] object-cover"
               />
             ) : null,
           )}
         </div>
+      ) : null}
+
+      {unsignedAudio > 0 ? (
+        <p className="py-1 text-[10.5px] italic text-[var(--text-muted)]">
+          {unsignedAudio} recording{unsignedAudio === 1 ? '' : 's'} need
+          {unsignedAudio === 1 ? 's' : ''} signal.
+        </p>
       ) : null}
 
       {unsignedPhotos > 0 ? (

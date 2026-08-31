@@ -54,7 +54,11 @@ export function readFieldNotePayload(row: MarginItemRow): FieldNotePayload {
 /** 64.5 → "1:04". Null when there is no duration worth stating. */
 export function formatNoteDuration(seconds: number | null): string | null {
   if (seconds === null || !Number.isFinite(seconds) || seconds <= 0) return null;
-  const whole = Math.floor(seconds);
+  // Math.floor (not Math.round) matches the native <audio> transport
+  // convention and is what makes the plan's own 64.5 → "1:04" assertion pass
+  // (Math.round would give "1:05"). Floor alone reads "0:00" for a sub-second
+  // note, so a working recording is floored to a minimum of one second.
+  const whole = Math.max(1, Math.floor(seconds));
   const mins = Math.floor(whole / 60);
   const secs = whole % 60;
   return `${mins}:${String(secs).padStart(2, '0')}`;
