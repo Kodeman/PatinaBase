@@ -85,13 +85,8 @@ interface DocumentTimeValue {
   offer: LogOffer | null;
   /**
    * D-B54 — whether the offer OWNS the thumb edge, published once so the two
-   * components that share that edge cannot answer it differently.
-   *
-   * `MobileBar` yielded on a bare `offer`, while `LogStrip` refused to paint
-   * an offer belonging to a project other than the one in hand — so opening a
-   * document while a timer ran on another project left BOTH null and the
-   * phone with no bottom chrome at all. An offer only takes the edge when the
-   * strip will actually paint it.
+   * components that share that edge cannot answer it differently. Derived by
+   * `offerOwnsThumbEdge` below, which is the single home of the rule.
    */
   offerOwnsEdge: boolean;
   /** Today's minutes across every engagement, live timer included. */
@@ -103,6 +98,27 @@ interface DocumentTimeValue {
   manualLog: (minutes: number, activity: string) => Promise<void>;
   logOffer: (minutes: number, activity: string | null) => Promise<void>;
   discardOffer: () => Promise<void>;
+}
+
+/**
+ * D-B54 — the ONE rule for who owns the thumb edge, exported so nothing has to
+ * restate it.
+ *
+ * `MobileBar` yielded the edge on a bare `offer`, while `LogStrip` refused to
+ * paint an offer belonging to a project other than the one in hand — so opening
+ * a document while a timer ran on another project left BOTH components null and
+ * the phone with no bottom chrome at all. An offer takes the edge only when the
+ * strip will actually paint it: it is this project's, or no project is held
+ * (back at the Desk, where the offer resurfaces).
+ *
+ * Exported because a stub that re-derives the formula asserts the stub. Every
+ * consumer's test doubles call THIS, so a change here goes red in all of them.
+ */
+export function offerOwnsThumbEdge(
+  offer: { projectId: string } | null,
+  heldProjectId: string | null,
+): boolean {
+  return offer !== null && !(heldProjectId && heldProjectId !== offer.projectId);
 }
 
 const DocumentTimeContext = createContext<DocumentTimeValue | null>(null);
@@ -480,9 +496,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       paused: pausedFor !== null && pausedFor === held?.projectId,
       elapsedSeconds,
       offer,
-      offerOwnsEdge:
-        offer !== null &&
-        !(held?.projectId && held.projectId !== offer.projectId),
+      offerOwnsEdge: offerOwnsThumbEdge(offer, held?.projectId ?? null),
       inHandToday,
       hold,
       release,

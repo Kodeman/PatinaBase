@@ -60,21 +60,30 @@ jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: mockCallSheetOn }),
 }));
 
-// D-B54 — the whole defect lived in this value. The file pinned `offer: null`
-// for every case, so the yield branch never rendered and the cross-project
-// state the designer is actually in was never once executed.
-let mockOfferOwnsEdge = false;
+// D-B54 — the whole defect lived here. This file used to pin `offer: null`
+// for every case, so the bar's yield branch never rendered once and the
+// cross-project state the designer is actually in was never executed. The
+// stub now carries the RAW pair the provider reasons over and derives the
+// answer with the provider's OWN exported rule, so a change to that rule goes
+// red here rather than being re-stated (and re-blessed) by a hand-copied
+// formula in the mock.
+let mockOffer: { entryId: string; projectId: string } | null = null;
+let mockHeldProjectId: string | null = null;
 
-jest.mock('@/hooks/document-time-provider', () => ({
-  useDocumentTime: () => ({
-    inHandToday: 0,
-    running: false,
-    paused: false,
-    elapsedSeconds: 0,
-    offer: null,
-    offerOwnsEdge: mockOfferOwnsEdge,
-  }),
-}));
+jest.mock('@/hooks/document-time-provider', () => {
+  const actual = jest.requireActual('@/hooks/document-time-provider');
+  return {
+    useDocumentTime: () => ({
+      inHandToday: 0,
+      running: false,
+      paused: false,
+      elapsedSeconds: 0,
+      offer: mockOffer,
+      heldProjectId: mockHeldProjectId,
+      offerOwnsEdge: actual.offerOwnsThumbEdge(mockOffer, mockHeldProjectId),
+    }),
+  };
+});
 
 jest.mock('@/hooks/use-margin-items', () => ({
   useMarginItems: () => ({ data: [] }),
@@ -675,31 +684,43 @@ describe('the thumb edge’s one owner (D-B54)', () => {
   beforeEach(() => {
     mockPathname = '/doc/proj-1';
     mockCallSheetOn = true;
-    mockOfferOwnsEdge = false;
+    mockOffer = null;
+    mockHeldProjectId = null;
   });
 
   afterEach(() => {
-    mockOfferOwnsEdge = false;
+    mockOffer = null;
+    mockHeldProjectId = null;
   });
 
-  it('RENDERS the bar while an offer stands that the strip will not paint (a cross-project offer)', () => {
-    // `offerOwnsEdge` is exactly `offer && !crossProject`: a chained-out timer
-    // on project A while document B is in hand does NOT own the edge.
-    mockOfferOwnsEdge = false;
+  it('RENDERS the bar while a CROSS-PROJECT offer stands — the strip will not paint it', () => {
+    // Kody's screen, stated in the two raw facts the provider reasons over: a
+    // chained-out timer on project A while document B is in hand. `LogStrip`
+    // refuses this offer, so a bar that yielded to it would leave the phone
+    // with no bottom chrome at all.
+    mockOffer = { entryId: 'entry-a', projectId: 'project-a' };
+    mockHeldProjectId = 'project-b';
     mountBar();
-    const bar = screen.getByTestId('mobile-bar');
-    expect(bar).toBeInTheDocument();
+    expect(screen.getByTestId('mobile-bar')).toBeInTheDocument();
     expect(
       document.querySelectorAll('[data-mobile-edge-owner]'),
     ).toHaveLength(1);
   });
 
-  it('yields the edge when the offer DOES own it — the strip is about to paint', () => {
-    mockOfferOwnsEdge = true;
+  it('yields the edge to an offer on the project IN HAND — the strip is about to paint it', () => {
+    mockOffer = { entryId: 'entry-a', projectId: 'project-a' };
+    mockHeldProjectId = 'project-a';
     mountBar();
     expect(screen.queryByTestId('mobile-bar')).toBeNull();
     expect(document.querySelectorAll('[data-mobile-edge-owner]')).toHaveLength(
       0,
     );
+  });
+
+  it('yields the edge to an offer with NOTHING held — the Desk, where it resurfaces', () => {
+    mockOffer = { entryId: 'entry-a', projectId: 'project-a' };
+    mockHeldProjectId = null;
+    mountBar();
+    expect(screen.queryByTestId('mobile-bar')).toBeNull();
   });
 });

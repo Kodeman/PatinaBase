@@ -231,3 +231,112 @@ describe('DocumentTimeProvider — A3 queue hardening', () => {
     ]);
   });
 });
+
+/**
+ * D-B54 — who owns the thumb edge, driven through the REAL provider.
+ *
+ * This is the falsifier the W7 correctness review found missing. The rule the
+ * prod defect turned on now lives in `offerOwnsThumbEdge`, and until this
+ * suite existed nothing anywhere exercised it: replacing the derivation with
+ * a bare `offer !== null` — i.e. re-introducing the exact defect Kody hit —
+ * left the whole portal suite green.
+ *
+ * Every case below reaches its state through `hold`/`release` rather than by
+ * setting the boolean, so what is asserted is the provider's own arithmetic
+ * over a real offer and a real held document.
+ */
+describe('DocumentTimeProvider — who owns the thumb edge (D-B54)', () => {
+  let qc: QueryClient;
+
+  beforeEach(() => {
+    events.length = 0;
+    runningTimerRow = null;
+    stopTimerMutateAsync.mockClear();
+    startTimerMutateAsync.mockClear();
+    discardTimerMutateAsync.mockClear();
+    qc = new QueryClient();
+  });
+
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={qc}>
+      <DocumentTimeProvider>{children}</DocumentTimeProvider>
+    </QueryClientProvider>
+  );
+
+  it('no offer standing: nothing owns the edge, so the bar keeps it', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+
+    expect(result.current.offer).toBeNull();
+    expect(result.current.offerOwnsEdge).toBe(false);
+  });
+
+  it('an offer on ANOTHER project while this one is held: the offer does NOT own the edge', async () => {
+    // Kody's screen. A timer runs on A; opening B chains A out into an offer,
+    // and `LogStrip` will refuse to paint it over the document in hand — so
+    // the bar must NOT yield, or the phone has no bottom chrome at all.
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      result.current.hold({ projectId: 'project-b', projectName: 'B', phaseKey: null });
+    });
+    await waitFor(() => expect(stopTimerMutateAsync).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.offer).not.toBeNull());
+
+    expect(result.current.offer?.projectId).toBe('project-a');
+    expect(result.current.heldProjectId).toBe('project-b');
+    expect(result.current.offerOwnsEdge).toBe(false);
+  });
+
+  it('an offer with NOTHING held: the offer owns the edge (the Desk)', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      result.current.release();
+    });
+    await waitFor(() => expect(result.current.offer).not.toBeNull());
+
+    expect(result.current.offer?.projectId).toBe('project-a');
+    expect(result.current.heldProjectId).toBeNull();
+    expect(result.current.offerOwnsEdge).toBe(true);
+  });
+
+  it('an offer on the project that is BACK in hand: the offer owns the edge', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      result.current.release();
+    });
+    await waitFor(() => expect(result.current.offer).not.toBeNull());
+
+    // Picking the SAME document back up: the offer is this project's, so the
+    // strip paints it and the bar rightly yields.
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(2));
+
+    expect(result.current.offer?.projectId).toBe('project-a');
+    expect(result.current.heldProjectId).toBe('project-a');
+    expect(result.current.offerOwnsEdge).toBe(true);
+  });
+});

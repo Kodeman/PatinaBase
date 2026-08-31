@@ -97,7 +97,7 @@ export function MobileBar() {
     openDrawer,
     openMargin,
   } = useMobileShell();
-  const { inHandToday, running, paused, elapsedSeconds, offerOwnsEdge } =
+  const { inHandToday, running, paused, elapsedSeconds, offer, offerOwnsEdge } =
     useDocumentTime();
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
   const { data: unreadProcurement = 0 } = useProcurementUnreadCount();
@@ -203,9 +203,12 @@ export function MobileBar() {
     };
   }, [moreOpen]);
 
+  // D-B54 ruled this line STAYS on the bare `offer`: a chain-out is a change
+  // of subject whether or not it takes the edge, and an open More menu over
+  // it is stale either way. Only the EDGE question reads `offerOwnsEdge`.
   useEffect(() => {
-    if (sheet || offerOwnsEdge) setMoreOpen(false);
-  }, [offerOwnsEdge, sheet]);
+    if (sheet || offer) setMoreOpen(false);
+  }, [offer, sheet]);
 
   // D-B47 — the paper's bottom inset is the bar's own box, not a number that
   // hopes to match it. The bar measured 93px at 390 against a 72px inset (the
