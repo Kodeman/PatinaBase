@@ -13,6 +13,7 @@ import {
 import {
   useBoardTemplates,
   useBoards,
+  useCreateProjectBoard,
   useMaterializeBoardTemplate,
   useOrganizations,
   useProjectOwnedBoards,
@@ -121,6 +122,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   const studioTemplates = templates.filter((template) => template.kind === 'studio');
 
   const createBoard = useUpsertBoard();
+  const createProjectBoard = useCreateProjectBoard();
   const materializeTemplate = useMaterializeBoardTemplate();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
@@ -179,10 +181,17 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   const handleBlank = () =>
     void runCreate('blank', async () => {
       if (!owner) throw new Error('The board owner is unavailable.');
+      const name = `Board ${boards.length + 1}`;
+      // A project-owned board is never written through the table mutations —
+      // useUpsertBoard refuses that leg outright. create_project_board is the
+      // owner-aware server path, the same shape materialize_board_template
+      // already uses from this dialog.
+      if (owner.kind === 'project') {
+        return createProjectBoard.mutateAsync({ projectId: owner.id, name });
+      }
       const board = await createBoard.mutateAsync({
-        proposalId: owner.kind === 'proposal' ? owner.id : undefined,
-        projectId: owner.kind === 'project' ? owner.id : undefined,
-        name: `Board ${boards.length + 1}`,
+        proposalId: owner.id,
+        name,
         sortOrder: (boardsQuery.data ?? []).length,
       });
       return board.id;

@@ -909,9 +909,7 @@ function BoardRoomSurface({
         )}
 
         <div className="flex shrink-0 items-center gap-1">
-          {owner.kind === 'proposal' && (
-            <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)}>Share</Button>
-          )}
+          <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)}>Share</Button>
           {api.mode === 'edit' && <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 sm:inline-flex" onClick={() => setExportOpen(true)}>Export</Button>}
           <Button variant={api.mode === 'present' ? 'secondary' : 'ghost'} size="sm" className="min-h-11 min-w-11" onClick={api.togglePresent}>
             {api.mode === 'present' ? 'Edit' : 'Present'}
@@ -937,16 +935,28 @@ function BoardRoomSurface({
       {(surfaceError || api.persistenceError) && (
         <div role="alert" className="relative z-40 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--color-clay-ink)]">
           <span>{surfaceError ?? api.persistenceError}</span>
-          <button
-            type="button"
-            className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
-            onClick={() => {
-              setSurfaceError(null);
-              api.discardPersistenceError();
-            }}
-          >
-            Dismiss reverted change
-          </button>
+          <span className="flex shrink-0 items-center gap-1">
+            {api.persistenceError && !surfaceError && (
+              <button
+                type="button"
+                disabled={api.isRetryingPersistence}
+                className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase underline underline-offset-2 disabled:no-underline disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                onClick={() => { void api.retryPersistence(); }}
+              >
+                {api.isRetryingPersistence ? 'Trying…' : 'Try again'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+              onClick={() => {
+                setSurfaceError(null);
+                api.discardPersistenceError();
+              }}
+            >
+              Dismiss reverted change
+            </button>
+          </span>
         </div>
       )}
 
@@ -1083,17 +1093,15 @@ function BoardRoomSurface({
             : '')}
       </div>
 
-      {owner.kind === 'proposal' && (
-        <BoardShareDialog
-          boardId={state.boardId}
-          boardName={state.name}
-          owner={owner}
-          sourceProposalId={sourceProposalId}
-          open={shareOpen}
-          onOpenChange={setShareOpen}
-          flush={api.flushPending}
-        />
-      )}
+      <BoardShareDialog
+        boardId={state.boardId}
+        boardName={state.name}
+        owner={owner}
+        sourceProposalId={sourceProposalId}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        flush={api.flushPending}
+      />
       <BoardExportDialog
         boardId={state.boardId}
         boardName={state.name}
