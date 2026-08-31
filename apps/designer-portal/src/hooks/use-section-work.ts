@@ -53,6 +53,10 @@ export interface SectionTask {
   owner_party_id: string | null;
   blocked_by_item_id: string | null;
   seq_after_task_id: string | null;
+  // Field Companion wave 4 (FC-R7 + FC-R15): the field_captures row a
+  // Field-raised punch item was photographed and spoken into. NULL for
+  // every task typed at the desk.
+  field_capture_id: string | null;
 }
 
 export interface SectionGateOption {
@@ -87,7 +91,7 @@ export function useSectionTasks(projectId: string | null) {
     queryFn: async () => {
       const { data, error } = await getSupabase()
         .from('project_tasks')
-        .select('id, project_id, section_key, title, status, due_date, starts_on, completed_at, estimate_minutes, sort_order, owner, owner_party_id, blocked_by_item_id, seq_after_task_id')
+        .select('id, project_id, section_key, title, status, due_date, starts_on, completed_at, estimate_minutes, sort_order, owner, owner_party_id, blocked_by_item_id, seq_after_task_id, field_capture_id')
         .eq('project_id', projectId)
         .not('section_key', 'is', null)
         .order('sort_order', { ascending: true })

@@ -1,0 +1,68 @@
+'use client';
+
+/**
+ * The storage keys behind a Field-raised punch item's photo (FC-R15).
+ * Portal-local by the §11.1 convention: shared Supabase reads live in
+ * packages/supabase; hooks that serve one portal surface stay here, beside
+ * use-margin-notes.ts and use-section-work.ts.
+ *
+ * One `in`-filtered read for a whole section's punch items, then ONE batched
+ * signing call at the call site. field_captures RLS is owner-only outside the
+ * shared inbox (00233:155-186), so a studio co-member simply gets fewer rows
+ * back and the thumbnails do not render — FC-R8, per-designer in v1.
+ */
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { createBrowserClient } from '@patina/supabase';
+
+const getSupabase = () => createBrowserClient();
+
+interface CapturePhotoRow {
+  id: string;
+  photos: unknown;
+  primary_photo_path: string | null;
+}
+
+export function photoPathsByCapture(
+  rows: readonly CapturePhotoRow[],
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const row of rows) {
+    if (!Array.isArray(row.photos)) continue;
+    const paths = row.photos
+      .map((p) =>
+        p && typeof p === 'object' && typeof (p as { path?: unknown }).path === 'string'
+          ? (p as { path: string }).path
+          : '',
+      )
+      .filter((p) => p.length > 0);
+    if (paths.length === 0) continue;
+
+    const primary = row.primary_photo_path;
+    out[row.id] =
+      primary && paths.includes(primary)
+        ? [primary, ...paths.filter((p) => p !== primary)]
+        : paths;
+  }
+  return out;
+}
+
+export function useFieldCapturePhotoPaths(
+  captureIds: readonly string[],
+): UseQueryResult<Record<string, string[]>> {
+  const ids = Array.from(new Set(captureIds.filter(Boolean))).sort();
+  return useQuery({
+    queryKey: ['field-capture-photos', ids],
+    enabled: ids.length > 0,
+    staleTime: 60_000,
+    queryFn: async (): Promise<Record<string, string[]>> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('field_captures')
+        .select('id, photos, primary_photo_path')
+        .in('id', ids);
+      if (error) throw error;
+      return photoPathsByCapture((data ?? []) as CapturePhotoRow[]);
+    },
+  });
+}
