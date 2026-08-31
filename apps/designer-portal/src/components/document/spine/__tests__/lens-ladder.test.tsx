@@ -875,7 +875,7 @@ describe('the rail around the ladder', () => {
         segments={segments}
         doors={doors}
         stageWord="Procurement & Orders"
-        stageIndex="4 OF 6"
+        stagePhase={{ name: 'Procurement & Orders', position: 4, of: 6 }}
       />,
     );
     const spine = document.querySelector('[data-document-spine]') as HTMLElement;

@@ -2473,9 +2473,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         // W5-R4 (F2) — one line on the four pre-work spreads.
         preWork={isPreWorkSection(bandSpread)}
         stageWord={ticketPhase ? ticketPhase.name.toUpperCase() : null}
-        stageIndex={
-          ticketPhase ? `${ticketPhase.position} OF ${ticketPhase.of}` : null
-        }
+        // W7-R1 §1 — the phase itself: the head's `N OF M` and the progress
+        // mark's own name are formatted from this one pair.
+        stagePhase={ticketPhase}
         household={row.client_name}
         roomInHand={
           heldRoomId && heldRoomName

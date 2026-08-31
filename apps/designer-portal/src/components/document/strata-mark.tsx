@@ -100,13 +100,16 @@ export function StrataMark({
               }}
             >
               <span
-                className="strata-fill absolute inset-0"
+                // W7-R1 §1 — the fill's ease is a CLASS, not an inline style:
+                // an inline `transition` outranks `motion-reduce:transition-none`
+                // and the mark would keep animating under reduce. `ease-in-out`
+                // IS cubic-bezier(0.4,0,0.2,1).
+                className="strata-fill absolute inset-0 transition-transform duration-[600ms] ease-in-out motion-reduce:transition-none"
                 style={{
                   background: hue,
                   borderRadius: 999,
                   transformOrigin: 'left center',
                   transform: `scaleX(${clamp(fill[i])})`,
-                  transition: 'transform 0.6s cubic-bezier(0.4,0,0.2,1)',
                 }}
               />
             </span>

@@ -2,7 +2,7 @@
 
 /**
  * The document spine (spec §3, D12; R127 Wave 1). Above the `--rule-mid`: the
- * head — `Put down`, the household, the seven-mark arc, the stage phrase — one
+ * head — `Put down`, the household, ONE progress mark, the stage phrase — one
  * reserved block that keeps its height at every offset. Below it: this paper's
  * own furniture. A sticky full-height rail only when the paper can keep its
  * working measure: 136px of words from 1180px, 200px from 1440px. Below
@@ -29,10 +29,14 @@ import type {
 } from '@/lib/document/lens-ladder-derivation';
 import type { SpineSection } from '@/lib/document/section-derivation';
 import type { SectionKey } from '@/lib/document/desk-derivation';
+import type { TicketPhase } from '@/lib/document/ticket-derivation';
 
 export interface DocSpineProps {
   sections: SpineSection[];
-  /** Click a settled/active marker to scroll to (and unfold) that section. */
+  /** Scroll to (and unfold) a section. W7-R1 §1 retired the arc that pressed
+   *  it, so the rail itself reads this no longer; it stays declared because
+   *  the page's own section landing is still routed through the spine's
+   *  callers (the same rule `projectId` below states). */
   onJump?: (key: SectionKey) => void;
   /** C-3 · the ladder. One segment per stop this spread puts on the paper
    *  (`deriveLadderSegments`), and the doors filed beneath them
@@ -50,7 +54,7 @@ export interface DocSpineProps {
   headInFrame?: DocumentIndexKey | null;
   /** L-6 — the letterhead is in frame. The head then yields its stage phrase
    *  only; the household and the count stay printed and turn `--text-muted`
-   *  (RF-02). The arc never yields. */
+   *  (RF-02). The mark never yields. */
   letterheadInFrame?: boolean;
   /** C-4 · the reading stop and the jump that reaches it. ONE
    *  `useDocumentRunningIndex` call stands on this document and it stands on
@@ -64,7 +68,10 @@ export interface DocSpineProps {
    *  ORDERS` over `4 OF 6` (reconciliation §7). The section label is a
    *  different vocabulary and prints only where no phase has been placed. */
   stageWord?: string | null;
-  stageIndex?: string | null;
+  /** W7-R1 §1 · the phase ITSELF, not a formatted ordinal: the spine prints
+   *  `N OF M` and names the mark from the same pair, so the glyph and the
+   *  count cannot disagree. */
+  stagePhase?: TicketPhase | null;
   /**
    * W5-R4 (F2) — a pre-work spread's rail head prints ONE line: the stage
    * name, and nothing under it.
@@ -91,7 +98,6 @@ export interface DocSpineProps {
 
 export function DocSpine({
   sections,
-  onJump,
   segments = [],
   doors = [],
   headInFrame = null,
@@ -100,19 +106,30 @@ export function DocSpine({
   onJumpRegion,
   onToggleRoom,
   stageWord = null,
-  stageIndex = null,
+  stagePhase = null,
   preWork = false,
   household,
   roomInHand = null,
   onReleaseRoom,
 }: DocSpineProps) {
   const activeSection = sections.find((s) => s.state === 'active');
+  const ordinal = stagePhase
+    ? `${stagePhase.position} OF ${stagePhase.of}`
+    : null;
   const stagePhrase =
     stageWord != null
-      ? { top: stageWord, bottom: stageIndex }
+      ? { top: stageWord, bottom: ordinal }
       : activeSection
         ? { top: activeSection.label, bottom: preWork ? null : activeSection.sub }
         : null;
+  // W7-R1 §1 — the fill is the engagement's own, read at the section it stands
+  // in; a pre-work spread has placed no phase, so the mark prints unfilled and
+  // keeps its box rather than claiming progress the job has not made.
+  const markFill: [number, number, number] =
+    preWork || !activeSection ? [0, 0, 0] : fillStateAtSection(activeSection.key);
+  const markLabel = stagePhrase
+    ? `${stagePhrase.top}${ordinal ? ` — ${ordinal.toLowerCase()}` : ''}`
+    : 'Document progress';
   return (
     <aside
       aria-label="Document spine"
@@ -145,7 +162,11 @@ export function DocSpine({
           wave the head prints statically. */}
         <div
           data-spine-head
-          className="doc-rule-mid mb-3 min-h-[126px] shrink-0 pb-3 min-[1440px]:min-h-[117px]"
+          // W7-R1 §1 — the arc's 44/48px row is gone and the reserve shrinks
+          // with it. Measured, not arithmetic (this portal's root is 18px):
+          // the head is 97px at 1180–1439, where `PROCUREMENT & ORDERS` wraps
+          // inside the 112px measure, and 84px from 1440, where it does not.
+          className="doc-rule-mid mb-3 min-h-[97px] shrink-0 pb-3 min-[1440px]:min-h-[84px]"
         >
           {household && (
             <p
@@ -160,79 +181,30 @@ export function DocSpine({
             </p>
           )}
 
-          {/* The arc — all seven marks, at rest, at both desktop tiers: the
-            progression is the point, so nothing may hide behind a scroll and
-            no mark is dropped for a count.
+          {/* W7-R1 §1 — ONE progress mark, where the seven-mark arc stood.
+            Kody: "this collection of strata symbols at the top is useless.
+            Have it be a single strata mark that is filled in to represent
+            current progress on the document." The component already IS the
+            brand's progress device (R15 fill-state / R35): three descending
+            lines, each a left-clipped fill over a ghost track in the movement
+            hues. `md` is 88px wide — inside the 112px measure the narrow tier
+            leaves and the 164px the full tier leaves, so one size serves both.
 
-            ≥1440: one row. The 200px column leaves 164px inside its px-4
-            (1rem = 18px at this portal's root) and the reclaimed padding
-            (-mx-2.5 = 11.25px a side) makes it 186.5. Seven cells at 24px
-            plus six 2.25px gaps measure 181.5 — inside it. The cells are
-            written as `24px` rather than `w-6` because `w-6` computes to 27
-            here, and 7 × 27 + 13.5 = 202.5 overran the rail: the seventh mark
-            was clipped against the aside's own `overflow-x-hidden` (W2 design
-            review, item 10).
-
-            1180–1439 (design lead §10, ruling (d)): 112px of measure inside
-            px-3 cannot hold 154px of row, so the arc WRAPS — same seven `xs`
-            marks, four on the first row and three on the second, each cell at
-            the 24px pointer floor rather than 44px. The cell gap is `gap-1`
-            here, not `gap-0.5`: at 4px a fifth cell needs 136px against the
-            128px the reclaimed padding gives, so the break after the fourth
-            is arithmetic rather than luck (at 2px the fifth measures exactly
-            128 and the row is a subpixel coin-toss). The arc costs 48px; the
-            head reserve above is 126px at this tier and 117 at 1440 — the
-            measured heights (W1 e2e: 126 / 117), not the arithmetic's 116 /
-            100, because `min-h-6` computes to 27px here and `min-h-11` to
-            49.5 at this portal's 18px root. */}
-          <ul className="-mx-2 flex flex-row flex-wrap items-center gap-1 min-[1440px]:-mx-2.5 min-[1440px]:flex-nowrap min-[1440px]:gap-0.5">
-            {sections.map((s) => {
-              const mark = (
-                <StrataMark
-                  // R35: each marker carries the engagement's fill as of its
-                  // section (the filling staircase); R15: only the active one
-                  // breathes — "alive" is literally true here.
-                  fill={fillStateAtSection(s.key)}
-                  size="xs"
-                  breathing={s.state === 'active'}
-                  label={
-                    s.state === 'active' ? `${s.label} — ${s.sub}` : undefined
-                  }
-                />
-              );
-              // Settled + active markers jump to their section; future ones are
-              // inert (nothing to reach yet). The jump button gives keyboard reach.
-              // The cell is 24px wide at both tiers (the xs mark is 22px) —
-              // narrower than the usual 44px target, so it sits at the 2.5.8
-              // pointer floor rather than the mark's own 22px. Height follows:
-              // 44px at 1440 where the single row has the space, 24px at
-              // 1180–1439 where two rows must fit inside a 116px head.
-              return (
-                <li key={s.key} className="w-6 shrink-0 min-[1440px]:w-[24px]">
-                  {s.state === 'future' ||
-                  s.state === 'unrecorded' ||
-                  !onJump ? (
-                    <div
-                      aria-label={`${s.label}: ${s.sub}`}
-                      className="flex min-h-6 w-full items-center justify-center min-[1440px]:min-h-11"
-                    >
-                      {mark}
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onJump(s.key)}
-                      title={`Jump to ${s.label}`}
-                      aria-label={`Jump to ${s.label}: ${s.sub}`}
-                      className="flex min-h-6 w-full items-center justify-center rounded-[4px] transition-colors hover:bg-[rgba(196,165,123,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none min-[1440px]:min-h-11"
-                    >
-                      {mark}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+            It is INERT: `role="img"` with the stage word and the ordinal as
+            its name, no press, no tooltip, no tabstop. The ladder below the
+            rule is this rail's navigation, and the arc's seven per-section
+            jumps have no single honest successor. The breath is the one
+            ambient move the system keeps, and it stills under reduce
+            (`.doc-breath`, globals.css). */}
+          <div data-spine-mark className="flex items-center">
+            <StrataMark
+              size="md"
+              fill={markFill}
+              breathing
+              ground="light"
+              label={markLabel}
+            />
+          </div>
 
           {stagePhrase && (
             <p

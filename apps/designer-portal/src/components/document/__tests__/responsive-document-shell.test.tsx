@@ -169,8 +169,7 @@ describe('quiet responsive document shell', () => {
   });
 
   it('exposes a compact index at 1180px and the full labelled spine at 1440px', () => {
-    const onJump = jest.fn();
-    render(<DocSpine sections={sections} onJump={onJump} />);
+    render(<DocSpine sections={sections} onJump={jest.fn()} />);
 
     const spine = screen.getByRole('complementary', { name: 'Document spine' });
     expect(spine).toHaveAttribute(
@@ -190,16 +189,11 @@ describe('quiet responsive document shell', () => {
       'min-h-11',
       'min-w-11',
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Jump to Brief: Settled' }),
-    );
-    expect(onJump).toHaveBeenCalledWith('brief');
-    expect(
-      screen.getByRole('button', { name: 'Jump to Discovery: In discovery' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Direction/ }),
-    ).not.toBeInTheDocument();
+    // W7-R1 §1 — the seven-mark arc and its per-section jumps are retired: the
+    // head prints ONE inert progress mark and the ladder is the navigation.
+    expect(screen.queryByRole('button', { name: /^Jump to/ })).toBeNull();
+    expect(screen.queryAllByRole('list')).toHaveLength(0);
+    expect(screen.getAllByTestId('strata-mark')).toHaveLength(1);
 
     expect(screen.queryByTestId('spine-timer')).not.toBeInTheDocument();
     expect(
