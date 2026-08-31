@@ -107,6 +107,39 @@ describe('mood board cover lifecycle', () => {
     expect(write).toHaveBeenCalledTimes(1);
   });
 
+  it('never re-writes an unchanged snapshot on a forced flush (board-paths D6)', async () => {
+    // Reproduces the exact prod trigger: room exit calls flush(true)
+    // unconditionally, every time, even when nothing changed since the last
+    // successful write. Before the fix, `force` bypassed the
+    // signature-equality check and re-rendered/re-uploaded a byte-identical
+    // cover under a fresh random path on every single exit, forever.
+    const write = jest.fn().mockResolvedValue(undefined);
+    const lifecycle = createMoodBoardCoverLifecycle({ write });
+    lifecycle.update(snapshot('initial'));
+
+    await lifecycle.flush(true);
+    expect(write).toHaveBeenCalledTimes(1);
+
+    // Simulate a second room exit with no intervening edit: `update` is
+    // called again with the identical signature (mirrors writeCover's own
+    // synchronous `update` call immediately before `flush`), then `flush(true)`
+    // runs again.
+    lifecycle.update(snapshot('initial'));
+    await lifecycle.flush(true);
+    expect(write).toHaveBeenCalledTimes(1);
+
+    // A third exit, again with no edit and no intervening `update` call at
+    // all, must also be a no-op.
+    await lifecycle.flush(true);
+    expect(write).toHaveBeenCalledTimes(1);
+
+    // An actual edit still writes, forced or not.
+    lifecycle.update(snapshot('edited'));
+    await lifecycle.flush(true);
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(write).toHaveBeenNthCalledWith(2, snapshot('edited'));
+  });
+
   it('keeps cover failures silent and retryable so launchers can render their fallback', async () => {
     const failure = new Error('renderer unavailable');
     const write = jest.fn().mockRejectedValue(failure);
