@@ -70,3 +70,68 @@ export function summarizeBoardVerdicts(
 
   return counts;
 }
+
+/** One board's client-loop status (board-paths W2b, DV10-lite / M5). */
+export type BoardReactionStatus = 'awaiting_reaction' | 'reactions_in' | 'approved_pipeline';
+
+/**
+ * The board-level reaction-status chip (board-paths W2b #1). Derived purely
+ * from data already read for the cover card — no new column, no migration:
+ *
+ *   - `approved_pipeline` — at least one approved verdict exists, regardless
+ *     of current share state (an approval already happened; that outranks
+ *     everything else, including a since-revoked share).
+ *   - `reactions_in`      — some verdict exists (rejected/comment/approved=0)
+ *     but nothing has been approved yet.
+ *   - `awaiting_reaction` — the board has an active share and zero verdicts.
+ *   - `null`              — never shared, no reactions: the card shows nothing.
+ */
+export function deriveBoardReactionStatus(input: {
+  verdictCounts: BoardVerdictCounts;
+  hasActiveShare: boolean;
+}): BoardReactionStatus | null {
+  if (input.verdictCounts.approved > 0) return 'approved_pipeline';
+  if (input.verdictCounts.total > 0) return 'reactions_in';
+  if (input.hasActiveShare) return 'awaiting_reaction';
+  return null;
+}
+
+/** A flat item_feedback row anchored to a board pin — the shape returned by
+ * a direct `board_item_id`-scoped read (see useBoardItemFeedbackByBoard). */
+export interface BoardItemFeedbackRow {
+  id: string;
+  board_item_id: string | null;
+  client_id: string;
+  verdict: string;
+  created_at: string;
+}
+
+/**
+ * The set of board_item_ids whose CURRENT verdict (latest per client, same
+ * rule as summarizeBoardVerdicts) is 'approved' for at least one client — the
+ * population for the "approved pieces -> purchase pipeline" panel (board-paths
+ * W2b #2). Rows with no board_item_id (line-anchored feedback) are ignored.
+ */
+export function deriveApprovedBoardItemIds(
+  rows: readonly BoardItemFeedbackRow[],
+): Set<string> {
+  const latestByItem = new Map<string, Map<string, BoardVerdictProjection>>();
+  for (const row of rows) {
+    if (!row.board_item_id || !isVerdict(row.verdict)) continue;
+    const byClient = latestByItem.get(row.board_item_id) ?? new Map();
+    const current = byClient.get(row.client_id);
+    if (isLaterVerdict(row, current)) byClient.set(row.client_id, row);
+    latestByItem.set(row.board_item_id, byClient);
+  }
+
+  const approved = new Set<string>();
+  for (const [boardItemId, byClient] of latestByItem) {
+    for (const feedback of byClient.values()) {
+      if (feedback.verdict === 'approved') {
+        approved.add(boardItemId);
+        break;
+      }
+    }
+  }
+  return approved;
+}

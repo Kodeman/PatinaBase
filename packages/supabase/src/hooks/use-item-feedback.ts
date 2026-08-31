@@ -104,6 +104,33 @@ export function useBoardFeedback(proposalId: string | undefined) {
   });
 }
 
+/**
+ * Every BOARD-PIN verdict on a specific board, scoped directly by `board_id`
+ * rather than a proposal leg (board-paths W2b). useBoardFeedback above requires
+ * a proposal_id and returns nothing for a project-owned board (proposal_boards
+ * with `project_id` set) — this is the owner-agnostic parallel, since a board's
+ * items live in `proposal_board_items` regardless of which leg owns the board.
+ * Same 00267 RLS: designer sees every verdict on their board, a client sees
+ * her own.
+ */
+export function useBoardItemFeedbackByBoard(boardId: string | undefined) {
+  return useQuery({
+    queryKey: ['board-item-feedback', boardId],
+    enabled: !!boardId,
+    queryFn: async (): Promise<ItemFeedback[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('item_feedback')
+        .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, verdict, body, resolved_at, resolved_by, created_at, updated_at, proposal_board_items!inner(board_id)')
+        .eq('proposal_board_items.board_id', boardId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ItemFeedback[];
+    },
+  });
+}
+
 /** Authenticated client board-pin feed through the client-safe RPC. */
 export function useClientBoardFeedback(proposalId: string | undefined) {
   return useQuery({

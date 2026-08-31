@@ -1482,12 +1482,24 @@ export type {
 export {
   emptyBoardVerdictCounts,
   summarizeBoardVerdicts,
+  deriveBoardReactionStatus,
+  deriveApprovedBoardItemIds,
 } from "./board-verdicts";
 export type {
   BoardVerdictCounts,
   BoardVerdictProjection,
   BoardItemVerdictProjection,
+  BoardReactionStatus,
+  BoardItemFeedbackRow,
 } from "./board-verdicts";
+export { useBoardReactionStatuses } from "./use-board-reaction-status";
+export {
+  useBoardsReactionRollup,
+} from "./use-board-reaction-rollup";
+export type {
+  BoardReactionRollupEntry,
+  BoardsReactionRollup,
+} from "./use-board-reaction-rollup";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Invoicing money core (Wave 1 — see migration 00178)
@@ -1650,6 +1662,8 @@ export {
   useCreateShare,
   useCreateBoardShare,
   useRevokeShare,
+  useActiveBoardShareIds,
+  fetchActiveBoardShareIds,
 } from "./use-document-shares";
 export type { DocumentShare, CreatedShare } from "./use-document-shares";
 
@@ -1668,6 +1682,7 @@ export {
   useProposalFeedback,
   useClientProposalFeedback,
   useBoardFeedback,
+  useBoardItemFeedbackByBoard,
   useClientBoardFeedback,
   useItemFeedbackThread,
   useSubmitVerdict,
