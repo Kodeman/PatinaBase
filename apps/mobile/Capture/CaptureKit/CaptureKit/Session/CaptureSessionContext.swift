@@ -401,9 +401,14 @@ public final class CaptureSessionContextStore {
         return mine
     }
 
+    /// Sign-out or workspace change. The open context goes; the pending-end
+    /// queue does NOT. Each notice carries its own visit and its own identity —
+    /// `takePendingVisitEnds` hands back only the caller's — so a close reaped
+    /// seconds before a sign-out survives to be emitted when that account comes
+    /// back, instead of being thrown away by a switch that had nothing to do
+    /// with it.
     public func reset() {
         defaults.removeObject(forKey: key)
-        defaults.removeObject(forKey: pendingEndsKey)
     }
 
     /// R119: a visit can begin or end from a surface that presents no sheet —
@@ -415,20 +420,27 @@ public final class CaptureSessionContextStore {
     /// make this chatter.
     public static let visitDidChange = Notification.Name("capture.visitDidChange")
 
-    /// A queue that is not draining means nothing is emitting, and the closes
-    /// already waiting are the ones a dashboard is missing — so the cap keeps
-    /// the OLDEST rather than the newest.
+    /// The cap keeps the NEWEST. Keeping the oldest meant that once eight
+    /// closes had queued, every close after them was dropped on the floor for
+    /// good — the queue froze on the first eight and no later visit could ever
+    /// reach a dashboard. Dropping the oldest loses one old close instead of
+    /// every new one, and the ones still worth acting on are the recent ones.
     private static let maxPendingVisitEnds = 8
 
     private func enqueuePendingVisitEnd(_ notice: FieldVisitEndNotice) {
-        let queued = (pendingVisitEnds() + [notice]).prefix(Self.maxPendingVisitEnds)
+        let queued = (pendingVisitEnds() + [notice]).suffix(Self.maxPendingVisitEnds)
         persistPendingVisitEnds(Array(queued))
     }
 
+    /// One unreadable entry must not strand the other seven. Decoding the array
+    /// with `try?` returned nil for the whole queue whenever a single element
+    /// failed — a shape change in `CaptureSessionContext` or a truncated write
+    /// would silently discard every close waiting. Each notice is decoded on
+    /// its own and a failure skips just that element.
     private func pendingVisitEnds() -> [FieldVisitEndNotice] {
-        defaults.data(forKey: pendingEndsKey).flatMap {
-            try? decoder.decode([FieldVisitEndNotice].self, from: $0)
-        } ?? []
+        guard let data = defaults.data(forKey: pendingEndsKey) else { return [] }
+        let entries = (try? decoder.decode([LenientVisitEndNotice].self, from: data)) ?? []
+        return entries.compactMap(\.notice)
     }
 
     private func persistPendingVisitEnds(_ notices: [FieldVisitEndNotice]) {
@@ -443,6 +455,16 @@ public final class CaptureSessionContextStore {
     private func persist(_ context: CaptureSessionContext) {
         guard let data = try? encoder.encode(context) else { return }
         defaults.set(data, forKey: key)
+    }
+}
+
+/// One element of the persisted pending-end queue, decoded tolerantly so a
+/// malformed neighbour cannot take the rest of the queue with it.
+private struct LenientVisitEndNotice: Decodable {
+    let notice: FieldVisitEndNotice?
+
+    init(from decoder: Decoder) throws {
+        notice = try? FieldVisitEndNotice(from: decoder)
     }
 }
 

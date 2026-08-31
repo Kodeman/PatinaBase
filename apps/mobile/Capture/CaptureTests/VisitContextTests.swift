@@ -681,6 +681,88 @@ struct VisitContextTests {
         #expect(store.takePendingVisitEnds(identity: identity).isEmpty)
     }
 
+    // MARK: - The pending-end queue survives its owner's sign-out, and its cap
+
+    /// `reset()` is sign-out / workspace change, and it used to delete the
+    /// pending-end queue with the open context. A close reaped seconds before
+    /// she signs out is still a close that owes a `visit.end` — and every
+    /// notice carries its own visit and identity, so nothing about a switch
+    /// makes it wrong to keep. The open context still goes.
+    @Test @MainActor func signingOutKeepsTheClosesThatAreStillOwedAnEvent() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let opened = store.startVisit(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+            identity: identity, now: now)
+        let late = now.addingTimeInterval(13 * 60 * 60)
+        _ = store.current(identity: identity, now: late, calendar: calendar)
+
+        store.reset()
+
+        // The context is gone...
+        #expect(!store.current(identity: identity, now: late, calendar: calendar).isVisit)
+        // ...and the close it owes is not.
+        let pending = store.takePendingVisitEnds(identity: identity)
+        #expect(pending.count == 1)
+        #expect(pending.first?.context.visitID == opened.visitID)
+    }
+
+    /// The 8-cap kept the OLDEST, so once eight closes had queued behind a
+    /// surface that never drained, every close after them was dropped for good
+    /// — the queue froze and no later visit could ever reach a dashboard.
+    /// Dropping the oldest loses one stale close instead of all the new ones.
+    @Test @MainActor func anOverflowingQueueDropsTheOldestCloseRatherThanEveryNewOne() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        var cursor = now
+        var labels: [String] = []
+        for index in 0..<11 {
+            let label = "Visit \(index)"
+            labels.append(label)
+            store.startVisit(CaptureVisitDraft(kind: .site, kit: .walkThrough, label: label),
+                             identity: identity, now: cursor)
+            cursor = cursor.addingTimeInterval(13 * 60 * 60)
+            _ = store.current(identity: identity, now: cursor, calendar: calendar)
+        }
+
+        let pending = store.takePendingVisitEnds(identity: identity)
+        #expect(pending.count == 8)
+        #expect(pending.map(\.context.label) == Array(labels.suffix(8)))
+        #expect(pending.map(\.context.label).contains("Visit 10"))
+    }
+
+    /// One unreadable entry must not take the queue with it. `try?` on the
+    /// whole array returned nil for all eight whenever a single element failed
+    /// to decode — a truncated write, or a shape change in
+    /// `CaptureSessionContext`, silently discarded every close waiting.
+    @Test @MainActor func oneMalformedEntryIsSkippedRatherThanStrandingTheQueue() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let context = CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            kind: .site, kit: .walkThrough, label: "Maple St")
+        let notice = FieldVisitEndNotice(context: context, reason: .auto, closedAt: now)
+
+        var blob = Data(#"[{"broken":true},"#.utf8)
+        blob.append(try JSONEncoder().encode(notice))
+        blob.append(Data("]".utf8))
+        defaults.set(blob, forKey: "context.pending-ends")
+
+        let pending = store.takePendingVisitEnds(identity: identity)
+        #expect(pending.count == 1)
+        #expect(pending.first?.context.visitID == context.visitID)
+        #expect(pending.first?.reason == .auto)
+    }
+
     /// The happy path is unchanged: a visit idle 10 minutes resumes with its
     /// visitID, kind and label intact, and nothing is reaped or announced.
     @Test @MainActor func aVisitIdleTenMinutesResumesUnchangedThroughCurrent() throws {
