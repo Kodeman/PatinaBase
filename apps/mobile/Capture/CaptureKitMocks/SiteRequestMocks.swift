@@ -155,6 +155,13 @@ public actor MockSiteRequestService: SiteRequestService, GuestSiteRequestService
 
     public func hub(projectID _: String) async throws -> SiteProjectHub { currentHub }
 
+    /// One consented GC, so the harness and the previews exercise the reachable
+    /// line rather than only the no-court fallback.
+    public func fieldParties(projectID _: String) async throws -> [FieldPartyRef] {
+        [FieldPartyRef(id: "party-gc", displayName: "Delaney Build Co",
+                       partyKind: "gc", smsConsentGranted: true)]
+    }
+
     public func createDraft(_ draft: SiteRequestDraft) async throws -> String {
         recordedDrafts.append(draft)
         return "draft-\(draft.projectID)"

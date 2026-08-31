@@ -185,6 +185,50 @@ public enum PunchTaskComposer {
     // swiftlint:enable function_parameter_count
 }
 
+/// The one place the app talks to a designer about whether a text went out.
+///
+/// The tense change between `intent` and `filed` is load-bearing. She reads the
+/// intent line at TAP time, off the device's cached sms_consent_status; the row
+/// is written at DRAIN time, which may be a tunnel and a night later; and the
+/// send is decided later still, server-side, by fc_dispatch_task_assignment
+/// re-reading the party's real consent (00284:160-203). Consent can flip either
+/// way in between. So the pre-tap line promises an intention and the card states
+/// the fact only once the row exists.
+public enum PunchCourtCopy {
+    /// BEFORE she taps Add. The row does not exist yet and the send is the
+    /// database's to make later, so this is an intention, not a receipt.
+    public static func intent(for court: PunchCourt) -> String {
+        switch court {
+        case .reachable(let party):
+            return "\(party.displayName) will get a text."
+        case .noCourt:
+            // Ruling 2: a gc-owned row with no party reaches no trigger and no
+            // digest, so it is filed as hers rather than pretending at a court.
+            // There is deliberately no "filed for <GC>" line — naming a party
+            // who will never see it is the failure §3.3 forbids.
+            return "No general contractor with texting on this project — this stays as your task."
+        }
+    }
+
+    /// AFTER the drain reports punchTaskState == .written. Now the row exists
+    /// and the trigger has had its say, so the past tense is earned.
+    public static func filed(for court: PunchCourt) -> String {
+        switch court {
+        case .reachable(let party): return "Filed. \(party.displayName) was texted."
+        case .noCourt:              return "Filed as your task."
+        }
+    }
+
+    /// FC-R8, per-designer in v1: a studio co-member's insert into
+    /// project_tasks raises 42501, and the honest fallback is the note lane —
+    /// which margin_notes_designer_all DOES admit from her, because that policy
+    /// keys on the note's own designer_id, not the project's. The drain itself
+    /// performs that write (ruling 3); this line only reports it.
+    public static let refusedTask =
+        "Tasks on this project belong to its designer of record. "
+        + "Saved as a note in the Document instead."
+}
+
 public protocol PunchTaskGateway: Sendable {
     func existingProjectTask(id: UUID) async throws -> Bool
     func insertProjectTask(_ request: PunchTaskWriteRequest) async throws
