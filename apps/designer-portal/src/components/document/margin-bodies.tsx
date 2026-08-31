@@ -38,6 +38,7 @@ import { useEscalateNoteToDecision } from '@/hooks/use-margin-notes';
 import { AmendmentSheet } from '@/components/document/overlays/amendment-sheet';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { readFieldNotePayload } from '@/lib/document/field-note-payload';
+import { FieldNoteMedia } from './field-note-media';
 import { extendRevivesDecision } from '@/lib/document/decision-edges';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd, tomorrowYmd } from '@/lib/document/format';
@@ -842,6 +843,13 @@ export function NoteBody({
       <p className="mb-2 whitespace-pre-wrap text-[11.5px] leading-[1.55] text-[var(--color-charcoal)]">
         {field.body}
       </p>
+      {field.captureVisible ? (
+        <FieldNoteMedia
+          audioPaths={field.audioPaths}
+          photoPaths={field.photoPaths}
+          durationSeconds={field.durationSeconds}
+        />
+      ) : null}
       {/* §8.5 — the transcript is labelled a draft ONCE, where she reads it.
           No mechanism talk, and never the word "AI". */}
       {field.fieldCaptureId && field.captureVisible && field.hasAudio ? (
