@@ -118,17 +118,21 @@ struct SmartGuessKeywordTests {
         }
     }
 
-    /// The real ordering hazard: a label with SEVERAL tokens can match two
-    /// different rows, and first-match-wins means the earlier row takes it. A
-    /// "table lamp" is a lamp, and reads as `.table` purely because `table`
-    /// sits above `lamp`. Swap the two rows and this flips — which is exactly
-    /// the sensitivity the completeness check above cannot see.
-    @Test func aMultiWordLabelIsTakenByTheEarlierOfTwoMatchingRows() throws {
-        #expect(SmartGuessKeywords.category(forVisionLabel: "table lamp") == .table)
+    /// The ordering hazard, now closed. A label with SEVERAL tokens can match
+    /// two rows; first-match-wins gave it to whichever sat higher in the table,
+    /// so "table lamp" read as `.table` — an answer about table ORDER, not
+    /// about the label. A table lamp is a lamp. The head of an English compound
+    /// noun is its last word, so the row matching furthest into the label wins,
+    /// and the assertion below is deliberately made against the row order that
+    /// used to decide it.
+    @Test func aCompoundLabelIsTakenByItsHeadNoun_notByTableOrder() throws {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "table lamp") == .lighting)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "desk lamp") == .lighting)
         let keywords = SmartGuessKeywords.table.map(\.keyword)
         let table = try #require(keywords.firstIndex(of: "table"))
         let lamp = try #require(keywords.firstIndex(of: "lamp"))
-        #expect(table < lamp, "the .table read above is the earlier row winning, not a lamp rule")
+        #expect(table < lamp,
+                "the .lighting read above is the head noun winning against, not with, row order")
     }
 
     @Test func anUnknownCategoryIsNeverWorthRecording() {
