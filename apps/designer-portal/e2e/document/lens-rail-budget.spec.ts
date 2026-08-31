@@ -140,6 +140,152 @@ test.describe('the rail budget', () => {
   });
 
   /**
+   * W7-R1 §2 — the stops PACK, and the nav has exactly one gap.
+   *
+   * Kody, on prod: "on the lens between sections there should not be giant
+   * gaps, the only gap should be after 'the record'." The falsifiable
+   * sentence: at 1440x900 on the long paper, no gap between consecutive stop
+   * rows exceeds the rows' own `py-1` rhythm (16px), and exactly ONE gap in
+   * the whole nav column exceeds 24px — the one between the last stop's row
+   * and `FILED WITH THIS JOB`.
+   */
+  test('W7-R1 §2 — the stops pack, and the ONE gap in the nav sits after the last stop', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page, LONG_PAPER_ID);
+    await quiet(page);
+    await scrollTo(page, 0);
+
+    const geometry = await page.evaluate(() => {
+      const nav = document.querySelector<HTMLElement>('[data-lens-ladder]');
+      if (!nav) return null;
+      const segments = Array.from(
+        nav.querySelectorAll<HTMLElement>('[data-ladder-segment]'),
+      ).map((el) => ({
+        key: el.getAttribute('data-ladder-segment') ?? '?',
+        top: el.getBoundingClientRect().top,
+        bottom: el.getBoundingClientRect().bottom,
+      }));
+      const doors = nav.querySelector<HTMLElement>('[data-ladder-doors]');
+      return {
+        segments,
+        doorsTop: doors?.getBoundingClientRect().top ?? null,
+        doorsBottom: doors?.getBoundingClientRect().bottom ?? null,
+        navBottom: nav.getBoundingClientRect().bottom,
+      };
+    });
+    expect(geometry, 'the ladder did not mount at 1440').not.toBeNull();
+    const { segments, doorsTop } = geometry!;
+    expect(segments.length).toBeGreaterThan(1);
+    expect(doorsTop).not.toBeNull();
+
+    const stopGaps = segments.slice(1).map((segment, i) => ({
+      after: segments[i].key,
+      gap: Math.round((segment.top - segments[i].bottom) * 100) / 100,
+    }));
+    const doorsGap =
+      Math.round((doorsTop! - segments[segments.length - 1].bottom) * 100) / 100;
+
+    console.log(
+      `W7-R1 §2 · stop gaps ${JSON.stringify(stopGaps)} · gap before the doors ${doorsGap}px`,
+    );
+
+    expect(
+      stopGaps.filter((row) => row.gap > 16),
+      'a gap between consecutive stop rows exceeded the rows own py-1 rhythm',
+    ).toEqual([]);
+
+    const wide = [
+      ...stopGaps.filter((row) => row.gap > 24).map((row) => row.after),
+      ...(doorsGap > 24 ? ['<the doors>'] : []),
+    ];
+    expect(
+      wide,
+      `exactly one gap over 24px is allowed, and it must sit after the last stop (${segments[segments.length - 1].key})`,
+    ).toEqual(['<the doors>']);
+  });
+
+  /**
+   * W7-R1 §2 — a SHORT viewport: the doors still print whole, with a breath.
+   *
+   * `mt-auto` collapses toward zero when the column has no free space; the
+   * rows own `mb-3` is what keeps that collapsed state from butting the last
+   * stop against the doors rule. The ruling names 900x620; the rail is
+   * `display:none` below 1180 (`data-spine-regime`), so the doors question
+   * only arises where it mounts. Both are asserted: at 900 the rail is
+   * absent by regime, and at 1180x620 — the narrowest tier that mounts it,
+   * at the ruling's short height — the doors are whole with >= 12px above.
+   */
+  test('W7-R1 §2 — the doors print whole at a short viewport, with a breath above them', async ({
+    authenticatedPage: page,
+  }) => {
+    await openPaper(page, LONG_PAPER_ID);
+
+    await page.setViewportSize({ width: 900, height: 620 });
+    await settle(page);
+    expect(
+      await page.locator('[data-lens-ladder]').first().isVisible(),
+      'the rail must not print below 1180 — the sheet is the index there',
+    ).toBe(false);
+
+    await page.setViewportSize({ width: 1180, height: 620 });
+    await settle(page);
+    await quiet(page);
+
+    const short = await page.evaluate(() => {
+      const nav = document.querySelector<HTMLElement>('[data-lens-ladder]');
+      const doors = nav?.querySelector<HTMLElement>('[data-ladder-doors]');
+      if (!nav || !doors) return null;
+      const rows = Array.from(
+        doors.querySelectorAll<HTMLElement>('[data-ladder-door]'),
+      );
+      const track = nav.querySelector<HTMLElement>('[data-lens-track]');
+      const box = doors.getBoundingClientRect();
+      const round = (n: number) => Math.round(n * 100) / 100;
+      // The breath is between the TRACK and the doors, not between the last
+      // stop row and the doors: on a short viewport the track scrolls, so the
+      // last row's own box sits below the track's visible bottom.
+      const breath = track ? round(box.top - track.getBoundingClientRect().bottom) : null;
+      // D-B52 (3) — can the doors sink under the Studio Drawer today?
+      const inset =
+        Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue(
+            '--doc-shell-bottom-inset',
+          ),
+        ) || 60;
+      return {
+        doorCount: rows.length,
+        clipped: rows
+          .filter((row) => {
+            const r = row.getBoundingClientRect();
+            return r.height <= 0 || r.bottom > window.innerHeight + 0.5;
+          })
+          .map((row) => row.getAttribute('data-ladder-door')),
+        breath,
+        trackScrolls: track ? track.scrollHeight > track.clientHeight + 1 : null,
+        doorsBottom: round(box.bottom),
+        drawerTop: round(window.innerHeight - inset),
+        viewport: window.innerHeight,
+      };
+    });
+    expect(short, 'the rail did not mount at 1180x620').not.toBeNull();
+    console.log(`W7-R1 §2 · 1180x620 doors ${JSON.stringify(short)}`);
+    expect(short!.doorCount).toBeGreaterThan(0);
+    expect(short!.clipped, 'a door was cut off at the short viewport').toEqual(
+      [],
+    );
+    expect(short!.breath ?? 0).toBeGreaterThanOrEqual(12);
+    // D-B52 (3) — the sticky rail's `h-screen` + `pb-[--doc-shell-floating-bottom]`
+    // already stops the column above the drawer strip, so no `max-height` is
+    // added. Measured, not assumed: the last door's rule sits above the
+    // drawer's own top edge.
+    expect(
+      short!.doorsBottom,
+      `the doors end at ${short!.doorsBottom} and the Studio Drawer starts at ${short!.drawerTop}`,
+    ).toBeLessThanOrEqual(short!.drawerTop);
+  });
+
+  /**
    * D-B37 — the rail holds its own layout while the reader moves.
    *
    * THE FALSIFIABLE SENTENCE: over the same 30-step settled scroll the CLS spec
@@ -194,15 +340,29 @@ test.describe('the rail budget', () => {
       const now = await read();
       const indexChanged = now.index !== previous.index;
       if (indexChanged) indexChanges += 1;
+      const moved = Object.entries(now.heights).filter(([key, height]) => {
+        const before = previous.heights[key];
+        return before !== undefined && before !== height;
+      });
       if (!indexChanged) {
-        for (const [key, height] of Object.entries(now.heights)) {
-          const before = previous.heights[key];
-          if (before !== undefined && before !== height) {
-            offenders.push(
-              `step ${i} · ${key}: ${before} -> ${height} (index held at ${String(now.index)})`,
-            );
-          }
+        for (const [key, height] of moved) {
+          offenders.push(
+            `step ${i} · ${key}: ${String(previous.heights[key])} -> ${height} (index held at ${String(now.index)})`,
+          );
         }
+      } else if (moved.length > 1) {
+        // D-B52's clause on D-B37: with the extent redistribution channel
+        // deleted, an index change may move ONLY the segment that gains or
+        // loses its room rungs. Every sibling is byte-equal — there is no
+        // remainder left for the track to re-deal.
+        offenders.push(
+          `step ${i} · an index change moved ${moved.length} segments, not one: ${moved
+            .map(
+              ([key, height]) =>
+                `${key} ${String(previous.heights[key])} -> ${height}`,
+            )
+            .join(', ')}`,
+        );
       }
       previous = now;
     }

@@ -163,10 +163,11 @@ export function DocSpine({
         <div
           data-spine-head
           // W7-R1 §1 — the arc's 44/48px row is gone and the reserve shrinks
-          // with it. Measured, not arithmetic (this portal's root is 18px):
-          // the head is 97px at 1180–1439, where `PROCUREMENT & ORDERS` wraps
-          // inside the 112px measure, and 84px from 1440, where it does not.
-          className="doc-rule-mid mb-3 min-h-[97px] shrink-0 pb-3 min-[1440px]:min-h-[84px]"
+          // with it. MEASURED, not arithmetic (this portal's root is 18px, and
+          // the mark is 88×17): 106px of content at 1180–1439, where
+          // `PROCUREMENT & ORDERS` wraps inside the 112px measure, and 92.25
+          // from 1440, where it does not. Was 126 / 117 with the arc.
+          className="doc-rule-mid mb-3 min-h-[107px] shrink-0 pb-3 min-[1440px]:min-h-[93px]"
         >
           {household && (
             <p
@@ -196,7 +197,7 @@ export function DocSpine({
             jumps have no single honest successor. The breath is the one
             ambient move the system keeps, and it stills under reduce
             (`.doc-breath`, globals.css). */}
-          <div data-spine-mark className="flex items-center">
+          <div data-spine-mark className="mt-2 flex items-center">
             <StrataMark
               size="md"
               fill={markFill}

@@ -106,7 +106,7 @@ describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
 
     // The height is still RESERVED, not measured — at the new, smaller
     // reserve the arc's 44/48px row left behind.
-    expect(head).toHaveClass('min-h-[97px]', 'min-[1440px]:min-h-[84px]');
+    expect(head).toHaveClass('min-h-[107px]', 'min-[1440px]:min-h-[93px]');
   });
 
   it('is inert: no press, no tooltip, no tabstop on the mark (W7-R1 §1)', () => {

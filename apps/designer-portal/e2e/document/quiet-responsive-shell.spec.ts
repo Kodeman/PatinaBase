@@ -1,6 +1,7 @@
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 import { adminDb } from '../helpers/supabase-admin';
 import { quiet, scrollTo, settle } from '../helpers/lens';
+import { psqlRun } from '../helpers/psql';
 
 const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
 /**
@@ -579,5 +580,75 @@ test.describe('the mobile bar publishes its height (D-B47)', () => {
       document.documentElement.style.getPropertyValue('--doc-mobile-bar-height'),
     );
     expect(published, 'the desktop widths must not carry the bar token').toBe('');
+  });
+});
+
+/**
+ * D-B54 — the thumb edge has ONE owner, and it is never nobody.
+ *
+ * Kody saw no navigation at all on prod at 390. `MobileBar` yielded the edge
+ * on a bare `offer`, while `LogStrip` refused to paint an offer belonging to a
+ * project other than the one in hand — so opening a document while a timer ran
+ * on ANOTHER project left both null. Every mobile-edge assertion in this suite
+ * (and in `action-visibility`, `quiet-focus`, `quiet-release-contracts`) runs
+ * on a cold, single-document session, where `offer` is always null: the state
+ * the designer is in the moment he has been working was never once executed.
+ *
+ * This is that state. A running timer on `…d1` is seeded straight into
+ * `project_time_entries` (`duration_minutes IS NULL`), then `…d5` is opened at
+ * 390 — `hold()` chains the `…d1` timer out into a cross-project offer, and
+ * the bar must still print.
+ */
+const OTHER_PROJECT_ID = 'b0000000-0000-0000-0000-0000000000d1';
+const LONG_PAPER_PROJECT_ID = 'b0000000-0000-0000-0000-0000000000d5';
+const DESIGNER_ID = 'a0000000-0000-0000-0000-000000000004'; // designer@patina.dev
+
+test.describe('D-B54 · the thumb edge with a cross-project offer standing', () => {
+  test.beforeAll(() => {
+    // Any leftover open timer for this designer would confound the setup.
+    psqlRun(
+      `DELETE FROM project_time_entries
+        WHERE user_id = '${DESIGNER_ID}'::uuid AND duration_minutes IS NULL`,
+    );
+    psqlRun(
+      `INSERT INTO project_time_entries (project_id, user_id, started_at, duration_minutes, source, activity)
+       VALUES ('${OTHER_PROJECT_ID}'::uuid, '${DESIGNER_ID}'::uuid, now() - interval '20 minutes', NULL, 'timer_manual', 'design')`,
+    );
+  });
+
+  test.afterAll(() => {
+    // Both the seeded row and whatever `hold()` opened for the paper under
+    // test: the suite leaves the database exactly as it found it.
+    psqlRun(
+      `DELETE FROM project_time_entries
+        WHERE user_id = '${DESIGNER_ID}'::uuid
+          AND duration_minutes IS NULL
+          AND project_id IN ('${OTHER_PROJECT_ID}'::uuid, '${LONG_PAPER_PROJECT_ID}'::uuid)`,
+    );
+  });
+
+  test('the bar still owns the edge at 390 while a timer runs on another project', async ({
+    authenticatedPage: page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/doc/${LONG_PAPER_PROJECT_ID}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await expect(page.locator('[data-document-shell]')).toBeVisible({
+      timeout: 30_000,
+    });
+    await settle(page);
+
+    await expect(page.getByTestId('mobile-bar')).toBeVisible();
+    await expect(page.locator('[data-mobile-edge-owner]')).toHaveCount(1);
+
+    const published = await page.evaluate(() =>
+      document.documentElement.style.getPropertyValue('--doc-mobile-bar-height'),
+    );
+    expect(
+      published,
+      'the bar must publish its box — an unset token means no bottom chrome at all',
+    ).not.toBe('');
+    await expectNoHorizontalOverflow(page);
   });
 });
