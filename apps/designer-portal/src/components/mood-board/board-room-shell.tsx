@@ -85,6 +85,11 @@ import {
   BOARD_ROOM_MIN_TIDY_GAP,
   resolveBoardRoomTidyTarget,
 } from './board-room-tidy';
+import {
+  collectPresentPrefetchTargets,
+  warmPresentImages,
+  type PresentPrefetchHandle,
+} from '@/lib/mood-board/present-prefetch';
 
 const RAIL_COLLAPSED_KEY = 'patina:mood-board:add-rail-collapsed';
 const GRID_VISIBLE_KEY = 'patina:mood-board:grid-visible';
@@ -332,6 +337,17 @@ function BoardRoomSurface({
   const startedAtRef = useRef(performance.now());
   const presentStartedRef = useRef<number | null>(null);
   const previousModeRef = useRef(api.mode);
+  // Present-entry image prefetch (VD12/AC2.1 program, W2d part 3) — a
+  // separate previous-mode ref from `previousModeRef` above: that ref is
+  // consumed (read-then-overwritten) by the analytics effect earlier in this
+  // component, so a second effect reading it in the same render would always
+  // see it already equal to `api.mode`.
+  const presentPrefetchPreviousModeRef = useRef(api.mode);
+  const presentPrefetchWarmedRef = useRef<Set<string>>(new Set());
+  const presentPrefetchHandleRef = useRef<PresentPrefetchHandle | null>(null);
+  const [presentPrefetchProgress, setPresentPrefetchProgress] = useState<
+    { loaded: number; total: number } | null
+  >(null);
   const upsertCoverRef = useRef(upsertBoard.mutateAsync);
   const applyBoardStateRef = useRef(applyBoardState.mutateAsync);
   const preferenceScope = user?.id;
@@ -681,6 +697,38 @@ function BoardRoomSurface({
       presentStartedRef.current = null;
     }
   }, [api.mode, api.state, owner.id, owner.kind, sourceProposalId]);
+
+  // Warm every item image (+ cover) the instant Present is entered — from
+  // either the toolbar toggle or the 'p' shortcut, both of which land here as
+  // an `api.mode` flip. Never blocks the switch: `warmPresentImages` returns
+  // synchronously and Present renders immediately; this only shortens the
+  // window where a pin is still a gray box mid-load. `presentPrefetchWarmedRef`
+  // persists for the life of the room session, so re-entering Present never
+  // re-requests a URL already warmed.
+  useEffect(() => {
+    const previous = presentPrefetchPreviousModeRef.current;
+    presentPrefetchPreviousModeRef.current = api.mode;
+    if (api.mode !== 'present') {
+      if (previous === 'present') {
+        presentPrefetchHandleRef.current?.cancel();
+        presentPrefetchHandleRef.current = null;
+        setPresentPrefetchProgress(null);
+      }
+      return;
+    }
+    if (previous === 'present' || !api.state) return;
+
+    const targets = collectPresentPrefetchTargets(
+      api.state.items,
+      boardQuery.data?.cover_image_url ?? null,
+    );
+    presentPrefetchHandleRef.current = warmPresentImages(targets, presentPrefetchWarmedRef.current, {
+      onProgress: (loaded, total) => setPresentPrefetchProgress({ loaded, total }),
+      onSettled: () => setPresentPrefetchProgress(null),
+    });
+  }, [api.mode, api.state, boardQuery.data?.cover_image_url]);
+
+  useEffect(() => () => presentPrefetchHandleRef.current?.cancel(), []);
 
   const input = useMemo(() => boardRasterInput(api), [api]);
   useBoardRoomBoundary(
@@ -1053,18 +1101,29 @@ function BoardRoomSurface({
             </div>
           )}
           {api.mode === 'present' ? (
-            <BoardComposition
-              board={api.compositionBoard}
-              sections={state.sections}
-              canvasWidth={state.canvasWidth}
-              canvasHeight={state.canvasHeight}
-              backgroundColor={state.backgroundColor}
-              renderPinOverlay={renderVerdictOverlay}
-              fullBleed
-              fit="contain"
-              showNotes={api.showNotes}
-              className="h-full"
-            />
+            <>
+              <BoardComposition
+                board={api.compositionBoard}
+                sections={state.sections}
+                canvasWidth={state.canvasWidth}
+                canvasHeight={state.canvasHeight}
+                backgroundColor={state.backgroundColor}
+                renderPinOverlay={renderVerdictOverlay}
+                fullBleed
+                fit="contain"
+                showNotes={api.showNotes}
+                className="h-full"
+              />
+              {presentPrefetchProgress && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="pointer-events-none absolute bottom-3 right-3 z-40 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] shadow-sm"
+                >
+                  Loading images {presentPrefetchProgress.loaded}/{presentPrefetchProgress.total}
+                </div>
+              )}
+            </>
           ) : (
             <BoardRoomCanvas
               {...api.canvasProps}
