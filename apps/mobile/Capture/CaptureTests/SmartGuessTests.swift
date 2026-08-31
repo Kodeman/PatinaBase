@@ -135,6 +135,49 @@ struct SmartGuessKeywordTests {
                 "the .lighting read above is the head noun winning against, not with, row order")
     }
 
+    /// The head-noun rule's own false positive. A carpet tile is soft flooring
+    /// sold by the box — the thing a designer specs as a rug — and reading it as
+    /// ceramic is exactly as wrong as reading "table lamp" as furniture was.
+    /// The exception is a multi-word row, which wins the length tiebreak at the
+    /// same head position.
+    @Test func aCarpetTileIsSoftFlooring_notCeramic() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "carpet tile") == .rug)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "carpet tiles") == .rug)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "carpet_tile") == .rug)
+        // The exception is exactly that wide: a tile with no carpet in front of
+        // it is still a tile, and carpet on its own is still a rug.
+        #expect(SmartGuessKeywords.category(forVisionLabel: "floor tile") == .tile)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "carpet") == .rug)
+    }
+
+    /// The rule now decides a great many compounds nothing pinned, and an
+    /// unpinned decision is one nobody notices going wrong. Each assertion below
+    /// states the category the LABEL deserves, not the one the table happens to
+    /// reach: the head noun names the thing in every one of them.
+    @Test func realisticCompoundLabelsLandOnTheCategoryTheThingActuallyIs() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "floor lamp") == .lighting)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "bar stool") == .seating)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "side table") == .table)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "console table") == .table)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "kitchen sink") == .plumbing)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "throw pillow") == .textile)
+    }
+
+    /// Two deliberate calls, stated rather than left to drift.
+    ///
+    /// A faucet handle is `.hardware`, not `.plumbing`: `hardware` is where this
+    /// table puts knobs, handles and hinges, and a faucet handle is one of them
+    /// — the piece specified from a hardware page, next to the fixture rather
+    /// than as it.
+    ///
+    /// A ceiling fan is NOTHING. The table names no fan, and nil means "we could
+    /// not tell", which is the honest answer — never `.lighting` because some
+    /// fans carry a bulb, and never a guess dressed up as a read.
+    @Test func twoCompoundsWhoseRightAnswerIsDeliberate() {
+        #expect(SmartGuessKeywords.category(forVisionLabel: "faucet handle") == .hardware)
+        #expect(SmartGuessKeywords.category(forVisionLabel: "ceiling fan") == nil)
+    }
+
     @Test func anUnknownCategoryIsNeverWorthRecording() {
         let blank = SmartGuess(category: .unknown, categoryConfidence: 0, fields: [
             FieldSuggestion(key: .category, value: SpecimenCategory.unknown.rawValue,

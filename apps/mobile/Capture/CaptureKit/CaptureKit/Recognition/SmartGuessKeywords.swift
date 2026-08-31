@@ -20,6 +20,12 @@ public enum SmartGuessKeywords {
         ("bookcase", .storage), ("dresser", .storage),
         ("wardrobe", .storage), ("credenza", .storage),
         ("rug", .rug), ("carpet", .rug),
+        // Head-noun exception. A carpet tile is soft flooring sold by the box —
+        // a rug, not ceramic — and the head-noun rule alone reads it as `.tile`.
+        // A two-word row wins on the length tiebreak at the same head position,
+        // so the exception is stated as data like the one-word compounds
+        // ("bookshelf", "spotlight") rather than as a branch.
+        ("carpet tile", .rug),
         ("curtain", .textile), ("fabric", .textile), ("textile", .textile), ("pillow", .textile),
         ("cushion", .textile), ("drapery", .textile),
         ("vase", .decor), ("bowl", .decor), ("sculpture", .decor), ("mirror", .decor),
@@ -47,6 +53,11 @@ public enum SmartGuessKeywords {
     ///
     /// A compound written as ONE word still earns its own row ("bookshelf",
     /// "spotlight"): the head-noun rule reads across tokens, not inside them.
+    ///
+    /// Where the head noun is simply WRONG about the thing — "carpet tile" is
+    /// soft flooring, not ceramic — the exception is a MULTI-WORD row. It wins
+    /// the length tiebreak against the single-word row ending on the same token,
+    /// so an exception is data in the table rather than a branch in the rule.
     ///
     /// The plural it keeps is only the REGULAR one: a trailing "s" or "es" on
     /// the keyword's last token ("chairs", "benches"). "shelves" does not find
