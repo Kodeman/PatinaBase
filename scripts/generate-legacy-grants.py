@@ -30,15 +30,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "supabase" / "seed" / "00-legacy-grants.sql"
 
-DOLLAR_BODY = re.compile(r"\$([A-Za-z_]*)\$.*?\$\1\$", re.DOTALL)
-LINE_COMMENT = re.compile(r"--[^\n]*")
-BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+# Postgres' own tag rule: an identifier, or nothing at all for `$$`. Spelling
+# it `[A-Za-z_]*` (as this script did) misses `$steps2$` and friends, leaving
+# those bodies unstripped for anything they might one day contain.
+DOLLAR_OPEN = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
 # A replayable ACL statement must begin a SQL statement. Without the boundary,
 # the matcher splits `ALTER DEFAULT PRIVILEGES ... REVOKE ...` at its nested
 # REVOKE subcommand and emits an invalid standalone statement into the seed.
+# IGNORECASE because SQL is: migrations that spell the keyword `grant` are as
+# real as the ones that shout it, and matching only the shouted form silently
+# dropped 49 statements across 24 migrations.
 STMT = re.compile(
     r"(?:(?<=;)|\A)\s*(?:GRANT|REVOKE)\s[^;]*;",
-    re.DOTALL,
+    re.DOTALL | re.IGNORECASE,
 )
 DROP_FN = re.compile(
     r"DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?([A-Za-z_.\"]+\s*\([^)]*\))", re.IGNORECASE
@@ -61,9 +65,89 @@ def signature(text: str) -> str:
 
 
 def clean(raw: str) -> str:
-    # Strip function bodies first (GRANT text inside plpgsql must not replay),
-    # then comments (prose that merely mentions REVOKE).
-    return LINE_COMMENT.sub("", BLOCK_COMMENT.sub("", DOLLAR_BODY.sub("", raw)))
+    """Drop comments and dollar-quoted bodies in one left-to-right pass.
+
+    Both must go — GRANT text inside a plpgsql body must not replay, and prose
+    that merely mentions REVOKE is not a statement — but neither ORDER is safe
+    when each is a separate regex sweep. Bodies-then-comments lets a dollar tag
+    written in PROSE pair with the real block hundreds of lines below and
+    swallow every statement between them (this is what cost 00543 and 00292
+    their grants). Comments-then-bodies lets a `--` or `/* */` sitting inside a
+    body or a string literal cut the text at a point that is not a comment.
+    A scanner that always knows which construct it is inside has no order to
+    get wrong.
+    """
+    out: list[str] = []
+    i, n = 0, len(raw)
+    while i < n:
+        ch = raw[i]
+
+        if raw.startswith("--", i):
+            end = raw.find("\n", i)
+            if end == -1:
+                break
+            i = end  # leave the newline: it still separates two statements
+            continue
+
+        if raw.startswith("/*", i):
+            depth, i = 1, i + 2  # block comments nest in Postgres
+            while i < n and depth:
+                if raw.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif raw.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+            continue
+
+        if ch == "$":
+            opener = DOLLAR_OPEN.match(raw, i)
+            if opener:
+                close = raw.find(opener.group(0), opener.end())
+                i = n if close == -1 else close + len(opener.group(0))
+                continue
+
+        if ch == "'":
+            # Kept verbatim: a string literal is part of the statement around
+            # it. `''` doubles in every string; a backslash escapes only in an
+            # E'…' one.
+            backslash = i > 0 and raw[i - 1] in "Ee" and (
+                i == 1 or not (raw[i - 2].isalnum() or raw[i - 2] == "_")
+            )
+            j = i + 1
+            while j < n:
+                if backslash and raw[j] == "\\":
+                    j += 2
+                elif raw[j] == "'":
+                    if raw.startswith("''", j):
+                        j += 2
+                    else:
+                        j += 1
+                        break
+                else:
+                    j += 1
+            out.append(raw[i:j])
+            i = j
+            continue
+
+        if ch == '"':
+            j = i + 1
+            while j < n:
+                if raw[j] == '"':
+                    if raw.startswith('""', j):
+                        j += 2
+                    else:
+                        j += 1
+                        break
+                else:
+                    j += 1
+            out.append(raw[i:j])
+            i = j
+            continue
+
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 def iter_top_level_acl_statements(
@@ -94,7 +178,9 @@ def extract_statements() -> list[tuple[str, str]]:
     for index, path in enumerate(paths):
         for position, stmt in iter_top_level_acl_statements(cleaned[path]):
             # Only statements that start with the keyword survive (defensive).
-            if not stmt.startswith(("GRANT ", "REVOKE ")):
+            # Compared upper-cased, since STMT now matches either casing; the
+            # statement itself is emitted as its migration wrote it.
+            if not stmt.upper().startswith(("GRANT ", "REVOKE ")):
                 continue
             target = ON_FN.search(stmt)
             if target and last_drop.get(signature(target.group(1)), (-1, -1)) > (
