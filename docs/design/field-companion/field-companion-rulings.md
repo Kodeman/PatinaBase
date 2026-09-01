@@ -856,6 +856,50 @@ by this one.
 **No code change.**
 
 
+## Post-wave-4 rulings — 2026-09-01
+
+Ruled against the wave-4 fix ledger's one recorded gap (I-4). This is a ruling, not a proposal:
+the code on `feat/field-verb-mount-c3` is written to it.
+
+### FC-R23 · Where do the three field verbs mount? (I-4)
+
+**Ruled: on the C3 quick-confirm card** — `CaptureCardOverlay`, the card every capture shows
+after the shutter — **not on N5.** Candidate 1 of the two the wave-4 ledger put up.
+
+- The verbs (*Make it a note in the Document* · *Make it a task* · *Make it a punch item*), the
+  punch-court confirm, both filed rows and the lane's status line are **one component in
+  CaptureKit**, rendered by the card and by N5 alike. The menu cannot say one thing on one
+  surface and something else on the other.
+- **On the card they sit on an overflow beside *Add detail* / *Save*** — §7.5 draws that pair as
+  the card's bottom line, and §6 Flow 5 step 3 (*"Tap **⋯ → Make it a punch item**"*, reached from
+  step 1's shutter → C3) had already put this control on C3 in the spec's own prose. The mount is
+  the package's flow, not an invention on the app's hottest surface.
+- **N5 keeps its harness presenter.** `SmartGuessSheet` still renders the verbs and is still
+  reachable only through `CaptureDeepLink`'s `verificationHarnessAllowed` gate. Candidate 2 —
+  giving N5 a production entry point — is **not** taken here and is not owed by this ruling;
+  un-stranding `HeuristicSmartGuessService`'s confirm-or-correct screen remains its own question.
+- **No other navigation surface is wired.** A capture with no card moment — a tray row, a V4 row —
+  has no verbs, and §7.8/§7.9 grant it none. **Tray-side access rides with Wave 5.**
+
+**One difference the mount forces, and it is a correctness point rather than a preference.** N5 runs
+after a capture has committed; C3 runs before it. Both rows carry `field_capture_id`, an FK to a
+`field_captures` row that Save is what creates. So the card **mints the lane and saves it, and does
+not enqueue** unless the capture already holds a receipt — an enqueue there would stamp `.queued` on
+a capture she has not saved and upload it behind her back, and would buy nothing, because
+`FieldWriteGate.fieldCaptureID` returns nil until the commit and the lane waits regardless. The lane
+rides the capture's own commit instead. A verb tapped and then swiped away leaves a pending lane on
+the draft that lands when she files it from the tray; nothing is lost and nothing is written early.
+
+**What did not change.** The wave-4 write lanes — `MarginNoteWrite`, `PunchTaskWrite`, and
+`Specimen`'s `requestMarginNote` / `requestPunchTask` — are untouched. So are FC-R7's court rule,
+ruling 2's no-court fallback, ruling 1's automatic in-visit note, I-5's re-open, and FC-R16: no
+action on this menu can reach a measurement, and a falsifier runs the whole flow over a transcript
+carrying a number to prove it.
+
+**This makes wave 4's acceptance criterion 3 walkable for the first time**, and with it the device
+pass the ledger says cannot be delegated.
+
+
 ## Summary sheet
 
 **Ruling order: FC-R18 → FC-R8 → FC-R17 → FC-R11 / FC-R19 → FC-R14 → everything else.**
