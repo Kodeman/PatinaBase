@@ -164,7 +164,7 @@ describe('BoardPromoteAllPanel (DV3)', () => {
         onPromoted={jest.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(promoteMutateAsync).not.toHaveBeenCalled();
   });

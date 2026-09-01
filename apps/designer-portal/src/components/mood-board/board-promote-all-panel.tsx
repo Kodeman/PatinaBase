@@ -138,11 +138,11 @@ export function BoardPromoteAllPanel({
           {justMaterialized && (
             <button
               type="button"
-              aria-label="Dismiss"
+              aria-label="Not now"
               onClick={onDismissJustMaterialized}
               className="min-h-8 min-w-8 font-mono text-[9px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
             >
-              Dismiss
+              Not now
             </button>
           )}
         </div>
