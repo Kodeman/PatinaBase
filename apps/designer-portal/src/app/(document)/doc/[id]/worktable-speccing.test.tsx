@@ -147,6 +147,12 @@ jest.mock('@patina/supabase', () => ({
     return { data: mockBoards, isLoading: false, isError: false };
   },
   useUpsertBoard: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  // BoardCreatePickerDialog (board-paths W3b naming prompt) resolves the
+  // studio id off the caller's organizations before it can query templates.
+  useOrganizations: () => ({ data: [{ id: "studio-1", type: "design_studio" }] }),
+  useBoardTemplates: () => ({ data: [], isLoading: false, isError: false }),
+  useCreateProjectBoard: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useMaterializeBoardTemplate: () => ({ mutateAsync: jest.fn(), isPending: false }),
   /* the reach-in (library-reach-in.test.tsx pattern) */
   useCrossLayerSearch: () => ({ data: undefined, isLoading: false, isError: false }),
   useAddProposalItem: () => ({ mutateAsync: jest.fn(), isPending: false }),
