@@ -4,8 +4,17 @@ import { BoardItemDirectionPanel } from '../board-item-direction-panel';
 const addMutateAsync = jest.fn();
 const resolveMutateAsync = jest.fn();
 const reopenMutateAsync = jest.fn();
+// DirectionMeta resolves author_id -> name via useProfileName -> useQuery,
+// same convention as doc-colophon.test.tsx: mock the react-query hook itself
+// rather than standing up a real QueryClient for a component test.
+const useQueryMock = jest.fn(() => ({ data: null }));
+
+jest.mock('@tanstack/react-query', () => ({
+  useQuery: (...args: unknown[]) => useQueryMock(...args),
+}));
 
 jest.mock('@patina/supabase', () => ({
+  createBrowserClient: jest.fn(),
   useAddBoardItemDirection: () => ({ mutateAsync: addMutateAsync, isPending: false }),
   useResolveBoardItemDirection: () => ({ mutateAsync: resolveMutateAsync, isPending: false }),
   useReopenBoardItemDirection: () => ({ mutateAsync: reopenMutateAsync, isPending: false }),
@@ -40,6 +49,7 @@ beforeEach(() => {
   addMutateAsync.mockReset().mockResolvedValue(direction());
   resolveMutateAsync.mockReset().mockResolvedValue(direction({ resolved: true }));
   reopenMutateAsync.mockReset().mockResolvedValue(direction({ resolved: false }));
+  useQueryMock.mockReset().mockReturnValue({ data: null });
 });
 
 describe('BoardItemDirectionPanel', () => {
@@ -106,5 +116,50 @@ describe('BoardItemDirectionPanel', () => {
     expect(
       screen.getByText('No direction on this pin yet. Studio-only — never shown to a client or a guest link.'),
     ).toBeInTheDocument();
+  });
+
+  it('attributes each note to its resolved author name (C10 — DV6 is lead→junior)', () => {
+    useQueryMock.mockReturnValue({ data: 'Direction Junior' });
+    render(
+      <BoardItemDirectionPanel
+        boardId="board-1"
+        boardItemId="pin-1"
+        directions={[direction({ author_id: 'user-2' })]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /direction/i }));
+    expect(screen.getByText(/Direction Junior/)).toBeInTheDocument();
+  });
+
+  it('surfaces a resolve failure instead of a silent unhandled rejection (C3)', async () => {
+    resolveMutateAsync.mockReset().mockRejectedValue(new Error('only a studio co-member may resolve direction'));
+    render(
+      <BoardItemDirectionPanel boardId="board-1" boardItemId="pin-1" directions={[direction()]} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /direction/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'only a studio co-member may resolve direction',
+      ),
+    );
+  });
+
+  it('surfaces a reopen failure the same way, with a fallback message for a non-Error rejection', async () => {
+    reopenMutateAsync.mockReset().mockRejectedValue('boom');
+    render(
+      <BoardItemDirectionPanel
+        boardId="board-1"
+        boardItemId="pin-1"
+        directions={[direction({ resolved: true })]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /direction/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not reopen this note.'),
+    );
   });
 });

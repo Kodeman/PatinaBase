@@ -116,6 +116,36 @@ describe('StudioBoardsView', () => {
     expect(screen.queryByText('Awaiting board')).not.toBeInTheDocument();
   });
 
+  it('carries the active ?status= filter into the room link\'s from= (C13)', () => {
+    searchParams = new URLSearchParams('status=approved_pipeline');
+    useStudioBoardsOverview.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        boards: [board({ id: 'board-b', name: 'Approved board', reactionStatus: 'approved_pipeline' })],
+        capped: false,
+      },
+    });
+    render(<StudioBoardsView />);
+    const link = screen.getByRole('link', { name: /Approved board/ });
+    expect(link).toHaveAttribute(
+      'href',
+      '/board/board-b?source=studio_boards&from=%2Fboards%3Fstatus%3Dapproved_pipeline',
+    );
+  });
+
+  it('gives every status-filter chip a 44px minimum touch target (C12)', () => {
+    useStudioBoardsOverview.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { boards: [board()], capped: false },
+    });
+    render(<StudioBoardsView />);
+    for (const name of ['All', 'Awaiting reaction', 'Reactions in', 'Approved · pipeline']) {
+      expect(screen.getByRole('link', { name })).toHaveClass('min-h-11');
+    }
+  });
+
   it('shows a capped note when the read stopped short of every active board', () => {
     useStudioBoardsOverview.mockReturnValue({
       isLoading: false,

@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
+  createBrowserClient,
   useAddBoardItemDirection,
   useResolveBoardItemDirection,
   useReopenBoardItemDirection,
@@ -15,6 +17,44 @@ function formatDirectionStamp(iso: string): string {
   } catch {
     return '';
   }
+}
+
+/** Resolve author_id (uuid) to a name, quietly — same pattern as
+ * ScheduleLineUnfold's useProfileName (captured_by). DV6 is lead→junior
+ * direction; an unattributed thread defeats the point. */
+function useProfileName(profileId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['profile-name', profileId],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = createBrowserClient() as any;
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', profileId)
+        .maybeSingle();
+      return (data?.full_name || data?.email || null) as string | null;
+    },
+    enabled: !!profileId,
+  });
+}
+
+/** "Kody Kochaver · Aug 1 · resolved" — omits the name segment gracefully
+ * while it's loading or unknown, rather than a stray leading separator. */
+function DirectionMeta({
+  authorId,
+  createdAt,
+  resolved,
+}: {
+  authorId: string;
+  createdAt: string;
+  resolved: boolean;
+}) {
+  const { data: name } = useProfileName(authorId);
+  const parts = [name, formatDirectionStamp(createdAt), resolved ? 'resolved' : null].filter(
+    (part): part is string => Boolean(part),
+  );
+  return <>{parts.join(' · ')}</>;
 }
 
 /**
@@ -52,6 +92,23 @@ export function BoardItemDirectionPanel({
       setDraft('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not add this note.');
+    }
+  };
+
+  const toggleResolved = async (note: BoardItemDirection) => {
+    setError(null);
+    try {
+      if (note.resolved) {
+        await reopenDirection.mutateAsync({ boardId, directionId: note.id });
+      } else {
+        await resolveDirection.mutateAsync({ boardId, directionId: note.id });
+      }
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : `Could not ${note.resolved ? 'reopen' : 'resolve'} this note.`,
+      );
     }
   };
 
@@ -93,20 +150,17 @@ export function BoardItemDirectionPanel({
               <p className="whitespace-pre-wrap text-[var(--text-primary)]">{note.body}</p>
               <div className="mt-1.5 flex items-center justify-between gap-2">
                 <span className="font-mono text-[8px] uppercase tracking-[0.04em] text-[var(--text-muted)]">
-                  {formatDirectionStamp(note.created_at)}
-                  {note.resolved ? ' · resolved' : ''}
+                  <DirectionMeta
+                    authorId={note.author_id}
+                    createdAt={note.created_at}
+                    resolved={note.resolved}
+                  />
                 </span>
                 <Button
                   size="sm"
                   variant="ghost"
                   disabled={resolveDirection.isPending || reopenDirection.isPending}
-                  onClick={() => {
-                    if (note.resolved) {
-                      void reopenDirection.mutateAsync({ boardId, directionId: note.id });
-                    } else {
-                      void resolveDirection.mutateAsync({ boardId, directionId: note.id });
-                    }
-                  }}
+                  onClick={() => void toggleResolved(note)}
                 >
                   {note.resolved ? 'Reopen' : 'Resolve'}
                 </Button>

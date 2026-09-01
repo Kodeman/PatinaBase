@@ -70,10 +70,20 @@ function VerdictSplitLine({ verdicts }: { verdicts: StudioBoardOverviewEntry['ve
   );
 }
 
-function StudioBoardRow({ board }: { board: StudioBoardOverviewEntry }) {
+function StudioBoardRow({
+  board,
+  activeStatus,
+}: {
+  board: StudioBoardOverviewEntry;
+  /** The live `?status=` filter, if any (C13) — carried into the room's
+   * `from` so returning from the board keeps the filtered view, not the
+   * unfiltered list. */
+  activeStatus: BoardReactionStatus | null;
+}) {
+  const from = activeStatus ? `/boards?status=${activeStatus}` : '/boards';
   return (
     <Link
-      href={boardRoomHref({ boardId: board.id, from: '/boards', source: 'studio_boards' })}
+      href={boardRoomHref({ boardId: board.id, from, source: 'studio_boards' })}
       className="flex min-h-[76px] w-full items-center gap-3 border-b border-[var(--color-pearl)] py-2.5 text-left last:border-b-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
       <BoardCoverArt
@@ -147,10 +157,10 @@ export function StudioBoardsView() {
           </div>
         </div>
         {!overview.isLoading && boards.length > 0 && (
-          <div className="mx-auto mt-2 flex max-w-[1100px] flex-wrap items-center gap-x-4 gap-y-1">
+          <div className="mx-auto mt-2 flex max-w-[1100px] flex-wrap items-center gap-x-2 gap-y-0">
             <Link
               href="/boards"
-              className={`font-mono text-[10px] uppercase tracking-[0.05em] underline decoration-dotted underline-offset-4 hover:text-[var(--color-clay-ink)] ${
+              className={`inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.05em] underline decoration-dotted underline-offset-4 hover:text-[var(--color-clay-ink)] ${
                 activeStatus ? 'text-[var(--text-muted)]' : 'text-[var(--color-clay-ink)]'
               }`}
             >
@@ -160,7 +170,7 @@ export function StudioBoardsView() {
               <Link
                 key={filter.key}
                 href={`/boards?status=${filter.key}`}
-                className={`font-mono text-[10px] uppercase tracking-[0.05em] underline decoration-dotted underline-offset-4 hover:text-[var(--color-clay-ink)] ${
+                className={`inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.05em] underline decoration-dotted underline-offset-4 hover:text-[var(--color-clay-ink)] ${
                   activeStatus === filter.key ? 'text-[var(--color-clay-ink)]' : 'text-[var(--text-muted)]'
                 }`}
               >
@@ -187,7 +197,7 @@ export function StudioBoardsView() {
         ) : (
           <div className="border-t border-[var(--color-pearl)]">
             {filtered.map((board) => (
-              <StudioBoardRow key={board.id} board={board} />
+              <StudioBoardRow key={board.id} board={board} activeStatus={activeStatus} />
             ))}
           </div>
         )}
