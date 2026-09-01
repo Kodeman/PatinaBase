@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import {
   useCreateOrganization,
+  useInviteMember,
   useLeaveOrganization,
   useOrganizationMembers,
   useOrganizations,
@@ -17,6 +18,7 @@ import { AccountStudioPage } from '../account-studio-page';
 
 jest.mock('@patina/supabase', () => ({
   useCreateOrganization: jest.fn(),
+  useInviteMember: jest.fn(),
   useLeaveOrganization: jest.fn(),
   useOrganizationMembers: jest.fn(),
   useOrganizations: jest.fn(),
@@ -75,6 +77,7 @@ const mockUseProjects = useProjects as jest.Mock;
 const mockUseStudioContacts = useStudioContacts as jest.Mock;
 const mockUseStudioBillingSettings = useStudioBillingSettings as jest.Mock;
 const mockUseCreateOrganization = useCreateOrganization as jest.Mock;
+const mockUseInviteMember = useInviteMember as jest.Mock;
 const mockUseUpdateOrganization = useUpdateOrganization as jest.Mock;
 const mockUseUpdateMemberRole = useUpdateMemberRole as jest.Mock;
 const mockUseRemoveMember = useRemoveMember as jest.Mock;
@@ -87,6 +90,10 @@ const mockUseUpdateStudioBillingSettings =
 const updateMemberRole = jest.fn();
 const transferOwnership = jest.fn();
 const removeMembership = jest.fn();
+const resendInvite = jest.fn() as jest.Mock<
+  void,
+  [unknown, { onSuccess: (result: { email_status: string; email_error?: string }) => void; onError?: (err: unknown) => void }]
+>;
 
 function mutation(mutate = jest.fn()) {
   return {
@@ -152,6 +159,30 @@ function organizationMembers(selfRole: 'owner' | 'admin') {
   ];
 }
 
+function invitedMember(
+  overrides: Partial<{
+    invitation_expires_at: string | null;
+    job_title: string | null;
+    staff_role: string | null;
+    role: 'admin' | 'member' | 'guest';
+  }> = {},
+) {
+  return {
+    id: 'membership-invited',
+    user_id: 'invited-user',
+    role: 'member',
+    status: 'invited',
+    job_title: null,
+    staff_role: null,
+    invitation_expires_at: '2099-01-01T00:00:00.000Z',
+    profiles: {
+      display_name: null,
+      email: 'invited@test.invalid',
+    },
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   mockUseOrganizations.mockReturnValue({
     data: [organization('owner')],
@@ -164,6 +195,7 @@ beforeEach(() => {
   mockUseStudioContacts.mockReturnValue({ data: [] });
   mockUseStudioBillingSettings.mockReturnValue({ data: undefined });
   mockUseCreateOrganization.mockReturnValue(mutation());
+  mockUseInviteMember.mockReturnValue(mutation(resendInvite));
   mockUseUpdateOrganization.mockReturnValue(mutation());
   mockUseUpdateMemberRole.mockReturnValue(mutation(updateMemberRole));
   mockUseRemoveMember.mockReturnValue(mutation(removeMembership));
@@ -292,5 +324,147 @@ describe('AccountStudioPage owner transitions', () => {
     );
     expect(removeMembership).toHaveBeenCalledWith('membership-member');
     expect(transferOwnership).not.toHaveBeenCalled();
+  });
+});
+
+describe('AccountStudioPage — invited roster: expiry + resend', () => {
+  it('labels a past-due invited member "Invite expired" instead of "invited"', () => {
+    mockUseOrganizationMembers.mockReturnValue({
+      data: [
+        ...organizationMembers('owner'),
+        invitedMember({ invitation_expires_at: '2020-01-01T00:00:00.000Z' }),
+      ],
+    });
+    render(<AccountStudioPage />);
+
+    const row = screen.getByText('invited@test.invalid').closest('li');
+    expect(row).not.toBeNull();
+    expect(
+      within(row as HTMLElement).getByText('Invite expired'),
+    ).toBeInTheDocument();
+    expect(
+      within(row as HTMLElement).queryByText('invited'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps a live (non-expired) invited member labeled "invited"', () => {
+    mockUseOrganizationMembers.mockReturnValue({
+      data: [
+        ...organizationMembers('owner'),
+        invitedMember({ invitation_expires_at: '2099-01-01T00:00:00.000Z' }),
+      ],
+    });
+    render(<AccountStudioPage />);
+
+    const row = screen.getByText('invited@test.invalid').closest('li');
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText('invited')).toBeInTheDocument();
+    expect(
+      within(row as HTMLElement).queryByText('Invite expired'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('never treats an active member as expired, even with a stale invitation_expires_at', () => {
+    mockUseOrganizationMembers.mockReturnValue({
+      data: organizationMembers('owner'),
+    });
+    render(<AccountStudioPage />);
+
+    expect(screen.queryByText('Invite expired')).not.toBeInTheDocument();
+  });
+
+  it('shows "Resend invite" to an owner for an invited member and calls useInviteMember with the row\'s email/role/title', () => {
+    mockUseOrganizationMembers.mockReturnValue({
+      data: [
+        ...organizationMembers('owner'),
+        invitedMember({ job_title: 'Bookkeeper', staff_role: 'bookkeeper' }),
+      ],
+    });
+    render(<AccountStudioPage />);
+
+    const row = screen.getByText('invited@test.invalid').closest('li');
+    expect(row).not.toBeNull();
+    fireEvent.click(
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+    );
+
+    expect(resendInvite).toHaveBeenCalledTimes(1);
+    const [payload, options] = resendInvite.mock.calls[0];
+    expect(payload).toEqual({
+      organizationId: 'studio-1',
+      email: 'invited@test.invalid',
+      role: 'member',
+      jobTitle: 'Bookkeeper',
+      staffRole: 'bookkeeper',
+    });
+    expect(options).toEqual(
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+  });
+
+  it('also shows "Resend invite" to an admin (mirrors the same canManage gate as other row actions)', () => {
+    mockUseOrganizations.mockReturnValue({
+      data: [organization('admin')],
+      isLoading: false,
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: [...organizationMembers('admin'), invitedMember()],
+    });
+    render(<AccountStudioPage />);
+
+    const row = screen.getByText('invited@test.invalid').closest('li');
+    expect(
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+    ).toBeInTheDocument();
+  });
+
+  it('never shows "Resend invite" for an active member', () => {
+    mockUseOrganizationMembers.mockReturnValue({
+      data: organizationMembers('owner'),
+    });
+    render(<AccountStudioPage />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Resend invite' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a confirmation message in the row after a successful resend', () => {
+    resendInvite.mockImplementation((_input, options) => {
+      options.onSuccess({ email_status: 'sent' });
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: [...organizationMembers('owner'), invitedMember()],
+    });
+    render(<AccountStudioPage />);
+
+    const row = screen.getByText('invited@test.invalid').closest('li');
+    fireEvent.click(
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+    );
+
+    expect(
+      within(row as HTMLElement).getByText('Invite email sent again.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows an issue message in the row when the resend email fails', () => {
+    resendInvite.mockImplementation((_input, options) => {
+      options.onSuccess({ email_status: 'failed', email_error: 'smtp down' });
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: [...organizationMembers('owner'), invitedMember()],
+    });
+    render(<AccountStudioPage />);
+
+    const row = screen.getByText('invited@test.invalid').closest('li');
+    fireEvent.click(
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+    );
+
+    expect(within(row as HTMLElement).getByText('smtp down')).toBeInTheDocument();
   });
 });

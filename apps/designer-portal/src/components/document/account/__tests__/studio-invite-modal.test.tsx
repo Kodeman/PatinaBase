@@ -233,3 +233,192 @@ describe('StudioInviteModal — submit payload', () => {
     expect(payload.role).toBe('guest');
   });
 });
+
+type InviteMutationOptions = {
+  onSuccess: (result: {
+    email: string;
+    organizationId?: string;
+    email_status: 'sent' | 'suppressed' | 'failed';
+    email_error?: string;
+  }) => void;
+};
+
+describe('StudioInviteModal — email delivery outcome', () => {
+  it('shows the plain success state when email_status is "sent"', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({ email: 'jamie@example.com', email_status: 'sent' });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      "Invited jamie@example.com — they'll get an email.",
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Try sending again' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a distinct email-issue state with detail and a resend action when email_status is "failed"', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+        email_error: 'smtp down',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      "Invited jamie@example.com — but the invite email couldn't be sent.",
+    );
+    expect(screen.getByText(/smtp down/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Try sending again' }),
+    ).toBeInTheDocument();
+  });
+
+  it('handles "suppressed" as an email-issue state too, with fallback copy when no detail is given', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({ email: 'jamie@example.com', email_status: 'suppressed' });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(
+      screen.getByText(/suppressed and never went out/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Try sending again' }),
+    ).toBeInTheDocument();
+  });
+
+  it('handles the legacy 502 send_failed shape identically to a 200 email_status:"failed"', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      // useInviteMember normalizes the legacy shape before this callback
+      // ever sees it — the modal only ever branches on email_status.
+      options.onSuccess({
+        email: 'jamie@example.com',
+        organizationId: 'org-1',
+        email_status: 'failed',
+        email_error: 'smtp connection refused',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.getByText(/smtp connection refused/)).toBeInTheDocument();
+  });
+
+  it('"Try sending again" re-invokes the mutation with the same payload', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+        email_error: 'smtp down',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+    mutate.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try sending again' }));
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const [payload] = mutate.mock.calls[0];
+    expect(payload).toMatchObject({
+      organizationId: 'org-1',
+      email: 'jamie@example.com',
+      role: 'member',
+    });
+  });
+
+  it('"Invite another" from the email-issue state resets back to a fresh form', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+        email_error: 'smtp down',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+    expect(
+      screen.getByRole('button', { name: 'Try sending again' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Invite another' }));
+
+    expect(screen.getByLabelText('Email')).toHaveValue('');
+    expect(
+      screen.queryByRole('button', { name: 'Try sending again' }),
+    ).not.toBeInTheDocument();
+  });
+});
