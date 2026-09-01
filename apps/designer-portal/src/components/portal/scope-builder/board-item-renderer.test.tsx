@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { render, screen } from '@testing-library/react';
 import type { EditableMoodBoardItem } from '@patina/types';
 import { renderBoardRoomItem } from './board-item-renderer';
@@ -80,10 +82,6 @@ describe('renderBoardRoomItem — note card tokens, not raw hex (VD1/VD18)', () 
     // drops var(...) values from computed inline style, so the token swap
     // can't be asserted by inspecting rendered style — read the source
     // instead, the same grep-style check this repo's D4 shadow audit uses.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('fs');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require('path');
     const source = fs.readFileSync(
       path.join(__dirname, 'board-item-renderer.tsx'),
       'utf8',
