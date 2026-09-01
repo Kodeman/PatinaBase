@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   useProducts,
   useCreateDraftProduct,
@@ -606,14 +606,65 @@ function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
 
 // ─── Quick-create draft tab ────────────────────────────────────────────────────
 
+/**
+ * Quick-create draft tab (D9). The "Source URL" field used to be inert text
+ * storage — pasting a real vendor product URL fetched nothing, so every
+ * field had to be typed by hand (mood-board-ux-audit-2026-08-31 F8/D9). It
+ * now unfurls through the same guarded `capture-from-url` edge function the
+ * Captures tab's `AddFromUrl` already uses: on blur (or Enter) of the Source
+ * URL field, a currently-empty Name/Brand/Price is filled from the fetched
+ * page, and the fetched image travels with the pick. A failed fetch degrades
+ * to the original manual-entry form with an inline note — it never blocks
+ * creating the draft.
+ */
 function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [priceDollars, setPriceDollars] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [unfurlNote, setUnfurlNote] = useState<string | null>(null);
+  const [unfurledImages, setUnfurledImages] = useState<string[] | null>(null);
+  const lastUnfurledUrlRef = useRef<string | null>(null);
 
   const create = useCreateDraftProduct();
+  const unfurl = useCaptureFromUrl();
+
+  const attemptUnfurl = async () => {
+    const trimmed = sourceUrl.trim();
+    if (!trimmed) return;
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(trimmed);
+    } catch {
+      return; // not a well-formed URL yet — leave manual entry alone, no note
+    }
+    if (lastUnfurledUrlRef.current === trimmed) return; // already tried this exact URL
+    lastUnfurledUrlRef.current = trimmed;
+    setUnfurlNote(null);
+    try {
+      const extracted = await unfurl.mutateAsync({ url: trimmed, mode: 'capture' });
+      if (extracted.name?.trim()) setName((prev) => prev || extracted.name!.trim());
+      if (extracted.brand?.trim()) setBrand((prev) => prev || extracted.brand!.trim());
+      if (
+        typeof extracted.priceRetailCents === 'number' &&
+        Number.isFinite(extracted.priceRetailCents)
+      ) {
+        setPriceDollars((prev) => prev || String(extracted.priceRetailCents! / 100));
+      }
+      setUnfurledImages(extracted.images && extracted.images.length > 0 ? extracted.images : null);
+      const host = parsedUrl.hostname.replace(/^www\./, '');
+      setUnfurlNote(`Fetched details from ${host} — check them over before adding.`);
+    } catch (err) {
+      setUnfurledImages(null);
+      const reason = err instanceof Error && err.message ? err.message : null;
+      setUnfurlNote(
+        reason
+          ? `Couldn't fetch details from that link (${reason}) — enter them below instead.`
+          : "Couldn't fetch details from that link — enter them below instead.",
+      );
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -628,11 +679,12 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
         brand: brand || undefined,
         sourceUrl: sourceUrl || undefined,
         priceRetailDollars,
+        images: unfurledImages ?? undefined,
       });
       onPick({
         productId: result.id,
         name: name.trim(),
-        imageUrl: null,
+        imageUrl: unfurledImages?.[0] ?? null,
         priceCents:
           priceRetailDollars !== undefined ? Math.round(priceRetailDollars * 100) : null,
         priceTradeCents: null, // drafts carry no trade cost
@@ -654,6 +706,35 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
         later — it stays in <span style={{ color: 'var(--text-primary)' }}>draft</span> in your
         personal library until you publish it.
       </p>
+
+      <label className="block">
+        <span className="type-meta mb-1 block">Source URL</span>
+        <Input
+          type="url"
+          value={sourceUrl}
+          onChange={(e) => setSourceUrl(e.target.value)}
+          onBlur={() => void attemptUnfurl()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void attemptUnfurl();
+            }
+          }}
+          placeholder="https://… paste a vendor product page"
+          disabled={unfurl.isPending}
+          data-testid="draft-source-url-input"
+        />
+      </label>
+      {unfurl.isPending && (
+        <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }} role="status">
+          Fetching product details…
+        </p>
+      )}
+      {!unfurl.isPending && unfurlNote && (
+        <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }} role="status">
+          {unfurlNote}
+        </p>
+      )}
 
       <label className="block">
         <span className="type-meta mb-1 block">Product Name *</span>
@@ -689,6 +770,7 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
               type="number"
               min="0"
               step="1"
+              data-testid="draft-price-input"
               value={priceDollars}
               onChange={(e) => setPriceDollars(e.target.value)}
               placeholder="0"
@@ -697,16 +779,6 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
           </div>
         </label>
       </div>
-
-      <label className="block">
-        <span className="type-meta mb-1 block">Source URL</span>
-        <Input
-          type="url"
-          value={sourceUrl}
-          onChange={(e) => setSourceUrl(e.target.value)}
-          placeholder="https://…"
-        />
-      </label>
 
       {errorMessage && (
         <div

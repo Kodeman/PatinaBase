@@ -119,6 +119,12 @@ let mockCatalogRows: Array<Record<string, unknown>> = [];
 let mockProduct: Record<string, unknown> = VARIANT_PRODUCT;
 let mockDefinition: Record<string, unknown> = VARIANT_DEFINITION;
 
+// D9 — the Quick-create draft tab's URL unfurl. Controllable per-test (unlike
+// the other static mocks below) so success/failure/degrade paths can each set
+// their own resolved/rejected value.
+const mockCreateDraftProduct = jest.fn();
+const mockCaptureFromUrl = jest.fn();
+
 /** A server evaluation that mirrors what 00403/00413 actually return. */
 const evaluateMock = jest.fn(
   async (input: { productId: string; optionValueIds: string[] }) => {
@@ -211,8 +217,8 @@ jest.mock('@patina/supabase', () => ({
     isError: false,
   }),
   useProposalCaptures: () => ({ data: [], isLoading: false, isError: false }),
-  useCreateDraftProduct: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useCaptureFromUrl: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useCreateDraftProduct: () => ({ mutateAsync: mockCreateDraftProduct, isPending: false }),
+  useCaptureFromUrl: () => ({ mutateAsync: mockCaptureFromUrl, isPending: false }),
   useCommitProposalCapture: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProduct: () => ({ data: mockProduct, isLoading: false, error: null }),
   useProductConfigurationDefinition: () => ({
@@ -587,5 +593,119 @@ describe('ProductPickerModal — custom commissions', () => {
       configurationSkipped: true,
     });
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D9/F8 (mood-board-ux-audit-2026-08-31) — the Quick-create draft tab's
+// "Source URL" field used to store raw text and fetch nothing. It now
+// unfurls through the same `capture-from-url` edge function the Captures
+// tab's AddFromUrl already uses (useCaptureFromUrl), filling empty
+// Name/Brand/Price fields and carrying the fetched image + provenance
+// (source_url) through to the create call and the emitted pick.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ProductPickerModal — Quick-create draft URL unfurl (D9)', () => {
+  function openDraftTab() {
+    const helpers = openLibraryPicker();
+    fireEvent.click(screen.getByRole('tab', { name: 'Quick-create draft' }));
+    return helpers;
+  }
+
+  it('fetches title/image/price into empty fields on a successful unfurl, and the fields stay editable', async () => {
+    mockCaptureFromUrl.mockResolvedValueOnce({
+      name: 'Cardamom Lounge Chair',
+      brand: 'Holly Hunt',
+      priceRetailCents: 125000,
+      images: ['https://img.example.com/chair.jpg'],
+    });
+    mockCreateDraftProduct.mockResolvedValueOnce({ id: 'draft-99' });
+    const { onPick } = openDraftTab();
+
+    const urlInput = screen.getByTestId('draft-source-url-input');
+    fireEvent.change(urlInput, { target: { value: 'https://www.example.com/chair' } });
+    fireEvent.blur(urlInput);
+
+    await screen.findByText('Fetched details from example.com — check them over before adding.');
+    expect(mockCaptureFromUrl).toHaveBeenCalledWith({
+      url: 'https://www.example.com/chair',
+      mode: 'capture',
+    });
+    expect(screen.getByLabelText('Product Name *')).toHaveValue('Cardamom Lounge Chair');
+    expect(screen.getByLabelText('Brand')).toHaveValue('Holly Hunt');
+    expect(screen.getByTestId('draft-price-input')).toHaveValue(1250);
+
+    // Still editable before adding — the designer can override the fetch.
+    fireEvent.change(screen.getByLabelText('Product Name *'), {
+      target: { value: 'Cardamom Lounge Chair — Walnut' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft + use' }));
+
+    await waitFor(() => expect(mockCreateDraftProduct).toHaveBeenCalledWith({
+      name: 'Cardamom Lounge Chair — Walnut',
+      brand: 'Holly Hunt',
+      sourceUrl: 'https://www.example.com/chair',
+      priceRetailDollars: 1250,
+      images: ['https://img.example.com/chair.jpg'],
+    }));
+    expect(lastPick(onPick)).toMatchObject({
+      productId: 'draft-99',
+      name: 'Cardamom Lounge Chair — Walnut',
+      imageUrl: 'https://img.example.com/chair.jpg',
+      vendorName: 'Holly Hunt',
+      layer: 'personal',
+    });
+  });
+
+  it('degrades to manual entry with an inline note when the unfurl fails, without blocking creation', async () => {
+    mockCaptureFromUrl.mockRejectedValueOnce(new Error('That URL could not be read.'));
+    mockCreateDraftProduct.mockResolvedValueOnce({ id: 'draft-manual' });
+    const { onPick } = openDraftTab();
+
+    const urlInput = screen.getByTestId('draft-source-url-input');
+    fireEvent.change(urlInput, { target: { value: 'https://www.example.com/sofa' } });
+    fireEvent.blur(urlInput);
+
+    await screen.findByText(
+      "Couldn't fetch details from that link (That URL could not be read.) — enter them below instead.",
+    );
+    // Degrade, not a block — the manual fields are untouched and usable.
+    expect(screen.getByLabelText('Product Name *')).toHaveValue('');
+
+    fireEvent.change(screen.getByLabelText('Product Name *'), {
+      target: { value: 'Hand-typed Sofa' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft + use' }));
+
+    await waitFor(() => expect(mockCreateDraftProduct).toHaveBeenCalledWith({
+      name: 'Hand-typed Sofa',
+      brand: undefined,
+      sourceUrl: 'https://www.example.com/sofa',
+      priceRetailDollars: undefined,
+      images: undefined,
+    }));
+    expect(lastPick(onPick)).toMatchObject({
+      productId: 'draft-manual',
+      name: 'Hand-typed Sofa',
+      imageUrl: null,
+    });
+  });
+
+  it('never fires the unfurl for an incomplete URL, and never re-fires for the same URL twice', async () => {
+    mockCaptureFromUrl.mockResolvedValue({ name: 'Ottoman', images: [] });
+    openDraftTab();
+
+    const urlInput = screen.getByTestId('draft-source-url-input');
+    fireEvent.change(urlInput, { target: { value: 'not-a-url' } });
+    fireEvent.blur(urlInput);
+    expect(mockCaptureFromUrl).not.toHaveBeenCalled();
+
+    fireEvent.change(urlInput, { target: { value: 'https://www.example.com/ottoman' } });
+    fireEvent.blur(urlInput);
+    await waitFor(() => expect(mockCaptureFromUrl).toHaveBeenCalledTimes(1));
+
+    // Blurring again without changing the value must not re-fetch.
+    fireEvent.blur(urlInput);
+    expect(mockCaptureFromUrl).toHaveBeenCalledTimes(1);
   });
 });
