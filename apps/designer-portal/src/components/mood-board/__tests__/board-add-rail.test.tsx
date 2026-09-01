@@ -22,7 +22,7 @@ jest.mock('@patina/supabase', () => ({
       }),
     }),
   }),
-  useBoardPinFeedback: () => ({ data: mockPinFeedback.rows, isLoading: false }),
+  useBoardItemFeedbackByBoard: () => ({ data: mockPinFeedback.rows, isLoading: false }),
   usePalettes: () => ({ data: [], isLoading: false }),
   useProposal: () => ({ data: undefined, isLoading: false }),
   useProposalCaptures: () => ({

@@ -19,7 +19,7 @@ export interface ItemFeedback {
   proposal_item_id: string | null;
   ffe_item_id: string | null;
   board_item_id: string | null;
-  /** Null on a guest-link reaction (00549); guest_share_id carries it instead. */
+  /** Null on a guest-link reaction (W2a, 00549); guest_share_id carries it instead. */
   client_id: string | null;
   guest_share_id?: string | null;
   verdict: Verdict;
@@ -108,15 +108,19 @@ export function useBoardFeedback(proposalId: string | undefined) {
 }
 
 /**
- * Every verdict on ONE board's pins, whichever document owns the board. The
- * proposal-scoped feed above cannot see a project-owned board (its join runs
- * through proposal_boards.proposal_id, which is NULL there), and guest-link
- * reactions land on exactly those boards. RLS (00549) still decides the rows:
- * a studio co-member of the board's owner sees them, nobody else does.
+ * Every verdict on ONE board's pins, scoped directly by `board_id` rather
+ * than a proposal leg, whichever document owns the board. useBoardFeedback
+ * above requires a proposal_id and returns nothing for a project-owned board
+ * (its join runs through proposal_boards.proposal_id, which is NULL there) or
+ * for a guest-link reaction (which lands on exactly those boards) — this is
+ * the owner-agnostic parallel, since a board's items live in
+ * `proposal_board_items` regardless of which leg owns the board. RLS (00267,
+ * widened by 00549) still decides the rows: a studio co-member of the
+ * board's owner sees every verdict, a client sees only her own.
  */
-export function useBoardPinFeedback(boardId: string | undefined) {
+export function useBoardItemFeedbackByBoard(boardId: string | undefined) {
   return useQuery({
-    queryKey: ['board-pin-feedback', boardId],
+    queryKey: ['board-item-feedback', boardId],
     enabled: !!boardId,
     queryFn: async (): Promise<ItemFeedback[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

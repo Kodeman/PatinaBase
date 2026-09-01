@@ -23,6 +23,9 @@ const mockFrozen = jest.fn();
 jest.mock('@patina/supabase', () => ({
   useProjectOwnedBoards: () => mockLive(),
   useProjectBoards: () => mockFrozen(),
+  // Board-level reaction status chip (board-paths W2b #1) — no active shares
+  // in this suite's fixtures, so every row renders no chip.
+  useBoardReactionStatuses: () => new Map(),
 }));
 
 jest.mock('@/components/portal/scope-builder/boards-builder', () => ({

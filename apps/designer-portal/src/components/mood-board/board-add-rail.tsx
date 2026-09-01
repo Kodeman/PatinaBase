@@ -9,7 +9,7 @@ import type {
 } from '@patina/types';
 import {
   createBrowserClient,
-  useBoardPinFeedback,
+  useBoardItemFeedbackByBoard,
   usePalettes,
   useProposal,
   useProposalCaptures,
@@ -601,7 +601,7 @@ function FeedbackPanel({
 }) {
   // Board-scoped, not proposal-scoped: a project-owned board has no proposal to
   // join through, and guest-link reactions (00549) land on exactly those.
-  const { data: feedback = [], isLoading } = useBoardPinFeedback(boardId);
+  const { data: feedback = [], isLoading } = useBoardItemFeedbackByBoard(boardId);
   const [filter, setFilter] = useState<'all' | 'approved' | 'rejected' | 'comment' | 'none'>('all');
   const latest = useMemo(() => {
     const rows = new Map<string, ItemFeedback>();

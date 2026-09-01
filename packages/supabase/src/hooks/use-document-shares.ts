@@ -127,6 +127,43 @@ export function useCreateBoardShare() {
   });
 }
 
+/**
+ * Bulk existence check: which of these board ids currently have an ACTIVE
+ * share link. Backs the board-level reaction-status chip and the desk rollup
+ * (board-paths W2b) — a single IN() read instead of one useBoardShares call
+ * per card. Exported as a plain async fetcher too, so a caller that already
+ * has a board list can fold it into one larger query instead of a second
+ * React Query round trip.
+ */
+export async function fetchActiveBoardShareIds(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  boardIds: readonly string[],
+): Promise<Set<string>> {
+  if (boardIds.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from('document_shares')
+    .select('board_id')
+    .in('board_id', boardIds)
+    .eq('status', 'active');
+  if (error) throw error;
+  const ids = new Set<string>();
+  for (const row of (data ?? []) as Array<{ board_id: string | null }>) {
+    if (typeof row.board_id === 'string') ids.add(row.board_id);
+  }
+  return ids;
+}
+
+export function useActiveBoardShareIds(boardIds: readonly string[]) {
+  const sortedIds = [...new Set(boardIds)].sort();
+  return useQuery({
+    queryKey: ['active-board-share-ids', sortedIds],
+    enabled: sortedIds.length > 0,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    queryFn: () => fetchActiveBoardShareIds(getSupabase() as any, sortedIds),
+  });
+}
+
 export function useRevokeShare() {
   const qc = useQueryClient();
   return useMutation({

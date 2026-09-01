@@ -21,6 +21,9 @@ jest.mock('@patina/supabase', () => ({
   useProjectFfeReadiness: (...args: unknown[]) => useProjectFfeReadiness(...args),
   useProjectReviewAttention: (...args: unknown[]) => useProjectReviewAttention(...args),
   useContinueBoardInProject: () => ({ mutateAsync, isPending: false }),
+  // Board-level reaction status chip (board-paths W2b #1) — no active shares
+  // in this suite's fixtures, so every card renders no chip.
+  useBoardReactionStatuses: () => new Map(),
 }));
 
 jest.mock('@patina/design-system', () => ({
