@@ -47,6 +47,11 @@ import {
 } from 'https://esm.sh/@supabase/supabase-js@2';
 import { renderTemplateFromDb } from '../_shared/render-template.ts';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
+import {
+  type InviteEmailOutcome,
+  inviteEmailOutcome,
+  TEMPLATE_MISSING_OUTCOME,
+} from './lib.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -324,7 +329,27 @@ async function handleInvite(req: Request): Promise<Response> {
     }
   }
 
-  // 6. Render + send the branded invite (fail loud — never send unbranded).
+  // 6. Render + send the branded invite. Past this line the membership is
+  //    durably committed, so an email failure is REPORTED, never raised: the
+  //    caller gets 200 with email_status='failed' plus an email_error, and the
+  //    portal offers a resend rather than treating the whole invite as lost.
+  //    Only pre-upsert validation/authz still answers with an error status.
+  const isProd = Deno.env.get('ENVIRONMENT') === 'production';
+  const emailDevMode = Deno.env.get('EMAIL_DEV_MODE');
+  const includeActionLink = !isProd && !!emailDevMode;
+
+  const respond = (outcome: InviteEmailOutcome) =>
+    json({
+      userId,
+      email,
+      status: 'invited',
+      organizationId,
+      teammateType,
+      memberRole,
+      ...outcome,
+      ...(includeActionLink ? { actionLink } : {}),
+    });
+
   const firstName = deriveFirstName(name, email);
   const rendered = await renderTemplateFromDb(admin, 'workspace-invite', {
     first_name: firstName,
@@ -334,7 +359,7 @@ async function handleInvite(req: Request): Promise<Response> {
   });
   if (!rendered) {
     console.error('workspace-member-invite: template_missing:workspace-invite');
-    return json({ error: 'template_missing:workspace-invite' }, 500);
+    return respond(TEMPLATE_MISSING_OUTCOME);
   }
 
   const sendResult = await sendCompliantEmail(admin, {
@@ -356,22 +381,9 @@ async function handleInvite(req: Request): Promise<Response> {
   });
   if (!sendResult.success && !sendResult.suppressed) {
     console.error('workspace-member-invite: send failed', sendResult.error);
-    return json({ error: 'send_failed', detail: sendResult.error }, 502);
   }
 
-  const isProd = Deno.env.get('ENVIRONMENT') === 'production';
-  const emailDevMode = Deno.env.get('EMAIL_DEV_MODE');
-  const includeActionLink = !isProd && !!emailDevMode;
-
-  return json({
-    userId,
-    email,
-    status: 'invited',
-    organizationId,
-    teammateType,
-    memberRole,
-    ...(includeActionLink ? { actionLink } : {}),
-  });
+  return respond(inviteEmailOutcome(sendResult));
 }
 
 Deno.serve(async (req: Request) => {

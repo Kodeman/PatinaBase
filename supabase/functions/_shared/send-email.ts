@@ -227,6 +227,7 @@ export async function prepareCompliantEmail(
         .eq("user_id", options.userId)
         .eq("channel", "email")
         .in("status", [
+          "sent",
           "delivered",
           "sending",
           "opened",
@@ -423,8 +424,10 @@ export async function sendCompliantEmail(
   const result = await sendPreparedResendRequest(prepared.request);
   if (logId) {
     if (result.state === "delivered") {
+      // Resend's 2xx is an ACCEPT, not a delivery. 'delivered' is written only
+      // by resend-webhook's email.delivered event (00552 added 'sent').
       await supabase.from("notification_log").update({
-        status: "delivered",
+        status: "sent",
         provider_id: result.id,
         sent_at: new Date().toISOString(),
       }).eq("id", logId);

@@ -27,7 +27,7 @@ async function getOverview(supabase: any, since: string) {
   // SENT-side: an SMS accepted by Twilio sits at 'sending' until the status
   // webhook flips it — it was sent, so it counts toward totalSent/sendVolume,
   // but it is NOT yet delivered (deliveredStatuses above stays untouched).
-  const sentStatuses = [...deliveredStatuses, 'sending', 'bounced', 'unconfirmed'];
+  const sentStatuses = [...deliveredStatuses, 'sending', 'sent', 'bounced', 'complained', 'unconfirmed'];
 
   const totalSent = allLogs.filter((l: { status: string }) => sentStatuses.includes(l.status)).length;
   const totalDelivered = allLogs.filter((l: { status: string }) => deliveredStatuses.includes(l.status)).length;
@@ -106,7 +106,7 @@ async function getAttribution(supabase: any, since: string) {
   const [sentResult, openedResult, clickedResult] = await Promise.all([
     // SENT-side: an SMS accepted by Twilio sits at 'sending' until the status
     // webhook flips it — it was sent, so it belongs in the funnel's "Sent" stage.
-    supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', [...deliveredStatuses, 'sending', 'bounced', 'unconfirmed']),
+    supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', [...deliveredStatuses, 'sending', 'sent', 'bounced', 'complained', 'unconfirmed']),
     supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).not('opened_at', 'is', null),
     supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).not('clicked_at', 'is', null),
   ]);
@@ -155,7 +155,7 @@ async function getDeliveryHealth(supabase: any, since: string) {
     // SENT-side 'total' denominator: an in-flight ('sending') SMS was sent,
     // so it counts toward total — this correctly lowers deliveryRate for
     // messages not yet confirmed delivered (deliveredStatuses is untouched).
-    supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', [...deliveredStatuses, 'sending', 'bounced', 'failed', 'unconfirmed']),
+    supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', [...deliveredStatuses, 'sending', 'sent', 'bounced', 'complained', 'failed', 'unconfirmed']),
     supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', deliveredStatuses),
     supabase.from('notification_log').select('error', { count: 'exact' }).gte('created_at', since).eq('status', 'bounced'),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('email_complaint', true),
