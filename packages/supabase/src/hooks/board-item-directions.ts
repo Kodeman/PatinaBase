@@ -29,6 +29,16 @@ export interface BoardItemDirection {
 const DIRECTION_COLUMNS =
   'id, board_item_id, author_id, body, resolved, resolved_at, resolved_by, created_at, updated_at';
 
+/** The literal PostgREST response shape for the `board_id`-filter query below
+ * — DIRECTION_COLUMNS' fields plus the `proposal_board_items!inner(board_id)`
+ * embed the `.eq('proposal_board_items.board_id', ...)` filter requires.
+ * Declared (rather than cast straight to `BoardItemDirection[]`, board-paths
+ * review 2026-09-01/C4) so the embed's presence is explicit in the type, not
+ * silently discarded by a same-shape-looking `as`. */
+interface BoardItemDirectionRow extends BoardItemDirection {
+  proposal_board_items: { board_id: string } | { board_id: string }[] | null;
+}
+
 /**
  * Every direction note on ONE board's pins, scoped by `board_id` (owner-
  * agnostic — works for both a proposal-owned and a project-owned board, same
@@ -49,7 +59,11 @@ export function useBoardItemDirectionsByBoard(boardId: string | undefined) {
         .eq('proposal_board_items.board_id', boardId)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      return (data ?? []) as BoardItemDirection[];
+      const rows = (data ?? []) as BoardItemDirectionRow[];
+      // Strip the embed explicitly rather than casting past it — the return
+      // type is BoardItemDirection[], and every consumer should get exactly
+      // that shape, never the join artifact PostgREST required to filter.
+      return rows.map(({ proposal_board_items: _embed, ...direction }) => direction);
     },
   });
 }

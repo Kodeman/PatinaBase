@@ -1,28 +1,42 @@
 'use client';
 
 // Studio-wide boards status view (board-paths W3c, DV8/DV10). Builds on the
-// desk rollup's derivation helpers (board-verdicts.ts) and cap pattern
-// (use-board-reaction-rollup.ts): a bounded, RLS-scoped read of every active
-// board across projects — with cover, project/proposal name, reaction-status
-// chip, client/guest verdict split, and unresolved-direction count (00550).
-// This is the destination the desk rollup's count-links now point at; see
-// desk-boards-reaction-rollup.tsx.
+// desk rollup's derivation helpers (board-verdicts.ts): deriveBoardReactionStatus
+// for the chip, the same client/guest split summarizeBoardVerdicts already
+// established. Bounded — never an unbounded all-boards scan.
+//
+// Board-paths review (2026-09-01, C4/C9): the first cut selected
+// `proposal_boards(...).select('proposal_board_items(verdicts:item_feedback(...),
+// directions:board_item_directions(...))')` — an unbounded PostgREST nested
+// embed pulling every pin's every feedback/direction ROW for up to `cap`
+// boards, with no per-item limit expressible in that shape. This version
+// calls `studio_boards_overview` (00550), a SECURITY INVOKER SQL function
+// that aggregates server-side (RLS still applies as the calling user) and
+// returns exactly one row per board — six verdict counts (client/guest ×
+// approved/rejected/comment, already folded to "latest verdict per author"
+// the same way latestVerdictByAuthor does) plus one unresolved-direction
+// count and one has-active-share flag. No row-per-pin data crosses the wire.
+//
+// C5: desk-boards-reaction-rollup.tsx's three counts and this page must never
+// disagree, so use-board-reaction-rollup.ts now DERIVES its buckets from this
+// exact hook/cap rather than running its own independent query — see that
+// file. DEFAULT_CAP is exported so both call sites share the identical
+// default (and therefore the identical react-query cache key) unless a
+// caller explicitly overrides it.
 
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-import { fetchActiveBoardShareIds } from './use-document-shares';
 import {
   deriveBoardReactionStatus,
-  summarizeBoardVerdicts,
-  type BoardItemVerdictProjection,
+  emptyBoardVerdictCounts,
   type BoardReactionStatus,
   type BoardVerdictBreakdown,
 } from './board-verdicts';
 
 const getSupabase = () => createBrowserClient();
 
-const DEFAULT_CAP = 60;
-const MAX_CAP = 150;
+export const DEFAULT_STUDIO_BOARDS_CAP = 60;
+export const MAX_STUDIO_BOARDS_CAP = 150;
 
 export interface StudioBoardOverviewEntry {
   id: string;
@@ -45,84 +59,91 @@ export interface StudioBoardsOverview {
   capped: boolean;
 }
 
-function firstRelation<T>(value: T | T[] | null | undefined): T | null {
-  return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
+/** The literal row shape `studio_boards_overview` returns (00550) — bigint
+ * aggregate columns arrive as strings over PostgREST/JS, so this is declared
+ * rather than cast through `BoardVerdictBreakdown`. */
+interface StudioBoardsOverviewRow {
+  id: string;
+  name: string;
+  owner_kind: string;
+  owner_id: string;
+  owner_name: string;
+  cover_image_url: string | null;
+  updated_at: string;
+  has_active_share: boolean;
+  verdict_client_approved: number | string;
+  verdict_client_rejected: number | string;
+  verdict_client_comment: number | string;
+  verdict_guest_approved: number | string;
+  verdict_guest_rejected: number | string;
+  verdict_guest_comment: number | string;
+  unresolved_direction_count: number | string;
+}
+
+function toCount(value: number | string): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function toVerdicts(row: StudioBoardsOverviewRow): BoardVerdictBreakdown {
+  const counts = emptyBoardVerdictCounts();
+  counts.bySource.client.approved = toCount(row.verdict_client_approved);
+  counts.bySource.client.rejected = toCount(row.verdict_client_rejected);
+  counts.bySource.client.comment = toCount(row.verdict_client_comment);
+  counts.bySource.client.total =
+    counts.bySource.client.approved + counts.bySource.client.rejected + counts.bySource.client.comment;
+  counts.bySource.guest.approved = toCount(row.verdict_guest_approved);
+  counts.bySource.guest.rejected = toCount(row.verdict_guest_rejected);
+  counts.bySource.guest.comment = toCount(row.verdict_guest_comment);
+  counts.bySource.guest.total =
+    counts.bySource.guest.approved + counts.bySource.guest.rejected + counts.bySource.guest.comment;
+  counts.approved = counts.bySource.client.approved + counts.bySource.guest.approved;
+  counts.rejected = counts.bySource.client.rejected + counts.bySource.guest.rejected;
+  counts.comment = counts.bySource.client.comment + counts.bySource.guest.comment;
+  counts.total = counts.bySource.client.total + counts.bySource.guest.total;
+  return counts;
 }
 
 /**
  * The studio's active boards across every project/proposal, newest-updated
- * first, each folded down to the exact fields DV8/DV10 asked for: a cover, an
- * owner name, the same reaction-status chip the per-board card uses, the
- * client/guest verdict split (summarizeBoardVerdicts.bySource), and how many
- * unresolved direction notes it carries. Bounded — never an unbounded
- * all-boards scan; `capped` tells the caller when the read stopped short.
+ * first, each folded down to the exact fields DV8/DV10 asked for. Bounded —
+ * `capped` tells the caller when the read stopped short of every active
+ * board (one extra row over the cap is the cheapest way to know that without
+ * a separate count query).
  */
-export function useStudioBoardsOverview(cap = DEFAULT_CAP) {
-  const safeCap = Math.max(1, Math.min(MAX_CAP, Math.trunc(cap) || DEFAULT_CAP));
+export function useStudioBoardsOverview(cap = DEFAULT_STUDIO_BOARDS_CAP) {
+  const safeCap = Math.max(1, Math.min(MAX_STUDIO_BOARDS_CAP, Math.trunc(cap) || DEFAULT_STUDIO_BOARDS_CAP));
   return useQuery({
     queryKey: ['studio-boards-overview', safeCap],
     queryFn: async (): Promise<StudioBoardsOverview> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('proposal_boards')
-        .select(
-          'id, name, proposal_id, project_id, updated_at, cover_image_url, ' +
-            'proposal:proposals(title), project:projects(name), ' +
-            'proposal_board_items(' +
-            'verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, guest_share_id, verdict, created_at), ' +
-            'directions:board_item_directions(id, resolved)' +
-            ')',
-        )
-        .eq('status', 'active')
-        .order('updated_at', { ascending: false })
-        // One extra row over the cap is the cheapest way to know whether more
-        // active boards exist without a separate count query.
-        .limit(safeCap + 1);
+      const { data, error } = await supabase.rpc('studio_boards_overview', {
+        p_limit: safeCap + 1,
+      });
       if (error) throw error;
 
-      const rows = (data ?? []) as Array<Record<string, unknown>>;
+      const rows = (data ?? []) as StudioBoardsOverviewRow[];
       const capped = rows.length > safeCap;
       const boardRows = capped ? rows.slice(0, safeCap) : rows;
-      const boardIds = boardRows.map((row) => String(row.id));
-      const activeShareIds = await fetchActiveBoardShareIds(supabase, boardIds);
 
       const boards: StudioBoardOverviewEntry[] = boardRows.map((row) => {
-        const id = String(row.id);
-        const proposalId = typeof row.proposal_id === 'string' ? row.proposal_id : null;
-        const projectId = typeof row.project_id === 'string' ? row.project_id : null;
-        const proposal = firstRelation(row.proposal as { title?: unknown } | null);
-        const project = firstRelation(row.project as { name?: unknown } | null);
-        const ownerKind: 'proposal' | 'project' = proposalId ? 'proposal' : 'project';
-        const ownerId = proposalId ?? projectId ?? '';
-        const ownerName = proposalId
-          ? (typeof proposal?.title === 'string' && proposal.title.trim() ? proposal.title : 'Draft proposal')
-          : (typeof project?.name === 'string' && project.name.trim() ? project.name : 'Project');
-
-        const items = (row.proposal_board_items ?? []) as Array<
-          BoardItemVerdictProjection & { directions?: Array<{ id: string; resolved: boolean }> | null }
-        >;
-        const verdicts = summarizeBoardVerdicts(items);
+        const verdicts = toVerdicts(row);
         const reactionStatus = deriveBoardReactionStatus({
           verdictCounts: verdicts,
-          hasActiveShare: activeShareIds.has(id),
+          hasActiveShare: row.has_active_share,
         });
-        const unresolvedDirectionCount = items.reduce(
-          (sum, item) => sum + (item.directions ?? []).filter((note) => !note.resolved).length,
-          0,
-        );
-
         return {
-          id,
-          name: String(row.name),
-          ownerKind,
-          ownerId,
-          ownerName,
-          coverImageUrl: typeof row.cover_image_url === 'string' ? row.cover_image_url : null,
-          updatedAt: String(row.updated_at),
+          id: row.id,
+          name: row.name,
+          ownerKind: row.owner_kind === 'proposal' ? 'proposal' : 'project',
+          ownerId: row.owner_id,
+          ownerName: row.owner_name,
+          coverImageUrl: row.cover_image_url,
+          updatedAt: row.updated_at,
           reactionStatus,
           verdicts,
-          unresolvedDirectionCount,
+          unresolvedDirectionCount: toCount(row.unresolved_direction_count),
         };
       });
 
