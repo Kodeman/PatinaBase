@@ -1,14 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { DeskBoardsReactionRollup } from './desk-boards-reaction-rollup';
 
 const useBoardsReactionRollup = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   useBoardsReactionRollup: (...args: unknown[]) => useBoardsReactionRollup(...args),
-}));
-
-jest.mock('next/navigation', () => ({
-  usePathname: () => '/desk',
 }));
 
 describe('DeskBoardsReactionRollup', () => {
@@ -61,7 +57,7 @@ describe('DeskBoardsReactionRollup', () => {
     expect(screen.queryByText(/with reactions in/)).not.toBeInTheDocument();
   });
 
-  it('a count expands into a linked list of its boards', () => {
+  it('a count links straight to its studio-wide status bucket (board-paths W3c, DV8/DV10)', () => {
     useBoardsReactionRollup.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -77,10 +73,8 @@ describe('DeskBoardsReactionRollup', () => {
 
     render(<DeskBoardsReactionRollup />);
 
-    expect(screen.queryByRole('link', { name: /kitchen refresh/i })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('1 with reactions in'));
-    const link = screen.getByRole('link', { name: /kitchen refresh/i });
-    expect(link).toHaveAttribute('href', '/board/board-9?source=desk_recents&from=%2Fdesk');
+    const link = screen.getByRole('link', { name: '1 with reactions in' });
+    expect(link).toHaveAttribute('href', '/boards?status=reactions_in');
   });
 
   it('shows a capped note when the read stopped short of every active board', () => {

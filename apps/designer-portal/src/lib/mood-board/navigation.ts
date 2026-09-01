@@ -6,6 +6,7 @@ export type MoodBoardOpenSource =
   | 'desk_recents'
   | 'command_bar'
   | 'project_surface'
+  | 'studio_boards'
   | 'direct_url';
 
 export interface RecentBoardCommandInput {
@@ -15,7 +16,7 @@ export interface RecentBoardCommandInput {
   roomName: string | null;
 }
 
-const SAFE_RETURN_PATH = /^\/(?:desk(?:\/|$)|drafting\/[^/?#]+(?:\/|$)|doc\/[^/?#]+(?:\/|$))/;
+const SAFE_RETURN_PATH = /^\/(?:desk(?:\/|$)|drafting\/[^/?#]+(?:\/|$)|doc\/[^/?#]+(?:\/|$)|boards(?:\/|$))/;
 
 /** Strict allow-list for the room's `from` parameter; never an open redirect. */
 export function safeMoodBoardReturnPath(value: string | null | undefined): string | null {
@@ -125,6 +126,7 @@ export function moodBoardOpenSource(value: string | null | undefined): MoodBoard
     case 'desk_recents':
     case 'command_bar':
     case 'project_surface':
+    case 'studio_boards':
       return value;
     default:
       return 'direct_url';

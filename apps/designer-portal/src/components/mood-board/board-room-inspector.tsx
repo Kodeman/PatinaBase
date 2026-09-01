@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { resolveMoodBoardGeometry, unionBoardRects } from '@patina/design-system';
 import type { BoardOwnerRef, BoardRect, EditableMoodBoardItem } from '@patina/types';
-import { usePromoteBoardReferenceToSelection } from '@patina/supabase';
+import { usePromoteBoardReferenceToSelection, type BoardItemDirection } from '@patina/supabase';
 import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 import type { BoardRoomControllerApi } from '@/components/portal/scope-builder/board-room-controller';
 import { BoardImageInspectorActions } from './board-image-inspector-actions';
+import { BoardItemDirectionPanel } from './board-item-direction-panel';
 import { BoardPaletteInspectorActions } from './board-palette-inspector-actions';
 import { BoardScheduleInspectorAction } from './board-schedule-inspector-action';
 
@@ -183,6 +184,7 @@ export function BoardRoomInspector({
   onOpenProduct,
   onReplaceImage,
   onCommand,
+  directions = [],
 }: {
   api: BoardRoomControllerApi;
   owner?: BoardOwnerRef;
@@ -190,6 +192,11 @@ export function BoardRoomInspector({
   onOpenProduct?: (item: EditableMoodBoardItem) => void;
   onReplaceImage?: (item: EditableMoodBoardItem) => void;
   onCommand?: (kind: 'arrange' | 'content' | 'delete' | 'handle') => void;
+  /** Internal direction notes (board-paths W3c, DV6) for the WHOLE board —
+   * filtered to the selected pin below. Edit mode only: this component
+   * already returns null outside `api.mode === 'edit'` (see the early
+   * return), which keeps the thread out of Present by construction. */
+  directions?: readonly BoardItemDirection[];
 }) {
   const panelRef = useRef<HTMLElement>(null);
   const promoteReference = usePromoteBoardReferenceToSelection();
@@ -409,6 +416,12 @@ export function BoardRoomInspector({
               ))}
             </Select>
           </label>
+
+          <BoardItemDirectionPanel
+            boardId={api.state.boardId}
+            boardItemId={lead.id}
+            directions={directions.filter((note) => note.board_item_id === lead.id)}
+          />
 
           <div className="grid grid-cols-2 gap-1">
             <Button size="sm" variant="ghost" onClick={() => api.changeZOrder('forward')}>Forward</Button>

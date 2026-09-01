@@ -60,7 +60,18 @@ describe('mood-board room navigation', () => {
 
   it('normalizes untrusted source tags to direct_url', () => {
     expect(moodBoardOpenSource('command_bar')).toBe('command_bar');
+    expect(moodBoardOpenSource('studio_boards')).toBe('studio_boards');
     expect(moodBoardOpenSource('crafted')).toBe('direct_url');
+  });
+
+  it('allow-lists the studio boards view as a return target (board-paths W3c)', () => {
+    expect(safeMoodBoardReturnPath('/boards')).toBe('/boards');
+    expect(safeMoodBoardReturnPath('/boards?status=awaiting_reaction')).toBe(
+      '/boards?status=awaiting_reaction',
+    );
+    expect(
+      boardRoomHref({ boardId: 'board-1', from: '/boards', source: 'studio_boards' }),
+    ).toBe('/board/board-1?source=studio_boards&from=%2Fboards');
   });
 
   it('builds a concrete board command whose match outranks the generic room', () => {

@@ -885,6 +885,50 @@ export type Database = {
           },
         ]
       }
+      board_item_directions: {
+        Row: {
+          author_id: string
+          board_item_id: string
+          body: string
+          created_at: string
+          id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_id?: string
+          board_item_id: string
+          body: string
+          created_at?: string
+          id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          board_item_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_item_directions_board_item_id_fkey"
+            columns: ["board_item_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_board_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       board_templates: {
         Row: {
           background_color: string
@@ -32492,6 +32536,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reopen_board_item_direction: {
+        Args: { p_direction_id: string }
+        Returns: {
+          author_id: string
+          board_item_id: string
+          body: string
+          created_at: string
+          id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "board_item_directions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reopen_client_decision: {
         Args: { p_decision_id: string }
         Returns: {
@@ -32665,6 +32729,26 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "agent_tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      resolve_board_item_direction: {
+        Args: { p_direction_id: string }
+        Returns: {
+          author_id: string
+          board_item_id: string
+          body: string
+          created_at: string
+          id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "board_item_directions"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -33676,6 +33760,26 @@ export type Database = {
         Returns: Json
       }
       stripe_recon_cursor_epoch: { Args: never; Returns: number }
+      studio_boards_overview: {
+        Args: { p_limit?: number }
+        Returns: {
+          cover_image_url: string
+          has_active_share: boolean
+          id: string
+          name: string
+          owner_id: string
+          owner_kind: string
+          owner_name: string
+          unresolved_direction_count: number
+          updated_at: string
+          verdict_client_approved: number
+          verdict_client_comment: number
+          verdict_client_rejected: number
+          verdict_guest_approved: number
+          verdict_guest_comment: number
+          verdict_guest_rejected: number
+        }[]
+      }
       submit_board_share_reaction: {
         Args: {
           p_board_item_id: string

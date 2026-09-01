@@ -25,6 +25,8 @@ import {
   useAddProposalItem,
   useBoard,
   useBoardItemFeedbackByBoard,
+  useBoardItemDirectionsByBoard,
+  countUnresolvedDirectionsByItem,
   useApplyBoardRoomState,
   usePlaceProductInProjectV2,
   useProject,
@@ -142,6 +144,24 @@ function VerdictBadge({ feedback }: { feedback: ItemFeedback | undefined }) {
       {fromGuest && (
         <span className="text-[var(--text-muted)]">· guest</span>
       )}
+    </span>
+  );
+}
+
+/**
+ * Unresolved-direction pin indicator (board-paths W3c, DV6). Wired ONLY into
+ * editRenderItem below — never into renderVerdictOverlay, which is the
+ * Present-mode (and guest-share) render path via BoardComposition. Internal
+ * direction must never render there.
+ */
+function DirectionIndicator({ count }: { count: number }) {
+  if (!count) return null;
+  return (
+    <span
+      aria-label={`${count} unresolved direction note${count === 1 ? '' : 's'}`}
+      className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/10 bg-white/95 px-1 font-mono text-[8px] text-[var(--color-clay-ink)] shadow-sm"
+    >
+      {count}
     </span>
   );
 }
@@ -377,6 +397,14 @@ function BoardRoomSurface({
   const feedbackQuery = useBoardItemFeedbackByBoard(api.state?.boardId);
   const feedback = feedbackQuery.data ?? [];
   const feedbackByItem = useMemo(() => latestFeedback(feedback), [feedback]);
+  // Internal direction layer (board-paths W3c, DV6) — studio-only, never
+  // read in Present (see renderVerdictOverlay below, which never touches it).
+  const directionsQuery = useBoardItemDirectionsByBoard(api.state?.boardId);
+  const directions = directionsQuery.data ?? [];
+  const unresolvedDirectionCountByItem = useMemo(
+    () => countUnresolvedDirectionsByItem(directions),
+    [directions],
+  );
   const openedRef = useRef(false);
   const startedAtRef = useRef(performance.now());
   const presentStartedRef = useRef<number | null>(null);
@@ -1066,6 +1094,11 @@ function BoardRoomSurface({
           <VerdictBadge feedback={feedbackByItem.get(item.id)} />
         </span>
       )}
+      {(unresolvedDirectionCountByItem.get(item.id) ?? 0) > 0 && (
+        <span className="pointer-events-none absolute left-1 top-1 z-20">
+          <DirectionIndicator count={unresolvedDirectionCountByItem.get(item.id) ?? 0} />
+        </span>
+      )}
     </div>
   );
 
@@ -1379,6 +1412,7 @@ function BoardRoomSurface({
             scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
             onOpenProduct={openProduct}
             onReplaceImage={replaceImage}
+            directions={directions}
           />
         </div>
       </div>

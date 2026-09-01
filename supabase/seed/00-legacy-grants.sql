@@ -12343,3 +12343,51 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.resolve_board_share(text) TO anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00550_board_item_directions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.board_item_directions FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00550_board_item_directions.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT ON public.board_item_directions TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00550_board_item_directions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_board_item_direction(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00550_board_item_directions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reopen_board_item_direction(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00550_board_item_directions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_board_item_direction(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00550_board_item_directions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reopen_board_item_direction(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00550_board_item_directions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.studio_boards_overview(integer) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00550_board_item_directions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.studio_boards_overview(integer) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
