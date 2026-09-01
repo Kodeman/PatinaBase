@@ -37,7 +37,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { Select, StatusBadge, type StatusTone } from '@/components/ui/controls';
 import { monogramOf } from '@/lib/document/account-identity';
-import { friendlyInviteError, isInviteExpired } from '@/lib/document/invite-status';
+import { clampInvitableRole, friendlyInviteError, isInviteExpired } from '@/lib/document/invite-status';
 import { StudioInviteModal } from './studio-invite-modal';
 import { StudioLogoUploadField } from './studio-logo-upload-field';
 import { StudioSetupChecklist } from './studio-setup-checklist';
@@ -361,7 +361,7 @@ export function AccountStudioPage() {
       {
         organizationId: studio.id,
         email: member.profiles.email,
-        role: member.role,
+        role: clampInvitableRole(member.role),
         jobTitle: member.job_title ?? undefined,
         staffRole: member.staff_role ?? undefined,
       },
@@ -374,8 +374,9 @@ export function AccountStudioPage() {
               : {
                   memberId: member.id,
                   ok: false,
-                  message:
-                    result.email_error ?? 'Could not resend the invite email.',
+                  message: result.email_error
+                    ? friendlyInviteError(result.email_error)
+                    : 'Could not resend the invite email.',
                 },
           );
         },
@@ -1002,7 +1003,7 @@ export function AccountStudioPage() {
                       regionKey="studio-member-row"
                       variant="secondary"
                       onClick={() => handleResendInvite(m)}
-                      disabled={resendInvite.isPending}
+                      disabled={isResending}
                       loading={isResending}
                       loadingLabel="Sending…"
                     >
