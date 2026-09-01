@@ -41,6 +41,8 @@ struct CaptureCardOverlay: View {
     /// input (ruling 2); empty until the card's project resolves, which the
     /// resolver reads as no court rather than as an error.
     let verbParties: [FieldPartyRef]
+    /// Whether `verbParties` is the answer or merely the state before one.
+    let verbPartiesSettled: Bool
     /// Held by ViewfinderScreen for `affirmed`'s reason: a fresh card is a
     /// fresh confirm step, and this view's identity outlives the specimen's.
     @Binding var verbMenu: FieldVerbMenu
@@ -194,7 +196,9 @@ struct CaptureCardOverlay: View {
         }
     }
 
-    private var verbFacts: FieldVerbFacts { FieldVerbFacts(specimen: specimen) }
+    private var verbFacts: FieldVerbFacts {
+        FieldVerbFacts(specimen: specimen, partiesSettled: verbPartiesSettled)
+    }
 
     private var isBlocked: Bool {
         FieldAffirmationPolicy.recordingIsBlocked(noteSetting: noteSetting,

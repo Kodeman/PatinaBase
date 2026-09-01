@@ -132,6 +132,49 @@ struct FieldVerbMenuTests {
         #expect(menu.pendingPunch == nil)
     }
 
+    // MARK: - F2, the window before the party list lands
+
+    @Test func thePunchVerbWaitsForThePartyListAndTheTaskVerbDoesNot() {
+        let menu = FieldVerbMenu()
+        let unsettled = FieldVerbFacts(hasProject: true, partiesSettled: false)
+
+        // The row is still OFFERED — the capture is on a project, so hiding it
+        // would be a different lie — but it cannot be tapped into a court that
+        // has not been read yet.
+        #expect(menu.rows(unsettled) == [.note, .task, .punch])
+        #expect(menu.isEnabled(.punch, unsettled) == false)
+        // `Make it a task` is hers by definition and consults no court.
+        #expect(menu.isEnabled(.task, unsettled))
+        #expect(menu.isEnabled(.note, unsettled))
+    }
+
+    @Test func atapInTheUnsettledWindowResolvesNoCourtAndIsRefused() {
+        // The failure this guards: `PunchCourtResolver.resolve([])` is
+        // `.noCourt`, so before the fetch returns the confirm would promise
+        // "no general contractor with texting on this project" — a fact about
+        // the network told as a fact about the project — and file her own task.
+        var menu = FieldVerbMenu()
+        let unsettled = FieldVerbFacts(hasProject: true, partiesSettled: false)
+        #expect(menu.tap(.punch, facts: unsettled, parties: []) == nil)
+        #expect(menu.pendingPunch == nil)
+        #expect(menu.intentLine == nil)
+
+        // Settled with the same empty list, the ruled fallback stands.
+        let settled = FieldVerbFacts(hasProject: true, partiesSettled: true)
+        #expect(menu.isEnabled(.punch, settled))
+        #expect(menu.tap(.punch, facts: settled, parties: []) == nil)
+        #expect(menu.pendingPunch == .noCourt)
+        #expect(menu.confirmPunch() == .punchTask(owner: "designer", partyID: nil))
+    }
+
+    @Test func settlingDoesNotReviveALaneThatIsAlreadyClosed() {
+        let menu = FieldVerbMenu()
+        let landedButUnsettled = FieldVerbFacts(
+            hasProject: true, punchRequested: true, punchState: .pending,
+            partiesSettled: true)
+        #expect(menu.isEnabled(.punch, landedButUnsettled) == false)
+    }
+
     // MARK: - I-5, the re-tap
 
     @Test func aLandedPunchLaneSaysSoAndReOpensForADeliberateSecondItem() {
@@ -200,20 +243,20 @@ struct FieldVerbMenuTests {
 
     @Test func theFactsReadTheSpecimenTheCardIsShowing() {
         let specimen = Specimen()
-        #expect(FieldVerbFacts(specimen: specimen).hasProject == false)
+        #expect(FieldVerbFacts(specimen: specimen, partiesSettled: true).hasProject == false)
 
         specimen.venue = VenueStamp(projectId: "proj-1")
-        #expect(FieldVerbFacts(specimen: specimen).hasProject)
+        #expect(FieldVerbFacts(specimen: specimen, partiesSettled: true).hasProject)
 
         specimen.requestPunchTask(taskID: UUID(), owner: "gc", partyID: "party-gc")
-        let facts = FieldVerbFacts(specimen: specimen)
+        let facts = FieldVerbFacts(specimen: specimen, partiesSettled: true)
         #expect(facts.punchRequested)
         #expect(facts.punchState == .pending)
         #expect(facts.punchOwnerRaw == "gc")
         #expect(facts.punchPartyID == "party-gc")
 
         specimen.requestMarginNote(noteID: UUID())
-        #expect(FieldVerbFacts(specimen: specimen).noteRequested)
+        #expect(FieldVerbFacts(specimen: specimen, partiesSettled: true).noteRequested)
     }
 
     /// FC-R16: a spoken measurement never becomes a measured record. The verbs
@@ -226,7 +269,7 @@ struct FieldVerbMenuTests {
         var menu = FieldVerbMenu()
 
         for row: FieldVerbRow in [.note, .task, .punch] {
-            let facts = FieldVerbFacts(specimen: specimen)
+            let facts = FieldVerbFacts(specimen: specimen, partiesSettled: true)
             if let action = menu.tap(row, facts: facts, parties: [gc]) {
                 apply(action, to: specimen)
             }

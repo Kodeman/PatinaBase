@@ -90,6 +90,15 @@ public struct FieldVerbFacts: Equatable, Sendable {
     public let punchState: FieldWriteState?
     public let punchOwnerRaw: String?
     public let punchPartyID: String?
+    /// True once the party fetch has come BACK — success, empty, or failure.
+    /// The list alone cannot stand in for it: an empty list is what an
+    /// in-flight fetch and a project with no GC both look like, and
+    /// `PunchCourtResolver` reads both as `.noCourt`. Tapping the punch verb in
+    /// that window would file her own task and tell her there is no general
+    /// contractor — a fact about the network stated as a fact about the
+    /// project. Mirrors `ViewfinderModel.venueSettled`, which exists for the
+    /// same reason on the same screen.
+    public let partiesSettled: Bool
 
     public init(
         hasProject: Bool,
@@ -97,7 +106,8 @@ public struct FieldVerbFacts: Equatable, Sendable {
         punchRequested: Bool = false,
         punchState: FieldWriteState? = nil,
         punchOwnerRaw: String? = nil,
-        punchPartyID: String? = nil
+        punchPartyID: String? = nil,
+        partiesSettled: Bool = true
     ) {
         self.hasProject = hasProject
         self.noteRequested = noteRequested
@@ -105,16 +115,21 @@ public struct FieldVerbFacts: Equatable, Sendable {
         self.punchState = punchState
         self.punchOwnerRaw = punchOwnerRaw
         self.punchPartyID = punchPartyID
+        self.partiesSettled = partiesSettled
     }
 
-    public init(specimen: Specimen) {
+    /// `partiesSettled` has no default here: it is a fact about the host's
+    /// fetch, not about the specimen, and a surface that forgets to say gets
+    /// the race rather than a compiler error.
+    public init(specimen: Specimen, partiesSettled: Bool) {
         self.init(
             hasProject: specimen.venue?.projectId?.isEmpty == false,
             noteRequested: specimen.marginNoteId != nil,
             punchRequested: specimen.punchTaskId != nil,
             punchState: specimen.punchTaskState,
             punchOwnerRaw: specimen.punchTaskOwnerRaw,
-            punchPartyID: specimen.punchTaskPartyId)
+            punchPartyID: specimen.punchTaskPartyId,
+            partiesSettled: partiesSettled)
     }
 }
 
@@ -152,8 +167,12 @@ public struct FieldVerbMenu: Equatable, Sendable {
 
     public func isEnabled(_ row: FieldVerbRow, _ facts: FieldVerbFacts) -> Bool {
         switch row {
-        case .note:                return !facts.noteRequested
-        case .task, .punch:        return punchVerbsAreEnabled(facts)
+        case .note:  return !facts.noteRequested
+        case .task:  return punchVerbsAreEnabled(facts)
+        // The punch verb — and ONLY the punch verb — waits for the party list.
+        // *Make it a task* is hers by definition and consults no court, so it
+        // has nothing to wait for.
+        case .punch: return punchVerbsAreEnabled(facts) && facts.partiesSettled
         case .noteFiled, .punchFiled, .needsProject: return false
         }
     }

@@ -27,6 +27,10 @@ struct SmartGuessSheet: View {
     @State private var editing: Set<String> = []
     /// Unfiltered project parties — PunchCourtResolver's input (ruling 2).
     @State private var parties: [FieldPartyRef] = []
+    /// The party fetch has come back. N5 has the same race the card has: an
+    /// unloaded list resolves `.noCourt`, which reads as "no GC on this
+    /// project" rather than "not asked yet".
+    @State private var partiesSettled = false
     /// The three verbs now live in CaptureKit so the C3 card can mount the same
     /// menu (I-4). This screen keeps its presenter — the screenshot harness's
     /// deep link — and renders the shared component.
@@ -79,8 +83,10 @@ struct SmartGuessSheet: View {
     // MARK: - The three verbs (FC-R7 · FC-R8 · ruling 1)
 
     private var verbFacts: FieldVerbFacts {
-        currentSpecimen().map(FieldVerbFacts.init(specimen:))
-            ?? FieldVerbFacts(hasProject: false)
+        guard let specimen = currentSpecimen() else {
+            return FieldVerbFacts(hasProject: false)
+        }
+        return FieldVerbFacts(specimen: specimen, partiesSettled: partiesSettled)
     }
 
     /// Survives for exactly two cases (ruling 1): a capture with no visit — the
@@ -103,8 +109,9 @@ struct SmartGuessSheet: View {
 
     private func loadParties() async {
         guard let projectID = currentSpecimen()?.venue?.projectId,
-              !projectID.isEmpty else { return }
+              !projectID.isEmpty else { partiesSettled = true; return }
         parties = (try? await siteRequests.fieldParties(projectID: projectID)) ?? []
+        partiesSettled = true
     }
 
     private func enqueue(_ id: UUID) {

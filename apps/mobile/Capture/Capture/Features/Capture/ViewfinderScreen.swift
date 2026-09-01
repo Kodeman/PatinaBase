@@ -101,6 +101,7 @@ struct ViewfinderScreen: View {
                     },
                     affirmed: $affirmed,
                     verbParties: model.cardParties,
+                    verbPartiesSettled: model.cardPartiesSettled,
                     verbMenu: $verbMenu,
                     onVerb: model.performVerb
                 )

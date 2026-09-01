@@ -466,13 +466,27 @@ final class ViewfinderModel {
     /// court: the same window N5's own `.task` load has.
     private(set) var cardParties: [FieldPartyRef] = []
 
+    /// True once the party fetch has come BACK — the `venueSettled` precedent
+    /// above, for the same reason. `cardParties.isEmpty` cannot stand in for
+    /// it: an in-flight fetch and a project with no reachable GC are the same
+    /// empty list, and the punch verb must not resolve `.noCourt` off the
+    /// first one.
+    private(set) var cardPartiesSettled = false
+
     func loadCardParties() async {
         cardParties = []
+        cardPartiesSettled = false
         guard let projectID = cardSpecimen?.venue?.projectId,
-              !projectID.isEmpty else { return }
+              !projectID.isEmpty else {
+            // No project means no court to fetch, so there is nothing to wait
+            // for — and the menu shows `needsProject` rather than the verb.
+            cardPartiesSettled = true
+            return
+        }
         let loaded = (try? await siteRequests.fieldParties(projectID: projectID)) ?? []
         guard cardSpecimen?.venue?.projectId == projectID else { return }
         cardParties = loaded
+        cardPartiesSettled = true
     }
 
     /// Mints the lane on the specimen's own request accessor and saves. The
