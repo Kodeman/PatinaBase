@@ -86,25 +86,32 @@ public struct FieldVerbNotice: View {
         self.onAction = onAction
     }
 
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let intent = menu.intentLine {
-                // An INTENTION. The row is not written yet, and
-                // fc_dispatch_task_assignment re-reads the party's real consent
-                // when it is.
-                line(intent)
-                Button("Add") {
-                    if let action = menu.confirmPunch() { onAction(action) }
+    /// The conditional is at the TOP, not inside the stack: an empty `VStack`
+    /// is still a child, and its host's spacing would open a gap on every card
+    /// that has nothing to report.
+    @ViewBuilder public var body: some View {
+        let intent = menu.intentLine
+        let status = menu.statusLine(facts, parties: parties)
+        if intent != nil || status != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                if let intent {
+                    // An INTENTION. The row is not written yet, and
+                    // fc_dispatch_task_assignment re-reads the party's real
+                    // consent when it is.
+                    line(intent)
+                    Button("Add") {
+                        if let action = menu.confirmPunch() { onAction(action) }
+                    }
+                    .buttonStyle(FieldVerbConfirmButtonStyle())
+                    .accessibilityIdentifier("card.verbs.confirm")
                 }
-                .buttonStyle(FieldVerbConfirmButtonStyle())
-                .accessibilityIdentifier("card.verbs.confirm")
+                if let status {
+                    line(status)
+                        .accessibilityIdentifier("card.verbs.status")
+                }
             }
-            if let status = menu.statusLine(facts, parties: parties) {
-                line(status)
-                    .accessibilityIdentifier("card.verbs.status")
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func line(_ text: String) -> some View {
