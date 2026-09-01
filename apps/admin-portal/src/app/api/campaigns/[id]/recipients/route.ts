@@ -24,12 +24,15 @@ type ProfileRow = {
 const ALLOWED_STATUSES = new Set([
   'queued',
   'sending',
+  'sent',
   'delivered',
   'opened',
   'clicked',
   'bounced',
+  'complained',
   'failed',
   'suppressed',
+  'unconfirmed',
 ]);
 
 export async function GET(
