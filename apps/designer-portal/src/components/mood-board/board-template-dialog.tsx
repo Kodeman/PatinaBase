@@ -132,7 +132,12 @@ export function BoardTemplateDialog({
           <div className="mt-3 space-y-3">
             <label className="block text-[11px] text-[var(--text-muted)]">
               Template name
-              <Input value={name} onChange={(event) => setName(event.target.value)} className="mt-1" />
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                onFocus={(event) => event.currentTarget.select()}
+                className="mt-1"
+              />
             </label>
             <label className="block text-[11px] text-[var(--text-muted)]">
               Description <span className="italic">(optional)</span>

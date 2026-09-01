@@ -54,6 +54,24 @@ describe('BoardTemplateDialog', () => {
     remove.mockReset();
   });
 
+  it('selects the prefilled template name on focus (VD5)', () => {
+    render(
+      <BoardTemplateDialog
+        boardId="board-1"
+        boardName="Living room"
+        itemCount={5}
+        sectionCount={2}
+        open
+        onOpenChange={jest.fn()}
+        onSaved={jest.fn()}
+      />,
+    );
+    const input = screen.getByLabelText('Template name') as HTMLInputElement;
+    const selectSpy = jest.spyOn(input, 'select');
+    fireEvent.focus(input);
+    expect(selectSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('saves the live board as a studio template', async () => {
     save.mockResolvedValue({ id: 'template-new' });
     const onSaved = jest.fn();
