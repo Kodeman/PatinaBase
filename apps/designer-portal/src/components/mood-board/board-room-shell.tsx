@@ -77,6 +77,7 @@ import {
 } from '@/lib/mood-board-assets/board-cover-lifecycle';
 import { BoardAddRail, uploadFilesAsBoardItems, type BoardAddSource } from './board-add-rail';
 import { BoardApprovedPinsPanel } from './board-approved-pins-panel';
+import { BoardPromoteAllPanel } from './board-promote-all-panel';
 import { BoardRoomInspector } from './board-room-inspector';
 import { BoardRoomSectionsMenu } from './board-room-sections-menu';
 import { BoardShareDialog } from './board-share-dialog';
@@ -288,6 +289,8 @@ function BoardRoomSurface({
   dropUploadProgress,
   externalNotice,
   onConsumeExternalNotice,
+  justMaterialized,
+  onDismissJustMaterialized,
 }: {
   api: BoardRoomControllerApi;
   owner: BoardOwnerRef;
@@ -301,6 +304,9 @@ function BoardRoomSurface({
   dropUploadProgress: string | null;
   externalNotice: string | null;
   onConsumeExternalNotice: () => void;
+  /** DV3 — true right after a template materialized onto THIS project board. */
+  justMaterialized: boolean;
+  onDismissJustMaterialized: () => void;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -1109,6 +1115,17 @@ function BoardRoomSurface({
       )}
 
       {owner.kind === 'project' && !surfaceError && !api.persistenceError && (
+        <BoardPromoteAllPanel
+          projectId={owner.id}
+          scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
+          items={state.items}
+          justMaterialized={justMaterialized}
+          onDismissJustMaterialized={onDismissJustMaterialized}
+          onPromoted={(itemId, selectionId) => api.updateItem(itemId, { projectFfeItemId: selectionId })}
+        />
+      )}
+
+      {owner.kind === 'project' && !surfaceError && !api.persistenceError && (
         <BoardApprovedPinsPanel
           boardId={state.boardId}
           projectId={owner.id}
@@ -1278,6 +1295,7 @@ function BoardRoomSurface({
         boardName={state.name}
         itemCount={state.items.length}
         sectionCount={state.sections.length}
+        items={state.items}
         open={templateOpen}
         onOpenChange={setTemplateOpen}
         flush={api.flushPending}
@@ -1339,6 +1357,14 @@ export function MoodBoardRoom({
       moodBoardEvents.itemAdded({ board_id: boardId, type, source, count });
     }
   }, [boardId]);
+  // DV3 — set once from the `materialized=template` query param BoardsBuilder
+  // appends on its post-materialize redirect. Dismissible (either an
+  // explicit dismiss or a completed "Promote all" run) but never recomputed
+  // from the URL again — a one-shot banner, not a persistent read of `search`.
+  const [justMaterialized, setJustMaterialized] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('materialized') === 'template';
+  });
   const [navigation] = useState(() => {
     if (typeof window === 'undefined') {
       return { source: 'direct_url' as const, returnTarget: owner.kind === 'proposal' ? `/drafting/${owner.id}` : `/doc/${owner.id}` };
@@ -1513,6 +1539,8 @@ export function MoodBoardRoom({
             dropUploadProgress={dropUploadProgress}
             externalNotice={externalNotice}
             onConsumeExternalNotice={() => setExternalNotice(null)}
+            justMaterialized={justMaterialized}
+            onDismissJustMaterialized={() => setJustMaterialized(false)}
           />
         );
       }}
