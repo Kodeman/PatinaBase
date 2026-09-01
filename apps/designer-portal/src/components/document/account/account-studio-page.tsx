@@ -25,16 +25,19 @@ import {
   useRemoveMember,
   useLeaveOrganization,
   useTransferOrganizationOwnership,
+  useInviteMember,
   useProjects,
   useStudioContacts,
   useStudioBillingSettings,
   useUpdateStudioBillingSettings,
   type MemberRole,
+  type OrganizationMemberWithProfile,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { Select, StatusBadge, type StatusTone } from '@/components/ui/controls';
 import { monogramOf } from '@/lib/document/account-identity';
+import { clampInvitableRole, friendlyInviteError, isInviteExpired } from '@/lib/document/invite-status';
 import { StudioInviteModal } from './studio-invite-modal';
 import { StudioLogoUploadField } from './studio-logo-upload-field';
 import { StudioSetupChecklist } from './studio-setup-checklist';
@@ -139,11 +142,22 @@ export function AccountStudioPage() {
   const leaveOrg = useLeaveOrganization();
   const transferOwner = useTransferOrganizationOwnership();
   const updateBilling = useUpdateStudioBillingSettings();
+  const resendInvite = useInviteMember();
 
   const [newStudioName, setNewStudioName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
+  // Per-row "Resend invite" feedback — keyed by member id since resendInvite
+  // is one shared mutation instance for the whole roster.
+  const [resendingMemberId, setResendingMemberId] = useState<string | null>(
+    null,
+  );
+  const [resendFeedback, setResendFeedback] = useState<{
+    memberId: string;
+    ok: boolean;
+    message: string;
+  } | null>(null);
 
   // Branding form (contact + address). Seeded from the studio row; re-synced
   // when the active studio changes (keyed on id so a background refetch doesn't
@@ -332,6 +346,50 @@ export function AccountStudioPage() {
     )
       return;
     transferOwner.mutate({ organizationId: studio.id, newOwnerUserId });
+  };
+
+  // Resends the invite email for an invited/expired member — reuses the same
+  // workspace-member-invite call the modal makes, keyed off the existing
+  // membership row's own email/role/title. teammateType is intentionally
+  // omitted: it isn't stored on the membership row, and the edge function's
+  // designer grant is additive/idempotent, so a resend can't ever revoke it.
+  const handleResendInvite = (member: OrganizationMemberWithProfile) => {
+    if (!studio || !member.profiles?.email) return;
+    setResendingMemberId(member.id);
+    setResendFeedback(null);
+    resendInvite.mutate(
+      {
+        organizationId: studio.id,
+        email: member.profiles.email,
+        role: clampInvitableRole(member.role),
+        jobTitle: member.job_title ?? undefined,
+        staffRole: member.staff_role ?? undefined,
+      },
+      {
+        onSuccess: (result) => {
+          setResendingMemberId(null);
+          setResendFeedback(
+            result.email_status === 'sent'
+              ? { memberId: member.id, ok: true, message: 'Invite email sent again.' }
+              : {
+                  memberId: member.id,
+                  ok: false,
+                  message: result.email_error
+                    ? friendlyInviteError(result.email_error)
+                    : 'Could not resend the invite email.',
+                },
+          );
+        },
+        onError: (err) => {
+          setResendingMemberId(null);
+          setResendFeedback({
+            memberId: member.id,
+            ok: false,
+            message: friendlyInviteError(err),
+          });
+        },
+      },
+    );
   };
 
   // ── No-studio state ───────────────────────────────────────────────────
@@ -887,12 +945,26 @@ export function AccountStudioPage() {
               canManage && !isSelf && m.role !== 'owner';
             const canTransferOwnership =
               myRole === 'owner' && !isSelf && m.status === 'active';
+            const expired = isInviteExpired(m);
+            const canResend = canManage && m.status === 'invited';
+            const isResending = resendingMemberId === m.id;
+            // resendInvite is ONE mutation instance shared by every row, so two
+            // overlapping resends interleave onto the same state: the second
+            // mutate() overwrites resendingMemberId and whichever callback
+            // lands last clears it and claims the feedback line — the other
+            // row is left spinning forever with the wrong result. Only one
+            // resend may be in flight at a time; the spinner still shows on
+            // the row that actually started it.
+            const resendBlocked = resendingMemberId !== null;
+            const feedback =
+              resendFeedback?.memberId === m.id ? resendFeedback : null;
 
             return (
               <li
                 key={m.id}
-                className="flex items-center justify-between gap-3 border-b border-[var(--color-pearl)] py-3"
+                className="flex flex-col gap-1.5 border-b border-[var(--color-pearl)] py-3"
               >
+                <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-pearl)] font-mono text-[11px] uppercase tracking-wider text-[var(--color-mocha)]">
                     {monogramOf(
@@ -926,9 +998,26 @@ export function AccountStudioPage() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2.5">
-                  <StatusBadge tone={STATUS_TONE[m.status] ?? 'neutral'} dot>
-                    {m.status}
+                  <StatusBadge
+                    tone={expired ? 'error' : STATUS_TONE[m.status] ?? 'neutral'}
+                    dot
+                  >
+                    {expired ? 'Invite expired' : m.status}
                   </StatusBadge>
+                  {canResend && (
+                    <DocumentAction
+                      actionKey="resend-studio-invite"
+                      surfaceKey="account"
+                      regionKey="studio-member-row"
+                      variant="secondary"
+                      onClick={() => handleResendInvite(m)}
+                      disabled={resendBlocked}
+                      loading={isResending}
+                      loadingLabel="Sending…"
+                    >
+                      Resend invite
+                    </DocumentAction>
+                  )}
                   {canEditMembership ? (
                     <Select
                       aria-label={`Role for ${label}`}
@@ -981,6 +1070,19 @@ export function AccountStudioPage() {
                     </DocumentAction>
                   )}
                 </div>
+                </div>
+                {feedback && (
+                  <p
+                    role={feedback.ok ? 'status' : 'alert'}
+                    className={`pl-11 text-[11px] ${
+                      feedback.ok
+                        ? 'text-[var(--color-aged-oak)]'
+                        : 'text-[var(--color-terracotta-ink)]'
+                    }`}
+                  >
+                    {feedback.message}
+                  </p>
+                )}
               </li>
             );
           })}

@@ -7,6 +7,7 @@ import { buildAuthCallbackUrl, createBrowserClient, normalizeAuthError, safeAuth
 import { PortalAuthNotice, PortalLogin } from '@patina/design-system';
 import { authEvents } from '@/lib/analytics/events';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
+import { tryTestAccountFallback } from '../test-account-fallback';
 
 function VerifyOtpContent() {
   const searchParams = useSearchParams();
@@ -43,6 +44,12 @@ function VerifyOtpContent() {
       authEvents.login('email-otp');
       setSuccess(true);
     } catch (cause) {
+      if (await tryTestAccountFallback(email, value)) {
+        navigated.current = true;
+        authEvents.login('email-otp');
+        setSuccess(true);
+        return;
+      }
       setCode('');
       setError(normalizeAuthError(cause, 'invalid_code').message);
     }

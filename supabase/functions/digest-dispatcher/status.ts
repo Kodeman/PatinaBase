@@ -5,6 +5,7 @@
  * verified. Suppressed, bounced, and failed rows never become digest content.
  */
 export const DIGEST_ELIGIBLE_NOTIFICATION_STATUSES = [
+  "sent",
   "delivered",
   "opened",
   "clicked",

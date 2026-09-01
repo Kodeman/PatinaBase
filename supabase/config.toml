@@ -349,6 +349,16 @@ verify_jwt = false
 [functions.comms-mute]
 verify_jwt = false
 
+# Owner-authorized pre-auth login for ONE allowlisted shared test account
+# (tester@patina.cloud), for external testers with no mailbox access. There is
+# no caller session yet, so the gateway cannot verify a JWT here — the
+# function itself is the auth: email+code must match Vault-backed app settings
+# (test_login_accounts / test_login_code, public.app_setting, 00258), checked
+# with a constant-time code comparison and a generic 403 on every failure
+# mode. Fails closed if either setting is missing/empty.
+[functions.test-account-login]
+verify_jwt = false
+
 # Browser-invoked after the guarded send_proposal RPC. The gateway validates
 # the user JWT again before constructing any service-role client, then limits
 # dispatch to the exact owner or an eligible active design-studio co-member.

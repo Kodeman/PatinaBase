@@ -38,8 +38,6 @@ Created custom hooks for data fetching and mutations:
   - `useBanUser()` - Ban user permanently
   - `useActivateUser()` - Activate/reactivate user
   - `useVerifyEmail()` - Manually verify user's email
-  - `useRevokeSession()` - Revoke single session
-  - `useRevokeAllSessions()` - Revoke all user sessions
   - `useAssignRole()` - Assign role to user
   - `useRevokeRole()` - Revoke role from user
 
@@ -75,11 +73,12 @@ Created reusable dialog components for user actions:
 - Warning about bypassing standard verification flow
 - Use case explanation for admins
 
-#### RevokeSessionDialog.tsx
-- Single session revocation
-- Displays device information if available
-- Immediate logout warning
-- Red destructive theme
+> **Session revocation was removed.** There is no `RevokeSessionDialog`, no
+> "Revoke All" control, and no service/hook behind either. The installed
+> supabase-js (`@supabase/auth-js` 2.98.0) exposes no admin-side, userId-scoped
+> session invalidation — `GoTrueAdminApi.signOut` needs the target session's
+> own JWT, which the admin portal never holds. `SessionList` is view-only and
+> says so.
 
 All dialogs feature:
 - Proper loading states with disabled buttons
@@ -278,9 +277,8 @@ Integrates with these backend endpoints:
 - `POST /v1/users/:id/ban` - Ban user
 - `POST /v1/users/:id/activate` - Activate/reactivate user
 - `POST /v1/users/:id/verify-email` - Verify email
-- `GET /v1/users/:userId/sessions` - Get user sessions
-- `DELETE /v1/users/:userId/sessions/:sessionId` - Revoke session
-- `POST /v1/users/:userId/sessions/revoke-all` - Revoke all sessions
+- `GET /v1/users/:userId/sessions` - Get user sessions (read-only; no revoke
+  endpoint exists — see the session-revocation note above)
 
 ## Best Practices Implemented
 
@@ -342,15 +340,11 @@ await suspendUser.mutateAsync({
 });
 ```
 
-### Revoke Session
+### Sessions (read-only)
 ```typescript
-const revokeSession = useRevokeSession();
-
-await revokeSession.mutateAsync({
-  userId: 'user-id',
-  sessionId: 'session-id'
-});
+const { data: sessions } = useUserSessions('user-id');
 ```
+There is no revoke hook — see the session-revocation note above.
 
 ## Next Steps (Future Enhancements)
 
@@ -410,7 +404,6 @@ await revokeSession.mutateAsync({
 - `/apps/admin-portal/src/components/users/BanUserDialog.tsx`
 - `/apps/admin-portal/src/components/users/ActivateUserDialog.tsx`
 - `/apps/admin-portal/src/components/users/VerifyEmailDialog.tsx`
-- `/apps/admin-portal/src/components/users/RevokeSessionDialog.tsx`
 - `/apps/admin-portal/src/components/users/SessionList.tsx`
 - `/apps/admin-portal/src/app/(dashboard)/users/[id]/page.tsx`
 

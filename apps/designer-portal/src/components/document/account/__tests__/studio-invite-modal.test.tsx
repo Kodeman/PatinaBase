@@ -233,3 +233,341 @@ describe('StudioInviteModal — submit payload', () => {
     expect(payload.role).toBe('guest');
   });
 });
+
+type InviteMutationOptions = {
+  onSuccess: (result: {
+    email: string;
+    organizationId?: string;
+    email_status: 'sent' | 'suppressed' | 'failed';
+    email_error?: string;
+  }) => void;
+  onError?: (err: unknown) => void;
+};
+
+describe('StudioInviteModal — email delivery outcome', () => {
+  it('shows the plain success state when email_status is "sent"', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({ email: 'jamie@example.com', email_status: 'sent' });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      "Invited jamie@example.com — they'll get an email.",
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Try sending again' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a distinct email-issue state with detail and a resend action when email_status is "failed"', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+        email_error: 'smtp down',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      "Invited jamie@example.com — but the invite email couldn't be sent.",
+    );
+    expect(screen.getByText(/smtp down/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Try sending again' }),
+    ).toBeInTheDocument();
+  });
+
+  it('gives "suppressed" its own copy with NO retry — retrying a durably suppressed address just re-suppresses forever', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({ email: 'jamie@example.com', email_status: 'suppressed' });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(
+      screen.getByText(/previously bounced or marked our email as spam/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Try sending again' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('handles the legacy 502 send_failed shape identically to a 200 email_status:"failed"', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      // useInviteMember normalizes the legacy shape before this callback
+      // ever sees it — the modal only ever branches on email_status.
+      options.onSuccess({
+        email: 'jamie@example.com',
+        organizationId: 'org-1',
+        email_status: 'failed',
+        email_error: 'smtp connection refused',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.getByText(/smtp connection refused/)).toBeInTheDocument();
+  });
+
+  it('"Try sending again" re-invokes the mutation with the same payload', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+        email_error: 'smtp down',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+    mutate.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try sending again' }));
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const [payload] = mutate.mock.calls[0];
+    expect(payload).toMatchObject({
+      organizationId: 'org-1',
+      email: 'jamie@example.com',
+      role: 'member',
+    });
+  });
+
+  it('"Invite another" from the email-issue state resets back to a fresh form', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+        email_error: 'smtp down',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+    expect(
+      screen.getByRole('button', { name: 'Try sending again' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Invite another' }));
+
+    expect(screen.getByLabelText('Email')).toHaveValue('');
+    expect(
+      screen.queryByRole('button', { name: 'Try sending again' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('maps the raw email_error code "send_failed" through friendlyInviteError instead of showing it as prose', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+        email_error: 'send_failed',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.queryByText('send_failed')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/failed to send\. try sending it again/i),
+    ).toBeInTheDocument();
+  });
+
+  it('reads coherently when the failed send carries no error code at all', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    // friendlyInviteError's generic fallback ("Failed to send the invite.")
+    // read as if nothing had happened, directly contradicting the
+    // "they're already on the roster" sentence that follows it.
+    expect(
+      screen.queryByText(/failed to send the invite\./i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/gave no reason.*already on the roster/is),
+    ).toBeInTheDocument();
+  });
+
+  it('maps the raw email_error code "template_missing" through friendlyInviteError instead of showing it as prose', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+        email_error: 'template_missing',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.queryByText('template_missing')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/template is temporarily unavailable/i),
+    ).toBeInTheDocument();
+  });
+
+  it('notes in the retry affordance that a new email invalidates the previous invite link', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+        email_error: 'smtp down',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(
+      screen.getByText(/previous link will stop working/i),
+    ).toBeInTheDocument();
+  });
+
+  it('"Try sending again" surfaces a thrown resend error (e.g. already-a-member) instead of failing silently', async () => {
+    const mutate = jest
+      .fn()
+      .mockImplementationOnce((_input: unknown, options: InviteMutationOptions) => {
+        options.onSuccess({
+          email: 'jamie@example.com',
+          email_status: 'failed',
+          email_error: 'smtp down',
+        });
+      })
+      .mockImplementationOnce((_input: unknown, options: InviteMutationOptions) => {
+        options.onError?.(new Error('already_member'));
+      });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try sending again' }));
+
+    expect(
+      screen.getByText('That person is already part of this studio.'),
+    ).toBeInTheDocument();
+  });
+});

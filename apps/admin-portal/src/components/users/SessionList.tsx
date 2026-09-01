@@ -1,15 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { LogOut, Monitor, Smartphone, AlertCircle } from 'lucide-react';
-import { useUserSessions, useRevokeAllSessions } from '@/hooks/use-users';
-import { RevokeSessionDialog } from './RevokeSessionDialog';
+import { Monitor, Smartphone, AlertCircle } from 'lucide-react';
+import { useUserSessions } from '@/hooks/use-users';
 import { formatDistanceToNow } from 'date-fns';
-import { toast } from 'sonner';
 
 interface SessionListProps {
   userId: string;
@@ -52,27 +48,14 @@ function parseUserAgent(userAgent?: string) {
   return { browser, os, device };
 }
 
+// A "Revoke All" button used to sit in this header. It had no working
+// backend: the installed supabase-js (@supabase/auth-js 2.98.0) exposes no
+// admin-side, userId-scoped session invalidation — GoTrueAdminApi.signOut
+// takes the target session's own JWT, which the admin portal never holds.
+// Rather than keep a control that 404s on every click, the surface is now
+// read-only and says so.
 export function SessionList({ userId }: SessionListProps) {
   const { data: sessions, isLoading, error } = useUserSessions(userId);
-  const revokeAllSessions = useRevokeAllSessions();
-  const [selectedSession, setSelectedSession] = useState<{
-    sessionId: string;
-    deviceInfo: string;
-  } | null>(null);
-
-  const handleRevokeAll = async () => {
-    if (!confirm('Are you sure you want to revoke all sessions? The user will be logged out from all devices.')) {
-      return;
-    }
-
-    try {
-      await revokeAllSessions.mutateAsync(userId);
-      toast.success('All sessions revoked successfully');
-    } catch (error) {
-      toast.error('Failed to revoke sessions');
-      console.error('Revoke all sessions error:', error);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -103,24 +86,15 @@ export function SessionList({ userId }: SessionListProps) {
     <>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Active Sessions</CardTitle>
-              <CardDescription>
-                Manage the user's active sessions across all devices
-              </CardDescription>
-            </div>
-            {sessionList.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRevokeAll}
-                disabled={revokeAllSessions.isPending}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                {revokeAllSessions.isPending ? 'Revoking...' : 'Revoke All'}
-              </Button>
-            )}
+          <div>
+            <CardTitle>Active Sessions</CardTitle>
+            <CardDescription>
+              The user&apos;s active sessions across all devices
+            </CardDescription>
+            <p className="mt-2 text-xs text-muted-foreground">
+              View only — the auth backend supports no admin-side session
+              revocation, so sessions can&apos;t be ended from here.
+            </p>
           </div>
         </CardHeader>
         <CardContent>
@@ -170,16 +144,6 @@ export function SessionList({ userId }: SessionListProps) {
                         </div>
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setSelectedSession({ sessionId: session.id, deviceInfo })
-                      }
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Revoke
-                    </Button>
                   </div>
                 );
               })}
@@ -187,16 +151,6 @@ export function SessionList({ userId }: SessionListProps) {
           )}
         </CardContent>
       </Card>
-
-      {selectedSession && (
-        <RevokeSessionDialog
-          userId={userId}
-          sessionId={selectedSession.sessionId}
-          deviceInfo={selectedSession.deviceInfo}
-          open={!!selectedSession}
-          onOpenChange={(open) => !open && setSelectedSession(null)}
-        />
-      )}
     </>
   );
 }

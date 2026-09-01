@@ -24168,6 +24168,27 @@ export type Database = {
           },
         ]
       }
+      test_login_attempts: {
+        Row: {
+          attempted_at: string
+          email: string | null
+          id: number
+          ip: string
+        }
+        Insert: {
+          attempted_at?: string
+          email?: string | null
+          id?: never
+          ip: string
+        }
+        Update: {
+          attempted_at?: string
+          email?: string | null
+          id?: never
+          ip?: string
+        }
+        Relationships: []
+      }
       trade_rfq_requests: {
         Row: {
           closed_at: string | null
@@ -34311,6 +34332,8 @@ export type Database = {
         | "failed"
         | "suppressed"
         | "unconfirmed"
+        | "sent"
+        | "complained"
       oauth_provider: "apple" | "google"
       organization_status:
         | "active"
@@ -34559,6 +34582,8 @@ export const Constants = {
         "failed",
         "suppressed",
         "unconfirmed",
+        "sent",
+        "complained",
       ],
       oauth_provider: ["apple", "google"],
       organization_status: [

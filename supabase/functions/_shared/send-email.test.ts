@@ -106,7 +106,7 @@ Deno.test("rate-cap lookup failure is fail-closed", async () => {
   );
 });
 
-Deno.test("rate cap counts terminal unconfirmed delivery", async () => {
+Deno.test("rate cap counts provider-accepted 'sent' and terminal unconfirmed delivery", async () => {
   const previousSecret = Deno.env.get("UNSUBSCRIBE_TOKEN_SECRET");
   Deno.env.set("UNSUBSCRIBE_TOKEN_SECRET", "test-only-secret");
   try {
@@ -121,6 +121,7 @@ Deno.test("rate cap counts terminal unconfirmed delivery", async () => {
     );
     assertEquals(result.state, "ready");
     assertEquals(statuses, [
+      "sent",
       "delivered",
       "sending",
       "opened",

@@ -6,6 +6,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { capturePosthogEvent } from "../_shared/posthog.ts";
+import {
+  DELIVERY_UPGRADE_FROM_STATUSES,
+  isHardBounce,
+  RESEND_EVENT_STATUS,
+} from "./status-map.ts";
 
 
 const corsHeaders = {
@@ -14,8 +19,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, svix-id, svix-timestamp, svix-signature",
 };
 
-// Bounce suppression thresholds
-const HARD_BOUNCE_THRESHOLD = 2;
+// Soft-bounce suppression threshold. Hard bounces suppress on the first event.
 const SOFT_BOUNCE_THRESHOLD = 3;
 const BOUNCE_WINDOW_DAYS = 30;
 
@@ -137,16 +141,22 @@ serve(async (req) => {
     const sequenceId = fullLog?.metadata?.sequence_id as string | undefined;
     const stepIndex = fullLog?.metadata?.step_index as number | undefined;
 
+    const mappedStatus = RESEND_EVENT_STATUS[event.type];
+
     // Process based on event type
     switch (event.type) {
       case "email.delivered": {
+        // sendCompliantEmail writes 'sent' on Resend's 2xx accept (00552);
+        // this event is the only writer of delivery truth. Guarded so an
+        // out-of-order delivered event cannot walk 'opened'/'clicked' back.
         await supabase
           .from("notification_log")
           .update({
-            status: "delivered",
+            status: mappedStatus,
             sent_at: event.data.created_at || new Date().toISOString(),
           })
-          .eq("id", logEntry.id);
+          .eq("id", logEntry.id)
+          .in("status", [...DELIVERY_UPGRADE_FROM_STATUSES]);
 
         // Update campaign inline counter
         if (campaignId) {
@@ -177,7 +187,7 @@ serve(async (req) => {
         await supabase
           .from("notification_log")
           .update({
-            status: "opened",
+            status: mappedStatus,
             opened_at: new Date().toISOString(),
           })
           .eq("id", logEntry.id);
@@ -208,7 +218,7 @@ serve(async (req) => {
         await supabase
           .from("notification_log")
           .update({
-            status: "clicked",
+            status: mappedStatus,
             clicked_at: new Date().toISOString(),
           })
           .eq("id", logEntry.id);
@@ -234,7 +244,7 @@ serve(async (req) => {
         await supabase
           .from("notification_log")
           .update({
-            status: "bounced",
+            status: mappedStatus,
             error: `Bounce: ${event.data.bounce_type || "unknown"}`,
           })
           .eq("id", logEntry.id);
@@ -263,7 +273,7 @@ serve(async (req) => {
         await supabase
           .from("notification_log")
           .update({
-            status: "failed",
+            status: mappedStatus,
             error: "Spam complaint",
           })
           .eq("id", logEntry.id);
@@ -321,9 +331,8 @@ serve(async (req) => {
 });
 
 /**
- * Handle bounce events: increment counter and suppress if threshold reached.
- * Hard bounces: suppress after 2 in 30 days.
- * Soft bounces: suppress after 3 in 30 days.
+ * Handle bounce events: increment counter, then suppress — immediately for a
+ * hard bounce, or after 3 soft bounces in 30 days.
  */
 /**
  * Emit a PostHog event via the shared capture helper (_shared/posthog.ts).
@@ -399,9 +408,24 @@ async function handleBounce(
     .update({ email_bounce_count: newCount })
     .eq("id", userId);
 
-  // Check threshold
-  const isHardBounce = bounceType === "hard" || bounceType === "permanent";
-  const threshold = isHardBounce ? HARD_BOUNCE_THRESHOLD : SOFT_BOUNCE_THRESHOLD;
+  // A permanent bounce is proof the address is dead — suppress on the first
+  // one rather than waiting for the rolling threshold to fill.
+  if (isHardBounce(bounceType)) {
+    await supabase
+      .from("profiles")
+      .update({
+        email_suppressed: true,
+        email_suppressed_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+
+    console.warn(
+      `Email suppressed for user ${userId}: hard bounce (type: ${bounceType})`,
+    );
+    return;
+  }
+
+  const threshold = SOFT_BOUNCE_THRESHOLD;
 
   // Count recent bounces
   const windowStart = new Date();

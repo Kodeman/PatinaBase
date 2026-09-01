@@ -127,7 +127,12 @@ export const usersService = {
   },
 
   async verifyEmail(userId: string): Promise<void> {
-    await apiFetch(`/api/users/${userId}/verify-email`, { method: 'POST' });
+    // No dedicated /verify-email route exists — reuse the PATCH /api/users/[id]
+    // handler, which already supports { emailVerified: true } -> email_confirm.
+    await apiFetch(`/api/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ emailVerified: true }),
+    });
   },
 
   async getRoles(): Promise<Role[]> {
@@ -193,11 +198,16 @@ export const usersService = {
     return json.data;
   },
 
-  async revokeSession(userId: string, sessionId: string): Promise<void> {
-    await apiFetch(`/api/users/${userId}/sessions/${sessionId}`, { method: 'DELETE' });
-  },
-
-  async revokeAllSessions(userId: string): Promise<void> {
-    await apiFetch(`/api/users/${userId}/sessions/revoke-all`, { method: 'POST' });
-  },
+  // revokeAllSessions was removed along with the "Revoke All" button it
+  // backed. GET /sessions returns MFA factors as a session proxy, not real
+  // sessions, and there is no per-session or all-sessions admin revocation
+  // call reachable from this repo's installed supabase-js
+  // (@supabase/auth-js 2.98.0): GoTrueAdminApi's only session method is
+  // signOut(jwt, scope), which needs the target session's own JWT, not a
+  // userId. An earlier "fix" rerouted it to DELETE /sessions, which wrote an
+  // app_metadata field GoTrue ignores — a fake success; a later one pointed it
+  // at a nonexistent /sessions/revoke-all route so the failure would at least
+  // be visible. Neither is a feature. The sessions surface is read-only until
+  // a real mechanism exists (e.g. deleting auth.sessions rows via a
+  // service-role RPC).
 };
