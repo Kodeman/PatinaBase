@@ -92,19 +92,9 @@ export function useVerifyEmail() {
   });
 }
 
-// Revoke all sessions mutation
-export function useRevokeAllSessions() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (userId: string) => {
-      await usersService.revokeAllSessions(userId);
-    },
-    onSuccess: (_, userId) => {
-      queryClient.invalidateQueries({ queryKey: userKeys.sessions(userId) });
-    },
-  });
-}
+// useRevokeAllSessions was removed with usersService.revokeAllSessions — the
+// auth backend has no admin-side, userId-scoped session invalidation, so the
+// sessions surface is read-only. See services/users.ts for the full reasoning.
 
 // Assign role mutation
 export function useAssignRole() {

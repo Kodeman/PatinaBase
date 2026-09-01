@@ -46,6 +46,6 @@ export async function GET(
 // invalidation call — GoTrueAdminApi.signOut(jwt, scope) needs the specific
 // session's own JWT, which the admin portal never holds. Until a real
 // mechanism exists (e.g. deleting rows from `auth.sessions` via a
-// service-role RPC), `usersService.revokeAllSessions` points at
-// `/sessions/revoke-all`, which has no route — a visible 404/error is
-// safer than a fake success toast.
+// service-role RPC), there is no revoke path at all: the client-side
+// `usersService.revokeAllSessions` and the "Revoke All" button that called it
+// were both removed, and SessionList states that the surface is view-only.

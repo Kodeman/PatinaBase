@@ -22,10 +22,18 @@ export const RESEND_EVENT_STATUS: Record<string, string> = {
  * guarantee event ordering, so a late delivered event must not walk an
  * engagement state backwards.
  *
- * 'failed' IS upgradeable: send-email.ts writes it for an AMBIGUOUS send (a
- * timeout, transport error, or unreadable 2xx), where Resend may well have
- * accepted the message. A delivered webhook for that row is authoritative
- * evidence the send landed, so it corrects the pessimistic guess.
+ * 'failed' is listed as upgradeable, but is currently UNREACHABLE by this
+ * path, and the entry is future-proofing rather than a live correction:
+ * send-email.ts writes 'failed' for an AMBIGUOUS send (a timeout, transport
+ * error, non-2xx, or unreadable 2xx) where Resend may well have accepted the
+ * message — but in every one of those branches `sendPreparedResendRequest`
+ * returns no message id (`PreparedResendResult` carries `id` only on
+ * `state: "delivered"`), so the row is written with `provider_id` NULL. This
+ * webhook matches rows by `provider_id = event.data.email_id`, so an
+ * ambiguous row can never be found, and such rows cannot be auto-corrected
+ * today — they need a reconciliation pass keyed on something else (e.g. the
+ * idempotency key) to be fixed. Keeping 'failed' here is harmless and makes
+ * the upgrade work the moment an id does become available on that branch.
  */
 export const DELIVERY_UPGRADE_FROM_STATUSES = [
   "queued",

@@ -432,6 +432,13 @@ export async function sendCompliantEmail(
         sent_at: new Date().toISOString(),
       }).eq("id", logId);
     } else {
+      // 'failed' covers both a definite failure and an AMBIGUOUS send (timeout,
+      // transport error, non-2xx, unreadable 2xx). No provider_id is written
+      // because none of those branches yield one — PreparedResendResult carries
+      // `id` only on state "delivered". Consequence: resend-webhook matches on
+      // provider_id, so an ambiguous row that Resend actually delivered cannot
+      // be found and auto-upgraded; correcting it needs a reconciliation pass
+      // keyed on something else. See resend-webhook/status-map.ts.
       await supabase.from("notification_log").update({
         status: "failed",
         error: result.error,

@@ -19,12 +19,15 @@
 // 'app.settings.test_login_accounts' / 'app.settings.test_login_code'); this
 // change does not create them.
 //
-// Rate limiting: every POST writes one row to public.test_login_attempts
-// (migration 00551) with the caller's IP (LAST hop of X-Forwarded-For — the
-// first hop is caller-controlled) BEFORE the credential decision; the
-// submitted email is stored only when it is allowlisted. More than 20
-// attempts from the same IP, or more than 300 across all IPs, in the trailing
-// 15 minutes -> 429. Rows are swept at 24h by a pg_cron job (00554).
+// Rate limiting: both caps are checked FIRST, on count-only reads over
+// public.test_login_attempts (migration 00551) — before the app_setting RPCs
+// and before any row is written. 20 or more attempts already logged for this
+// IP, or 300 or more across all IPs, in the trailing 15 minutes -> 429 with
+// nothing written and no config read (a rejected request must not extend the
+// window it was rejected by). Otherwise one row is written with the caller's
+// IP (cf-connecting-ip / x-real-ip / first X-Forwarded-For hop — see lib.ts)
+// before the credential decision; the submitted email is stored only when it
+// is allowlisted. Rows are swept at 24h by a pg_cron job (00554).
 //
 // SECURITY: every failure path (bad email, bad code, missing config,
 // generateLink failure) returns the SAME generic 403 body — a caller can
@@ -95,7 +98,10 @@ const deps: TestAccountLoginDeps = {
       console.error('test-account-login: rate-limit check failed', error.message);
       return true;
     }
-    return (count ?? 0) > RATE_LIMIT_MAX_ATTEMPTS;
+    // >= so RATE_LIMIT_MAX_ATTEMPTS is the documented ceiling: `count` excludes
+    // this request (nothing is written until both caps pass), so the 21st
+    // attempt sees 20 and is rejected.
+    return (count ?? 0) >= RATE_LIMIT_MAX_ATTEMPTS;
   },
 
   isGloballyRateLimited: async () => {
@@ -107,7 +113,7 @@ const deps: TestAccountLoginDeps = {
       console.error('test-account-login: global rate-limit check failed', error.message);
       return true;
     }
-    return (count ?? 0) > RATE_LIMIT_MAX_ATTEMPTS_GLOBAL;
+    return (count ?? 0) >= RATE_LIMIT_MAX_ATTEMPTS_GLOBAL;
   },
 
   generateMagiclinkHash: async (email) => {

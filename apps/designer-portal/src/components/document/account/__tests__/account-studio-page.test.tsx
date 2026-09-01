@@ -514,7 +514,7 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
     expect(['admin', 'member', 'guest']).toContain(payload.role);
   });
 
-  it('disables only the resending row\'s button while a resend is in flight, leaving other rows clickable', () => {
+  it('disables EVERY row\'s resend button while any resend is in flight (one shared mutation instance), spinning only on the active row', () => {
     mockUseInviteMember.mockReturnValue({
       mutate: resendInvite,
       isPending: true,
@@ -545,11 +545,15 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
       within(row1 as HTMLElement).getByRole('button', { name: 'Resend invite' }),
     );
 
+    // The active row spins…
     expect(
-      within(row1 as HTMLElement).getByRole('button', { name: /Sending…|Resend invite/ }),
+      within(row1 as HTMLElement).getByRole('button', { name: 'Sending…' }),
     ).toBeDisabled();
+    // …and every other row is locked out too: resendInvite is one shared
+    // mutation instance, so a second concurrent resend would clobber
+    // resendingMemberId / resendFeedback and strand the first row's spinner.
     expect(
       within(row2 as HTMLElement).getByRole('button', { name: 'Resend invite' }),
-    ).not.toBeDisabled();
+    ).toBeDisabled();
   });
 });

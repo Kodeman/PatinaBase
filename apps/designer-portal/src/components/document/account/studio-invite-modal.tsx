@@ -258,7 +258,15 @@ export function StudioInviteModal({
                 {' '}— but the invite email couldn&apos;t be sent.
               </p>
               <p className={HELP}>
-                {friendlyInviteError(invitedResult.email_error)}{' '}
+                {/*
+                  friendlyInviteError's own fallback ("Failed to send the
+                  invite.") reads as if nothing happened, which contradicts the
+                  "they're already on the roster" sentence that follows it. Use
+                  it only when there IS a code to translate.
+                */}
+                {invitedResult.email_error
+                  ? `${friendlyInviteError(invitedResult.email_error)} `
+                  : 'The email provider gave no reason. '}
                 They&apos;re already on the roster — try sending the invite
                 email again, or share the invite link another way.
               </p>

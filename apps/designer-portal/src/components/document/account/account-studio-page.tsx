@@ -948,6 +948,14 @@ export function AccountStudioPage() {
             const expired = isInviteExpired(m);
             const canResend = canManage && m.status === 'invited';
             const isResending = resendingMemberId === m.id;
+            // resendInvite is ONE mutation instance shared by every row, so two
+            // overlapping resends interleave onto the same state: the second
+            // mutate() overwrites resendingMemberId and whichever callback
+            // lands last clears it and claims the feedback line — the other
+            // row is left spinning forever with the wrong result. Only one
+            // resend may be in flight at a time; the spinner still shows on
+            // the row that actually started it.
+            const resendBlocked = resendingMemberId !== null;
             const feedback =
               resendFeedback?.memberId === m.id ? resendFeedback : null;
 
@@ -1003,7 +1011,7 @@ export function AccountStudioPage() {
                       regionKey="studio-member-row"
                       variant="secondary"
                       onClick={() => handleResendInvite(m)}
-                      disabled={isResending}
+                      disabled={resendBlocked}
                       loading={isResending}
                       loadingLabel="Sending…"
                     >

@@ -451,6 +451,38 @@ describe('StudioInviteModal — email delivery outcome', () => {
     ).toBeInTheDocument();
   });
 
+  it('reads coherently when the failed send carries no error code at all', async () => {
+    const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
+      options.onSuccess({
+        email: 'jamie@example.com',
+        email_status: 'failed',
+      });
+    });
+    mockUseInviteMember.mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    // friendlyInviteError's generic fallback ("Failed to send the invite.")
+    // read as if nothing had happened, directly contradicting the
+    // "they're already on the roster" sentence that follows it.
+    expect(
+      screen.queryByText(/failed to send the invite\./i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/gave no reason.*already on the roster/is),
+    ).toBeInTheDocument();
+  });
+
   it('maps the raw email_error code "template_missing" through friendlyInviteError instead of showing it as prose', async () => {
     const mutate = jest.fn((_input: unknown, options: InviteMutationOptions) => {
       options.onSuccess({

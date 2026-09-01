@@ -217,21 +217,17 @@ describe('usersService', () => {
     // entirely, per an adversarial review. There is no per-session revoke
     // action anymore; see the "sessions surface honesty" fix.
 
-    // Regression test: revokeAllSessions was briefly rerouted to DELETE
-    // /sessions, whose handler wrote app_metadata.sessions_revoked_at —
-    // a field GoTrue never reads, so it silently did nothing while
-    // reporting success. No admin-side, userId-scoped session invalidation
-    // call exists in the installed supabase-js (@supabase/auth-js 2.98.0);
-    // this intentionally targets the (nonexistent) /sessions/revoke-all
-    // route so the failure is visible instead of a fake success.
-    it('should target the (currently nonexistent) revoke-all route rather than fake success via DELETE /sessions', async () => {
-      fetchMock.mockResolvedValueOnce(okJson(undefined));
-
-      await usersService.revokeAllSessions('123');
-
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe('/api/users/123/sessions/revoke-all');
-      expect(init.method).toBe('POST');
+    // usersService.revokeAllSessions was removed too, along with the
+    // "Revoke All" button in SessionList. It had no working backend: it
+    // first wrote app_metadata.sessions_revoked_at (a field GoTrue never
+    // reads — a fake success), then was pointed at a nonexistent
+    // /sessions/revoke-all route so the failure would be visible, which
+    // meant a 404 on every click. No admin-side, userId-scoped session
+    // invalidation exists in the installed supabase-js
+    // (@supabase/auth-js 2.98.0), so the sessions surface is read-only.
+    it('exposes no session-revocation call at all', () => {
+      expect('revokeAllSessions' in usersService).toBe(false);
+      expect('revokeSession' in usersService).toBe(false);
     });
   });
 });

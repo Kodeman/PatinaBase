@@ -47,11 +47,13 @@ Deno.test("'sent' is upgradeable to 'delivered'", () => {
   assertEquals(upgradeable.has("unconfirmed"), true);
 });
 
-Deno.test("'failed' is upgradeable — an ambiguous send that actually landed", () => {
+Deno.test("'failed' is listed as upgradeable (future-proofing, not a live path)", () => {
   const upgradeable = new Set<string>(DELIVERY_UPGRADE_FROM_STATUSES);
-  // send-email.ts writes 'failed' for an AMBIGUOUS upload (timeout / transport
-  // error / unreadable 2xx). A delivered webhook proves Resend accepted and
-  // delivered it, so the pessimistic row must be corrected.
+  // send-email.ts writes 'failed' for an AMBIGUOUS send (timeout / transport
+  // error / non-2xx / unreadable 2xx). Those branches carry no Resend message
+  // id, so the row's provider_id is NULL and this webhook — which matches on
+  // provider_id — can never reach it. The entry is harmless and becomes live
+  // the moment an id is available there; see status-map.ts.
   assertEquals(upgradeable.has("failed"), true);
 });
 

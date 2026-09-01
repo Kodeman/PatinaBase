@@ -31,14 +31,20 @@ export function clampInvitableRole(role: MemberRole): InvitableRole {
  * `lib.ts` sets `email_error: "send_failed"` / `"template_missing"` verbatim
  * on the 200 response — those are internal codes, never meant to reach a
  * designer as prose).
+ *
+ * Every match uses `includes`, not `startsWith`: a raw `email_error` arrives
+ * as the bare code, but a THROWN error arrives wrapped by supabase-js —
+ * FunctionsHttpError reads "Edge Function returned a non-2xx status: <code>",
+ * so the code sits mid-string. Anchoring at the start would map those to the
+ * raw-message fallback and leak the internal code as prose.
  */
 export function friendlyInviteError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err ?? '');
   if (msg.includes('already_member'))
     return 'That person is already part of this studio.';
-  if (msg.startsWith('send_failed'))
+  if (msg.includes('send_failed'))
     return 'The invite email failed to send. Try sending it again.';
-  if (msg.startsWith('template_missing'))
+  if (msg.includes('template_missing'))
     return 'The invite email template is temporarily unavailable. Try again in a moment.';
   return msg || 'Failed to send the invite.';
 }

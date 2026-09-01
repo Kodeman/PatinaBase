@@ -175,3 +175,10 @@ DO $$ BEGIN
   EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the authoritative registry. Test-account login (00554): purge-test-login-attempts-hourly at :25 -> plain SQL deleting public.test_login_attempts rows older than 24 hours (only the trailing 15-minute window is ever read). Studio onboarding (00553): expire-stale-workspace-invites-daily at 07:40 UTC -> plain SQL flipping organization_members rows stuck at invited with invitation_expires_at older than 30 days to removed. Rendered Room v2 (00491): dispatch-scan-modal-sweep every 5 minutes. Rendered Room v2 (00501): expire-stale-upload-intents-daily at 07:15 UTC -> public.expire_stale_upload_intents() directly (no edge function), transitioning stale pending upload-interface media_objects rows to expired. Room View, Agent OS, BOH, Field Site Request, Mood Board, invoice/decision reminders, and earlier schedules are unchanged (see prior registry text / cron.job).'$C$;
 EXCEPTION WHEN insufficient_privilege THEN NULL;
 END $$;
+
+-- ── 5. Refresh PostgREST's schema cache ───────────────────────────────────
+-- Section 1 GRANTs EXECUTE on public.app_setting(text) to service_role. The
+-- DDL watcher picks that up eventually; this makes it visible immediately, so
+-- the test-account-login edge function's app_setting RPC does not 404 in the
+-- window right after the migration applies.
+NOTIFY pgrst, 'reload schema';

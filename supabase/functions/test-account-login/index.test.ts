@@ -4,11 +4,12 @@
 // Tests ./lib.ts directly with injected deps — importing ./index.ts would boot
 // Deno.serve (field-login-token / po-send / aesthete-ask convention). Covers:
 // the method guard, missing/empty config (fail closed), allowlist miss, wrong
-// code, per-IP and global rate limiting (before the credential decision),
-// last-hop X-Forwarded-For extraction, the attempt row omitting a
-// non-allowlisted email, the generic-403 shape being IDENTICAL across every
-// failure mode (no allowlist-membership oracle), the happy path's response
-// shape, generateLink failure, and constantTimeEqual.
+// code, per-IP and global rate limiting (both evaluated BEFORE the config read
+// and BEFORE the attempt row is written), the cf-connecting-ip / x-real-ip /
+// first-XFF-hop preference chain, the attempt row omitting a non-allowlisted
+// email, the generic-403 shape being IDENTICAL across every failure mode (no
+// allowlist-membership oracle), the happy path's response shape, generateLink
+// failure, and constantTimeEqual.
 
 import {
   assert,
@@ -104,7 +105,7 @@ Deno.test('global cap -> 429 even when the per-IP counter is clear', async () =>
   assertFalse(minted, 'no token may be minted once globally rate-limited');
 });
 
-Deno.test('the global cap is checked after the per-IP cap, on every request', async () => {
+Deno.test('the global cap is checked after the per-IP cap, before the attempt row', async () => {
   const calls: string[] = [];
   await handleTestAccountLogin(
     req('POST', { email: ALLOWED_EMAIL, code: CODE }),
@@ -121,15 +122,73 @@ Deno.test('the global cap is checked after the per-IP cap, on every request', as
         calls.push('isGloballyRateLimited');
         return Promise.resolve(false);
       },
+      getConfig: () => {
+        calls.push('getConfig');
+        return Promise.resolve(DEFAULT_CONFIG);
+      },
     }),
   );
-  assertEquals(calls, ['recordAttempt', 'isRateLimited', 'isGloballyRateLimited']);
+  assertEquals(calls, [
+    'isRateLimited',
+    'isGloballyRateLimited',
+    'getConfig',
+    'recordAttempt',
+  ]);
 });
 
-Deno.test('every attempt is recorded BEFORE the rate-limit check', async () => {
-  const calls: string[] = [];
-  await handleTestAccountLogin(
+// Rejected requests must cost nothing: no Vault read, and — critically — no
+// attempt row, or a caller already over the cap would keep its own trailing
+// window (and the global counter) alive just by hammering the endpoint.
+
+Deno.test('a per-IP rate-limited request reads NO config and records NO attempt', async () => {
+  let configReads = 0;
+  let attempts = 0;
+  const res = await handleTestAccountLogin(
     req('POST', { email: ALLOWED_EMAIL, code: CODE }),
+    makeDeps({
+      isRateLimited: () => Promise.resolve(true),
+      getConfig: () => {
+        configReads += 1;
+        return Promise.resolve(DEFAULT_CONFIG);
+      },
+      recordAttempt: () => {
+        attempts += 1;
+        return Promise.resolve();
+      },
+    }),
+  );
+  assertEquals(res.status, 429);
+  assertEquals(configReads, 0, 'getConfig must not run once rate-limited');
+  assertEquals(attempts, 0, 'a rejected request must not extend the window');
+});
+
+Deno.test('a globally rate-limited request reads NO config and records NO attempt', async () => {
+  let configReads = 0;
+  let attempts = 0;
+  const res = await handleTestAccountLogin(
+    req('POST', { email: ALLOWED_EMAIL, code: CODE }),
+    makeDeps({
+      isRateLimited: () => Promise.resolve(false),
+      isGloballyRateLimited: () => Promise.resolve(true),
+      getConfig: () => {
+        configReads += 1;
+        return Promise.resolve(DEFAULT_CONFIG);
+      },
+      recordAttempt: () => {
+        attempts += 1;
+        return Promise.resolve();
+      },
+    }),
+  );
+  assertEquals(res.status, 429);
+  assertEquals(configReads, 0, 'getConfig must not run once globally rate-limited');
+  assertEquals(attempts, 0, 'a rejected request must not sustain the global cap');
+});
+
+Deno.test('an accepted attempt IS recorded, after both caps and before the credential decision', async () => {
+  const calls: string[] = [];
+  const res = await handleTestAccountLogin(
+    req('POST', { email: ALLOWED_EMAIL, code: 'wrong-code' }),
     makeDeps({
       recordAttempt: () => {
         calls.push('recordAttempt');
@@ -139,12 +198,35 @@ Deno.test('every attempt is recorded BEFORE the rate-limit check', async () => {
         calls.push('isRateLimited');
         return Promise.resolve(false);
       },
+      isGloballyRateLimited: () => {
+        calls.push('isGloballyRateLimited');
+        return Promise.resolve(false);
+      },
     }),
   );
-  assertEquals(calls, ['recordAttempt', 'isRateLimited']);
+  assertEquals(res.status, 403);
+  assertEquals(calls, ['isRateLimited', 'isGloballyRateLimited', 'recordAttempt']);
 });
 
-Deno.test('recordAttempt receives the LAST hop of X-Forwarded-For (proxies append; the first hop is caller-controlled)', async () => {
+Deno.test('recordAttempt receives the cf-connecting-ip address when the edge set one', async () => {
+  let seenIp = '';
+  await handleTestAccountLogin(
+    req(
+      'POST',
+      { email: ALLOWED_EMAIL, code: CODE },
+      { 'cf-connecting-ip': '198.51.100.9', 'x-forwarded-for': '203.0.113.7, 10.0.0.1' },
+    ),
+    makeDeps({
+      recordAttempt: (ip) => {
+        seenIp = ip;
+        return Promise.resolve();
+      },
+    }),
+  );
+  assertEquals(seenIp, '198.51.100.9');
+});
+
+Deno.test('recordAttempt falls back to the FIRST X-Forwarded-For hop with no platform header', async () => {
   let seenIp = '';
   await handleTestAccountLogin(
     req(
@@ -159,10 +241,35 @@ Deno.test('recordAttempt receives the LAST hop of X-Forwarded-For (proxies appen
       },
     }),
   );
-  assertEquals(seenIp, '10.0.0.1');
+  assertEquals(seenIp, '203.0.113.7');
 });
 
-Deno.test('getClientIp takes the last hop and ignores a spoofed leading entry', () => {
+Deno.test('getClientIp prefers cf-connecting-ip over every other header', () => {
+  assertEquals(
+    getClientIp(
+      req('POST', undefined, {
+        'cf-connecting-ip': '198.51.100.9',
+        'x-real-ip': '192.0.2.5',
+        'x-forwarded-for': '203.0.113.7, 10.0.0.1',
+      }),
+    ),
+    '198.51.100.9',
+  );
+});
+
+Deno.test('getClientIp falls back to x-real-ip before x-forwarded-for', () => {
+  assertEquals(
+    getClientIp(
+      req('POST', undefined, {
+        'x-real-ip': '192.0.2.5',
+        'x-forwarded-for': '203.0.113.7, 10.0.0.1',
+      }),
+    ),
+    '192.0.2.5',
+  );
+});
+
+Deno.test('getClientIp takes the FIRST x-forwarded-for hop (the client, not the proxies)', () => {
   assertEquals(
     getClientIp(req('POST', undefined, { 'x-forwarded-for': '1.2.3.4' })),
     '1.2.3.4',
@@ -171,16 +278,20 @@ Deno.test('getClientIp takes the last hop and ignores a spoofed leading entry', 
     getClientIp(
       req('POST', undefined, { 'x-forwarded-for': '9.9.9.9, 203.0.113.7, 10.0.0.1' }),
     ),
-    '10.0.0.1',
+    '9.9.9.9',
   );
   assertEquals(
-    getClientIp(req('POST', undefined, { 'x-forwarded-for': '203.0.113.7,  ' })),
+    getClientIp(req('POST', undefined, { 'x-forwarded-for': '  203.0.113.7 , 10.0.0.1' })),
     '203.0.113.7',
   );
 });
 
-Deno.test('getClientIp falls back to "unknown" with no X-Forwarded-For header', () => {
+Deno.test('getClientIp falls back to "unknown" with no usable header', () => {
   assertEquals(getClientIp(req('POST')), 'unknown');
+  assertEquals(
+    getClientIp(req('POST', undefined, { 'x-forwarded-for': ' , 10.0.0.1' })),
+    'unknown',
+  );
 });
 
 // ── Attempt-log privacy ──────────────────────────────────────────────────

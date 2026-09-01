@@ -198,16 +198,16 @@ export const usersService = {
     return json.data;
   },
 
-  async revokeAllSessions(userId: string): Promise<void> {
-    // GET /sessions returns MFA factors as a session proxy, not real
-    // sessions — there is no per-session or all-sessions admin revocation
-    // call reachable from this repo's installed supabase-js
-    // (@supabase/auth-js 2.98.0): GoTrueAdminApi's only session method is
-    // signOut(jwt, scope), which needs the target session's own JWT, not a
-    // userId. A prior "fix" rerouted this to DELETE /sessions, which just
-    // wrote an app_metadata field GoTrue ignores — a fake success. This
-    // points at the (nonexistent) /sessions/revoke-all route on purpose so
-    // the failure is visible instead of silently doing nothing.
-    await apiFetch(`/api/users/${userId}/sessions/revoke-all`, { method: 'POST' });
-  },
+  // revokeAllSessions was removed along with the "Revoke All" button it
+  // backed. GET /sessions returns MFA factors as a session proxy, not real
+  // sessions, and there is no per-session or all-sessions admin revocation
+  // call reachable from this repo's installed supabase-js
+  // (@supabase/auth-js 2.98.0): GoTrueAdminApi's only session method is
+  // signOut(jwt, scope), which needs the target session's own JWT, not a
+  // userId. An earlier "fix" rerouted it to DELETE /sessions, which wrote an
+  // app_metadata field GoTrue ignores — a fake success; a later one pointed it
+  // at a nonexistent /sessions/revoke-all route so the failure would at least
+  // be visible. Neither is a feature. The sessions surface is read-only until
+  // a real mechanism exists (e.g. deleting auth.sessions rows via a
+  // service-role RPC).
 };
