@@ -19,6 +19,17 @@ beforeAll(() => {
     configurable: true,
     value: PointerEventMock,
   })
+
+  // Pointer-move preview state is rAF-coalesced in production (CI-25). Every
+  // gesture assertion in this file is about the geometry the canvas computes,
+  // not about when it paints, so the default here runs frames straight
+  // through. The coalescing itself gets its own test, which installs a
+  // manual frame queue.
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    callback(0)
+    return 0
+  })
+  vi.stubGlobal('cancelAnimationFrame', () => {})
 })
 
 const ITEMS: EditableMoodBoardItem[] = [
@@ -95,7 +106,7 @@ describe('BoardRoomCanvas accessibility and view controls', () => {
     ).map((node) => node.getAttribute('data-board-item-id'))
     expect(ids).toEqual(['locked', 'image', 'chair', 'note'])
     expect(
-      screen.getByText(/Use Tab to move through items/),
+      screen.getByText(/Tab moves into the board/),
     ).toBeInTheDocument()
   })
 
@@ -1402,5 +1413,630 @@ describe('BoardRoomCanvas semantic commits', () => {
         canvas: { width: 1640, height: 800 },
       }),
     )
+  })
+})
+
+describe('BoardRoomCanvas touch gestures (CI-01)', () => {
+  const touch = (pointerId: number, clientX: number, clientY: number) => ({
+    pointerId,
+    pointerType: 'touch',
+    button: 0,
+    clientX,
+    clientY,
+  })
+
+  it('pans on a one-finger drag over empty canvas instead of marqueeing', () => {
+    const onViewChange = vi.fn()
+    renderCanvas({ onViewChange })
+    const application = screen.getByRole('application')
+
+    fireEvent.pointerDown(application, touch(1, 300, 300))
+    expect(screen.queryByTestId('board-marquee')).toBeNull()
+
+    fireEvent.pointerMove(application, touch(1, 340, 330))
+    expect(onViewChange).toHaveBeenLastCalledWith(
+      { pan: { x: 72, y: 62 }, zoom: 1 },
+      'pan',
+    )
+    fireEvent.pointerUp(application, touch(1, 340, 330))
+  })
+
+  it('still marquees on touch after a long press holds the finger still', () => {
+    vi.useFakeTimers()
+    try {
+      const onSelectionChange = vi.fn()
+      renderCanvas({ onSelectionChange })
+      const application = screen.getByRole('application')
+
+      fireEvent.pointerDown(application, touch(2, 20, 40))
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      expect(screen.getByTestId('board-marquee')).toBeInTheDocument()
+
+      fireEvent.pointerMove(application, touch(2, 400, 500))
+      fireEvent.pointerUp(application, touch(2, 400, 500))
+      expect(onSelectionChange.mock.lastCall?.[1]).toEqual({
+        reason: 'marquee',
+      })
+      expect(onSelectionChange.mock.lastCall?.[0]).toContain('chair')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not arm the marquee when the finger travels — that is a pan', () => {
+    vi.useFakeTimers()
+    try {
+      renderCanvas()
+      const application = screen.getByRole('application')
+      fireEvent.pointerDown(application, touch(3, 20, 40))
+      fireEvent.pointerMove(application, touch(3, 120, 140))
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      expect(screen.queryByTestId('board-marquee')).toBeNull()
+      fireEvent.pointerUp(application, touch(3, 120, 140))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('pinches to zoom with two fingers and keeps the midpoint anchored', () => {
+    const onViewChange = vi.fn()
+    renderCanvas({ onViewChange })
+    const application = screen.getByRole('application')
+
+    fireEvent.pointerDown(application, touch(10, 300, 300))
+    fireEvent.pointerDown(application, touch(11, 400, 300))
+    // Midpoint (350,300) at pan {32,32} zoom 1 → board point (318, 268).
+    fireEvent.pointerMove(application, touch(10, 250, 300))
+    fireEvent.pointerMove(application, touch(11, 450, 300))
+
+    const [view, reason] = onViewChange.mock.lastCall!
+    expect(reason).toBe('zoom')
+    expect(view.zoom).toBeCloseTo(2, 6)
+    // The board point that sat under the midpoint still sits under it.
+    expect(view.pan.x + 318 * view.zoom).toBeCloseTo(350, 6)
+    expect(view.pan.y + 268 * view.zoom).toBeCloseTo(300, 6)
+  })
+
+  it('takes a second finger over from an in-flight one-finger pin drag', () => {
+    const onItemsMoved = vi.fn()
+    const onViewChange = vi.fn()
+    renderCanvas({ onItemsMoved, onViewChange, selectedItemIds: ['chair'] })
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+
+    fireEvent.pointerDown(chair, touch(20, 100, 130))
+    fireEvent.pointerMove(application, touch(20, 160, 180))
+    // A second finger lands anywhere — capture phase sees it even though the
+    // pin's own handler stops propagation.
+    fireEvent.pointerDown(application, touch(21, 300, 300))
+    fireEvent.pointerMove(application, touch(20, 120, 130))
+    fireEvent.pointerMove(application, touch(21, 480, 300))
+    fireEvent.pointerUp(application, touch(20, 120, 130))
+    fireEvent.pointerUp(application, touch(21, 480, 300))
+
+    expect(onViewChange.mock.lastCall?.[1]).toBe('zoom')
+    // The abandoned drag commits nothing.
+    expect(onItemsMoved).not.toHaveBeenCalled()
+  })
+})
+
+describe('BoardRoomCanvas rotated resize (CI-07)', () => {
+  it('counter-rotates the pointer delta into the pin’s own frame', () => {
+    const onItemResized = vi.fn()
+    // `note` carries rotation -10; resize it from the east handle.
+    renderCanvas({ selectedItemIds: ['note'], onItemResized, showGuides: false })
+    const application = screen.getByRole('application')
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Resize e' }), {
+      pointerId: 40,
+      clientX: 880,
+      clientY: 215,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 40,
+      clientX: 980,
+      clientY: 215,
+    })
+    fireEvent.pointerUp(application, {
+      pointerId: 40,
+      clientX: 980,
+      clientY: 215,
+    })
+
+    const after = onItemResized.mock.lastCall![0].after
+    // A 100px screen drag along +x is only cos(10°)·100 along the rotated
+    // pin's own width axis — the pre-fix code grew it by the full 100.
+    expect(after.width).toBeCloseTo(200 + 100 * Math.cos((10 * Math.PI) / 180), 3)
+    expect(after.width).toBeLessThan(300)
+  })
+
+  it('holds the anchored corner still while a rotated pin is resized', () => {
+    const onItemResized = vi.fn()
+    renderCanvas({ selectedItemIds: ['note'], onItemResized, showGuides: false })
+    const application = screen.getByRole('application')
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Resize se' }), {
+      pointerId: 41,
+      clientX: 880,
+      clientY: 330,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 41,
+      clientX: 960,
+      clientY: 400,
+    })
+    fireEvent.pointerUp(application, {
+      pointerId: 41,
+      clientX: 960,
+      clientY: 400,
+    })
+
+    const { before, after } = onItemResized.mock.lastCall![0]
+    const radians = (-10 * Math.PI) / 180
+    const nwCorner = (box: {
+      x: number
+      y: number
+      width: number
+      resolvedHeight: number
+    }) => {
+      const dx = -box.width / 2
+      const dy = -box.resolvedHeight / 2
+      return {
+        x:
+          box.x + box.width / 2 + dx * Math.cos(radians) - dy * Math.sin(radians),
+        y:
+          box.y +
+          box.resolvedHeight / 2 +
+          dx * Math.sin(radians) +
+          dy * Math.cos(radians),
+      }
+    }
+    expect(nwCorner(after).x).toBeCloseTo(nwCorner(before).x, 3)
+    expect(nwCorner(after).y).toBeCloseTo(nwCorner(before).y, 3)
+  })
+})
+
+describe('BoardRoomCanvas selection depth (CI-19)', () => {
+  it('subtracts an already-selected pin swept by a shift-marquee', () => {
+    const onSelectionChange = vi.fn()
+    renderCanvas({
+      selectedItemIds: ['chair', 'locked'],
+      onSelectionChange,
+    })
+    const application = screen.getByRole('application')
+
+    // Sweep a band that covers `chair` (x 40-280, y 80-356) but not `image`.
+    fireEvent.pointerDown(application, {
+      button: 0,
+      pointerId: 61,
+      shiftKey: true,
+      clientX: 40,
+      clientY: 90,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 61,
+      clientX: 320,
+      clientY: 420,
+      shiftKey: true,
+    })
+    fireEvent.pointerUp(application, {
+      pointerId: 61,
+      clientX: 320,
+      clientY: 420,
+    })
+
+    const [ids, meta] = onSelectionChange.mock.lastCall!
+    expect(meta).toEqual({ reason: 'marquee' })
+    // `chair` was already in; the sweep takes it back out. `locked` is never
+    // a marquee hit, so it survives untouched.
+    expect(ids).not.toContain('chair')
+    expect(ids).toContain('locked')
+  })
+
+  it('walks down the stack on ⌘-click and cycles back to the top', () => {
+    const onSelectionChange = vi.fn()
+    const stacked: EditableMoodBoardItem[] = [
+      {
+        id: 'under',
+        type: 'image',
+        x: 0,
+        y: 0,
+        width: 300,
+        height: 300,
+        zIndex: 1,
+        data: {},
+      },
+      {
+        id: 'over',
+        type: 'image',
+        x: 0,
+        y: 0,
+        width: 300,
+        height: 300,
+        zIndex: 5,
+        data: {},
+      },
+    ]
+    const { rerender } = renderCanvas({
+      items: stacked,
+      sections: [],
+      onSelectionChange,
+    })
+    const over = document.querySelector('[data-board-item-id="over"]')!
+
+    fireEvent.pointerDown(over, {
+      button: 0,
+      pointerId: 70,
+      metaKey: true,
+      clientX: 100,
+      clientY: 100,
+    })
+    expect(onSelectionChange).toHaveBeenLastCalledWith(['over'], {
+      reason: 'item',
+    })
+
+    rerender(
+      <BoardRoomCanvas
+        boardName="Living Room"
+        items={stacked}
+        sections={[]}
+        selectedItemIds={['over']}
+        onSelectionChange={onSelectionChange}
+        renderItem={(item) => <span>{item.id}</span>}
+      />,
+    )
+    fireEvent.pointerDown(over, {
+      button: 0,
+      pointerId: 71,
+      metaKey: true,
+      clientX: 100,
+      clientY: 100,
+    })
+    expect(onSelectionChange).toHaveBeenLastCalledWith(['under'], {
+      reason: 'item',
+    })
+
+    rerender(
+      <BoardRoomCanvas
+        boardName="Living Room"
+        items={stacked}
+        sections={[]}
+        selectedItemIds={['under']}
+        onSelectionChange={onSelectionChange}
+        renderItem={(item) => <span>{item.id}</span>}
+      />,
+    )
+    fireEvent.pointerDown(over, {
+      button: 0,
+      pointerId: 72,
+      metaKey: true,
+      clientX: 100,
+      clientY: 100,
+    })
+    expect(onSelectionChange).toHaveBeenLastCalledWith(['over'], {
+      reason: 'item',
+    })
+  })
+
+  it('never starts a drag from a deep-select click', () => {
+    const onItemsMoved = vi.fn()
+    renderCanvas({ onItemsMoved })
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+
+    fireEvent.pointerDown(chair, {
+      button: 0,
+      pointerId: 73,
+      metaKey: true,
+      clientX: 100,
+      clientY: 130,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 73,
+      clientX: 200,
+      clientY: 230,
+    })
+    fireEvent.pointerUp(application, {
+      pointerId: 73,
+      clientX: 200,
+      clientY: 230,
+    })
+    expect(onItemsMoved).not.toHaveBeenCalled()
+  })
+})
+
+describe('BoardRoomCanvas locked affordances (CI-15)', () => {
+  it('shows a lock glyph and dead handle stubs on hover, and on selection', () => {
+    const { rerender } = renderCanvas()
+    const locked = document.querySelector('[data-board-item-id="locked"]')!
+    expect(screen.queryByTestId('board-item-lock-locked')).toBeNull()
+
+    fireEvent.pointerEnter(locked)
+    expect(screen.getByTestId('board-item-lock-locked')).toBeInTheDocument()
+    expect(
+      locked.querySelectorAll('[data-board-locked-handle]'),
+    ).toHaveLength(4)
+    // Stubs are inert — no button, nothing to press.
+    expect(locked.querySelectorAll('button')).toHaveLength(0)
+
+    fireEvent.pointerLeave(locked)
+    expect(screen.queryByTestId('board-item-lock-locked')).toBeNull()
+
+    rerender(
+      <BoardRoomCanvas
+        boardName="Living Room"
+        items={ITEMS}
+        sections={SECTIONS}
+        selectedItemIds={['locked']}
+        renderItem={(item) => <span>{item.id}</span>}
+      />,
+    )
+    expect(screen.getByTestId('board-item-lock-locked')).toBeInTheDocument()
+  })
+
+  it('says the pin is locked in its accessible name', () => {
+    renderCanvas()
+    expect(
+      screen.getByRole('button', { name: 'Untitled palette, locked' }),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('BoardRoomCanvas announcements and names (CI-13/CI-14)', () => {
+  it('names a pin by its product title, note text or palette name', () => {
+    renderCanvas()
+    expect(
+      screen.getByRole('button', { name: 'Chair, product' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Collected and warm, note' }),
+    ).toBeInTheDocument()
+    // Nameless pins still say what they are rather than going silent.
+    expect(
+      screen.getByRole('button', { name: 'Untitled image' }),
+    ).toBeInTheDocument()
+  })
+
+  it('routes announcements to the host and drops its own live region', () => {
+    const onAnnounce = vi.fn()
+    const { container } = renderCanvas({ onAnnounce })
+    fireEvent.pointerDown(
+      document.querySelector('[data-board-item-id="chair"]')!,
+      { button: 0, pointerId: 90, clientX: 100, clientY: 100 },
+    )
+    expect(onAnnounce).toHaveBeenLastCalledWith('1 item selected')
+    expect(container.querySelector('[aria-live]')).toBeNull()
+  })
+
+  it('speaks human copy with correct plurals and no engine vocabulary', () => {
+    const onAnnounce = vi.fn()
+    renderCanvas({ onAnnounce, selectedItemIds: ['chair'] })
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+
+    fireEvent.focus(chair)
+    fireEvent.keyDown(chair, { key: 'ArrowRight' })
+    expect(onAnnounce).toHaveBeenLastCalledWith('Moved 1 item 1 pixel')
+
+    fireEvent.keyDown(chair, { key: 'ArrowRight', shiftKey: true })
+    expect(onAnnounce).toHaveBeenLastCalledWith('Moved 1 item 10 pixels')
+  })
+})
+
+describe('BoardRoomCanvas roving focus (CI-16)', () => {
+  it('keeps one Tab stop and hands it to the focused pin', () => {
+    renderCanvas()
+    const application = screen.getByRole('application')
+    const items = Array.from(
+      document.querySelectorAll('[data-board-item-id]'),
+    )
+    expect(application).toHaveAttribute('tabindex', '0')
+    expect(items.every((node) => node.getAttribute('tabindex') === '-1')).toBe(
+      true,
+    )
+
+    fireEvent.focus(document.querySelector('[data-board-item-id="note"]')!)
+    expect(application).toHaveAttribute('tabindex', '-1')
+    expect(
+      document.querySelector('[data-board-item-id="note"]'),
+    ).toHaveAttribute('tabindex', '0')
+    expect(
+      document.querySelector('[data-board-item-id="chair"]'),
+    ).toHaveAttribute('tabindex', '-1')
+  })
+
+  it('walks the pins in reading order from a cold canvas', () => {
+    const onAnnounce = vi.fn()
+    renderCanvas({ onAnnounce })
+    const application = screen.getByRole('application')
+
+    // Reading order for the fixture: chair (x40) and image (x340) share the
+    // top row left-to-right, then note (x680), then the palette at y500.
+    fireEvent.keyDown(application, { key: 'ArrowRight' })
+    expect(document.activeElement).toHaveAttribute(
+      'data-board-item-id',
+      'chair',
+    )
+    expect(onAnnounce).toHaveBeenLastCalledWith('Chair, product, 1 of 4')
+
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight', altKey: true })
+    expect(document.activeElement).toHaveAttribute(
+      'data-board-item-id',
+      'image',
+    )
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft', altKey: true })
+    expect(document.activeElement).toHaveAttribute(
+      'data-board-item-id',
+      'chair',
+    )
+  })
+
+  it('traverses on Alt+Arrow even while a selection owns the bare arrows', () => {
+    const onItemsMoved = vi.fn()
+    renderCanvas({ selectedItemIds: ['chair'], onItemsMoved })
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+    fireEvent.focus(chair)
+
+    fireEvent.keyDown(chair, { key: 'ArrowRight', altKey: true })
+    expect(document.activeElement).toHaveAttribute(
+      'data-board-item-id',
+      'image',
+    )
+    expect(onItemsMoved).not.toHaveBeenCalled()
+  })
+
+  it('leaves the bare-arrow nudge alone, focused pin adoption included', () => {
+    const onItemsMoved = vi.fn()
+    const onSelectionChange = vi.fn()
+    renderCanvas({ onItemsMoved, onSelectionChange })
+    // No selection at all, but a pin holds DOM focus — the protected path
+    // that adopts it rather than traversing away from it.
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+    fireEvent.focus(chair)
+    fireEvent.keyDown(chair, { key: 'ArrowRight' })
+    expect(onSelectionChange).toHaveBeenLastCalledWith(['chair'], {
+      reason: 'keyboard',
+    })
+    expect(onItemsMoved.mock.lastCall?.[0]).toMatchObject({
+      reason: 'keyboard',
+      after: [{ id: 'chair', x: 41, y: 80 }],
+    })
+  })
+
+  it('hands the arrows to the nudge as soon as something is selected', () => {
+    const onItemsMoved = vi.fn()
+    renderCanvas({ selectedItemIds: ['chair'], onItemsMoved })
+    fireEvent.keyDown(screen.getByRole('application'), { key: 'ArrowRight' })
+    expect(onItemsMoved.mock.lastCall?.[0]).toMatchObject({
+      reason: 'keyboard',
+      after: [{ id: 'chair', x: 41, y: 80 }],
+    })
+  })
+
+  it('picks a focused pin up into the selection with Space', () => {
+    const onSelectionChange = vi.fn()
+    renderCanvas({ onSelectionChange })
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+    fireEvent.focus(chair)
+    fireEvent.keyDown(chair, { code: 'Space', key: ' ' })
+    expect(onSelectionChange).toHaveBeenLastCalledWith(['chair'], {
+      reason: 'keyboard',
+    })
+  })
+
+  it('follows the selection with focus', () => {
+    const { rerender } = renderCanvas()
+    expect(screen.getByRole('application')).toHaveAttribute('tabindex', '0')
+    rerender(
+      <BoardRoomCanvas
+        boardName="Living Room"
+        items={ITEMS}
+        sections={SECTIONS}
+        selectedItemIds={['image']}
+        renderItem={(item) => <span>{item.id}</span>}
+      />,
+    )
+    expect(
+      document.querySelector('[data-board-item-id="image"]'),
+    ).toHaveAttribute('tabindex', '0')
+  })
+})
+
+describe('BoardRoomCanvas wayfinding (CI-22)', () => {
+  it('cues the edges that board content has been pushed past', () => {
+    const { rerender } = renderCanvas({
+      view: { pan: { x: 32, y: 32 }, zoom: 1 },
+    })
+    const application = screen.getByRole('application')
+    Object.defineProperty(application, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        x: 0,
+        y: 0,
+        left: 0,
+        top: 0,
+        right: 2000,
+        bottom: 2000,
+        width: 2000,
+        height: 2000,
+      }),
+    })
+    act(() => {
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    // Panned hard left: content now runs off the left edge only.
+    rerender(
+      <BoardRoomCanvas
+        boardName="Living Room"
+        items={ITEMS}
+        sections={SECTIONS}
+        selectedItemIds={[]}
+        view={{ pan: { x: -400, y: 32 }, zoom: 1 }}
+        renderItem={(item) => <span>{item.id}</span>}
+      />,
+    )
+    const cue = screen.getByTestId('board-offscreen-cue')
+    expect(cue.getAttribute('data-offscreen-edges')).toBe('left')
+  })
+
+  it('keeps the Fit control alongside the zoom pair', () => {
+    renderCanvas()
+    expect(screen.getByRole('button', { name: 'Fit board' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Zoom in' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Zoom out' })).toBeVisible()
+  })
+})
+
+describe('BoardRoomCanvas pointer-move coalescing (CI-25)', () => {
+  it('paints once per frame no matter how many moves arrive', () => {
+    const frames: FrameRequestCallback[] = []
+    const raf = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback: FrameRequestCallback) => {
+        frames.push(callback)
+        return frames.length
+      })
+    try {
+      renderCanvas({ selectedItemIds: ['chair'], showGuides: false })
+      const application = screen.getByRole('application')
+      const chair = document.querySelector(
+        '[data-board-item-id="chair"]',
+      ) as HTMLElement
+
+      fireEvent.pointerDown(chair, {
+        button: 0,
+        pointerId: 95,
+        clientX: 100,
+        clientY: 130,
+      })
+      for (const offset of [20, 40, 60, 80]) {
+        fireEvent.pointerMove(application, {
+          pointerId: 95,
+          clientX: 100 + offset,
+          clientY: 130,
+        })
+      }
+      // Four moves, one frame requested — and nothing painted yet.
+      expect(frames).toHaveLength(1)
+      expect(chair.style.left).toBe('40px')
+
+      act(() => {
+        frames.shift()!(0)
+      })
+      // The frame paints the LATEST position, not the first one.
+      expect(chair.style.left).toBe('120px')
+
+      fireEvent.pointerUp(application, {
+        pointerId: 95,
+        clientX: 180,
+        clientY: 130,
+      })
+    } finally {
+      raf.mockRestore()
+    }
   })
 })
