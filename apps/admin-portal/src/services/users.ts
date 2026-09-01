@@ -127,7 +127,12 @@ export const usersService = {
   },
 
   async verifyEmail(userId: string): Promise<void> {
-    await apiFetch(`/api/users/${userId}/verify-email`, { method: 'POST' });
+    // No dedicated /verify-email route exists — reuse the PATCH /api/users/[id]
+    // handler, which already supports { emailVerified: true } -> email_confirm.
+    await apiFetch(`/api/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ emailVerified: true }),
+    });
   },
 
   async getRoles(): Promise<Role[]> {
@@ -198,6 +203,8 @@ export const usersService = {
   },
 
   async revokeAllSessions(userId: string): Promise<void> {
-    await apiFetch(`/api/users/${userId}/sessions/revoke-all`, { method: 'POST' });
+    // No dedicated /sessions/revoke-all route exists — the base sessions route's
+    // DELETE handler already implements "revoke all sessions".
+    await apiFetch(`/api/users/${userId}/sessions`, { method: 'DELETE' });
   },
 };
