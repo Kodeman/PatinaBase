@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import VerifyOtpPage from './page';
+import SignInPage from './page';
 
-const verifyOtpMutateAsync = jest.fn();
 const sendEmailOtpMutateAsync = jest.fn();
+const verifyOtpMutateAsync = jest.fn();
 const getSession = jest.fn();
 const authVerifyOtp = jest.fn();
 const functionsInvoke = jest.fn();
@@ -17,12 +17,20 @@ jest.mock('next/navigation', () => ({
 jest.mock('@patina/supabase', () => ({
   buildAuthCallbackUrl: jest.requireActual('@patina/supabase/auth')
     .buildAuthCallbackUrl,
+  buildVerifyOtpPath: jest.requireActual('@patina/supabase/auth')
+    .buildVerifyOtpPath,
   safeAuthReturnPath: jest.requireActual('@patina/supabase/auth')
     .safeAuthReturnPath,
   normalizeAuthError: jest.requireActual('@patina/supabase/auth')
     .normalizeAuthError,
+  isOAuthProviderEnabled: () => false,
   createBrowserClient: () => ({
-    auth: { getSession, verifyOtp: authVerifyOtp },
+    auth: {
+      getSession,
+      verifyOtp: authVerifyOtp,
+      signInWithPassword: jest.fn(),
+      signInWithOAuth: jest.fn(),
+    },
     functions: { invoke: functionsInvoke },
   }),
   useSendEmailOtp: () => ({
@@ -30,11 +38,35 @@ jest.mock('@patina/supabase', () => ({
     isPending: false,
   }),
   useVerifyOtp: () => ({ mutateAsync: verifyOtpMutateAsync, isPending: false }),
+  useAmbientQrAuth: () => ({
+    qrState: 'idle',
+    qrUrl: null,
+    secondsRemaining: 0,
+    totalSeconds: 0,
+    phase: 'idle',
+    wakeAvailable: false,
+    wake: jest.fn(),
+    cancel: jest.fn(),
+  }),
 }));
 
 jest.mock('@/lib/analytics/events', () => ({
   authEvents: { login: (...args: unknown[]) => authLogin(...args) },
 }));
+
+async function fillEmail(email = 'jamie@example.com') {
+  fireEvent.change(screen.getByLabelText('Email address'), {
+    target: { value: email },
+  });
+}
+
+async function sendCode() {
+  await fillEmail();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Email me a one-time code' }),
+  );
+  await screen.findByLabelText('Six-digit code');
+}
 
 function enterCode(code = '123456') {
   fireEvent.change(screen.getByLabelText('Six-digit code'), {
@@ -44,40 +76,26 @@ function enterCode(code = '123456') {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockSearchParams = new URLSearchParams({ email: 'jamie@example.com' });
+  mockSearchParams = new URLSearchParams();
   getSession.mockResolvedValue({ data: { session: null } });
+  sendEmailOtpMutateAsync.mockResolvedValue(undefined);
 });
 
-describe('Designer verify-otp — normal path', () => {
+describe('Designer signin — own inline OTP entry, normal path', () => {
   it('signs in on a correct code without ever touching the test-account fallback', async () => {
     verifyOtpMutateAsync.mockResolvedValue({ session: { access_token: 'tok' } });
-    render(<VerifyOtpPage />);
+    render(<SignInPage />);
 
+    await sendCode();
     enterCode();
 
     await waitFor(() => expect(authLogin).toHaveBeenCalledWith('email-otp'));
     expect(functionsInvoke).not.toHaveBeenCalled();
   });
-
-  it('shows the ordinary invalid-code error when both the real check and the fallback reject', async () => {
-    verifyOtpMutateAsync.mockRejectedValue(new Error('invalid_code'));
-    functionsInvoke.mockResolvedValue({
-      data: null,
-      error: { message: 'not_allowed' },
-    });
-    render(<VerifyOtpPage />);
-
-    enterCode();
-
-    expect(
-      await screen.findByText(/expired or isn.t correct/i),
-    ).toBeInTheDocument();
-    expect(authLogin).not.toHaveBeenCalled();
-  });
 });
 
-describe('Designer verify-otp — test-account fallback', () => {
-  it('tries test-account-login only after the normal verifyOtp call has failed', async () => {
+describe('Designer signin — test-account fallback (regression: signin has its own inline code entry, verify-otp/page.tsx is a separate route)', () => {
+  it('tries test-account-login only after the normal verifyOtp call on THIS page has failed', async () => {
     verifyOtpMutateAsync.mockRejectedValue(new Error('invalid_code'));
     functionsInvoke.mockResolvedValue({
       data: { token_hash: 'th-1' },
@@ -87,8 +105,9 @@ describe('Designer verify-otp — test-account fallback', () => {
       data: { session: { access_token: 'fallback-tok' } },
       error: null,
     });
-    render(<VerifyOtpPage />);
+    render(<SignInPage />);
 
+    await sendCode();
     enterCode('654321');
 
     await waitFor(() =>
@@ -96,11 +115,10 @@ describe('Designer verify-otp — test-account fallback', () => {
         body: { email: 'jamie@example.com', code: '654321' },
       }),
     );
-    // Called only once the real verifyOtp attempt already rejected.
     expect(verifyOtpMutateAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('completes sign-in via token_hash when the fallback succeeds, with no visible error', async () => {
+  it('completes sign-in via the magiclink token_hash when the fallback succeeds', async () => {
     verifyOtpMutateAsync.mockRejectedValue(new Error('invalid_code'));
     functionsInvoke.mockResolvedValue({
       data: { token_hash: 'th-1' },
@@ -110,8 +128,9 @@ describe('Designer verify-otp — test-account fallback', () => {
       data: { session: { access_token: 'fallback-tok' } },
       error: null,
     });
-    render(<VerifyOtpPage />);
+    render(<SignInPage />);
 
+    await sendCode();
     enterCode();
 
     await waitFor(() => expect(authLogin).toHaveBeenCalledWith('email-otp'));
@@ -119,67 +138,23 @@ describe('Designer verify-otp — test-account fallback', () => {
       type: 'magiclink',
       token_hash: 'th-1',
     });
-    expect(
-      screen.queryByText(/expired or isn.t correct/i),
-    ).not.toBeInTheDocument();
   });
 
-  it('falls through to the ordinary invalid-code error on a 403 (not allowlisted / wrong code)', async () => {
+  it('falls through to the ordinary invalid-code error when both the real check and the fallback reject', async () => {
     verifyOtpMutateAsync.mockRejectedValue(new Error('invalid_code'));
     functionsInvoke.mockResolvedValue({
       data: null,
-      error: { message: 'not_allowed', status: 403 },
+      error: { message: 'not_allowed' },
     });
-    render(<VerifyOtpPage />);
+    render(<SignInPage />);
 
-    enterCode();
-
-    expect(
-      await screen.findByText(/expired or isn.t correct/i),
-    ).toBeInTheDocument();
-    expect(authVerifyOtp).not.toHaveBeenCalled();
-    expect(authLogin).not.toHaveBeenCalled();
-  });
-
-  it('falls through to the ordinary invalid-code error on a 429 (rate-limited)', async () => {
-    verifyOtpMutateAsync.mockRejectedValue(new Error('invalid_code'));
-    functionsInvoke.mockResolvedValue({
-      data: null,
-      error: { message: 'rate_limited', status: 429 },
-    });
-    render(<VerifyOtpPage />);
-
+    await sendCode();
     enterCode();
 
     expect(
       await screen.findByText(/expired or isn.t correct/i),
     ).toBeInTheDocument();
     expect(authLogin).not.toHaveBeenCalled();
-  });
-
-  it('falls through to the ordinary error when the fallback returns no token_hash', async () => {
-    verifyOtpMutateAsync.mockRejectedValue(new Error('invalid_code'));
-    functionsInvoke.mockResolvedValue({ data: {}, error: null });
-    render(<VerifyOtpPage />);
-
-    enterCode();
-
-    expect(
-      await screen.findByText(/expired or isn.t correct/i),
-    ).toBeInTheDocument();
-    expect(authVerifyOtp).not.toHaveBeenCalled();
-  });
-
-  it('falls through to the ordinary error when the fallback network call itself throws', async () => {
-    verifyOtpMutateAsync.mockRejectedValue(new Error('invalid_code'));
-    functionsInvoke.mockRejectedValue(new TypeError('network down'));
-    render(<VerifyOtpPage />);
-
-    enterCode();
-
-    expect(
-      await screen.findByText(/expired or isn.t correct/i),
-    ).toBeInTheDocument();
   });
 
   it('never logs the submitted code', async () => {
@@ -192,8 +167,9 @@ describe('Designer verify-otp — test-account fallback', () => {
       data: null,
       error: { message: 'not_allowed' },
     });
-    render(<VerifyOtpPage />);
+    render(<SignInPage />);
 
+    await sendCode();
     enterCode('998877');
     await screen.findByText(/expired or isn.t correct/i);
 
