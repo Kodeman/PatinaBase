@@ -20,9 +20,11 @@
 // change does not create them.
 //
 // Rate limiting: every POST writes one row to public.test_login_attempts
-// (migration 00551) with the caller's IP (first hop of X-Forwarded-For) and
-// submitted email, BEFORE any comparison. More than 20 attempts from the same
-// IP in the trailing 15 minutes -> 429.
+// (migration 00551) with the caller's IP (LAST hop of X-Forwarded-For — the
+// first hop is caller-controlled) BEFORE the credential decision; the
+// submitted email is stored only when it is allowlisted. More than 20
+// attempts from the same IP, or more than 300 across all IPs, in the trailing
+// 15 minutes -> 429. Rows are swept at 24h by a pg_cron job (00554).
 //
 // SECURITY: every failure path (bad email, bad code, missing config,
 // generateLink failure) returns the SAME generic 403 body — a caller can
@@ -41,6 +43,11 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const RATE_LIMIT_WINDOW_MINUTES = 15;
 const RATE_LIMIT_MAX_ATTEMPTS = 20;
+const RATE_LIMIT_MAX_ATTEMPTS_GLOBAL = 300;
+
+function rateLimitWindowStart(): string {
+  return new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60_000).toISOString();
+}
 
 const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -77,14 +84,11 @@ const deps: TestAccountLoginDeps = {
   },
 
   isRateLimited: async (ip) => {
-    const windowStart = new Date(
-      Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60_000,
-    ).toISOString();
     const { count, error } = await admin
       .from('test_login_attempts')
       .select('id', { count: 'exact', head: true })
       .eq('ip', ip)
-      .gte('attempted_at', windowStart);
+      .gte('attempted_at', rateLimitWindowStart());
     if (error) {
       // Fail closed on a rate-limit read error: treat as rate-limited rather
       // than risk an unbounded brute-force window.
@@ -92,6 +96,18 @@ const deps: TestAccountLoginDeps = {
       return true;
     }
     return (count ?? 0) > RATE_LIMIT_MAX_ATTEMPTS;
+  },
+
+  isGloballyRateLimited: async () => {
+    const { count, error } = await admin
+      .from('test_login_attempts')
+      .select('id', { count: 'exact', head: true })
+      .gte('attempted_at', rateLimitWindowStart());
+    if (error) {
+      console.error('test-account-login: global rate-limit check failed', error.message);
+      return true;
+    }
+    return (count ?? 0) > RATE_LIMIT_MAX_ATTEMPTS_GLOBAL;
   },
 
   generateMagiclinkHash: async (email) => {

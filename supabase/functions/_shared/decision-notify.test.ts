@@ -79,4 +79,30 @@ Deno.test("notification log status classification preserves delivery state", () 
     classifyExistingDecisionEmailLogStatuses(["failed"]),
     null,
   );
+  // 'sent' is the post-00552 accept state — a real prior send, not "no email".
+  assertEquals(
+    classifyExistingDecisionEmailLogStatuses(["sent"]),
+    "sent",
+  );
+  assertEquals(
+    classifyExistingDecisionEmailLogStatuses(["failed", "sent"]),
+    "sent",
+  );
+  assertEquals(
+    classifyExistingDecisionEmailLogStatuses(["sent", "delivered"]),
+    "delivered",
+  );
+  assertEquals(
+    classifyExistingDecisionEmailLogStatuses(["sending", "sent"]),
+    "sent",
+  );
+  // 'complained' is terminal recipient-side evidence — never re-attempt.
+  assertEquals(
+    classifyExistingDecisionEmailLogStatuses(["complained"]),
+    "complained",
+  );
+  assertEquals(
+    classifyExistingDecisionEmailLogStatuses(["queued", "complained"]),
+    "complained",
+  );
 });

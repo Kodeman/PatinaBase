@@ -229,12 +229,15 @@ async function getSuppressedUserIds(supabase: SupabaseClient): Promise<Set<strin
   }
 
   // 3. Frequency cap — 3+ marketing emails in last 7 days
+  // 'sent' is the post-00552 accept state sendCompliantEmail writes on Resend's
+  // 2xx; omitting it would let a user who received three emails this week
+  // through the cap because none had a webhook-confirmed delivery yet.
   const sevenDaysAgo = daysAgo(7);
   const { data: recentSends } = await supabase
     .from('notification_log')
     .select('user_id')
     .eq('channel', 'email')
-    .in('status', ['delivered', 'sending', 'opened', 'clicked', 'unconfirmed'])
+    .in('status', ['delivered', 'sent', 'sending', 'opened', 'clicked', 'unconfirmed'])
     .gte('created_at', sevenDaysAgo);
 
   if (recentSends) {

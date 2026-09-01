@@ -12391,3 +12391,51 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.studio_boards_overview(integer) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00551_test_login_rate_limit.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.test_login_attempts FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00551_test_login_rate_limit.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.test_login_attempts TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00554_onboarding_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.app_setting(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00554_onboarding_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.app_setting(text) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00554_onboarding_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.app_setting(text) FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00554_onboarding_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.app_setting(text) FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00554_onboarding_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_ab_variant_stats(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00554_onboarding_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_ab_variant_stats(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

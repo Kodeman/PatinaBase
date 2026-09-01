@@ -47,6 +47,14 @@ Deno.test("'sent' is upgradeable to 'delivered'", () => {
   assertEquals(upgradeable.has("unconfirmed"), true);
 });
 
+Deno.test("'failed' is upgradeable — an ambiguous send that actually landed", () => {
+  const upgradeable = new Set<string>(DELIVERY_UPGRADE_FROM_STATUSES);
+  // send-email.ts writes 'failed' for an AMBIGUOUS upload (timeout / transport
+  // error / unreadable 2xx). A delivered webhook proves Resend accepted and
+  // delivered it, so the pessimistic row must be corrected.
+  assertEquals(upgradeable.has("failed"), true);
+});
+
 Deno.test("engagement states are never walked back to 'delivered'", () => {
   const upgradeable = new Set<string>(DELIVERY_UPGRADE_FROM_STATUSES);
   for (const terminal of ["opened", "clicked", "bounced", "complained"]) {

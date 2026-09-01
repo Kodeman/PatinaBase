@@ -21,9 +21,14 @@
 //   - Code comparison is constant-time (constantTimeEqual below) so response
 //     latency cannot be used to guess the static code character-by-character.
 //   - The submitted code and the minted token_hash are NEVER logged.
-//   - Per-IP rate limiting: one attempt row is written per request BEFORE any
-//     comparison; if that IP has more than 20 attempts in the trailing 15
-//     minutes, the request is rejected 429 before touching the allowlist.
+//   - Rate limiting: one attempt row is written per request BEFORE the
+//     credential decision; the request is rejected 429 if that IP has more
+//     than 20 attempts in the trailing 15 minutes, or if ALL IPs together
+//     have more than 300 in that window (the global cap bounds a flood that
+//     rotates X-Forwarded-For to dodge the per-IP counter).
+//   - The attempt row stores the submitted email ONLY when it is allowlisted.
+//     The portal falls back to this endpoint on every failed OTP, so logging
+//     the raw address would accumulate real users' emails pre-auth.
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,12 +55,21 @@ function deny(): Response {
   return json(GENERIC_DENY_BODY, 403);
 }
 
-/** Extracts the caller IP from the first hop of X-Forwarded-For. */
+/**
+ * Extracts the caller IP from the LAST hop of X-Forwarded-For.
+ *
+ * Proxies APPEND to this header, so the first hop is whatever the client sent
+ * and is fully caller-controlled — an attacker rotating it defeats a per-IP
+ * limiter entirely. The last hop is the address observed by the nearest
+ * trusted proxy. Same reasoning as the portal's QR-token limiter
+ * (apps/designer-portal/src/app/api/auth/qr/generate/route.ts), which likewise
+ * refuses to trust the first hop.
+ */
 export function getClientIp(req: Request): string {
   const xff = req.headers.get('x-forwarded-for');
   if (!xff) return 'unknown';
-  const first = xff.split(',')[0]?.trim();
-  return first || 'unknown';
+  const hops = xff.split(',').map((hop) => hop.trim()).filter(Boolean);
+  return hops[hops.length - 1] || 'unknown';
 }
 
 /**
@@ -92,10 +106,18 @@ export type GenerateResult = { tokenHash: string } | { error: string };
 export interface TestAccountLoginDeps {
   /** Read the two Vault-backed app settings this function depends on. */
   getConfig: () => Promise<TestLoginConfig>;
-  /** Insert one row per attempt (fires before any comparison). */
+  /**
+   * Insert one row per attempt (fires before the credential decision).
+   * `email` is non-null ONLY for an allowlisted address — see the caller.
+   */
   recordAttempt: (ip: string, email: string | null) => Promise<void>;
   /** True if this IP has more than 20 attempts in the trailing 15 minutes. */
   isRateLimited: (ip: string) => Promise<boolean>;
+  /**
+   * True if attempts across ALL IPs in the trailing 15 minutes exceed 300.
+   * Bounds a flood that rotates X-Forwarded-For to dodge the per-IP limiter.
+   */
+  isGloballyRateLimited: () => Promise<boolean>;
   /** Mint a magiclink for `email`; return its hashed_token, or a non-secret error code. */
   generateMagiclinkHash: (email: string) => Promise<GenerateResult>;
 }
@@ -111,7 +133,8 @@ function parseAllowlist(accounts: string): string[] {
  * Core handler. Contract:
  *   OPTIONS                    -> 200 CORS preflight
  *   non-POST                   -> 405 { error: 'method_not_allowed' }
- *   rate limited (>20/15min)   -> 429 { error: 'rate_limited' }
+ *   rate limited (>20/15min per IP, or >300/15min across all IPs)
+ *                               -> 429 { error: 'rate_limited' }
  *   missing config / bad email / bad code / generateLink failure
  *                               -> 403 { error: 'invalid_credentials' } (identical body every time)
  *   ok                         -> 200 { token_hash }
@@ -139,25 +162,35 @@ export async function handleTestAccountLogin(
   const rawCode = typeof body.code === 'string' ? body.code : '';
   const ip = getClientIp(req);
 
-  // Record the attempt BEFORE any comparison, per spec.
-  await deps.recordAttempt(ip, rawEmail || null);
+  // Config is read up front only so the attempt row can be written WITHOUT the
+  // submitted address unless it is allowlisted: the portal falls back to this
+  // endpoint on every failed OTP, so persisting rawEmail would collect real
+  // users' email addresses in a pre-auth side table.
+  const config = await deps.getConfig();
+  const allowlist = config.accounts ? parseAllowlist(config.accounts) : [];
+  const emailLower = rawEmail.toLowerCase();
+  const emailAllowed = allowlist.includes(emailLower);
+
+  // Record the attempt BEFORE the credential decision, per spec.
+  await deps.recordAttempt(ip, emailAllowed ? emailLower : null);
 
   if (await deps.isRateLimited(ip)) {
     return json({ error: 'rate_limited' }, 429);
   }
 
-  const config = await deps.getConfig();
+  // Global cap: a flood spoofing a fresh X-Forwarded-For per request never
+  // trips the per-IP limiter, so total volume is bounded too.
+  if (await deps.isGloballyRateLimited()) {
+    return json({ error: 'rate_limited' }, 429);
+  }
+
   // Fail closed: either setting missing/empty means the path is unconfigured.
   if (!config.accounts || !config.code) {
     return deny();
   }
 
-  const allowlist = parseAllowlist(config.accounts);
-  const emailLower = rawEmail.toLowerCase();
-
   // Evaluate BOTH checks unconditionally (no short-circuit) so response
   // timing doesn't leak which check failed.
-  const emailAllowed = allowlist.includes(emailLower);
   const codeMatches = constantTimeEqual(rawCode, config.code);
 
   if (!emailAllowed || !codeMatches) {

@@ -21,12 +21,18 @@ export const RESEND_EVENT_STATUS: Record<string, string> = {
  * deliberately absent: both already prove delivery, and Resend does not
  * guarantee event ordering, so a late delivered event must not walk an
  * engagement state backwards.
+ *
+ * 'failed' IS upgradeable: send-email.ts writes it for an AMBIGUOUS send (a
+ * timeout, transport error, or unreadable 2xx), where Resend may well have
+ * accepted the message. A delivered webhook for that row is authoritative
+ * evidence the send landed, so it corrects the pessimistic guess.
  */
 export const DELIVERY_UPGRADE_FROM_STATUSES = [
   "queued",
   "sending",
   "sent",
   "unconfirmed",
+  "failed",
 ] as const;
 
 /**
