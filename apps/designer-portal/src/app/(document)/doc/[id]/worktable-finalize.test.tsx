@@ -53,6 +53,15 @@ jest.mock('@patina/supabase', () => ({
   invoiceDaysOverdue: jest.requireActual('@patina/supabase').invoiceDaysOverdue,
   useProjectRoomScans: () => ({ data: [] }),
   useGeneratedRoomFilesByScan: () => ({ data: new Map() }),
+  // The Visits block (FC W4) mounts on every project spread; both of its
+  // reads are unconditional hooks, so any suite rendering one must stub them.
+  useProjectVisits: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
+  useCaptureMediaUrls: () => ({ data: undefined }),
   /* the page's own reads */
   useProjectV2: () => ({ data: undefined, isLoading: false, isError: false }),
   useProjectPhases: () => ({ data: [] }),
