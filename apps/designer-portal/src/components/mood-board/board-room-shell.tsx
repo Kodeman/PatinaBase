@@ -50,6 +50,7 @@ import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { lockBodyScroll, trapTabWithin } from '@/lib/full-screen-boundary';
 import {
+  consumeMaterializedTemplateFlag,
   moodBoardOpenSource,
   resolveMoodBoardReturnTarget,
 } from '@/lib/mood-board/navigation';
@@ -1363,8 +1364,25 @@ export function MoodBoardRoom({
   // from the URL again — a one-shot banner, not a persistent read of `search`.
   const [justMaterialized, setJustMaterialized] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return new URLSearchParams(window.location.search).get('materialized') === 'template';
+    return consumeMaterializedTemplateFlag({
+      pathname: window.location.pathname,
+      search: window.location.search,
+    }).present;
   });
+  const materializedRouter = useRouter();
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const { strippedHref } = consumeMaterializedTemplateFlag({
+      pathname: window.location.pathname,
+      search: window.location.search,
+    });
+    if (!strippedHref) return;
+    // Strip the param immediately — otherwise a refresh or a bookmark of
+    // THIS url re-triggers the "just materialized" framing forever; this
+    // read is meant to fire exactly once per real materialize-then-redirect.
+    materializedRouter.replace(strippedHref, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [navigation] = useState(() => {
     if (typeof window === 'undefined') {
       return { source: 'direct_url' as const, returnTarget: owner.kind === 'proposal' ? `/drafting/${owner.id}` : `/doc/${owner.id}` };
