@@ -119,7 +119,7 @@ struct CaptureCardOverlay: View {
             micRow
 
             FieldVerbNotice(menu: $verbMenu, facts: verbFacts,
-                            parties: verbParties, onAction: onVerb)
+                            parties: verbParties, idPrefix: "card.", onAction: onVerb)
 
             // §7.5 draws Save and Add detail as the card's bottom line, so the
             // verbs join that line rather than displacing it.
@@ -141,7 +141,7 @@ struct CaptureCardOverlay: View {
                         .background(CaptureColor.verdigris, in: RoundedRectangle(cornerRadius: 12))
                 }
                 FieldVerbOverflowMenu(menu: $verbMenu, facts: verbFacts,
-                                      parties: verbParties, onAction: onVerb)
+                                      parties: verbParties, idPrefix: "card.", onAction: onVerb)
             }
         }
         .padding(18)

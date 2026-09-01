@@ -18,17 +18,23 @@ public struct FieldVerbOverflowMenu: View {
     @Binding private var menu: FieldVerbMenu
     private let facts: FieldVerbFacts
     private let parties: [FieldPartyRef]
+    private let idPrefix: String
     private let onAction: (FieldVerbAction) -> Void
 
+    /// `idPrefix` names the SURFACE ("card." / "n5."). Both mount the same
+    /// controls, so a hardcoded id would have the device-pass script addressing
+    /// N5's menu by the card's name.
     public init(
         menu: Binding<FieldVerbMenu>,
         facts: FieldVerbFacts,
         parties: [FieldPartyRef],
+        idPrefix: String,
         onAction: @escaping (FieldVerbAction) -> Void
     ) {
         _menu = menu
         self.facts = facts
         self.parties = parties
+        self.idPrefix = idPrefix
         self.onAction = onAction
     }
 
@@ -45,7 +51,7 @@ public struct FieldVerbOverflowMenu: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("More ways to file this")
-        .accessibilityIdentifier("card.verbs")
+        .accessibilityIdentifier("\(idPrefix)verbs")
     }
 
     @ViewBuilder private func rowView(_ row: FieldVerbRow) -> some View {
@@ -72,17 +78,23 @@ public struct FieldVerbNotice: View {
     @Binding private var menu: FieldVerbMenu
     private let facts: FieldVerbFacts
     private let parties: [FieldPartyRef]
+    private let idPrefix: String
     private let onAction: (FieldVerbAction) -> Void
 
+    /// `idPrefix` names the SURFACE ("card." / "n5."). Both mount the same
+    /// controls, so a hardcoded id would have the device-pass script addressing
+    /// N5's menu by the card's name.
     public init(
         menu: Binding<FieldVerbMenu>,
         facts: FieldVerbFacts,
         parties: [FieldPartyRef],
+        idPrefix: String,
         onAction: @escaping (FieldVerbAction) -> Void
     ) {
         _menu = menu
         self.facts = facts
         self.parties = parties
+        self.idPrefix = idPrefix
         self.onAction = onAction
     }
 
@@ -104,19 +116,19 @@ public struct FieldVerbNotice: View {
                             if let action = menu.confirmPunch() { onAction(action) }
                         }
                         .buttonStyle(FieldVerbConfirmButtonStyle())
-                        .accessibilityIdentifier("card.verbs.confirm")
+                        .accessibilityIdentifier("\(idPrefix)verbs.confirm")
                         // A confirm step with no way out is a trap: the only
                         // escape was swiping the whole card away, which loses
                         // the capture's card moment too. The decline writes
                         // nothing and returns the menu to idle.
                         Button("Not now") { menu.cancelPunch() }
                             .buttonStyle(FieldVerbDeclineButtonStyle())
-                            .accessibilityIdentifier("card.verbs.decline")
+                            .accessibilityIdentifier("\(idPrefix)verbs.decline")
                     }
                 }
                 if let status {
                     line(status)
-                        .accessibilityIdentifier("card.verbs.status")
+                        .accessibilityIdentifier("\(idPrefix)verbs.status")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -67,10 +67,12 @@ struct SmartGuessSheet: View {
                     onPrimary: { accept() }
                 )
                 FieldVerbOverflowMenu(menu: $verbMenu, facts: verbFacts,
-                                      parties: parties, onAction: performVerb)
+                                      parties: parties, idPrefix: "n5.",
+                                      onAction: performVerb)
             }
             FieldVerbNotice(menu: $verbMenu, facts: verbFacts,
-                            parties: parties, onAction: performVerb)
+                            parties: parties, idPrefix: "n5.",
+                            onAction: performVerb)
             Spacer(minLength: 0)
         }
         .accessibilityIdentifier(CaptureScreenID.n5SmartGuess.rawValue)
@@ -99,9 +101,9 @@ struct SmartGuessSheet: View {
         case .note:
             specimen.requestMarginNote(noteID: UUID())
             analytics.event("N5.make-note", ["id": specimen.id.uuidString])
-        case .punchTask(let owner, let partyID):
+        case .punchTask(let owner, let partyID, let intent):
             specimen.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
-            analytics.event("N5.make-task", ["owner": owner])
+            analytics.event("N5.make-task", ["owner": owner, "verb": intent.rawValue])
         }
         try? store.save()
         enqueue(specimen.id)
