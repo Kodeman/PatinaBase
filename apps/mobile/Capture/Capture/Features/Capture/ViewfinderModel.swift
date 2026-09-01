@@ -74,7 +74,7 @@ final class ViewfinderModel {
               FieldInHandPlacement.adopt(visitState, into: draft) else { return }
         try? store.save()
         // The card just gained a project, so the punch verb just gained a court.
-        Task { await loadCardParties() }
+        Task { @MainActor [weak self] in await self?.loadCardParties() }
     }
 
     func refreshVisit(now: Date = Date()) {
@@ -473,18 +473,28 @@ final class ViewfinderModel {
     /// first one.
     private(set) var cardPartiesSettled = false
 
+    /// Builds the list in a local and assigns ONCE. Pre-blanking `cardParties`
+    /// would flip a landed punch's status line from "Filed. <GC> was texted."
+    /// to "Filed as your task." for the length of the fetch — `filedCourt`
+    /// resolves the name out of this list — and the visit door closing reloads
+    /// it while the card is on screen.
     func loadCardParties() async {
-        cardParties = []
+        let previouslySettled = cardPartiesSettled
         cardPartiesSettled = false
         guard let projectID = cardSpecimen?.venue?.projectId,
               !projectID.isEmpty else {
             // No project means no court to fetch, so there is nothing to wait
             // for — and the menu shows `needsProject` rather than the verb.
+            cardParties = []
             cardPartiesSettled = true
             return
         }
         let loaded = (try? await siteRequests.fieldParties(projectID: projectID)) ?? []
-        guard cardSpecimen?.venue?.projectId == projectID else { return }
+        guard cardSpecimen?.venue?.projectId == projectID else {
+            // The card moved on mid-flight; leave the newer load to settle it.
+            cardPartiesSettled = previouslySettled
+            return
+        }
         cardParties = loaded
         cardPartiesSettled = true
     }
@@ -514,7 +524,7 @@ final class ViewfinderModel {
         CaptureHaptics.selection()
         guard specimen.hasConfirmedCaptureReceipt else { return }
         let id = specimen.id
-        Task { await sync.enqueue(id) }
+        Task { @MainActor [weak self] in await self?.sync.enqueue(id) }
     }
 
     /// The C3 card's one tap to the only project picker in the app. S1 is
