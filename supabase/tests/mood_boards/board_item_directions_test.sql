@@ -243,6 +243,49 @@ BEGIN
 END;
 $$;
 
+-- ── 3b. A co-member's raw UPDATE/DELETE is refused at the grant (C6) ──────
+-- can_manage_board_item_feedback would authorize this actor under RLS, but
+-- there is no UPDATE/DELETE policy AND (as of the 00550 fix) no UPDATE/DELETE
+-- grant on the table either — 00550 REVOKEs ALL from authenticated, not just
+-- PUBLIC/anon, closing the local-stack legacy-grants blanket baseline that
+-- would otherwise leave a real UPDATE/DELETE grant sitting underneath the
+-- migration's "deliberately no UPDATE or DELETE policy" comment. Resolve/
+-- reopen MUST go through the SECURITY DEFINER RPCs, never a direct write.
+-- Still acting as the lead (a genuine co-member) from the block above.
+DO $$
+BEGIN
+  BEGIN
+    UPDATE public.board_item_directions
+       SET resolved = true, resolved_at = now(), resolved_by = auth.uid()
+     WHERE id = 'd5505000-0000-4000-8000-000000000002';
+    RAISE EXCEPTION 'a studio co-member unexpectedly UPDATEd board_item_directions directly';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  BEGIN
+    DELETE FROM public.board_item_directions
+     WHERE id = 'd5505000-0000-4000-8000-000000000002';
+    RAISE EXCEPTION 'a studio co-member unexpectedly DELETEd a board_item_directions row directly';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+END;
+$$;
+
+DO $$
+BEGIN
+  ASSERT (
+    SELECT resolved FROM public.board_item_directions
+    WHERE id = 'd5505000-0000-4000-8000-000000000002'
+  ) = false, 'the denied raw UPDATE must not have taken effect';
+  ASSERT EXISTS (
+    SELECT 1 FROM public.board_item_directions
+    WHERE id = 'd5505000-0000-4000-8000-000000000002'
+  ), 'the denied raw DELETE must not have taken effect';
+END;
+$$;
+
 RESET ROLE;
 
 -- ── 4. Non-member authenticated (foreign designer): refused ───────────────
@@ -282,6 +325,38 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
+END;
+$$;
+
+-- C8: a not-found id and a not-authorized (but real) id must be
+-- INDISTINGUISHABLE to the caller — same message, same errcode — or the RPC
+-- becomes an existence oracle a non-member could probe ids against.
+DO $$
+DECLARE
+  v_message_real  text;
+  v_sqlstate_real text;
+  v_message_fake  text;
+  v_sqlstate_fake text;
+BEGIN
+  BEGIN
+    PERFORM public.resolve_board_item_direction('d5505000-0000-4000-8000-000000000001');
+  EXCEPTION WHEN insufficient_privilege THEN
+    GET STACKED DIAGNOSTICS v_message_real = MESSAGE_TEXT, v_sqlstate_real = RETURNED_SQLSTATE;
+  END;
+
+  BEGIN
+    PERFORM public.resolve_board_item_direction('00000000-0000-0000-0000-000000000000');
+  EXCEPTION WHEN insufficient_privilege THEN
+    GET STACKED DIAGNOSTICS v_message_fake = MESSAGE_TEXT, v_sqlstate_fake = RETURNED_SQLSTATE;
+  END;
+
+  ASSERT v_message_real IS NOT NULL AND v_message_fake IS NOT NULL,
+    'both calls must raise (not silently succeed)';
+  ASSERT v_message_real = v_message_fake,
+    format('a real-but-unauthorized id and a nonexistent id must raise the SAME message: %L vs %L',
+      v_message_real, v_message_fake);
+  ASSERT v_sqlstate_real = v_sqlstate_fake,
+    'a real-but-unauthorized id and a nonexistent id must raise the SAME errcode';
 END;
 $$;
 
@@ -354,6 +429,64 @@ END;
 $$;
 
 RESET ROLE;
+
+-- ── 5b. CASCADE + pin-undo (C2 ruling) ─────────────────────────────────────
+-- Deleting a pin CASCADE-deletes its direction thread; the room's pin-undo
+-- restores the PIN by re-inserting a proposal_board_items row (here modeled
+-- with the SAME id, which is MORE generous to "undo" than the room's real
+-- undo — it never reuses the old id at all) and the thread does NOT come
+-- back either way. See the migration header + the FK constraint comment for
+-- the ruling this proves.
+INSERT INTO public.proposal_board_items (
+  id, board_id, type, x, y, width, height, z_index, rotation, content, data
+) VALUES (
+  'd5504000-0000-4000-8000-000000000002',
+  'd5503000-0000-4000-8000-000000000001',
+  'note', 200, 200, 160, 90, 1, 0, 'Cascade probe pin', '{}'::jsonb
+);
+
+INSERT INTO public.board_item_directions (id, board_item_id, author_id, body)
+VALUES (
+  'd5505000-0000-4000-8000-000000000006',
+  'd5504000-0000-4000-8000-000000000002',
+  'd5500000-0000-4000-8000-000000000001',
+  'Direction on the soon-to-be-deleted pin'
+);
+
+DELETE FROM public.proposal_board_items
+ WHERE id = 'd5504000-0000-4000-8000-000000000002';
+
+DO $$
+BEGIN
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.board_item_directions
+    WHERE id = 'd5505000-0000-4000-8000-000000000006'
+  ), 'deleting the pin must CASCADE-delete its direction thread';
+END;
+$$;
+
+-- "Undo": the pin comes back (even at the identical id, the most generous
+-- case) — the thread stays gone.
+INSERT INTO public.proposal_board_items (
+  id, board_id, type, x, y, width, height, z_index, rotation, content, data
+) VALUES (
+  'd5504000-0000-4000-8000-000000000002',
+  'd5503000-0000-4000-8000-000000000001',
+  'note', 200, 200, 160, 90, 1, 0, 'Cascade probe pin', '{}'::jsonb
+);
+
+DO $$
+BEGIN
+  ASSERT EXISTS (
+    SELECT 1 FROM public.proposal_board_items
+    WHERE id = 'd5504000-0000-4000-8000-000000000002'
+  ), 'undo must restore the pin itself';
+  ASSERT (
+    SELECT count(*) FROM public.board_item_directions
+    WHERE board_item_id = 'd5504000-0000-4000-8000-000000000002'
+  ) = 0, 'undo restoring the pin must NOT resurrect its direction thread (00550 ruling)';
+END;
+$$;
 
 -- ── 6. The guest-share token path cannot reach directions at all ──────────
 -- Mint an opted-in reaction share on the same board (00548/00549's own
@@ -429,5 +562,66 @@ BEGIN
   RESET ROLE;
 END;
 $$;
+
+-- ── 7. studio_boards_overview: aggregate counts, RLS-scoped, no anon ───────
+-- Replaces the first cut's unbounded PostgREST nested embed (board-paths
+-- review, 2026-09-01) with server-side aggregation. SECURITY INVOKER — RLS
+-- on proposal_boards/item_feedback/board_item_directions/document_shares
+-- still applies as the calling user.
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_direction_actor('d5500000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  v_row record;
+BEGIN
+  SELECT * INTO v_row
+  FROM public.studio_boards_overview(10) AS overview
+  WHERE overview.id = 'd5503000-0000-4000-8000-000000000001';
+
+  ASSERT FOUND, 'the lead (board owner) must see the board in the overview';
+  ASSERT v_row.owner_kind = 'project', 'a project-owned board must report owner_kind=project';
+  ASSERT v_row.owner_id = 'd5502000-0000-4000-8000-000000000001'::uuid,
+    'owner_id must be the project id for a project-owned board';
+  ASSERT v_row.owner_name = 'Direction layer project', 'owner_name must be the project name';
+  ASSERT v_row.has_active_share = true, 'the still-active opted-in share must be reported';
+  ASSERT v_row.verdict_guest_approved = 1,
+    format('the one guest approval must be counted on the guest side: got %s', v_row.verdict_guest_approved);
+  ASSERT v_row.verdict_client_approved = 0, 'no client (signed-in) verdicts exist on this board';
+  ASSERT v_row.unresolved_direction_count = 2,
+    format('both surviving direction notes are unresolved: got %s', v_row.unresolved_direction_count);
+END;
+$$;
+
+-- A non-member authenticated designer's RLS-scoped read simply omits the board.
+SELECT pg_temp.assume_direction_actor('d5500000-0000-4000-8000-000000000003');
+
+DO $$
+BEGIN
+  ASSERT (
+    SELECT count(*) FROM public.studio_boards_overview(10) AS overview
+    WHERE overview.id = 'd5503000-0000-4000-8000-000000000001'
+  ) = 0, 'a non-member must not see this board in the studio overview';
+END;
+$$;
+
+RESET ROLE;
+
+-- anon has no EXECUTE on the overview RPC at all.
+SET LOCAL ROLE anon;
+SELECT pg_temp.assume_anon();
+
+DO $$
+BEGIN
+  BEGIN
+    PERFORM public.studio_boards_overview(10);
+    RAISE EXCEPTION 'anon unexpectedly has EXECUTE on studio_boards_overview';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+END;
+$$;
+
+RESET ROLE;
 
 ROLLBACK;

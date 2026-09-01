@@ -33760,6 +33760,26 @@ export type Database = {
         Returns: Json
       }
       stripe_recon_cursor_epoch: { Args: never; Returns: number }
+      studio_boards_overview: {
+        Args: { p_limit?: number }
+        Returns: {
+          cover_image_url: string
+          has_active_share: boolean
+          id: string
+          name: string
+          owner_id: string
+          owner_kind: string
+          owner_name: string
+          unresolved_direction_count: number
+          updated_at: string
+          verdict_client_approved: number
+          verdict_client_comment: number
+          verdict_client_rejected: number
+          verdict_guest_approved: number
+          verdict_guest_comment: number
+          verdict_guest_rejected: number
+        }[]
+      }
       submit_board_share_reaction: {
         Args: {
           p_board_item_id: string
