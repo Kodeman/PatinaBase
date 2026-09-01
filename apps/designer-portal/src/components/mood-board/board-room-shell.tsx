@@ -746,37 +746,55 @@ function BoardRoomSurface({
   // commands but silently died for the view (CI-17). Window level, with the
   // same guards the edit shortcuts use — the canvas's own handler calls
   // preventDefault first, so a focused canvas never double-applies.
+  //
+  // Scoped to the room's own subtree (A2): Cmd +/-/0 is the browser's page
+  // zoom, a primary low-vision affordance. Swallowing it for the whole route
+  // — dialogs, header, anything portalled outside the room — would take that
+  // away. Only a keystroke aimed INSIDE the room is ours.
+  const resetZoom = useCallback(() => {
+    const rect = workspaceRef.current?.getBoundingClientRect();
+    api.canvasProps?.onViewChange?.(
+      zoomBoardViewAtPoint(
+        api.view,
+        { x: (rect?.width ?? 800) / 2, y: (rect?.height ?? 600) / 2 },
+        1,
+      ),
+      'reset',
+    );
+  }, [api]);
+  // Held in a ref so the window listener registers once instead of on every
+  // render (A14).
+  const viewShortcutsRef = useRef({ fit, zoomBy, resetZoom });
+  viewShortcutsRef.current = { fit, zoomBy, resetZoom };
   useEffect(() => {
     const handleViewKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || isTextEntryTarget(event.target)) return;
+      const root = rootRef.current;
+      const target = event.target;
+      if (!root || !(target instanceof Node) || !root.contains(target)) return;
+      // No view change while a pointer gesture is in flight — zoom or fit
+      // re-anchors the frame the gesture was measured against. Bare '1'
+      // needed this as much as the mod+ combos did (A3).
+      if (gestureActiveRef.current) return;
       const mod = event.metaKey || event.ctrlKey;
-      if (mod && gestureActiveRef.current) return;
       if (!mod && event.key === '1') {
         event.preventDefault();
-        fit();
+        viewShortcutsRef.current.fit();
         return;
       }
       if (mod && event.key === '0') {
         event.preventDefault();
-        const rect = workspaceRef.current?.getBoundingClientRect();
-        api.canvasProps?.onViewChange?.(
-          zoomBoardViewAtPoint(
-            api.view,
-            { x: (rect?.width ?? 800) / 2, y: (rect?.height ?? 600) / 2 },
-            1,
-          ),
-          'reset',
-        );
+        viewShortcutsRef.current.resetZoom();
         return;
       }
       if (mod && (event.key === '+' || event.key === '=' || event.key === '-')) {
         event.preventDefault();
-        zoomBy(event.key === '-' ? -0.1 : 0.1);
+        viewShortcutsRef.current.zoomBy(event.key === '-' ? -0.1 : 0.1);
       }
     };
     window.addEventListener('keydown', handleViewKeyDown);
     return () => window.removeEventListener('keydown', handleViewKeyDown);
-  }, [api, fit, zoomBy]);
+  }, []);
 
   useEffect(() => {
     const guard = (items: readonly EditableMoodBoardItem[]) => {
@@ -1217,7 +1235,7 @@ function BoardRoomSurface({
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {api.mode === 'edit' && !railCollapsed && (
-          <aside className="flex max-h-48 w-full shrink-0 flex-col border-b border-[var(--border-default)] bg-[var(--bg-surface)] md:max-h-none md:w-[264px] md:border-b-0 md:border-r">
+          <aside aria-label="Add to board" className="flex max-h-48 w-full shrink-0 flex-col border-b border-[var(--border-default)] bg-[var(--bg-surface)] md:max-h-none md:w-[264px] md:border-b-0 md:border-r">
             <BoardAddRail
               owner={owner}
               boardId={state.boardId}
@@ -1347,23 +1365,32 @@ function BoardRoomSurface({
         </div>
       </div>
 
-      {/* The room's ONE live region — the canvas routes its announcements
-          here rather than rendering a second one (CI-14). It also carries the
-          exit guard, and shows itself when it does: the "press again" prompt
-          was previously audible to a screen reader and invisible to everyone
-          else (CI-20). */}
+      {/* Persistence status keeps its OWN region. Sharing one with the
+          announcements meant a routed canvas announcement — which fires on
+          every click — permanently masked "Saving"/"Saved" behind it (A4).
+          This one is derived from state, so it clears itself. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {api.persistenceState === 'saving' || api.persistenceState === 'dirty'
+          ? 'Saving board changes'
+          : api.persistenceState === 'saved'
+            ? 'Board changes saved'
+            : ''}
+      </div>
+
+      {/* The room's ONE announcement region — the canvas routes its own here
+          rather than rendering a second one that talks over it (CI-14). It
+          also carries the exit guard, and shows itself when it does: the
+          "press again" prompt used to be audible to a screen reader and
+          invisible to everyone else (CI-20). */}
       <div
         aria-live="polite"
+        aria-atomic="true"
         data-testid="board-room-live-region"
         className={api.exitPromptArmed
           ? 'pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-[var(--border-subtle,#DED6C9)] bg-[var(--bg-raised,#FFFDF9)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]'
           : 'sr-only'}
       >
-        {api.announcement || (api.persistenceState === 'saving' || api.persistenceState === 'dirty'
-          ? 'Saving board changes'
-          : api.persistenceState === 'saved'
-            ? 'Board changes saved'
-            : '')}
+        {api.announcement}
       </div>
 
       <BoardShareDialog

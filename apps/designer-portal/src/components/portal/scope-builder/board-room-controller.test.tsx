@@ -1174,6 +1174,51 @@ describe('BoardRoomController binding', () => {
     expect(screen.getByTestId('exit-armed')).toHaveTextContent('false');
   });
 
+  it('keeps the exit chip armed while other announcements come and go (A5)', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return (
+            <>
+              <span data-testid="armed">{String(value.exitPromptArmed)}</span>
+              <span data-testid="said">{value.announcement}</span>
+            </>
+          );
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('armed')).toHaveTextContent('true');
+
+    // Anything else speaking must not silently disarm the guard — the old
+    // string-equality derivation hid the chip here while Escape stayed live.
+    act(() => api!.announce('1 item selected'));
+    expect(screen.getByTestId('said')).toHaveTextContent('1 item selected');
+    expect(screen.getByTestId('armed')).toHaveTextContent('true');
+  });
+
+  it('retires a stale announcement so it cannot sit in the live region (A4)', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="stale">{value.announcement}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    act(() => api!.announce('Moved 2 items 10 pixels'));
+    expect(screen.getByTestId('stale')).toHaveTextContent('Moved 2 items 10 pixels');
+    act(() => { jest.advanceTimersByTime(5_100); });
+    expect(screen.getByTestId('stale')).toBeEmptyDOMElement();
+  });
+
   it('announces board changes in human copy, not command-engine vocabulary (CI-14)', async () => {
     let api: BoardRoomControllerApi | null = null;
     render(

@@ -613,12 +613,11 @@ test.describe("MoodBoard GA browser acceptance", () => {
   }) => {
     await openBoard(page);
     await page.getByRole("tab", { name: "palettes", exact: true }).click();
-    // The rail source is a real <button draggable>; a board pin is a
-    // div[role=button]. Since a dropped pin now announces its own name too
-    // (CI-13), an unscoped /GA rail palette/ would match both.
+    // Scoped to the rail's landmark: a dropped pin announces its own name
+    // now (CI-13), so an unscoped /GA rail palette/ matches the pin too.
     const source = page
-      .locator('button[draggable="true"]')
-      .filter({ hasText: "GA rail palette" });
+      .getByRole("complementary", { name: "Add to board" })
+      .getByRole("button", { name: /GA rail palette/i });
     await expect(source).toBeVisible();
     await expect(source).toHaveAttribute("draggable", "true");
     const application = page.getByRole("application", {
@@ -1016,12 +1015,11 @@ test.describe("MoodBoard GA browser acceptance", () => {
     const assertNoNavigation = armNavigationSentinel(page);
 
     await page.getByRole("tab", { name: "palettes", exact: true }).click();
-    // The rail source is a real <button draggable>; a board pin is a
-    // div[role=button]. Since a dropped pin now announces its own name too
-    // (CI-13), an unscoped /GA rail palette/ would match both.
+    // Scoped to the rail's landmark: a dropped pin announces its own name
+    // now (CI-13), so an unscoped /GA rail palette/ matches the pin too.
     const source = page
-      .locator('button[draggable="true"]')
-      .filter({ hasText: "GA rail palette" });
+      .getByRole("complementary", { name: "Add to board" })
+      .getByRole("button", { name: /GA rail palette/i });
     await expect(source).toBeVisible();
     const header = page.locator("header");
     const headerBox = await header.boundingBox();
@@ -1312,6 +1310,21 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await expect(page.getByText("110%", { exact: true })).toBeVisible();
 
     await page.keyboard.press("Meta+0");
+    await expect(page.getByText("100%", { exact: true })).toBeVisible();
+
+    // Scoped to the room's subtree: a Cmd+= aimed outside it stays the
+    // browser's own page zoom, which the room must never swallow (A2).
+    const swallowedOutside = await page.evaluate(() => {
+      const event = new KeyboardEvent("keydown", {
+        key: "=",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      document.body.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(swallowedOutside).toBe(false);
     await expect(page.getByText("100%", { exact: true })).toBeVisible();
   });
 });

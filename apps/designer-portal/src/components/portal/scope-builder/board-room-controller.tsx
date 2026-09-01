@@ -643,6 +643,9 @@ const BOARD_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 /** Window in which a second Escape means "leave" (supersedes PRD R1.3.1). */
 const BOARD_ROOM_EXIT_CONFIRM_MS = 1_500;
 export const BOARD_ROOM_EXIT_CONFIRM_MESSAGE = 'Press Escape again to leave the board';
+/** How long a spoken announcement stays in the live region before it is
+ *  retired as stale. */
+const BOARD_ROOM_ANNOUNCEMENT_TTL_MS = 5_000;
 
 /**
  * A screen-reader user hears what happened to their board, not what the
@@ -776,6 +779,10 @@ export function useBoardRoomController({
   const [isExiting, setIsExiting] = useState(false);
   const lastPointerRef = useRef<BoardPoint | null>(null);
   const escapeArmedUntilRef = useRef(0);
+  // Derived from the guard itself, never from the announcement string:
+  // any other announcement (a selection, a save) would otherwise hide the
+  // chip while Escape was still armed (A5).
+  const [exitPromptArmed, setExitPromptArmed] = useState(false);
   const escapeArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSemanticGestureRef = useRef<string | null>(null);
   const transitionBarrierRef = useRef<() => Promise<void>>(async () => {});
@@ -1481,6 +1488,7 @@ export function useBoardRoomController({
           escapeArmedUntilRef.current = 0;
           if (escapeArmTimerRef.current) clearTimeout(escapeArmTimerRef.current);
           escapeArmTimerRef.current = null;
+          setExitPromptArmed(false);
           void requestExit();
         } else {
           escapeArmedUntilRef.current = Date.now() + BOARD_ROOM_EXIT_CONFIRM_MS;
@@ -1491,10 +1499,12 @@ export function useBoardRoomController({
           escapeArmTimerRef.current = setTimeout(() => {
             escapeArmTimerRef.current = null;
             escapeArmedUntilRef.current = 0;
+            setExitPromptArmed(false);
             setAnnouncement((current) => (
               current === BOARD_ROOM_EXIT_CONFIRM_MESSAGE ? '' : current
             ));
           }, BOARD_ROOM_EXIT_CONFIRM_MS);
+          setExitPromptArmed(true);
           setAnnouncement(BOARD_ROOM_EXIT_CONFIRM_MESSAGE);
         }
         return;
@@ -1580,6 +1590,15 @@ export function useBoardRoomController({
   useEffect(() => () => {
     if (escapeArmTimerRef.current) clearTimeout(escapeArmTimerRef.current);
   }, []);
+
+  // The live region holds only the newest thing that happened; stale text
+  // lingering there is what let an announcement mask everything behind it
+  // (A4). Longer than the Escape window, which retires its own prompt first.
+  useEffect(() => {
+    if (!announcement) return;
+    const timer = setTimeout(() => setAnnouncement(''), BOARD_ROOM_ANNOUNCEMENT_TTL_MS);
+    return () => clearTimeout(timer);
+  }, [announcement]);
 
   const state = history?.present ?? null;
   const canvasProps = useMemo<BoardRoomCanvasProps | null>(() => state ? {
@@ -1760,7 +1779,7 @@ export function useBoardRoomController({
     persistenceError: effectiveError,
     announcement,
     announce: setAnnouncement,
-    exitPromptArmed: announcement === BOARD_ROOM_EXIT_CONFIRM_MESSAGE,
+    exitPromptArmed,
     canUndo: !!history?.past.length,
     canRedo: !!history?.future.length,
     canvasProps,
