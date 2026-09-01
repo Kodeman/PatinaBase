@@ -185,12 +185,12 @@ BEGIN
 
   ASSERT has_function_privilege(
     'authenticated',
-    'public.create_board_share(uuid,text,timestamp with time zone)',
+    'public.create_board_share(uuid,text,timestamp with time zone,boolean)',
     'EXECUTE'
   ), 'authenticated must be able to mint board shares';
   ASSERT NOT has_function_privilege(
     'anon',
-    'public.create_board_share(uuid,text,timestamp with time zone)',
+    'public.create_board_share(uuid,text,timestamp with time zone,boolean)',
     'EXECUTE'
   ), 'anon must not mint board shares';
 
@@ -327,6 +327,10 @@ BEGIN
     'a0000000-0000-0000-0000-000000000003'
   );
 
+  -- Minting as `authenticated` keeps the caller out of
+  -- guard_document_share_board_payload's postgres-superuser bypass, so the
+  -- edition-mint ceremony this file exists to police actually runs.
+  SET LOCAL ROLE authenticated;
   SELECT share.id, share.token
   INTO v_board_share_id, v_board_token
   FROM public.create_board_share(
@@ -334,6 +338,7 @@ BEGIN
     'Board guest link',
     now() + interval '1 day'
   ) AS share;
+  RESET ROLE;
 
   ASSERT length(v_board_token) = 64
      AND v_board_token ~ '^[0-9a-f]{64}$',
@@ -417,6 +422,7 @@ BEGIN
   PERFORM pg_temp.assume_mood_board_actor(
     'a0000000-0000-0000-0000-000000000005'
   );
+  SET LOCAL ROLE authenticated;
   BEGIN
     PERFORM public.create_board_share(
       'c4061000-0000-4000-8000-000000000002',
@@ -427,10 +433,12 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
+  RESET ROLE;
 
   PERFORM pg_temp.assume_mood_board_actor(
     'a0000000-0000-0000-0000-000000000003'
   );
+  SET LOCAL ROLE authenticated;
   SELECT share.id, share.token
   INTO v_project_board_share_id, v_project_board_token
   FROM public.create_board_share(
@@ -438,6 +446,7 @@ BEGIN
     'Project board guest link',
     now() + interval '1 day'
   ) AS share;
+  RESET ROLE;
 
   ASSERT EXISTS (
     SELECT 1

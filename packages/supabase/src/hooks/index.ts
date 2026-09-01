@@ -1485,6 +1485,8 @@ export {
 } from "./board-verdicts";
 export type {
   BoardVerdictCounts,
+  BoardVerdictBreakdown,
+  BoardVerdictSource,
   BoardVerdictProjection,
   BoardItemVerdictProjection,
 } from "./board-verdicts";
@@ -1668,6 +1670,7 @@ export {
   useProposalFeedback,
   useClientProposalFeedback,
   useBoardFeedback,
+  useBoardPinFeedback,
   useClientBoardFeedback,
   useItemFeedbackThread,
   useSubmitVerdict,

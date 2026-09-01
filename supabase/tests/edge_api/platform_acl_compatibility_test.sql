@@ -378,7 +378,7 @@ BEGIN
       ('public.accept_workspace_invitation(text)', 'authenticated'),
       ('public.aesthete_search(text,jsonb)', 'authenticated'),
       (
-        'public.create_board_share(uuid,text,timestamp with time zone)',
+        'public.create_board_share(uuid,text,timestamp with time zone,boolean)',
         'authenticated'
       ),
       ('public.create_direct_order(uuid,integer)', 'authenticated'),

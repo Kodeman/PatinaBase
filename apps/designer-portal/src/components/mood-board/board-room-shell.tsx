@@ -22,7 +22,7 @@ import type { BoardOwnerRef, BoardPoint, EditableMoodBoardItem } from '@patina/t
 import {
   useAddProposalItem,
   useBoard,
-  useBoardFeedback,
+  useBoardPinFeedback,
   useApplyBoardRoomState,
   usePlaceProductInProjectV2,
   useProject,
@@ -118,14 +118,19 @@ function latestFeedback(rows: readonly ItemFeedback[]): Map<string, ItemFeedback
 function VerdictBadge({ feedback }: { feedback: ItemFeedback | undefined }) {
   const chip = verdictChipSpec(feedback?.verdict, feedback?.resolved_at);
   if (!chip) return null;
+  const fromGuest = Boolean(feedback?.guest_share_id);
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em] shadow-sm"
       style={{ color: chip.color }}
       data-board-verdict={feedback?.verdict}
+      data-verdict-source={fromGuest ? 'guest' : 'client'}
     >
       <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
       {chip.label}
+      {fromGuest && (
+        <span className="text-[var(--text-muted)]">· guest</span>
+      )}
     </span>
   );
 }
@@ -325,7 +330,7 @@ function BoardRoomSurface({
     boardQuery.data?.cover_review_media_asset_id, owner.kind]);
   const scheduleQuery = useProposalScheduleItems(owner.kind === 'proposal' ? owner.id : undefined);
   const addScheduleItem = useAddProposalItem();
-  const feedbackQuery = useBoardFeedback(owner.kind === 'proposal' ? owner.id : undefined);
+  const feedbackQuery = useBoardPinFeedback(api.state?.boardId);
   const feedback = feedbackQuery.data ?? [];
   const feedbackByItem = useMemo(() => latestFeedback(feedback), [feedback]);
   const openedRef = useRef(false);
@@ -631,7 +636,10 @@ function BoardRoomSurface({
 
   useEffect(() => {
     const guard = (items: readonly EditableMoodBoardItem[]) => {
-      if (owner.kind === 'proposal' && !feedbackQuery.isSuccess) {
+      // Was proposal-owners-only. A project board's pins can now carry guest
+      // link reactions, so deleting them destroys real client feedback there
+      // too — the guard has to wait for the feed on both owner kinds.
+      if (!feedbackQuery.isSuccess) {
         setSurfaceError(FEEDBACK_UNAVAILABLE_MESSAGE);
         void feedbackQuery.refetch();
         return false;
@@ -649,7 +657,7 @@ function BoardRoomSurface({
     return () => {
       if (deleteGuardRef.current === guard) deleteGuardRef.current = null;
     };
-  }, [deleteGuardRef, feedback, feedbackQuery, owner.kind]);
+  }, [deleteGuardRef, feedback, feedbackQuery]);
 
   useEffect(() => {
     if (feedbackQuery.isSuccess) {

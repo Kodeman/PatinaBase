@@ -84,9 +84,26 @@ describe('board document shares', () => {
       p_board_id: 'board-1',
       p_label: 'Client view',
       p_expires_at: null,
+      p_reactions_enabled: false,
     });
     mutation.onSuccess(result, { boardId: 'board-1' });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['board-shares', 'board-1'] });
+  });
+
+  it('mints a reaction-capable link only when the caller asked for one', async () => {
+    rpc.mockResolvedValue({ data: [{ id: 'share-2', token: 'raw-once' }], error: null });
+    const mutation = useCreateBoardShare() as unknown as {
+      mutationFn: (input: {
+        boardId: string;
+        reactionsEnabled: boolean;
+      }) => Promise<unknown>;
+    };
+
+    await mutation.mutationFn({ boardId: 'board-1', reactionsEnabled: true });
+    expect(rpc).toHaveBeenCalledWith(
+      'create_board_share',
+      expect.objectContaining({ p_reactions_enabled: true }),
+    );
   });
 
   it('revokes through the shared RPC and refreshes the board list', async () => {

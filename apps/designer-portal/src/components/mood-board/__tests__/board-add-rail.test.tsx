@@ -11,6 +11,7 @@ import {
 } from '../board-add-rail';
 
 const placeProduct = jest.fn();
+const mockPinFeedback: { rows: unknown[] } = { rows: [] };
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({
@@ -21,7 +22,7 @@ jest.mock('@patina/supabase', () => ({
       }),
     }),
   }),
-  useBoardFeedback: () => ({ data: [] }),
+  useBoardPinFeedback: () => ({ data: mockPinFeedback.rows, isLoading: false }),
   usePalettes: () => ({ data: [], isLoading: false }),
   useProposal: () => ({ data: undefined, isLoading: false }),
   useProposalCaptures: () => ({
@@ -217,5 +218,47 @@ describe('BoardAddRail thumbnails carry no native browser drag payload', () => {
     renderRail();
     fireEvent.click(screen.getByRole('tab', { name: 'scans' }));
     expect(screen.getByAltText('')).toHaveAttribute('draggable', 'false');
+  });
+});
+
+// A project-owned board has no proposal to join through, so the rail's feed is
+// board-scoped (00549) — and a guest-link reaction has to read as a guest's.
+describe('BoardAddRail feedback tab', () => {
+  afterEach(() => {
+    mockPinFeedback.rows = [];
+  });
+
+  it('shows a board pin verdict on a project board and marks a guest one', () => {
+    mockPinFeedback.rows = [
+      {
+        id: 'feedback-1',
+        proposal_item_id: null,
+        ffe_item_id: null,
+        board_item_id: uploadedImage.id,
+        client_id: null,
+        guest_share_id: 'share-1',
+        verdict: 'approved',
+        body: null,
+        resolved_at: null,
+        resolved_by: null,
+        created_at: '2026-08-31T10:00:00.000Z',
+        updated_at: '2026-08-31T10:00:00.000Z',
+      },
+    ];
+    renderRail();
+    fireEvent.click(screen.getByRole('tab', { name: 'feedback' }));
+
+    expect(screen.getByText('Guest')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Client verdicts stay with proposal boards.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('leaves an untouched pin without a guest marker', () => {
+    renderRail();
+    fireEvent.click(screen.getByRole('tab', { name: 'feedback' }));
+
+    expect(screen.getByText('No verdict')).toBeInTheDocument();
+    expect(screen.queryByText('Guest')).not.toBeInTheDocument();
   });
 });

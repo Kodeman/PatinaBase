@@ -11,7 +11,9 @@ export interface BoardVerdictCounts {
 /** Minimal RLS-filtered feedback projection nested under a board item. */
 export interface BoardVerdictProjection {
   id: string;
-  client_id: string;
+  /** Null on a guest-link reaction, which attributes to the share instead. */
+  client_id: string | null;
+  guest_share_id?: string | null;
   verdict: string;
   created_at: string;
 }
@@ -21,8 +23,30 @@ export interface BoardItemVerdictProjection {
   verdicts?: BoardVerdictProjection[] | null;
 }
 
-export function emptyBoardVerdictCounts(): BoardVerdictCounts {
-  return { approved: 0, rejected: 0, comment: 0, total: 0 };
+/** Where a verdict came from: a signed-in client, or a guest share link. */
+export type BoardVerdictSource = 'client' | 'guest';
+
+/**
+ * The same totals, plus the client/guest split (00549). A surface that only
+ * wants "how many approvals" reads the top-level fields exactly as before;
+ * one that has to tell a link reaction from a signed-in client's verdict —
+ * because they carry different weight in a decision — reads `bySource`.
+ */
+export interface BoardVerdictBreakdown extends BoardVerdictCounts {
+  bySource: Record<BoardVerdictSource, BoardVerdictCounts>;
+}
+
+export function emptyBoardVerdictCounts(): BoardVerdictBreakdown {
+  return {
+    approved: 0,
+    rejected: 0,
+    comment: 0,
+    total: 0,
+    bySource: {
+      client: { approved: 0, rejected: 0, comment: 0, total: 0 },
+      guest: { approved: 0, rejected: 0, comment: 0, total: 0 },
+    },
+  };
 }
 
 function isVerdict(value: string): value is Verdict {
@@ -40,31 +64,52 @@ function isLaterVerdict(
   return candidate.id > current.id;
 }
 
+/** A signed-in client, or the guest link a reaction arrived on (00549). */
+function verdictAuthor(
+  feedback: BoardVerdictProjection,
+): { key: string; source: BoardVerdictSource } | null {
+  if (feedback.client_id) {
+    return { key: `client:${feedback.client_id}`, source: 'client' };
+  }
+  if (feedback.guest_share_id) {
+    return { key: `share:${feedback.guest_share_id}`, source: 'guest' };
+  }
+  return null;
+}
+
 /**
- * Count the current verdict for each client on each pin. item_feedback keeps an
+ * Count the current verdict for each author on each pin. item_feedback keeps an
  * append-only history, so counting every visible row would inflate cover
  * totals after a client changes their mind. The nested rows have already been
- * RLS-filtered by PostgREST; this fold only chooses each anchor/client's latest
+ * RLS-filtered by PostgREST; this fold only chooses each anchor/author's latest
  * entry and never broadens access.
  */
 export function summarizeBoardVerdicts(
   items: BoardItemVerdictProjection[],
-): BoardVerdictCounts {
+): BoardVerdictBreakdown {
   const counts = emptyBoardVerdictCounts();
 
   for (const item of items) {
-    const latestByClient = new Map<string, BoardVerdictProjection>();
+    const latestByAuthor = new Map<
+      string,
+      { feedback: BoardVerdictProjection; source: BoardVerdictSource }
+    >();
     for (const feedback of item.verdicts ?? []) {
       if (!isVerdict(feedback.verdict)) continue;
-      const current = latestByClient.get(feedback.client_id);
-      if (isLaterVerdict(feedback, current)) {
-        latestByClient.set(feedback.client_id, feedback);
+      const author = verdictAuthor(feedback);
+      if (!author) continue;
+      const current = latestByAuthor.get(author.key);
+      if (isLaterVerdict(feedback, current?.feedback)) {
+        latestByAuthor.set(author.key, { feedback, source: author.source });
       }
     }
 
-    for (const feedback of latestByClient.values()) {
-      counts[feedback.verdict as Verdict] += 1;
+    for (const { feedback, source } of latestByAuthor.values()) {
+      const verdict = feedback.verdict as Verdict;
+      counts[verdict] += 1;
       counts.total += 1;
+      counts.bySource[source][verdict] += 1;
+      counts.bySource[source].total += 1;
     }
   }
 

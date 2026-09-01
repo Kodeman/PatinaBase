@@ -557,7 +557,10 @@ describe('summarizeBoard', () => {
     expect(summary.status).toBe('active');
     expect(summary.cover_fallback_url).toBeNull();
     expect(summary.cover_fallback_urls).toEqual([]);
-    expect(summary.verdict_counts).toEqual({ approved: 0, rejected: 0, comment: 0, total: 0 });
+    expect(summary.verdict_counts).toMatchObject({
+      approved: 0, rejected: 0, comment: 0, total: 0,
+    });
+    expect(summary.verdict_counts.bySource.guest.total).toBe(0);
   });
 
   it('uses the active cutout for fallback covers while original_image_url marks it as applied', () => {
@@ -600,7 +603,13 @@ describe('summarizeBoard', () => {
       },
     ]);
 
-    expect(summary.verdict_counts).toEqual({ approved: 1, rejected: 0, comment: 0, total: 1 });
+    expect(summary.verdict_counts).toMatchObject({
+      approved: 1, rejected: 0, comment: 0, total: 1,
+    });
+    expect(summary.verdict_counts.bySource).toEqual({
+      client: { approved: 1, rejected: 0, comment: 0, total: 1 },
+      guest: { approved: 0, rejected: 0, comment: 0, total: 0 },
+    });
   });
 });
 

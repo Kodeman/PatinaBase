@@ -22,6 +22,8 @@ export interface DocumentShare {
   view_count: number;
   last_viewed_at: string | null;
   created_at: string;
+  /** Board links only (00549). Chosen at mint, immutable afterwards. */
+  board_reactions_enabled?: boolean;
 }
 
 export interface CreatedShare {
@@ -59,7 +61,7 @@ export function useBoardShares(boardId: string | undefined) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('document_shares')
-        .select('id, proposal_id, board_id, label, visibility, status, expires_at, view_count, last_viewed_at, created_at')
+        .select('id, proposal_id, board_id, label, visibility, status, expires_at, view_count, last_viewed_at, created_at, board_reactions_enabled')
         .eq('board_id', boardId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -103,6 +105,8 @@ export function useCreateBoardShare() {
       boardId: string;
       label?: string | null;
       expiresAt?: string | null;
+      /** Opt the link into per-pin guest reactions. Immutable after mint. */
+      reactionsEnabled?: boolean;
     }): Promise<CreatedShare> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -110,6 +114,7 @@ export function useCreateBoardShare() {
         p_board_id: input.boardId,
         p_label: input.label ?? null,
         p_expires_at: input.expiresAt ?? null,
+        p_reactions_enabled: input.reactionsEnabled ?? false,
       });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;

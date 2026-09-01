@@ -9,7 +9,7 @@ import type {
 } from '@patina/types';
 import {
   createBrowserClient,
-  useBoardFeedback,
+  useBoardPinFeedback,
   usePalettes,
   useProposal,
   useProposalCaptures,
@@ -591,17 +591,17 @@ function ProposalScansPanel({
 }
 
 function FeedbackPanel({
-  proposalId,
   boardId,
   items,
   onSelectItem,
 }: {
-  proposalId?: string;
   boardId: string;
   items: readonly EditableMoodBoardItem[];
   onSelectItem?: (itemId: string) => void;
 }) {
-  const { data: feedback = [], isLoading } = useBoardFeedback(proposalId);
+  // Board-scoped, not proposal-scoped: a project-owned board has no proposal to
+  // join through, and guest-link reactions (00549) land on exactly those.
+  const { data: feedback = [], isLoading } = useBoardPinFeedback(boardId);
   const [filter, setFilter] = useState<'all' | 'approved' | 'rejected' | 'comment' | 'none'>('all');
   const latest = useMemo(() => {
     const rows = new Map<string, ItemFeedback>();
@@ -616,9 +616,6 @@ function FeedbackPanel({
     if (filter === 'none') return !verdict;
     return verdict === filter;
   });
-  if (!proposalId) {
-    return <p className="text-[11px] text-[var(--text-muted)]">Client verdicts stay with proposal boards.</p>;
-  }
   return (
     <div className="space-y-3" data-board-feedback-filter={boardId}>
       <div className="flex flex-wrap gap-1">
@@ -652,8 +649,18 @@ function FeedbackPanel({
                   className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[4px] border border-[var(--border-default)] px-2.5 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
                 >
                   <span className="truncate text-[11px]">{label}</span>
-                  <span className="shrink-0 font-mono text-[8px] uppercase" style={{ color: chip?.color ?? 'var(--text-muted)' }}>
-                    {chip?.label ?? 'No verdict'}
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {row?.guest_share_id && (
+                      <span
+                        data-verdict-source="guest"
+                        className="rounded-full border border-[var(--border-default)] px-1.5 font-mono text-[8px] uppercase tracking-[0.04em] text-[var(--text-muted)]"
+                      >
+                        Guest
+                      </span>
+                    )}
+                    <span className="font-mono text-[8px] uppercase" style={{ color: chip?.color ?? 'var(--text-muted)' }}>
+                      {chip?.label ?? 'No verdict'}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -1099,7 +1106,6 @@ export function BoardAddRail({
 
         {tab === 'feedback' && (
           <FeedbackPanel
-            proposalId={proposalId}
             boardId={boardId}
             items={items}
             onSelectItem={onSelectItem}
