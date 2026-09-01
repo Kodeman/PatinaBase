@@ -137,14 +137,62 @@ function noticeForReceipt(
 }
 
 function errorMessage(error: unknown) {
-  if (
+  const raw =
     typeof error === 'object' &&
     error !== null &&
     'message' in error &&
     typeof error.message === 'string' &&
     error.message.trim()
+      ? error.message.toLowerCase()
+      : '';
+
+  if (raw.includes('unresolved phase blocker')) {
+    return 'This phase still has open blockers. Resolve them in Coordination, then try again.';
+  }
+  if (raw.includes('canonical successor is missing')) {
+    return 'This schedule is not connected after this phase. Choose and connect the exact next phase, then try again.';
+  }
+  if (raw.includes('cross-project handoff is unsupported')) {
+    return 'A phase here is connected to a phase in another project. Make it an independent root, then reconnect it inside this project if needed.';
+  }
+  if (raw.includes('successor is ambiguous')) {
+    return 'More than one phase is connected next. Repair the schedule so this phase has one exact successor.';
+  }
+  if (raw.includes('canonical successor chain is cyclic')) {
+    return 'The schedule contains a loop. Repair the phase connections before completing this phase.';
+  }
+  if (raw.includes('predecessor phases must be completed')) {
+    return 'An earlier phase in this schedule is still open. Complete or repair that predecessor before this handoff.';
+  }
+  if (raw.includes('successor phases must be pending')) {
+    return 'A later phase in this schedule has already started or closed. Review the phase statuses before this handoff.';
+  }
+  if (
+    raw.includes('status changed') ||
+    raw.includes('phase changed during') ||
+    raw.includes('successor changed during') ||
+    raw.includes('project pointer update failed')
   ) {
-    return error.message;
+    return 'The schedule changed while this handoff was running. Refresh it before trying again.';
+  }
+  if (raw.includes('project is not active')) {
+    return 'Only an active project can move between phases.';
+  }
+  if (
+    raw.includes('project not found or access denied') ||
+    raw.includes('phase does not belong to project')
+  ) {
+    return 'This phase is no longer available to change. Refresh the project or ask its owner for access.';
+  }
+  if (raw.includes('authenticated user') || raw.includes('jwt')) {
+    return 'Your session could not be verified. Sign in again before changing this phase.';
+  }
+  if (
+    raw.includes('failed to fetch') ||
+    raw.includes('network') ||
+    raw.includes('load failed')
+  ) {
+    return 'Patina could not reach the server. Check your connection and try again.';
   }
 
   return 'The server rejected this phase handoff. Refresh the schedule and try again.';
