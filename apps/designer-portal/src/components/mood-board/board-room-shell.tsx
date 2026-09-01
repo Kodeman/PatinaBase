@@ -140,7 +140,11 @@ function VerdictBadge({ feedback }: { feedback: ItemFeedback | undefined }) {
   const fromGuest = Boolean(feedback?.guest_share_id);
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border border-black/15 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em]"
+      // Deviation from the D4 zero-shadow reconciliation above: this badge
+      // floats over uncontrolled photo imagery, not app chrome, so a
+      // minimal shadow is kept for legibility. The zero-shadow rule applies
+      // to chrome on app surfaces (toolbar, popovers, panels), not pins.
+      className="inline-flex items-center gap-1 rounded-full border border-black/15 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em] shadow-sm"
       style={{ color: chip.color }}
       data-board-verdict={feedback?.verdict}
       data-verdict-source={fromGuest ? 'guest' : 'client'}
