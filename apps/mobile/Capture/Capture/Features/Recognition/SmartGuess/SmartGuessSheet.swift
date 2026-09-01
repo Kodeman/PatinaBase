@@ -27,8 +27,10 @@ struct SmartGuessSheet: View {
     @State private var editing: Set<String> = []
     /// Unfiltered project parties — PunchCourtResolver's input (ruling 2).
     @State private var parties: [FieldPartyRef] = []
-    @State private var pendingPunch = false
-    @State private var court: PunchCourt = .noCourt
+    /// The three verbs now live in CaptureKit so the C3 card can mount the same
+    /// menu (I-4). This screen keeps its presenter — the screenshot harness's
+    /// deep link — and renders the shared component.
+    @State private var verbMenu = FieldVerbMenu()
 
     // Working values + the original guesses (to tell a correction from an accept).
     @State private var categoryRaw = SpecimenCategory.unknown.rawValue
@@ -60,10 +62,11 @@ struct SmartGuessSheet: View {
                     onSecondary: { editAll.toggle() },
                     onPrimary: { accept() }
                 )
-                verbMenu
+                FieldVerbOverflowMenu(menu: $verbMenu, facts: verbFacts,
+                                      parties: parties, onAction: performVerb)
             }
-            punchConfirm
-            fieldWriteStatus
+            FieldVerbNotice(menu: $verbMenu, facts: verbFacts,
+                            parties: parties, onAction: performVerb)
             Spacer(minLength: 0)
         }
         .accessibilityIdentifier(CaptureScreenID.n5SmartGuess.rawValue)
@@ -75,140 +78,33 @@ struct SmartGuessSheet: View {
 
     // MARK: - The three verbs (FC-R7 · FC-R8 · ruling 1)
 
-    /// The app's first overflow menu. It sits BESIDE "Looks right", never in
-    /// place of it — accepting the guesses is still the primary act on this card.
-    private var verbMenu: some View {
-        Menu {
-            if currentSpecimen()?.marginNoteId != nil {
-                // Ruling 1: inside a placed visit the drain already filed it, so
-                // this row is state, not an action. Offering the verb here would
-                // either write a second note or do nothing, and both teach her
-                // that the menu lies.
-                Label("Filed in the Document.", systemImage: "checkmark")
-                    .labelStyle(.titleAndIcon)
-            } else {
-                Button("Make it a note in the Document") { promoteToNote() }
-            }
-            if hasProject {
-                Button("Make it a task") { makeTask() }
-                if currentSpecimen()?.punchTaskState == .written {
-                    // The lane re-opens for a deliberate second item, which is
-                    // right — but silently, so the first filing had to be
-                    // remembered rather than read. Same shape as the note
-                    // branch's landed row, above.
-                    Label(PunchCourtCopy.punchFiledMenuRow, systemImage: "checkmark")
-                        .labelStyle(.titleAndIcon)
-                }
-                Button("Make it a punch item") { beginPunchItem() }
-            } else {
-                // Both writes need a project_id. Said plainly rather than shown
-                // as a dead row. (Filing an unplaced note is FC-R6's Today flow,
-                // not this card's.)
-                Text("Put this on a project first.")
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(CaptureType.callout)
-                .foregroundStyle(CaptureColor.inkSoft)
-                .frame(width: 44, height: 44)
+    private var verbFacts: FieldVerbFacts {
+        currentSpecimen().map(FieldVerbFacts.init(specimen:))
+            ?? FieldVerbFacts(hasProject: false)
+    }
+
+    /// Survives for exactly two cases (ruling 1): a capture with no visit — the
+    /// walk-and-talk and the market-run note — and filing an unplaced note from
+    /// Today (FC-R6). Inside a placed visit the menu's filed row replaces the
+    /// verb, because the drain already did it.
+    private func performVerb(_ action: FieldVerbAction) {
+        guard let specimen = currentSpecimen() else { return }
+        switch action {
+        case .note:
+            specimen.requestMarginNote(noteID: UUID())
+            analytics.event("N5.make-note", ["id": specimen.id.uuidString])
+        case .punchTask(let owner, let partyID):
+            specimen.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
+            analytics.event("N5.make-task", ["owner": owner])
         }
-    }
-
-    @ViewBuilder
-    private var punchConfirm: some View {
-        if pendingPunch {
-            VStack(alignment: .leading, spacing: 8) {
-                // An INTENTION. The row is not written yet, and
-                // fc_dispatch_task_assignment re-reads the party's real consent
-                // when it is.
-                Text(PunchCourtCopy.intent(for: court))
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.inkSoft)
-                Button("Add") { confirmPunchItem() }
-                    .buttonStyle(RecognitionPrimaryButtonStyle())
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    @ViewBuilder
-    private var fieldWriteStatus: some View {
-        switch currentSpecimen()?.punchTaskState {
-        case .refused:
-            // Reports only. The degrade write already happened on the drain
-            // (ruling 3), because this card may never be on screen when the
-            // refusal arrives.
-            statusLine(PunchCourtCopy.refusedTask)
-        case .written:
-            statusLine(PunchCourtCopy.filed(for: filedCourt))
-        default:
-            EmptyView()
-        }
-    }
-
-    private func statusLine(_ text: String) -> some View {
-        Text(text)
-            .font(CaptureType.footnote)
-            .foregroundStyle(CaptureColor.inkSoft)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// The court as the WRITTEN row records it, not as this session resolved it:
-    /// the card can be reopened after a relaunch, long after `court` was set.
-    private var filedCourt: PunchCourt {
-        guard let specimen = currentSpecimen(),
-              specimen.punchTaskOwnerRaw == "gc",
-              let partyID = specimen.punchTaskPartyId,
-              let party = parties.first(where: { $0.id == partyID })
-        else { return .noCourt }
-        return .reachable(party)
-    }
-
-    private var hasProject: Bool {
-        currentSpecimen()?.venue?.projectId?.isEmpty == false
+        try? store.save()
+        enqueue(specimen.id)
     }
 
     private func loadParties() async {
         guard let projectID = currentSpecimen()?.venue?.projectId,
               !projectID.isEmpty else { return }
         parties = (try? await siteRequests.fieldParties(projectID: projectID)) ?? []
-    }
-
-    /// Survives for exactly two cases (ruling 1): a capture with no visit — the
-    /// walk-and-talk and the market-run note — and filing an unplaced note from
-    /// Today (FC-R6). Inside a placed visit the branch above hides it, because
-    /// the drain already did it.
-    private func promoteToNote() {
-        guard let specimen = currentSpecimen() else { return }
-        specimen.requestMarginNote(noteID: UUID())
-        try? store.save()
-        analytics.event("N5.make-note", ["id": specimen.id.uuidString])
-        enqueue(specimen.id)
-    }
-
-    private func makeTask() { requestPunch(owner: "designer", partyID: nil) }
-
-    private func beginPunchItem() {
-        court = PunchCourtResolver.resolve(parties: parties)
-        pendingPunch = true
-    }
-
-    private func confirmPunchItem() {
-        pendingPunch = false
-        // Ruling 2: with no reachable GC this is written as HER task — which is
-        // exactly what the intent line already told her would happen.
-        switch court {
-        case .reachable(let party): requestPunch(owner: "gc", partyID: party.id)
-        case .noCourt:              requestPunch(owner: "designer", partyID: nil)
-        }
-    }
-
-    private func requestPunch(owner: String, partyID: String?) {
-        guard let specimen = currentSpecimen() else { return }
-        specimen.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
-        try? store.save()
-        analytics.event("N5.make-task", ["owner": owner])
-        enqueue(specimen.id)
     }
 
     private func enqueue(_ id: UUID) {

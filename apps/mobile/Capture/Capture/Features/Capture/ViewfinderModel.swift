@@ -23,6 +23,7 @@ final class ViewfinderModel {
     private let companion: FieldCompanionController
     private let sessionContext: CaptureSessionContextStore
     private let smartGuess: any SmartGuessService
+    private let siteRequests: any SiteRequestService
     private let voice: any VoiceNoteService
     private let featureFlags: CaptureFeatureFlags
     /// The learned filing places a suggestion is computed against, on device.
@@ -72,6 +73,8 @@ final class ViewfinderModel {
         guard let draft = cardSpecimen,
               FieldInHandPlacement.adopt(visitState, into: draft) else { return }
         try? store.save()
+        // The card just gained a project, so the punch verb just gained a court.
+        Task { await loadCardParties() }
     }
 
     func refreshVisit(now: Date = Date()) {
@@ -126,6 +129,7 @@ final class ViewfinderModel {
         self.session = container.session
         self.companion = container.companion
         self.smartGuess = container.smartGuess
+        self.siteRequests = container.siteRequests
         self.featureFlags = container.featureFlags
         self.projectCache = container.projectCache
         self.voice = SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
@@ -342,6 +346,7 @@ final class ViewfinderModel {
         switch SpecimenCapturePolicy.nextStep(for: mode) {
         case .quickConfirm:
             cardSpecimen = currentDraft
+            await loadCardParties()
         case .tagOCR:
             coordinator.present(.ocr(currentDraft.id))
         case .codeScan:
@@ -452,6 +457,50 @@ final class ViewfinderModel {
         endCardNote()
         cardSpecimen = nil
         CaptureHaptics.selection()
+    }
+
+    // MARK: C3 field verbs (I-4)
+
+    /// Unfiltered project parties — `PunchCourtResolver`'s input (ruling 2).
+    /// Empty while the fetch is in flight, which the resolver reads as no
+    /// court: the same window N5's own `.task` load has.
+    private(set) var cardParties: [FieldPartyRef] = []
+
+    func loadCardParties() async {
+        cardParties = []
+        guard let projectID = cardSpecimen?.venue?.projectId,
+              !projectID.isEmpty else { return }
+        let loaded = (try? await siteRequests.fieldParties(projectID: projectID)) ?? []
+        guard cardSpecimen?.venue?.projectId == projectID else { return }
+        cardParties = loaded
+    }
+
+    /// Mints the lane on the specimen's own request accessor and saves. The
+    /// wave-4 write path is untouched.
+    ///
+    /// The card's capture is usually still a DRAFT, and both rows carry
+    /// `field_capture_id` — an FK to a `field_captures` row that does not exist
+    /// until Save commits it. So an enqueue here would stamp `.queued` on a
+    /// capture she has not saved and upload it behind her back, to no benefit:
+    /// `FieldWriteGate.fieldCaptureID` would return nil and the lane would wait
+    /// anyway. The lane rides the capture's own commit instead — `saveFromCard`
+    /// → `route` → drain → `performFieldWritesIfNeeded` — and an already
+    /// committed capture is enqueued exactly as N5 enqueues it.
+    func performVerb(_ action: FieldVerbAction) {
+        guard let specimen = cardSpecimen else { return }
+        switch action {
+        case .note:
+            specimen.requestMarginNote(noteID: UUID())
+            analytics.event("C3.make-note", ["id": specimen.id.uuidString])
+        case .punchTask(let owner, let partyID):
+            specimen.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
+            analytics.event("C3.make-task", ["owner": owner])
+        }
+        try? store.save()
+        CaptureHaptics.selection()
+        guard specimen.hasConfirmedCaptureReceipt else { return }
+        let id = specimen.id
+        Task { await sync.enqueue(id) }
     }
 
     /// The C3 card's one tap to the only project picker in the app. S1 is

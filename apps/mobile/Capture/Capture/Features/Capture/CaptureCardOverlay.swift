@@ -8,6 +8,11 @@
 //  Add detail opens the full sheet (C5);
 //  swipe down keeps shooting. This is a transient overlay INSIDE the viewfinder,
 //  not a registered sheet (Team C owns CaptureSheet.smartGuessCard).
+//
+//  Wave 4 / I-4: the three field verbs mount HERE, on the overflow beside Save
+//  — the C3 card §7.5 draws is this file, and it is the card every capture
+//  shows after the shutter. They shipped on N5 (SmartGuessSheet), which no
+//  release build can open.
 
 import SwiftUI
 import CaptureKit
@@ -32,6 +37,14 @@ struct CaptureCardOverlay: View {
     /// One source of truth for the tap, owned by ViewfinderScreen so the SAME
     /// value the chip sets is the one the model's second gate is handed.
     @Binding var affirmed: Bool
+    /// The three verbs (I-4). Unfiltered project parties — PunchCourtResolver's
+    /// input (ruling 2); empty until the card's project resolves, which the
+    /// resolver reads as no court rather than as an error.
+    let verbParties: [FieldPartyRef]
+    /// Held by ViewfinderScreen for `affirmed`'s reason: a fresh card is a
+    /// fresh confirm step, and this view's identity outlives the specimen's.
+    @Binding var verbMenu: FieldVerbMenu
+    let onVerb: (FieldVerbAction) -> Void
 
     @State private var dragOffset: CGFloat = 0
 
@@ -103,6 +116,11 @@ struct CaptureCardOverlay: View {
 
             micRow
 
+            FieldVerbNotice(menu: $verbMenu, facts: verbFacts,
+                            parties: verbParties, onAction: onVerb)
+
+            // §7.5 draws Save and Add detail as the card's bottom line, so the
+            // verbs join that line rather than displacing it.
             HStack(spacing: 12) {
                 Button(action: onAddDetail) {
                     Text("Add detail")
@@ -120,6 +138,8 @@ struct CaptureCardOverlay: View {
                         .padding(.vertical, 13)
                         .background(CaptureColor.verdigris, in: RoundedRectangle(cornerRadius: 12))
                 }
+                FieldVerbOverflowMenu(menu: $verbMenu, facts: verbFacts,
+                                      parties: verbParties, onAction: onVerb)
             }
         }
         .padding(18)
@@ -173,6 +193,8 @@ struct CaptureCardOverlay: View {
             }
         }
     }
+
+    private var verbFacts: FieldVerbFacts { FieldVerbFacts(specimen: specimen) }
 
     private var isBlocked: Bool {
         FieldAffirmationPolicy.recordingIsBlocked(noteSetting: noteSetting,
