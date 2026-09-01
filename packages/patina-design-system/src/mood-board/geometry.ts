@@ -720,6 +720,68 @@ export function distributeBoardItems(
   return distributeGaps(selected, 'y')
 }
 
+export interface BoardCascadePlacementOptions {
+  /** Board-space distance between cascade steps on each axis. */
+  step?: number
+  /** How close two points must be to count as the same occupied slot. */
+  tolerance?: number
+  maxAttempts?: number
+  /**
+   * Rects a candidate slot must not fall inside — e.g. section-band bounds
+   * (label included, since a band's derived bounds already pad for it), so
+   * a click-add never lands under a band.
+   */
+  avoidRects?: readonly BoardRect[]
+}
+
+function pointInBoardRect(point: BoardPoint, rect: BoardRect): boolean {
+  return (
+    point.x >= rect.x &&
+    point.x <= rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y <= rect.y + rect.height
+  )
+}
+
+/**
+ * Walks a diagonal cascade from `basePoint` — (step, step), (2*step, 2*step),
+ * … — and returns the first point that is neither already occupied nor
+ * inside an avoided rect. Click-add (note, product, palette, scan, project
+ * selection, single uploads) shares one base anchor; without this, every
+ * add would land on the exact same board point and stack invisibly (CI-11).
+ * Exhausting `maxAttempts` (default 500) falls back to the final unchecked
+ * cascade point rather than looping forever.
+ */
+export function findBoardCascadePlacement(
+  basePoint: BoardPoint,
+  occupied: readonly BoardPoint[],
+  options: BoardCascadePlacementOptions = {},
+): BoardPoint {
+  const step = options.step ?? 24
+  const tolerance = options.tolerance ?? 4
+  const maxAttempts = options.maxAttempts ?? 500
+  const avoidRects = options.avoidRects ?? []
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const candidate = {
+      x: basePoint.x + step * attempt,
+      y: basePoint.y + step * attempt,
+    }
+    const collidesWithItem = occupied.some(
+      (point) =>
+        Math.abs(point.x - candidate.x) <= tolerance &&
+        Math.abs(point.y - candidate.y) <= tolerance,
+    )
+    const collidesWithBand = avoidRects.some((rect) =>
+      pointInBoardRect(candidate, rect),
+    )
+    if (!collidesWithItem && !collidesWithBand) return candidate
+  }
+  return {
+    x: basePoint.x + step * maxAttempts,
+    y: basePoint.y + step * maxAttempts,
+  }
+}
+
 export function computeBoardAutoGrow(
   geometry: BoardGeometrySnapshot,
   margin = MOOD_BOARD_CANVAS_GROW_MARGIN,

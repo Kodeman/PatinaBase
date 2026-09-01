@@ -4,6 +4,7 @@ import {
   computeBoardAutoGrow,
   distributeBoardItems,
   findBoardAlignmentGuides,
+  findBoardCascadePlacement,
   findBoardSmartGuides,
   fitBoardGeometry,
   marqueeIntersections,
@@ -213,5 +214,72 @@ describe('canvas auto-grow', () => {
     // integer columns and apply_board_room_state rejects anything else.
     expect(Number.isInteger(growth.canvas.width)).toBe(true)
     expect(Number.isInteger(growth.canvas.height)).toBe(true)
+  })
+})
+
+describe('findBoardCascadePlacement (CI-11)', () => {
+  it('returns the base point untouched when nothing occupies it', () => {
+    const point = findBoardCascadePlacement({ x: 100, y: 200 }, [])
+    expect(point).toEqual({ x: 100, y: 200 })
+  })
+
+  it('steps by (24, 24) past every occupied slot until a free one is found', () => {
+    const base = { x: 100, y: 200 }
+    const occupied = [
+      { x: 100, y: 200 },
+      { x: 124, y: 224 },
+      { x: 148, y: 248 },
+    ]
+    const point = findBoardCascadePlacement(base, occupied)
+    expect(point).toEqual({ x: 172, y: 272 })
+  })
+
+  it('is insensitive to sub-pixel drift within tolerance, so re-adding near a prior slot still cascades', () => {
+    const base = { x: 100, y: 200 }
+    const occupied = [{ x: 100.5, y: 199.7 }]
+    const point = findBoardCascadePlacement(base, occupied)
+    expect(point).toEqual({ x: 124, y: 224 })
+  })
+
+  it('honors a custom step and tolerance', () => {
+    const base = { x: 0, y: 0 }
+    const occupied = [{ x: 0, y: 0 }]
+    const point = findBoardCascadePlacement(base, occupied, { step: 10 })
+    expect(point).toEqual({ x: 10, y: 10 })
+  })
+
+  it('treats avoidRects (e.g. section-band bounds, label included) as occupied, so a click-add never lands under a band', () => {
+    const base = { x: 50, y: 50 }
+    const bandRect = { x: 0, y: 0, width: 200, height: 100 }
+    const point = findBoardCascadePlacement(base, [], {
+      avoidRects: [bandRect],
+    })
+    // Attempts 0-2 (50,50 / 74,74 / 98,98) all still land inside the band;
+    // attempt 3 (122,122) clears its bottom edge.
+    expect(point).toEqual({ x: 122, y: 122 })
+  })
+
+  it('combines occupied points and avoidRects — a slot must clear both', () => {
+    const base = { x: 0, y: 0 }
+    const bandRect = { x: 0, y: 0, width: 30, height: 30 }
+    const occupied = [{ x: 48, y: 48 }]
+    const point = findBoardCascadePlacement(base, occupied, {
+      avoidRects: [bandRect],
+    })
+    // attempt 0 (0,0) is inside the band; attempt 1 (24,24) is inside the
+    // band too; attempt 2 (48,48) clears the band but hits the occupied
+    // item; attempt 3 (72,72) is the first free slot.
+    expect(point).toEqual({ x: 72, y: 72 })
+  })
+
+  it('falls back to the final cascade point rather than looping forever once maxAttempts is exhausted', () => {
+    const base = { x: 0, y: 0 }
+    const maxAttempts = 5
+    const occupied = Array.from({ length: maxAttempts }, (_, attempt) => ({
+      x: base.x + 24 * attempt,
+      y: base.y + 24 * attempt,
+    }))
+    const point = findBoardCascadePlacement(base, occupied, { maxAttempts })
+    expect(point).toEqual({ x: 24 * maxAttempts, y: 24 * maxAttempts })
   })
 })

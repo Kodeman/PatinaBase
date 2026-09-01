@@ -262,3 +262,39 @@ describe('BoardAddRail feedback tab', () => {
     expect(screen.queryByText('Guest')).not.toBeInTheDocument();
   });
 });
+
+// Cascade placement (CI-11) lives in the shared `findBoardCascadePlacement`
+// geometry helper and the shell's `nextPoint`; the rail's job is simply to
+// call the passed-in `nextPoint` fresh for every single-add click rather than
+// caching one point across clicks — otherwise every add would still stack.
+describe('BoardAddRail requests a fresh point on every click-add (CI-11)', () => {
+  it('calls nextPoint again for a second Add Note click, landing at a different point', () => {
+    const onAddItems = jest.fn();
+    let calls = 0;
+    const nextPoint = jest.fn(() => {
+      calls += 1;
+      return { x: calls * 24, y: calls * 24 };
+    });
+    render(
+      <BoardAddRail
+        owner={owner}
+        boardId="board-1"
+        items={[uploadedImage]}
+        nextPoint={nextPoint}
+        nextZ={() => 1}
+        onAddItems={onAddItems}
+      />,
+    );
+    const addNote = screen.getByRole('button', { name: '+ Note' });
+    fireEvent.click(addNote);
+    fireEvent.click(addNote);
+
+    expect(nextPoint).toHaveBeenCalledTimes(2);
+    expect(onAddItems).toHaveBeenCalledTimes(2);
+    const firstItems = onAddItems.mock.calls[0]![0] as EditableMoodBoardItem[];
+    const secondItems = onAddItems.mock.calls[1]![0] as EditableMoodBoardItem[];
+    expect(firstItems[0]!.x).toBe(24);
+    expect(secondItems[0]!.x).toBe(48);
+    expect(firstItems[0]!.x).not.toBe(secondItems[0]!.x);
+  });
+});

@@ -733,6 +733,16 @@ export function useBoardRoomController({
   const escapeArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSemanticGestureRef = useRef<string | null>(null);
   const transitionBarrierRef = useRef<() => Promise<void>>(async () => {});
+  // Mirrors the canvas's own pointer-gesture state (drag/resize/rotate/
+  // marquee/pan). A ref, not state — it doesn't need to trigger a render,
+  // only to be readable inside the window keydown handler below, which
+  // suspends mod+ edit shortcuts while a gesture is in flight (undo/
+  // duplicate/copy/etc. firing mid-drag against stale gesture state is a
+  // latent bug independent of the Ctrl/Cmd suppress-snap modifier).
+  const gestureActiveRef = useRef(false);
+  const setGestureActive = useCallback((active: boolean) => {
+    gestureActiveRef.current = active;
+  }, []);
   const mode = controlledMode ?? internalMode;
   const showNotes = controlledShowNotes ?? internalShowNotes;
 
@@ -1449,6 +1459,13 @@ export function useBoardRoomController({
         return;
       }
       if (mode !== 'edit') return;
+      // A pointer gesture (drag/resize/rotate/section-move/marquee/pan) is
+      // in flight — mod+ edit shortcuts must not fire against gesture-local
+      // state that hasn't committed yet. This also removes the collision
+      // where holding Ctrl/Cmd to suppress snap/guides during a move or
+      // resize (BoardRoomCanvas CI-09) plus an incidental keystroke would
+      // otherwise trigger undo/duplicate/copy/etc. mid-drag.
+      if (mod && gestureActiveRef.current) return;
       if (mod && key === 'z') {
         event.preventDefault();
         if (event.shiftKey) redo(); else undo();
@@ -1647,6 +1664,7 @@ export function useBoardRoomController({
         y: (event.clientY - rect.top - view.pan.y) / view.zoom,
       };
     },
+    onGestureActiveChange: setGestureActive,
     renderItem: renderBoardRoomItem,
   } : null, [
     addItems,
@@ -1662,6 +1680,7 @@ export function useBoardRoomController({
     rotateItem,
     selectedItemIds,
     commitItemsSectionMembership,
+    setGestureActive,
     setSelection,
     state,
     view,

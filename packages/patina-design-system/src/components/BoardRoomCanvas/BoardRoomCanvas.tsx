@@ -170,6 +170,13 @@ export interface BoardRoomCanvasProps extends Omit<
   onCanvasGrow?: (commit: BoardCanvasGrowCommit) => void
   onItemActivate?: (item: EditableMoodBoardItem) => void
   onContextMenuRequest?: (request: BoardContextMenuRequest) => void
+  /**
+   * Fires whenever a pointer gesture (move/resize/rotate/section-move/
+   * marquee/pan) starts or ends. A host uses this to suspend anything that
+   * shouldn't fire mid-gesture — e.g. window-level edit shortcuts that would
+   * otherwise race a held modifier key against stale gesture state.
+   */
+  onGestureActiveChange?: (active: boolean) => void
   renderItem: (item: EditableMoodBoardItem) => React.ReactNode
   showGrid?: boolean
   snapToGrid?: boolean
@@ -214,7 +221,7 @@ interface MoveGesture {
   before: BoardMoveSnapshot[]
   latest: BoardMoveSnapshot[]
   guides: BoardGuide[]
-  promotedZIndices: Array<{ id: string; zIndex: number }>
+  /** Also gates whether the gesture has cleared the arming threshold (CI-04). */
   didMove: boolean
   duplicate: boolean
   sectionBounds: Array<{ id: string; bounds: BoardRect }>
@@ -281,6 +288,11 @@ const ASPECT_LOCKED_TYPES = new Set([
 const BOARD_LONG_PRESS_MS = 500
 const BOARD_LONG_PRESS_MOVE_TOLERANCE_PX = 8
 const BOARD_LONG_PRESS_SUPPRESSION_MS = 1_000
+/** Screen-space travel a pointer must clear before a move gesture arms (CI-04). */
+const BOARD_MOVE_ARM_THRESHOLD_PX = 3
+/** Below this on-screen size, edge (non-corner) resize handles hide so they
+ * don't bury the artwork (CI-10). */
+const BOARD_EDGE_HANDLE_MIN_SCREEN_PX = 80
 
 function eventPoint(
   event: { clientX: number; clientY: number },
@@ -387,6 +399,29 @@ function resizeHandleAxes(handle: BoardResizeHandle) {
     movesTop: handle.includes('n'),
   }
 }
+
+/** Directional resize cursor per handle (CI-10); ignores item rotation. */
+function resizeHandleCursor(handle: BoardResizeHandle): string {
+  switch (handle) {
+    case 'nw':
+    case 'se':
+      return 'nwse-resize'
+    case 'ne':
+    case 'sw':
+      return 'nesw-resize'
+    case 'n':
+    case 's':
+      return 'ns-resize'
+    case 'e':
+    case 'w':
+    default:
+      return 'ew-resize'
+  }
+}
+
+/** A rotate-affordance cursor: browsers have no native "rotate" keyword. */
+const ROTATE_HANDLE_CURSOR =
+  'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'20\' viewBox=\'0 0 20 20\'%3E%3Cpath d=\'M5 10a5 5 0 1 1 1.6 3.7M5 10v4h4\' fill=\'none\' stroke=\'%23000\' stroke-width=\'1.6\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3C/svg%3E") 10 10, grab'
 
 function resizeGeometryWithSnapping(
   before: BoardResizeGeometry,
@@ -564,6 +599,7 @@ export const BoardRoomCanvas = React.forwardRef<
       onCanvasGrow,
       onItemActivate,
       onContextMenuRequest,
+      onGestureActiveChange,
       renderItem,
       showGrid = false,
       snapToGrid = false,
@@ -596,6 +632,20 @@ export const BoardRoomCanvas = React.forwardRef<
       null,
     )
     const gestureRef = React.useRef<CanvasGesture | null>(null)
+    // Every reassignment of gestureRef.current goes through here so a host
+    // (the board-room controller) can suspend window-level edit shortcuts
+    // for as long as a pointer gesture is in flight — see
+    // onGestureActiveChange. In-place mutation of the current gesture object
+    // (e.g. gesture.didMove, gesture.latest) does not call this.
+    const setGesture = React.useCallback(
+      (next: CanvasGesture | null) => {
+        const wasActive = gestureRef.current !== null
+        gestureRef.current = next
+        const isActive = next !== null
+        if (wasActive !== isActive) onGestureActiveChange?.(isActive)
+      },
+      [onGestureActiveChange],
+    )
     const longPressRef = React.useRef<{
       pointerId: number
       itemId: string
@@ -610,6 +660,16 @@ export const BoardRoomCanvas = React.forwardRef<
       () => new Set(selectedItemIds),
       [selectedItemIds],
     )
+    // Mirrors the controlled `selectedItemIds` prop so a click immediately
+    // followed by a shift-click (same tick, before the parent's echo lands)
+    // computes its "add to selection" against the truth we just requested,
+    // not a stale prop read. Root cause of the aria-pressed multi-select
+    // regression: the shift-click branch below used to read `selectedItemIds`
+    // directly, which could still be the pre-first-click value.
+    const selectedItemIdsRef = React.useRef<readonly string[]>(selectedItemIds)
+    React.useEffect(() => {
+      selectedItemIdsRef.current = selectedItemIds
+    }, [selectedItemIds])
 
     const cancelLongPress = React.useCallback((pointerId?: number) => {
       const pending = longPressRef.current
@@ -747,6 +807,7 @@ export const BoardRoomCanvas = React.forwardRef<
 
     const setSelection = React.useCallback(
       (ids: string[], reason: BoardSelectionChangeMeta['reason']) => {
+        selectedItemIdsRef.current = ids
         onSelectionChange?.(ids, { reason })
         setAnnouncement(selectionLabel(ids.length))
       },
@@ -770,7 +831,7 @@ export const BoardRoomCanvas = React.forwardRef<
         pending.timer = setTimeout(() => {
           if (longPressRef.current !== pending) return
           longPressRef.current = null
-          gestureRef.current = null
+          setGesture(null)
           const suppressUntil = Date.now() + BOARD_LONG_PRESS_SUPPRESSION_MS
           suppressClickUntilRef.current = suppressUntil
           suppressContextMenuUntilRef.current = suppressUntil
@@ -787,7 +848,7 @@ export const BoardRoomCanvas = React.forwardRef<
         }, BOARD_LONG_PRESS_MS)
         longPressRef.current = pending
       },
-      [cancelLongPress, onContextMenuRequest],
+      [cancelLongPress, onContextMenuRequest, setGesture],
     )
 
     const handleItemPointerDown = (
@@ -802,17 +863,17 @@ export const BoardRoomCanvas = React.forwardRef<
       event.currentTarget.focus()
       setFocusedItemId(itemId)
 
+      const currentSelection = selectedItemIdsRef.current
+      const isSelected = currentSelection.includes(itemId)
       let nextSelection: string[]
       if (event.shiftKey) {
-        nextSelection = selectedSet.has(itemId)
-          ? selectedItemIds.filter((id) => id !== itemId)
-          : [...selectedItemIds, itemId]
+        nextSelection = isSelected
+          ? currentSelection.filter((id) => id !== itemId)
+          : [...currentSelection, itemId]
       } else {
-        nextSelection = selectedSet.has(itemId)
-          ? [...selectedItemIds]
-          : [itemId]
+        nextSelection = isSelected ? [...currentSelection] : [itemId]
       }
-      if (nextSelection.join('|') !== selectedItemIds.join('|'))
+      if (nextSelection.join('|') !== currentSelection.join('|'))
         setSelection(nextSelection, 'item')
       startLongPress(event, itemId)
       if (event.pointerType === 'touch')
@@ -834,20 +895,16 @@ export const BoardRoomCanvas = React.forwardRef<
           x: candidate.x,
           y: candidate.y,
         }))
-      const maxZ = Math.max(0, ...items.map((candidate) => candidate.zIndex ?? 0))
-      const promotedZIndices = items
-        .filter((candidate) => movingIds.includes(candidate.id))
-        .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
-        .map((candidate, index) => ({
-          id: candidate.id,
-          zIndex: maxZ + index + 1,
-        }))
+      // Z-order is an explicit action (context menu / inspector / shortcuts)
+      // only — a move never re-stacks the dragged item(s) (CI-03). The item
+      // still renders above its siblings for the duration of the drag; see
+      // the CSS-only boost applied at render time below.
       const duplicate = event.altKey && !!onItemsAltDragged
       const leadBounds = geometry.items.find(
         (candidate) => candidate.id === itemId,
       )?.aabb
       if (!leadBounds) return
-      gestureRef.current = {
+      setGesture({
         kind: 'move',
         pointerId: event.pointerId,
         startScreen: eventPoint(event, viewport),
@@ -857,14 +914,13 @@ export const BoardRoomCanvas = React.forwardRef<
         before,
         latest: before,
         guides: [],
-        promotedZIndices,
         didMove: false,
         duplicate,
         sectionBounds: geometry.sections.map(({ id, bounds }) => ({
           id,
           bounds,
         })),
-      }
+      })
       if (duplicate) setAltDragPreview(before)
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
@@ -912,7 +968,7 @@ export const BoardRoomCanvas = React.forwardRef<
             height: selectionBounds.height,
             resolvedHeight: selectionBounds.height,
           }
-      gestureRef.current = {
+      setGesture({
         kind: 'resize',
         pointerId: event.pointerId,
         startScreen: eventPoint(event, viewport),
@@ -924,7 +980,7 @@ export const BoardRoomCanvas = React.forwardRef<
         latestBounds: boundsBefore,
         guides: [],
         preserveAspectByDefault: sources.length > 1 || ASPECT_LOCKED_TYPES.has(sources[0]!.type),
-      }
+      })
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
 
@@ -941,7 +997,7 @@ export const BoardRoomCanvas = React.forwardRef<
         .filter((item) => item.data?.section_id === sectionId)
         .map((item) => ({ id: item.id, x: item.x, y: item.y }))
       if (before.length === 0) return
-      gestureRef.current = {
+      setGesture({
         kind: 'section-move',
         pointerId: event.pointerId,
         startScreen: eventPoint(event, viewport),
@@ -949,7 +1005,7 @@ export const BoardRoomCanvas = React.forwardRef<
         itemIds: before.map((item) => item.id),
         before,
         latest: before,
-      }
+      })
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
 
@@ -967,7 +1023,7 @@ export const BoardRoomCanvas = React.forwardRef<
         activeView.pan,
         activeView.zoom,
       )
-      gestureRef.current = {
+      setGesture({
         kind: 'rotate',
         pointerId: event.pointerId,
         itemId,
@@ -978,7 +1034,7 @@ export const BoardRoomCanvas = React.forwardRef<
         ),
         before: item.rotation,
         latest: item.rotation,
-      }
+      })
       event.currentTarget.setPointerCapture?.(event.pointerId)
     }
 
@@ -992,25 +1048,25 @@ export const BoardRoomCanvas = React.forwardRef<
       const screen = eventPoint(event, viewport)
       if (spaceHeld || event.button === 1) {
         event.preventDefault()
-        gestureRef.current = {
+        setGesture({
           kind: 'pan',
           pointerId: event.pointerId,
           startScreen: screen,
           startPan: activeView.pan,
-        }
+        })
       } else if (!readOnly) {
         const logical = screenPointToBoard(
           screen,
           activeView.pan,
           activeView.zoom,
         )
-        gestureRef.current = {
+        setGesture({
           kind: 'marquee',
           pointerId: event.pointerId,
           start: logical,
           current: logical,
           additive: event.shiftKey,
-        }
+        })
         setMarquee({ ...logical, width: 0, height: 0 })
       }
       event.currentTarget.setPointerCapture?.(event.pointerId)
@@ -1057,16 +1113,31 @@ export const BoardRoomCanvas = React.forwardRef<
       }
 
       if (gesture.kind === 'move') {
+        // Screen-space travel, before the zoom division below, so the
+        // threshold reads the same physical distance at any zoom (CI-04).
+        const screenDeltaX = screen.x - gesture.startScreen.x
+        const screenDeltaY = screen.y - gesture.startScreen.y
+        if (!gesture.didMove) {
+          if (
+            Math.hypot(screenDeltaX, screenDeltaY) <=
+            BOARD_MOVE_ARM_THRESHOLD_PX
+          )
+            return
+          gesture.didMove = true
+        }
         const rawDelta = {
-          x: (screen.x - gesture.startScreen.x) / activeView.zoom,
-          y: (screen.y - gesture.startScreen.y) / activeView.zoom,
+          x: screenDeltaX / activeView.zoom,
+          y: screenDeltaY / activeView.zoom,
         }
         const leadBefore = gesture.before.find(
           (item) => item.id === gesture.leadId,
         )!
-        if (rawDelta.x !== 0 || rawDelta.y !== 0) gesture.didMove = true
+        // Alt keeps exactly one meaning on a move: duplicate. Snap and guide
+        // suppression live on Ctrl/Cmd instead, so alt-drag duplicates keep
+        // smart guides active (CI-09).
+        const suppressSnapping = event.ctrlKey || event.metaKey
         let delta = { ...rawDelta }
-        if (snapToGrid && !event.altKey) {
+        if (snapToGrid && !suppressSnapping) {
           delta = {
             x:
               Math.round((leadBefore.x + delta.x) / gridSize) * gridSize -
@@ -1077,7 +1148,7 @@ export const BoardRoomCanvas = React.forwardRef<
           }
         }
         let nextGuides: BoardGuide[] = []
-        if (showGuides && !event.altKey) {
+        if (showGuides && !suppressSnapping) {
           const guideResult = findBoardSmartGuides(
             {
               ...gesture.leadBounds,
@@ -1106,14 +1177,12 @@ export const BoardRoomCanvas = React.forwardRef<
         if (gesture.duplicate) {
           setAltDragPreview(gesture.latest)
         } else {
-          const zById = new Map(
-            gesture.promotedZIndices.map((patch) => [patch.id, patch.zIndex]),
-          )
+          // No zIndex here: a move never re-stacks the dragged item(s) (CI-03).
           setPreview(
             Object.fromEntries(
               gesture.latest.map((item) => [
                 item.id,
-                { x: item.x, y: item.y, zIndex: zById.get(item.id) },
+                { x: item.x, y: item.y },
               ]),
             ),
           )
@@ -1149,7 +1218,10 @@ export const BoardRoomCanvas = React.forwardRef<
           gesture.boundsBefore,
           gesture.handle,
           rawDelta,
-          gesture.preserveAspectByDefault && !event.shiftKey,
+          // Shift constrains aspect on ANY item type (revises AC1.13); an
+          // aspect-locked-by-default type stays locked with no gesture-time
+          // release — use the inspector's width/height fields for that (CI-08).
+          gesture.preserveAspectByDefault || event.shiftKey,
           {
             geometryItems: geometry.items,
             excludedIds: gesture.itemIds,
@@ -1158,7 +1230,9 @@ export const BoardRoomCanvas = React.forwardRef<
             gridSize,
             snapToGrid,
             showGuides,
-            suppressSnapping: event.altKey,
+            // Alt is duplicate-on-move only; snap/guide suppression lives on
+            // Ctrl/Cmd instead (CI-09).
+            suppressSnapping: event.ctrlKey || event.metaKey,
           },
         )
         if (gesture.itemIds.length === 1) {
@@ -1212,7 +1286,7 @@ export const BoardRoomCanvas = React.forwardRef<
       cancelLongPress(event.pointerId)
       const gesture = gestureRef.current
       if (!gesture || gesture.pointerId !== event.pointerId) return
-      gestureRef.current = null
+      setGesture(null)
 
       if (gesture.kind === 'marquee') {
         const box = rectFromPoints(gesture.start, gesture.current)
@@ -1220,7 +1294,7 @@ export const BoardRoomCanvas = React.forwardRef<
           items.some((item) => item.id === id),
         )
         const next = gesture.additive
-          ? Array.from(new Set([...selectedItemIds, ...hits]))
+          ? Array.from(new Set([...selectedItemIdsRef.current, ...hits]))
           : hits
         setSelection(next, 'marquee')
       }
@@ -1263,12 +1337,8 @@ export const BoardRoomCanvas = React.forwardRef<
             emitAutoGrow([...items, ...copied], 'move')
           }
         } else if (gesture.didMove) {
-          emitMovePatches(
-            patches,
-            'drag',
-            gesture.guides,
-            gesture.promotedZIndices,
-          )
+          // No z-order patches: a move never re-stacks the dragged item(s) (CI-03).
+          emitMovePatches(patches, 'drag', gesture.guides)
         }
         const nextById = new Map(patches.map((patch) => [patch.id, patch]))
         const membershipIds = gesture.duplicate && createdIds.length > 0
@@ -1411,7 +1481,7 @@ export const BoardRoomCanvas = React.forwardRef<
 
     const cancelGesture = () => {
       cancelLongPress()
-      gestureRef.current = null
+      setGesture(null)
       setPreview({})
       setAltDragPreview(null)
       setGuides([])
@@ -1651,8 +1721,20 @@ export const BoardRoomCanvas = React.forwardRef<
         )
         .map((item) => item.aabb),
     )
-    const handleSize = 20 / activeView.zoom
+    // 24px hit area (WCAG 2.2 ยง2.5.8); the painted dot stays small (CI-10).
+    const handleSize = 24 / activeView.zoom
     const handleDot = 10 / activeView.zoom
+    // CSS-only: the actively dragged item(s) render above their siblings for
+    // the duration of the gesture without committing any z-order change
+    // (CI-03) — settles back to its real stacking position on release.
+    const activeDragItemIds =
+      gestureRef.current?.kind === 'move' && !gestureRef.current.duplicate
+        ? gestureRef.current.itemIds
+        : null
+    // The alignment cluster sits at the bottom-center and is unusable mid-
+    // gesture anyway; hiding it (rather than out-z-indexing it) keeps a
+    // dragged item from painting over it.
+    const gestureInFlight = gestureRef.current !== null
 
     return (
       <div
@@ -1774,7 +1856,7 @@ export const BoardRoomCanvas = React.forwardRef<
           </div>
         )}
 
-        {showAlignmentControls && !readOnly && selectedItemIds.length >= 2 && (
+        {showAlignmentControls && !readOnly && !gestureInFlight && selectedItemIds.length >= 2 && (
           <div
             role="toolbar"
             aria-label="Board alignment"
@@ -1869,7 +1951,7 @@ export const BoardRoomCanvas = React.forwardRef<
                 data-board-item-id={item.id}
                 className={cn(
                   'absolute outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]',
-                  !readOnly && !item.locked && 'cursor-move',
+                  !readOnly && !item.locked && 'cursor-grab active:cursor-grabbing',
                   item.locked && 'cursor-default',
                 )}
                 style={{
@@ -1877,7 +1959,12 @@ export const BoardRoomCanvas = React.forwardRef<
                   top: resolved.y,
                   width: resolved.width,
                   height: resolved.height,
-                  zIndex: Math.max(0, resolved.zIndex),
+                  // A drag never re-stacks the item (CI-03); this is a
+                  // render-only boost so the piece being moved stays visible
+                  // above its siblings, and it carries no committed z patch.
+                  zIndex: activeDragItemIds?.includes(item.id)
+                    ? 9000 + Math.max(0, resolved.zIndex)
+                    : Math.max(0, resolved.zIndex),
                   transform: resolved.rotation
                     ? `rotate(${resolved.rotation}deg)`
                     : undefined,
@@ -1900,7 +1987,13 @@ export const BoardRoomCanvas = React.forwardRef<
                 {selectedSingle?.id === item.id &&
                   !item.locked &&
                   !readOnly &&
-                  RESIZE_HANDLES.map((handle) => (
+                  RESIZE_HANDLES.filter(
+                    (handle) =>
+                      handle.length > 1 ||
+                      Math.min(resolved.width, resolved.height) *
+                        activeView.zoom >=
+                        BOARD_EDGE_HANDLE_MIN_SCREEN_PX,
+                  ).map((handle) => (
                     <ResizeHandle
                       key={handle}
                       handle={handle}
@@ -1922,6 +2015,7 @@ export const BoardRoomCanvas = React.forwardRef<
                         width: handleSize,
                         height: handleSize,
                         top: -40 / activeView.zoom,
+                        cursor: ROTATE_HANDLE_CURSOR,
                       }}
                       onPointerDown={(event) =>
                         handleRotatePointerDown(event, item.id)
@@ -2001,7 +2095,16 @@ export const BoardRoomCanvas = React.forwardRef<
                   height: resizableSelectionBounds.height,
                 }}
               >
-                {RESIZE_HANDLES.map((handle) => (
+                {RESIZE_HANDLES.filter(
+                  (handle) =>
+                    handle.length > 1 ||
+                    Math.min(
+                      resizableSelectionBounds.width,
+                      resizableSelectionBounds.height,
+                    ) *
+                      activeView.zoom >=
+                      BOARD_EDGE_HANDLE_MIN_SCREEN_PX,
+                ).map((handle) => (
                   <ResizeHandle
                     key={handle}
                     handle={handle}
@@ -2220,7 +2323,12 @@ function ResizeHandle({
       type="button"
       aria-label={label ?? `Resize ${handle}`}
       className="pointer-events-auto absolute z-30 flex items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]"
-      style={{ ...positions[handle], width: size, height: size }}
+      style={{
+        ...positions[handle],
+        width: size,
+        height: size,
+        cursor: resizeHandleCursor(handle),
+      }}
       onPointerDown={onPointerDown}
     >
       <span
