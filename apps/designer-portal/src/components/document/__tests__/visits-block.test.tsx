@@ -54,21 +54,27 @@ describe('VisitsBlock', () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     const { container } = render(<VisitsBlock projectId="project-1" />);
     expect(container).toBeEmptyDOMElement();
+    // R-11 follow-up: the degraded hint belongs to a FAILED read only — an
+    // empty project rendering it would re-blur the very distinction it draws.
+    expect(screen.queryByText('Field data unavailable')).not.toBeInTheDocument();
     // FIX 2: a genuinely empty project must stay silent — only a THROWN
     // query gets the console.error, or the two are indistinguishable again.
     expect(consoleError).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
 
-  // FIX 2: FC-R10's render-nothing posture makes a broken read indistinguishable
-  // from an empty one unless the failure is surfaced somewhere a QA pass can
-  // see it. Render stays null either way — only the console tells them apart.
-  it('renders nothing on a THROWN query too, but says so to the console', () => {
+  // R-11 follow-up: FC-R10's render-nothing posture made a broken read
+  // indistinguishable from an empty one. The console line stays for a QA
+  // pass; the quiet muted hint is what lets the DESIGNER tell them apart.
+  it('renders the quiet degraded hint on a THROWN query, and says so to the console', () => {
     const queryError = new Error('PGRST201');
     visits.mockReturnValue({ data: undefined, isLoading: false, isError: true, error: queryError });
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const { container } = render(<VisitsBlock projectId="project-1" />);
-    expect(container).toBeEmptyDOMElement();
+    render(<VisitsBlock projectId="project-1" />);
+    const hint = screen.getByText('Field data unavailable');
+    // The block's own micro-label idiom — muted, mono, no alert, no toast.
+    expect(hint).toHaveAttribute('role', 'status');
+    expect(hint).toHaveClass('font-mono', 'text-[var(--text-muted)]');
     expect(consoleError).toHaveBeenCalledWith(
       '[VisitsBlock] useProjectVisits failed',
       'project-1',
@@ -77,10 +83,27 @@ describe('VisitsBlock', () => {
     consoleError.mockRestore();
   });
 
-  it('renders nothing while the read is still in flight', () => {
+  it('keeps rendering cached visits through a background refetch error', () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    visits.mockReturnValue({
+      data: [visit()],
+      isLoading: false,
+      isError: true,
+      error: new Error('refetch failed'),
+    });
+    render(<VisitsBlock projectId="project-1" />);
+    // Stale truth beats the degraded hint — the hint fires only when there
+    // is nothing to show instead.
+    expect(screen.getByText('Visits')).toBeInTheDocument();
+    expect(screen.queryByText('Field data unavailable')).not.toBeInTheDocument();
+    consoleError.mockRestore();
+  });
+
+  it('renders nothing while the read is still in flight — the hint is not a loading state', () => {
     visits.mockReturnValue({ data: undefined, isLoading: true });
     const { container } = render(<VisitsBlock projectId="project-1" />);
     expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText('Field data unavailable')).not.toBeInTheDocument();
   });
 
   it('names the block Visits and counts them', () => {

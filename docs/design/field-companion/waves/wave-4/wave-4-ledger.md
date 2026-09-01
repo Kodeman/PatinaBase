@@ -128,6 +128,21 @@ The hazard was introduced by `909ccf975`/`485be0a47` and became reachable only a
 
 **Both Supabase inserts are app-target code with no test target.** `capture-gate.sh test` runs `-scheme CaptureKit` only, so of this wave's iOS work only the pure types are covered — `FieldWriteGate`, `PunchCourtCopy`, `MarginNoteComposer`, `PunchTaskComposer`, `PunchCourtResolver`, `FieldWriteClassifier`, `VisitReviewComposer`. `SupabaseFieldWriteGateway`'s two inserts, the drain wiring, the overflow menu and V4 are proven by **nothing but the device pass**. A 646/646 suite is not evidence that a row lands.
 
+**Unchanged by FC-R23's mount (2026-09-01).** The verb *decisions* — which rows show, which are
+disabled, when the confirm is required, what each line says — moved into CaptureKit and are covered
+by `FieldVerbMenuTests` (suite **755 in 72**, from 732 in 70).
+
+⚠ **`CaptureCardConfirmUnchangedTests` does NOT pin the overlay** — nothing can, from this target.
+It exercises the CaptureKit accessors the card reads (`setValue`/`provenance`, `FieldPlacementLine`)
+and proves the *verb lanes* leave them alone. That is worth having — it is the falsifier for "the
+verbs moved what C3 was already for" — but it is a statement about `Specimen`, not about
+`CaptureCardOverlay`, and the name should not be read as more.
+
+What is still app-target and therefore **compile-gated only**: `CaptureCardOverlay`'s rendering of
+the menu and the notice, `ViewfinderScreen`'s per-card reset, and `ViewfinderModel`'s `cardParties`
+load and `performVerb`. The device pass remains the only evidence that a tap on the card puts a row
+in the database.
+
 ## Notable plan-vs-repo corrections in Tasks 11/12
 
 - **There is no `Specimen.visitID`.** Wave 3 spells a declared visit as `visitKind`, which is what `FieldCapturePayload` itself gates on. `captureSessionID` rides every draft and does **not** mean a visit was declared.
@@ -160,7 +175,63 @@ Two more capacity notes from the same batch, for whoever plans Wave 5:
 - **`.written` close records are never deleted** and accumulate for the life of the install.
 - The "byte-for-byte" backoff tests hardcode expected delays rather than asserting against `SiteRequestOutboxRecord.retryDelay`. The formulas are currently character-identical (verified by hand); an edit to either would not be caught.
 
-## 🔴 I-4 — the three verbs ship on a screen no shipping build can open. **GAP RECORDED, needs a Kody ruling.**
+## ✅ I-4 — RESOLVED 2026-09-01 by **FC-R23**: the verbs mount on the C3 card
+
+**Kody ruled candidate 1.** The three verbs mount on `CaptureCardOverlay` — the real §7.5 C3
+quick-confirm card, the one every capture shows after the shutter — on an overflow control beside
+*Add detail* / *Save*. The gap and its evidence are preserved below, unedited, because the reasoning
+is what the ruling answers.
+
+**What landed** (branch `feat/field-verb-mount-c3`):
+
+- The menu, the punch confirm, the two filed rows and the status line moved out of `SmartGuessSheet`
+  into CaptureKit — `FieldVerbMenu.swift` (the state machine + copy) and `FieldVerbControls.swift`
+  (`FieldVerbOverflowMenu`, `FieldVerbNotice`). **Both surfaces render the same component**, so the
+  menu cannot say one thing on the card and another on N5.
+- `SmartGuessSheet` keeps working for the screenshot harness. Its deep-link presenter is untouched;
+  it lost its private copy of the verbs and reuses the extracted one.
+- **Everything the sheet's verbs did carried over**: FC-R7's punch-court confirm before any punch
+  write, ruling 2's no-court fallback to her own task, I-5's *"Punch item filed — file another?"* row
+  above a still-live punch verb, ruling 1's *"Filed in the Document."* statement in place of a second
+  note verb, the `refused` / `filed` status lines, and FC-R16 (no action on this menu can reach a
+  measurement — pinned by a falsifier that runs the whole flow over a transcript carrying a number).
+- **Disable-during-write is now shown rather than merely enforced.** `requestPunchTask` was already a
+  no-op while the lane is open; the card renders that as a disabled row, so a tap the model would
+  swallow is never offered. `.refused` / `.unwritable` / `.failed` close the lane the same way and are
+  disabled with it.
+- **The write lanes were not touched.** `MarginNoteWrite`, `PunchTaskWrite` and
+  `Specimen+Accessors`'s request methods are byte-unchanged; the menu returns a `FieldVerbAction` and
+  its host calls the same accessors N5 called.
+
+**One deliberate difference from N5, forced by where the card sits.** N5 runs after a capture has
+committed; C3 runs *before* it. Both rows carry `field_capture_id`, an FK to a `field_captures` row
+that does not exist until Save commits it, so the card **mints the lane and saves, and does not
+enqueue** unless the capture already holds a receipt. An enqueue there would stamp `.queued` on a
+capture she has not saved and upload it behind her back — for nothing, since
+`FieldWriteGate.fieldCaptureID` would return nil and the lane would wait anyway. The lane instead
+rides the capture's own commit (`saveFromCard` → `route` → drain → `performFieldWritesIfNeeded`).
+**Consequence, recorded rather than hidden:** a verb tapped and then swiped away without saving
+leaves the draft with a pending lane, which lands when she files that capture from the tray. Nothing
+is lost and nothing is written early.
+
+**Also:** `ViewfinderModel` gained `cardParties` — the unfiltered `project_parties` list
+`PunchCourtResolver` needs (ruling 2) — loaded when the card appears and again when the visit door
+closes, because that is where the card gains a project and therefore a court. Empty while the fetch
+is in flight, which the resolver reads as *no court*: the same window N5's own `.task` load has.
+
+**Out of scope by the brief, and stated so it is not re-discovered:** no other navigation surface was
+wired. **Captures with no card moment — the tray's rows, V4's rows — still have no verbs, and the
+spec does not grant them any**; §7.8 and §7.9 list their acts and the three verbs are not among them.
+**Tray-side access rides with Wave 5.**
+
+**Two carried items this unblocks**: R-17 (I-5's menu row shipped on the unreachable sheet) is now
+visible and tested, and W4-01's harness `withSample` cleanup is no longer contingent — the harness is
+no longer the *only* presenter, though `CaptureDeepLink.swift:102` is deliberately left as it is.
+
+<details>
+<summary>The gap as recorded on 2026-08-31, preserved</summary>
+
+### 🔴 I-4 — the three verbs ship on a screen no shipping build can open. **GAP RECORDED, needs a Kody ruling.**
 
 Task 12's three verbs (*Make it a note in the Document* · *Make it a task* · *Make it a punch item*) and Task 10's whole punch lane live in `SmartGuessSheet.swift`'s `verbMenu`. **`SmartGuessSheet` has no production presenter.**
 
@@ -187,6 +258,12 @@ So there is no spec line to obey, and inventing a mount would be inventing UX on
 
 Either way it is a wave of its own, with the device pass attached. **Wave 5.**
 
+</details>
+
+**Ruled: candidate 1.** §6 Flow 5 step 3 — *"Tap **⋯ → Make it a punch item**"*, reached from step 1's
+shutter → C3 — turns out to put the overflow on C3 in the spec's own prose, so the mount is the
+package's flow rather than an invention. FC-R23 records it.
+
 ## ⚠ Owed decision created by the CaptureKit fixes (`653904911`)
 
 The fixes added a durable `fieldWriteAttention` record so a lane that closes terminally — a new `.unwritable` state after the retry ceiling, or a margin-lane `.refused` — **leaves the loss on record instead of vanishing**. But **nothing reads it yet.** `SmartGuessSheet.fieldWriteStatus` switches on `punchTaskState` with a `default:`, so `.unwritable` compiles and shows the designer nothing, and the Sync-screen surface is unbuilt. The implementer deliberately did not invent user-facing copy for it.
@@ -198,9 +275,10 @@ So the data loss is now *recorded* rather than *silent*, which is the right firs
 Recorded here so none of them is re-discovered as an omission.
 
 - **I-9 — only one of the four `endVisit` sites routes through V4.** The call sites are `V0VisitSheet.swift:362` (the visit sheet's own *End visit*), `V4VisitReviewScreen.swift:357` (reached only from the tray), `WorkDashboardScreen.swift:71` (the stale prompt's *End visit*), and `RootView.swift:264` (the Today band's `FieldCompanionActionID.endVisit`). Only `V1SessionTrayScreen.swift:403-408` opens V4 first. So a visit closed from the sheet, the Today band or the stale prompt produces **no receipt and no Hours offer** — the two things Task 15/16 exist for. This is FC-R3 breadth, not a defect in the shipped code: making the other three route through V4 changes what those three controls *do*, and the stale-prompt one in particular is a close the designer did not initiate. **Needs a ruling.**
-- **I-6 — nothing reads `fieldWriteAttention`.** Already recorded above under *Owed decision created by the CaptureKit fixes*; carried unchanged. Wave 5 owes the surface and its copy.
+- **I-6 — nothing reads `fieldWriteAttention`.** Already recorded above under *Owed decision created by the CaptureKit fixes*; carried unchanged. Wave 5 owes the surface and its copy. **⚠ FC-R23 raised its priority (2026-09-01).** A lane that closes `.unwritable` at the retry ceiling now leaves the punch verb correctly disabled and says *nothing at all* — `.refused` at least has a status line. On N5 that silence sat on a screen no build could open; it now sits on the surface every capture passes through. Same fix, higher stakes.
 - **The punch-row visual residual** — the 10px / 32px / baseline relationship on the punch row after W4-C13 confined the grid change. A browser-walk item, not a test item; it needs Kody's eye on the running page, not another jest assertion.
-- **W4-01's harness `withSample` cleanup** — contingent on I-4 landing a production mount. I-4 did not land (see the gap above), so `CaptureDeepLink.swift:102` stays as the only presenter and there is nothing to clean up yet.
+- **W4-01's harness `withSample` cleanup** — contingent on I-4 landing a production mount. ~~I-4 did not land~~ **I-4 landed on 2026-09-01 (FC-R23)**, so the contingency is discharged; `CaptureDeepLink.swift:102` is deliberately left as it is (N5 still needs its harness presenter) and the cleanup is now a Wave 5 choice rather than a blocked one.
+- **Tray-side verb access.** The C3 mount covers every capture with a card moment. A capture with none — a tray row, a V4 row — still has no verbs, and §7.8/§7.9 grant it none, so nothing was invented for them. **Wave 5.**
 
 ## Process finding — sandboxed `sleep` does not wait
 

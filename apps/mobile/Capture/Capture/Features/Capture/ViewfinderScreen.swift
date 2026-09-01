@@ -21,6 +21,10 @@ struct ViewfinderScreen: View {
     /// tap and the value handed to `beginCardNote(affirmed:)` are one fact; a
     /// fresh card is a fresh note, so it resets with the card.
     @State private var affirmed = false
+    /// I-4's mount. Held here for `affirmed`'s reason: the overlay's view
+    /// identity outlives any one specimen, so a confirm step left open on one
+    /// card would greet the next one.
+    @State private var verbMenu = FieldVerbMenu()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     private let coordinator: CaptureCoordinator
@@ -95,7 +99,11 @@ struct ViewfinderScreen: View {
                         isDown ? model.beginCardNote(affirmed: affirmed)
                                : model.endCardNote()
                     },
-                    affirmed: $affirmed
+                    affirmed: $affirmed,
+                    verbParties: model.cardParties,
+                    verbPartiesSettled: model.cardPartiesSettled,
+                    verbMenu: $verbMenu,
+                    onVerb: model.performVerb
                 )
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .zIndex(2)
@@ -107,7 +115,10 @@ struct ViewfinderScreen: View {
         // values instead of inverting under system dark mode.
         .environment(\.colorScheme, .light)
         .animation(cardAnimation, value: model.cardSpecimen?.id)
-        .onChange(of: model.cardSpecimen?.id) { _, _ in affirmed = false }
+        .onChange(of: model.cardSpecimen?.id) { _, _ in
+            affirmed = false
+            verbMenu = FieldVerbMenu()
+        }
         .animation(cardAnimation, value: model.isHolding)
         .task {
             await model.start()

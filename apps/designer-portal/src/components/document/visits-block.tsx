@@ -109,9 +109,9 @@ export function VisitsBlock({ projectId }: { projectId: string }) {
 
   // FIX 2: FC-R10's render-nothing posture makes a THROWN query render
   // identically to a genuinely empty one unless the failure is surfaced
-  // somewhere. This block still renders null either way (no new
-  // user-facing failure copy) — the point is that a QA pass checking the
-  // console can now tell the two apart.
+  // somewhere. The console line is for a QA pass; the quiet line below
+  // (R-11 follow-up) is for the designer — no toast either way, the hook
+  // stays errorSurface: 'silent'.
   useEffect(() => {
     if (isError) {
       console.error('[VisitsBlock] useProjectVisits failed', projectId, error);
@@ -122,6 +122,22 @@ export function VisitsBlock({ projectId }: { projectId: string }) {
   const { data: signed } = useCaptureMediaUrls(
     openVisit ? leadPhotoPaths(openVisit.captures) : [],
   );
+
+  // R-11 follow-up: a FAILED read must not wear the empty project's nothing —
+  // "no field data" is FC-R10's claim, "the read broke" is not. One muted
+  // line in the block's place, in its own micro-label idiom. Cached visits
+  // still render through a background refetch error — the guard fires only
+  // when there is nothing truthful to show instead.
+  if (isError && (!visits || visits.length === 0)) {
+    return (
+      <p
+        role="status"
+        className="mb-8 font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
+      >
+        Field data unavailable
+      </p>
+    );
+  }
 
   if (!visits || visits.length === 0) return null;
 
