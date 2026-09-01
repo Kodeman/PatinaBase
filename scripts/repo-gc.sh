@@ -302,6 +302,9 @@ if [[ "$APPLY" -eq 1 && "${#REMOVABLE_WT[@]}" -gt 0 ]]; then
       continue
     fi
     recheck="$(git -C "$wt" status --porcelain)"
+    if [[ "$IGNORE_GENERATED_DIRT" -eq 1 && -n "$recheck" ]]; then
+      recheck="$(printf '%s\n' "$recheck" | grep -v '/src/generated/prisma-client/' || true)"
+    fi
     if [[ -n "$recheck" ]]; then
       echo "    skip (dirtied since scan): $wt" >&2
       continue
