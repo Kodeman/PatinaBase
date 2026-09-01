@@ -62,11 +62,21 @@ public enum FieldVerbRow: String, Equatable, Sendable, CaseIterable {
     }
 }
 
+/// Which verb she reached for. Both `Make it a task` and a courtless punch
+/// write the same designer-owned row (ruling 2), so `owner` cannot tell them
+/// apart — and without this the §14 taxonomy cannot count how often the punch
+/// verb lands courtless, which is the number that says whether the GC rail is
+/// reaching anyone.
+public enum FieldVerbIntent: String, Equatable, Sendable {
+    case task
+    case punch
+}
+
 /// The write a tap asks its host to make. The owner/party pair is resolved
 /// here so the host never re-decides a court that was already shown to her.
 public enum FieldVerbAction: Equatable, Sendable {
     case note
-    case punchTask(owner: String, partyID: String?)
+    case punchTask(owner: String, partyID: String?, intent: FieldVerbIntent)
 }
 
 /// Where the punch lane stands. The note lane has no confirm step and no
@@ -202,7 +212,7 @@ public struct FieldVerbMenu: Equatable, Sendable {
         case .note:
             return .note
         case .task:
-            return .punchTask(owner: "designer", partyID: nil)
+            return .punchTask(owner: "designer", partyID: nil, intent: .task)
         case .punch:
             pendingPunch = PunchCourtResolver.resolve(parties: parties)
             return nil
@@ -217,8 +227,10 @@ public struct FieldVerbMenu: Equatable, Sendable {
         // Ruling 2: with no reachable GC this is written as HER task — which is
         // exactly what the intent line already told her would happen.
         switch court {
-        case .reachable(let party): return .punchTask(owner: "gc", partyID: party.id)
-        case .noCourt:              return .punchTask(owner: "designer", partyID: nil)
+        case .reachable(let party):
+            return .punchTask(owner: "gc", partyID: party.id, intent: .punch)
+        case .noCourt:
+            return .punchTask(owner: "designer", partyID: nil, intent: .punch)
         }
     }
 

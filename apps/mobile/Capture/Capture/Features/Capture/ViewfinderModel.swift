@@ -516,9 +516,13 @@ final class ViewfinderModel {
         case .note:
             specimen.requestMarginNote(noteID: UUID())
             analytics.event("C3.make-note", ["id": specimen.id.uuidString])
-        case .punchTask(let owner, let partyID):
+        case .punchTask(let owner, let partyID, let intent):
             specimen.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
-            analytics.event("C3.make-task", ["owner": owner])
+            // `verb` is additive and the event name is unchanged. Ruling 2 makes
+            // a courtless punch a designer-owned row, identical to a plain task
+            // in every other property — so without this the taxonomy cannot see
+            // how often the punch verb finds no court.
+            analytics.event("C3.make-task", ["owner": owner, "verb": intent.rawValue])
         }
         try? store.save()
         CaptureHaptics.selection()

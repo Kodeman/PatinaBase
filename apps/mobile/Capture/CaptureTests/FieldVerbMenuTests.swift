@@ -72,7 +72,7 @@ struct FieldVerbMenuTests {
 
         // Only the confirm yields the write, owner + party already resolved.
         let confirmed = menu.confirmPunch()
-        #expect(confirmed == .punchTask(owner: "gc", partyID: "party-gc"))
+        #expect(confirmed == .punchTask(owner: "gc", partyID: "party-gc", intent: .punch))
         #expect(menu.pendingPunch == nil)
 
         // The lane in flight is `writing`, and the verbs stop offering a tap
@@ -122,14 +122,34 @@ struct FieldVerbMenuTests {
                                  partyKind: "gc", smsConsentGranted: false)
         _ = menu.tap(.punch, facts: placed(), parties: [mute])
         #expect(menu.phase(placed()) == .confirming(.noCourt))
-        #expect(menu.confirmPunch() == .punchTask(owner: "designer", partyID: nil))
+        #expect(menu.confirmPunch() == .punchTask(owner: "designer", partyID: nil, intent: .punch))
     }
 
     @Test func makeItATaskIsHerOwnAndSkipsTheCourtEntirely() {
         var menu = FieldVerbMenu()
         let action = menu.tap(.task, facts: placed(), parties: [gc])
-        #expect(action == .punchTask(owner: "designer", partyID: nil))
+        #expect(action == .punchTask(owner: "designer", partyID: nil, intent: .task))
         #expect(menu.pendingPunch == nil)
+    }
+
+    /// F8: ruling 2 makes a courtless punch a designer-owned row — the same
+    /// `owner` and the same nil party as a plain task. Only `intent` can tell
+    /// the analytics taxonomy which verb she actually reached for.
+    @Test func aCourtlessPunchIsDistinguishableFromAPlainTask() {
+        var task = FieldVerbMenu()
+        let taskAction = task.tap(.task, facts: placed(), parties: [])
+
+        var punch = FieldVerbMenu()
+        _ = punch.tap(.punch, facts: placed(), parties: [])
+        let punchAction = punch.confirmPunch()
+
+        // Identical in every property the row carries…
+        #expect(taskAction == .punchTask(owner: "designer", partyID: nil, intent: .task))
+        #expect(punchAction == .punchTask(owner: "designer", partyID: nil, intent: .punch))
+        // …and therefore separable only by intent.
+        #expect(taskAction != punchAction)
+        #expect(FieldVerbIntent.task.rawValue == "task")
+        #expect(FieldVerbIntent.punch.rawValue == "punch")
     }
 
     // MARK: - F2, the window before the party list lands
@@ -164,7 +184,7 @@ struct FieldVerbMenuTests {
         #expect(menu.isEnabled(.punch, settled))
         #expect(menu.tap(.punch, facts: settled, parties: []) == nil)
         #expect(menu.pendingPunch == .noCourt)
-        #expect(menu.confirmPunch() == .punchTask(owner: "designer", partyID: nil))
+        #expect(menu.confirmPunch() == .punchTask(owner: "designer", partyID: nil, intent: .punch))
     }
 
     @Test func settlingDoesNotReviveALaneThatIsAlreadyClosed() {
@@ -285,7 +305,7 @@ struct FieldVerbMenuTests {
         switch action {
         case .note:
             specimen.requestMarginNote(noteID: UUID())
-        case .punchTask(let owner, let partyID):
+        case .punchTask(let owner, let partyID, _):
             specimen.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
         }
     }
