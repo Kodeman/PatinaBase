@@ -513,7 +513,15 @@ export function BoardRoomInspector({
       )}
 
       <div className="mt-3 border-t border-[var(--border-default)] pt-2">
-        <Button size="sm" variant="ghost" onClick={deleteSelection}>
+        {/* VD11: destructive, unlike the benign ghost actions above it
+            (Open product, Replace image) — clay/error tone marks it as
+            different in kind, not just placement. */}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-[var(--color-clay-ink)] hover:text-[var(--color-terracotta-ink)]"
+          onClick={deleteSelection}
+        >
           {lead.projectFfeItemId ? 'Remove placement' : 'Delete reference'}
         </Button>
       </div>
