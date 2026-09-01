@@ -966,6 +966,13 @@ export function useApplyBoardRoomState() {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId], refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(variables.owner) });
       queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(variables.owner) });
+      // board-item-feedback (useBoardItemFeedbackByBoard) is the owner-agnostic
+      // feed board-room-shell actually reads on both owner kinds — a delete
+      // that removes a pin's feedback rows (CASCADE) must invalidate this or
+      // the shell keeps showing a stale verdict badge after undo restores the
+      // pin. board-feedback stays proposal-scoped for useBoardFeedback's own
+      // (proposal-only) consumers.
+      queryClient.invalidateQueries({ queryKey: ['board-item-feedback', variables.boardId] });
       if (variables.owner.kind === 'proposal') {
         await Promise.all([
           queryClient.invalidateQueries({

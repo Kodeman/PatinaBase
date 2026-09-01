@@ -352,6 +352,15 @@ describe('verdictAuthor / latestVerdictByAuthor (shared with summarizeBoardVerdi
           ],
         },
       ]),
-    ).toEqual({ approved: 1, rejected: 0, comment: 0, total: 1 });
+    ).toEqual({
+      approved: 1,
+      rejected: 0,
+      comment: 0,
+      total: 1,
+      bySource: {
+        client: { approved: 0, rejected: 0, comment: 0, total: 0 },
+        guest: { approved: 1, rejected: 0, comment: 0, total: 1 },
+      },
+    });
   });
 });
