@@ -144,14 +144,30 @@ function VerdictBadge({ feedback }: { feedback: ItemFeedback | undefined }) {
   );
 }
 
+/**
+ * Edits a note's text where the note actually sits (CI-24). Reached by
+ * double-clicking the pin; the inspector's textarea remains the alternate
+ * path. Commit semantics match the inspector's: blur and Cmd/Ctrl+Enter
+ * commit, Escape reverts — and because a whole editing session commits once,
+ * on the way out, it costs exactly one undo step.
+ *
+ * It deliberately mounts only while THIS note is being edited, never merely
+ * because it is selected. Mounted on selection, the browser's native
+ * focus-on-click landed in this textarea the instant a shift-click added the
+ * note to a multi-selection, and the focus handler then collapsed the
+ * selection back to the single note — the aria-pressed multi-select failure
+ * that only ever reproduced in a real browser.
+ */
 function InlineNoteEditor({
   item,
   onCommit,
   onFocus,
+  onDone,
 }: {
   item: EditableMoodBoardItem;
   onCommit: (content: string) => void;
   onFocus: () => void;
+  onDone: () => void;
 }) {
   const [draft, setDraft] = useState(item.content ?? '');
   useEffect(() => setDraft(item.content ?? ''), [item.content, item.id]);
@@ -161,12 +177,18 @@ function InlineNoteEditor({
   return (
     <textarea
       aria-label="Edit note"
+      autoFocus
       value={draft}
       onChange={(event) => setDraft(event.currentTarget.value)}
       onFocus={onFocus}
-      onBlur={commit}
+      onBlur={() => {
+        commit();
+        onDone();
+      }}
       onPointerDown={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
+        event.stopPropagation();
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
           commit();
           event.currentTarget.blur();
@@ -317,6 +339,12 @@ function BoardRoomSurface({
   const [showGrid, setShowGrid] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [tidySession, setTidySession] = useState<TidySpacingSession | null>(null);
+  /** The one note currently being edited in place on the canvas (CI-24). */
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  /** Mirrors the canvas's pointer-gesture state so the room-scoped view
+   *  shortcuts stay out of the way mid-drag, exactly as the edit shortcuts
+   *  already do (CI-17). */
+  const gestureActiveRef = useRef(false);
   const upsertBoard = useUpsertBoard();
   const applyBoardState = useApplyBoardRoomState();
   const boardQuery = useBoard(api.state?.boardId);
@@ -666,6 +694,90 @@ function BoardRoomSurface({
     if (api.selectedItemIds.length > 1) metricsRef.current.usedMultiselect = true;
   }, [api.selectedItemIds.length]);
 
+  // The in-place editor closes as soon as its note stops being the single
+  // selection, is deleted, or the room leaves edit mode (CI-24).
+  useEffect(() => {
+    if (!editingNoteId) return;
+    const stillEditable =
+      api.mode === 'edit' &&
+      api.selectedItemIds.length === 1 &&
+      api.selectedItemIds[0] === editingNoteId &&
+      (api.state?.items.some((item) => item.id === editingNoteId) ?? false);
+    if (!stillEditable) setEditingNoteId(null);
+  }, [api.mode, api.selectedItemIds, api.state?.items, editingNoteId]);
+
+  // Defined above the loading guard so the room-scoped view shortcuts below
+  // can close over them; the toolbar buttons use the same two functions.
+  const zoomBy = useCallback((delta: number) => {
+    const rect = workspaceRef.current?.getBoundingClientRect();
+    const size = { width: rect?.width ?? 800, height: rect?.height ?? 600 };
+    api.canvasProps?.onViewChange?.(
+      zoomBoardViewAtPoint(
+        api.view,
+        { x: size.width / 2, y: size.height / 2 },
+        api.view.zoom + delta,
+      ),
+      'zoom',
+    );
+  }, [api]);
+
+  const fit = useCallback(() => {
+    const current = api.state;
+    if (!current) return;
+    const rect = workspaceRef.current?.getBoundingClientRect();
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: current.canvasWidth,
+      canvasHeight: current.canvasHeight,
+      backgroundColor: current.backgroundColor,
+      sections: current.sections,
+      items: current.items,
+    });
+    api.canvasProps?.onViewChange?.(
+      fitBoardGeometry(geometry, {
+        width: rect?.width ?? 800,
+        height: rect?.height ?? 600,
+      }),
+      'fit',
+    );
+  }, [api]);
+
+  // View shortcuts are room-scoped, not canvas-scoped: after a click in the
+  // rail or the inspector, Cmd+0, 1 and the zoom keys kept working for edit
+  // commands but silently died for the view (CI-17). Window level, with the
+  // same guards the edit shortcuts use — the canvas's own handler calls
+  // preventDefault first, so a focused canvas never double-applies.
+  useEffect(() => {
+    const handleViewKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isTextEntryTarget(event.target)) return;
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && gestureActiveRef.current) return;
+      if (!mod && event.key === '1') {
+        event.preventDefault();
+        fit();
+        return;
+      }
+      if (mod && event.key === '0') {
+        event.preventDefault();
+        const rect = workspaceRef.current?.getBoundingClientRect();
+        api.canvasProps?.onViewChange?.(
+          zoomBoardViewAtPoint(
+            api.view,
+            { x: (rect?.width ?? 800) / 2, y: (rect?.height ?? 600) / 2 },
+            1,
+          ),
+          'reset',
+        );
+        return;
+      }
+      if (mod && (event.key === '+' || event.key === '=' || event.key === '-')) {
+        event.preventDefault();
+        zoomBy(event.key === '-' ? -0.1 : 0.1);
+      }
+    };
+    window.addEventListener('keydown', handleViewKeyDown);
+    return () => window.removeEventListener('keydown', handleViewKeyDown);
+  }, [api, fit, zoomBy]);
+
   useEffect(() => {
     const guard = (items: readonly EditableMoodBoardItem[]) => {
       // Was proposal-owners-only. A project board's pins can now carry guest
@@ -905,35 +1017,9 @@ function BoardRoomSurface({
     );
   };
   const nextZ = () => Math.max(-1, ...state.items.map((item) => item.zIndex ?? 0)) + 1;
-  const zoomBy = (delta: number) => {
-    const rect = workspaceRef.current?.getBoundingClientRect();
-    const size = { width: rect?.width ?? 800, height: rect?.height ?? 600 };
-    const next = zoomBoardViewAtPoint(
-      api.view,
-      { x: size.width / 2, y: size.height / 2 },
-      api.view.zoom + delta,
-    );
-    api.canvasProps?.onViewChange?.(next, 'zoom');
-  };
 
   const addFromRail = (items: readonly EditableMoodBoardItem[], addSource: BoardAddSource) => {
     api.addItems(items, { source: addSource });
-  };
-
-  const fit = () => {
-    const rect = workspaceRef.current?.getBoundingClientRect();
-    const geometry = resolveMoodBoardGeometry({
-      canvasWidth: state.canvasWidth,
-      canvasHeight: state.canvasHeight,
-      backgroundColor: state.backgroundColor,
-      sections: state.sections,
-      items: state.items,
-    });
-    const next = fitBoardGeometry(geometry, {
-      width: rect?.width ?? 800,
-      height: rect?.height ?? 600,
-    });
-    api.canvasProps?.onViewChange?.(next, 'fit');
   };
 
   const renderVerdictOverlay = (item: { id?: string }) => (
@@ -942,14 +1028,12 @@ function BoardRoomSurface({
   const originalRenderItem = api.canvasProps.renderItem;
   const editRenderItem = (item: EditableMoodBoardItem): ReactNode => (
     <div className="relative h-full w-full">
-      {item.type === 'note' && api.selectedItemIds.includes(item.id) ? (
+      {item.type === 'note' && editingNoteId === item.id ? (
         <InlineNoteEditor
           item={item}
-          onFocus={() => {
-            api.setFocusedItemId(item.id);
-            api.setSelection([item.id]);
-          }}
+          onFocus={() => api.setFocusedItemId(item.id)}
           onCommit={(content) => api.updateItem(item.id, { content })}
+          onDone={() => setEditingNoteId(null)}
         />
       ) : originalRenderItem(item)}
       {feedbackByItem.has(item.id) && (
@@ -1234,6 +1318,22 @@ function BoardRoomSurface({
               showGrid={showGrid}
               snapToGrid={snapToGrid}
               showViewControls={false}
+              onAnnounce={api.announce}
+              onGestureActiveChange={(active) => {
+                gestureActiveRef.current = active;
+                api.canvasProps?.onGestureActiveChange?.(active);
+              }}
+              onItemActivate={(item) => {
+                // Double-click a note and the caret lands in the note itself
+                // (CI-24); everything else keeps the controller's activation.
+                if (item.type === 'note') {
+                  api.setSelection([item.id]);
+                  api.setFocusedItemId(item.id);
+                  setEditingNoteId(item.id);
+                  return;
+                }
+                api.canvasProps?.onItemActivate?.(item);
+              }}
               className="h-full min-h-0"
             />
           )}
@@ -1247,7 +1347,18 @@ function BoardRoomSurface({
         </div>
       </div>
 
-      <div aria-live="polite" className="sr-only">
+      {/* The room's ONE live region — the canvas routes its announcements
+          here rather than rendering a second one (CI-14). It also carries the
+          exit guard, and shows itself when it does: the "press again" prompt
+          was previously audible to a screen reader and invisible to everyone
+          else (CI-20). */}
+      <div
+        aria-live="polite"
+        data-testid="board-room-live-region"
+        className={api.exitPromptArmed
+          ? 'pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-[var(--border-subtle,#DED6C9)] bg-[var(--bg-raised,#FFFDF9)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]'
+          : 'sr-only'}
+      >
         {api.announcement || (api.persistenceState === 'saving' || api.persistenceState === 'dirty'
           ? 'Saving board changes'
           : api.persistenceState === 'saved'
