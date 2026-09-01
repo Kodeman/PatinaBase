@@ -109,6 +109,16 @@ function generatedId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+/**
+ * VD3: plain language for the unprepared-review-media banner. It used to
+ * read "N visual references need review-media preparation" — internal
+ * pipeline jargon a designer has no reason to know. This just says what's
+ * missing and what to do about it.
+ */
+export function reviewMediaBannerCopy(count: number): string {
+  return `${count} ${count === 1 ? 'pin still needs' : 'pins still need'} a real photo before this board can be published.`;
+}
+
 function boardRasterInput(api: BoardRoomControllerApi): MoodBoardRasterInput | null {
   if (!api.state) return null;
   return {
@@ -134,7 +144,11 @@ function VerdictBadge({ feedback }: { feedback: ItemFeedback | undefined }) {
   const fromGuest = Boolean(feedback?.guest_share_id);
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em] shadow-sm"
+      // Deviation from the D4 zero-shadow reconciliation above: this badge
+      // floats over uncontrolled photo imagery, not app chrome, so a
+      // minimal shadow is kept for legibility. The zero-shadow rule applies
+      // to chrome on app surfaces (toolbar, popovers, panels), not pins.
+      className="inline-flex items-center gap-1 rounded-full border border-black/15 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em] shadow-sm"
       style={{ color: chip.color }}
       data-board-verdict={feedback?.verdict}
       data-verdict-source={fromGuest ? 'guest' : 'client'}
@@ -220,7 +234,7 @@ function InlineNoteEditor({
           event.currentTarget.blur();
         }
       }}
-      className="h-full w-full resize-none overflow-auto rounded-sm border border-[#E0D2B8] bg-[#F3E9D5] p-3 text-[0.78rem] leading-[1.5] text-[#4A4137] shadow-sm outline-none focus:ring-2 focus:ring-[var(--color-clay)]"
+      className="h-full w-full resize-none overflow-auto rounded-sm border border-[var(--border-warm)] bg-[var(--bg-warm)] p-3 text-[0.78rem] leading-[1.5] text-[var(--color-bark)] outline-none focus:ring-2 focus:ring-[var(--color-clay)]"
       style={{ fontFamily: 'var(--font-body)' }}
     />
   );
@@ -380,18 +394,21 @@ function BoardRoomSurface({
   const sourceProposalId = owner.kind === 'proposal'
     ? owner.id
     : projectQuery.data?.proposal_id ?? null;
-  const unpreparedReviewMediaCount = useMemo(() => {
-    if (owner.kind !== 'project') return 0;
-    const itemCount = (api.state?.items ?? []).filter((item) =>
+  // VD3: item ids kept alongside the count so the banner can jump straight
+  // to the first pin that still needs a real photo, not just report a total.
+  const unpreparedReviewMediaItemIds = useMemo(() => {
+    if (owner.kind !== 'project') return [] as string[];
+    return (api.state?.items ?? []).filter((item) =>
       !item.projectFfeItemId &&
       (item.type === 'image' || item.type === 'room_scan') &&
       Boolean(item.imageUrl) &&
-      typeof item.data?.review_media_asset_id !== 'string').length;
-    const coverCount = boardQuery.data?.cover_image_url &&
-      !boardQuery.data.cover_review_media_asset_id ? 1 : 0;
-    return itemCount + coverCount;
-  }, [api.state?.items, boardQuery.data?.cover_image_url,
-    boardQuery.data?.cover_review_media_asset_id, owner.kind]);
+      typeof item.data?.review_media_asset_id !== 'string').map((item) => item.id);
+  }, [api.state?.items, owner.kind]);
+  const unpreparedReviewMediaCoverNeedsPrep = Boolean(
+    boardQuery.data?.cover_image_url && !boardQuery.data.cover_review_media_asset_id,
+  );
+  const unpreparedReviewMediaCount =
+    unpreparedReviewMediaItemIds.length + (unpreparedReviewMediaCoverNeedsPrep ? 1 : 0);
   const scheduleQuery = useProposalScheduleItems(owner.kind === 'proposal' ? owner.id : undefined);
   const addScheduleItem = useAddProposalItem();
   const feedbackQuery = useBoardItemFeedbackByBoard(api.state?.boardId);
@@ -1240,7 +1257,17 @@ function BoardRoomSurface({
 
       {unpreparedReviewMediaCount > 0 && !surfaceError && !api.persistenceError && (
         <div role="status" className="relative z-40 shrink-0 border-b border-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--color-clay-ink)]">
-          {unpreparedReviewMediaCount} visual {unpreparedReviewMediaCount === 1 ? 'reference needs' : 'references need'} review-media preparation before this board can be published.
+          {unpreparedReviewMediaItemIds[0] ? (
+            <button
+              type="button"
+              onClick={() => focusFeedbackItem(unpreparedReviewMediaItemIds[0])}
+              className="min-h-11 text-left underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+            >
+              {reviewMediaBannerCopy(unpreparedReviewMediaCount)}
+            </button>
+          ) : (
+            <span>{reviewMediaBannerCopy(unpreparedReviewMediaCount)}</span>
+          )}
         </div>
       )}
 
@@ -1309,7 +1336,7 @@ function BoardRoomSurface({
             <div
               role="group"
               aria-label="Tidy spacing"
-              className="absolute left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 shadow-lg"
+              className="absolute left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2"
             >
               <label className="flex items-center gap-2 font-mono text-[9px] uppercase text-[var(--text-muted)]">
                 Spacing

@@ -298,3 +298,16 @@ describe('BoardAddRail requests a fresh point on every click-add (CI-11)', () =>
     expect(firstItems[0]!.x).not.toBe(secondItems[0]!.x);
   });
 });
+
+describe('BoardAddRail palettes tab owner-kind wall (VD16)', () => {
+  it('explains, in a distinct explanatory-note style, that palettes are proposal-only', () => {
+    renderRail();
+    fireEvent.click(screen.getByRole('tab', { name: 'palettes' }));
+
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent('Palettes stay with proposal boards');
+    // Distinct from the plain-text "nothing here yet" empty states elsewhere
+    // in the rail — this is unavailable, not empty.
+    expect(note.className).toContain('border-dashed');
+  });
+});

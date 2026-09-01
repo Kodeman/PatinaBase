@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { render, screen } from '@testing-library/react';
 import type { EditableMoodBoardItem } from '@patina/types';
 import { renderBoardRoomItem } from './board-item-renderer';
@@ -64,5 +66,30 @@ describe('renderBoardRoomItem — Edit-mode placeholder parity (VD12)', () => {
     );
 
     expect(screen.getByText('Halyard chair')).toBeInTheDocument();
+  });
+});
+
+describe('renderBoardRoomItem — note card tokens, not raw hex (VD1/VD18)', () => {
+  it('renders the note content with no shadow-* utility on the card', () => {
+    render(<>{renderBoardRoomItem(item({ type: 'note', content: 'Remember the trim' }))}</>);
+
+    const card = screen.getByText('Remember the trim').parentElement as HTMLElement;
+    expect(card.className).not.toMatch(/shadow-/);
+  });
+
+  it('uses design tokens for the warm-paper palette, not raw parchment hex', () => {
+    // jsdom's cssstyle validates color-typed CSS properties and silently
+    // drops var(...) values from computed inline style, so the token swap
+    // can't be asserted by inspecting rendered style — read the source
+    // instead, the same grep-style check this repo's D4 shadow audit uses.
+    const source = fs.readFileSync(
+      path.join(__dirname, 'board-item-renderer.tsx'),
+      'utf8',
+    );
+    const noteCardSource = source.slice(source.indexOf('function NoteCard'));
+    expect(noteCardSource).not.toMatch(/#E0D2B8|#F3E9D5|#4A4137/i);
+    expect(noteCardSource).toContain('var(--bg-warm)');
+    expect(noteCardSource).toContain('var(--border-warm)');
+    expect(noteCardSource).toContain('var(--color-bark)');
   });
 });

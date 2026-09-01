@@ -283,7 +283,7 @@ export function BoardRoomInspector({
       aria-label="Selected board item inspector"
       data-placement-horizontal={position?.horizontal}
       data-placement-vertical={position?.vertical}
-      className="absolute z-40 w-[286px] max-w-[calc(100%-16px)] overflow-y-auto rounded-[6px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 shadow-lg max-md:!bottom-2 max-md:!left-2 max-md:!right-2 max-md:!top-auto max-md:w-auto"
+      className="absolute z-40 w-[286px] max-w-[calc(100%-16px)] overflow-y-auto rounded-[6px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 max-md:!bottom-2 max-md:!left-2 max-md:!right-2 max-md:!top-auto max-md:w-auto"
       style={{
         left: position?.left ?? INSPECTOR_MARGIN,
         top: position?.top ?? INSPECTOR_MARGIN,
@@ -526,7 +526,15 @@ export function BoardRoomInspector({
       )}
 
       <div className="mt-3 border-t border-[var(--border-default)] pt-2">
-        <Button size="sm" variant="ghost" onClick={deleteSelection}>
+        {/* VD11: destructive, unlike the benign ghost actions above it
+            (Open product, Replace image) — clay/error tone marks it as
+            different in kind, not just placement. */}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-[var(--color-clay-ink)] hover:text-[var(--color-terracotta-ink)]"
+          onClick={deleteSelection}
+        >
           {lead.projectFfeItemId ? 'Remove placement' : 'Delete reference'}
         </Button>
       </div>

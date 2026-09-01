@@ -464,7 +464,17 @@ function PalettePanel({
   };
 
   if (!proposalId) {
-    return <p className="text-[11px] text-[var(--text-muted)]">Palettes stay with proposal boards.</p>;
+    // VD16: an owner-kind wall — this tab is unavailable on this board, not
+    // merely empty. A dashed border distinguishes it from the plain-text
+    // "nothing here yet" states below (no proposal palettes, no captures).
+    return (
+      <p
+        role="note"
+        className="rounded-[4px] border border-dashed border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-2.5 text-[11px] leading-4 text-[var(--text-muted)]"
+      >
+        Palettes stay with proposal boards — this project board has none to draw from.
+      </p>
+    );
   }
   if (isLoading) return <p className="text-[11px] text-[var(--text-muted)]">Loading palettes…</p>;
   if (palettes.length === 0) {

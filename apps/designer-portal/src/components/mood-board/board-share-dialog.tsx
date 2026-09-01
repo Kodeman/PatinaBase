@@ -245,7 +245,8 @@ export function BoardShareDialog({
             <span>
               <span className="text-[var(--text-primary)]">Allow reactions</span> — the reader
               can tap approve or pass on each piece and leave a short note. Fixed when the link
-              is made; make a fresh link to change it.
+              is made; make a fresh link to change it. The link is shared, not personal —
+              everyone who has it sees every reaction left through it, not just their own.
             </span>
           </label>
           <Button

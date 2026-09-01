@@ -69,6 +69,20 @@ test('Present and guest/client surfaces agree on BoardComposition geometry (AC2.
     .toBe(true)
   await page.evaluate(() => document.fonts.ready)
 
+  // The two surfaces are stacked vertically in the harness (guest sits
+  // `marginTop: 32` below present's 800px-tall box), so raw boundingBox()
+  // values are page-absolute and carry a ~832px Y offset that has nothing to
+  // do with layout parity. Every comparison below is container-relative:
+  // each surface's own canvas origin is subtracted out first.
+  const presentOrigin = await present.boundingBox()
+  const guestOrigin = await guest.boundingBox()
+  expect(presentOrigin).not.toBeNull()
+  expect(guestOrigin).not.toBeNull()
+  const relativeBox = (
+    box: { x: number; y: number; width: number; height: number } | null,
+    origin: { x: number; y: number },
+  ) => (box ? { x: box.x - origin.x, y: box.y - origin.y, width: box.width, height: box.height } : null)
+
   // Section bands agree in count and bounds.
   const presentSections = present.locator('[data-composition-section]')
   const guestSections = guest.locator('[data-composition-section]')
@@ -76,8 +90,8 @@ test('Present and guest/client surfaces agree on BoardComposition geometry (AC2.
   expect(sectionCount).toBeGreaterThanOrEqual(2)
   await expect(guestSections).toHaveCount(sectionCount)
   for (let i = 0; i < sectionCount; i += 1) {
-    const presentBox = await presentSections.nth(i).boundingBox()
-    const guestBox = await guestSections.nth(i).boundingBox()
+    const presentBox = relativeBox(await presentSections.nth(i).boundingBox(), presentOrigin!)
+    const guestBox = relativeBox(await guestSections.nth(i).boundingBox(), guestOrigin!)
     expect(presentBox).not.toBeNull()
     expect(guestBox).not.toBeNull()
     expect(Math.abs(presentBox!.x - guestBox!.x)).toBeLessThanOrEqual(1)
@@ -95,8 +109,8 @@ test('Present and guest/client surfaces agree on BoardComposition geometry (AC2.
     await expect(presentItem, key).toBeVisible()
     await expect(guestItem, key).toBeVisible()
 
-    const presentBox = await presentItem.boundingBox()
-    const guestBox = await guestItem.boundingBox()
+    const presentBox = relativeBox(await presentItem.boundingBox(), presentOrigin!)
+    const guestBox = relativeBox(await guestItem.boundingBox(), guestOrigin!)
     expect(presentBox, key).not.toBeNull()
     expect(guestBox, key).not.toBeNull()
     expect(Math.abs(presentBox!.x - guestBox!.x), key).toBeLessThanOrEqual(1)
