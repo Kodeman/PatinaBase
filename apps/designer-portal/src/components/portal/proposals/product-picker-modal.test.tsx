@@ -317,6 +317,21 @@ describe('ProductPickerModal — proposal library access', () => {
     expect(screen.getByTestId('library-layer-catalog')).toBeVisible();
   });
 
+  it('shows empty-state microcopy on a zero-count layer chip instead of a bare "· 0" (VD8)', () => {
+    mockLayerCounts = { personal: 1, studio: 0, catalog: 0 };
+    render(<ProductPickerModal open onClose={jest.fn()} onPick={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Library' }));
+
+    const studioChip = screen.getByTestId('library-layer-studio');
+    expect(studioChip).toHaveTextContent('no studio pieces yet');
+    expect(studioChip).not.toHaveTextContent('· 0');
+
+    // A non-zero layer still shows its plain count.
+    const personalChip = screen.getByTestId('library-layer-personal');
+    expect(personalChip).toHaveTextContent('Personal · 1');
+  });
+
   it('loads beyond the first authorized layer page', async () => {
     mockLayerRows = Array.from({ length: 61 }, (_, index) =>
       layerRow({ id: `personal-${index}`, name: `Personal piece ${index}` }),

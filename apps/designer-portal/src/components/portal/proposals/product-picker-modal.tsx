@@ -472,7 +472,11 @@ function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
               data-testid={`library-layer-${l}`}
             >
               {LAYER_LABEL[l]}
-              {counts ? ` · ${counts[l]}` : ''}
+              {counts
+                ? counts[l] === 0
+                  ? ` · no ${LAYER_LABEL[l].toLowerCase()} pieces yet`
+                  : ` · ${counts[l]}`
+                : ''}
             </FilterPill>
           );
         })}
