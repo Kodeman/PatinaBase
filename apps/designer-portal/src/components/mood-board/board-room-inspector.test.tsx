@@ -14,6 +14,9 @@ jest.mock('@/hooks/use-background-removal', () => ({
 
 jest.mock('@patina/supabase', () => ({
   usePromoteBoardReferenceToSelection: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useAddBoardItemDirection: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useResolveBoardItemDirection: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useReopenBoardItemDirection: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 function controllerApi(): BoardRoomControllerApi {
