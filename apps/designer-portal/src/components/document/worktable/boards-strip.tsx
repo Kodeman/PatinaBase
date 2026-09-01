@@ -10,13 +10,19 @@
  *
  * The strip is proposal-keyed (R3): direction-stage boards are the PROPOSAL's
  * boards, read through the same `useBoards` the Drafting Room's Boards facet
- * (BoardsBuilder) reads, and created through the same `useUpsertBoard` +
- * autosave barrier the facet's blank-board leg uses. The mood-board shelf leaf
- * is project-keyed and is deliberately NOT this strip's source.
+ * (BoardsBuilder) reads. The mood-board shelf leaf is project-keyed and is
+ * deliberately NOT this strip's source.
  *
  * Opening a board reuses the facet's exact affordance: a link into the one
  * canonical full-viewport board room (`boardRoomHref`), same `drafting_strip`
  * attribution, `from` set so the room returns to this paper.
+ *
+ * Creation (IA-5, mood-board-ux-audit-2026-08-31): "Start a board" used to
+ * reimplement blank-board creation independently — same `useUpsertBoard`
+ * call as the facet, but no picker, so a template pick was unreachable from
+ * this table. It now opens the SAME `BoardCreatePickerDialog` the facet
+ * uses (blank / Patina starters / studio templates / naming, IA-6) — one
+ * creation path, not two with silently different capability.
  *
  * ≥1440: a horizontal row of quiet tiles + a scored "Start a board" line.
  * <1440 (Q7/A4 — the capability is never display:none'd, it changes form):
@@ -24,18 +30,14 @@
  * vertically, with the same start line.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  useBoards,
-  useUpsertBoard,
-  type ProposalBoardSummary,
-} from "@patina/supabase";
+import { useBoards, type ProposalBoardSummary } from "@patina/supabase";
 import type { BoardOwnerRef } from "@patina/types";
 import { DocumentAction } from "@/components/document/document-action";
 import { boardRoomHref } from "@/lib/mood-board/navigation";
-import { runBoardOwnerAutosaveAction } from "@/lib/proposal-autosave-registry";
+import { BoardCreatePickerDialog } from "@/components/portal/scope-builder/board-create-picker-dialog";
 
 export interface BoardsStripProps {
   proposalId: string;
@@ -81,11 +83,9 @@ export function BoardsStrip({ proposalId, roomFilter }: BoardsStripProps) {
   const router = useRouter();
   const pathname = usePathname();
   const boardsQuery = useBoards(proposalId);
-  const createBoard = useUpsertBoard();
   const [expanded, setExpanded] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const actionPending = useRef(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const owner: BoardOwnerRef = { kind: "proposal", id: proposalId };
 
   const boards = useMemo(() => {
     const live = (boardsQuery.data ?? []).filter(
@@ -103,38 +103,6 @@ export function BoardsStrip({ proposalId, roomFilter }: BoardsStripProps) {
   const hrefFor = (boardId: string) =>
     boardRoomHref({ boardId, from: pathname, source: "drafting_strip" });
 
-  // The facet's blank-board leg, verbatim: same barrier, same naming, same
-  // sort seed, same landing in the board room. Templates stay with the facet.
-  const startBoard = async () => {
-    if (actionPending.current) return;
-    actionPending.current = true;
-    setStarting(true);
-    setError(null);
-    const owner: BoardOwnerRef = { kind: "proposal", id: proposalId };
-    try {
-      let boardId = "";
-      await runBoardOwnerAutosaveAction(owner, async () => {
-        const board = await createBoard.mutateAsync({
-          proposalId,
-          name: `Board ${boards.length + 1}`,
-          sortOrder: (boardsQuery.data ?? []).length,
-        });
-        boardId = board.id;
-      });
-      if (!boardId) throw new Error("The new board did not return an id.");
-      router.push(hrefFor(boardId));
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "The board could not be started.",
-      );
-    } finally {
-      actionPending.current = false;
-      setStarting(false);
-    }
-  };
-
   // A strip that cannot yet say how many boards there are prints nothing —
   // the table stays calm while the read settles or fails; the shelf and the
   // facet still hold the domain.
@@ -146,9 +114,7 @@ export function BoardsStrip({ proposalId, roomFilter }: BoardsStripProps) {
       surfaceKey="open-document"
       regionKey="boards-strip"
       variant="secondary"
-      loading={starting}
-      loadingLabel="Starting…"
-      onClick={() => void startBoard()}
+      onClick={() => setPickerOpen(true)}
     >
       Start a board
     </DocumentAction>
@@ -214,11 +180,14 @@ export function BoardsStrip({ proposalId, roomFilter }: BoardsStripProps) {
         )}
       </div>
 
-      {error && (
-        <p role="alert" className="mt-1 text-[12px] text-[var(--color-clay-ink)]">
-          {error}
-        </p>
-      )}
+      <BoardCreatePickerDialog
+        owner={owner}
+        boardsCount={boards.length}
+        sortOrderSeed={(boardsQuery.data ?? []).length}
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onCreated={(boardId) => router.push(hrefFor(boardId))}
+      />
     </div>
   );
 }

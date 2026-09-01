@@ -130,3 +130,39 @@ export function moodBoardOpenSource(value: string | null | undefined): MoodBoard
       return 'direct_url';
   }
 }
+
+export interface MaterializedTemplateFlag {
+  /** True exactly once per real materialize-then-redirect — the room's DV3 "Promote all" banner. */
+  present: boolean;
+  /**
+   * The href to `router.replace` into history right after reading `present`
+   * — the param is ALWAYS stripped when found (any value), so a refresh or
+   * a bookmark of the resulting url never re-triggers the one-shot banner.
+   * `null` when there was nothing to strip.
+   */
+  strippedHref: string | null;
+}
+
+/**
+ * DV3 — reads the `materialized=template` query param BoardsBuilder appends
+ * to its post-materialize redirect for a project owner. Pure so the
+ * one-shot "read once, strip once" contract is unit-testable without
+ * mounting the full board room: a second call against the already-stripped
+ * search must report `present: false`.
+ */
+export function consumeMaterializedTemplateFlag(input: {
+  pathname: string;
+  search: string;
+}): MaterializedTemplateFlag {
+  const params = new URLSearchParams(input.search);
+  if (!params.has('materialized')) {
+    return { present: false, strippedHref: null };
+  }
+  const present = params.get('materialized') === 'template';
+  params.delete('materialized');
+  const query = params.toString();
+  return {
+    present,
+    strippedHref: `${input.pathname}${query ? `?${query}` : ''}`,
+  };
+}
