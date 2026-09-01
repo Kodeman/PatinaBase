@@ -92,20 +92,6 @@ export function useVerifyEmail() {
   });
 }
 
-// Revoke single session mutation
-export function useRevokeSession() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ userId, sessionId }: { userId: string; sessionId: string }) => {
-      await usersService.revokeSession(userId, sessionId);
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: userKeys.sessions(variables.userId) });
-    },
-  });
-}
-
 // Revoke all sessions mutation
 export function useRevokeAllSessions() {
   const queryClient = useQueryClient();

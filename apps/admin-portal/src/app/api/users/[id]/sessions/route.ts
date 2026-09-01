@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getAuthenticatedAdmin,
-  createAuditLog,
   serverError,
-  getClientIp,
 } from '@/lib/supabase-admin';
 
 // GET /api/users/[id]/sessions - Get user sessions
@@ -40,35 +38,14 @@ export async function GET(
   }
 }
 
-// DELETE /api/users/[id]/sessions - Revoke all user sessions
-export async function DELETE(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const auth = await getAuthenticatedAdmin(request);
-  if ('error' in auth) return auth.error;
-  const { user: adminUser, adminClient } = auth;
-  const { id } = await context.params;
-
-  try {
-    // Force session invalidation by updating app_metadata
-    const { error } = await adminClient.auth.admin.updateUserById(id, {
-      app_metadata: { sessions_revoked_at: new Date().toISOString() },
-    });
-
-    if (error) return serverError(error.message);
-
-    await createAuditLog(adminClient, {
-      userId: adminUser.id,
-      action: 'user.sessions.revoke_all',
-      resourceType: 'user',
-      resourceId: id,
-      ipAddress: getClientIp(request),
-      userAgent: request.headers.get('user-agent') ?? undefined,
-    });
-
-    return NextResponse.json({ data: { success: true } });
-  } catch (err: any) {
-    return serverError(err.message ?? 'Failed to revoke sessions');
-  }
-}
+// A DELETE handler used to live here for "revoke all sessions". It only
+// wrote `app_metadata.sessions_revoked_at` on the user — GoTrue never reads
+// that field, so it returned { success: true } while doing nothing; the
+// user stayed logged in everywhere. The installed supabase-js
+// (@supabase/auth-js 2.98.0) has no admin-side, userId-scoped session
+// invalidation call — GoTrueAdminApi.signOut(jwt, scope) needs the specific
+// session's own JWT, which the admin portal never holds. Until a real
+// mechanism exists (e.g. deleting rows from `auth.sessions` via a
+// service-role RPC), `usersService.revokeAllSessions` points at
+// `/sessions/revoke-all`, which has no route — a visible 404/error is
+// safer than a fake success toast.
