@@ -158,11 +158,32 @@ function ProductCard({ row }: { row: ProposalBoardItem }) {
 
 // ─── Bare image ──────────────────────────────────────────────────────────────
 
+interface ImageSnapshot {
+  name?: string | null;
+}
+
+/**
+ * Edit-mode placeholder for an id-backed image with no `image_url` yet
+ * (VD12). Present mode's `ImageTile` (packages/patina-design-system's
+ * BoardsBlock.tsx) already names the item instead of a bare "missing" label;
+ * this brings the same captioned treatment here so what a designer composes
+ * matches what they present, while keeping the dashed border as an
+ * edit-only affordance (Present's placeholder border is solid).
+ */
 function ImageTile({ row }: { row: ProposalBoardItem }) {
   if (!row.image_url) {
+    const snap = (row.data ?? {}) as ImageSnapshot;
     return (
-      <div className="flex h-full w-full items-center justify-center rounded-sm border border-dashed border-[var(--border-default)] bg-[var(--bg-muted)] text-xs text-[var(--text-muted)]">
-        Missing image
+      <div className="flex h-full w-full select-none flex-col items-center justify-center gap-1 rounded-sm border border-dashed border-[var(--border-default)] bg-[var(--bg-muted)] p-2 text-center">
+        <span
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: '0.62rem',
+            color: 'var(--text-muted)',
+          }}
+        >
+          {snap.name?.trim() ? snap.name : 'No image'}
+        </span>
       </div>
     );
   }
@@ -263,14 +284,18 @@ function PaletteStrip({ row }: { row: ProposalBoardItem }) {
 function NoteCard({ row }: { row: ProposalBoardItem }) {
   return (
     <div
-      className="h-full w-full select-none overflow-hidden rounded-sm p-3 shadow-sm"
+      className="h-full w-full select-none overflow-hidden rounded-sm p-3"
       style={{
-        backgroundColor: '#F3E9D5',
-        border: '1px solid #E0D2B8',
+        // VD1/VD18: tokens, not raw hex — the exact same warm-paper look via
+        // --bg-warm/--border-warm/--color-bark, kept in step with the
+        // editable InlineNoteEditor (board-room-shell.tsx) this card matches
+        // when a note isn't being edited. Zero shadow per the Document model.
+        backgroundColor: 'var(--bg-warm)',
+        border: '1px solid var(--border-warm)',
         fontFamily: 'var(--font-body)',
         fontSize: '0.78rem',
         lineHeight: 1.5,
-        color: '#4A4137',
+        color: 'var(--color-bark)',
       }}
     >
       <p className="whitespace-pre-wrap break-words">

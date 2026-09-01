@@ -22,6 +22,8 @@ export interface DocumentShare {
   view_count: number;
   last_viewed_at: string | null;
   created_at: string;
+  /** Board links only (00549). Chosen at mint, immutable afterwards. */
+  board_reactions_enabled?: boolean;
 }
 
 export interface CreatedShare {
@@ -59,7 +61,7 @@ export function useBoardShares(boardId: string | undefined) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('document_shares')
-        .select('id, proposal_id, board_id, label, visibility, status, expires_at, view_count, last_viewed_at, created_at')
+        .select('id, proposal_id, board_id, label, visibility, status, expires_at, view_count, last_viewed_at, created_at, board_reactions_enabled')
         .eq('board_id', boardId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -103,6 +105,8 @@ export function useCreateBoardShare() {
       boardId: string;
       label?: string | null;
       expiresAt?: string | null;
+      /** Opt the link into per-pin guest reactions. Immutable after mint. */
+      reactionsEnabled?: boolean;
     }): Promise<CreatedShare> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -110,6 +114,7 @@ export function useCreateBoardShare() {
         p_board_id: input.boardId,
         p_label: input.label ?? null,
         p_expires_at: input.expiresAt ?? null,
+        p_reactions_enabled: input.reactionsEnabled ?? false,
       });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
@@ -119,6 +124,43 @@ export function useCreateBoardShare() {
     onSuccess: (_r, input) => {
       qc.invalidateQueries({ queryKey: ['board-shares', input.boardId] });
     },
+  });
+}
+
+/**
+ * Bulk existence check: which of these board ids currently have an ACTIVE
+ * share link. Backs the board-level reaction-status chip and the desk rollup
+ * (board-paths W2b) — a single IN() read instead of one useBoardShares call
+ * per card. Exported as a plain async fetcher too, so a caller that already
+ * has a board list can fold it into one larger query instead of a second
+ * React Query round trip.
+ */
+export async function fetchActiveBoardShareIds(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  boardIds: readonly string[],
+): Promise<Set<string>> {
+  if (boardIds.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from('document_shares')
+    .select('board_id')
+    .in('board_id', boardIds)
+    .eq('status', 'active');
+  if (error) throw error;
+  const ids = new Set<string>();
+  for (const row of (data ?? []) as Array<{ board_id: string | null }>) {
+    if (typeof row.board_id === 'string') ids.add(row.board_id);
+  }
+  return ids;
+}
+
+export function useActiveBoardShareIds(boardIds: readonly string[]) {
+  const sortedIds = [...new Set(boardIds)].sort();
+  return useQuery({
+    queryKey: ['active-board-share-ids', sortedIds],
+    enabled: sortedIds.length > 0,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    queryFn: () => fetchActiveBoardShareIds(getSupabase() as any, sortedIds),
   });
 }
 

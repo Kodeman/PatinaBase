@@ -33,8 +33,13 @@ INSERT INTO public.purchase_orders(id,designer_id,project_id,vendor_id,payment_p
 ('fa350000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001','fa200000-0000-4000-8000-000000000001','full_upfront','draft');
 INSERT INTO public.project_ffe_media_assets(id,project_id,storage_path,media_kind,checksum_sha256,size_bytes,content_type,created_by) VALUES
 ('fa400000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001/source/chair.pdf','source_document',repeat('d',64),1000,'application/pdf','fa000000-0000-4000-8000-000000000001');
+-- Derivative checksum matches its source's (repeat('d',64)): review-media
+-- preparation copies working bytes verbatim (see 00546's header), and
+-- apply_board_room_state's cover guard (00546) now matches source<->derivative
+-- by project + checksum rather than by source_asset_id identity, so a fixture
+-- pairing them with different checksums no longer describes a real pairing.
 INSERT INTO public.project_review_media_assets(id,project_id,source_asset_id,storage_path,derivative_kind,checksum_sha256,size_bytes,content_type,prepared_by) VALUES
-('fa500000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001','fa400000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001/review/chair.webp','display',repeat('e',64),2000,'image/webp','fa000000-0000-4000-8000-000000000001');
+('fa500000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001','fa400000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001/review/chair.webp','display',repeat('d',64),2000,'image/webp','fa000000-0000-4000-8000-000000000001');
 
 DO $$
 DECLARE v_selected jsonb; v_candidate jsonb; v_review jsonb; v_edition uuid; v_review_item uuid; v_projection jsonb; v_manifest jsonb; v_board jsonb;
@@ -97,7 +102,7 @@ BEGIN
   ASSERT (SELECT jsonb_array_length(board_snapshot->0->'items')=2
     AND board_snapshot->0->'items'->1->>'type'='image'
     AND board_snapshot->0->'items'->1->'renderMedia'->>'assetId'='fa500000-0000-4000-8000-000000000001'
-    AND board_snapshot->0->'coverMedia'->>'checksumSha256'=repeat('e',64)
+    AND board_snapshot->0->'coverMedia'->>'checksumSha256'=repeat('d',64)
     AND position('/review/chair.webp' IN board_snapshot::text)=0
     FROM public.project_review_editions WHERE id=v_edition),
     'published review must freeze linked selections and board-only references';
@@ -117,7 +122,7 @@ BEGIN
   ALTER TABLE public.project_review_media_assets ENABLE TRIGGER guard_published_review_media_asset_trg;
   v_manifest:=public.authorize_project_review_media(v_edition,'fa000000-0000-4000-8000-000000000002');
   ASSERT jsonb_array_length(v_manifest->'media')=1
-    AND v_manifest->'media'->0->>'checksumSha256'=repeat('e',64);
+    AND v_manifest->'media'->0->>'checksumSha256'=repeat('d',64);
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000002');
   ASSERT position('/review/chair.webp' in public.get_client_project_review_bundle(v_edition)::text)=0,
     'client bundle must not expose private derivative paths';

@@ -1482,12 +1482,33 @@ export type {
 export {
   emptyBoardVerdictCounts,
   summarizeBoardVerdicts,
+  deriveBoardReactionStatus,
+  deriveApprovedBoardItemIds,
+  verdictAuthor,
+  latestVerdictByAuthor,
 } from "./board-verdicts";
 export type {
   BoardVerdictCounts,
+  BoardVerdictBreakdown,
+  BoardVerdictSource,
   BoardVerdictProjection,
   BoardItemVerdictProjection,
+  BoardReactionStatus,
+  BoardItemFeedbackRow,
 } from "./board-verdicts";
+export { useBoardReactionStatuses } from "./use-board-reaction-status";
+export {
+  useBoardsReactionRollup,
+} from "./use-board-reaction-rollup";
+export type {
+  BoardReactionRollupEntry,
+  BoardsReactionRollup,
+} from "./use-board-reaction-rollup";
+export { useStudioBoardsOverview } from "./use-studio-boards-overview";
+export type {
+  StudioBoardOverviewEntry,
+  StudioBoardsOverview,
+} from "./use-studio-boards-overview";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Invoicing money core (Wave 1 — see migration 00178)
@@ -1650,6 +1671,8 @@ export {
   useCreateShare,
   useCreateBoardShare,
   useRevokeShare,
+  useActiveBoardShareIds,
+  fetchActiveBoardShareIds,
 } from "./use-document-shares";
 export type { DocumentShare, CreatedShare } from "./use-document-shares";
 
@@ -1668,6 +1691,7 @@ export {
   useProposalFeedback,
   useClientProposalFeedback,
   useBoardFeedback,
+  useBoardItemFeedbackByBoard,
   useClientBoardFeedback,
   useItemFeedbackThread,
   useSubmitVerdict,
@@ -1679,6 +1703,17 @@ export type {
   ItemFeedbackEvent,
   Verdict,
 } from "./use-item-feedback";
+
+// Internal direction layer on board pins (board-paths W3c, DV6) — distinct
+// from the item_feedback client verdict loop above.
+export {
+  useBoardItemDirectionsByBoard,
+  countUnresolvedDirectionsByItem,
+  useAddBoardItemDirection,
+  useResolveBoardItemDirection,
+  useReopenBoardItemDirection,
+} from "./board-item-directions";
+export type { BoardItemDirection } from "./board-item-directions";
 
 // Schedule & Boards Wave 3 · Track A — Designer-Taught Intelligence (A1/C4/B6/A3)
 export {

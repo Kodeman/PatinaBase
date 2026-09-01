@@ -1,5 +1,6 @@
 import {
   boardRoomHref,
+  consumeMaterializedTemplateFlag,
   moodBoardOpenSource,
   recentBoardCommandDescriptor,
   resolveMoodBoardReturnTarget,
@@ -59,7 +60,18 @@ describe('mood-board room navigation', () => {
 
   it('normalizes untrusted source tags to direct_url', () => {
     expect(moodBoardOpenSource('command_bar')).toBe('command_bar');
+    expect(moodBoardOpenSource('studio_boards')).toBe('studio_boards');
     expect(moodBoardOpenSource('crafted')).toBe('direct_url');
+  });
+
+  it('allow-lists the studio boards view as a return target (board-paths W3c)', () => {
+    expect(safeMoodBoardReturnPath('/boards')).toBe('/boards');
+    expect(safeMoodBoardReturnPath('/boards?status=awaiting_reaction')).toBe(
+      '/boards?status=awaiting_reaction',
+    );
+    expect(
+      boardRoomHref({ boardId: 'board-1', from: '/boards', source: 'studio_boards' }),
+    ).toBe('/board/board-1?source=studio_boards&from=%2Fboards');
   });
 
   it('builds a concrete board command whose match outranks the generic room', () => {
@@ -80,5 +92,54 @@ describe('mood-board room navigation', () => {
     expect(command.match).toContain('board');
     expect(command.match).toContain('moodboard');
     expect(command.href).toBe('/board/board-1?source=command_bar&from=%2Fdesk');
+  });
+});
+
+describe('consumeMaterializedTemplateFlag (DV3 one-shot banner)', () => {
+  it('reports present and a stripped href for a first read carrying the flag', () => {
+    const result = consumeMaterializedTemplateFlag({
+      pathname: '/board/board-1',
+      search: '?source=project_surface&materialized=template',
+    });
+    expect(result.present).toBe(true);
+    expect(result.strippedHref).toBe('/board/board-1?source=project_surface');
+  });
+
+  it('a second read against the ALREADY-stripped url reports absent — mount twice, one framing', () => {
+    const first = consumeMaterializedTemplateFlag({
+      pathname: '/board/board-1',
+      search: '?source=project_surface&materialized=template',
+    });
+    const second = consumeMaterializedTemplateFlag({
+      pathname: '/board/board-1',
+      search: new URL(first.strippedHref!, 'https://patina.invalid').search,
+    });
+    expect(second.present).toBe(false);
+    expect(second.strippedHref).toBeNull();
+  });
+
+  it('reports absent (and nothing to strip) when the param was never present', () => {
+    const result = consumeMaterializedTemplateFlag({
+      pathname: '/board/board-1',
+      search: '?source=drafting_strip',
+    });
+    expect(result).toEqual({ present: false, strippedHref: null });
+  });
+
+  it('strips an unrecognized materialized VALUE too, without flagging present', () => {
+    const result = consumeMaterializedTemplateFlag({
+      pathname: '/board/board-1',
+      search: '?materialized=something-else',
+    });
+    expect(result.present).toBe(false);
+    expect(result.strippedHref).toBe('/board/board-1');
+  });
+
+  it('produces a bare pathname (no trailing "?") when nothing else survives', () => {
+    const result = consumeMaterializedTemplateFlag({
+      pathname: '/board/board-1',
+      search: '?materialized=template',
+    });
+    expect(result.strippedHref).toBe('/board/board-1');
   });
 });

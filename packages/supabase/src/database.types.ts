@@ -885,6 +885,50 @@ export type Database = {
           },
         ]
       }
+      board_item_directions: {
+        Row: {
+          author_id: string
+          board_item_id: string
+          body: string
+          created_at: string
+          id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_id?: string
+          board_item_id: string
+          body: string
+          created_at?: string
+          id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          board_item_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_item_directions_board_item_id_fkey"
+            columns: ["board_item_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_board_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       board_templates: {
         Row: {
           background_color: string
@@ -5159,6 +5203,7 @@ export type Database = {
           board_id: string | null
           board_payload: Json | null
           board_payload_hash: string | null
+          board_reactions_enabled: boolean
           created_at: string
           created_by: string | null
           expires_at: string | null
@@ -5177,6 +5222,7 @@ export type Database = {
           board_id?: string | null
           board_payload?: Json | null
           board_payload_hash?: string | null
+          board_reactions_enabled?: boolean
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -5195,6 +5241,7 @@ export type Database = {
           board_id?: string | null
           board_payload?: Json | null
           board_payload_hash?: string | null
+          board_reactions_enabled?: boolean
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -7851,10 +7898,11 @@ export type Database = {
         Row: {
           board_item_id: string | null
           body: string | null
-          client_id: string
+          client_id: string | null
           created_at: string
           decision_id: string | null
           ffe_item_id: string | null
+          guest_share_id: string | null
           id: string
           project_review_item_id: string | null
           proposal_item_id: string | null
@@ -7866,10 +7914,11 @@ export type Database = {
         Insert: {
           board_item_id?: string | null
           body?: string | null
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           decision_id?: string | null
           ffe_item_id?: string | null
+          guest_share_id?: string | null
           id?: string
           project_review_item_id?: string | null
           proposal_item_id?: string | null
@@ -7881,10 +7930,11 @@ export type Database = {
         Update: {
           board_item_id?: string | null
           body?: string | null
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           decision_id?: string | null
           ffe_item_id?: string | null
+          guest_share_id?: string | null
           id?: string
           project_review_item_id?: string | null
           proposal_item_id?: string | null
@@ -7923,6 +7973,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "item_feedback_guest_share_id_fkey"
+            columns: ["guest_share_id"]
+            isOneToOne: false
+            referencedRelation: "document_shares"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "item_feedback_project_review_item_id_fkey"
             columns: ["project_review_item_id"]
             isOneToOne: false
@@ -7940,7 +7997,7 @@ export type Database = {
       }
       item_feedback_events: {
         Row: {
-          actor: string
+          actor: string | null
           body: string | null
           created_at: string
           feedback_id: string
@@ -7948,7 +8005,7 @@ export type Database = {
           kind: string
         }
         Insert: {
-          actor?: string
+          actor?: string | null
           body?: string | null
           created_at?: string
           feedback_id: string
@@ -7956,7 +8013,7 @@ export type Database = {
           kind: string
         }
         Update: {
-          actor?: string
+          actor?: string | null
           body?: string | null
           created_at?: string
           feedback_id?: string
@@ -29555,6 +29612,10 @@ export type Database = {
         Args: { p_owner: string }
         Returns: boolean
       }
+      can_manage_board_item_feedback: {
+        Args: { p_board_item_id: string }
+        Returns: boolean
+      }
       can_manage_invoice: { Args: { p_invoice_id: string }; Returns: boolean }
       can_process_board_item_media: {
         Args: { p_board_id: string; p_item_id: string; p_reference: string }
@@ -29906,7 +29967,12 @@ export type Database = {
         Returns: Json
       }
       create_board_share: {
-        Args: { p_board_id: string; p_expires_at?: string; p_label?: string }
+        Args: {
+          p_board_id: string
+          p_expires_at?: string
+          p_label?: string
+          p_reactions_enabled?: boolean
+        }
         Returns: {
           id: string
           token: string
@@ -30604,10 +30670,11 @@ export type Database = {
         Returns: {
           board_item_id: string | null
           body: string | null
-          client_id: string
+          client_id: string | null
           created_at: string
           decision_id: string | null
           ffe_item_id: string | null
+          guest_share_id: string | null
           id: string
           project_review_item_id: string | null
           proposal_item_id: string | null
@@ -32469,6 +32536,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reopen_board_item_direction: {
+        Args: { p_direction_id: string }
+        Returns: {
+          author_id: string
+          board_item_id: string
+          body: string
+          created_at: string
+          id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "board_item_directions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reopen_client_decision: {
         Args: { p_decision_id: string }
         Returns: {
@@ -32522,10 +32609,11 @@ export type Database = {
         Returns: {
           board_item_id: string | null
           body: string | null
-          client_id: string
+          client_id: string | null
           created_at: string
           decision_id: string | null
           ffe_item_id: string | null
+          guest_share_id: string | null
           id: string
           project_review_item_id: string | null
           proposal_item_id: string | null
@@ -32581,7 +32669,7 @@ export type Database = {
       reply_to_item_feedback: {
         Args: { p_body: string; p_feedback_id: string }
         Returns: {
-          actor: string
+          actor: string | null
           body: string | null
           created_at: string
           feedback_id: string
@@ -32641,6 +32729,26 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "agent_tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      resolve_board_item_direction: {
+        Args: { p_direction_id: string }
+        Returns: {
+          author_id: string
+          board_item_id: string
+          body: string
+          created_at: string
+          id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "board_item_directions"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -32716,10 +32824,11 @@ export type Database = {
         Returns: {
           board_item_id: string | null
           body: string | null
-          client_id: string
+          client_id: string | null
           created_at: string
           decision_id: string | null
           ffe_item_id: string | null
+          guest_share_id: string | null
           id: string
           project_review_item_id: string | null
           proposal_item_id: string | null
@@ -33651,6 +33760,35 @@ export type Database = {
         Returns: Json
       }
       stripe_recon_cursor_epoch: { Args: never; Returns: number }
+      studio_boards_overview: {
+        Args: { p_limit?: number }
+        Returns: {
+          cover_image_url: string
+          has_active_share: boolean
+          id: string
+          name: string
+          owner_id: string
+          owner_kind: string
+          owner_name: string
+          unresolved_direction_count: number
+          updated_at: string
+          verdict_client_approved: number
+          verdict_client_comment: number
+          verdict_client_rejected: number
+          verdict_guest_approved: number
+          verdict_guest_comment: number
+          verdict_guest_rejected: number
+        }[]
+      }
+      submit_board_share_reaction: {
+        Args: {
+          p_board_item_id: string
+          p_body?: string
+          p_token: string
+          p_verdict: string
+        }
+        Returns: Json
+      }
       submit_coordination_revision: {
         Args: {
           p_attachments?: Json

@@ -18,6 +18,10 @@ const mockOrgs = jest.fn();
 const mockMembers = jest.fn();
 const mockProjects = jest.fn();
 const mockContacts = jest.fn();
+// D5 — the recents strip returns to the Desk; its own query needs a mock so
+// the real component (not stubbed here — see B2-L2's "one population" test
+// below) can resolve without throwing.
+const mockRecentBoards = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   useProfile: () => ({ data: { display_name: 'Leah Warner' } }),
@@ -25,6 +29,14 @@ jest.mock('@patina/supabase', () => ({
   useOrganizationMembers: () => ({ data: mockMembers() }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
+  useRecentBoards: (...args: unknown[]) => mockRecentBoards(...args),
+  // Desk rollup line (board-paths W2b #3) — no boards behind any bucket in
+  // this suite's fixtures, so the strip renders nothing.
+  useBoardsReactionRollup: () => ({
+    data: { awaitingReaction: [], reactionsIn: [], approvedPipeline: [], capped: false },
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 jest.mock('@/hooks/use-desk-engagements', () => ({
@@ -113,6 +125,7 @@ beforeEach(() => {
   mockMembers.mockReturnValue([{ user_id: 'me', job_title: 'Principal' }]);
   mockProjects.mockReturnValue([{ id: 'proj-1' }]);
   mockContacts.mockReturnValue([]);
+  mockRecentBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
 });
 
 describe('Desk — the studio setup whisper counts the rolodex', () => {
@@ -178,13 +191,49 @@ describe('Desk — the roster is the Desk’s one population (B2-L2)', () => {
     ).toBeInTheDocument();
   });
 
-  it('no longer prints the four-up folio grid, The studio today, or Recent boards', () => {
+  it('no longer prints the four-up folio grid or The studio today', () => {
     const { container } = render(<DeskPage />);
     expect(container.querySelector('#needs-your-hand-folios')).toBeNull();
     expect(screen.queryByText('Needs your hand')).not.toBeInTheDocument();
     expect(screen.queryByText('The studio today')).not.toBeInTheDocument();
-    expect(screen.queryByText('Recent boards')).not.toBeInTheDocument();
     expect(container.querySelector('#studio-pulse')).toBeNull();
+  });
+});
+
+describe('Desk — D5 the recents strip returns beside the roster', () => {
+  it('stays absent when there is nothing recent, same as an empty roster', () => {
+    const { container } = render(<DeskPage />);
+    expect(screen.queryByText('Recent boards')).not.toBeInTheDocument();
     expect(container.querySelector('#recent-mood-boards')).toBeNull();
+  });
+
+  it('prints the strip below the roster once a recent board exists', () => {
+    mockRecentBoards.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [
+        {
+          id: 'board-1',
+          name: 'Living room direction',
+          owner: { kind: 'project', id: 'project-1' },
+          ownerName: 'Lake House project',
+          roomName: 'Living room',
+          coverImageUrl: null,
+          coverFallbackUrls: [],
+          verdictCounts: { approved: 0, rejected: 0, comment: 0, total: 0 },
+          updatedAt: '2026-08-30T00:00:00Z',
+        },
+      ],
+    });
+
+    render(<DeskPage />);
+
+    expect(screen.getByText('Recent boards')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Open mood board Living room direction' }),
+    ).toBeInTheDocument();
+    // The roster still stands as the Desk's own population — the strip is a
+    // second, quiet doorway beside it, not a replacement for it (B2-L2).
+    expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
   });
 });

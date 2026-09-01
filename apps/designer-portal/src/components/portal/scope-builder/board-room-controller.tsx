@@ -186,6 +186,15 @@ export interface BoardRoomControllerApi {
   persistenceState: BufferedAutosaveState | 'saving';
   persistenceError: string | null;
   announcement: string;
+  /**
+   * The room speaks through ONE live region. The canvas routes its own
+   * announcements here rather than rendering a second one that talks over
+   * this (CI-14).
+   */
+  announce: (message: string) => void;
+  /** True while a second Escape would leave the board — surfaced visually,
+   *  not only to a screen reader (CI-20). */
+  exitPromptArmed: boolean;
   canUndo: boolean;
   canRedo: boolean;
   canvasProps: BoardRoomCanvasProps | null;
@@ -233,6 +242,9 @@ export interface BoardRoomControllerApi {
   trimCanvas: () => void;
   /** Clears a surfaced error after the failed structural change was reverted. */
   discardPersistenceError: () => void;
+  /** Re-sends the reverted-but-consistent board. Resolves true once it lands. */
+  retryPersistence: () => Promise<boolean>;
+  isRetryingPersistence: boolean;
 }
 
 function boardItemFromRow(row: ProposalBoardItem): EditableMoodBoardItem {
@@ -356,6 +368,81 @@ function atomicBoardState(state: BoardRoomState) {
 }
 
 export type StructuralTransitionDirection = 'apply' | 'undo' | 'redo';
+
+/**
+ * Human copy for a failed board write. The backend's own message names RPCs
+ * and validation internals ("Project board changes require
+ * apply_board_room_state", "invalid board item") and reached designers in
+ * production, so it is never rendered — only classified here and logged.
+ */
+export const BOARD_SAVE_MESSAGES = {
+  access:
+    'That change was reverted — this board is no longer open for editing here. Reopen it from the project and try again.',
+  limit:
+    'That change was reverted — this board is already holding as many pins as it can.',
+  layout: 'That change was reverted — the board could not accept that layout.',
+  offline:
+    'That change was reverted — the connection dropped before it could be saved.',
+  unknown: 'That change was reverted because it could not be saved.',
+} as const;
+
+/**
+ * SQLSTATEs the board RPCs raise. Dispatching on the code rather than the
+ * sentence keeps the copy stable when a RAISE is reworded.
+ */
+const BOARD_SAVE_CODES: Record<string, keyof typeof BOARD_SAVE_MESSAGES> = {
+  '42501': 'access', // insufficient_privilege
+  '54000': 'limit', // program_limit_exceeded
+  '23514': 'layout', // check_violation
+  '23000': 'layout', // integrity_constraint_violation
+};
+
+function errorField(error: unknown, key: 'code' | 'message'): string {
+  if (typeof error === 'string') return key === 'message' ? error : '';
+  if (!error || typeof error !== 'object') return '';
+  const value = (error as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : '';
+}
+
+export function boardPersistenceMessage(error: unknown): string {
+  // PostgREST rejects with a plain {code, message, details, hint} object, not
+  // an Error, so both fields are read structurally rather than by instanceof.
+  const coded = BOARD_SAVE_CODES[errorField(error, 'code')];
+  if (coded) return BOARD_SAVE_MESSAGES[coded];
+
+  // Fallback for anything that carries no SQLSTATE — fetch/abort failures and
+  // the client-side guards that throw a bare Error.
+  const text = errorField(error, 'message').toLowerCase();
+  if (
+    text.includes('unavailable') ||
+    text.includes('not accessible') ||
+    text.includes('access denied') ||
+    text.includes('authentication required') ||
+    text.includes('permission') ||
+    text.includes('does not belong')
+  ) {
+    return BOARD_SAVE_MESSAGES.access;
+  }
+  if (text.includes('limit exceeded')) return BOARD_SAVE_MESSAGES.limit;
+  if (
+    text.includes('invalid board') ||
+    text.includes('out of range') ||
+    text.includes('apply_board_room_state')
+  ) {
+    return BOARD_SAVE_MESSAGES.layout;
+  }
+  if (
+    text.includes('failed to fetch') ||
+    text.includes('networkerror') ||
+    text.includes('network request failed') ||
+    text.includes('load failed') ||
+    text.includes('timeout') ||
+    text.includes('aborted')
+  ) {
+    return BOARD_SAVE_MESSAGES.offline;
+  }
+  return BOARD_SAVE_MESSAGES.unknown;
+}
 
 function recoveryCommand(
   command: BoardRoomCommand,
@@ -555,7 +642,47 @@ const BOARD_IMAGE_TYPES = new Set([
 const BOARD_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 /** Window in which a second Escape means "leave" (supersedes PRD R1.3.1). */
 const BOARD_ROOM_EXIT_CONFIRM_MS = 1_500;
-const BOARD_ROOM_EXIT_CONFIRM_MESSAGE = 'Press Escape again to leave the board';
+export const BOARD_ROOM_EXIT_CONFIRM_MESSAGE = 'Press Escape again to leave the board';
+/** How long a spoken announcement stays in the live region before it is
+ *  retired as stale. */
+const BOARD_ROOM_ANNOUNCEMENT_TTL_MS = 5_000;
+
+/**
+ * A screen-reader user hears what happened to their board, not what the
+ * command engine calls it — "z order applied" and "section membership
+ * applied" were the engine's own vocabulary leaking into the room (CI-14).
+ */
+const BOARD_COMMAND_ANNOUNCEMENTS: Record<BoardCommandKind, string> = {
+  move: 'Moved',
+  resize: 'Resized',
+  rotate: 'Rotated',
+  add: 'Added to the board',
+  delete: 'Removed from the board',
+  duplicate: 'Duplicated',
+  paste: 'Pasted onto the board',
+  lock: 'Lock changed',
+  'z-order': 'Restacked',
+  'section-membership': 'Moved into a section',
+  'section-create': 'Section added',
+  'section-update': 'Section updated',
+  'section-delete': 'Section removed',
+  'section-reorder': 'Sections reordered',
+  tidy: 'Tidied the layout',
+  align: 'Aligned',
+  distribute: 'Spaced evenly',
+  'canvas-grow': 'Board area grew',
+  'canvas-trim': 'Board area trimmed',
+  content: 'Content updated',
+};
+
+function boardCommandAnnouncement(
+  kind: BoardCommandKind,
+  direction: 'apply' | 'undo' | 'redo' = 'apply',
+): string {
+  const phrase = BOARD_COMMAND_ANNOUNCEMENTS[kind] ?? 'Board updated';
+  if (direction === 'apply') return phrase;
+  return `${direction === 'undo' ? 'Undid' : 'Redid'}: ${phrase.toLowerCase()}`;
+}
 
 export function validateBoardImageFiles(files: readonly File[]): void {
   const invalidType = files.find((file) => !BOARD_IMAGE_TYPES.has(file.type));
@@ -652,9 +779,23 @@ export function useBoardRoomController({
   const [isExiting, setIsExiting] = useState(false);
   const lastPointerRef = useRef<BoardPoint | null>(null);
   const escapeArmedUntilRef = useRef(0);
+  // Derived from the guard itself, never from the announcement string:
+  // any other announcement (a selection, a save) would otherwise hide the
+  // chip while Escape was still armed (A5).
+  const [exitPromptArmed, setExitPromptArmed] = useState(false);
   const escapeArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSemanticGestureRef = useRef<string | null>(null);
   const transitionBarrierRef = useRef<() => Promise<void>>(async () => {});
+  // Mirrors the canvas's own pointer-gesture state (drag/resize/rotate/
+  // marquee/pan). A ref, not state — it doesn't need to trigger a render,
+  // only to be readable inside the window keydown handler below, which
+  // suspends mod+ edit shortcuts while a gesture is in flight (undo/
+  // duplicate/copy/etc. firing mid-drag against stale gesture state is a
+  // latent bug independent of the Ctrl/Cmd suppress-snap modifier).
+  const gestureActiveRef = useRef(false);
+  const setGestureActive = useCallback((active: boolean) => {
+    gestureActiveRef.current = active;
+  }, []);
   const mode = controlledMode ?? internalMode;
   const showNotes = controlledShowNotes ?? internalShowNotes;
 
@@ -824,8 +965,8 @@ export function useBoardRoomController({
             direction === 'undo' ? 1 : -1,
           );
         }
-        const normalized = error instanceof Error ? error : new Error('The board change could not be saved.');
-        reportError(new Error(`That change was reverted because it could not be saved. ${normalized.message}`));
+        console.warn('[board-room] structural write failed', error);
+        reportError(new Error(boardPersistenceMessage(error)));
         throw error;
       }
     });
@@ -931,7 +1072,7 @@ export function useBoardRoomController({
       'apply',
       result.viewTranslationDelta,
     );
-    setAnnouncement(`${result.command.kind.replaceAll('-', ' ')} applied`);
+    setAnnouncement(boardCommandAnnouncement(result.command.kind));
     onCommandCommitted?.({ command: result.command, direction: 'apply' });
     return result;
   }, [offsetViewForStateTranslation, onCommandCommitted, persistTransition]);
@@ -984,7 +1125,7 @@ export function useBoardRoomController({
     setHistory(step.history);
     setSelectedItemIds((ids) => ids.filter((id) => step.history.present.items.some((item) => item.id === id)));
     persistTransition(current.present, step.history.present, step.command, 'undo');
-    setAnnouncement(`Undid ${step.command.kind.replaceAll('-', ' ')}`);
+    setAnnouncement(boardCommandAnnouncement(step.command.kind, 'undo'));
     onCommandCommitted?.({ command: step.command, direction: 'undo' });
   }, [offsetViewForStateTranslation, onCommandCommitted, persistTransition]);
 
@@ -1002,7 +1143,7 @@ export function useBoardRoomController({
     setHistory(step.history);
     setSelectedItemIds((ids) => ids.filter((id) => step.history.present.items.some((item) => item.id === id)));
     persistTransition(current.present, step.history.present, step.command, 'redo');
-    setAnnouncement(`Redid ${step.command.kind.replaceAll('-', ' ')}`);
+    setAnnouncement(boardCommandAnnouncement(step.command.kind, 'redo'));
     onCommandCommitted?.({ command: step.command, direction: 'redo' });
   }, [offsetViewForStateTranslation, onCommandCommitted, persistTransition]);
 
@@ -1220,32 +1361,113 @@ export function useBoardRoomController({
     });
   }, []);
 
-  const flushPending = useCallback(async () => {
+  /**
+   * A buffered write that fails is NOT rolled back — use-buffered-autosave
+   * keeps the queued patch and records the error — so a rejection here is
+   * genuinely unsaved work, never something the room may walk away from.
+   */
+  const flushBufferedWrites = useCallback(async () => {
     await Promise.all([layoutBuffer.flushAll(), canvasBuffer.flushAll()]);
+  }, [canvasBuffer, layoutBuffer]);
+
+  /**
+   * A structural write reverts itself before its failure ever surfaces, so a
+   * rejection here means the server is already consistent with what the reader
+   * can see.
+   */
+  const awaitStructuralWrites = useCallback(async () => {
     await Promise.all([...structuralTasksRef.current.keys()]);
+  }, []);
+
+  const flushPending = useCallback(async () => {
+    await flushBufferedWrites();
+    await awaitStructuralWrites();
     await flushBoardOwnerAutosaves(owner);
     if (persistenceError) throw new Error(persistenceError);
-  }, [canvasBuffer, layoutBuffer, owner, persistenceError]);
+  }, [awaitStructuralWrites, flushBufferedWrites, owner, persistenceError]);
   transitionBarrierRef.current = flushPending;
+
+  const [isRetryingPersistence, setIsRetryingPersistence] = useState(false);
+
+  /**
+   * Re-asserts the restored board. It rides the same queue, task registry and
+   * write gate as scheduleStructural, so it cannot race a concurrent edit in
+   * either direction and flushPending/requestExit wait on it like any other
+   * structural write. It carries no before/after pair, so there is nothing to
+   * revert: a failure leaves the already-consistent server untouched.
+   */
+  const retryPersistence = useCallback(async () => {
+    if (!stateRef.current) return false;
+    setIsRetryingPersistence(true);
+    const previous = structuralQueueRef.current;
+    const task = previous.catch(() => undefined).then(async () => {
+      const live = stateRef.current;
+      if (!live) return;
+      await runBoardOwnerAutosaveAction(owner, () => {
+        const write = applyStateMutation.mutateAsync({
+          boardId,
+          owner,
+          state: atomicBoardState(live),
+        });
+        const gate = write.then(() => undefined, () => undefined);
+        structuralWriteGateRef.current = gate;
+        return write.finally(() => {
+          if (structuralWriteGateRef.current === gate) structuralWriteGateRef.current = null;
+        });
+      });
+      for (const item of live.items) snapshotItemIdsRef.current.add(item.id);
+    });
+    structuralQueueRef.current = task.then(() => undefined, () => undefined);
+    structuralTasksRef.current.set(task, 'retry');
+    setStructuralSaving(true);
+    try {
+      await task;
+      setPersistenceError(null);
+      setAnnouncement('Board changes saved');
+      return true;
+    } catch (error) {
+      console.warn('[board-room] retry of the board write failed', error);
+      setPersistenceError(boardPersistenceMessage(error));
+      return false;
+    } finally {
+      structuralTasksRef.current.delete(task);
+      setStructuralSaving(structuralTasksRef.current.size > 0);
+      setIsRetryingPersistence(false);
+    }
+  }, [applyStateMutation, boardId, owner]);
 
   const requestExit = useCallback(async () => {
     if (isExiting) return false;
-    if (persistenceError) {
-      reportError(new Error(persistenceError));
-      return false;
-    }
     setIsExiting(true);
     try {
-      await flushPending();
+      // Unsaved work still blocks the door: a rejected buffered write kept its
+      // patch, and the owner's other autosaves are not self-reverting either.
+      await flushBufferedWrites();
+      try {
+        await awaitStructuralWrites();
+      } catch (error) {
+        // Already reverted, so the server is consistent — a standing failure
+        // must not hold the reader in the room. The banner keeps carrying it.
+        console.warn('[board-room] leaving the room with a reverted change', error);
+      }
+      await flushBoardOwnerAutosaves(owner);
       await onExit?.();
       return true;
     } catch (error) {
-      reportError(error);
+      console.warn('[board-room] exit failed', error);
+      reportError(new Error(boardPersistenceMessage(error)));
       return false;
     } finally {
       setIsExiting(false);
     }
-  }, [flushPending, isExiting, onExit, persistenceError, reportError]);
+  }, [
+    awaitStructuralWrites,
+    flushBufferedWrites,
+    isExiting,
+    onExit,
+    owner,
+    reportError,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1266,6 +1488,7 @@ export function useBoardRoomController({
           escapeArmedUntilRef.current = 0;
           if (escapeArmTimerRef.current) clearTimeout(escapeArmTimerRef.current);
           escapeArmTimerRef.current = null;
+          setExitPromptArmed(false);
           void requestExit();
         } else {
           escapeArmedUntilRef.current = Date.now() + BOARD_ROOM_EXIT_CONFIRM_MS;
@@ -1276,10 +1499,12 @@ export function useBoardRoomController({
           escapeArmTimerRef.current = setTimeout(() => {
             escapeArmTimerRef.current = null;
             escapeArmedUntilRef.current = 0;
+            setExitPromptArmed(false);
             setAnnouncement((current) => (
               current === BOARD_ROOM_EXIT_CONFIRM_MESSAGE ? '' : current
             ));
           }, BOARD_ROOM_EXIT_CONFIRM_MS);
+          setExitPromptArmed(true);
           setAnnouncement(BOARD_ROOM_EXIT_CONFIRM_MESSAGE);
         }
         return;
@@ -1290,6 +1515,13 @@ export function useBoardRoomController({
         return;
       }
       if (mode !== 'edit') return;
+      // A pointer gesture (drag/resize/rotate/section-move/marquee/pan) is
+      // in flight — mod+ edit shortcuts must not fire against gesture-local
+      // state that hasn't committed yet. This also removes the collision
+      // where holding Ctrl/Cmd to suppress snap/guides during a move or
+      // resize (BoardRoomCanvas CI-09) plus an incidental keystroke would
+      // otherwise trigger undo/duplicate/copy/etc. mid-drag.
+      if (mod && gestureActiveRef.current) return;
       if (mod && key === 'z') {
         event.preventDefault();
         if (event.shiftKey) redo(); else undo();
@@ -1358,6 +1590,15 @@ export function useBoardRoomController({
   useEffect(() => () => {
     if (escapeArmTimerRef.current) clearTimeout(escapeArmTimerRef.current);
   }, []);
+
+  // The live region holds only the newest thing that happened; stale text
+  // lingering there is what let an announcement mask everything behind it
+  // (A4). Longer than the Escape window, which retires its own prompt first.
+  useEffect(() => {
+    if (!announcement) return;
+    const timer = setTimeout(() => setAnnouncement(''), BOARD_ROOM_ANNOUNCEMENT_TTL_MS);
+    return () => clearTimeout(timer);
+  }, [announcement]);
 
   const state = history?.present ?? null;
   const canvasProps = useMemo<BoardRoomCanvasProps | null>(() => state ? {
@@ -1488,6 +1729,7 @@ export function useBoardRoomController({
         y: (event.clientY - rect.top - view.pan.y) / view.zoom,
       };
     },
+    onGestureActiveChange: setGestureActive,
     renderItem: renderBoardRoomItem,
   } : null, [
     addItems,
@@ -1503,6 +1745,7 @@ export function useBoardRoomController({
     rotateItem,
     selectedItemIds,
     commitItemsSectionMembership,
+    setGestureActive,
     setSelection,
     state,
     view,
@@ -1510,7 +1753,7 @@ export function useBoardRoomController({
 
   const effectiveError = persistenceError ?? layoutBuffer.error ?? canvasBuffer.error ??
     (boardQuery.error instanceof Error ? boardQuery.error.message : null);
-  const persistenceState: BoardRoomControllerApi['persistenceState'] = structuralSaving
+  const persistenceState: BoardRoomControllerApi['persistenceState'] = structuralSaving || isRetryingPersistence
     ? 'saving'
     : layoutBuffer.state === 'error' || canvasBuffer.state === 'error'
       ? 'error'
@@ -1535,6 +1778,8 @@ export function useBoardRoomController({
     persistenceState,
     persistenceError: effectiveError,
     announcement,
+    announce: setAnnouncement,
+    exitPromptArmed,
     canUndo: !!history?.past.length,
     canRedo: !!history?.future.length,
     canvasProps,
@@ -1574,6 +1819,8 @@ export function useBoardRoomController({
     moveSectionBand,
     trimCanvas,
     discardPersistenceError: () => setPersistenceError(null),
+    retryPersistence,
+    isRetryingPersistence,
   };
 }
 

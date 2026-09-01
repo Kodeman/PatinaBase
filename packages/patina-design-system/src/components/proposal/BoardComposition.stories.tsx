@@ -179,3 +179,132 @@ export const MobileStackedSections: Story = {
 export const ExportPainterParity: Story = {
   render: () => <ExportPainterParityHarness />,
 }
+
+// ─── AC2.1: Present vs. guest/client geometry parity ─────────────────────────
+//
+// Present mode (board-room-shell.tsx) and the guest-share surface
+// (apps/client-portal .../share/[token]/page.tsx) both render through this
+// SAME `BoardComposition` component, but reach it via two different prop
+// paths: Present forwards the live edit session's canvasWidth/canvasHeight/
+// backgroundColor/sections as top-level overrides (its in-memory state can
+// be ahead of what's persisted on `board`), while guest/client/mirror pass
+// only `board` and let BoardComposition read its nested fields. AC2.1
+// ("Present/client/guest/mirror geometry matches visually") was Waived as
+// MANUAL-PARITY; this harness makes the one real risk in that gap — the two
+// prop paths silently disagreeing — an automated, code-verified assertion
+// instead of a screenshot someone has to remember to take.
+//
+// Fixture: MOOD_BOARD_GOLDEN_FIXTURE (sections + a rotated id-less item +
+// a palette) plus one added item with no image at all, to also exercise the
+// placeholder-parity fix (VD12, board-item-renderer.tsx/BoardsBlock.tsx
+// ImageTile) across both surfaces.
+
+const presentGuestParityFixture = {
+  ...MOOD_BOARD_GOLDEN_FIXTURE,
+  items: [
+    ...MOOD_BOARD_GOLDEN_FIXTURE.items.map((fixtureItem) => ({
+      ...fixtureItem,
+      imageUrl:
+        fixtureItem.type === 'product' ||
+        fixtureItem.type === 'capture' ||
+        fixtureItem.type === 'image' ||
+        fixtureItem.type === 'room_scan'
+          ? safeImage
+          : fixtureItem.imageUrl,
+    })),
+    {
+      id: 'placeholder-plan',
+      type: 'image' as const,
+      x: 40,
+      y: 620,
+      width: 200,
+      height: 140,
+      zIndex: 6,
+      data: { section_id: 'living', name: 'Floor plan reference' },
+    },
+  ],
+}
+
+const presentGuestParityItems: BoardCompositionItem[] = presentGuestParityFixture.items.map(
+  (fixtureItem) => ({
+    id: fixtureItem.id,
+    type: fixtureItem.type,
+    x: fixtureItem.x,
+    y: fixtureItem.y,
+    width: fixtureItem.width,
+    height: fixtureItem.height ?? null,
+    z_index: fixtureItem.zIndex,
+    rotation: fixtureItem.rotation,
+    image_url: fixtureItem.imageUrl,
+    content: fixtureItem.content,
+    data: fixtureItem.data,
+  }),
+)
+
+const presentGuestParityBoard: BoardCompositionBoard = {
+  id: 'present-guest-parity-board',
+  name: presentGuestParityFixture.name,
+  canvas_width: presentGuestParityFixture.canvasWidth,
+  canvas_height: presentGuestParityFixture.canvasHeight,
+  background_color: presentGuestParityFixture.backgroundColor,
+  sections: presentGuestParityFixture.sections,
+  items: presentGuestParityItems,
+}
+
+function PresentGuestParityHarness() {
+  return (
+    <div data-present-guest-parity-harness="true">
+      {/* Present's exact prop shape — top-level canvas/section overrides
+          plus the designer-only verdict overlay. */}
+      <div
+        data-parity-surface="present"
+        style={{ width: 1200, height: 800, position: 'relative' }}
+      >
+        <BoardComposition
+          board={presentGuestParityBoard}
+          sections={presentGuestParityBoard.sections}
+          canvasWidth={presentGuestParityBoard.canvas_width}
+          canvasHeight={presentGuestParityBoard.canvas_height}
+          backgroundColor={presentGuestParityBoard.background_color}
+          renderPinOverlay={(item) =>
+            item.id ? (
+              <span
+                data-present-verdict-badge="true"
+                style={{ fontSize: 9, background: '#fff', borderRadius: 9999, padding: '1px 4px' }}
+              >
+                ✓
+              </span>
+            ) : null
+          }
+          fullBleed
+          fit="contain"
+          showNotes
+        />
+      </div>
+      {/* Guest/client's exact prop shape — `board` only, no overrides. */}
+      <div
+        data-parity-surface="guest"
+        style={{ width: 1200, height: 800, marginTop: 32, position: 'relative' }}
+      >
+        <BoardComposition
+          board={presentGuestParityBoard}
+          fit="contain"
+          fullBleed
+          showNotes
+          interactive={false}
+        />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * AC2.1: Present and the guest/client-portal surface render one board
+ * fixture (sections + a no-image placeholder + a rotated item + a palette)
+ * through the same shared `BoardComposition`, via each surface's real prop
+ * shape. `present-guest-parity.visual.pw.ts` asserts every item's resolved
+ * geometry agrees between the two.
+ */
+export const PresentGuestParity: Story = {
+  render: () => <PresentGuestParityHarness />,
+}

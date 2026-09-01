@@ -79,7 +79,11 @@ describe('BoardExportDialog', () => {
     expect(onExported).toHaveBeenCalledWith(
       expect.objectContaining({ format: 'png', failedImageCount: 1 }),
     );
-    expect(screen.getByText(/labelled image placeholder/)).toBeInTheDocument();
+    // VD4/VD15: the placeholder warning lives in its own clay-toned list,
+    // separate from the minimal "PNG downloaded." success line.
+    const warning = screen.getByText(/labelled image placeholder/);
+    expect(warning.closest('[role="alert"]')).toBeInTheDocument();
+    expect(screen.getByText('PNG downloaded.')).toBeInTheDocument();
   });
 
   it('reports the effective PNG scale when the 8192px cap lowers the requested 2×', async () => {
@@ -126,6 +130,11 @@ describe('BoardExportDialog', () => {
       expect(screen.getByText(/choose Spec sheet for a more legible product reference/)).toBeInTheDocument(),
     );
     expect(screen.queryByText(/dense_board/)).not.toBeInTheDocument();
+    // The recommendation is a warning, not the success line.
+    expect(
+      screen.getByText(/choose Spec sheet/).closest('[role="alert"]'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('PDF downloaded.')).toBeInTheDocument();
   });
 
   it('keeps composition and spec-sheet PDF kinds distinct for project boards', async () => {

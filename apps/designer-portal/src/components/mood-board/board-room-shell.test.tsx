@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { render } from '@testing-library/react';
-import { useBoardRoomBoundary } from './board-room-shell';
+import { reviewMediaBannerCopy, useBoardRoomBoundary } from './board-room-shell';
 
 function Harness({ active }: { active: boolean }) {
   const ref = useRef<HTMLElement | null>(null);
@@ -74,5 +74,20 @@ describe('useBoardRoomBoundary window drag containment', () => {
     const preventDefault = jest.spyOn(event, 'preventDefault');
     window.dispatchEvent(event);
     expect(preventDefault).not.toHaveBeenCalled();
+  });
+});
+
+describe('reviewMediaBannerCopy (VD3)', () => {
+  it('speaks plainly instead of internal pipeline jargon', () => {
+    expect(reviewMediaBannerCopy(2)).toBe(
+      '2 pins still need a real photo before this board can be published.',
+    );
+    expect(reviewMediaBannerCopy(2)).not.toMatch(/review-media|preparation/i);
+  });
+
+  it('uses singular phrasing for exactly one pin', () => {
+    expect(reviewMediaBannerCopy(1)).toBe(
+      '1 pin still needs a real photo before this board can be published.',
+    );
   });
 });

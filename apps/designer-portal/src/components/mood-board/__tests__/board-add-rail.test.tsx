@@ -11,6 +11,7 @@ import {
 } from '../board-add-rail';
 
 const placeProduct = jest.fn();
+const mockPinFeedback: { rows: unknown[] } = { rows: [] };
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({
@@ -21,7 +22,7 @@ jest.mock('@patina/supabase', () => ({
       }),
     }),
   }),
-  useBoardFeedback: () => ({ data: [] }),
+  useBoardItemFeedbackByBoard: () => ({ data: mockPinFeedback.rows, isLoading: false }),
   usePalettes: () => ({ data: [], isLoading: false }),
   useProposal: () => ({ data: undefined, isLoading: false }),
   useProposalCaptures: () => ({
@@ -217,5 +218,96 @@ describe('BoardAddRail thumbnails carry no native browser drag payload', () => {
     renderRail();
     fireEvent.click(screen.getByRole('tab', { name: 'scans' }));
     expect(screen.getByAltText('')).toHaveAttribute('draggable', 'false');
+  });
+});
+
+// A project-owned board has no proposal to join through, so the rail's feed is
+// board-scoped (00549) — and a guest-link reaction has to read as a guest's.
+describe('BoardAddRail feedback tab', () => {
+  afterEach(() => {
+    mockPinFeedback.rows = [];
+  });
+
+  it('shows a board pin verdict on a project board and marks a guest one', () => {
+    mockPinFeedback.rows = [
+      {
+        id: 'feedback-1',
+        proposal_item_id: null,
+        ffe_item_id: null,
+        board_item_id: uploadedImage.id,
+        client_id: null,
+        guest_share_id: 'share-1',
+        verdict: 'approved',
+        body: null,
+        resolved_at: null,
+        resolved_by: null,
+        created_at: '2026-08-31T10:00:00.000Z',
+        updated_at: '2026-08-31T10:00:00.000Z',
+      },
+    ];
+    renderRail();
+    fireEvent.click(screen.getByRole('tab', { name: 'feedback' }));
+
+    expect(screen.getByText('Guest')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Client verdicts stay with proposal boards.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('leaves an untouched pin without a guest marker', () => {
+    renderRail();
+    fireEvent.click(screen.getByRole('tab', { name: 'feedback' }));
+
+    expect(screen.getByText('No verdict')).toBeInTheDocument();
+    expect(screen.queryByText('Guest')).not.toBeInTheDocument();
+  });
+});
+
+// Cascade placement (CI-11) lives in the shared `findBoardCascadePlacement`
+// geometry helper and the shell's `nextPoint`; the rail's job is simply to
+// call the passed-in `nextPoint` fresh for every single-add click rather than
+// caching one point across clicks — otherwise every add would still stack.
+describe('BoardAddRail requests a fresh point on every click-add (CI-11)', () => {
+  it('calls nextPoint again for a second Add Note click, landing at a different point', () => {
+    const onAddItems = jest.fn();
+    let calls = 0;
+    const nextPoint = jest.fn(() => {
+      calls += 1;
+      return { x: calls * 24, y: calls * 24 };
+    });
+    render(
+      <BoardAddRail
+        owner={owner}
+        boardId="board-1"
+        items={[uploadedImage]}
+        nextPoint={nextPoint}
+        nextZ={() => 1}
+        onAddItems={onAddItems}
+      />,
+    );
+    const addNote = screen.getByRole('button', { name: '+ Note' });
+    fireEvent.click(addNote);
+    fireEvent.click(addNote);
+
+    expect(nextPoint).toHaveBeenCalledTimes(2);
+    expect(onAddItems).toHaveBeenCalledTimes(2);
+    const firstItems = onAddItems.mock.calls[0]![0] as EditableMoodBoardItem[];
+    const secondItems = onAddItems.mock.calls[1]![0] as EditableMoodBoardItem[];
+    expect(firstItems[0]!.x).toBe(24);
+    expect(secondItems[0]!.x).toBe(48);
+    expect(firstItems[0]!.x).not.toBe(secondItems[0]!.x);
+  });
+});
+
+describe('BoardAddRail palettes tab owner-kind wall (VD16)', () => {
+  it('explains, in a distinct explanatory-note style, that palettes are proposal-only', () => {
+    renderRail();
+    fireEvent.click(screen.getByRole('tab', { name: 'palettes' }));
+
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent('Palettes stay with proposal boards');
+    // Distinct from the plain-text "nothing here yet" empty states elsewhere
+    // in the rail — this is unavailable, not empty.
+    expect(note.className).toContain('border-dashed');
   });
 });

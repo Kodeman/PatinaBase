@@ -14,6 +14,9 @@ jest.mock('@/hooks/use-background-removal', () => ({
 
 jest.mock('@patina/supabase', () => ({
   usePromoteBoardReferenceToSelection: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useAddBoardItemDirection: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useResolveBoardItemDirection: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useReopenBoardItemDirection: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 function controllerApi(): BoardRoomControllerApi {
@@ -114,7 +117,11 @@ describe('BoardRoomInspector multi-selection', () => {
     fireEvent.change(screen.getByLabelText('Section'), { target: { value: 'living' } });
     expect(api.setItemsSectionMembership).toHaveBeenCalledWith(['chair', 'rug'], 'living');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete reference' }));
+    const deleteButton = screen.getByRole('button', { name: 'Delete reference' });
+    // VD11: destructive action carries the clay/error tone, not the plain
+    // ghost text color the benign actions above it use.
+    expect(deleteButton.className).toContain('text-[var(--color-clay-ink)]');
+    fireEvent.click(deleteButton);
     expect(api.deleteItems).toHaveBeenCalled();
   });
 });

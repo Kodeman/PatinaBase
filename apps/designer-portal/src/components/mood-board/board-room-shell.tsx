@@ -13,8 +13,10 @@ import { useRouter } from 'next/navigation';
 import {
   BoardComposition,
   BoardRoomCanvas,
+  findBoardCascadePlacement,
   fitBoardGeometry,
   resolveMoodBoardGeometry,
+  zoomBoardViewAtPoint,
   type BoardItemsDroppedCommit,
   type MoodBoardRasterInput,
 } from '@patina/design-system';
@@ -22,7 +24,9 @@ import type { BoardOwnerRef, BoardPoint, EditableMoodBoardItem } from '@patina/t
 import {
   useAddProposalItem,
   useBoard,
-  useBoardFeedback,
+  useBoardItemFeedbackByBoard,
+  useBoardItemDirectionsByBoard,
+  countUnresolvedDirectionsByItem,
   useApplyBoardRoomState,
   usePlaceProductInProjectV2,
   useProject,
@@ -37,6 +41,7 @@ import {
   validateBoardImageFiles,
   type BoardRoomControllerApi,
   type BoardRoomCommandCommittedEvent,
+  type BoardRoomMode,
   type BoardRoomUrlPasteControls,
 } from '@/components/portal/scope-builder/board-room-controller';
 import {
@@ -47,6 +52,7 @@ import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { lockBodyScroll, trapTabWithin } from '@/lib/full-screen-boundary';
 import {
+  consumeMaterializedTemplateFlag,
   moodBoardOpenSource,
   resolveMoodBoardReturnTarget,
 } from '@/lib/mood-board/navigation';
@@ -73,6 +79,8 @@ import {
   type MoodBoardCoverSnapshot,
 } from '@/lib/mood-board-assets/board-cover-lifecycle';
 import { BoardAddRail, uploadFilesAsBoardItems, type BoardAddSource } from './board-add-rail';
+import { BoardApprovedPinsPanel } from './board-approved-pins-panel';
+import { BoardPromoteAllPanel } from './board-promote-all-panel';
 import { BoardRoomInspector } from './board-room-inspector';
 import { BoardRoomSectionsMenu } from './board-room-sections-menu';
 import { BoardShareDialog } from './board-share-dialog';
@@ -85,6 +93,11 @@ import {
   BOARD_ROOM_MIN_TIDY_GAP,
   resolveBoardRoomTidyTarget,
 } from './board-room-tidy';
+import {
+  collectPresentPrefetchTargets,
+  warmPresentImages,
+  type PresentPrefetchHandle,
+} from '@/lib/mood-board/present-prefetch';
 
 const RAIL_COLLAPSED_KEY = 'patina:mood-board:add-rail-collapsed';
 const GRID_VISIBLE_KEY = 'patina:mood-board:grid-visible';
@@ -94,6 +107,16 @@ const FEEDBACK_UNAVAILABLE_MESSAGE = 'Client feedback is still loading or unavai
 function generatedId(prefix: string): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * VD3: plain language for the unprepared-review-media banner. It used to
+ * read "N visual references need review-media preparation" — internal
+ * pipeline jargon a designer has no reason to know. This just says what's
+ * missing and what to do about it.
+ */
+export function reviewMediaBannerCopy(count: number): string {
+  return `${count} ${count === 1 ? 'pin still needs' : 'pins still need'} a real photo before this board can be published.`;
 }
 
 function boardRasterInput(api: BoardRoomControllerApi): MoodBoardRasterInput | null {
@@ -118,26 +141,69 @@ function latestFeedback(rows: readonly ItemFeedback[]): Map<string, ItemFeedback
 function VerdictBadge({ feedback }: { feedback: ItemFeedback | undefined }) {
   const chip = verdictChipSpec(feedback?.verdict, feedback?.resolved_at);
   if (!chip) return null;
+  const fromGuest = Boolean(feedback?.guest_share_id);
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em] shadow-sm"
+      // Deviation from the D4 zero-shadow reconciliation above: this badge
+      // floats over uncontrolled photo imagery, not app chrome, so a
+      // minimal shadow is kept for legibility. The zero-shadow rule applies
+      // to chrome on app surfaces (toolbar, popovers, panels), not pins.
+      className="inline-flex items-center gap-1 rounded-full border border-black/15 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em] shadow-sm"
       style={{ color: chip.color }}
       data-board-verdict={feedback?.verdict}
+      data-verdict-source={fromGuest ? 'guest' : 'client'}
     >
       <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
       {chip.label}
+      {fromGuest && (
+        <span className="text-[var(--text-muted)]">· guest</span>
+      )}
     </span>
   );
 }
 
+/**
+ * Unresolved-direction pin indicator (board-paths W3c, DV6). Wired ONLY into
+ * editRenderItem below — never into renderVerdictOverlay, which is the
+ * Present-mode (and guest-share) render path via BoardComposition. Internal
+ * direction must never render there.
+ */
+function DirectionIndicator({ count }: { count: number }) {
+  if (!count) return null;
+  return (
+    <span
+      aria-label={`${count} unresolved direction note${count === 1 ? '' : 's'}`}
+      className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/10 bg-white/95 px-1 font-mono text-[8px] text-[var(--color-clay-ink)] shadow-sm"
+    >
+      {count}
+    </span>
+  );
+}
+
+/**
+ * Edits a note's text where the note actually sits (CI-24). Reached by
+ * double-clicking the pin; the inspector's textarea remains the alternate
+ * path. Commit semantics match the inspector's: blur and Cmd/Ctrl+Enter
+ * commit, Escape reverts — and because a whole editing session commits once,
+ * on the way out, it costs exactly one undo step.
+ *
+ * It deliberately mounts only while THIS note is being edited, never merely
+ * because it is selected. Mounted on selection, the browser's native
+ * focus-on-click landed in this textarea the instant a shift-click added the
+ * note to a multi-selection, and the focus handler then collapsed the
+ * selection back to the single note — the aria-pressed multi-select failure
+ * that only ever reproduced in a real browser.
+ */
 function InlineNoteEditor({
   item,
   onCommit,
   onFocus,
+  onDone,
 }: {
   item: EditableMoodBoardItem;
   onCommit: (content: string) => void;
   onFocus: () => void;
+  onDone: () => void;
 }) {
   const [draft, setDraft] = useState(item.content ?? '');
   useEffect(() => setDraft(item.content ?? ''), [item.content, item.id]);
@@ -147,12 +213,18 @@ function InlineNoteEditor({
   return (
     <textarea
       aria-label="Edit note"
+      autoFocus
       value={draft}
       onChange={(event) => setDraft(event.currentTarget.value)}
       onFocus={onFocus}
-      onBlur={commit}
+      onBlur={() => {
+        commit();
+        onDone();
+      }}
       onPointerDown={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
+        event.stopPropagation();
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
           commit();
           event.currentTarget.blur();
@@ -162,7 +234,7 @@ function InlineNoteEditor({
           event.currentTarget.blur();
         }
       }}
-      className="h-full w-full resize-none overflow-auto rounded-sm border border-[#E0D2B8] bg-[#F3E9D5] p-3 text-[0.78rem] leading-[1.5] text-[#4A4137] shadow-sm outline-none focus:ring-2 focus:ring-[var(--color-clay)]"
+      className="h-full w-full resize-none overflow-auto rounded-sm border border-[var(--border-warm)] bg-[var(--bg-warm)] p-3 text-[0.78rem] leading-[1.5] text-[var(--color-bark)] outline-none focus:ring-2 focus:ring-[var(--color-clay)]"
       style={{ fontFamily: 'var(--font-body)' }}
     />
   );
@@ -274,6 +346,8 @@ function BoardRoomSurface({
   dropUploadProgress,
   externalNotice,
   onConsumeExternalNotice,
+  justMaterialized,
+  onDismissJustMaterialized,
 }: {
   api: BoardRoomControllerApi;
   owner: BoardOwnerRef;
@@ -287,6 +361,9 @@ function BoardRoomSurface({
   dropUploadProgress: string | null;
   externalNotice: string | null;
   onConsumeExternalNotice: () => void;
+  /** DV3 — true right after a template materialized onto THIS project board. */
+  justMaterialized: boolean;
+  onDismissJustMaterialized: () => void;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -303,6 +380,12 @@ function BoardRoomSurface({
   const [showGrid, setShowGrid] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [tidySession, setTidySession] = useState<TidySpacingSession | null>(null);
+  /** The one note currently being edited in place on the canvas (CI-24). */
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  /** Mirrors the canvas's pointer-gesture state so the room-scoped view
+   *  shortcuts stay out of the way mid-drag, exactly as the edit shortcuts
+   *  already do (CI-17). */
+  const gestureActiveRef = useRef(false);
   const upsertBoard = useUpsertBoard();
   const applyBoardState = useApplyBoardRoomState();
   const boardQuery = useBoard(api.state?.boardId);
@@ -311,27 +394,61 @@ function BoardRoomSurface({
   const sourceProposalId = owner.kind === 'proposal'
     ? owner.id
     : projectQuery.data?.proposal_id ?? null;
-  const unpreparedReviewMediaCount = useMemo(() => {
-    if (owner.kind !== 'project') return 0;
-    const itemCount = (api.state?.items ?? []).filter((item) =>
+  // VD3: item ids kept alongside the count so the banner can jump straight
+  // to the first pin that still needs a real photo, not just report a total.
+  const unpreparedReviewMediaItemIds = useMemo(() => {
+    if (owner.kind !== 'project') return [] as string[];
+    return (api.state?.items ?? []).filter((item) =>
       !item.projectFfeItemId &&
       (item.type === 'image' || item.type === 'room_scan') &&
       Boolean(item.imageUrl) &&
-      typeof item.data?.review_media_asset_id !== 'string').length;
-    const coverCount = boardQuery.data?.cover_image_url &&
-      !boardQuery.data.cover_review_media_asset_id ? 1 : 0;
-    return itemCount + coverCount;
-  }, [api.state?.items, boardQuery.data?.cover_image_url,
-    boardQuery.data?.cover_review_media_asset_id, owner.kind]);
+      typeof item.data?.review_media_asset_id !== 'string').map((item) => item.id);
+  }, [api.state?.items, owner.kind]);
+  const unpreparedReviewMediaCoverNeedsPrep = Boolean(
+    boardQuery.data?.cover_image_url && !boardQuery.data.cover_review_media_asset_id,
+  );
+  const unpreparedReviewMediaCount =
+    unpreparedReviewMediaItemIds.length + (unpreparedReviewMediaCoverNeedsPrep ? 1 : 0);
   const scheduleQuery = useProposalScheduleItems(owner.kind === 'proposal' ? owner.id : undefined);
   const addScheduleItem = useAddProposalItem();
-  const feedbackQuery = useBoardFeedback(owner.kind === 'proposal' ? owner.id : undefined);
+  const feedbackQuery = useBoardItemFeedbackByBoard(api.state?.boardId);
   const feedback = feedbackQuery.data ?? [];
   const feedbackByItem = useMemo(() => latestFeedback(feedback), [feedback]);
+  // Internal direction layer (board-paths W3c, DV6) — studio-only, never
+  // read in Present (see renderVerdictOverlay below, which never touches it).
+  const directionsQuery = useBoardItemDirectionsByBoard(api.state?.boardId);
+  const directions = directionsQuery.data ?? [];
+  const unresolvedDirectionCountByItem = useMemo(
+    () => countUnresolvedDirectionsByItem(directions),
+    [directions],
+  );
   const openedRef = useRef(false);
   const startedAtRef = useRef(performance.now());
   const presentStartedRef = useRef<number | null>(null);
   const previousModeRef = useRef(api.mode);
+  // Present-entry image prefetch (VD12/AC2.1 program, W2d part 3) — a
+  // separate previous-mode ref from `previousModeRef` above: that ref is
+  // consumed (read-then-overwritten) by the analytics effect earlier in this
+  // component, so a second effect reading it in the same render would always
+  // see it already equal to `api.mode`. Seeded to `null` — a sentinel outside
+  // BoardRoomMode's 'edit' | 'present' union — rather than `api.mode`, so a
+  // room that ever mounts directly into Present (e.g. a future
+  // defaultMode:'present') still sees a real transition and warms on that
+  // very first render instead of `previous === current` skipping it.
+  const presentPrefetchPreviousModeRef = useRef<BoardRoomMode | null>(null);
+  const presentPrefetchWarmedRef = useRef<Set<string>>(new Set());
+  const presentPrefetchHandleRef = useRef<PresentPrefetchHandle | null>(null);
+  const [presentPrefetchProgress, setPresentPrefetchProgress] = useState<
+    { loaded: number; total: number } | null
+  >(null);
+  // Set once warming settles with at least one failure (a 404/expired
+  // signed URL/etc still "completes" a warm — see warmPresentImages) so
+  // "Loading images n/n" doesn't silently read as a full success when some
+  // images will still have to stream in live. Auto-dismissed on the
+  // viewer's first interaction with the room; never blocks anything.
+  const [presentPrefetchResult, setPresentPrefetchResult] = useState<
+    { failed: number } | null
+  >(null);
   const upsertCoverRef = useRef(upsertBoard.mutateAsync);
   const applyBoardStateRef = useRef(applyBoardState.mutateAsync);
   const preferenceScope = user?.id;
@@ -629,9 +746,114 @@ function BoardRoomSurface({
     if (api.selectedItemIds.length > 1) metricsRef.current.usedMultiselect = true;
   }, [api.selectedItemIds.length]);
 
+  // The in-place editor closes as soon as its note stops being the single
+  // selection, is deleted, or the room leaves edit mode (CI-24).
+  useEffect(() => {
+    if (!editingNoteId) return;
+    const stillEditable =
+      api.mode === 'edit' &&
+      api.selectedItemIds.length === 1 &&
+      api.selectedItemIds[0] === editingNoteId &&
+      (api.state?.items.some((item) => item.id === editingNoteId) ?? false);
+    if (!stillEditable) setEditingNoteId(null);
+  }, [api.mode, api.selectedItemIds, api.state?.items, editingNoteId]);
+
+  // Defined above the loading guard so the room-scoped view shortcuts below
+  // can close over them; the toolbar buttons use the same two functions.
+  const zoomBy = useCallback((delta: number) => {
+    const rect = workspaceRef.current?.getBoundingClientRect();
+    const size = { width: rect?.width ?? 800, height: rect?.height ?? 600 };
+    api.canvasProps?.onViewChange?.(
+      zoomBoardViewAtPoint(
+        api.view,
+        { x: size.width / 2, y: size.height / 2 },
+        api.view.zoom + delta,
+      ),
+      'zoom',
+    );
+  }, [api]);
+
+  const fit = useCallback(() => {
+    const current = api.state;
+    if (!current) return;
+    const rect = workspaceRef.current?.getBoundingClientRect();
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: current.canvasWidth,
+      canvasHeight: current.canvasHeight,
+      backgroundColor: current.backgroundColor,
+      sections: current.sections,
+      items: current.items,
+    });
+    api.canvasProps?.onViewChange?.(
+      fitBoardGeometry(geometry, {
+        width: rect?.width ?? 800,
+        height: rect?.height ?? 600,
+      }),
+      'fit',
+    );
+  }, [api]);
+
+  // View shortcuts are room-scoped, not canvas-scoped: after a click in the
+  // rail or the inspector, Cmd+0, 1 and the zoom keys kept working for edit
+  // commands but silently died for the view (CI-17). Window level, with the
+  // same guards the edit shortcuts use — the canvas's own handler calls
+  // preventDefault first, so a focused canvas never double-applies.
+  //
+  // Scoped to the room's own subtree (A2): Cmd +/-/0 is the browser's page
+  // zoom, a primary low-vision affordance. Swallowing it for the whole route
+  // — dialogs, header, anything portalled outside the room — would take that
+  // away. Only a keystroke aimed INSIDE the room is ours.
+  const resetZoom = useCallback(() => {
+    const rect = workspaceRef.current?.getBoundingClientRect();
+    api.canvasProps?.onViewChange?.(
+      zoomBoardViewAtPoint(
+        api.view,
+        { x: (rect?.width ?? 800) / 2, y: (rect?.height ?? 600) / 2 },
+        1,
+      ),
+      'reset',
+    );
+  }, [api]);
+  // Held in a ref so the window listener registers once instead of on every
+  // render (A14).
+  const viewShortcutsRef = useRef({ fit, zoomBy, resetZoom });
+  viewShortcutsRef.current = { fit, zoomBy, resetZoom };
+  useEffect(() => {
+    const handleViewKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isTextEntryTarget(event.target)) return;
+      const root = rootRef.current;
+      const target = event.target;
+      if (!root || !(target instanceof Node) || !root.contains(target)) return;
+      // No view change while a pointer gesture is in flight — zoom or fit
+      // re-anchors the frame the gesture was measured against. Bare '1'
+      // needed this as much as the mod+ combos did (A3).
+      if (gestureActiveRef.current) return;
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod && event.key === '1') {
+        event.preventDefault();
+        viewShortcutsRef.current.fit();
+        return;
+      }
+      if (mod && event.key === '0') {
+        event.preventDefault();
+        viewShortcutsRef.current.resetZoom();
+        return;
+      }
+      if (mod && (event.key === '+' || event.key === '=' || event.key === '-')) {
+        event.preventDefault();
+        viewShortcutsRef.current.zoomBy(event.key === '-' ? -0.1 : 0.1);
+      }
+    };
+    window.addEventListener('keydown', handleViewKeyDown);
+    return () => window.removeEventListener('keydown', handleViewKeyDown);
+  }, []);
+
   useEffect(() => {
     const guard = (items: readonly EditableMoodBoardItem[]) => {
-      if (owner.kind === 'proposal' && !feedbackQuery.isSuccess) {
+      // Was proposal-owners-only. A project board's pins can now carry guest
+      // link reactions, so deleting them destroys real client feedback there
+      // too — the guard has to wait for the feed on both owner kinds.
+      if (!feedbackQuery.isSuccess) {
         setSurfaceError(FEEDBACK_UNAVAILABLE_MESSAGE);
         void feedbackQuery.refetch();
         return false;
@@ -649,7 +871,7 @@ function BoardRoomSurface({
     return () => {
       if (deleteGuardRef.current === guard) deleteGuardRef.current = null;
     };
-  }, [deleteGuardRef, feedback, feedbackQuery, owner.kind]);
+  }, [deleteGuardRef, feedback, feedbackQuery]);
 
   useEffect(() => {
     if (feedbackQuery.isSuccess) {
@@ -681,6 +903,58 @@ function BoardRoomSurface({
       presentStartedRef.current = null;
     }
   }, [api.mode, api.state, owner.id, owner.kind, sourceProposalId]);
+
+  // Warm every item image (+ cover) the instant Present is entered — from
+  // either the toolbar toggle or the 'p' shortcut, both of which land here as
+  // an `api.mode` flip. Never blocks the switch: `warmPresentImages` returns
+  // synchronously and Present renders immediately; this only shortens the
+  // window where a pin is still a gray box mid-load. `presentPrefetchWarmedRef`
+  // persists for the life of the room session, so re-entering Present never
+  // re-requests a URL already warmed.
+  useEffect(() => {
+    const previous = presentPrefetchPreviousModeRef.current;
+    presentPrefetchPreviousModeRef.current = api.mode;
+    if (api.mode !== 'present') {
+      if (previous === 'present') {
+        presentPrefetchHandleRef.current?.cancel();
+        presentPrefetchHandleRef.current = null;
+        setPresentPrefetchProgress(null);
+        setPresentPrefetchResult(null);
+      }
+      return;
+    }
+    if (previous === 'present' || !api.state) return;
+
+    setPresentPrefetchResult(null); // clear any stale note from a prior session
+    const targets = collectPresentPrefetchTargets(
+      api.state.items,
+      boardQuery.data?.cover_image_url ?? null,
+    );
+    presentPrefetchHandleRef.current = warmPresentImages(targets, presentPrefetchWarmedRef.current, {
+      onProgress: (loaded, total) => setPresentPrefetchProgress({ loaded, total }),
+      onSettled: (failed) => {
+        setPresentPrefetchProgress(null);
+        if (failed > 0) setPresentPrefetchResult({ failed });
+      },
+    });
+  }, [api.mode, api.state, boardQuery.data?.cover_image_url]);
+
+  // Auto-dismiss the "may load during presentation" note on the viewer's
+  // first interaction with the room — it's informational, never modal.
+  useEffect(() => {
+    if (!presentPrefetchResult) return;
+    const node = workspaceRef.current;
+    if (!node) return;
+    const dismiss = () => setPresentPrefetchResult(null);
+    node.addEventListener('pointerdown', dismiss, { once: true });
+    node.addEventListener('keydown', dismiss, { once: true });
+    return () => {
+      node.removeEventListener('pointerdown', dismiss);
+      node.removeEventListener('keydown', dismiss);
+    };
+  }, [presentPrefetchResult]);
+
+  useEffect(() => () => presentPrefetchHandleRef.current?.cancel(), []);
 
   const input = useMemo(() => boardRasterInput(api), [api]);
   useBoardRoomBoundary(
@@ -791,19 +1065,12 @@ function BoardRoomSurface({
   const state = api.state;
   const nextPoint = (): BoardPoint => {
     const rect = workspaceRef.current?.getBoundingClientRect();
-    return {
+    const base = {
       x: ((rect?.width ?? 800) / 2 - api.view.pan.x) / api.view.zoom - 130,
       y: ((rect?.height ?? 600) / 2 - api.view.pan.y) / api.view.zoom - 150,
     };
-  };
-  const nextZ = () => Math.max(-1, ...state.items.map((item) => item.zIndex ?? 0)) + 1;
-
-  const addFromRail = (items: readonly EditableMoodBoardItem[], addSource: BoardAddSource) => {
-    api.addItems(items, { source: addSource });
-  };
-
-  const fit = () => {
-    const rect = workspaceRef.current?.getBoundingClientRect();
+    // Section-band bounds (label included) are also avoided, so a click-add
+    // never lands under a band.
     const geometry = resolveMoodBoardGeometry({
       canvasWidth: state.canvasWidth,
       canvasHeight: state.canvasHeight,
@@ -811,11 +1078,18 @@ function BoardRoomSurface({
       sections: state.sections,
       items: state.items,
     });
-    const next = fitBoardGeometry(geometry, {
-      width: rect?.width ?? 800,
-      height: rect?.height ?? 600,
-    });
-    api.canvasProps?.onViewChange?.(next, 'fit');
+    // Cascades by (24, 24) past whatever already occupies the centre point,
+    // so repeated click-adds don't stack invisibly on top of each other (CI-11).
+    return findBoardCascadePlacement(
+      base,
+      state.items.map((item) => ({ x: item.x, y: item.y })),
+      { avoidRects: geometry.sections.map((section) => section.bounds) },
+    );
+  };
+  const nextZ = () => Math.max(-1, ...state.items.map((item) => item.zIndex ?? 0)) + 1;
+
+  const addFromRail = (items: readonly EditableMoodBoardItem[], addSource: BoardAddSource) => {
+    api.addItems(items, { source: addSource });
   };
 
   const renderVerdictOverlay = (item: { id?: string }) => (
@@ -824,19 +1098,22 @@ function BoardRoomSurface({
   const originalRenderItem = api.canvasProps.renderItem;
   const editRenderItem = (item: EditableMoodBoardItem): ReactNode => (
     <div className="relative h-full w-full">
-      {item.type === 'note' && api.selectedItemIds.includes(item.id) ? (
+      {item.type === 'note' && editingNoteId === item.id ? (
         <InlineNoteEditor
           item={item}
-          onFocus={() => {
-            api.setFocusedItemId(item.id);
-            api.setSelection([item.id]);
-          }}
+          onFocus={() => api.setFocusedItemId(item.id)}
           onCommit={(content) => api.updateItem(item.id, { content })}
+          onDone={() => setEditingNoteId(null)}
         />
       ) : originalRenderItem(item)}
       {feedbackByItem.has(item.id) && (
         <span className="pointer-events-none absolute right-1 top-1 z-20">
           <VerdictBadge feedback={feedbackByItem.get(item.id)} />
+        </span>
+      )}
+      {(unresolvedDirectionCountByItem.get(item.id) ?? 0) > 0 && (
+        <span className="pointer-events-none absolute left-1 top-1 z-20">
+          <DirectionIndicator count={unresolvedDirectionCountByItem.get(item.id) ?? 0} />
         </span>
       )}
     </div>
@@ -892,8 +1169,12 @@ function BoardRoomSurface({
             </button>
             <button type="button" disabled={!api.canUndo} onClick={api.undo} className="hidden min-h-11 min-w-11 px-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30 sm:block" aria-label="Undo">↶</button>
             <button type="button" disabled={!api.canRedo} onClick={api.redo} className="hidden min-h-11 min-w-11 px-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30 sm:block" aria-label="Redo">↷</button>
-            <span className="hidden min-w-10 text-center font-mono text-[9px] tabular-nums text-[var(--text-muted)] lg:block">{Math.round(api.view.zoom * 100)}%</span>
-            <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 lg:inline-flex" onClick={fit}>Fit</Button>
+            {/* Zoom/Fit stay visible at every viewport width (CI-02) — only
+                Grid/Snap/Tidy below keep their lg:/xl: gating. */}
+            <button type="button" aria-label="Zoom out" onClick={() => zoomBy(-0.1)} className="flex min-h-11 min-w-11 items-center justify-center text-sm text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">−</button>
+            <span className="min-w-10 text-center font-mono text-[9px] tabular-nums text-[var(--text-muted)]">{Math.round(api.view.zoom * 100)}%</span>
+            <button type="button" aria-label="Zoom in" onClick={() => zoomBy(0.1)} className="flex min-h-11 min-w-11 items-center justify-center text-sm text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">+</button>
+            <Button variant="ghost" size="sm" className="min-h-11 min-w-11 inline-flex" onClick={fit}>Fit</Button>
             <button type="button" aria-pressed={showGrid} onClick={toggleGrid} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Grid</button>
             <button type="button" aria-pressed={snapToGrid} onClick={toggleSnap} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Snap</button>
             <Button
@@ -909,9 +1190,7 @@ function BoardRoomSurface({
         )}
 
         <div className="flex shrink-0 items-center gap-1">
-          {owner.kind === 'proposal' && (
-            <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)}>Share</Button>
-          )}
+          <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)}>Share</Button>
           {api.mode === 'edit' && <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 sm:inline-flex" onClick={() => setExportOpen(true)}>Export</Button>}
           <Button variant={api.mode === 'present' ? 'secondary' : 'ghost'} size="sm" className="min-h-11 min-w-11" onClick={api.togglePresent}>
             {api.mode === 'present' ? 'Edit' : 'Present'}
@@ -937,16 +1216,28 @@ function BoardRoomSurface({
       {(surfaceError || api.persistenceError) && (
         <div role="alert" className="relative z-40 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--color-clay-ink)]">
           <span>{surfaceError ?? api.persistenceError}</span>
-          <button
-            type="button"
-            className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
-            onClick={() => {
-              setSurfaceError(null);
-              api.discardPersistenceError();
-            }}
-          >
-            Dismiss reverted change
-          </button>
+          <span className="flex shrink-0 items-center gap-1">
+            {api.persistenceError && !surfaceError && (
+              <button
+                type="button"
+                disabled={api.isRetryingPersistence}
+                className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase underline underline-offset-2 disabled:no-underline disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                onClick={() => { void api.retryPersistence(); }}
+              >
+                {api.isRetryingPersistence ? 'Trying…' : 'Try again'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+              onClick={() => {
+                setSurfaceError(null);
+                api.discardPersistenceError();
+              }}
+            >
+              Dismiss reverted change
+            </button>
+          </span>
         </div>
       )}
 
@@ -966,7 +1257,17 @@ function BoardRoomSurface({
 
       {unpreparedReviewMediaCount > 0 && !surfaceError && !api.persistenceError && (
         <div role="status" className="relative z-40 shrink-0 border-b border-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--color-clay-ink)]">
-          {unpreparedReviewMediaCount} visual {unpreparedReviewMediaCount === 1 ? 'reference needs' : 'references need'} review-media preparation before this board can be published.
+          {unpreparedReviewMediaItemIds[0] ? (
+            <button
+              type="button"
+              onClick={() => focusFeedbackItem(unpreparedReviewMediaItemIds[0])}
+              className="min-h-11 text-left underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+            >
+              {reviewMediaBannerCopy(unpreparedReviewMediaCount)}
+            </button>
+          ) : (
+            <span>{reviewMediaBannerCopy(unpreparedReviewMediaCount)}</span>
+          )}
         </div>
       )}
 
@@ -974,6 +1275,27 @@ function BoardRoomSurface({
         <div role="status" className="relative z-40 shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--text-muted)]">
           Uploading {dropUploadProgress}
         </div>
+      )}
+
+      {owner.kind === 'project' && !surfaceError && !api.persistenceError && (
+        <BoardPromoteAllPanel
+          projectId={owner.id}
+          scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
+          items={state.items}
+          justMaterialized={justMaterialized}
+          onDismissJustMaterialized={onDismissJustMaterialized}
+          onPromoted={(itemId, selectionId) => api.updateItem(itemId, { projectFfeItemId: selectionId })}
+        />
+      )}
+
+      {owner.kind === 'project' && !surfaceError && !api.persistenceError && (
+        <BoardApprovedPinsPanel
+          boardId={state.boardId}
+          projectId={owner.id}
+          scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
+          items={state.items}
+          onPromoted={(itemId, selectionId) => api.updateItem(itemId, { projectFfeItemId: selectionId })}
+        />
       )}
 
       <input
@@ -991,7 +1313,7 @@ function BoardRoomSurface({
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {api.mode === 'edit' && !railCollapsed && (
-          <aside className="flex max-h-48 w-full shrink-0 flex-col border-b border-[var(--border-default)] bg-[var(--bg-surface)] md:max-h-none md:w-[264px] md:border-b-0 md:border-r">
+          <aside aria-label="Add to board" className="flex max-h-48 w-full shrink-0 flex-col border-b border-[var(--border-default)] bg-[var(--bg-surface)] md:max-h-none md:w-[264px] md:border-b-0 md:border-r">
             <BoardAddRail
               owner={owner}
               boardId={state.boardId}
@@ -1014,7 +1336,7 @@ function BoardRoomSurface({
             <div
               role="group"
               aria-label="Tidy spacing"
-              className="absolute left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 shadow-lg"
+              className="absolute left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2"
             >
               <label className="flex items-center gap-2 font-mono text-[9px] uppercase text-[var(--text-muted)]">
                 Spacing
@@ -1043,18 +1365,48 @@ function BoardRoomSurface({
             </div>
           )}
           {api.mode === 'present' ? (
-            <BoardComposition
-              board={api.compositionBoard}
-              sections={state.sections}
-              canvasWidth={state.canvasWidth}
-              canvasHeight={state.canvasHeight}
-              backgroundColor={state.backgroundColor}
-              renderPinOverlay={renderVerdictOverlay}
-              fullBleed
-              fit="contain"
-              showNotes={api.showNotes}
-              className="h-full"
-            />
+            <>
+              <BoardComposition
+                board={api.compositionBoard}
+                sections={state.sections}
+                canvasWidth={state.canvasWidth}
+                canvasHeight={state.canvasHeight}
+                backgroundColor={state.backgroundColor}
+                renderPinOverlay={renderVerdictOverlay}
+                fullBleed
+                fit="contain"
+                showNotes={api.showNotes}
+                className="h-full"
+              />
+              {presentPrefetchProgress && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="pointer-events-none absolute bottom-3 right-3 z-40 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] shadow-sm"
+                >
+                  Loading images {presentPrefetchProgress.loaded}/{presentPrefetchProgress.total}
+                </div>
+              )}
+              {!presentPrefetchProgress && presentPrefetchResult && presentPrefetchResult.failed > 0 && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="absolute bottom-3 right-3 z-40 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] shadow-sm"
+                >
+                  <span>
+                    {presentPrefetchResult.failed} image{presentPrefetchResult.failed === 1 ? '' : 's'} may load during presentation
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Dismiss"
+                    onClick={() => setPresentPrefetchResult(null)}
+                    className="min-h-4 min-w-4 text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <BoardRoomCanvas
               {...api.canvasProps}
@@ -1062,6 +1414,22 @@ function BoardRoomSurface({
               showGrid={showGrid}
               snapToGrid={snapToGrid}
               showViewControls={false}
+              onAnnounce={api.announce}
+              onGestureActiveChange={(active) => {
+                gestureActiveRef.current = active;
+                api.canvasProps?.onGestureActiveChange?.(active);
+              }}
+              onItemActivate={(item) => {
+                // Double-click a note and the caret lands in the note itself
+                // (CI-24); everything else keeps the controller's activation.
+                if (item.type === 'note') {
+                  api.setSelection([item.id]);
+                  api.setFocusedItemId(item.id);
+                  setEditingNoteId(item.id);
+                  return;
+                }
+                api.canvasProps?.onItemActivate?.(item);
+              }}
               className="h-full min-h-0"
             />
           )}
@@ -1071,29 +1439,48 @@ function BoardRoomSurface({
             scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
             onOpenProduct={openProduct}
             onReplaceImage={replaceImage}
+            directions={directions}
           />
         </div>
       </div>
 
-      <div aria-live="polite" className="sr-only">
-        {api.announcement || (api.persistenceState === 'saving' || api.persistenceState === 'dirty'
+      {/* Persistence status keeps its OWN region. Sharing one with the
+          announcements meant a routed canvas announcement — which fires on
+          every click — permanently masked "Saving"/"Saved" behind it (A4).
+          This one is derived from state, so it clears itself. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {api.persistenceState === 'saving' || api.persistenceState === 'dirty'
           ? 'Saving board changes'
           : api.persistenceState === 'saved'
             ? 'Board changes saved'
-            : '')}
+            : ''}
       </div>
 
-      {owner.kind === 'proposal' && (
-        <BoardShareDialog
-          boardId={state.boardId}
-          boardName={state.name}
-          owner={owner}
-          sourceProposalId={sourceProposalId}
-          open={shareOpen}
-          onOpenChange={setShareOpen}
-          flush={api.flushPending}
-        />
-      )}
+      {/* The room's ONE announcement region — the canvas routes its own here
+          rather than rendering a second one that talks over it (CI-14). It
+          also carries the exit guard, and shows itself when it does: the
+          "press again" prompt used to be audible to a screen reader and
+          invisible to everyone else (CI-20). */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        data-testid="board-room-live-region"
+        className={api.exitPromptArmed
+          ? 'pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-[var(--border-subtle,#DED6C9)] bg-[var(--bg-raised,#FFFDF9)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]'
+          : 'sr-only'}
+      >
+        {api.announcement}
+      </div>
+
+      <BoardShareDialog
+        boardId={state.boardId}
+        boardName={state.name}
+        owner={owner}
+        sourceProposalId={sourceProposalId}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        flush={api.flushPending}
+      />
       <BoardExportDialog
         boardId={state.boardId}
         boardName={state.name}
@@ -1108,6 +1495,7 @@ function BoardRoomSurface({
         boardName={state.name}
         itemCount={state.items.length}
         sectionCount={state.sections.length}
+        items={state.items}
         open={templateOpen}
         onOpenChange={setTemplateOpen}
         flush={api.flushPending}
@@ -1169,6 +1557,31 @@ export function MoodBoardRoom({
       moodBoardEvents.itemAdded({ board_id: boardId, type, source, count });
     }
   }, [boardId]);
+  // DV3 — set once from the `materialized=template` query param BoardsBuilder
+  // appends on its post-materialize redirect. Dismissible (either an
+  // explicit dismiss or a completed "Promote all" run) but never recomputed
+  // from the URL again — a one-shot banner, not a persistent read of `search`.
+  const [justMaterialized, setJustMaterialized] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return consumeMaterializedTemplateFlag({
+      pathname: window.location.pathname,
+      search: window.location.search,
+    }).present;
+  });
+  const materializedRouter = useRouter();
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const { strippedHref } = consumeMaterializedTemplateFlag({
+      pathname: window.location.pathname,
+      search: window.location.search,
+    });
+    if (!strippedHref) return;
+    // Strip the param immediately — otherwise a refresh or a bookmark of
+    // THIS url re-triggers the "just materialized" framing forever; this
+    // read is meant to fire exactly once per real materialize-then-redirect.
+    materializedRouter.replace(strippedHref, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [navigation] = useState(() => {
     if (typeof window === 'undefined') {
       return { source: 'direct_url' as const, returnTarget: owner.kind === 'proposal' ? `/drafting/${owner.id}` : `/doc/${owner.id}` };
@@ -1343,6 +1756,8 @@ export function MoodBoardRoom({
             dropUploadProgress={dropUploadProgress}
             externalNotice={externalNotice}
             onConsumeExternalNotice={() => setExternalNotice(null)}
+            justMaterialized={justMaterialized}
+            onDismissJustMaterialized={() => setJustMaterialized(false)}
           />
         );
       }}

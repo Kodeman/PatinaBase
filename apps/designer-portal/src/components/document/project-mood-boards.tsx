@@ -11,6 +11,7 @@ import {
   useProjectFfeReadiness,
   useProjectReviewAttention,
   useProjectOwnedBoards,
+  useBoardReactionStatuses,
   type ProjectBoard,
   type ProposalBoardSummary,
 } from '@patina/supabase';
@@ -18,6 +19,7 @@ import type { MoodBoardSection } from '@patina/types';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
+import { BoardReactionStatusChip } from '@/components/mood-board/board-reaction-status-chip';
 import { GuidedEmptyState } from './guided-empty-state';
 import { BoardsBuilder } from '@/components/portal/scope-builder/boards-builder';
 import { RegionHead, type RegionLedgerEntry } from './region/region-head';
@@ -119,6 +121,10 @@ export function ProjectMoodBoards({
       ),
     [frozenQuery.data, heldRoomId],
   );
+  // Board-level reaction status chip (board-paths W2b #1) — derived from the
+  // same verdict_counts already fetched for the cover card plus a batched
+  // active-share lookup; nothing new is read per board.
+  const reactionStatuses = useBoardReactionStatuses(liveBoards);
 
   // The boards now live on a shelf, and the FF&E line these three items point
   // at lives on the paper behind it — so the leaf has to be put away before
@@ -215,10 +221,16 @@ export function ProjectMoodBoards({
   }, [activeSelectionRows, attentionQuery.data, canCreate, liveBoards, pathname, readinessQuery.data, revealSelection]);
 
   const boardsEmpty = liveBoards.length === 0 && frozenBoards.length === 0;
+  // D4' — an empty Boards region used to default FOLDED, so the only "Start a
+  // board" affordance on the paper was a click behind a plain unfold seam:
+  // audit personas took minutes to find where a board even lives. The region
+  // now always defaults open (a designer can still fold it explicitly — that
+  // choice is remembered same as ever); this only changes what a reader sees
+  // on the FIRST visit to an empty region.
   const { folded: boardsFolded, setFolded: setBoardsFolded, cause: boardsCause } = useRegionFold({
     docId: projectId,
     region: 'boards',
-    defaultFolded: isLoading ? null : boardsEmpty,
+    defaultFolded: isLoading ? null : false,
   });
   const unfoldFocusRef = useRef(false);
 
@@ -428,6 +440,10 @@ export function ProjectMoodBoards({
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {board.item_count} {board.item_count === 1 ? 'piece' : 'pieces'} · Open room
                     </p>
+                    <BoardReactionStatusChip
+                      status={reactionStatuses.get(board.id)}
+                      className="mt-1"
+                    />
                   </div>
                 </Link>
               );

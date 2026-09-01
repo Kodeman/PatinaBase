@@ -25,9 +25,15 @@ export const MOOD_BOARD_VISUAL = {
     border: '#ded7cd',
     text: '#362f29',
     muted: '#776e64',
-    note: '#f3e9d5',
-    noteBorder: '#e0d2b8',
-    noteText: '#4a4137',
+    // Kept as hex, not a CSS var: the deterministic export painter can't
+    // resolve custom properties. These are the hex VALUES of the
+    // --bg-warm/--border-warm/--color-bark tokens board-room-shell.tsx's
+    // InlineNoteEditor and board-item-renderer.tsx's NoteCard standardized
+    // on (VD1/VD18) — keep all three in step or edit mode diverges from
+    // every presentation surface (Present/guest/client/mirror + export PDF).
+    note: '#eee6db',
+    noteBorder: '#ddd4c8',
+    noteText: '#4a453f',
     placeholder: '#eee9e1',
     placeholderBorder: '#cfc5b8',
     placeholderText: '#756b60',

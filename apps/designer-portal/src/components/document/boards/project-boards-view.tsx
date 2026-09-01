@@ -14,14 +14,17 @@ import { useRouter } from 'next/navigation';
 import {
   useProjectBoards,
   useProjectOwnedBoards,
+  useBoardReactionStatuses,
   type ProjectBoard,
   type ProposalBoardSummary,
 } from '@patina/supabase';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { boardsRoutePath } from '@/lib/document/registry';
-import { NEW_BOARD_EVENT } from '@/lib/document/shelves';
+import { NEW_BOARD_EVENT, startBoardPending } from '@/lib/document/shelves';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { BoardsBuilder } from '@/components/portal/scope-builder/boards-builder';
+import { BoardReactionStatusChip } from '@/components/mood-board/board-reaction-status-chip';
+import type { BoardReactionStatus } from '@patina/supabase';
 import { DocumentAction, DocumentActionRow } from '../document-action';
 
 const SURFACE_KEY = 'project-boards';
@@ -41,10 +44,12 @@ function BoardRow({
   name,
   detail,
   href,
+  status,
 }: {
   name: string;
   detail: string;
   href: string;
+  status?: BoardReactionStatus | null;
 }) {
   return (
     <Link href={href} className={ROW}>
@@ -52,8 +57,11 @@ function BoardRow({
         <span className="block truncate font-heading text-[15px] text-[var(--color-charcoal)]">
           {name}
         </span>
-        <span className="mt-0.5 block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-          {detail}
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            {detail}
+          </span>
+          <BoardReactionStatusChip status={status} />
         </span>
       </span>
       <span aria-hidden className="font-mono text-[13px] text-[var(--color-clay-ink)]">
@@ -87,8 +95,31 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
     return () => window.removeEventListener(NEW_BOARD_EVENT, open);
   }, []);
 
+  // D4' — ⌘K's "Start a board…" command lands here after a navigation, so the
+  // intent has to be read off the pending flag rather than the live event
+  // (this page did not exist yet when the command fired it). Gated on this
+  // page's OWN project id, and cleared unconditionally once that id is known
+  // — a mismatch is cleared just as eagerly as a match, so an abandoned
+  // navigation (a superseded push, a fast back, an aborted RSC nav) cannot
+  // leave the flag to silently auto-open the builder on a later, unrelated
+  // project's Boards page. Depends on `projectId` rather than running once on
+  // mount: the engagement read resolves after first paint, so the id is not
+  // yet known on the render that installs this effect.
+  useEffect(() => {
+    if (!projectId) return;
+    const pendingProjectId = startBoardPending.projectId;
+    startBoardPending.projectId = null;
+    if (pendingProjectId === projectId) setStarting(true);
+  }, [projectId]);
+
   const live = useProjectOwnedBoards(projectId ?? '');
   const frozen = useProjectBoards(projectId ?? '');
+  // Board-level reaction status chip (board-paths W2b #1) — computed above
+  // every early return per the rules of hooks; reads (live.data ?? []) directly
+  // since the filtered `liveBoards` below isn't derived until after them.
+  const reactionStatuses = useBoardReactionStatuses(
+    (live.data ?? []) as ProposalBoardSummary[],
+  );
 
   if (engagement.isLoading || (projectId && (live.isLoading || frozen.isLoading))) {
     return (
@@ -201,6 +232,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
                       key={board.id}
                       name={board.name}
                       detail={`${pieces(board.item_count)} · open room`}
+                      status={reactionStatuses.get(board.id)}
                       href={boardRoomHref({
                         boardId: board.id,
                         from: boardsRoutePath(routeId),

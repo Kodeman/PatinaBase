@@ -21,6 +21,9 @@ jest.mock('@patina/supabase', () => ({
   useProjectFfeReadiness: (...args: unknown[]) => useProjectFfeReadiness(...args),
   useProjectReviewAttention: (...args: unknown[]) => useProjectReviewAttention(...args),
   useContinueBoardInProject: () => ({ mutateAsync, isPending: false }),
+  // Board-level reaction status chip (board-paths W2b #1) — no active shares
+  // in this suite's fixtures, so every card renders no chip.
+  useBoardReactionStatuses: () => new Map(),
 }));
 
 jest.mock('@patina/design-system', () => ({
@@ -87,23 +90,30 @@ describe('Boards region head', () => {
     );
   });
 
-  it('renders a folded seam with the no-boards-yet summary by default', () => {
+  // D4' — an empty region used to default folded shut, so the only "Start a
+  // board" affordance was a click behind a plain unfold seam. It now defaults
+  // OPEN even with no boards yet; a designer can still fold it explicitly
+  // (that choice is remembered, same as ever — see the round-trip below).
+  it('renders unfolded by default even with no boards yet', () => {
     render(<ProjectMoodBoards projectId="project-1" />);
 
+    expect(screen.getByRole('heading', { name: 'Boards' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: 'Boards' }),
-    ).not.toBeInTheDocument();
-    const seam = screen.getByRole('button', {
-      name: 'Boards no boards yet unfold ↓',
-    });
-    expect(seam).toBeInTheDocument();
-    expect(seam).toHaveAttribute('aria-expanded', 'false');
+      screen.getByText(/Start the project.s visual direction/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
   });
 
-  it('round-trips the seam: unfolding mounts the head and body', () => {
+  it('round-trips the fold: an explicit fold shows the seam, and unfolding it restores the head and body', () => {
     render(<ProjectMoodBoards projectId="project-1" />);
 
-    const seam = screen.getByRole('button', { name: /boards/i });
+    fireEvent.click(screen.getByRole('button', { name: 'Fold ↑' }));
+
+    const seam = screen.getByRole('button', { name: /no boards yet/i });
+    expect(seam).toBeInTheDocument();
+    expect(seam).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('heading', { name: 'Boards' })).not.toBeInTheDocument();
+
     fireEvent.click(seam);
 
     expect(

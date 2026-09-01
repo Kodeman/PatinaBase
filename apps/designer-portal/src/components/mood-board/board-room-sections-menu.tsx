@@ -88,7 +88,7 @@ export function BoardRoomSectionsMenu({
       <summary className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center px-2 font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">
         More
       </summary>
-      <div className="absolute right-0 top-full z-[80] mt-1 w-[320px] max-w-[85vw] rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 shadow-xl">
+      <div className="absolute right-0 top-full z-[80] mt-1 w-[320px] max-w-[85vw] rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
         <div className="mb-3 grid grid-cols-3 gap-1 border-b border-[var(--border-default)] pb-3 xl:hidden">
           <Button size="sm" className="min-h-11 min-w-11" variant={showGrid ? 'secondary' : 'ghost'} aria-pressed={showGrid} onClick={onToggleGrid}>Grid</Button>
           <Button size="sm" className="min-h-11 min-w-11" variant={snapToGrid ? 'secondary' : 'ghost'} aria-pressed={snapToGrid} onClick={onToggleSnap}>Snap</Button>

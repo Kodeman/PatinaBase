@@ -71,9 +71,40 @@ jest.mock("@/lib/analytics/document-events", () => ({
   },
 }));
 
+jest.mock("@/lib/analytics/mood-board-events", () => ({
+  moodBoardEvents: {
+    templateUsed: jest.fn(),
+  },
+}));
+
+// BoardCreatePickerDialog (IA-5 — the strip now opens the same picker the
+// Drafting Room facet uses) needs the design-system Dialog primitives and a
+// wider @patina/supabase surface than the strip's own reads.
+jest.mock("@patina/design-system", () => ({
+  Dialog: ({
+    open,
+    children,
+  }: React.PropsWithChildren<{ open: boolean }>) =>
+    open ? <div role="dialog">{children}</div> : null,
+  DialogContent: ({ children }: React.PropsWithChildren) => (
+    <div>{children}</div>
+  ),
+  DialogDescription: ({ children }: React.PropsWithChildren) => (
+    <p>{children}</p>
+  ),
+  DialogHeader: ({ children }: React.PropsWithChildren) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
+}));
+
 jest.mock("@patina/supabase", () => ({
   useBoards: () => ({ data: mockBoards, ...mockBoardsQueryState }),
   useUpsertBoard: () => ({ mutateAsync: upsert, isPending: false }),
+  useOrganizations: () => ({ data: [{ id: "studio-1", type: "design_studio" }] }),
+  useBoardTemplates: () => ({ data: [], isLoading: false, isError: false }),
+  useCreateProjectBoard: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useMaterializeBoardTemplate: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 const expectedHref = (boardId: string) =>
@@ -134,12 +165,17 @@ describe("BoardsStrip", () => {
     expect(screen.queryByText("Retired direction")).not.toBeInTheDocument();
   });
 
-  it("starts a board through the facet creation flow and lands in its room", async () => {
+  it("starts a board through the SAME picker the facet uses, and lands in its room (IA-5)", async () => {
     upsert.mockResolvedValue({ id: "board-new" });
     render(<BoardsStrip proposalId="proposal-1" />);
 
     fireEvent.click(
       screen.getAllByRole("button", { name: "Start a board" })[0],
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Blank board A clean, flexible canvas. Choose",
+      }),
     );
 
     await waitFor(() =>
@@ -162,6 +198,11 @@ describe("BoardsStrip", () => {
 
     fireEvent.click(
       screen.getAllByRole("button", { name: "Start a board" })[0],
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Blank board A clean, flexible canvas. Choose",
+      }),
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent("RLS said no.");

@@ -28,21 +28,31 @@ export interface BoardExportResult {
   failedImageCount: number;
 }
 
+/** VD4/VD15: the export outcome is a minimal success line plus a separate,
+ * visually distinct list of anything the designer should double-check —
+ * never one paragraph blending "it worked" with "here's what's off". */
+export interface BoardExportOutcome {
+  success: string;
+  warnings: string[];
+}
+
 function pngExportMessage(result: {
   effectiveScale: number;
   warnings: readonly unknown[];
-}): string {
+}): BoardExportOutcome {
   const scale = result.effectiveScale < 2
     ? ` at ${formatMoodBoardExportScale(result.effectiveScale)}× effective scale (8192px cap)`
     : '';
-  const placeholders = result.warnings.length
-    ? ` with ${result.warnings.length} labelled image placeholder${result.warnings.length === 1 ? '' : 's'}`
-    : '';
-  return `PNG downloaded${scale}${placeholders}.`;
+  const warnings = result.warnings.length
+    ? [
+        `${result.warnings.length} image${result.warnings.length === 1 ? '' : 's'} could not be loaded and ${result.warnings.length === 1 ? 'was' : 'were'} replaced with ${result.warnings.length === 1 ? 'a labelled image placeholder' : 'labelled image placeholders'}.`,
+      ]
+    : [];
+  return { success: `PNG downloaded${scale}.`, warnings };
 }
 
-function pdfExportMessage(warnings: readonly string[], placeholderCount: number): string {
-  const messages: string[] = ['PDF downloaded.'];
+function pdfExportMessage(warnings: readonly string[], placeholderCount: number): BoardExportOutcome {
+  const messages: string[] = [];
   if (warnings.includes('dense_board')) {
     messages.push(
       'This board is dense at one-page composition scale; choose Spec sheet for a more legible product reference.',
@@ -58,7 +68,7 @@ function pdfExportMessage(warnings: readonly string[], placeholderCount: number)
   if (warnings.some((warning) => warning !== 'dense_board' && warning !== 'image_placeholders')) {
     messages.push('The export completed with additional warnings.');
   }
-  return messages.join(' ');
+  return { success: 'PDF downloaded.', warnings: messages };
 }
 
 export function BoardExportDialog({
@@ -82,7 +92,7 @@ export function BoardExportDialog({
 }) {
   const [busy, setBusy] = useState<BoardExportFormat | null>(null);
   const [progress, setProgress] = useState(0);
-  const [message, setMessage] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<BoardExportOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pngPlan = useMemo(() => getMoodBoardPngExportPlan(input), [input]);
 
@@ -92,19 +102,19 @@ export function BoardExportDialog({
 
   const run = async (
     format: BoardExportFormat,
-    action: () => Promise<{ failedImageCount: number; message?: string }>,
+    action: () => Promise<{ failedImageCount: number; outcome?: BoardExportOutcome }>,
   ) => {
     if (busy) return;
     const started = performance.now();
     setBusy(format);
     setProgress(0);
-    setMessage(null);
+    setOutcome(null);
     setError(null);
     try {
       await flush();
       const result = await action();
       setProgress(1);
-      setMessage(result.message ?? 'Export downloaded.');
+      setOutcome(result.outcome ?? { success: 'Export downloaded.', warnings: [] });
       const exported = {
         format,
         durationMs: Math.max(0, Math.round(performance.now() - started)),
@@ -136,7 +146,7 @@ export function BoardExportDialog({
       });
       return {
         failedImageCount: result.warnings.length,
-        message: pngExportMessage(result),
+        outcome: pngExportMessage(result),
       };
     });
 
@@ -159,7 +169,7 @@ export function BoardExportDialog({
         : 0;
       return {
         failedImageCount: placeholderCount,
-        message: pdfExportMessage(result.warnings, placeholderCount),
+        outcome: pdfExportMessage(result.warnings, placeholderCount),
       };
     });
   };
@@ -221,7 +231,23 @@ export function BoardExportDialog({
             </p>
           </div>
         )}
-        {message && <p className="text-[12px] text-[var(--color-sage)]">{message}</p>}
+        {outcome && (
+          <div className="space-y-1.5">
+            <p className="text-[12px] text-[var(--color-sage)]">{outcome.success}</p>
+            {outcome.warnings.length > 0 && (
+              <ul
+                role="alert"
+                className="space-y-1 rounded-[4px] border border-[var(--color-clay)] bg-[var(--wash-clay-still)] px-2.5 py-2"
+              >
+                {outcome.warnings.map((warning) => (
+                  <li key={warning} className="text-[11px] text-[var(--color-clay-ink)]">
+                    {warning}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         {error && <p role="alert" className="text-[12px] text-[var(--color-clay-ink)]">{error}</p>}
         <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy !== null}>
           Done

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -11,22 +11,18 @@ import {
   DialogTitle,
 } from '@patina/design-system';
 import {
-  useBoardTemplates,
   useBoards,
-  useMaterializeBoardTemplate,
-  useOrganizations,
   useProjectOwnedBoards,
   useUpsertBoard,
-  type BoardTemplate,
   type ProposalBoardSummary,
 } from '@patina/supabase';
 import type { BoardOwnerRef } from '@patina/types';
 import { Button } from '@/components/ui/controls';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
-import { runBoardOwnerAutosaveAction } from '@/lib/proposal-autosave-registry';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { BoardVerdictSummary } from '@/components/mood-board/board-verdict-summary';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
+import { BoardCreatePickerDialog } from './board-create-picker-dialog';
 
 interface BoardsBuilderProps {
   /** Pass exactly one owner. Both legs launch the same dedicated board room. */
@@ -44,43 +40,6 @@ function BoardCover({ board }: { board: ProposalBoardSummary }) {
       }
       className="h-[112px]"
     />
-  );
-}
-
-function TemplateCard({
-  template,
-  busy,
-  onChoose,
-}: {
-  template: BoardTemplate;
-  busy: boolean;
-  onChoose: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onChoose}
-      disabled={busy}
-      className="overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] text-left transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
-      aria-label={`Start from ${template.name}`}
-    >
-      <div className="flex h-24 items-center justify-center overflow-hidden bg-[var(--bg-muted)]">
-        {template.cover_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={template.cover_url} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <span aria-hidden className="font-heading text-2xl italic text-[var(--text-muted)]">
-            {template.name.trim().charAt(0).toUpperCase() || 'T'}
-          </span>
-        )}
-      </div>
-      <div className="p-3">
-        <p className="font-heading text-[14px] text-[var(--text-primary)]">{template.name}</p>
-        <p className="mt-1 line-clamp-2 min-h-8 text-[11px] leading-4 text-[var(--text-muted)]">
-          {template.description || `${template.items.length} ready-to-compose pieces`}
-        </p>
-      </div>
-    </button>
   );
 }
 
@@ -106,27 +65,16 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   const boards = (boardsQuery.data ?? []).filter((board) => board.status !== 'archived');
   const archivedCount = (boardsQuery.data ?? []).length - boards.length;
 
-  const { data: organizations } = useOrganizations();
-  const studioId = useMemo(() => {
-    if (!organizations) return undefined;
-    return (
-      organizations.find((organization) => organization.type === 'design_studio')?.id ??
-      organizations[0]?.id ??
-      null
-    );
-  }, [organizations]);
-  const templatesQuery = useBoardTemplates(studioId);
-  const templates = templatesQuery.data ?? [];
-  const seededTemplates = templates.filter((template) => template.kind === 'seeded');
-  const studioTemplates = templates.filter((template) => template.kind === 'studio');
-
-  const createBoard = useUpsertBoard();
-  const materializeTemplate = useMaterializeBoardTemplate();
+  const unarchiveBoard = useUpsertBoard();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pendingKey, setPendingKey] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const actionPending = useRef(false);
   const draftingTouchRecorded = useRef(false);
+
+  // IA-7 — archived boards had no "view archived" affordance anywhere; the
+  // count rendered as plain text and archived rows were unreachable.
+  const archivedBoards = (boardsQuery.data ?? []).filter((board) => board.status === 'archived');
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [unarchivingId, setUnarchivingId] = useState<string | null>(null);
+  const [unarchiveError, setUnarchiveError] = useState<string | null>(null);
 
   // FacetSection lazy-mounts this launcher on the first real visit. Emit one
   // explicit event after its active-board read settles so M1 has a durable,
@@ -155,50 +103,35 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   const hrefFor = (boardId: string) =>
     boardRoomHref({ boardId, from: pathname, source });
 
-  const runCreate = async (key: string, action: () => Promise<string>) => {
-    if (!owner || actionPending.current) return;
-    actionPending.current = true;
-    setPendingKey(key);
-    setError(null);
-    try {
-      let boardId = '';
-      await runBoardOwnerAutosaveAction(owner, async () => {
-        boardId = await action();
-      });
-      if (!boardId) throw new Error('The new board did not return an id.');
-      setPickerOpen(false);
-      router.push(hrefFor(boardId));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The board could not be created.');
-    } finally {
-      actionPending.current = false;
-      setPendingKey(null);
-    }
+  // DV3 — a template materialized onto a project board strips owner links
+  // from every product pin; `materialized=template` flags the room to offer
+  // a one-shot bulk "Promote all" right on arrival.
+  const handleCreated = (boardId: string, meta: { materialized: boolean }) => {
+    const href =
+      meta.materialized && owner?.kind === 'project'
+        ? `${hrefFor(boardId)}&materialized=template`
+        : hrefFor(boardId);
+    router.push(href);
   };
 
-  const handleBlank = () =>
-    void runCreate('blank', async () => {
-      if (!owner) throw new Error('The board owner is unavailable.');
-      const board = await createBoard.mutateAsync({
-        proposalId: owner.kind === 'proposal' ? owner.id : undefined,
-        projectId: owner.kind === 'project' ? owner.id : undefined,
-        name: `Board ${boards.length + 1}`,
-        sortOrder: (boardsQuery.data ?? []).length,
-      });
-      return board.id;
-    });
-
-  const handleTemplate = (template: BoardTemplate) =>
-    void runCreate(`template:${template.id}`, async () => {
-      if (!owner) throw new Error('The board owner is unavailable.');
-      const boardId = await materializeTemplate.mutateAsync({ templateId: template.id, owner });
-      moodBoardEvents.templateUsed({
-        source: template.kind,
-        template_id: template.id,
-        board_id: boardId,
-      });
-      return boardId;
-    });
+  const handleUnarchive = async (boardId: string) => {
+    setUnarchiveError(null);
+    setUnarchivingId(boardId);
+    try {
+      // IA-7 — only proposal-owned boards can flip status back directly;
+      // project-owned board writes are RPC-only (guard_project_board_rpc_
+      // mutation, 00436) and apply_board_room_state carries no status field,
+      // so there is no backend path for a project-owned unarchive today.
+      // The archived list stays read-only for that leg (no button renders).
+      await unarchiveBoard.mutateAsync({ boardId, status: 'active' });
+    } catch (cause) {
+      setUnarchiveError(
+        cause instanceof Error ? cause.message : 'This board could not be restored.',
+      );
+    } finally {
+      setUnarchivingId(null);
+    }
+  };
 
   if (!owner) {
     return <p className="text-sm text-[var(--text-muted)]">The board owner is unavailable.</p>;
@@ -226,9 +159,13 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
             Open a board in its room to compose, present, share, and export.
           </p>
           {archivedCount > 0 && (
-            <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+            <button
+              type="button"
+              onClick={() => setArchivedOpen(true)}
+              className="mt-1 min-h-6 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)] underline underline-offset-2 hover:text-[var(--text-primary)]"
+            >
               {archivedCount} archived
-            </p>
+            </button>
           )}
         </div>
         <Button variant="primary" size="sm" onClick={() => setPickerOpen(true)}>
@@ -273,87 +210,68 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
         </button>
       )}
 
-      {error && (
-        <p role="alert" className="text-[12px] text-[var(--color-clay-ink)]">
-          {error}
-        </p>
-      )}
+      <BoardCreatePickerDialog
+        owner={owner}
+        boardsCount={boards.length}
+        sortOrderSeed={(boardsQuery.data ?? []).length}
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onCreated={handleCreated}
+      />
 
-      <Dialog open={pickerOpen} onOpenChange={(open) => !actionPending.current && setPickerOpen(open)}>
-        <DialogContent className="max-h-[85dvh] max-w-3xl overflow-y-auto">
+      <Dialog open={archivedOpen} onOpenChange={setArchivedOpen}>
+        <DialogContent className="max-h-[85dvh] max-w-lg overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Start a mood board</DialogTitle>
+            <DialogTitle>Archived boards</DialogTitle>
             <DialogDescription>
-              Begin with open space, a Patina starter, or a template saved by your studio.
+              {isProject
+                ? 'Read-only for now — restoring a project-owned board needs a backend path that does not exist yet.'
+                : 'Archiving is a one-way door in the boards list; restore one from here.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mt-2 space-y-6">
-            <section aria-labelledby="blank-board-option">
-              <h3 id="blank-board-option" className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                Blank
-              </h3>
-              <button
-                type="button"
-                onClick={handleBlank}
-                disabled={pendingKey !== null}
-                className="mt-2 flex min-h-20 w-full items-center justify-between rounded-[5px] border border-dashed border-[var(--border-default)] px-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
-              >
-                <span>
-                  <span className="block font-heading text-[14px] text-[var(--text-primary)]">Blank board</span>
-                  <span className="mt-1 block text-[11px] text-[var(--text-muted)]">A clean, flexible canvas.</span>
-                </span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
-                  {pendingKey === 'blank' ? 'Creating…' : 'Choose'}
-                </span>
-              </button>
-            </section>
+          {archivedBoards.length === 0 ? (
+            <p className="mt-2 text-[12px] text-[var(--text-muted)]">No archived boards.</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {archivedBoards.map((board) => (
+                <li
+                  key={board.id}
+                  className="flex items-center gap-3 rounded-[5px] border border-[var(--border-default)] p-2"
+                >
+                  <div className="h-12 w-16 shrink-0 overflow-hidden rounded-[3px]">
+                    <BoardCover board={board} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-heading text-[13px] text-[var(--text-primary)]">
+                      {board.name}
+                    </p>
+                    <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      {/* proposal_boards has no dedicated archived_at column;
+                          updated_at is the best available proxy for "when". */}
+                      Archived · {new Date(board.updated_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {!isProject && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={unarchivingId === board.id}
+                      onClick={() => void handleUnarchive(board.id)}
+                    >
+                      {unarchivingId === board.id ? 'Restoring…' : 'Unarchive'}
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
 
-            {templatesQuery.isLoading && (
-              <p className="text-[12px] text-[var(--text-muted)]">Loading templates…</p>
-            )}
-            {templatesQuery.isError && (
-              <p role="alert" className="text-[12px] text-[var(--color-clay-ink)]">
-                Templates could not be loaded. You can still start blank.
-              </p>
-            )}
-
-            {seededTemplates.length > 0 && (
-              <section aria-labelledby="patina-board-templates">
-                <h3 id="patina-board-templates" className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                  Patina starters
-                </h3>
-                <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {seededTemplates.map((template) => (
-                    <TemplateCard
-                      key={template.id}
-                      template={template}
-                      busy={pendingKey !== null}
-                      onChoose={() => handleTemplate(template)}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {studioTemplates.length > 0 && (
-              <section aria-labelledby="studio-board-templates">
-                <h3 id="studio-board-templates" className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                  Your studio
-                </h3>
-                <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {studioTemplates.map((template) => (
-                    <TemplateCard
-                      key={template.id}
-                      template={template}
-                      busy={pendingKey !== null}
-                      onChoose={() => handleTemplate(template)}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
+          {unarchiveError && (
+            <p role="alert" className="mt-2 text-[12px] text-[var(--color-clay-ink)]">
+              {unarchiveError}
+            </p>
+          )}
         </DialogContent>
       </Dialog>
     </div>

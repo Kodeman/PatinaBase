@@ -54,6 +54,24 @@ describe('BoardTemplateDialog', () => {
     remove.mockReset();
   });
 
+  it('selects the prefilled template name on focus (VD5)', () => {
+    render(
+      <BoardTemplateDialog
+        boardId="board-1"
+        boardName="Living room"
+        itemCount={5}
+        sectionCount={2}
+        open
+        onOpenChange={jest.fn()}
+        onSaved={jest.fn()}
+      />,
+    );
+    const input = screen.getByLabelText('Template name') as HTMLInputElement;
+    const selectSpy = jest.spyOn(input, 'select');
+    fireEvent.focus(input);
+    expect(selectSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('saves the live board as a studio template', async () => {
     save.mockResolvedValue({ id: 'template-new' });
     const onSaved = jest.fn();
@@ -114,5 +132,87 @@ describe('BoardTemplateDialog', () => {
     await waitFor(() =>
       expect(remove).toHaveBeenCalledWith({ templateId: 'template-1', studioId: 'studio-1' }),
     );
+  });
+
+  // DV13 — save-time asset hygiene, non-blocking.
+  describe('template asset warning', () => {
+    const RealImage = global.Image;
+
+    afterEach(() => {
+      global.Image = RealImage;
+    });
+
+    it('warns about a missing image reference without disabling Save', () => {
+      render(
+        <BoardTemplateDialog
+          boardId="board-1"
+          boardName="Living room"
+          itemCount={1}
+          sectionCount={1}
+          items={[{ id: 'pin-1', type: 'image', x: 0, y: 0, width: 100, imageUrl: null, data: { name: 'Blank frame' } }]}
+          open
+          onOpenChange={jest.fn()}
+        />,
+      );
+
+      expect(
+        screen.getByText(
+          '1 item has a missing or broken image and will carry over as-is: Blank frame.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save as template' })).not.toBeDisabled();
+    });
+
+    it('warns about a broken image reference once the async probe settles, without blocking a save started earlier', async () => {
+      save.mockResolvedValue({ id: 'template-new' });
+      class FailingImage {
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        set src(_value: string) {
+          queueMicrotask(() => this.onerror?.());
+        }
+      }
+      // @ts-expect-error test stub
+      global.Image = FailingImage;
+
+      render(
+        <BoardTemplateDialog
+          boardId="board-1"
+          boardName="Living room"
+          itemCount={1}
+          sectionCount={1}
+          items={[{ id: 'pin-1', type: 'image', x: 0, y: 0, width: 100, imageUrl: 'https://img/dead.jpg', data: { name: 'Dead link' } }]}
+          open
+          onOpenChange={jest.fn()}
+        />,
+      );
+
+      expect(screen.queryByText(/missing or broken image/)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Save as template' }));
+      await waitFor(() => expect(save).toHaveBeenCalled());
+
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            '1 item has a missing or broken image and will carry over as-is: Dead link.',
+          ),
+        ).toBeInTheDocument(),
+      );
+    });
+
+    it('says nothing when every visual item resolves cleanly', () => {
+      render(
+        <BoardTemplateDialog
+          boardId="board-1"
+          boardName="Living room"
+          itemCount={1}
+          sectionCount={1}
+          items={[{ id: 'note-1', type: 'note', x: 0, y: 0, width: 100, content: 'Ask about finish' }]}
+          open
+          onOpenChange={jest.fn()}
+        />,
+      );
+      expect(screen.queryByText(/missing or broken image/)).not.toBeInTheDocument();
+    });
   });
 });

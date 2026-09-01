@@ -36,6 +36,7 @@ export type MoodBoardOpenSource =
   | "desk_recents"
   | "command_bar"
   | "project_surface"
+  | "studio_boards"
   | "direct_url";
 
 export type MoodBoardItemAddSource =

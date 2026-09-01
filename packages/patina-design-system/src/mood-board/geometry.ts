@@ -174,6 +174,56 @@ export function rotatedBoardRect(rect: BoardRect, degrees = 0): BoardRect {
   }
 }
 
+/** Rotates a vector (not a point about the origin of a rect) by `degrees`. */
+export function rotateBoardVector(
+  vector: BoardPoint,
+  degrees: number,
+): BoardPoint {
+  if (!degrees) return { ...vector }
+  const radians = (degrees * Math.PI) / 180
+  const sin = Math.sin(radians)
+  const cos = Math.cos(radians)
+  return {
+    x: vector.x * cos - vector.y * sin,
+    y: vector.x * sin + vector.y * cos,
+  }
+}
+
+/**
+ * A rotated pin renders as `rotate(deg)` about its own centre, so growing the
+ * unrotated box also moves that centre — and with it every corner, including
+ * the one the user is anchoring against. This returns the x/y correction that
+ * pins the rendered anchor corner in place, so a handle on a rotated item
+ * tracks the pointer instead of sliding away from it (CI-07).
+ *
+ * `anchor` is the fixed corner in unit space: {x:0,y:0} = top-left,
+ * {x:1,y:1} = bottom-right, {x:0.5,y:1} = bottom-centre.
+ */
+export function rotatedResizeAnchorCorrection(
+  before: BoardRect,
+  after: BoardRect,
+  anchor: BoardPoint,
+  degrees: number,
+): BoardPoint {
+  if (!degrees) return { x: 0, y: 0 }
+  const renderedAnchor = (rect: BoardRect): BoardPoint => {
+    const offset = rotateBoardVector(
+      {
+        x: (anchor.x - 0.5) * rect.width,
+        y: (anchor.y - 0.5) * rect.height,
+      },
+      degrees,
+    )
+    return {
+      x: rect.x + rect.width / 2 + offset.x,
+      y: rect.y + rect.height / 2 + offset.y,
+    }
+  }
+  const from = renderedAnchor(before)
+  const to = renderedAnchor(after)
+  return { x: from.x - to.x, y: from.y - to.y }
+}
+
 export function unionBoardRects(rects: readonly BoardRect[]): BoardRect | null {
   if (rects.length === 0) return null
   let minX = Number.POSITIVE_INFINITY
@@ -720,6 +770,68 @@ export function distributeBoardItems(
   return distributeGaps(selected, 'y')
 }
 
+export interface BoardCascadePlacementOptions {
+  /** Board-space distance between cascade steps on each axis. */
+  step?: number
+  /** How close two points must be to count as the same occupied slot. */
+  tolerance?: number
+  maxAttempts?: number
+  /**
+   * Rects a candidate slot must not fall inside — e.g. section-band bounds
+   * (label included, since a band's derived bounds already pad for it), so
+   * a click-add never lands under a band.
+   */
+  avoidRects?: readonly BoardRect[]
+}
+
+function pointInBoardRect(point: BoardPoint, rect: BoardRect): boolean {
+  return (
+    point.x >= rect.x &&
+    point.x <= rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y <= rect.y + rect.height
+  )
+}
+
+/**
+ * Walks a diagonal cascade from `basePoint` — (step, step), (2*step, 2*step),
+ * … — and returns the first point that is neither already occupied nor
+ * inside an avoided rect. Click-add (note, product, palette, scan, project
+ * selection, single uploads) shares one base anchor; without this, every
+ * add would land on the exact same board point and stack invisibly (CI-11).
+ * Exhausting `maxAttempts` (default 500) falls back to the final unchecked
+ * cascade point rather than looping forever.
+ */
+export function findBoardCascadePlacement(
+  basePoint: BoardPoint,
+  occupied: readonly BoardPoint[],
+  options: BoardCascadePlacementOptions = {},
+): BoardPoint {
+  const step = options.step ?? 24
+  const tolerance = options.tolerance ?? 4
+  const maxAttempts = options.maxAttempts ?? 500
+  const avoidRects = options.avoidRects ?? []
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const candidate = {
+      x: basePoint.x + step * attempt,
+      y: basePoint.y + step * attempt,
+    }
+    const collidesWithItem = occupied.some(
+      (point) =>
+        Math.abs(point.x - candidate.x) <= tolerance &&
+        Math.abs(point.y - candidate.y) <= tolerance,
+    )
+    const collidesWithBand = avoidRects.some((rect) =>
+      pointInBoardRect(candidate, rect),
+    )
+    if (!collidesWithItem && !collidesWithBand) return candidate
+  }
+  return {
+    x: basePoint.x + step * maxAttempts,
+    y: basePoint.y + step * maxAttempts,
+  }
+}
+
 export function computeBoardAutoGrow(
   geometry: BoardGeometrySnapshot,
   margin = MOOD_BOARD_CANVAS_GROW_MARGIN,
@@ -735,11 +847,18 @@ export function computeBoardAutoGrow(
   const grew = leftGrowth > 0 || topGrowth > 0 || rightGrowth > 0 || bottomGrowth > 0
   const translation = { x: leftGrowth, y: topGrowth }
 
+  // Canvas dimensions are integers on the wire (proposal_boards.canvas_width /
+  // canvas_height are `integer`, and apply_board_room_state rejects anything
+  // that is not `^[0-9]+$`). Growth derived from rotated/fractional content
+  // bounds is not, so it is rounded up here rather than at each consumer.
+  // The item translation below deliberately stays fractional: the same RPC
+  // accepts decimal item coordinates (`^[0-9]+([.][0-9]+)?$`), and rounding
+  // them would shift pins away from where the gesture left them.
   return {
     grew,
     canvas: {
-      width: geometry.canvas.width + leftGrowth + rightGrowth,
-      height: geometry.canvas.height + topGrowth + bottomGrowth,
+      width: Math.ceil(geometry.canvas.width + leftGrowth + rightGrowth),
+      height: Math.ceil(geometry.canvas.height + topGrowth + bottomGrowth),
     },
     translation,
     items: geometry.items.map((item) => ({

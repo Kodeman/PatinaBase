@@ -690,6 +690,8 @@ export interface CreateDraftProductInput {
   sourceUrl?: string;
   /** Retail price in DOLLARS. Stored as cents. */
   priceRetailDollars?: number;
+  /** Image URLs — e.g. from a URL unfurl (D9). Falls back to []. */
+  images?: string[];
 }
 
 /**
@@ -736,7 +738,7 @@ export function useCreateDraftProduct() {
           status: 'draft',
           captured_by: user.id,
           captured_at: new Date().toISOString(),
-          images: [],
+          images: input.images ?? [],
           materials: [],
         })
         .select('id')
