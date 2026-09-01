@@ -113,6 +113,10 @@ interface RoomScanSnapshot {
   room_type?: string | null
 }
 
+interface ImageSnapshot {
+  name?: string | null
+}
+
 function formatDollars(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', {
     minimumFractionDigits: 0,
@@ -638,9 +642,10 @@ function ImageTile({
   box?: { width: number; height: number }
 }) {
   if (!item.image_url) {
+    const snap = (item.data ?? {}) as ImageSnapshot
     return (
       <div
-        className="flex h-full w-full items-center justify-center text-center"
+        className="flex h-full w-full items-center justify-center px-2 text-center"
         style={{
           borderRadius: MOOD_BOARD_VISUAL.pinRadius,
           border: box
@@ -654,7 +659,7 @@ function ImageTile({
           fontSize: 12,
         }}
       >
-        {box ? 'image' : null}
+        {box ? (snap.name?.trim() || 'Image reference') : null}
       </div>
     )
   }
