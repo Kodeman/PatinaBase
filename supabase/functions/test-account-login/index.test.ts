@@ -4,9 +4,11 @@
 // Tests ./lib.ts directly with injected deps — importing ./index.ts would boot
 // Deno.serve (field-login-token / po-send / aesthete-ask convention). Covers:
 // the method guard, missing/empty config (fail closed), allowlist miss, wrong
-// code, rate limiting (before any comparison), the generic-403 shape being
-// IDENTICAL across every failure mode (no allowlist-membership oracle), the
-// happy path's response shape, generateLink failure, and constantTimeEqual.
+// code, per-IP and global rate limiting (before the credential decision),
+// last-hop X-Forwarded-For extraction, the attempt row omitting a
+// non-allowlisted email, the generic-403 shape being IDENTICAL across every
+// failure mode (no allowlist-membership oracle), the happy path's response
+// shape, generateLink failure, and constantTimeEqual.
 
 import {
   assert,
@@ -35,6 +37,7 @@ function makeDeps(overrides: Partial<TestAccountLoginDeps> = {}): TestAccountLog
     getConfig: () => Promise.resolve(DEFAULT_CONFIG),
     recordAttempt: () => Promise.resolve(),
     isRateLimited: () => Promise.resolve(false),
+    isGloballyRateLimited: () => Promise.resolve(false),
     generateMagiclinkHash: () =>
       Promise.resolve({ tokenHash: 'HASHED_TOKEN_XYZ' } as GenerateResult),
     ...overrides,
@@ -66,21 +69,61 @@ Deno.test('non-POST -> 405', async () => {
 
 // ── Rate limiting (before any comparison) ────────────────────────────────
 
-Deno.test('rate limited -> 429 before config is ever read', async () => {
-  let configRead = false;
+Deno.test('rate limited -> 429 before the credential decision', async () => {
+  let minted = false;
   const res = await handleTestAccountLogin(
     req('POST', { email: ALLOWED_EMAIL, code: CODE }),
     makeDeps({
       isRateLimited: () => Promise.resolve(true),
-      getConfig: () => {
-        configRead = true;
-        return Promise.resolve(DEFAULT_CONFIG);
+      generateMagiclinkHash: () => {
+        minted = true;
+        return Promise.resolve({ tokenHash: 'NOPE' } as GenerateResult);
       },
     }),
   );
   assertEquals(res.status, 429);
   assertEquals((await res.json()).error, 'rate_limited');
-  assertFalse(configRead, 'getConfig must not be called once rate-limited');
+  assertFalse(minted, 'no token may be minted once rate-limited');
+});
+
+Deno.test('global cap -> 429 even when the per-IP counter is clear', async () => {
+  let minted = false;
+  const res = await handleTestAccountLogin(
+    req('POST', { email: ALLOWED_EMAIL, code: CODE }),
+    makeDeps({
+      isRateLimited: () => Promise.resolve(false),
+      isGloballyRateLimited: () => Promise.resolve(true),
+      generateMagiclinkHash: () => {
+        minted = true;
+        return Promise.resolve({ tokenHash: 'NOPE' } as GenerateResult);
+      },
+    }),
+  );
+  assertEquals(res.status, 429);
+  assertEquals((await res.json()).error, 'rate_limited');
+  assertFalse(minted, 'no token may be minted once globally rate-limited');
+});
+
+Deno.test('the global cap is checked after the per-IP cap, on every request', async () => {
+  const calls: string[] = [];
+  await handleTestAccountLogin(
+    req('POST', { email: ALLOWED_EMAIL, code: CODE }),
+    makeDeps({
+      recordAttempt: () => {
+        calls.push('recordAttempt');
+        return Promise.resolve();
+      },
+      isRateLimited: () => {
+        calls.push('isRateLimited');
+        return Promise.resolve(false);
+      },
+      isGloballyRateLimited: () => {
+        calls.push('isGloballyRateLimited');
+        return Promise.resolve(false);
+      },
+    }),
+  );
+  assertEquals(calls, ['recordAttempt', 'isRateLimited', 'isGloballyRateLimited']);
 });
 
 Deno.test('every attempt is recorded BEFORE the rate-limit check', async () => {
@@ -101,9 +144,8 @@ Deno.test('every attempt is recorded BEFORE the rate-limit check', async () => {
   assertEquals(calls, ['recordAttempt', 'isRateLimited']);
 });
 
-Deno.test('recordAttempt receives the caller IP (first hop of X-Forwarded-For) and submitted email', async () => {
+Deno.test('recordAttempt receives the LAST hop of X-Forwarded-For (proxies append; the first hop is caller-controlled)', async () => {
   let seenIp = '';
-  let seenEmail: string | null = null;
   await handleTestAccountLogin(
     req(
       'POST',
@@ -111,19 +153,79 @@ Deno.test('recordAttempt receives the caller IP (first hop of X-Forwarded-For) a
       { 'x-forwarded-for': '203.0.113.7, 10.0.0.1' },
     ),
     makeDeps({
-      recordAttempt: (ip, email) => {
+      recordAttempt: (ip) => {
         seenIp = ip;
+        return Promise.resolve();
+      },
+    }),
+  );
+  assertEquals(seenIp, '10.0.0.1');
+});
+
+Deno.test('getClientIp takes the last hop and ignores a spoofed leading entry', () => {
+  assertEquals(
+    getClientIp(req('POST', undefined, { 'x-forwarded-for': '1.2.3.4' })),
+    '1.2.3.4',
+  );
+  assertEquals(
+    getClientIp(
+      req('POST', undefined, { 'x-forwarded-for': '9.9.9.9, 203.0.113.7, 10.0.0.1' }),
+    ),
+    '10.0.0.1',
+  );
+  assertEquals(
+    getClientIp(req('POST', undefined, { 'x-forwarded-for': '203.0.113.7,  ' })),
+    '203.0.113.7',
+  );
+});
+
+Deno.test('getClientIp falls back to "unknown" with no X-Forwarded-For header', () => {
+  assertEquals(getClientIp(req('POST')), 'unknown');
+});
+
+// ── Attempt-log privacy ──────────────────────────────────────────────────
+
+Deno.test('an allowlisted address IS recorded on the attempt row', async () => {
+  let seenEmail: string | null = 'unset';
+  await handleTestAccountLogin(
+    req('POST', { email: 'TESTER@Patina.Cloud', code: 'wrong-code' }),
+    makeDeps({
+      recordAttempt: (_ip, email) => {
         seenEmail = email;
         return Promise.resolve();
       },
     }),
   );
-  assertEquals(seenIp, '203.0.113.7');
   assertEquals(seenEmail, ALLOWED_EMAIL);
 });
 
-Deno.test('getClientIp falls back to "unknown" with no X-Forwarded-For header', () => {
-  assertEquals(getClientIp(req('POST')), 'unknown');
+Deno.test('a non-allowlisted address is NEVER written to the attempt row', async () => {
+  let seenEmail: string | null = 'unset';
+  await handleTestAccountLogin(
+    req('POST', { email: 'real.user@example.com', code: CODE }),
+    makeDeps({
+      recordAttempt: (_ip, email) => {
+        seenEmail = email;
+        return Promise.resolve();
+      },
+    }),
+  );
+  assertEquals(seenEmail, null);
+});
+
+Deno.test('no email is recorded when the allowlist config is missing', async () => {
+  let seenEmail: string | null = 'unset';
+  await handleTestAccountLogin(
+    req('POST', { email: ALLOWED_EMAIL, code: CODE }),
+    makeDeps({
+      getConfig: () => Promise.resolve({ accounts: null, code: null }),
+      recordAttempt: (_ip, email) => {
+        seenEmail = email;
+        return Promise.resolve();
+      },
+    }),
+  );
+  assertEquals(seenEmail, null);
 });
 
 // ── Fail-closed config + generic denial shape ────────────────────────────

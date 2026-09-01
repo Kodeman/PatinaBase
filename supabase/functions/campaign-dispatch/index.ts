@@ -485,7 +485,9 @@ serve(async (req) => {
             user_id: recipient.id,
             type: notificationType || campaign.template_id,
             channel: "email" as const,
-            status: "delivered" as const,
+            // Resend's batch 2xx is an ACCEPT, not a delivery (00552). Only
+            // resend-webhook's email.delivered event writes 'delivered'.
+            status: "sent" as const,
             template_id: campaign.template_id,
             provider_id: batchResults[idx]?.id || null,
             metadata: {
@@ -532,6 +534,8 @@ serve(async (req) => {
       .eq("id", campaign_id);
 
     // 9. Update analytics
+    // NOTE: this counter counts Resend ACCEPTANCES, not webhook-confirmed
+    // deliveries — deliberately left as-is pending the owner's call.
     await supabase
       .from("campaign_analytics")
       .update({ delivered: totalDelivered })

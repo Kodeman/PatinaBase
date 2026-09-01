@@ -227,7 +227,10 @@ async function findRecentSequenceSend(
     .select('sent_at, created_at, metadata')
     .eq('user_id', userId)
     .eq('channel', 'email')
-    .in('status', ['delivered', 'sending', 'opened', 'clicked', 'unconfirmed'])
+    // 'sent' is the post-00552 accept state (portal-side twin of the same list
+    // in automation-processor): a send awaiting webhook confirmation still
+    // counts against the 24h spacing guard.
+    .in('status', ['delivered', 'sent', 'sending', 'opened', 'clicked', 'unconfirmed'])
     .gte('created_at', cutoff)
     .order('created_at', { ascending: false })
     .limit(25);

@@ -524,7 +524,7 @@ describe('processEnrollments', () => {
         supabase.from.mock.results[notificationLogQueryIndex].value.in,
       ).toHaveBeenCalledWith(
         'status',
-        ['delivered', 'sending', 'opened', 'clicked', 'unconfirmed'],
+        ['delivered', 'sent', 'sending', 'opened', 'clicked', 'unconfirmed'],
       );
       // Deferred to last send + 24h.
       const expected = new Date(new Date(lastSentAt).getTime() + 86400000).toISOString();

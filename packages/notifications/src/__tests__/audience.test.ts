@@ -275,7 +275,7 @@ describe('resolveAudience', () => {
     );
     expect(notificationLogQueries[notificationLogQueries.length - 1].in).toHaveBeenCalledWith(
       'status',
-      ['delivered', 'sending', 'opened', 'clicked', 'unconfirmed'],
+      ['delivered', 'sent', 'sending', 'opened', 'clicked', 'unconfirmed'],
     );
   });
 

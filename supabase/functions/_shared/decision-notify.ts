@@ -120,10 +120,12 @@ export interface DeliverDecisionNotificationResult {
 export type DecisionEmailLogStatus =
   | "queued"
   | "sending"
+  | "sent"
   | "delivered"
   | "opened"
   | "clicked"
   | "bounced"
+  | "complained"
   | "failed"
   | "suppressed";
 
@@ -212,11 +214,21 @@ async function loadPreferences(
   return data as unknown as PrefRow;
 }
 
+// 'sent' is the post-00552 accept state that sendCompliantEmail writes on
+// Resend's 2xx — the ordinary resting state of a delivered-but-unconfirmed
+// email. Omitting it classified a genuinely sent email as "no prior email",
+// so every re-run of decision-reminders / expire-decisions sent it again. It
+// ranks below 'delivered' (weaker evidence) but above 'bounced', mirroring
+// where 'sending' sits relative to the in-flight states. 'complained' sits
+// with 'suppressed': both are terminal recipient-side outcomes that must
+// never be re-attempted.
 const EXISTING_EMAIL_STATUS_PRECEDENCE: readonly DecisionEmailLogStatus[] = [
   "clicked",
   "opened",
   "delivered",
+  "sent",
   "bounced",
+  "complained",
   "suppressed",
   "sending",
   "queued",
