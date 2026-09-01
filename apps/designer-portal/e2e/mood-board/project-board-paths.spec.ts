@@ -12,6 +12,9 @@ import { psqlRow, psqlRun, psqlScalar } from "../helpers/psql";
 
 const PROJECT_ID = "b0000000-0000-0000-0000-0000000000d1";
 const BOARD_ID = "e2e00000-0000-4000-8000-000000000101";
+// Pin accessible names (CI-13) — a pin announces its real name, not its type.
+const PRODUCT_PIN_NAME = "Heirloom lounge chair, product";
+const NOTE_PIN_NAME = "Project leg note, note";
 const PRODUCT_ID = "e2e00000-0000-4000-8000-000000000111";
 const NOTE_ID = "e2e00000-0000-4000-8000-000000000112";
 
@@ -157,15 +160,17 @@ test.describe("Project-owned board save path", () => {
     await openProjectBoard(page);
 
     const product = page.getByRole("button", {
-      name: "product item",
+      name: PRODUCT_PIN_NAME,
       exact: true,
     });
-    const note = page.getByRole("button", { name: "note item", exact: true });
-    // Note first, product second: a plain click on a note focuses its inline
-    // editor, which collapses the selection to that note — so the note is
-    // never the pin that joins the selection.
-    await note.click();
-    await product.click({ modifiers: ["Shift"] });
+    const note = page.getByRole("button", { name: NOTE_PIN_NAME, exact: true });
+    // Either order works now. The inline note editor opens on double-click
+    // only (CI-24), so a single click on a note no longer mounts a textarea
+    // that steals focus and collapses the selection back to one pin.
+    await product.click();
+    await note.click({ modifiers: ["Shift"] });
+    await expect(product).toHaveAttribute("aria-pressed", "true");
+    await expect(note).toHaveAttribute("aria-pressed", "true");
     // The bounds overlay is the multi-selection's own tell — it renders only
     // once two or more pins are selected together.
     await expect(page.getByTestId("multi-selection-bounds")).toBeVisible();
@@ -236,7 +241,7 @@ test.describe("Project-owned board save path", () => {
     // textarea, and the room's shortcut handler ignores keys typed into an
     // editable target.
     const product = page.getByRole("button", {
-      name: "product item",
+      name: PRODUCT_PIN_NAME,
       exact: true,
     });
     await product.click();
@@ -523,7 +528,7 @@ test.describe("Project-owned board save path", () => {
     await page.route(rpc, refuse);
 
     const product = page.getByRole("button", {
-      name: "product item",
+      name: PRODUCT_PIN_NAME,
       exact: true,
     });
     await product.click();
