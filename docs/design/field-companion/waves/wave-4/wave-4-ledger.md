@@ -130,11 +130,18 @@ The hazard was introduced by `909ccf975`/`485be0a47` and became reachable only a
 
 **Unchanged by FC-R23's mount (2026-09-01).** The verb *decisions* — which rows show, which are
 disabled, when the confirm is required, what each line says — moved into CaptureKit and are covered
-(`FieldVerbMenuTests`, `CaptureCardConfirmUnchangedTests`; suite **751 in 72**, from 732 in 70). What
-is still app-target and therefore **compile-gated only**: `CaptureCardOverlay`'s rendering of the
-menu, `ViewfinderScreen`'s per-card reset, and `ViewfinderModel`'s `cardParties` load and
-`performVerb`. The device pass remains the only evidence that a tap on the card puts a row in the
-database.
+by `FieldVerbMenuTests` (suite **755 in 72**, from 732 in 70).
+
+⚠ **`CaptureCardConfirmUnchangedTests` does NOT pin the overlay** — nothing can, from this target.
+It exercises the CaptureKit accessors the card reads (`setValue`/`provenance`, `FieldPlacementLine`)
+and proves the *verb lanes* leave them alone. That is worth having — it is the falsifier for "the
+verbs moved what C3 was already for" — but it is a statement about `Specimen`, not about
+`CaptureCardOverlay`, and the name should not be read as more.
+
+What is still app-target and therefore **compile-gated only**: `CaptureCardOverlay`'s rendering of
+the menu and the notice, `ViewfinderScreen`'s per-card reset, and `ViewfinderModel`'s `cardParties`
+load and `performVerb`. The device pass remains the only evidence that a tap on the card puts a row
+in the database.
 
 ## Notable plan-vs-repo corrections in Tasks 11/12
 
@@ -268,7 +275,7 @@ So the data loss is now *recorded* rather than *silent*, which is the right firs
 Recorded here so none of them is re-discovered as an omission.
 
 - **I-9 — only one of the four `endVisit` sites routes through V4.** The call sites are `V0VisitSheet.swift:362` (the visit sheet's own *End visit*), `V4VisitReviewScreen.swift:357` (reached only from the tray), `WorkDashboardScreen.swift:71` (the stale prompt's *End visit*), and `RootView.swift:264` (the Today band's `FieldCompanionActionID.endVisit`). Only `V1SessionTrayScreen.swift:403-408` opens V4 first. So a visit closed from the sheet, the Today band or the stale prompt produces **no receipt and no Hours offer** — the two things Task 15/16 exist for. This is FC-R3 breadth, not a defect in the shipped code: making the other three route through V4 changes what those three controls *do*, and the stale-prompt one in particular is a close the designer did not initiate. **Needs a ruling.**
-- **I-6 — nothing reads `fieldWriteAttention`.** Already recorded above under *Owed decision created by the CaptureKit fixes*; carried unchanged. Wave 5 owes the surface and its copy.
+- **I-6 — nothing reads `fieldWriteAttention`.** Already recorded above under *Owed decision created by the CaptureKit fixes*; carried unchanged. Wave 5 owes the surface and its copy. **⚠ FC-R23 raised its priority (2026-09-01).** A lane that closes `.unwritable` at the retry ceiling now leaves the punch verb correctly disabled and says *nothing at all* — `.refused` at least has a status line. On N5 that silence sat on a screen no build could open; it now sits on the surface every capture passes through. Same fix, higher stakes.
 - **The punch-row visual residual** — the 10px / 32px / baseline relationship on the punch row after W4-C13 confined the grid change. A browser-walk item, not a test item; it needs Kody's eye on the running page, not another jest assertion.
 - **W4-01's harness `withSample` cleanup** — contingent on I-4 landing a production mount. ~~I-4 did not land~~ **I-4 landed on 2026-09-01 (FC-R23)**, so the contingency is discharged; `CaptureDeepLink.swift:102` is deliberately left as it is (N5 still needs its harness presenter) and the cleanup is now a Wave 5 choice rather than a blocked one.
 - **Tray-side verb access.** The C3 mount covers every capture with a card moment. A capture with none — a tray row, a V4 row — still has no verbs, and §7.8/§7.9 grant it none, so nothing was invented for them. **Wave 5.**

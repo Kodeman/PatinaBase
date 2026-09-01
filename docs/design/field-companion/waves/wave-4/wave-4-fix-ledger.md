@@ -97,6 +97,24 @@ the P-1 falsifier landed without disturbing anything.
   `git diff main...HEAD -- scripts/` and finding it empty. **A fix whose evidence is "the output looks
   the same" is not evidence.**
 
+## Round 3 — the C3 verb mount (FC-R23), reviewed 2026-09-01
+
+Verdict MERGE-WITH-FIXES. All four priority attack lines held clean: lane timing (the card mints
+and does not enqueue an uncommitted draft), the court confirm, I-14, and the double-fire guard.
+
+| # | Landed | What was done |
+|---|---|---|
+| **F1** | ✅ | **The punch confirm had no way out.** `cancelPunch()` had exactly one caller in the repo and it was a test — on the card the only escape was swiping the whole card away, which costs the capture's card moment too. *Not now* sits beside *Add* in the card's secondary shape (Add detail's outline, not a fill) and returns the menu to idle having written nothing. Tested: decline → `.idle`, no pending court, no status line, verb offered again. |
+| **F2** | ✅ | **The punch verb was live before the party list landed.** `PunchCourtResolver.resolve([])` is `.noCourt`, and an in-flight fetch and a project with no reachable GC are the same empty list — so a tap in that window promised *"No general contractor with texting on this project"* and filed her own task. A fact about the network, told as a fact about the project. `FieldVerbFacts.partiesSettled` mirrors `ViewfinderModel.venueSettled` (`:60`), which exists for this reason on this screen; the punch row — and only the punch row, since *Make it a task* consults no court — is disabled until the fetch returns. After it settles, ruling 2's fallback is unchanged. N5 had the same race and takes the same flag. |
+| **F3** | ✅ | `loadCardParties()` pre-blanked `cardParties`, and `filedCourt` resolves the GC's name out of that list — so the visit door closing reloaded it and flipped *"Filed. Delaney Build Co was texted."* to *"Filed as your task."* for the length of the fetch. Built in a local and assigned once; a load the card outran restores the previous settled flag rather than stranding it false. |
+| **F5** | ✅ | Both new `Task`s take `@MainActor [weak self]`, the shape `observeVisitChanges` already uses in that file. |
+| **F7** | ✅ | `FieldVerbControls` hardcoded `card.verbs*` identifiers that N5 was also stamping, so the device-pass script would have addressed N5's menu by the card's name. The prefix is a parameter: `"card."` / `"n5."`. |
+| **F8** | ✅ | `make-task` fired for both verbs, and ruling 2 makes a courtless punch a designer-owned row — same `owner`, same nil party — so nothing could count how often the punch verb finds no court, which is the number that says whether the GC rail reaches anyone. `FieldVerbAction.punchTask` carries a `FieldVerbIntent`; both surfaces add an **additive** `verb: punch\|task`. Neither event renamed. |
+| **F4** | ✅ (docs) | The C1 note cited `CaptureCardConfirmUnchangedTests` as if it pinned the overlay, contradicting its own *"compile-gated only"* sentence in the same paragraph. Corrected in `wave-4-ledger.md` and in the suite's own doc comment: it pins the CaptureKit accessors the card reads, which is a statement about `Specimen`, not about `CaptureCardOverlay`. |
+| **F6** | ✅ (docs) | **N5's golden screenshots are stale.** The punch confirm's *Add* moved from the app-target `RecognitionPrimaryButtonStyle` to CaptureKit's `FieldVerbConfirmButtonStyle` (same verdigris/r12/`bodyEmph`, now with 22pt horizontal padding), and *Not now* is new beside it. Any N5 screenshot in the harness baseline that shows a pending punch needs regenerating. |
+| **F9** | carried, no code | **The regenerated `project.pbxproj` churns ~1500 lines of UUIDs on every run.** Known `generate_project.rb` behaviour, not this branch's doing — every feature commit in this wave that added a Swift file carries the same churn (`909ccf975`, `485be0a47`, `5c47b6dcf`, `420c65621`). Recorded so a reviewer does not read it as an unrelated edit. |
+| **F10** | carried, no code | **An exhausted-retry punch row is silent AND disabled.** `.unwritable` (retry ceiling) and `.refused` both close the lane, so the verb is correctly not offered — but the only thing that says so is the `refused` status line; `.unwritable` shows nothing at all. This is exactly **I-6** — nothing reads `fieldWriteAttention` — and it was already owed to Wave 5. **C3 raises its priority**: on N5 the silence sat on a screen no build could open, and it now sits on the surface every capture passes through. Wave 5 owes the surface and its copy. |
+
 ## Re-review round 2 — what was patched
 
 | # | What was done |

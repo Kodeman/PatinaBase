@@ -314,6 +314,11 @@ struct FieldVerbMenuTests {
 /// The verbs mounted on C3 must not move what C3 was already for. The card's
 /// own act is confirming the guess — category, material, their provenance — and
 /// the placement line beneath them.
+///
+/// ⚠ This pins the CaptureKit accessors the card READS, not the card. The
+/// overlay is app-target and unreachable from here (the wave's C1 finding), so
+/// what is falsified is "a verb lane disturbed the confirmed fields", which is
+/// a statement about `Specimen`. The rendering is compile-gated only.
 @MainActor
 struct CaptureCardConfirmUnchangedTests {
     private func confirmedCard() -> Specimen {
