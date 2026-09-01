@@ -6,12 +6,50 @@ import {
   useBoardItemFeedbackByBoard,
   usePromoteBoardReferenceToSelection,
   deriveApprovedBoardItemIds,
+  latestVerdictByAuthor,
+  type ItemFeedback,
 } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
 
 interface ApprovedPin {
   item: EditableMoodBoardItem;
   scheduled: boolean;
+  /** Whether the current 'approved' verdict(s) on this pin came from a guest
+   * share-link reaction, a signed-in client, or both (mixed approvers). */
+  approvalSource: 'guest' | 'client' | 'mixed';
+}
+
+/**
+ * Per pin, whether its live 'approved' verdict(s) came from a guest
+ * share-link reaction, a signed-in client, or both — same guest_share_id
+ * attribution and latest-per-author precedence the Feedback rail and
+ * VerdictBadge already use (board-add-rail.tsx's data-verdict-source, W2a
+ * 00549), so the room speaks one language about where a verdict came from.
+ */
+function approvalSourcesByItem(
+  rows: readonly ItemFeedback[],
+): Map<string, 'guest' | 'client' | 'mixed'> {
+  const rowsByItem = new Map<string, ItemFeedback[]>();
+  for (const row of rows) {
+    if (!row.board_item_id) continue;
+    const list = rowsByItem.get(row.board_item_id) ?? [];
+    list.push(row);
+    rowsByItem.set(row.board_item_id, list);
+  }
+  const sources = new Map<string, 'guest' | 'client' | 'mixed'>();
+  for (const [itemId, itemRows] of rowsByItem) {
+    let guest = false;
+    let client = false;
+    for (const feedback of latestVerdictByAuthor(itemRows)) {
+      if (feedback.verdict !== 'approved') continue;
+      if (feedback.guest_share_id) guest = true;
+      else if (feedback.client_id) client = true;
+    }
+    if (guest && client) sources.set(itemId, 'mixed');
+    else if (guest) sources.set(itemId, 'guest');
+    else if (client) sources.set(itemId, 'client');
+  }
+  return sources;
 }
 
 function pinName(item: EditableMoodBoardItem): string {
@@ -63,6 +101,11 @@ export function BoardApprovedPinsPanel({
     [feedbackQuery.data],
   );
 
+  const approvalSources = useMemo(
+    () => approvalSourcesByItem(feedbackQuery.data ?? []),
+    [feedbackQuery.data],
+  );
+
   const approvedPins = useMemo<ApprovedPin[]>(
     () =>
       items
@@ -70,8 +113,12 @@ export function BoardApprovedPinsPanel({
           (item) =>
             approvedIds.has(item.id) && (item.type === 'product' || item.type === 'capture'),
         )
-        .map((item) => ({ item, scheduled: Boolean(item.projectFfeItemId) })),
-    [items, approvedIds],
+        .map((item) => ({
+          item,
+          scheduled: Boolean(item.projectFfeItemId),
+          approvalSource: approvalSources.get(item.id) ?? 'client',
+        })),
+    [items, approvedIds, approvalSources],
   );
 
   if (approvedPins.length === 0) return null;
@@ -172,7 +219,7 @@ export function BoardApprovedPinsPanel({
         )}
       </div>
       <ul className="mt-2 flex flex-wrap gap-2">
-        {approvedPins.map(({ item, scheduled }) => (
+        {approvedPins.map(({ item, scheduled, approvalSource }) => (
           <li
             key={item.id}
             className="flex items-center gap-2 rounded-[4px] border border-[var(--border-default)] px-2 py-1.5"
@@ -180,6 +227,19 @@ export function BoardApprovedPinsPanel({
             <span className="max-w-[160px] truncate font-heading text-[12px] text-[var(--text-primary)]">
               {pinName(item)}
             </span>
+            {(approvalSource === 'guest' || approvalSource === 'mixed') && (
+              <span
+                data-verdict-source="guest"
+                className="rounded-full border border-[var(--border-default)] px-1.5 font-mono text-[8px] uppercase tracking-[0.04em] text-[var(--text-muted)]"
+                title={
+                  approvalSource === 'mixed'
+                    ? 'Approved by both a guest link and a signed-in client'
+                    : 'Approved via a guest share link, not a signed-in client'
+                }
+              >
+                Guest
+              </span>
+            )}
             {scheduled ? (
               <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-sage)]">
                 On schedule

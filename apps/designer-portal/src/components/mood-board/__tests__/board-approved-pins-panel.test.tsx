@@ -6,7 +6,8 @@ const promoteMutateAsync = jest.fn();
 let boardFeedbackData: Array<{
   id: string;
   board_item_id: string | null;
-  client_id: string;
+  client_id: string | null;
+  guest_share_id?: string | null;
   verdict: string;
   created_at: string;
 }> = [];
@@ -15,8 +16,10 @@ jest.mock('@patina/supabase', () => {
   const actual = jest.requireActual('@patina/supabase');
   return {
     // Real derivation — this is exactly what the panel's "approved" filter
-    // should exercise; only the network-backed hooks below are stubbed.
+    // and guest-badge attribution should exercise; only the network-backed
+    // hooks below are stubbed.
     deriveApprovedBoardItemIds: actual.deriveApprovedBoardItemIds,
+    latestVerdictByAuthor: actual.latestVerdictByAuthor,
     useBoardItemFeedbackByBoard: () => ({ data: boardFeedbackData }),
     usePromoteBoardReferenceToSelection: () => ({
       mutateAsync: promoteMutateAsync,
@@ -198,5 +201,55 @@ describe('BoardApprovedPinsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /send to schedule/i }));
     await waitFor(() => expect(promoteMutateAsync).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/could not be sent/i)).not.toBeInTheDocument();
+  });
+
+  it('marks a pin approved only via a guest share link with the room\'s Guest badge', () => {
+    boardFeedbackData = [
+      { id: 'f1', board_item_id: 'pin-1', client_id: null, guest_share_id: 'share-1', verdict: 'approved', created_at: '2026-08-01T00:00:00Z' },
+    ];
+    render(
+      <BoardApprovedPinsPanel
+        boardId="board-1"
+        projectId="project-1"
+        scopeRoomId={null}
+        items={[pin({ id: 'pin-1' })]}
+        onPromoted={jest.fn()}
+      />,
+    );
+    const badge = screen.getByText('Guest');
+    expect(badge).toHaveAttribute('data-verdict-source', 'guest');
+  });
+
+  it('does not badge a pin approved by a signed-in client', () => {
+    boardFeedbackData = [
+      { id: 'f1', board_item_id: 'pin-1', client_id: 'client-1', verdict: 'approved', created_at: '2026-08-01T00:00:00Z' },
+    ];
+    render(
+      <BoardApprovedPinsPanel
+        boardId="board-1"
+        projectId="project-1"
+        scopeRoomId={null}
+        items={[pin({ id: 'pin-1' })]}
+        onPromoted={jest.fn()}
+      />,
+    );
+    expect(screen.queryByText('Guest')).not.toBeInTheDocument();
+  });
+
+  it('badges a pin approved by both a guest link and a signed-in client', () => {
+    boardFeedbackData = [
+      { id: 'f1', board_item_id: 'pin-1', client_id: null, guest_share_id: 'share-1', verdict: 'approved', created_at: '2026-08-01T00:00:00Z' },
+      { id: 'f2', board_item_id: 'pin-1', client_id: 'client-1', verdict: 'approved', created_at: '2026-08-02T00:00:00Z' },
+    ];
+    render(
+      <BoardApprovedPinsPanel
+        boardId="board-1"
+        projectId="project-1"
+        scopeRoomId={null}
+        items={[pin({ id: 'pin-1' })]}
+        onPromoted={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('Guest')).toBeInTheDocument();
   });
 });
