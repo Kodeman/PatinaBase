@@ -174,6 +174,56 @@ export function rotatedBoardRect(rect: BoardRect, degrees = 0): BoardRect {
   }
 }
 
+/** Rotates a vector (not a point about the origin of a rect) by `degrees`. */
+export function rotateBoardVector(
+  vector: BoardPoint,
+  degrees: number,
+): BoardPoint {
+  if (!degrees) return { ...vector }
+  const radians = (degrees * Math.PI) / 180
+  const sin = Math.sin(radians)
+  const cos = Math.cos(radians)
+  return {
+    x: vector.x * cos - vector.y * sin,
+    y: vector.x * sin + vector.y * cos,
+  }
+}
+
+/**
+ * A rotated pin renders as `rotate(deg)` about its own centre, so growing the
+ * unrotated box also moves that centre — and with it every corner, including
+ * the one the user is anchoring against. This returns the x/y correction that
+ * pins the rendered anchor corner in place, so a handle on a rotated item
+ * tracks the pointer instead of sliding away from it (CI-07).
+ *
+ * `anchor` is the fixed corner in unit space: {x:0,y:0} = top-left,
+ * {x:1,y:1} = bottom-right, {x:0.5,y:1} = bottom-centre.
+ */
+export function rotatedResizeAnchorCorrection(
+  before: BoardRect,
+  after: BoardRect,
+  anchor: BoardPoint,
+  degrees: number,
+): BoardPoint {
+  if (!degrees) return { x: 0, y: 0 }
+  const renderedAnchor = (rect: BoardRect): BoardPoint => {
+    const offset = rotateBoardVector(
+      {
+        x: (anchor.x - 0.5) * rect.width,
+        y: (anchor.y - 0.5) * rect.height,
+      },
+      degrees,
+    )
+    return {
+      x: rect.x + rect.width / 2 + offset.x,
+      y: rect.y + rect.height / 2 + offset.y,
+    }
+  }
+  const from = renderedAnchor(before)
+  const to = renderedAnchor(after)
+  return { x: from.x - to.x, y: from.y - to.y }
+}
+
 export function unionBoardRects(rects: readonly BoardRect[]): BoardRect | null {
   if (rects.length === 0) return null
   let minX = Number.POSITIVE_INFINITY

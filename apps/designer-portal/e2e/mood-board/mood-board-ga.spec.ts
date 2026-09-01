@@ -15,6 +15,14 @@ const SOURCE_SWATCH_ID = "e2e00000-0000-4000-8000-000000000022";
 const PRODUCT_FEEDBACK_ID = "e2e00000-0000-4000-8000-000000000031";
 const NOTE_FEEDBACK_ID = "e2e00000-0000-4000-8000-000000000032";
 const FEEDBACK_CLIENT_ID = "a0000000-0000-0000-0000-000000000005";
+// Pin accessible names (CI-13): a pin announces the product title, the note's
+// own text or the palette name, followed by its type — never a bare
+// "product item", which made every pin on the board sound identical. These
+// track the fixture rows seeded below.
+const PRODUCT_PIN_NAME = "Heirloom lounge chair, product";
+const NOTE_PIN_NAME = "Leave breathing room, note";
+const PALETTE_PIN_NAME = "Warm earths, palette";
+
 // migration 00462's guard_proposal_board_item_media_reference trigger rejects
 // any image_url that resolves to a proposal-mood-boards Storage path the
 // board's own design studio doesn't own (public.board_storage_reference_path
@@ -492,16 +500,18 @@ test.describe("MoodBoard GA browser acceptance", () => {
       }),
     ).toBe(true);
 
-    for (const type of [
-      "product",
-      "capture",
-      "image",
-      "palette",
-      "note",
-      "room scan",
+    // One pin of each type, each announcing its own name rather than its bare
+    // type (CI-13).
+    for (const pinName of [
+      PRODUCT_PIN_NAME,
+      "Curated capture, capture",
+      "Visual reference, image",
+      PALETTE_PIN_NAME,
+      NOTE_PIN_NAME,
+      "North wall scan, room scan",
     ]) {
       await expect(
-        page.getByRole("button", { name: `${type} item`, exact: true }),
+        page.getByRole("button", { name: pinName, exact: true }),
       ).toHaveCount(1);
     }
     await expect(
@@ -543,10 +553,10 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await openBoard(page);
 
     const product = page.getByRole("button", {
-      name: "product item",
+      name: PRODUCT_PIN_NAME,
       exact: true,
     });
-    const note = page.getByRole("button", { name: "note item", exact: true });
+    const note = page.getByRole("button", { name: NOTE_PIN_NAME, exact: true });
     await product.click();
     await expect(product).toHaveAttribute("aria-pressed", "true");
     await expect(
@@ -603,7 +613,11 @@ test.describe("MoodBoard GA browser acceptance", () => {
   }) => {
     await openBoard(page);
     await page.getByRole("tab", { name: "palettes", exact: true }).click();
-    const source = page.getByRole("button", { name: /GA rail palette/i });
+    // Scoped to the rail's landmark: a dropped pin announces its own name
+    // now (CI-13), so an unscoped /GA rail palette/ matches the pin too.
+    const source = page
+      .getByRole("complementary", { name: "Add to board" })
+      .getByRole("button", { name: /GA rail palette/i });
     await expect(source).toBeVisible();
     await expect(source).toHaveAttribute("draggable", "true");
     const application = page.getByRole("application", {
@@ -654,7 +668,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await openBoard(page);
 
     const note = page
-      .getByRole("button", { name: "note item", exact: true })
+      .getByRole("button", { name: NOTE_PIN_NAME, exact: true })
       .first();
     const box = await note.boundingBox();
     expect(box).not.toBeNull();
@@ -668,7 +682,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await page.keyboard.up("Alt");
 
     await expect(
-      page.getByRole("button", { name: "note item", exact: true }),
+      page.getByRole("button", { name: NOTE_PIN_NAME, exact: true }),
     ).toHaveCount(2);
     await expect(page.locator("[data-board-item-id]")).toHaveCount(7);
     await expect
@@ -689,7 +703,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
   }) => {
     await openBoard(page);
 
-    const note = page.getByRole("button", { name: "note item", exact: true });
+    const note = page.getByRole("button", { name: NOTE_PIN_NAME, exact: true });
     const beforeX = Number(boardItemScalar("x::text", NOTE_ID));
     await note.focus();
     await expect(note).toHaveAttribute("aria-pressed", "false");
@@ -732,7 +746,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
   }) => {
     await openBoard(page);
 
-    await page.getByRole("button", { name: "note item", exact: true }).click();
+    await page.getByRole("button", { name: NOTE_PIN_NAME, exact: true }).click();
     await expect(
       page.getByRole("complementary", {
         name: "Selected board item inspector",
@@ -929,7 +943,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
       .toBe("none");
 
     await page
-      .getByRole("button", { name: "palette item", exact: true })
+      .getByRole("button", { name: PALETTE_PIN_NAME, exact: true })
       .click();
     const inspector = page.getByRole("complementary", {
       name: "Selected board item inspector",
@@ -971,7 +985,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
         response.status() === 401,
     );
     const product = page.getByRole("button", {
-      name: "product item",
+      name: PRODUCT_PIN_NAME,
       exact: true,
     });
     // Selecting a product/image/capture pin mounts BoardImageInspectorActions,
@@ -1001,7 +1015,11 @@ test.describe("MoodBoard GA browser acceptance", () => {
     const assertNoNavigation = armNavigationSentinel(page);
 
     await page.getByRole("tab", { name: "palettes", exact: true }).click();
-    const source = page.getByRole("button", { name: /GA rail palette/i });
+    // Scoped to the rail's landmark: a dropped pin announces its own name
+    // now (CI-13), so an unscoped /GA rail palette/ matches the pin too.
+    const source = page
+      .getByRole("complementary", { name: "Add to board" })
+      .getByRole("button", { name: /GA rail palette/i });
     await expect(source).toBeVisible();
     const header = page.locator("header");
     const headerBox = await header.boundingBox();
@@ -1045,7 +1063,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
     const assertNoNavigation = armNavigationSentinel(page);
 
     const product = page.getByRole("button", {
-      name: "product item",
+      name: PRODUCT_PIN_NAME,
       exact: true,
     });
     await product.click();
@@ -1085,7 +1103,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
     const assertNoNavigation = armNavigationSentinel(page);
 
     const product = page.getByRole("button", {
-      name: "product item",
+      name: PRODUCT_PIN_NAME,
       exact: true,
     });
     await product.click();
@@ -1135,10 +1153,10 @@ test.describe("MoodBoard GA browser acceptance", () => {
     const assertNoNavigation = armNavigationSentinel(page);
 
     const product = page.getByRole("button", {
-      name: "product item",
+      name: PRODUCT_PIN_NAME,
       exact: true,
     });
-    const note = page.getByRole("button", { name: "note item", exact: true });
+    const note = page.getByRole("button", { name: NOTE_PIN_NAME, exact: true });
     await product.click();
     await note.click({ modifiers: ["Shift"] });
     await expect(product).toHaveAttribute("aria-pressed", "true");
@@ -1224,5 +1242,89 @@ test.describe("MoodBoard GA browser acceptance", () => {
     // room resolves its exit target from openBoard's `from=%2Fdesk`.
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/desk/, { timeout: 15_000 });
+  });
+  test("double-click edits a note in place and costs one undo step (CI-24)", async ({
+    authenticatedPage: page,
+  }) => {
+    await openBoard(page);
+
+    const note = page.getByRole("button", { name: NOTE_PIN_NAME, exact: true });
+    // A single click selects but must NOT open an editor — mounting a
+    // textarea on selection is what used to steal focus and collapse a
+    // multi-selection.
+    await note.click();
+    await expect(page.getByRole("textbox", { name: "Edit note" })).toHaveCount(
+      0,
+    );
+
+    await note.dblclick();
+    const editor = page.getByRole("textbox", { name: "Edit note" });
+    await expect(editor).toBeFocused();
+
+    await editor.fill("Edited in place");
+    // Blur commits, matching the inspector's semantics.
+    await editor.blur();
+    await expect(page.getByRole("textbox", { name: "Edit note" })).toHaveCount(
+      0,
+    );
+    await expect
+      .poll(
+        () =>
+          psqlScalar(
+            `SELECT content FROM public.proposal_board_items WHERE id = '${NOTE_ID}'::uuid`,
+          ),
+        { timeout: 15_000 },
+      )
+      .toBe("Edited in place");
+
+    // One undo step for the whole editing session, not one per keystroke.
+    await page.keyboard.press("Meta+z");
+    await expect
+      .poll(
+        () =>
+          psqlScalar(
+            `SELECT content FROM public.proposal_board_items WHERE id = '${NOTE_ID}'::uuid`,
+          ),
+        { timeout: 15_000 },
+      )
+      .toBe("Leave breathing room");
+  });
+
+  test("view shortcuts still fire with focus in the rail (CI-17)", async ({
+    authenticatedPage: page,
+  }) => {
+    await openBoard(page);
+    await expect(page.getByText("100%", { exact: true })).toBeVisible();
+
+    // Move focus off the canvas and into the add rail, exactly as clicking a
+    // source tab does. Edit shortcuts kept working from here; the view
+    // shortcuts silently died because they were bound to the canvas element.
+    const railTab = page
+      .getByRole("tablist", { name: "Board sources" })
+      .getByRole("tab")
+      .first();
+    await railTab.click();
+    await expect(railTab).toBeFocused();
+
+    await page.keyboard.press("Meta+Equal");
+    await expect(page.getByText("110%", { exact: true })).toBeVisible();
+
+    await page.keyboard.press("Meta+0");
+    await expect(page.getByText("100%", { exact: true })).toBeVisible();
+
+    // Scoped to the room's subtree: a Cmd+= aimed outside it stays the
+    // browser's own page zoom, which the room must never swallow (A2).
+    const swallowedOutside = await page.evaluate(() => {
+      const event = new KeyboardEvent("keydown", {
+        key: "=",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      document.body.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(swallowedOutside).toBe(false);
+    await expect(page.getByText("100%", { exact: true })).toBeVisible();
   });
 });

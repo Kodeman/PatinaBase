@@ -9,6 +9,8 @@ import {
   fitBoardGeometry,
   marqueeIntersections,
   resolveMoodBoardGeometry,
+  rotateBoardVector,
+  rotatedResizeAnchorCorrection,
   screenPointToBoard,
   zoomBoardViewAtPoint,
 } from './geometry'
@@ -281,5 +283,121 @@ describe('findBoardCascadePlacement (CI-11)', () => {
     }))
     const point = findBoardCascadePlacement(base, occupied, { maxAttempts })
     expect(point).toEqual({ x: 24 * maxAttempts, y: 24 * maxAttempts })
+  })
+})
+
+describe('rotated resize frame (CI-07)', () => {
+  it('leaves an unrotated vector alone', () => {
+    expect(rotateBoardVector({ x: 30, y: -12 }, 0)).toEqual({ x: 30, y: -12 })
+  })
+
+  it('counter-rotates a pointer delta into a rotated pin\u2019s local frame', () => {
+    // A pin rotated 90deg: dragging the pointer 10px right pushes its local
+    // -y edge, not its local +x edge.
+    const local = rotateBoardVector({ x: 10, y: 0 }, -90)
+    expect(local.x).toBeCloseTo(0, 6)
+    expect(local.y).toBeCloseTo(-10, 6)
+  })
+
+  it('rotates past a half turn and past a three-quarter turn', () => {
+    const half = rotateBoardVector({ x: 10, y: 0 }, 180)
+    expect(half.x).toBeCloseTo(-10, 6)
+    expect(half.y).toBeCloseTo(0, 6)
+
+    const threeQuarter = rotateBoardVector({ x: 3, y: 4 }, -270)
+    expect(threeQuarter.x).toBeCloseTo(-4, 6)
+    expect(threeQuarter.y).toBeCloseTo(3, 6)
+  })
+
+  it('round-trips through the item frame and back', () => {
+    const delta = { x: 17, y: -4 }
+    const back = rotateBoardVector(rotateBoardVector(delta, -37), 37)
+    expect(back.x).toBeCloseTo(delta.x, 6)
+    expect(back.y).toBeCloseTo(delta.y, 6)
+  })
+
+  it('needs no correction when the pin is not rotated', () => {
+    expect(
+      rotatedResizeAnchorCorrection(
+        { x: 0, y: 0, width: 100, height: 100 },
+        { x: 0, y: 0, width: 140, height: 100 },
+        { x: 0, y: 0 },
+        0,
+      ),
+    ).toEqual({ x: 0, y: 0 })
+  })
+
+  // Expected values are worked by hand from
+  //   correction = (centreBefore - centreAfter) + R(deg)(offsetBefore - offsetAfter)
+  // so a sign or transposition error in the implementation cannot satisfy them.
+  it.each([
+    {
+      label: 'se handle at +30deg anchors the NW corner',
+      before: { x: 0, y: 0, width: 100, height: 100 },
+      after: { x: 0, y: 0, width: 160, height: 140 },
+      anchor: { x: 0, y: 0 },
+      degrees: 30,
+      expected: { x: -14.019238, y: 12.320508 },
+    },
+    {
+      label: 's handle at -45deg anchors the top edge',
+      before: { x: 10, y: 20, width: 200, height: 100 },
+      after: { x: 10, y: 20, width: 200, height: 160 },
+      anchor: { x: 0.5, y: 0 },
+      degrees: -45,
+      expected: { x: 21.213203, y: -8.786797 },
+    },
+    {
+      label: 'w handle at +135deg anchors the east edge',
+      before: { x: 0, y: 0, width: 80, height: 80 },
+      after: { x: 0, y: 0, width: 120, height: 80 },
+      anchor: { x: 1, y: 0.5 },
+      degrees: 135,
+      expected: { x: -5.857864, y: -14.142136 },
+    },
+  ])('$label', ({ before, after, anchor, degrees, expected }) => {
+    const correction = rotatedResizeAnchorCorrection(
+      before,
+      after,
+      anchor,
+      degrees,
+    )
+    expect(correction.x).toBeCloseTo(expected.x, 5)
+    expect(correction.y).toBeCloseTo(expected.y, 5)
+  })
+
+  it('actually holds the anchor still once the correction is applied', () => {
+    const before = { x: 0, y: 0, width: 100, height: 100 }
+    const after = { x: 0, y: 0, width: 160, height: 140 }
+    const anchor = { x: 0, y: 0 }
+    const degrees = 30
+    const renderedAnchor = (rect: typeof before) => {
+      const offset = rotateBoardVector(
+        {
+          x: (anchor.x - 0.5) * rect.width,
+          y: (anchor.y - 0.5) * rect.height,
+        },
+        degrees,
+      )
+      return {
+        x: rect.x + rect.width / 2 + offset.x,
+        y: rect.y + rect.height / 2 + offset.y,
+      }
+    }
+    const correction = rotatedResizeAnchorCorrection(
+      before,
+      after,
+      anchor,
+      degrees,
+    )
+    const corrected = {
+      ...after,
+      x: after.x + correction.x,
+      y: after.y + correction.y,
+    }
+    expect(renderedAnchor(corrected).x).toBeCloseTo(renderedAnchor(before).x, 6)
+    expect(renderedAnchor(corrected).y).toBeCloseTo(renderedAnchor(before).y, 6)
+    // Without the correction the anchor really does drift — the defect.
+    expect(renderedAnchor(after).x).not.toBeCloseTo(renderedAnchor(before).x, 3)
   })
 })
