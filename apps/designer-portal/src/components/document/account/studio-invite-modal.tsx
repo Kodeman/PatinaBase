@@ -17,8 +17,14 @@
 
 import { useState, type FormEvent } from 'react';
 import { Input, Select } from '@/components/ui/controls';
-import { useInviteMember, type MemberRole } from '@patina/supabase';
+import {
+  useInviteMember,
+  type InviteMemberInput,
+  type InviteMemberResult,
+  type MemberRole,
+} from '@patina/supabase';
 import { studioEvents } from '@/lib/analytics/studio-events';
+import { friendlyInviteError } from '@/lib/document/invite-status';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DocSheet } from '../overlays/doc-sheet';
 import {
@@ -51,14 +57,6 @@ const TIER_OPTIONS: { value: InvitableTier; label: string }[] = [
 const LABEL = 'mb-1 block text-[12px] font-medium text-[var(--text-primary)]';
 const HELP = 'text-[12px] leading-relaxed text-[var(--color-aged-oak)]';
 
-/** Friendly copy for the invite edge function's error codes. */
-function friendlyInviteError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err ?? '');
-  if (msg.includes('already_member'))
-    return 'That person is already part of this studio.';
-  return msg || 'Failed to send the invite.';
-}
-
 export function StudioInviteModal({
   open,
   onOpenChange,
@@ -70,7 +68,16 @@ export function StudioInviteModal({
   const [titleOpen, setTitleOpen] = useState(false);
   const [tier, setTier] = useState<InvitableTier>('member');
   const [teammateType, setTeammateType] = useState<TeammateType>('designer');
-  const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
+  // Set once the membership row is saved (email_status 'sent' | 'suppressed'
+  // | 'failed' — the mutation never throws for the latter two, since the
+  // invite itself succeeded). lastInviteInput is kept so "Try sending again"
+  // can re-invoke the exact same mutation without re-collecting the form.
+  const [invitedResult, setInvitedResult] = useState<InviteMemberResult | null>(
+    null,
+  );
+  const [lastInviteInput, setLastInviteInput] = useState<InviteMemberInput | null>(
+    null,
+  );
 
   const inviteMember = useInviteMember();
 
@@ -96,7 +103,8 @@ export function StudioInviteModal({
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       resetForm();
-      setInvitedEmail(null);
+      setInvitedResult(null);
+      setLastInviteInput(null);
       inviteMember.reset();
     }
     onOpenChange(nextOpen);
@@ -114,28 +122,38 @@ export function StudioInviteModal({
       ? findStaffRoleByLabel(trimmedTitle)
       : undefined;
 
-    inviteMember.mutate(
-      {
-        organizationId,
-        email: trimmedEmail,
-        role: tier,
-        teammateType,
-        name: name.trim() || undefined,
-        jobTitle: trimmedTitle || undefined,
-        staffRole: curatedRole,
+    const input: InviteMemberInput = {
+      organizationId,
+      email: trimmedEmail,
+      role: tier,
+      teammateType,
+      name: name.trim() || undefined,
+      jobTitle: trimmedTitle || undefined,
+      staffRole: curatedRole,
+    };
+
+    inviteMember.mutate(input, {
+      onSuccess: (result) => {
+        studioEvents.teammateInvited({ teammate_type: teammateType, role: tier });
+        setInvitedResult(result);
+        setLastInviteInput(input);
       },
-      {
-        onSuccess: () => {
-          studioEvents.teammateInvited({ teammate_type: teammateType, role: tier });
-          setInvitedEmail(trimmedEmail);
-        },
-      },
-    );
+    });
+  };
+
+  // Re-invokes the exact same mutation the send used — the membership row is
+  // already saved, this is purely a "try the email again" retry.
+  const handleResendEmail = () => {
+    if (!lastInviteInput || inviteMember.isPending) return;
+    inviteMember.mutate(lastInviteInput, {
+      onSuccess: (result) => setInvitedResult(result),
+    });
   };
 
   const handleInviteAnother = () => {
     resetForm();
-    setInvitedEmail(null);
+    setInvitedResult(null);
+    setLastInviteInput(null);
     inviteMember.reset();
   };
 
@@ -151,33 +169,87 @@ export function StudioInviteModal({
           email with a link to join.
         </p>
 
-        {invitedEmail ? (
-          <div className="mt-4 space-y-4">
-            <p role="status" className="text-sm text-[var(--color-charcoal)]">
-              Invited <span className="font-medium">{invitedEmail}</span> —
-              they&apos;ll get an email.
-            </p>
-            <DocumentActionGroup
-              surfaceKey="account"
-              regionKey="studio-invite-complete"
-              className="justify-end"
-            >
-              <DocumentAction
-                actionKey="invite-another-teammate"
-                variant="secondary"
-                onClick={handleInviteAnother}
+        {invitedResult ? (
+          invitedResult.email_status === 'sent' ? (
+            <div className="mt-4 space-y-4">
+              <p role="status" className="text-sm text-[var(--color-charcoal)]">
+                Invited{' '}
+                <span className="font-medium">{invitedResult.email}</span>
+                {' '}— they&apos;ll get an email.
+              </p>
+              <DocumentActionGroup
+                surfaceKey="account"
+                regionKey="studio-invite-complete"
+                className="justify-end"
               >
-                Invite another
-              </DocumentAction>
-              <DocumentAction
-                actionKey="finish-studio-invite"
-                variant="tertiary"
-                onClick={() => handleOpenChange(false)}
+                <DocumentAction
+                  actionKey="invite-another-teammate"
+                  variant="secondary"
+                  onClick={handleInviteAnother}
+                >
+                  Invite another
+                </DocumentAction>
+                <DocumentAction
+                  actionKey="finish-studio-invite"
+                  variant="tertiary"
+                  onClick={() => handleOpenChange(false)}
+                >
+                  Done
+                </DocumentAction>
+              </DocumentActionGroup>
+            </div>
+          ) : (
+            // The membership row WAS saved (they're on the roster as
+            // "invited" already) — only the email failed or was suppressed.
+            // Distinct from the plain success state so this doesn't read as
+            // "nothing happened".
+            <div className="mt-4 space-y-4">
+              <p role="alert" className="text-sm text-[var(--color-charcoal)]">
+                Invited{' '}
+                <span className="font-medium">{invitedResult.email}</span>
+                {' '}— but the invite email couldn&apos;t be sent.
+              </p>
+              <p className={HELP}>
+                {invitedResult.email_error ??
+                  (invitedResult.email_status === 'suppressed'
+                    ? 'The email was suppressed and never went out.'
+                    : 'Something went wrong sending the email.')}{' '}
+                They&apos;re already on the roster — try sending the invite
+                email again, or share the invite link another way.
+              </p>
+              <DocumentActionGroup
+                surfaceKey="account"
+                regionKey="studio-invite-email-issue"
+                className="justify-end"
               >
-                Done
-              </DocumentAction>
-            </DocumentActionGroup>
-          </div>
+                <DocumentAction
+                  actionKey="invite-another-teammate"
+                  variant="tertiary"
+                  onClick={handleInviteAnother}
+                  disabled={inviteMember.isPending}
+                >
+                  Invite another
+                </DocumentAction>
+                <DocumentAction
+                  actionKey="finish-studio-invite"
+                  variant="secondary"
+                  onClick={() => handleOpenChange(false)}
+                  disabled={inviteMember.isPending}
+                >
+                  Done
+                </DocumentAction>
+                <DocumentAction
+                  actionKey="resend-studio-invite-email"
+                  variant="primary"
+                  onClick={handleResendEmail}
+                  loading={inviteMember.isPending}
+                  loadingLabel="Sending…"
+                >
+                  Try sending again
+                </DocumentAction>
+              </DocumentActionGroup>
+            </div>
+          )
         ) : (
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>

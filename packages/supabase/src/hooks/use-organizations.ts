@@ -103,6 +103,30 @@ export interface AcceptedInvitation {
   organization_name: string;
 }
 
+/**
+ * Result of `useInviteMember`'s mutation. The membership row is guaranteed
+ * saved by the time this resolves — `email_status` distinguishes whether the
+ * invite email itself made it out:
+ *   - 'sent'       — normal path, matches all pre-contract responses (which
+ *                     never included this field and always meant the email
+ *                     went out).
+ *   - 'suppressed' — the send layer intentionally didn't send (e.g. a
+ *                     compliance/unsubscribe suppression).
+ *   - 'failed'     — the send attempt errored, including the function's
+ *                     legacy 502 `send_failed` shape, normalized here for
+ *                     callers so they only ever branch on `email_status`.
+ */
+export interface InviteMemberResult {
+  userId?: string;
+  email: string;
+  status?: string;
+  organizationId?: string;
+  teammateType?: string;
+  memberRole?: string;
+  email_status: 'sent' | 'suppressed' | 'failed';
+  email_error?: string;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // QUERY HOOKS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -299,7 +323,7 @@ export function useInviteMember() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: InviteMemberInput) => {
+    mutationFn: async (input: InviteMemberInput): Promise<InviteMemberResult> => {
       const supabase = getSupabase();
       const { data, error } = await supabase.functions.invoke('workspace-member-invite', {
         body: {
@@ -316,18 +340,32 @@ export function useInviteMember() {
       if (error) {
         // functions.invoke wraps a non-2xx in a FunctionsHttpError whose .context
         // is the raw Response — surface the edge fn's { error } (e.g. already_member)
-        // instead of a generic message.
-        let detail: string | undefined;
+        // instead of a generic message. EXCEPT the legacy `send_failed` (502)
+        // shape: the membership row is already saved by the time the function
+        // reaches the send step (upsert happens first — see the edge function's
+        // LOAD-BEARING ORDER comment), so this is really an email-side failure,
+        // not an invite failure. Normalize it to the same
+        // saved-but-email-failed shape the function's current 200 response
+        // carries via `email_status`, so callers only ever branch on that field.
+        let body: { error?: string; detail?: string } | undefined;
         try {
-          const body = await (error as { context?: Response }).context?.json();
-          detail = body?.detail ?? body?.error;
+          body = await (error as { context?: Response }).context?.json();
         } catch {
           /* fall through to the generic message */
         }
-        throw new Error(detail ?? error.message ?? 'Failed to invite member');
+        if (body?.error === 'send_failed') {
+          return {
+            email: input.email,
+            organizationId: input.organizationId,
+            email_status: 'failed',
+            email_error: body.detail,
+          };
+        }
+        throw new Error(body?.detail ?? body?.error ?? error.message ?? 'Failed to invite member');
       }
       if (data?.error) throw new Error(data.detail ?? data.error);
-      return data;
+      // Pre-contract / omitted email_status always meant the email went out.
+      return { ...data, email_status: data?.email_status ?? 'sent' } as InviteMemberResult;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({

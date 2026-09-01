@@ -762,6 +762,7 @@ export type {
   OrganizationMemberWithProfile,
   CreateOrganizationInput,
   InviteMemberInput,
+  InviteMemberResult,
 } from "./use-organizations";
 export { useStudioIdentity } from "./use-studio-identity";
 export type {
