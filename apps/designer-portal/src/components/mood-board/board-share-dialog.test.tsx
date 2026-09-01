@@ -167,4 +167,20 @@ describe('BoardShareDialog', () => {
       ),
     );
   });
+
+  it('warns that the link is shared, not personal, before reactions are turned on (W2a review #16)', () => {
+    render(
+      <BoardShareDialog
+        boardId="board-1"
+        boardName="Living room"
+        owner={{ kind: 'project', id: 'project-1' }}
+        open
+        onOpenChange={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(/everyone who has it sees every reaction left through it/i),
+    ).toBeInTheDocument();
+  });
 });
