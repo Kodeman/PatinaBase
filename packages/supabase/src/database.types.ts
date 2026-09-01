@@ -34311,6 +34311,8 @@ export type Database = {
         | "failed"
         | "suppressed"
         | "unconfirmed"
+        | "sent"
+        | "complained"
       oauth_provider: "apple" | "google"
       organization_status:
         | "active"
@@ -34559,6 +34561,8 @@ export const Constants = {
         "failed",
         "suppressed",
         "unconfirmed",
+        "sent",
+        "complained",
       ],
       oauth_provider: ["apple", "google"],
       organization_status: [

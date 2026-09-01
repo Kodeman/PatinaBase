@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
       // SENT-side: a Twilio-accepted SMS now sits at 'sending' until the
       // status webhook lands (or forever for a dev-SID send) — it was sent,
       // so it belongs in "Total Sent".
-      supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', ['sending', 'delivered', 'opened', 'clicked', 'unconfirmed']),
+      supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).in('status', ['sending', 'sent', 'delivered', 'opened', 'clicked', 'unconfirmed']),
       supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).not('opened_at', 'is', null),
       supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).not('clicked_at', 'is', null),
       supabase.from('notification_log').select('*', { count: 'exact', head: true }).gte('created_at', since).eq('status', 'bounced'),
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       supabase.from('notification_log').select('id, type, status, created_at, user_id').order('created_at', { ascending: false }).limit(10),
       supabase.from('campaigns').select('id, name, subject, scheduled_for, total_recipients').eq('status', 'scheduled').order('scheduled_for', { ascending: true }).limit(5),
       // Send-volume chart is SENT-side too — same list as sentResult above.
-      supabase.from('notification_log').select('created_at').gte('created_at', since).in('status', ['sending', 'delivered', 'opened', 'clicked', 'unconfirmed']).order('created_at', { ascending: true }),
+      supabase.from('notification_log').select('created_at').gte('created_at', since).in('status', ['sending', 'sent', 'delivered', 'opened', 'clicked', 'unconfirmed']).order('created_at', { ascending: true }),
     ]);
 
     const totalSent = sentResult.count || 0;
