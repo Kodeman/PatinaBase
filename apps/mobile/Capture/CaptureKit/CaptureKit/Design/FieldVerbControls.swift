@@ -99,11 +99,20 @@ public struct FieldVerbNotice: View {
                     // fc_dispatch_task_assignment re-reads the party's real
                     // consent when it is.
                     line(intent)
-                    Button("Add") {
-                        if let action = menu.confirmPunch() { onAction(action) }
+                    HStack(spacing: 12) {
+                        Button("Add") {
+                            if let action = menu.confirmPunch() { onAction(action) }
+                        }
+                        .buttonStyle(FieldVerbConfirmButtonStyle())
+                        .accessibilityIdentifier("card.verbs.confirm")
+                        // A confirm step with no way out is a trap: the only
+                        // escape was swiping the whole card away, which loses
+                        // the capture's card moment too. The decline writes
+                        // nothing and returns the menu to idle.
+                        Button("Not now") { menu.cancelPunch() }
+                            .buttonStyle(FieldVerbDeclineButtonStyle())
+                            .accessibilityIdentifier("card.verbs.decline")
                     }
-                    .buttonStyle(FieldVerbConfirmButtonStyle())
-                    .accessibilityIdentifier("card.verbs.confirm")
                 }
                 if let status {
                     line(status)
@@ -119,6 +128,23 @@ public struct FieldVerbNotice: View {
             .font(CaptureType.footnote)
             .foregroundStyle(CaptureColor.inkSoft)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The card's own secondary shape — *Add detail*'s outline, not a fill — so
+/// declining reads as the lighter act it is.
+public struct FieldVerbDeclineButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(CaptureType.bodyEmph)
+            .foregroundStyle(CaptureColor.inkSoft)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 13)
+            .overlay(RoundedRectangle(cornerRadius: 12)
+                .stroke(CaptureColor.line2, lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.6 : 1)
     }
 }
 

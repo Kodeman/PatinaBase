@@ -94,13 +94,26 @@ struct FieldVerbMenuTests {
         #expect(menu.confirmPunch() == nil)
     }
 
-    @Test func cancellingTheConfirmWritesNothing() {
+    /// F1: *Not now*. A confirm step whose only escape was swiping the card
+    /// away is a trap, so the decline is a real affordance — and it must leave
+    /// the menu exactly where the tap found it.
+    @Test func decliningTheConfirmReturnsToIdleAndWritesNothing() {
         var menu = FieldVerbMenu()
-        _ = menu.tap(.punch, facts: placed(), parties: [gc])
+        let facts = placed()
+        _ = menu.tap(.punch, facts: facts, parties: [gc])
+        #expect(menu.phase(facts) == .confirming(.reachable(gc)))
+
         menu.cancelPunch()
+
+        #expect(menu.phase(facts) == .idle)
         #expect(menu.pendingPunch == nil)
         #expect(menu.intentLine == nil)
+        // Nothing to confirm afterwards, and nothing was reported as filed.
         #expect(menu.confirmPunch() == nil)
+        #expect(menu.statusLine(facts, parties: [gc]) == nil)
+        // The verb is offered again, unchanged.
+        #expect(menu.rows(facts) == [.note, .task, .punch])
+        #expect(menu.isEnabled(.punch, facts))
     }
 
     @Test func withNoReachableCourtTheConfirmFilesItAsHerOwnTask() {
