@@ -124,6 +124,9 @@ let mockDefinition: Record<string, unknown> = VARIANT_DEFINITION;
 // their own resolved/rejected value.
 const mockCreateDraftProduct = jest.fn();
 const mockCaptureFromUrl = jest.fn();
+// Controllable per-test so a "submit while the unfurl is still in flight"
+// scenario can be modeled without a real react-query mutation object.
+let mockCaptureFromUrlPending = false;
 
 /** A server evaluation that mirrors what 00403/00413 actually return. */
 const evaluateMock = jest.fn(
@@ -218,7 +221,7 @@ jest.mock('@patina/supabase', () => ({
   }),
   useProposalCaptures: () => ({ data: [], isLoading: false, isError: false }),
   useCreateDraftProduct: () => ({ mutateAsync: mockCreateDraftProduct, isPending: false }),
-  useCaptureFromUrl: () => ({ mutateAsync: mockCaptureFromUrl, isPending: false }),
+  useCaptureFromUrl: () => ({ mutateAsync: mockCaptureFromUrl, isPending: mockCaptureFromUrlPending }),
   useCommitProposalCapture: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProduct: () => ({ data: mockProduct, isLoading: false, error: null }),
   useProductConfigurationDefinition: () => ({
@@ -295,6 +298,7 @@ beforeEach(() => {
   mockLayerCounts = { personal: 1, studio: 0, catalog: 0 };
   mockLayerErrors = {};
   mockCatalogRows = [];
+  mockCaptureFromUrlPending = false;
 });
 
 describe('ProductPickerModal — proposal library access', () => {
@@ -707,5 +711,64 @@ describe('ProductPickerModal — Quick-create draft URL unfurl (D9)', () => {
     // Blurring again without changing the value must not re-fetch.
     fireEvent.blur(urlInput);
     expect(mockCaptureFromUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries the SAME url after a failed unfurl instead of permanently blocking it', async () => {
+    mockCaptureFromUrl.mockRejectedValueOnce(new Error('Temporary network error.'));
+    mockCaptureFromUrl.mockResolvedValueOnce({ name: 'Retried Ottoman', images: [] });
+    openDraftTab();
+
+    const urlInput = screen.getByTestId('draft-source-url-input');
+    fireEvent.change(urlInput, { target: { value: 'https://www.example.com/ottoman' } });
+    fireEvent.blur(urlInput);
+    await screen.findByText(/Couldn't fetch details from that link/);
+    expect(mockCaptureFromUrl).toHaveBeenCalledTimes(1);
+
+    // Re-blur on the identical, still-failed URL must retry, not no-op.
+    fireEvent.blur(urlInput);
+    await waitFor(() => expect(mockCaptureFromUrl).toHaveBeenCalledTimes(2));
+    await screen.findByText('Fetched details from example.com — check them over before adding.');
+    expect(screen.getByLabelText('Product Name *')).toHaveValue('Retried Ottoman');
+  });
+
+  it('clears a stale unfurl note as soon as the Source URL field changes', async () => {
+    mockCaptureFromUrl.mockResolvedValueOnce({ name: 'Console', images: [] });
+    openDraftTab();
+
+    const urlInput = screen.getByTestId('draft-source-url-input');
+    fireEvent.change(urlInput, { target: { value: 'https://www.example.com/console' } });
+    fireEvent.blur(urlInput);
+    await screen.findByText('Fetched details from example.com — check them over before adding.');
+
+    fireEvent.change(urlInput, { target: { value: 'https://www.example.com/console-v2' } });
+    expect(
+      screen.queryByText('Fetched details from example.com — check them over before adding.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('defers submit while an unfurl is in flight so an about-to-succeed fetch is never dropped', async () => {
+    mockCreateDraftProduct.mockResolvedValue({ id: 'draft-race' });
+    mockCaptureFromUrlPending = true;
+    const { onPick } = openDraftTab();
+
+    // The designer already typed a name independently of the URL fetch.
+    fireEvent.change(screen.getByLabelText('Product Name *'), {
+      target: { value: 'Console table' },
+    });
+
+    // A fast click while the fetch is still in flight must not create yet.
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft + use' }));
+    expect(mockCreateDraftProduct).not.toHaveBeenCalled();
+    expect(onPick).not.toHaveBeenCalled();
+
+    // Once the unfurl settles, the exact same action proceeds normally.
+    mockCaptureFromUrlPending = false;
+    fireEvent.change(screen.getByLabelText('Brand'), { target: { value: 'Studio Oak' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft + use' }));
+
+    await waitFor(() => expect(mockCreateDraftProduct).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Console table', brand: 'Studio Oak' }),
+    ));
+    expect(onPick).toHaveBeenCalled();
   });
 });

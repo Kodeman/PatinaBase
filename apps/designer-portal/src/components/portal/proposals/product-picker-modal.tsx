@@ -656,6 +656,9 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
       const host = parsedUrl.hostname.replace(/^www\./, '');
       setUnfurlNote(`Fetched details from ${host} — check them over before adding.`);
     } catch (err) {
+      // Clear the guard on failure — a re-blur/Enter on the SAME url (e.g.
+      // after a transient network error) must retry, not silently no-op.
+      lastUnfurledUrlRef.current = null;
       setUnfurledImages(null);
       const reason = err instanceof Error && err.message ? err.message : null;
       setUnfurlNote(
@@ -668,6 +671,11 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // A fetch that's about to succeed must never be silently dropped by a
+    // fast submit racing it — defer until the in-flight unfurl settles
+    // (the fields it fills are then already in place for this same click's
+    // re-attempt, since the button re-enables and Enter no-ops meanwhile).
+    if (unfurl.isPending) return;
     if (!name.trim()) return;
     setErrorMessage(null);
     try {
@@ -712,7 +720,12 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
         <Input
           type="url"
           value={sourceUrl}
-          onChange={(e) => setSourceUrl(e.target.value)}
+          onChange={(e) => {
+            setSourceUrl(e.target.value);
+            // A stale note ("Fetched from X" / "Couldn't fetch from X") must
+            // never linger once the field no longer names that X.
+            setUnfurlNote(null);
+          }}
           onBlur={() => void attemptUnfurl()}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -793,7 +806,7 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
         <Button
           variant="primary"
           type="submit"
-          disabled={!name.trim() || create.isPending}
+          disabled={!name.trim() || create.isPending || unfurl.isPending}
         >
           {create.isPending ? 'Creating…' : 'Create draft + use'}
         </Button>
