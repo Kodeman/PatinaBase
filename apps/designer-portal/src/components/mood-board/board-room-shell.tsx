@@ -140,7 +140,7 @@ function VerdictBadge({ feedback }: { feedback: ItemFeedback | undefined }) {
   const fromGuest = Boolean(feedback?.guest_share_id);
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em] shadow-sm"
+      className="inline-flex items-center gap-1 rounded-full border border-black/15 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em]"
       style={{ color: chip.color }}
       data-board-verdict={feedback?.verdict}
       data-verdict-source={fromGuest ? 'guest' : 'client'}
@@ -186,7 +186,7 @@ function InlineNoteEditor({
           event.currentTarget.blur();
         }
       }}
-      className="h-full w-full resize-none overflow-auto rounded-sm border border-[#E0D2B8] bg-[#F3E9D5] p-3 text-[0.78rem] leading-[1.5] text-[#4A4137] shadow-sm outline-none focus:ring-2 focus:ring-[var(--color-clay)]"
+      className="h-full w-full resize-none overflow-auto rounded-sm border border-[var(--border-warm)] bg-[var(--bg-warm)] p-3 text-[0.78rem] leading-[1.5] text-[var(--color-bark)] outline-none focus:ring-2 focus:ring-[var(--color-clay)]"
       style={{ fontFamily: 'var(--font-body)' }}
     />
   );
@@ -1179,7 +1179,7 @@ function BoardRoomSurface({
             <div
               role="group"
               aria-label="Tidy spacing"
-              className="absolute left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 shadow-lg"
+              className="absolute left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2"
             >
               <label className="flex items-center gap-2 font-mono text-[9px] uppercase text-[var(--text-muted)]">
                 Spacing
