@@ -75,11 +75,11 @@ would return the account id/business name with zero secret exposure — but
 that requires deploying a diagnostic code path, which this task deliberately
 did not do (out of scope for a read-only diagnosis, and not requested).
 Kody can settle it in ten seconds without touching prod: Stripe Dashboard →
-**switch to Middle West Studio** → Developers → API keys → compare the
-**key's last-4** shown there against `supabase secrets list`'s
-`STRIPE_SECRET_KEY` digest is not comparable directly (it's a one-way hash,
-not last-4) — instead just re-set it (step 2 below); re-setting is cheap and
-removes all ambiguity in one move.
+**switch to Middle West Studio** → Developers → API keys — though the key
+shown there can't be compared directly against `supabase secrets list`'s
+`STRIPE_SECRET_KEY` (that's a one-way hash digest, not a last-4); instead,
+just re-set it (step 2 below), which is cheap and removes all ambiguity in
+one move.
 
 ## 2. If mismatch: exact steps for Kody
 
