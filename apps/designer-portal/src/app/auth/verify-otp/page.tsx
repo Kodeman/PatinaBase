@@ -7,39 +7,7 @@ import { buildAuthCallbackUrl, createBrowserClient, normalizeAuthError, safeAuth
 import { PortalAuthNotice, PortalLogin } from '@patina/design-system';
 import { authEvents } from '@/lib/analytics/events';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
-
-/**
- * Test-account OTP fallback (`test-account-login` edge function,
- * verify_jwt=false). Tried ONLY after the normal `supabase.auth.verifyOtp`
- * call has already failed, so it never intercepts a real user's code and
- * never changes the happy path. Resolves the caller's session directly via
- * `token_hash` on success; returns false for any other outcome (403 not
- * allowlisted / wrong code, 429 rate-limited, network error, missing
- * token_hash) so the caller falls through to the ordinary invalid-code
- * error — never logs `code`.
- */
-async function tryTestAccountFallback(
-  email: string,
-  code: string,
-): Promise<boolean> {
-  try {
-    const supabase = createBrowserClient();
-    const { data, error } = await supabase.functions.invoke('test-account-login', {
-      body: { email, code },
-    });
-    if (error) return false;
-    const tokenHash = (data as { token_hash?: string } | null)?.token_hash;
-    if (!tokenHash) return false;
-    const { data: verified, error: verifyError } = await supabase.auth.verifyOtp({
-      type: 'email',
-      token_hash: tokenHash,
-    });
-    if (verifyError) return false;
-    return !!verified.session;
-  } catch {
-    return false;
-  }
-}
+import { tryTestAccountFallback } from '../test-account-fallback';
 
 function VerifyOtpContent() {
   const searchParams = useSearchParams();

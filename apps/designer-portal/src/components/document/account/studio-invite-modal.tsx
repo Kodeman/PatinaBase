@@ -78,6 +78,11 @@ export function StudioInviteModal({
   const [lastInviteInput, setLastInviteInput] = useState<InviteMemberInput | null>(
     null,
   );
+  // Set only when the resend mutation itself throws (e.g. a 409
+  // already-a-member, a 502) — distinct from invitedResult.email_error,
+  // which is the ORIGINAL send's outcome and would otherwise go stale and
+  // silently mask a failed retry.
+  const [resendError, setResendError] = useState<string | null>(null);
 
   const inviteMember = useInviteMember();
 
@@ -105,6 +110,7 @@ export function StudioInviteModal({
       resetForm();
       setInvitedResult(null);
       setLastInviteInput(null);
+      setResendError(null);
       inviteMember.reset();
     }
     onOpenChange(nextOpen);
@@ -142,11 +148,16 @@ export function StudioInviteModal({
   };
 
   // Re-invokes the exact same mutation the send used — the membership row is
-  // already saved, this is purely a "try the email again" retry.
+  // already saved, this is purely a "try the email again" retry. A thrown
+  // error (409 already-a-member, 502, network) is surfaced in the panel
+  // rather than failing silently — the mutation's own isError/error only
+  // covers the initial send, not this retry.
   const handleResendEmail = () => {
     if (!lastInviteInput || inviteMember.isPending) return;
+    setResendError(null);
     inviteMember.mutate(lastInviteInput, {
       onSuccess: (result) => setInvitedResult(result),
+      onError: (err) => setResendError(friendlyInviteError(err)),
     });
   };
 
@@ -154,6 +165,7 @@ export function StudioInviteModal({
     resetForm();
     setInvitedResult(null);
     setLastInviteInput(null);
+    setResendError(null);
     inviteMember.reset();
   };
 
@@ -198,10 +210,46 @@ export function StudioInviteModal({
                 </DocumentAction>
               </DocumentActionGroup>
             </div>
+          ) : invitedResult.email_status === 'suppressed' ? (
+            // Durably suppressed (bounced / marked spam previously) — a
+            // retry just re-suppresses forever, so there's no "try again"
+            // here, only ways to reach the person another way.
+            <div className="mt-4 space-y-4">
+              <p role="alert" className="text-sm text-[var(--color-charcoal)]">
+                Invited{' '}
+                <span className="font-medium">{invitedResult.email}</span>
+                {' '}— but we couldn&apos;t email them.
+              </p>
+              <p className={HELP}>
+                This address previously bounced or marked our email as spam;
+                email can&apos;t be sent to it. They&apos;re already on the
+                roster — share the invite link another way.
+              </p>
+              <DocumentActionGroup
+                surfaceKey="account"
+                regionKey="studio-invite-email-suppressed"
+                className="justify-end"
+              >
+                <DocumentAction
+                  actionKey="invite-another-teammate"
+                  variant="tertiary"
+                  onClick={handleInviteAnother}
+                >
+                  Invite another
+                </DocumentAction>
+                <DocumentAction
+                  actionKey="finish-studio-invite"
+                  variant="primary"
+                  onClick={() => handleOpenChange(false)}
+                >
+                  Done
+                </DocumentAction>
+              </DocumentActionGroup>
+            </div>
           ) : (
             // The membership row WAS saved (they're on the roster as
-            // "invited" already) — only the email failed or was suppressed.
-            // Distinct from the plain success state so this doesn't read as
+            // "invited" already) — only the email send failed. Distinct
+            // from the plain success state so this doesn't read as
             // "nothing happened".
             <div className="mt-4 space-y-4">
               <p role="alert" className="text-sm text-[var(--color-charcoal)]">
@@ -210,13 +258,19 @@ export function StudioInviteModal({
                 {' '}— but the invite email couldn&apos;t be sent.
               </p>
               <p className={HELP}>
-                {invitedResult.email_error ??
-                  (invitedResult.email_status === 'suppressed'
-                    ? 'The email was suppressed and never went out.'
-                    : 'Something went wrong sending the email.')}{' '}
+                {friendlyInviteError(invitedResult.email_error)}{' '}
                 They&apos;re already on the roster — try sending the invite
                 email again, or share the invite link another way.
               </p>
+              <p className={HELP}>
+                Sending again mints a new invite link — the previous link
+                will stop working.
+              </p>
+              {resendError && (
+                <p role="alert" className="text-sm text-[var(--color-error)]">
+                  {resendError}
+                </p>
+              )}
               <DocumentActionGroup
                 surfaceKey="account"
                 regionKey="studio-invite-email-issue"

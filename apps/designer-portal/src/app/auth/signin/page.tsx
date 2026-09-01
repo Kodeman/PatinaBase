@@ -24,6 +24,7 @@ import { getAccountsForPortal } from '@patina/types';
 import { authEvents } from '@/lib/analytics/events';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
 import { confirmedSession, designerDestination, designerSignInNotice, type DesignerLoginPhase } from '../auth-journey';
+import { tryTestAccountFallback } from '../test-account-fallback';
 
 /**
  * The brand pane only carries the badge on a window that is both wide enough
@@ -123,6 +124,10 @@ function SignInContent() {
       }
       finish('email-otp');
     } catch (cause) {
+      if (await tryTestAccountFallback(email.trim(), value)) {
+        finish('email-otp');
+        return;
+      }
       setCode('');
       setError(normalizeAuthError(cause, 'invalid_code').message);
     }

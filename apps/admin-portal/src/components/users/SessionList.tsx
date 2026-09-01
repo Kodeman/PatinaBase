@@ -1,13 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LogOut, Monitor, Smartphone, AlertCircle } from 'lucide-react';
 import { useUserSessions, useRevokeAllSessions } from '@/hooks/use-users';
-import { RevokeSessionDialog } from './RevokeSessionDialog';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -55,10 +53,6 @@ function parseUserAgent(userAgent?: string) {
 export function SessionList({ userId }: SessionListProps) {
   const { data: sessions, isLoading, error } = useUserSessions(userId);
   const revokeAllSessions = useRevokeAllSessions();
-  const [selectedSession, setSelectedSession] = useState<{
-    sessionId: string;
-    deviceInfo: string;
-  } | null>(null);
 
   const handleRevokeAll = async () => {
     if (!confirm('Are you sure you want to revoke all sessions? The user will be logged out from all devices.')) {
@@ -170,16 +164,6 @@ export function SessionList({ userId }: SessionListProps) {
                         </div>
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setSelectedSession({ sessionId: session.id, deviceInfo })
-                      }
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Revoke
-                    </Button>
                   </div>
                 );
               })}
@@ -187,16 +171,6 @@ export function SessionList({ userId }: SessionListProps) {
           )}
         </CardContent>
       </Card>
-
-      {selectedSession && (
-        <RevokeSessionDialog
-          userId={userId}
-          sessionId={selectedSession.sessionId}
-          deviceInfo={selectedSession.deviceInfo}
-          open={!!selectedSession}
-          onOpenChange={(open) => !open && setSelectedSession(null)}
-        />
-      )}
     </>
   );
 }

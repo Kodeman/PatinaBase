@@ -198,13 +198,16 @@ export const usersService = {
     return json.data;
   },
 
-  async revokeSession(userId: string, sessionId: string): Promise<void> {
-    await apiFetch(`/api/users/${userId}/sessions/${sessionId}`, { method: 'DELETE' });
-  },
-
   async revokeAllSessions(userId: string): Promise<void> {
-    // No dedicated /sessions/revoke-all route exists — the base sessions route's
-    // DELETE handler already implements "revoke all sessions".
-    await apiFetch(`/api/users/${userId}/sessions`, { method: 'DELETE' });
+    // GET /sessions returns MFA factors as a session proxy, not real
+    // sessions — there is no per-session or all-sessions admin revocation
+    // call reachable from this repo's installed supabase-js
+    // (@supabase/auth-js 2.98.0): GoTrueAdminApi's only session method is
+    // signOut(jwt, scope), which needs the target session's own JWT, not a
+    // userId. A prior "fix" rerouted this to DELETE /sessions, which just
+    // wrote an app_metadata field GoTrue ignores — a fake success. This
+    // points at the (nonexistent) /sessions/revoke-all route on purpose so
+    // the failure is visible instead of silently doing nothing.
+    await apiFetch(`/api/users/${userId}/sessions/revoke-all`, { method: 'POST' });
   },
 };

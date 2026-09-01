@@ -467,4 +467,89 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
 
     expect(within(row as HTMLElement).getByText('smtp down')).toBeInTheDocument();
   });
+
+  it('maps a raw email_error code through friendlyInviteError instead of showing it as prose', () => {
+    resendInvite.mockImplementation((_input, options) => {
+      options.onSuccess({ email_status: 'failed', email_error: 'send_failed' });
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: [...organizationMembers('owner'), invitedMember()],
+    });
+    render(<AccountStudioPage />);
+
+    const row = screen.getByText('invited@test.invalid').closest('li');
+    fireEvent.click(
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+    );
+
+    expect(
+      within(row as HTMLElement).queryByText('send_failed'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(row as HTMLElement).getByText(
+        /failed to send\. try sending it again/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('never sends a resend role outside admin|member|guest, even if the row somehow carries "owner"', () => {
+    mockUseOrganizationMembers.mockReturnValue({
+      data: [
+        ...organizationMembers('owner'),
+        // A defensive-only case: an invited row should never actually be
+        // 'owner', but the type doesn't guarantee it — the resend payload
+        // must still clamp rather than pass 'owner' to the edge function.
+        invitedMember({ role: 'owner' as unknown as 'admin' }),
+      ],
+    });
+    render(<AccountStudioPage />);
+
+    const row = screen.getByText('invited@test.invalid').closest('li');
+    fireEvent.click(
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+    );
+
+    const [payload] = resendInvite.mock.calls[0];
+    expect(payload.role).not.toBe('owner');
+    expect(['admin', 'member', 'guest']).toContain(payload.role);
+  });
+
+  it('disables only the resending row\'s button while a resend is in flight, leaving other rows clickable', () => {
+    mockUseInviteMember.mockReturnValue({
+      mutate: resendInvite,
+      isPending: true,
+      isError: false,
+      error: null,
+    });
+    resendInvite.mockImplementation(() => {
+      /* left pending — no onSuccess/onError called */
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: [
+        ...organizationMembers('owner'),
+        invitedMember(),
+        {
+          ...invitedMember(),
+          id: 'membership-invited-2',
+          user_id: 'invited-user-2',
+          profiles: { display_name: null, email: 'invited2@test.invalid' },
+        },
+      ],
+    });
+    render(<AccountStudioPage />);
+
+    const row1 = screen.getByText('invited@test.invalid').closest('li');
+    const row2 = screen.getByText('invited2@test.invalid').closest('li');
+
+    fireEvent.click(
+      within(row1 as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+    );
+
+    expect(
+      within(row1 as HTMLElement).getByRole('button', { name: /Sending…|Resend invite/ }),
+    ).toBeDisabled();
+    expect(
+      within(row2 as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+    ).not.toBeDisabled();
+  });
 });

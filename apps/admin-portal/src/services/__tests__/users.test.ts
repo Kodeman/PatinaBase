@@ -211,27 +211,27 @@ describe('usersService', () => {
       expect(fetchMock.mock.calls[0][0]).toBe('/api/users/123/sessions');
     });
 
-    it('should revoke a specific session', async () => {
-      fetchMock.mockResolvedValueOnce(okJson(undefined));
+    // usersService.revokeSession (single-session revoke) was removed: its
+    // API route (DELETE /sessions/[sessionId]) deleted the user's MFA
+    // factor while claiming to revoke a "session" — the wrong object
+    // entirely, per an adversarial review. There is no per-session revoke
+    // action anymore; see the "sessions surface honesty" fix.
 
-      await usersService.revokeSession('123', 'session-456');
-
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe('/api/users/123/sessions/session-456');
-      expect(init.method).toBe('DELETE');
-    });
-
-    // Regression test: revokeAllSessions previously POSTed to a nonexistent
-    // /sessions/revoke-all route. It now reuses the sessions route's DELETE
-    // handler, which already implements "revoke all sessions".
-    it('should revoke all sessions via DELETE /api/users/{id}/sessions', async () => {
+    // Regression test: revokeAllSessions was briefly rerouted to DELETE
+    // /sessions, whose handler wrote app_metadata.sessions_revoked_at —
+    // a field GoTrue never reads, so it silently did nothing while
+    // reporting success. No admin-side, userId-scoped session invalidation
+    // call exists in the installed supabase-js (@supabase/auth-js 2.98.0);
+    // this intentionally targets the (nonexistent) /sessions/revoke-all
+    // route so the failure is visible instead of a fake success.
+    it('should target the (currently nonexistent) revoke-all route rather than fake success via DELETE /sessions', async () => {
       fetchMock.mockResolvedValueOnce(okJson(undefined));
 
       await usersService.revokeAllSessions('123');
 
       const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe('/api/users/123/sessions');
-      expect(init.method).toBe('DELETE');
+      expect(url).toBe('/api/users/123/sessions/revoke-all');
+      expect(init.method).toBe('POST');
     });
   });
 });
