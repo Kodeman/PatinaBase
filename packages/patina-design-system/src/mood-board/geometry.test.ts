@@ -286,37 +286,27 @@ describe('findBoardCascadePlacement (CI-11)', () => {
   })
 })
 
-/** Where a rect's anchor corner actually paints once the pin is rotated about
- *  its own centre — the thing the correction has to hold still. */
-function renderedAnchorOf(
-  rect: { x: number; y: number; width: number; height: number },
-  anchor: { x: number; y: number },
-  degrees: number,
-) {
-  const offset = rotateBoardVector(
-    {
-      x: (anchor.x - 0.5) * rect.width,
-      y: (anchor.y - 0.5) * rect.height,
-    },
-    degrees,
-  )
-  return {
-    x: rect.x + rect.width / 2 + offset.x,
-    y: rect.y + rect.height / 2 + offset.y,
-  }
-}
-
 describe('rotated resize frame (CI-07)', () => {
   it('leaves an unrotated vector alone', () => {
     expect(rotateBoardVector({ x: 30, y: -12 }, 0)).toEqual({ x: 30, y: -12 })
   })
 
-  it('counter-rotates a pointer delta into a rotated pin’s local frame', () => {
-    // A pin rotated 90deg: dragging the pointer 10px to the right pushes its
-    // local +y edge, not its local +x edge.
+  it('counter-rotates a pointer delta into a rotated pin\u2019s local frame', () => {
+    // A pin rotated 90deg: dragging the pointer 10px right pushes its local
+    // -y edge, not its local +x edge.
     const local = rotateBoardVector({ x: 10, y: 0 }, -90)
     expect(local.x).toBeCloseTo(0, 6)
     expect(local.y).toBeCloseTo(-10, 6)
+  })
+
+  it('rotates past a half turn and past a three-quarter turn', () => {
+    const half = rotateBoardVector({ x: 10, y: 0 }, 180)
+    expect(half.x).toBeCloseTo(-10, 6)
+    expect(half.y).toBeCloseTo(0, 6)
+
+    const threeQuarter = rotateBoardVector({ x: 3, y: 4 }, -270)
+    expect(threeQuarter.x).toBeCloseTo(-4, 6)
+    expect(threeQuarter.y).toBeCloseTo(3, 6)
   })
 
   it('round-trips through the item frame and back', () => {
@@ -337,21 +327,69 @@ describe('rotated resize frame (CI-07)', () => {
     ).toEqual({ x: 0, y: 0 })
   })
 
-  it('pins the anchored corner in place while a rotated box grows', () => {
-    const before = { x: 0, y: 0, width: 100, height: 100 }
-    // Dragging the SE handle anchors the NW corner: unit {x:0,y:0}.
-    const after = { x: 0, y: 0, width: 160, height: 140 }
-    const degrees = 30
-    const anchor = { x: 0, y: 0 }
+  // Expected values are worked by hand from
+  //   correction = (centreBefore - centreAfter) + R(deg)(offsetBefore - offsetAfter)
+  // so a sign or transposition error in the implementation cannot satisfy them.
+  it.each([
+    {
+      label: 'se handle at +30deg anchors the NW corner',
+      before: { x: 0, y: 0, width: 100, height: 100 },
+      after: { x: 0, y: 0, width: 160, height: 140 },
+      anchor: { x: 0, y: 0 },
+      degrees: 30,
+      expected: { x: -14.019238, y: 12.320508 },
+    },
+    {
+      label: 's handle at -45deg anchors the top edge',
+      before: { x: 10, y: 20, width: 200, height: 100 },
+      after: { x: 10, y: 20, width: 200, height: 160 },
+      anchor: { x: 0.5, y: 0 },
+      degrees: -45,
+      expected: { x: 21.213203, y: -8.786797 },
+    },
+    {
+      label: 'w handle at +135deg anchors the east edge',
+      before: { x: 0, y: 0, width: 80, height: 80 },
+      after: { x: 0, y: 0, width: 120, height: 80 },
+      anchor: { x: 1, y: 0.5 },
+      degrees: 135,
+      expected: { x: -5.857864, y: -14.142136 },
+    },
+  ])('$label', ({ before, after, anchor, degrees, expected }) => {
     const correction = rotatedResizeAnchorCorrection(
       before,
       after,
       anchor,
       degrees,
     )
+    expect(correction.x).toBeCloseTo(expected.x, 5)
+    expect(correction.y).toBeCloseTo(expected.y, 5)
+  })
 
-    const renderedAnchor = (rect: typeof before) =>
-      renderedAnchorOf(rect, anchor, degrees)
+  it('actually holds the anchor still once the correction is applied', () => {
+    const before = { x: 0, y: 0, width: 100, height: 100 }
+    const after = { x: 0, y: 0, width: 160, height: 140 }
+    const anchor = { x: 0, y: 0 }
+    const degrees = 30
+    const renderedAnchor = (rect: typeof before) => {
+      const offset = rotateBoardVector(
+        {
+          x: (anchor.x - 0.5) * rect.width,
+          y: (anchor.y - 0.5) * rect.height,
+        },
+        degrees,
+      )
+      return {
+        x: rect.x + rect.width / 2 + offset.x,
+        y: rect.y + rect.height / 2 + offset.y,
+      }
+    }
+    const correction = rotatedResizeAnchorCorrection(
+      before,
+      after,
+      anchor,
+      degrees,
+    )
     const corrected = {
       ...after,
       x: after.x + correction.x,
@@ -361,32 +399,5 @@ describe('rotated resize frame (CI-07)', () => {
     expect(renderedAnchor(corrected).y).toBeCloseTo(renderedAnchor(before).y, 6)
     // Without the correction the anchor really does drift — the defect.
     expect(renderedAnchor(after).x).not.toBeCloseTo(renderedAnchor(before).x, 3)
-  })
-
-  it('anchors the opposite EDGE for a single-axis handle', () => {
-    const before = { x: 0, y: 0, width: 100, height: 100 }
-    // Dragging 's' grows the height and anchors the top edge: unit {x:.5,y:0}.
-    const after = { x: 0, y: 0, width: 100, height: 180 }
-    const anchor = { x: 0.5, y: 0 }
-    const degrees = 45
-    const correction = rotatedResizeAnchorCorrection(
-      before,
-      after,
-      anchor,
-      degrees,
-    )
-    const corrected = {
-      ...after,
-      x: after.x + correction.x,
-      y: after.y + correction.y,
-    }
-    expect(renderedAnchorOf(corrected, anchor, degrees).x).toBeCloseTo(
-      renderedAnchorOf(before, anchor, degrees).x,
-      6,
-    )
-    expect(renderedAnchorOf(corrected, anchor, degrees).y).toBeCloseTo(
-      renderedAnchorOf(before, anchor, degrees).y,
-      6,
-    )
   })
 })

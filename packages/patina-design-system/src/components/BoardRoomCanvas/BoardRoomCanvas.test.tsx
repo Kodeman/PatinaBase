@@ -2,7 +2,11 @@ import * as React from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { EditableMoodBoardItem, MoodBoardSection } from '@patina/types'
-import { BoardRoomCanvas, type BoardRoomCanvasProps } from './BoardRoomCanvas'
+import {
+  BoardRoomCanvas,
+  resizeAnchorPoint,
+  type BoardRoomCanvasProps,
+} from './BoardRoomCanvas'
 
 beforeAll(() => {
   class PointerEventMock extends MouseEvent {
@@ -1524,6 +1528,133 @@ describe('BoardRoomCanvas touch gestures (CI-01)', () => {
   })
 })
 
+describe('BoardRoomCanvas pinch takeover (A1/A7/A19)', () => {
+  const touch = (pointerId: number, clientX: number, clientY: number) => ({
+    pointerId,
+    pointerType: 'touch',
+    button: 0,
+    clientX,
+    clientY,
+  })
+
+  it('ignores a third finger landing on a pin mid-pinch', () => {
+    const onItemsMoved = vi.fn()
+    const onViewChange = vi.fn()
+    renderCanvas({ onItemsMoved, onViewChange, selectedItemIds: ['chair'] })
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+
+    fireEvent.pointerDown(application, touch(30, 300, 300))
+    fireEvent.pointerDown(application, touch(31, 400, 300))
+    // Third finger, straight onto a pin.
+    fireEvent.pointerDown(chair, touch(32, 100, 130))
+    fireEvent.pointerMove(application, touch(32, 260, 330))
+    fireEvent.pointerUp(application, touch(32, 260, 330))
+    // The pinch is still the live gesture and still drives the view.
+    fireEvent.pointerMove(application, touch(30, 250, 300))
+    fireEvent.pointerMove(application, touch(31, 450, 300))
+    expect(onViewChange.mock.lastCall?.[1]).toBe('zoom')
+    expect(onItemsMoved).not.toHaveBeenCalled()
+
+    fireEvent.pointerUp(application, touch(30, 250, 300))
+    fireEvent.pointerUp(application, touch(31, 450, 300))
+  })
+
+  it('takes a second finger over from a marquee without selecting anything', () => {
+    const onSelectionChange = vi.fn()
+    const onViewChange = vi.fn()
+    renderCanvas({ onSelectionChange, onViewChange })
+    const application = screen.getByRole('application')
+
+    fireEvent.pointerDown(application, {
+      button: 0,
+      pointerId: 33,
+      clientX: 20,
+      clientY: 20,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 33,
+      clientX: 400,
+      clientY: 500,
+    })
+    expect(screen.getByTestId('board-marquee')).toBeInTheDocument()
+
+    fireEvent.pointerDown(application, touch(34, 300, 300))
+    fireEvent.pointerDown(application, touch(35, 400, 300))
+    expect(screen.queryByTestId('board-marquee')).toBeNull()
+
+    fireEvent.pointerUp(application, touch(34, 300, 300))
+    fireEvent.pointerUp(application, touch(35, 400, 300))
+    // The abandoned marquee commits no selection.
+    expect(onSelectionChange).not.toHaveBeenCalled()
+  })
+
+  it('takes a second finger over from a resize without committing it', () => {
+    const onItemResized = vi.fn()
+    renderCanvas({ selectedItemIds: ['chair'], onItemResized })
+    const application = screen.getByRole('application')
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Resize e' }), {
+      pointerId: 36,
+      clientX: 280,
+      clientY: 218,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 36,
+      clientX: 360,
+      clientY: 218,
+    })
+    fireEvent.pointerDown(application, touch(37, 300, 300))
+    fireEvent.pointerDown(application, touch(38, 400, 300))
+    fireEvent.pointerUp(application, { pointerId: 36, clientX: 360, clientY: 218 })
+    fireEvent.pointerUp(application, touch(37, 300, 300))
+    fireEvent.pointerUp(application, touch(38, 400, 300))
+    expect(onItemResized).not.toHaveBeenCalled()
+  })
+
+  it('takes a second finger over from a rotate without committing it', () => {
+    const onItemRotated = vi.fn()
+    renderCanvas({ selectedItemIds: ['chair'], onItemRotated })
+    const application = screen.getByRole('application')
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Rotate item' }), {
+      pointerId: 39,
+      clientX: 160,
+      clientY: 40,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 39,
+      clientX: 260,
+      clientY: 120,
+    })
+    fireEvent.pointerDown(application, touch(42, 300, 300))
+    fireEvent.pointerDown(application, touch(43, 400, 300))
+    fireEvent.pointerUp(application, { pointerId: 39, clientX: 260, clientY: 120 })
+    fireEvent.pointerUp(application, touch(42, 300, 300))
+    fireEvent.pointerUp(application, touch(43, 400, 300))
+    expect(onItemRotated).not.toHaveBeenCalled()
+  })
+
+  it('does not let a stale touch point turn the next lone finger into a pinch', () => {
+    const onViewChange = vi.fn()
+    renderCanvas({ onViewChange })
+    const application = screen.getByRole('application')
+
+    // A finger goes down and its pointerup never arrives (capture loss).
+    fireEvent.pointerDown(application, touch(44, 200, 200))
+    fireEvent.pointerCancel(application, touch(44, 200, 200))
+
+    // The next single finger must pan, not read as the second half of a pinch.
+    fireEvent.pointerDown(application, touch(45, 300, 300))
+    fireEvent.pointerMove(application, touch(45, 340, 330))
+    expect(onViewChange).toHaveBeenLastCalledWith(
+      { pan: { x: 72, y: 62 }, zoom: 1 },
+      'pan',
+    )
+    fireEvent.pointerUp(application, touch(45, 340, 330))
+  })
+})
+
 describe('BoardRoomCanvas rotated resize (CI-07)', () => {
   it('counter-rotates the pointer delta into the pin’s own frame', () => {
     const onItemResized = vi.fn()
@@ -2038,5 +2169,20 @@ describe('BoardRoomCanvas pointer-move coalescing (CI-25)', () => {
     } finally {
       raf.mockRestore()
     }
+  })
+})
+
+describe('resize anchor mapping (CI-07)', () => {
+  it('anchors the corner diagonally opposite each handle', () => {
+    // Corners anchor the opposite corner; an edge handle anchors the whole
+    // opposite edge, hence 0.5 on the axis it leaves alone.
+    expect(resizeAnchorPoint('nw')).toEqual({ x: 1, y: 1 })
+    expect(resizeAnchorPoint('ne')).toEqual({ x: 0, y: 1 })
+    expect(resizeAnchorPoint('se')).toEqual({ x: 0, y: 0 })
+    expect(resizeAnchorPoint('sw')).toEqual({ x: 1, y: 0 })
+    expect(resizeAnchorPoint('n')).toEqual({ x: 0.5, y: 1 })
+    expect(resizeAnchorPoint('s')).toEqual({ x: 0.5, y: 0 })
+    expect(resizeAnchorPoint('w')).toEqual({ x: 1, y: 0.5 })
+    expect(resizeAnchorPoint('e')).toEqual({ x: 0, y: 0.5 })
   })
 })

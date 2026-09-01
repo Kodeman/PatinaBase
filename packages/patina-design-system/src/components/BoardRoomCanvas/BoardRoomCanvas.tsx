@@ -335,6 +335,21 @@ const BOARD_EDGE_HANDLE_MIN_SCREEN_PX = 80
  */
 const BOARD_TOUCH_MARQUEE_LONG_PRESS_MS = 500
 
+/**
+ * Ctrl+click IS the context-menu gesture on macOS, so deep-select there takes
+ * Cmd only; elsewhere Ctrl is the natural modifier (CI-19).
+ */
+function ctrlIsContextMenu(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const source =
+    (navigator as { userAgentData?: { platform?: string } }).userAgentData
+      ?.platform ??
+    navigator.platform ??
+    navigator.userAgent ??
+    ''
+  return /mac|iphone|ipad|ipod/i.test(source)
+}
+
 function pointerDistance(a: BoardPoint, b: BoardPoint): number {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
@@ -348,7 +363,7 @@ function pointerMidpoint(a: BoardPoint, b: BoardPoint): BoardPoint {
  * opposite the dragged handle. An edge handle anchors the whole opposite edge,
  * hence the 0.5 on the free axis.
  */
-function resizeAnchorPoint(handle: BoardResizeHandle): BoardPoint {
+export function resizeAnchorPoint(handle: BoardResizeHandle): BoardPoint {
   return {
     x: handle.includes('w') ? 1 : handle.includes('e') ? 0 : 0.5,
     y: handle.includes('n') ? 1 : handle.includes('s') ? 0 : 0.5,
@@ -1104,6 +1119,8 @@ export const BoardRoomCanvas = React.forwardRef<
       pinId: string,
     ) => {
       if (event.button !== 0) return
+      // Two fingers own the surface; a further touch never becomes a drag.
+      if (gestureRef.current?.kind === 'pinch') return
       event.stopPropagation()
       const viewport = viewportRef.current
       if (!viewport) return
@@ -1112,7 +1129,9 @@ export const BoardRoomCanvas = React.forwardRef<
       // repeated presses cycle through every pin under the pointer instead of
       // being stuck on the topmost one (CI-19). Shift keeps its own meaning.
       let itemId = pinId
-      const deepSelect = (event.metaKey || event.ctrlKey) && !event.shiftKey
+      const deepSelect =
+        (event.metaKey || (event.ctrlKey && !ctrlIsContextMenu())) &&
+        !event.shiftKey
       if (deepSelect) {
         const stack = stackedItemIdsAt(
           screenPointToBoard(
@@ -1207,6 +1226,7 @@ export const BoardRoomCanvas = React.forwardRef<
       itemIds: readonly string[],
       handle: BoardResizeHandle,
     ) => {
+      if (gestureRef.current?.kind === 'pinch') return
       event.preventDefault()
       event.stopPropagation()
       const viewport = viewportRef.current
@@ -1271,6 +1291,7 @@ export const BoardRoomCanvas = React.forwardRef<
       sectionId: string,
     ) => {
       if (event.button !== 0 || readOnly) return
+      if (gestureRef.current?.kind === 'pinch') return
       event.preventDefault()
       event.stopPropagation()
       const viewport = viewportRef.current
@@ -1295,6 +1316,7 @@ export const BoardRoomCanvas = React.forwardRef<
       event: React.PointerEvent<HTMLButtonElement>,
       itemId: string,
     ) => {
+      if (gestureRef.current?.kind === 'pinch') return
       event.preventDefault()
       event.stopPropagation()
       const viewport = viewportRef.current
@@ -1333,8 +1355,18 @@ export const BoardRoomCanvas = React.forwardRef<
       const viewport = viewportRef.current
       if (!viewport) return
       const points = touchPointsRef.current
+      // A pointerup can go missing (capture loss, a cancelled sequence), and a
+      // stale entry would make the next lone finger read as half a pinch. With
+      // no gesture in flight nothing legitimately remains tracked, so a fresh
+      // first touch starts from an empty map.
+      if (!gestureRef.current && points.size > 0) points.clear()
       points.set(event.pointerId, eventPoint(event, viewport))
-      if (points.size !== 2) return
+      if (points.size < 2) return
+      // Any touch beyond the first belongs to the pinch, never to a pin. A
+      // third finger landing on a pin must not hijack a live pinch into a
+      // drag that then commits for real.
+      event.stopPropagation()
+      if (points.size > 2) return
 
       cancelLongPress()
       cancelTouchMarqueeArm()
@@ -1359,7 +1391,6 @@ export const BoardRoomCanvas = React.forwardRef<
           activeView.zoom,
         ),
       })
-      event.stopPropagation()
     }
 
     const handleViewportPointerDown = (
@@ -1644,8 +1675,12 @@ export const BoardRoomCanvas = React.forwardRef<
             snapToGrid,
             showGuides,
             // Alt is duplicate-on-move only; snap/guide suppression lives on
-            // Ctrl/Cmd instead (CI-09).
-            suppressSnapping: event.ctrlKey || event.metaKey,
+            // Ctrl/Cmd instead (CI-09). Rotation also suppresses it: grid and
+            // smart guides are board-axis concepts, and snapping a
+            // counter-rotated delta to a board axis just drags the pin to an
+            // alignment nobody can see (CI-07/CI-15).
+            suppressSnapping:
+              event.ctrlKey || event.metaKey || gesture.rotation !== 0,
           },
         )
         if (gesture.itemIds.length === 1) {
@@ -1981,6 +2016,10 @@ export const BoardRoomCanvas = React.forwardRef<
       if (editingText) return
       const mod = event.metaKey || event.ctrlKey
 
+      // A view change mid-gesture yanks the frame out from under the drag:
+      // startScreen was recorded against the old pan/zoom (CI-17/A3).
+      const viewShortcutsBlocked = gestureRef.current !== null
+
       if (event.code === 'Space') {
         event.preventDefault()
         // Space on a pin picks it up into the selection — the keyboard way
@@ -2002,11 +2041,13 @@ export const BoardRoomCanvas = React.forwardRef<
         return
       }
       if (event.key === '1' && !mod) {
+        if (viewShortcutsBlocked) return
         event.preventDefault()
         fit()
         return
       }
       if (mod && event.key === '0') {
+        if (viewShortcutsBlocked) return
         event.preventDefault()
         const size = viewportSize()
         updateView(
@@ -2023,6 +2064,7 @@ export const BoardRoomCanvas = React.forwardRef<
         mod &&
         (event.key === '+' || event.key === '=' || event.key === '-')
       ) {
+        if (viewShortcutsBlocked) return
         event.preventDefault()
         const size = viewportSize()
         const nextZoom = activeView.zoom + (event.key === '-' ? -0.1 : 0.1)
@@ -2046,7 +2088,7 @@ export const BoardRoomCanvas = React.forwardRef<
         )
         return
       }
-      if (event.key === 'Escape' && selectedItemIds.length > 0) {
+      if (event.key === 'Escape' && selectedItemIdsRef.current.length > 0) {
         event.preventDefault()
         setSelection([], 'escape')
         return
@@ -2085,7 +2127,7 @@ export const BoardRoomCanvas = React.forwardRef<
       if (
         arrowKey &&
         (event.altKey ||
-          (selectedItemIds.length === 0 &&
+          (selectedItemIdsRef.current.length === 0 &&
             !focusedItemId &&
             !target.closest('[data-board-item-id]')))
       ) {
@@ -2116,10 +2158,13 @@ export const BoardRoomCanvas = React.forwardRef<
           .closest<HTMLElement>('[data-board-item-id]')
           ?.dataset.boardItemId
         const keyboardFocusId = eventFocusedItemId ?? focusedItemId
-        const keyboardTargetIds = keyboardFocusId && !selectedItemIds.includes(keyboardFocusId)
+        // Same source of truth as the pointer path (A17): the ref carries the
+        // selection this canvas last requested, prop echo or not.
+        const liveSelection = selectedItemIdsRef.current
+        const keyboardTargetIds = keyboardFocusId && !liveSelection.includes(keyboardFocusId)
           ? [keyboardFocusId]
-          : selectedItemIds.length > 0
-            ? selectedItemIds
+          : liveSelection.length > 0
+            ? [...liveSelection]
             : keyboardFocusId
               ? [keyboardFocusId]
               : []
@@ -2130,8 +2175,8 @@ export const BoardRoomCanvas = React.forwardRef<
         if (movable.length === 0) return
         event.preventDefault()
         if (
-          keyboardTargetIds.length !== selectedItemIds.length ||
-          keyboardTargetIds.some((id, index) => id !== selectedItemIds[index])
+          keyboardTargetIds.length !== liveSelection.length ||
+          keyboardTargetIds.some((id, index) => id !== liveSelection[index])
         ) {
           setSelection([...keyboardTargetIds], 'keyboard')
         }
