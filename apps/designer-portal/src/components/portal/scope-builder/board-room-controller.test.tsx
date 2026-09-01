@@ -1148,4 +1148,70 @@ describe('BoardRoomController binding', () => {
     await waitFor(() => expect(onError).toHaveBeenCalled());
     expect(screen.getByTestId('reverted-items')).toHaveTextContent('item-1,item-2');
   });
+  it('surfaces the exit guard as a visible prompt flag, not only a spoken one (CI-20)', async () => {
+    const onExit = jest.fn().mockResolvedValue(undefined);
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController
+        owner={{ kind: 'project', id: 'project-1' }}
+        boardId="board-project"
+        onExit={onExit}
+      >
+        {(value) => {
+          api = value;
+          return <span data-testid="exit-armed">{String(value.exitPromptArmed)}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+    expect(screen.getByTestId('exit-armed')).toHaveTextContent('false');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('exit-armed')).toHaveTextContent('true');
+
+    // It retires with the window, so the visible chip never lingers.
+    act(() => { jest.advanceTimersByTime(1_600); });
+    expect(screen.getByTestId('exit-armed')).toHaveTextContent('false');
+  });
+
+  it('announces board changes in human copy, not command-engine vocabulary (CI-14)', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="human-announcement">{value.announcement}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    act(() => api!.moveItems({ 'item-1': { x: 640, y: 20 } }));
+    expect(screen.getByTestId('human-announcement')).toHaveTextContent('Moved');
+    expect(screen.getByTestId('human-announcement')).not.toHaveTextContent('applied');
+
+    act(() => api!.toggleLock(['item-1']));
+    expect(screen.getByTestId('human-announcement')).toHaveTextContent('Lock changed');
+
+    act(() => api!.undo());
+    expect(screen.getByTestId('human-announcement')).toHaveTextContent('Undid: lock changed');
+    // The engine's own kind strings never reach a listener.
+    expect(screen.getByTestId('human-announcement')).not.toHaveTextContent('z order');
+  });
+
+  it('lets the canvas speak through the room\u2019s one live region (CI-14)', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="routed-announcement">{value.announcement}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    act(() => api!.announce('Moved 2 items 10 pixels'));
+    expect(screen.getByTestId('routed-announcement')).toHaveTextContent('Moved 2 items 10 pixels');
+  });
 });

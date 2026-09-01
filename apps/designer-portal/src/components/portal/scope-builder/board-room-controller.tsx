@@ -186,6 +186,15 @@ export interface BoardRoomControllerApi {
   persistenceState: BufferedAutosaveState | 'saving';
   persistenceError: string | null;
   announcement: string;
+  /**
+   * The room speaks through ONE live region. The canvas routes its own
+   * announcements here rather than rendering a second one that talks over
+   * this (CI-14).
+   */
+  announce: (message: string) => void;
+  /** True while a second Escape would leave the board — surfaced visually,
+   *  not only to a screen reader (CI-20). */
+  exitPromptArmed: boolean;
   canUndo: boolean;
   canRedo: boolean;
   canvasProps: BoardRoomCanvasProps | null;
@@ -633,7 +642,44 @@ const BOARD_IMAGE_TYPES = new Set([
 const BOARD_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 /** Window in which a second Escape means "leave" (supersedes PRD R1.3.1). */
 const BOARD_ROOM_EXIT_CONFIRM_MS = 1_500;
-const BOARD_ROOM_EXIT_CONFIRM_MESSAGE = 'Press Escape again to leave the board';
+export const BOARD_ROOM_EXIT_CONFIRM_MESSAGE = 'Press Escape again to leave the board';
+
+/**
+ * A screen-reader user hears what happened to their board, not what the
+ * command engine calls it — "z order applied" and "section membership
+ * applied" were the engine's own vocabulary leaking into the room (CI-14).
+ */
+const BOARD_COMMAND_ANNOUNCEMENTS: Record<BoardCommandKind, string> = {
+  move: 'Moved',
+  resize: 'Resized',
+  rotate: 'Rotated',
+  add: 'Added to the board',
+  delete: 'Removed from the board',
+  duplicate: 'Duplicated',
+  paste: 'Pasted onto the board',
+  lock: 'Lock changed',
+  'z-order': 'Restacked',
+  'section-membership': 'Moved into a section',
+  'section-create': 'Section added',
+  'section-update': 'Section updated',
+  'section-delete': 'Section removed',
+  'section-reorder': 'Sections reordered',
+  tidy: 'Tidied the layout',
+  align: 'Aligned',
+  distribute: 'Spaced evenly',
+  'canvas-grow': 'Board area grew',
+  'canvas-trim': 'Board area trimmed',
+  content: 'Content updated',
+};
+
+function boardCommandAnnouncement(
+  kind: BoardCommandKind,
+  direction: 'apply' | 'undo' | 'redo' = 'apply',
+): string {
+  const phrase = BOARD_COMMAND_ANNOUNCEMENTS[kind] ?? 'Board updated';
+  if (direction === 'apply') return phrase;
+  return `${direction === 'undo' ? 'Undid' : 'Redid'}: ${phrase.toLowerCase()}`;
+}
 
 export function validateBoardImageFiles(files: readonly File[]): void {
   const invalidType = files.find((file) => !BOARD_IMAGE_TYPES.has(file.type));
@@ -1019,7 +1065,7 @@ export function useBoardRoomController({
       'apply',
       result.viewTranslationDelta,
     );
-    setAnnouncement(`${result.command.kind.replaceAll('-', ' ')} applied`);
+    setAnnouncement(boardCommandAnnouncement(result.command.kind));
     onCommandCommitted?.({ command: result.command, direction: 'apply' });
     return result;
   }, [offsetViewForStateTranslation, onCommandCommitted, persistTransition]);
@@ -1072,7 +1118,7 @@ export function useBoardRoomController({
     setHistory(step.history);
     setSelectedItemIds((ids) => ids.filter((id) => step.history.present.items.some((item) => item.id === id)));
     persistTransition(current.present, step.history.present, step.command, 'undo');
-    setAnnouncement(`Undid ${step.command.kind.replaceAll('-', ' ')}`);
+    setAnnouncement(boardCommandAnnouncement(step.command.kind, 'undo'));
     onCommandCommitted?.({ command: step.command, direction: 'undo' });
   }, [offsetViewForStateTranslation, onCommandCommitted, persistTransition]);
 
@@ -1090,7 +1136,7 @@ export function useBoardRoomController({
     setHistory(step.history);
     setSelectedItemIds((ids) => ids.filter((id) => step.history.present.items.some((item) => item.id === id)));
     persistTransition(current.present, step.history.present, step.command, 'redo');
-    setAnnouncement(`Redid ${step.command.kind.replaceAll('-', ' ')}`);
+    setAnnouncement(boardCommandAnnouncement(step.command.kind, 'redo'));
     onCommandCommitted?.({ command: step.command, direction: 'redo' });
   }, [offsetViewForStateTranslation, onCommandCommitted, persistTransition]);
 
@@ -1713,6 +1759,8 @@ export function useBoardRoomController({
     persistenceState,
     persistenceError: effectiveError,
     announcement,
+    announce: setAnnouncement,
+    exitPromptArmed: announcement === BOARD_ROOM_EXIT_CONFIRM_MESSAGE,
     canUndo: !!history?.past.length,
     canRedo: !!history?.future.length,
     canvasProps,
