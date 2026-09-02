@@ -421,6 +421,115 @@ def main():
             "header carries a timestamp",
         )
 
+        print("19. a fully-dated, entirely-old manifest is rejected (RL03-02)")
+        path = write_manifest(
+            tmp,
+            [row(slug="old%d" % i, published_at="2026-01-05") for i in range(6)],
+        )
+        try:
+            bc.load_manifest(path, profile="fixture")
+            check("19a all-old manifest is rejected", False, "it was accepted")
+        except bc.ManifestError as exc:
+            check(
+                "19a all-old manifest is rejected",
+                any("inside 7 days" in e for e in exc.errors),
+                "; ".join(exc.errors),
+            )
+        path = write_manifest(
+            tmp,
+            [row(slug="mix%d" % i, published_at="2026-01-05") for i in range(3)]
+            + [row(slug="mix%d" % i) for i in range(3, 6)],
+        )
+        rows_mix = bc.load_manifest(path, profile="fixture")
+        check(
+            "19b three blank-dated rows satisfy the floor",
+            bc.count_recent(rows_mix) >= bc.MIN_RECENT,
+            "recent=%d" % bc.count_recent(rows_mix),
+        )
+
+        print("20. a 30-row manifest reaches the charter's 8 recent rows (RL03-14)")
+        path = write_manifest(
+            tmp,
+            [
+                row(slug="s%d" % i, category=CATEGORIES[i % 6],
+                    maker_name="Maker %d" % (i % 4))
+                for i in range(30)
+            ],
+        )
+        rows30 = bc.load_manifest(path, profile="release")
+        check(
+            "20a >= 8 published inside 7 days",
+            bc.count_recent(rows30) >= 8,
+            "recent=%d" % bc.count_recent(rows30),
+        )
+        check(
+            "20b the 6-row fixture stagger is unchanged",
+            bc._stagger(6)[:3] == [0, 2881, 5762],
+            "%s" % bc._stagger(6)[:3],
+        )
+
+        print("21. one maker, two contradictory origins, is rejected (RL03-04)")
+        path = write_manifest(
+            tmp,
+            [
+                row(slug="a", maker_name="Split Workshop", maker_made_in="Bath, Maine"),
+                row(slug="b", maker_name="Split Workshop",
+                    maker_made_in="Aarhus, Denmark"),
+            ],
+        )
+        try:
+            bc.load_manifest(path, profile="fixture")
+            check("21a contradictory made_in is rejected", False, "it was accepted")
+        except bc.ManifestError as exc:
+            check(
+                "21a contradictory made_in is rejected",
+                any("made_in" in e for e in exc.errors),
+                "; ".join(exc.errors),
+            )
+        path = write_manifest(
+            tmp,
+            [
+                row(slug="a", maker_name="Quiet Workshop", maker_made_in="Bath, Maine"),
+                row(slug="b", maker_name="Quiet Workshop", maker_made_in=""),
+            ],
+        )
+        rows_blank = bc.load_manifest(path, profile="fixture")
+        check(
+            "21b a blank cell is an absence, not a contradiction",
+            len(rows_blank) == 2,
+            "rejected",
+        )
+
+        print("22. the vendor block preserves what the row already knows (RL03-04)")
+        sql = bc.render_sql(rows_blank, **args)
+        check(
+            "22a made_in is COALESCEd rather than discarded",
+            "made_in = COALESCE(public.vendors.made_in, 'Bath, Maine')" in sql,
+            "missing",
+        )
+        check(
+            "22b a flipped is_patina_catalog is announced",
+            "RAISE NOTICE" in sql and "is_patina_catalog" in sql,
+            "missing",
+        )
+
+        print("23. photo_verified_at records the seeding pass, not a claim (RL03-09)")
+        path = write_manifest(tmp, [row(slug="pv", photo_verified="yes")])
+        rows_pv = bc.load_manifest(path, profile="fixture")
+        sql = bc.render_sql(rows_pv, **args)
+        check(
+            "23a photo_verified_at is now(), never the publish date",
+            "  now(), NULL,\n" in sql or ",\n  now()," in sql,
+            "missing now()",
+        )
+
+        print("24. a slug already on the target stack stops the apply (RL03-10)")
+        check(
+            "24a the guard names the slug and the colliding id",
+            "already exists on a different row" in sql and "p.slug = " in sql,
+            "missing",
+        )
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

@@ -304,7 +304,10 @@ def _stagger(count):
     """
     offsets = []
     span_days = STAGGER_WEEKS * 7 - 1
-    recent = min(count, max(MIN_RECENT, count // 4))
+    # A quarter of the shelf, rounded UP: floor division gives 7 on a 30-row
+    # manifest and the charter asks for at least 8. The 6-row fixture is
+    # unaffected (both forms are floored at MIN_RECENT).
+    recent = min(count, max(MIN_RECENT, -(-count // 4)))
     for index in range(count):
         if index < recent:
             # spread across the last RECENT_DAYS, newest first
@@ -358,8 +361,11 @@ def load_manifest(path, profile="release", now=None):
     if not rows:
         raise ManifestError(["%s: 0 data rows" % path])
 
-    _check_manifest(rows, errors, profile, path)
+    # Dates first: the NEW THIS WEEK floor is a check on resolved dates, and
+    # _assign_dates only fills blank cells — a manifest Leah dates in full is
+    # exactly the case the floor has to catch.
     _assign_dates(rows, now)
+    _check_manifest(rows, errors, profile, path)
 
     if errors:
         raise ManifestError(errors)
@@ -482,6 +488,50 @@ def _check_manifest(rows, errors, profile, path):
         else:
             seen[row.slug] = row.line
 
+    # NEW THIS WEEK needs MIN_RECENT rows or the rail does not render, and the
+    # SQL test's case 5 asserts the same number in both profiles. Checked here
+    # so a manifest that would fail it fails BEFORE the photographs are
+    # uploaded and the rows applied.
+    # A manifest smaller than the floor cannot satisfy it, and a two-row file is
+    # a mechanics check rather than a shelf — the same reasoning as
+    # HIGH_QUALITY_MIN_SAMPLE below. Round one's manifest is >= 30 rows.
+    recent = count_recent(rows)
+    if len(rows) >= MIN_RECENT and recent < MIN_RECENT:
+        errors.append(
+            "%s: %d row(s) published inside %d days, below the floor of %d — "
+            "NEW THIS WEEK will not render. Leave `published_at` blank on at "
+            "least %d pieces (the generator staggers them) or date them inside "
+            "the last week"
+            % (path, recent, RECENT_DAYS, MIN_RECENT, MIN_RECENT)
+        )
+
+    # One maker is one vendors row, so two manifest rows naming the same maker
+    # must not disagree about where it works or what its site is: the emitted
+    # SQL can only write one value, and silently taking the first row's is how
+    # a wrong origin reaches `maker_location` in the app. A blank cell is an
+    # absence, never a disagreement.
+    for field, label in (("maker_made_in", "made_in"), ("maker_website", "website")):
+        seen_value = {}
+        for row in rows:
+            value = getattr(row, field)
+            if not row.maker_name or not value:
+                continue
+            if row.maker_name not in seen_value:
+                seen_value[row.maker_name] = (value, row.line)
+            elif seen_value[row.maker_name][0] != value:
+                errors.append(
+                    "line %d: maker %r gives %s %r here and %r on line %d — one "
+                    "maker is one vendors row and can carry only one value"
+                    % (
+                        row.line,
+                        row.maker_name,
+                        label,
+                        value,
+                        seen_value[row.maker_name][0],
+                        seen_value[row.maker_name][1],
+                    )
+                )
+
     scored = [r for r in rows if r.quality_score is not None]
     high = [r for r in scored if r.quality_score >= DESIGNER_SELECTION_THRESHOLD]
     if len(rows) >= HIGH_QUALITY_MIN_SAMPLE and len(high) > MAX_HIGH_QUALITY_SHARE * len(rows):
@@ -591,6 +641,11 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
         "-- Rows whose manifest cell was blank carry a staggered seeding timestamp;\n"
         "-- that is the only thing the column asserts.\n"
         "--\n"
+        "-- `photo_verified_at` is written as now() where the manifest's\n"
+        "-- `photo_verified` box is ticked. The manifest carries a boolean, not a\n"
+        "-- moment, so the column records THIS SEEDING PASS rather than claiming to\n"
+        "-- know when the photograph was checked. It is never the publish date.\n"
+        "--\n"
         "-- Every optional column the manifest left blank is written as NULL. A piece\n"
         "-- with no lead time has no lead time; the app omits the line rather than\n"
         "-- printing a placeholder.\n"
@@ -609,6 +664,27 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
         "-- seed file in this tree opens a transaction, and psql's -1 is what makes the\n"
         "-- production apply all-or-nothing.\n\n"
     )
+    out.write(
+        "-- ─── the slug guard, before anything is written ──────────────────────────\n"
+        "-- Idempotency is keyed on the derived id, not the slug, and products.slug\n"
+        "-- carries no unique index. A manifest slug that already belongs to a\n"
+        "-- different row would therefore INSERT a second, near-identical published\n"
+        "-- piece rather than update the first. Stop instead: the collision is a\n"
+        "-- decision for a person, not a thing to resolve automatically.\n"
+        "DO $ff$\nDECLARE\n  v_slug text;\n  v_id uuid;\nBEGIN\n"
+    )
+    for row in rows:
+        out.write(
+            "  SELECT p.slug, p.id INTO v_slug, v_id FROM public.products p\n"
+            "   WHERE p.slug = %s AND p.id <> %s::uuid LIMIT 1;\n"
+            "  IF v_slug IS NOT NULL THEN\n"
+            "    RAISE EXCEPTION 'slug %% already exists on a different row (%%) — "
+            "resolve by hand before seeding', v_slug, v_id;\n"
+            "  END IF;\n"
+            % (q(row.slug), q(row.product_id))
+        )
+    out.write("END\n$ff$;\n\n")
+
     out.write("-- ─── makers ──────────────────────────────────────────────────────────────\n")
     out.write(
         "-- vendors has no unique constraint on name, so ON CONFLICT is unavailable:\n"
@@ -616,14 +692,27 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
         "-- rather than pick one. `maker_name` must never resolve to 'Unknown Maker' —\n"
         "-- Product.resolvedMakerName drops those rows client-side.\n"
     )
-    out.write("DO $ff$\nDECLARE\n  v_n int;\nBEGIN\n")
+    out.write(
+        "-- An existing vendor is UPDATED, not left alone: is_patina_catalog is\n"
+        "-- what gates create_direct_order (A3-20), and made_in reaches the app as\n"
+        "-- `maker_location`. Both are COALESCEd — this apply fills what the row does\n"
+        "-- not know and overwrites nothing it does — and every vendor whose\n"
+        "-- is_patina_catalog it actually changes is announced, so the flip lands in\n"
+        "-- the apply report rather than happening quietly to production data.\n"
+    )
+    out.write("DO $ff$\nDECLARE\n  v_n int;\n  v_was boolean;\nBEGIN\n")
 
     makers = {}
     for row in rows:
-        if row.maker_name and row.maker_name not in makers:
-            makers[row.maker_name] = row
+        if not row.maker_name:
+            continue
+        entry = makers.setdefault(row.maker_name, {"made_in": None, "website": None})
+        if entry["made_in"] is None:
+            entry["made_in"] = row.maker_made_in
+        if entry["website"] is None:
+            entry["website"] = row.maker_website
     for maker_name in sorted(makers):
-        sample = makers[maker_name]
+        entry = makers[maker_name]
         out.write(
             "\n  SELECT count(*) INTO v_n FROM public.vendors WHERE lower(name) = lower(%s);\n"
             % q(maker_name)
@@ -635,13 +724,25 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
             "    INSERT INTO public.vendors (name, made_in, website, is_patina_catalog)\n"
             "    VALUES (%s, %s, %s, true);\n"
             "  ELSE\n"
-            "    UPDATE public.vendors SET is_patina_catalog = true WHERE lower(name) = lower(%s);\n"
+            "    SELECT is_patina_catalog INTO v_was FROM public.vendors WHERE lower(name) = lower(%s);\n"
+            "    UPDATE public.vendors SET\n"
+            "      is_patina_catalog = true,\n"
+            "      made_in = COALESCE(public.vendors.made_in, %s),\n"
+            "      website = COALESCE(public.vendors.website, %s)\n"
+            "     WHERE lower(name) = lower(%s);\n"
+            "    IF v_was IS DISTINCT FROM true THEN\n"
+            "      RAISE NOTICE 'vendor %% is_patina_catalog %% -> true (pre-existing row)', %s, v_was;\n"
+            "    END IF;\n"
             "  END IF;\n"
             % (
                 q(maker_name),
                 q(maker_name),
-                q(sample.maker_made_in),
-                q(sample.maker_website),
+                q(entry["made_in"]),
+                q(entry["website"]),
+                q(maker_name),
+                q(entry["made_in"]),
+                q(entry["website"]),
+                q(maker_name),
                 q(maker_name),
             )
         )
@@ -711,7 +812,7 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
                 q(row.source_url),
                 q_int(row.quality_score),
                 q_published(row),
-                q_published(row) if row.photo_verified else "NULL",
+                "now()" if row.photo_verified else "NULL",
                 q_int(row.shipping_flat_cents),
                 q(row.maker_name),
                 q(assigned_by),
