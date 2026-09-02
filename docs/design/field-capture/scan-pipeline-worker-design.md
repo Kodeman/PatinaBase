@@ -77,7 +77,7 @@ rows = claim_agent_tasks(
     p_task_types        := ARRAY[<enabled STAGES>],   # e.g. {'scan_pipeline.ingest','scan_pipeline.solve','scan_pipeline.drawings'}
     p_batch             := MAX_CONCURRENT,
     p_worker            := LEASE_OWNER,
-    p_visibility_timeout := VISIBILITY_TIMEOUT        # default '15 minutes'
+    p_visibility_timeout := VISIBILITY_TIMEOUT        # default '60 minutes'
 )
 # → each returned row is status='running', attempts+1, locked_by=LEASE_OWNER.
 # If rows is empty: sleep POLL_SECONDS, poll again.
@@ -153,7 +153,7 @@ Everything about a worker — its readable identity prefix, which stages it runs
 | `POLL_SECONDS` | int | `5` | Sleep between polls when a claim returns zero tasks. |
 | `MAX_CONCURRENT` | int | `2` | Claim batch size and max in-flight jobs (`p_batch`). Bounds scratch disk and CPU. |
 | `GPU` | enum `auto`\|`off` | `auto` | `auto` = detect and report a CUDA device (P1: report only). `off` = never touch the GPU. No P1 stage uses it either way. |
-| `VISIBILITY_TIMEOUT` | duration | `15 minutes` | Lease length (`p_visibility_timeout`); a job whose worker dies is reclaimable after this. |
+| `VISIBILITY_TIMEOUT` | duration | `60 minutes` | Lease length (`p_visibility_timeout`); a job whose worker dies is reclaimable after this. |
 | `MAX_ATTEMPTS` | int | `5` | `p_max_attempts` set on enqueued successors (backoff parks at this count). |
 | `SUPABASE_URL` | url | *(required)* | Strata PostgREST + Storage base. Outbound-443 only. |
 | `SUPABASE_SERVICE_ROLE_KEY` | secret | *(required)* | The service-role JWT. The worker's **only** write credential; server-side only. |
