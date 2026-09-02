@@ -14,7 +14,6 @@ import {
   DeskWalkthrough,
   DeskWalkthroughProvider,
 } from '@/components/document/help/desk-walkthrough';
-import { FeedbackLayer } from '@/components/document/feedback/feedback-layer';
 import { MobileShellProvider } from '@/components/document/mobile/mobile-shell';
 import { MobileBar } from '@/components/document/mobile/mobile-bar';
 import { MobileActionDock } from '@/components/document/mobile/mobile-action-dock';
@@ -91,11 +90,6 @@ export default function DocumentLayout({
                   <MobileActionDock />
                   <MobileBar />
                   <MobileSheets />
-                  {/* The feedback layer (docs/ledger/patina-feedback-layer-prd.md):
-                      a persistent capture button + sheet on its own layer, on every
-                      Desk screen. Mounted last so it sits above the rest of the
-                      chrome. */}
-                  <FeedbackLayer />
                   {/* R97 — the desk-first intro tour (WelcomeModal + six coachmarks).
                       Self-guards to /desk; renders nothing elsewhere. */}
                   <DeskWalkthrough />

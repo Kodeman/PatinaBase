@@ -5,8 +5,8 @@
  * sortable by date or weight, each row scannable at a glance. Selecting a row
  * opens its detail (triage lives there). The close-the-loop cards (R7.6) ride
  * the top for the author's own shipped-and-unseen notes; opening the Ledger
- * marks them seen (clearing the capture-button badge). Rendered inside the
- * Studio Drawer's sheet, like Orders/Accounts/Hours.
+ * marks them seen (clearing the capture-button badge). Rendered as the Tester
+ * widget's "Past notes" tab (compact), and standalone elsewhere.
  */
 
 import { useEffect, useState } from 'react';
@@ -20,10 +20,16 @@ import {
   type FeedbackBucket,
   type FeedbackStatus,
 } from '@patina/supabase';
+import { useAuth } from '@/hooks/use-auth';
 import { BUCKETS, STATUSES, bucketMeta, statusMeta, weightDots } from '@/lib/document/feedback';
 import { FeedbackDetail } from './feedback-detail';
 import { ShippedCard } from './feedback-loop';
-import { openFeedbackSheet } from './feedback-sheet';
+import { openFeedbackSheet } from './open-feedback';
+import {
+  GithubHint,
+  ISSUE_POLL_MS,
+  awaitingIssue,
+} from './github-issue-hint';
 
 function age(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -33,17 +39,37 @@ function age(iso: string): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-export function FeedbackLedger() {
+export function FeedbackLedger({
+  onNew,
+  compact = false,
+}: {
+  /** Where "leave the first note" goes. Defaults to the global opener. */
+  onNew?: () => void;
+  /** Drop the sheet chrome — the Tester widget supplies its own header. */
+  compact?: boolean;
+} = {}) {
   const [bucket, setBucket] = useState<FeedbackBucket | 'all'>('all');
   const [status, setStatus] = useState<FeedbackStatus | 'all'>('all');
   const [sort, setSort] = useState<'date' | 'weight'>('date');
   const [selected, setSelected] = useState<string | null>(null);
+  const { user } = useAuth();
 
-  const { data: notes, isLoading } = useFeedback({
-    bucket: bucket === 'all' ? undefined : bucket,
-    status: status === 'all' ? undefined : status,
-    sort,
-  });
+  // A freshly-filed bug has neither a URL nor an error until the edge function
+  // writes back, so the list polls — but only while one is actually pending.
+  const [poll, setPoll] = useState<number | false>(false);
+  const { data: notes, isLoading } = useFeedback(
+    {
+      bucket: bucket === 'all' ? undefined : bucket,
+      status: status === 'all' ? undefined : status,
+      sort,
+    },
+    { refetchInterval: poll },
+  );
+  useEffect(() => {
+    setPoll(
+      (notes ?? []).some((n) => awaitingIssue(n, user?.id)) ? ISSUE_POLL_MS : false,
+    );
+  }, [notes, user?.id]);
 
   // Snapshot the author's shipped-and-unseen notes once on open, then mark them
   // seen — so the cards persist for this view while the badge clears.
@@ -65,13 +91,15 @@ export function FeedbackLedger() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <DocSheetHead icon={MessageSquarePlus} title="Feedback" />
+      {!compact && <DocSheetHead icon={MessageSquarePlus} title="Feedback" />}
       <div className="flex items-baseline justify-between">
-        <h2 className="font-heading text-xl text-[var(--color-charcoal)]">Feedback</h2>
+        {!compact && (
+          <h2 className="font-heading text-xl text-[var(--color-charcoal)]">Feedback</h2>
+        )}
         <button
           type="button"
           onClick={() => setSort((s) => (s === 'date' ? 'weight' : 'date'))}
-          className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+          className="ml-auto font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
         >
           Sort · {sort === 'date' ? 'Newest' : 'Weight'} ▾
         </button>
@@ -105,7 +133,7 @@ export function FeedbackLedger() {
         {isLoading ? (
           <p className="py-8 text-center text-[13px] text-[var(--color-aged-oak)]">Loading…</p>
         ) : !notes || notes.length === 0 ? (
-          <EmptyState filtered={isFiltered} />
+          <EmptyState filtered={isFiltered} onNew={onNew} />
         ) : (
           <ul className="divide-y divide-[var(--color-pearl)]">
             {notes.map((n) => (
@@ -123,6 +151,9 @@ export function FeedbackLedger() {
                   <StatusPill status={n.status} />
                   <span className="w-7 shrink-0 text-right font-mono text-[11px] text-[var(--color-aged-oak)]">{age(n.created_at)}</span>
                 </button>
+                <div className="ml-5 pb-2">
+                  <GithubHint note={n} />
+                </div>
               </li>
             ))}
           </ul>
@@ -172,7 +203,7 @@ function StatusPill({ status }: { status: FeedbackStatus }) {
   );
 }
 
-function EmptyState({ filtered }: { filtered: boolean }) {
+function EmptyState({ filtered, onNew }: { filtered: boolean; onNew?: () => void }) {
   if (filtered) {
     return (
       <p className="py-10 text-center text-[13px] text-[var(--color-aged-oak)]">
@@ -184,11 +215,11 @@ function EmptyState({ filtered }: { filtered: boolean }) {
     <div className="py-10 text-center">
       <p className="font-heading text-[15px] text-[var(--color-charcoal)]">No notes yet</p>
       <p className="mx-auto mt-1 max-w-[26ch] text-[13px] leading-snug text-[var(--color-aged-oak)]">
-        The button’s bottom-right whenever something strikes you — good or bad. Two taps and it’s here.
+        The TESTER pill is bottom-left whenever something strikes you — good or bad. Two taps and it’s here.
       </p>
       <button
         type="button"
-        onClick={() => openFeedbackSheet()}
+        onClick={() => (onNew ? onNew() : openFeedbackSheet())}
         className="mt-3 rounded-md bg-[var(--color-clay)] px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]"
       >
         Leave the first note

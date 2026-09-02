@@ -7,13 +7,12 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Ellipsis, MessageSquareText, Search, TimerReset } from 'lucide-react';
+import { Ellipsis, Search, TimerReset } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   useUnreadInboxCount,
   useProcurementUnreadCount,
-  useUnseenShipped,
 } from '@patina/supabase';
 import { ALL_STUDIO_SURFACES, boardsRoutePath } from '@/lib/document/registry';
 import { DOCUMENT_INDEX_LABELS } from '@/lib/document/document-index';
@@ -21,7 +20,6 @@ import { useDocumentTime } from '@/hooks/document-time-provider';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
 import { DocumentAction } from '../document-action';
-import { openFeedbackSheet } from '../feedback/feedback-sheet';
 import { openPost } from '../overlays/post-sheet';
 import { useMobileShell } from './mobile-shell';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -101,10 +99,8 @@ export function MobileBar() {
     useDocumentTime();
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
   const { data: unreadProcurement = 0 } = useProcurementUnreadCount();
-  const { data: unseenFeedback } = useUnseenShipped();
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const unread = unreadInbox + unreadProcurement;
-  const hasUnseenFeedback = hydrated && (unseenFeedback?.length ?? 0) > 0;
 
   const [moreOpen, setMoreOpen] = useState(false);
   const barRef = useRef<HTMLElement>(null);
@@ -568,23 +564,6 @@ export function MobileBar() {
               <i className="h-4 w-[2px] rounded-[1px] bg-[var(--color-sage)]" />
             </span>
             <span className="text-[14px]">Ledgers</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => closeThen(openFeedbackSheet)}
-            className={MENU_ITEM}
-          >
-            <MessageSquareText
-              className="h-4 w-4 text-[var(--color-clay)]"
-              strokeWidth={1.5}
-              aria-hidden
-            />
-            <span className="text-[14px]">Leave a note</span>
-            {hasUnseenFeedback && (
-              <span className="ml-auto font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay)]">
-                Shipped
-              </span>
-            )}
           </button>
         </div>
       )}

@@ -45,7 +45,7 @@ import {
   isElementRendered,
   topActiveModalDialog,
 } from './overlays/active-dialog';
-import { openFeedbackSheet } from './feedback/feedback-sheet';
+import { openFeedbackSheet } from './feedback/open-feedback';
 import { openHelp } from '@/lib/help-system/open-help';
 import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
 import { fillStateForDesk, type FillState } from '@/lib/document/fill-state';

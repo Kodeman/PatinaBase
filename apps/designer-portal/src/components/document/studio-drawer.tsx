@@ -29,7 +29,6 @@ import {
 import {
   useUnreadInboxCount,
   useProcurementUnreadCount,
-  useUnseenShipped,
 } from '@patina/supabase';
 import { ALL_STUDIO_SURFACES } from '@/lib/document/registry';
 import { useSheetSurfaceKey } from '@/lib/help-system/use-sheet-surface-key';
@@ -39,8 +38,6 @@ import { PostSheet, openPost } from './overlays/post-sheet';
 import { OrdersLedger } from './orders-ledger';
 import { AccountsBook } from './accounts/accounts-book';
 import { HoursLedger } from './hours-ledger';
-import { FeedbackLedger } from './feedback/feedback-ledger';
-import { openFeedbackSheet } from './feedback/feedback-sheet';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useMobileShell } from './mobile/mobile-shell';
@@ -102,16 +99,7 @@ const LEDGERS: Ledger[] = (
 // bell isn't a door in the row — the two can never drift apart this way.
 const THE_POST = findSurface('the-post');
 
-// Feedback isn't a Studio Surface (R93/R95 — it's a reachable sheet, not a
-// labelled doorway): it keeps its own small meta for the sheet title/variant,
-// exactly as it did before the registry existed.
-const FEEDBACK_SHEET = {
-  key: 'feedback' as const,
-  name: 'Feedback',
-  weight: 'sheet' as const,
-};
-
-type SheetKey = LedgerKey | typeof FEEDBACK_SHEET.key;
+type SheetKey = LedgerKey;
 
 const ROOM_DOORS = LEDGERS.filter((ledger) => ledger.weight === 'room');
 const STUDIO_BOOKS = LEDGERS.filter((ledger) => ledger.weight === 'sheet');
@@ -161,8 +149,7 @@ export function StudioDrawer() {
   const [sheetContext, setSheetContext] = useState<OpenLedgerContext | null>(
     null,
   );
-  const openDoor = LEDGERS.find((l) => l.key === openLedger) ?? null;
-  const open = openLedger === FEEDBACK_SHEET.key ? FEEDBACK_SHEET : openDoor;
+  const open = LEDGERS.find((l) => l.key === openLedger) ?? null;
   const { inHandToday, heldEngagementId } = useDocumentTime();
   // F-3 route 1 — the drawer mounts in `(document)/layout.tsx`, above any
   // engagement, so it takes the channel's key off the document in hand rather
@@ -173,9 +160,7 @@ export function StudioDrawer() {
   // awareness dot must read both unreads or it would lie about the sheet.
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
   const { data: unreadProcurement = 0 } = useProcurementUnreadCount();
-  const { data: unseenFeedback } = useUnseenShipped();
   const unread = unreadInbox + unreadProcurement;
-  const hasUnseenFeedback = hydrated && (unseenFeedback?.length ?? 0) > 0;
   const breadcrumb = breadcrumbFor(pathname);
   const holding = (pathname ?? '').startsWith('/doc/');
   const orderedBooks = recentBook
@@ -187,7 +172,7 @@ export function StudioDrawer() {
 
   // help-desk Wave 1 — an open ledger sheet scopes the contextual help panel
   // to its own surface key (sheets never change the pathname); close restores
-  // the surface underneath. Non-ledger sheets (feedback) restore too.
+  // the surface underneath.
   useSheetSurfaceKey(openLedger);
 
   useEffect(() => {
@@ -277,13 +262,6 @@ export function StudioDrawer() {
       const name = typeof detail === 'string' ? detail : detail.name;
       const context =
         typeof detail === 'string' ? null : (detail.context ?? null);
-      if (name === FEEDBACK_SHEET.key) {
-        setBooksOpen(false);
-        setSheetContext(context);
-        setOpenLedger(FEEDBACK_SHEET.key);
-        setOpenedFromBooksMenu(false);
-        return;
-      }
       const match = LEDGERS.find((l) => l.key === name);
       if (!match) return;
       if (match.weight === 'room') {
@@ -452,28 +430,6 @@ export function StudioDrawer() {
                     </button>
                   );
                 })}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBooksOpen(false);
-                    openFeedbackSheet();
-                  }}
-                  className="flex min-h-11 w-full items-center gap-3 border-t border-[var(--color-clay)] px-3 py-2 text-left text-[var(--text-body)] hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)]"
-                >
-                  <MessageSquareText
-                    className="h-4 w-4 text-[var(--color-clay-ink)]"
-                    strokeWidth={1.5}
-                    aria-hidden
-                  />
-                  <span className="text-[14px] text-[var(--text-primary)]">
-                    Leave a note
-                  </span>
-                  {hasUnseenFeedback && (
-                    <span className="ml-auto font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
-                      Shipped
-                    </span>
-                  )}
-                </button>
               </div>
             )}
           </div>
@@ -594,7 +550,7 @@ export function StudioDrawer() {
         open={open !== null && open.weight === 'sheet'}
         onClose={() => setOpenLedger(null)}
         title={open?.name ?? ''}
-        variant={open?.key === 'feedback' ? 'center' : 'sheet'}
+        variant="sheet"
         wide={
           open?.key === 'orders' ||
           open?.key === 'accounts' ||
@@ -602,8 +558,8 @@ export function StudioDrawer() {
         }
         // SP-13/F46 — Orders and Accounts render their own dialog-owned
         // DocSheetHead with a working close; DocSheet must not print a second
-        // one above it. Hours and Feedback pass no onClose to their heads, so
-        // DocSheet's own close is the single copy for those two.
+        // one above it. Hours passes no onClose to its head, so DocSheet's own
+        // close is the single copy there.
         headOwnedByChild={open?.key === 'orders' || open?.key === 'accounts'}
         // F11 — a books-menu row unmounts the moment it opens a sheet, so the
         // still-mounted books toggle is where focus belongs on close.
@@ -622,7 +578,6 @@ export function StudioDrawer() {
           />
         )}
         {open?.key === 'hours' && <HoursLedger initialContext={sheetContext} />}
-        {open?.key === 'feedback' && <FeedbackLedger />}
         {/* All sheet-weight ledgers (orders/accounts/hours) are bound; People
             and Rooms are Rooms (R50/R107), so no generic placeholder branch
             remains. */}
