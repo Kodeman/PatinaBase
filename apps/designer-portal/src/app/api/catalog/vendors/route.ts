@@ -1,39 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
 import { getAuthenticatedDesignerAdmin } from '@/lib/supabase-admin';
+import { VENDOR_PUBLIC_FACE_COLUMNS } from '@/lib/vendor-columns';
 
-// The maker's public face. Identical to the column list migration 00555 grants
-// `anon` on public.vendors — the trade file (trade_terms, notes, contact_info,
-// preferred_contact, orders_email, trade_account_email, trade_portal_url,
-// trade_account_established_at, default_payment_terms, nomination_status,
-// nominated_by, nominated_at, contact_profile_id) is served only by the detail
-// route, behind the same guard.
-const VENDOR_PUBLIC_FACE_COLUMNS = [
-  'id',
-  'name',
-  'website',
-  'logo_url',
-  'hero_image_url',
-  'market_position',
-  'production_model',
-  'founded_year',
-  'ownership',
-  'headquarters_city',
-  'headquarters_state',
-  'parent_company_id',
-  'primary_category',
-  'secondary_categories',
-  'designer_rating_avg',
-  'review_count',
-  'lead_times',
-  'social_links',
-  'brand_story',
-  'made_in',
-  'is_patina_catalog',
-  'founding_circle',
-  'created_at',
-  'updated_at',
-].join(', ');
+// VENDOR_PUBLIC_FACE_COLUMNS is the column list migration 00555 grants `anon`
+// on public.vendors. The trade file is served only by the detail route, behind
+// the same guard. Both lists moved to @/lib/vendor-columns when RF-04 found the
+// same `select('*')` still live on the two /api/admin/catalog/vendors routes:
+// four route files reading one table want one column list, not four.
 
 // GET /api/catalog/vendors - List vendors
 //

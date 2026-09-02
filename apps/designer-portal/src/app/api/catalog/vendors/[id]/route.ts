@@ -1,50 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
 import { getAuthenticatedDesignerAdmin } from '@/lib/supabase-admin';
+import { VENDOR_DETAIL_COLUMNS } from '@/lib/vendor-columns';
 
-// The maker's public face plus the trade file. A DESIGNER's vendor detail
-// legitimately renders both; the 13 trade columns at the foot of this list are
-// exactly the ones migration 00555 revokes from `anon`, and they are served
-// here only behind the designer/admin gate below.
-const VENDOR_DETAIL_COLUMNS = [
-  'id',
-  'name',
-  'website',
-  'logo_url',
-  'hero_image_url',
-  'market_position',
-  'production_model',
-  'founded_year',
-  'ownership',
-  'headquarters_city',
-  'headquarters_state',
-  'parent_company_id',
-  'primary_category',
-  'secondary_categories',
-  'designer_rating_avg',
-  'review_count',
-  'lead_times',
-  'social_links',
-  'brand_story',
-  'made_in',
-  'is_patina_catalog',
-  'founding_circle',
-  'created_at',
-  'updated_at',
-  'trade_terms',
-  'notes',
-  'contact_info',
-  'preferred_contact',
-  'orders_email',
-  'trade_account_email',
-  'trade_portal_url',
-  'trade_account_established_at',
-  'default_payment_terms',
-  'nomination_status',
-  'nominated_by',
-  'nominated_at',
-  'contact_profile_id',
-].join(', ');
+// VENDOR_DETAIL_COLUMNS is the maker's public face plus the trade file. A
+// DESIGNER's vendor detail legitimately renders both; the 13 trade columns in
+// it are exactly the ones migration 00555 revokes from `anon`, and they are
+// served here only behind the designer/admin gate below. The list moved to
+// @/lib/vendor-columns when RF-04 found the same `select('*')` still live on
+// /api/admin/catalog/vendors/[id].
 
 // GET /api/catalog/vendors/:id
 //
