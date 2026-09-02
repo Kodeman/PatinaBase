@@ -1,0 +1,1122 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "process == "Patina""
+Timestamp               Ty Process[PID:TID]
+2026-09-01 15:56:56.491 Df Patina[39445:56395e] [com.apple.xpc:connection] [0x101c2dc60] activating connection: mach=true listener=false peer=false name=com.apple.cfprefsd.daemon
+2026-09-01 15:56:56.498 Df Patina[39445:563aa8] [com.apple.xpc:connection] [0x101c35a20] activating connection: mach=true listener=false peer=false name=com.apple.fontservicesd
+2026-09-01 15:56:56.520 Df Patina[39445:56395e] [com.apple.network:] networkd_settings_read_from_file_locked initialized networkd settings by reading plist directly
+2026-09-01 15:56:56.521 Df Patina[39445:56395e] [com.apple.network:] networkd_settings_read_from_file_locked initialized networkd settings by reading plist directly
+2026-09-01 15:56:56.521 Df Patina[39445:56395e] [com.apple.network:path] nw_path_evaluator_start [A4D47FA6-F5FD-4F5B-88DD-127A31665FEB <NULL> generic, attribution: developer]
+	path: satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown
+2026-09-01 15:56:56.523 Df Patina[39445:563aad] [com.apple.CFNetwork:Default] Task <A5F8C523-9E50-463B-B3F1-83F959880E8E>.<1> resuming, timeouts(10.0, 604800.0) qos(0x11) voucher((null)) activity(00000000-0000-0000-0000-000000000000)
+2026-09-01 15:56:56.523 A  Patina[39445:563aad] (CoreFoundation) Loading Preferences From User Session CFPrefsD
+2026-09-01 15:56:56.526 Df Patina[39445:563aa8] [com.apple.runningboard:connection] Initializing connection
+2026-09-01 15:56:56.527 Df Patina[39445:563aa8] [com.apple.runningboard:process] Removing all cached process handles
+2026-09-01 15:56:56.527 Df Patina[39445:563aad] [com.apple.runningboard:connection] Sending handshake request attempt #1 to server
+2026-09-01 15:56:56.527 Df Patina[39445:563aad] [com.apple.runningboard:connection] Creating connection to com.apple.runningboard
+2026-09-01 15:56:56.527 Df Patina[39445:563aad] [com.apple.xpc:connection] [0x102624000] activating connection: mach=true listener=false peer=false name=com.apple.runningboard
+2026-09-01 15:56:56.528 A  Patina[39445:563abb] (RunningBoardServices) didChangeInheritances
+2026-09-01 15:56:56.529 Df Patina[39445:563aad] [com.apple.runningboard:connection] Handshake succeeded
+2026-09-01 15:56:56.529 Df Patina[39445:563aad] [com.apple.runningboard:connection] Identity resolved as app<cloud.patina.app((null))>
+2026-09-01 15:56:56.540 Df Patina[39445:56395e] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.anonymousId
+2026-09-01 15:56:56.544 Df Patina[39445:56395e] [com.apple.xpc:connection] [0x102624140] activating connection: mach=true listener=false peer=false name=com.apple.lsd.mapdb
+2026-09-01 15:56:56.547 Df Patina[39445:56395e] [com.apple.BoardServices:XPCErrors] [C:1] Alloc com.apple.frontboard.systemappservices
+2026-09-01 15:56:56.548 Df Patina[39445:56395e] [com.apple.xpc:connection] [0x1026243c0] activating connection: mach=false listener=false peer=false name=(anonymous)
+2026-09-01 15:56:56.552 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Initializing NSHTTPCookieStorage singleton
+2026-09-01 15:56:56.560 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Initializing CFHTTPCookieStorage singleton
+2026-09-01 15:56:56.560 Df Patina[39445:56395e] (libMobileGestalt.dylib) No persisted cache on this platform.
+2026-09-01 15:56:56.560 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Creating default cookie storage with process/bundle identifier
+2026-09-01 15:56:56.561 A  Patina[39445:563aa8] (libsystem_containermanager.dylib) container_system_group_path_for_identifier
+2026-09-01 15:56:56.561 Df Patina[39445:563aa8] [com.apple.containermanager:xpc] Requesting container lookup; class = 13, identifier = com.apple.nsurlsessiond, group_identifier = systemgroup.com.apple.nsurlstoragedresources, create = 1, temp = 0, euid = 501, uid = 501
+2026-09-01 15:56:56.561 A  Patina[39445:563aa8] (libsystem_containermanager.dylib) container_query_t
+2026-09-01 15:56:56.561 Df Patina[39445:563aa8] [com.apple.containermanager:xpc] Query; euid = 501, uid = 501, class = 13, identifier = [com.apple.nsurlsessiond](1), flags = 900000003
+2026-09-01 15:56:56.562 Df Patina[39445:563aa8] [com.apple.containermanager:unspecified] _container_query_get_result_at_index: success
+2026-09-01 15:56:56.562 A  Patina[39445:563aa8] (libsystem_containermanager.dylib) container_copy_object
+2026-09-01 15:56:56.562 Df Patina[39445:563aa8] [com.apple.containermanager:unspecified] container_system_group_path_for_identifier: success
+2026-09-01 15:56:56.563 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Initializing AlternativeServices Storage singleton
+2026-09-01 15:56:56.563 Df Patina[39445:563aa8] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/HTTPStorages/cloud.patina.app
+2026-09-01 15:56:56.567 Df Patina[39445:56395e] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.registerProperties
+2026-09-01 15:56:56.567 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Garbage collection for alternative services
+2026-09-01 15:56:56.567 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Connection 0: creating secure tcp or quic connection
+2026-09-01 15:56:56.568 Df Patina[39445:56395e] (AppTrackingTransparency) [ATTrackingManager] trackingAuthorizationStatus API call invoked.
+2026-09-01 15:56:56.568 A  Patina[39445:56395e] (libsystem_containermanager.dylib) container_system_group_path_for_identifier
+2026-09-01 15:56:56.568 Df Patina[39445:56395e] [com.apple.containermanager:xpc] Requesting container lookup; class = 13, identifier = (null), group_identifier = systemgroup.com.apple.configurationprofiles, create = 1, temp = 0, euid = 501, uid = 501
+2026-09-01 15:56:56.568 A  Patina[39445:56395e] (libsystem_containermanager.dylib) container_query_t
+2026-09-01 15:56:56.568 Df Patina[39445:56395e] [com.apple.containermanager:xpc] Query; euid = 501, uid = 501, class = 13, identifier = [(null)](0), flags = 900000003
+2026-09-01 15:56:56.569 Df Patina[39445:56395e] [com.apple.containermanager:unspecified] _container_query_get_result_at_index: success
+2026-09-01 15:56:56.569 A  Patina[39445:56395e] (libsystem_containermanager.dylib) container_copy_object
+2026-09-01 15:56:56.569 Df Patina[39445:56395e] [com.apple.containermanager:unspecified] container_system_group_path_for_identifier: success
+2026-09-01 15:56:56.569 Df Patina[39445:56395e] [com.apple.ManagedConfiguration:MC] Got system group container path from MCM for systemgroup.com.apple.configurationprofiles: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/SystemGroup/systemgroup.com.apple.configurationprofiles
+2026-09-01 15:56:56.569 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Connection 1: enabling TLS
+2026-09-01 15:56:56.569 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Connection 1: starting, TC(0x0)
+2026-09-01 15:56:56.570 Df Patina[39445:563aa8] [com.apple.network:connection] [C1 4666BD09-3306-4D07-B6DF-EEC108F7CBA5 Hostname#b5c0af7c:443 quic-connection, url: https://us-assets.i.posthog.com/array/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/config, definite, attribution: developer, context: com.apple.CFNetwork.NSURLSession.{F4849335-F294-4099-A79C-F8D56E6539D0}{(null)}{Y}{2}{0x0} (private), proc: 7BD5AB0A-94C0-3596-89AC-BEE2A47B73D2, delegated upid: 0] start
+2026-09-01 15:56:56.570 Df Patina[39445:563aa8] [com.apple.network:connection] [C1 Hostname#b5c0af7c:443 initial parent-flow ((null))] event: path:start @0.000s
+2026-09-01 15:56:56.570 Df Patina[39445:563aa8] [com.apple.network:connection] [C1 Hostname#b5c0af7c:443 waiting parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.000s, uuid: 51A6FB0C-5BEF-4390-8116-4759044508FE
+2026-09-01 15:56:56.571 Df Patina[39445:563aa8] [com.apple.network:connection] [C1 Hostname#b5c0af7c:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.001s
+2026-09-01 15:56:56.571 Df Patina[39445:563aa8] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C1] reporting state preparing
+2026-09-01 15:56:56.572 Df Patina[39445:563aa8] [com.apple.network:connection] [C1 Hostname#b5c0af7c:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_child @0.002s
+2026-09-01 15:56:56.572 Df Patina[39445:563aa8] [com.apple.network:connection] [C1.1 Hostname#b5c0af7c:443 initial path ((null))] event: path:start @0.002s
+2026-09-01 15:56:56.572 Df Patina[39445:563aa8] [com.apple.network:connection] [C1.1 Hostname#b5c0af7c:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.002s, uuid: 51A6FB0C-5BEF-4390-8116-4759044508FE
+2026-09-01 15:56:56.572 Df Patina[39445:563aa8] [com.apple.network:connection] [C1.1 Hostname#b5c0af7c:443 in_progress transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: transform:start @0.002s
+2026-09-01 15:56:56.572 Df Patina[39445:563aa8] [com.apple.network:connection] [C1.1.1 Hostname#b5c0af7c:443 initial path ((null))] event: path:start @0.002s
+2026-09-01 15:56:56.572 Df Patina[39445:563aa8] [com.apple.network:connection] [C1.1.1 Hostname#b5c0af7c:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.002s, uuid: 88F33CCE-E2EB-4E74-8BBF-2C00287CED32
+2026-09-01 15:56:56.572 Df Patina[39445:563aa8] [com.apple.network:connection] [C1.1.1 Hostname#b5c0af7c:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:start_dns @0.002s
+2026-09-01 15:56:56.572 Df Patina[39445:56395e] (AppTrackingTransparency) [ATTrackingManager] Performing TCC Access Preflight Request.
+2026-09-01 15:56:56.573 A  Patina[39445:56395e] (TCC) tcc_send_request_authorization() IPC
+2026-09-01 15:56:56.573 Df Patina[39445:56395e] [com.apple.xpc:connection] [0x102625180] activating connection: mach=true listener=false peer=false name=com.apple.tccd
+2026-09-01 15:56:56.573 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Task <A5F8C523-9E50-463B-B3F1-83F959880E8E>.<1> setting up Connection 1
+2026-09-01 15:56:56.573 Df Patina[39445:563aa8] [com.apple.network:connection] nw_endpoint_resolver_update [C1.1.1 Hostname#b5c0af7c:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#84931aa6:443
+2026-09-01 15:56:56.573 Df Patina[39445:563aa8] [com.apple.network:connection] nw_endpoint_resolver_update [C1.1.1 Hostname#b5c0af7c:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#c717f32c:443
+2026-09-01 15:56:56.573 Df Patina[39445:563aa8] [com.apple.network:connection] nw_endpoint_resolver_update [C1.1.1 Hostname#b5c0af7c:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#6bd8c7de.443
+2026-09-01 15:56:56.573 Df Patina[39445:563aa8] [com.apple.network:connection] nw_endpoint_resolver_update [C1.1.1 Hostname#b5c0af7c:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#dc2ad595.443
+2026-09-01 15:56:56.573 Df Patina[39445:563aa8] [com.apple.network:connection] [C1.1.1 Hostname#b5c0af7c:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:receive_dns @0.003s
+2026-09-01 15:56:56.573 Df Patina[39445:563aa8] [com.apple.network:connection] [C1.1.1.1 IPv4#84931aa6:443 initial path ((null))] event: path:start @0.003s
+2026-09-01 15:56:56.573 Df Patina[39445:563aa8] [com.apple.network:connection] [C1.1.1.1 IPv4#84931aa6:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.003s, uuid: 5E761FEC-01C5-4D3A-9BF3-3697EFC223A7
+2026-09-01 15:56:56.574 Df Patina[39445:563aa8] [com.apple.network:connection] [C1.1.1.1 IPv4#84931aa6:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.004s
+2026-09-01 15:56:56.577 Df Patina[39445:56395e] [com.apple.xpc:connection] [0x102625180] invalidated after the last release of the connection object
+2026-09-01 15:56:56.577 Df Patina[39445:56395e] [com.apple.CoreAnalytics:client] No XPC connection in Simulator
+2026-09-01 15:56:56.577 Df Patina[39445:56395e] (AppTrackingTransparency) [ATTrackingManager] Returning from trackingAuthorizationStatus - 0
+2026-09-01 15:56:56.578 A  Patina[39445:56395e] (libsystem_containermanager.dylib) container_create_or_lookup_app_group_path_by_app_group_identifier
+2026-09-01 15:56:56.578 Df Patina[39445:56395e] [com.apple.containermanager:xpc] Requesting app group container lookup; identifier = group.cloud.patina.app, euid = 501, uid = 501, platform = 7
+2026-09-01 15:56:56.579 Df Patina[39445:56395e] [com.apple.containermanager:sandbox] Consumed sandbox extension; path = [/Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6], handle = 0
+2026-09-01 15:56:56.579 Df Patina[39445:56395e] [com.apple.containermanager:unspecified] container_create_or_lookup_app_group_path_by_app_group_identifier: success
+2026-09-01 15:56:56.597 Df Patina[39445:563acb] [com.apple.network:connection] nw_socket_handle_socket_event [C1.1.1.1:3] Socket received CONNECTED event
+2026-09-01 15:56:56.597 Df Patina[39445:563acb] [com.apple.network:connection] nw_flow_connected [C1.1.1.1 IPv4#84931aa6:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Transport protocol connected (socket)
+2026-09-01 15:56:56.597 Df Patina[39445:563acb] [com.apple.network:connection] [C1.1.1.1 IPv4#84931aa6:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_transport @0.027s
+2026-09-01 15:56:56.597 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_session_apply_protocol_options_for_transport_block_invoke_2(2367) [C1.1.1.1:2][0x1026051e0] TLS configured [server(0) min_version(0x0303) max_version(0x0304) name(redacted) tickets(false) false_start(false) enforce_ev(false) enforce_ats(false) ats_non_pfs_ciphersuite_allowed(false) cc_mode_enforced(false) ech(false) pqtls(true), pake(false) skip_ats_trust(false)]
+2026-09-01 15:56:56.597 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2806) [C1.1.1.1:2][0x1026051e0] Client handshake started
+2026-09-01 15:56:56.598 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS client enter_early_data
+2026-09-01 15:56:56.598 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS client read_server_hello
+2026-09-01 15:56:56.648 A  Patina[39445:56395e] (libsystem_containermanager.dylib) container_create_or_lookup_app_group_path_by_app_group_identifier
+2026-09-01 15:56:56.648 Df Patina[39445:56395e] [com.apple.containermanager:unspecified] container_create_or_lookup_app_group_path_by_app_group_identifier: success
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Failed to stat path '/Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6/Library/Application Support/default.store', errno 2 / No such file or directory.
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create denied
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Failed to statfs file; errno 2 / No such file or directory.
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for file system
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File system type: 		0
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File system flags: 		0
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Total data blocks: 		0
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Free data blocks: 		0
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Free blocks for nonsuperuser:	0
+2026-09-01 15:56:56.654 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Total i-nodes: 			0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File system ID: 		0, 0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Free i-nodes: 			0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Owner UID: 			0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Filesystem type name:
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Mount on name:
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Mount from name:
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Failed to stat path '/Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6/Library/Application Support', errno 2 / No such file or directory.
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create denied
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Failed to statfs file; errno 2 / No such file or directory.
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for file system
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File system type: 		0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File system flags: 		0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Total data blocks: 		0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Free data blocks: 		0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Free blocks for nonsuperuser:	0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Total i-nodes: 			0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File system ID: 		0, 0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Free i-nodes: 			0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Owner UID: 			0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Filesystem type name:
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Mount on name:
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Mount from name:
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6/Library
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		128 bytes
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		304108622
+2026-09-01 15:56:56.655 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for file system
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File system type: 		0x1a
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File system flags: 		0x4909080
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   MNT_JOURNALED
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Total data blocks: 		242837545
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Free data blocks: 		27583223
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Free blocks for nonsuperuser:	27583223
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Total i-nodes: 			1110903160
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File system ID: 		0x100000f, 0x1a
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Free i-nodes: 			1103328920
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Owner UID: 			0
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Filesystem type name: 		apfs
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Mount on name: 			/System/Volumes/Data
+2026-09-01 15:56:56.656 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Mount from name: 		/dev/disk3s5
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		128 bytes
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		304108620
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		2368 bytes
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		303976655
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.657 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		128 bytes
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		303975921
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		224 bytes
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		303975914
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.658 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		448 bytes
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		303974621
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   775
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		160 bytes
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		303928267
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		960 bytes
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		471894
+2026-09-01 15:56:56.659 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		160 bytes
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		471799
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		224 bytes
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		468090
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.660 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		3104 bytes
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		29264
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   700
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		3136 bytes
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		29257
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.661 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   750
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create allowed
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		160 bytes
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		17202
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		0
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		80
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create denied
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: ---------------------------
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		704 bytes
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		2
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		0
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		0
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   file is not a symbolic link
+2026-09-01 15:56:56.662 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create denied
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Logging status information for directory path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6/Library/Application Support
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Executing as effective user 501
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		704 bytes
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		2
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		0
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		0
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not writeable with errno 30
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		160 bytes
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		17202
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		0
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		80
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not writeable with errno 13
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		3136 bytes
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		29257
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.663 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   750
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		3104 bytes
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		29264
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   700
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		224 bytes
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		468090
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		160 bytes
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		471799
+2026-09-01 15:56:56.664 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		960 bytes
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		471894
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		160 bytes
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		303928267
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.665 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		448 bytes
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		303974621
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   775
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		224 bytes
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		303975914
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		128 bytes
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		303975921
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.666 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		2368 bytes
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		303976655
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		128 bytes
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		304108620
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.667 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Information for /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6/Library
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Device ID: 	0
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Device ID: 		16777231
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Size: 		128 bytes
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File inode: 		304108622
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File user ID: 		501
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File group ID: 		20
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   File Permissions:
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: d
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   755
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is not a symbolic link
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is readable
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   component is writeable
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Failed to stat path '/Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6/Library/Application Support', errno 2 / No such file or directory.
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error:   Sandbox access to file-write-create denied
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: addPersistentStoreWithType:configuration:URL:options:error: returned error NSCocoaErrorDomain (512)
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: userInfo:
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: 	reason : Failed to create file; code = 2
+2026-09-01 15:56:56.668 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: storeType: SQLite
+2026-09-01 15:56:56.669 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: configuration: default
+2026-09-01 15:56:56.669 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: URL: file:///Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6/Library/Application%20Support/default.store
+2026-09-01 15:56:56.669 Df Patina[39445:56395e] [com.apple.coredata:annotation] CoreData: annotation: options:
+2026-09-01 15:56:56.669 Df Patina[39445:56395e] [com.apple.coredata:annotation] CoreData: annotation: 	NSMigratePersistentStoresAutomaticallyOption : 1
+2026-09-01 15:56:56.669 Df Patina[39445:56395e] [com.apple.coredata:annotation] CoreData: annotation: 	NSInferMappingModelAutomaticallyOption : 1
+2026-09-01 15:56:56.669 Df Patina[39445:56395e] [com.apple.coredata:annotation] CoreData: annotation: 	NSPersistentStoreRemoteChangeNotificationOptionKey : 1
+2026-09-01 15:56:56.669 Df Patina[39445:56395e] [com.apple.coredata:annotation] CoreData: annotation: 	NSPersistentHistoryTrackingKey : 1
+2026-09-01 15:56:56.671 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: <NSPersistentStoreCoordinator: 0x1027bb000>: Attempting recovery from error encountered during addPersistentStore: 0x10245aa30 Error Domain=NSCocoaErrorDomain Code=512 "The file couldn’t be saved." UserInfo={reason=Failed to create file; code = 2}
+2026-09-01 15:56:56.671 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: During recovery, parent directory path reported as missing
+2026-09-01 15:56:56.679 E  Patina[39445:56395e] [com.apple.coredata:error] CoreData: error: Recovery attempt while adding <NSPersistentStoreDescription: 0x10245aa30> (type: SQLite, url: file:///Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Shared/AppGroup/D6E4E902-656A-411F-94F8-E7834C186ED6/Library/Application%20Support/default.store) was successful!
+2026-09-01 15:56:56.691 Df Patina[39445:56395e] [com.apple.xpc:connection] [0x102626800] activating connection: mach=true listener=false peer=false name=com.apple.nsurlsessiond
+2026-09-01 15:56:56.691 Df Patina[39445:56395e] [com.apple.CFNetwork:Default] BackgroundSession <CCA6D144-7F50-450B-8EFA-F1D5E8DF36AE> background session setup will wait for reply: session <__NSURLBackgroundSession: 0x1026266c0> with identifier com.patina.scans.upload
+2026-09-01 15:56:56.700 Df Patina[39445:56395e] [com.apple.CFNetwork:Default] BackgroundSession <CCA6D144-7F50-450B-8EFA-F1D5E8DF36AE> background session setup reply received: session <__NSURLBackgroundSession: 0x1026266c0> with identifier com.patina.scans.upload
+2026-09-01 15:56:56.700 Df Patina[39445:56395e] [com.apple.CFNetwork:Default] BackgroundSession <CCA6D144-7F50-450B-8EFA-F1D5E8DF36AE> background session setup complete
+2026-09-01 15:56:56.702 Df Patina[39445:56395e] [com.apple.network:path] nw_path_evaluator_start [9D12559A-8110-4B41-9EF8-2FEF02EF0639 <NULL> generic, multipath service: handover, attribution: developer]
+	path: satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown
+2026-09-01 15:56:56.703 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client read_hello_retry_request
+2026-09-01 15:56:56.703 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client read_server_hello
+2026-09-01 15:56:56.704 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client read_encrypted_extensions
+2026-09-01 15:56:56.704 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client read_certificate_request
+2026-09-01 15:56:56.704 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client read_server_certificate
+2026-09-01 15:56:56.704 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client read_server_certificate_verify
+2026-09-01 15:56:56.704 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async(2249) [C1.1.1.1:2][0x1026051e0] Performing external trust evaluation
+2026-09-01 15:56:56.704 A  Patina[39445:563acb] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:56.704 A  Patina[39445:563acb] (Security) SecKeyCopyAttributes
+2026-09-01 15:56:56.704 A  Patina[39445:563acb] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:56.704 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async_external(2234) [C1.1.1.1:2][0x1026051e0] Asyncing for external verify block
+2026-09-01 15:56:56.704 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Connection 1: asked to evaluate TLS Trust
+2026-09-01 15:56:56.705 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Task <A5F8C523-9E50-463B-B3F1-83F959880E8E>.<1> auth completion disp=1 cred=0x0
+2026-09-01 15:56:56.705 Df Patina[39445:563aa8] [com.apple.securityd:trust] (Trust 0x109800780) No pending evals, starting
+2026-09-01 15:56:56.705 A  Patina[39445:563aa8] (Security) SecTrustEvaluateIfNecessaryFastAsync
+2026-09-01 15:56:56.706 Df Patina[39445:563aa8] [com.apple.securityd:keychain] System Keychain Always Supported set via feature flag to disabled
+2026-09-01 15:56:56.706 Df Patina[39445:563aa8] [com.apple.xpc:connection] [0x102626940] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-09-01 15:56:56.706 Df Patina[39445:563aa8] [com.apple.xpc:connection] [0x102626a80] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-09-01 15:56:56.706 Df Patina[39445:563aa8] [com.apple.securityd:trust] (Trust 0x109800780) Completed async eval kickoff
+2026-09-01 15:56:56.711 A  Patina[39445:563acb] (CoreFoundation) Loading Preferences From User Session CFPrefsD
+2026-09-01 15:56:56.713 Df Patina[39445:56395e] [com.apple.UIKit:Application] Deactivation reason added: 10; deactivation reasons: 0 -> 1024; animating application lifecycle event: 0
+2026-09-01 15:56:56.713 Df Patina[39445:563aa8] [com.apple.UIKit:BackgroundTask] Creating new assertion because there is no existing background assertion.
+2026-09-01 15:56:56.713 Df Patina[39445:563aa8] [com.apple.UIKit:BackgroundTask] Creating new background assertion
+2026-09-01 15:56:56.713 Df Patina[39445:563aa8] [com.apple.UIKit:BackgroundTask] Created new background assertion <BKSProcessAssertion: 0x102629180>
+2026-09-01 15:56:56.713 Df Patina[39445:56395e] [com.apple.BoardServices:Injection] activating monitor for service com.apple.frontboard.open
+2026-09-01 15:56:56.714 Df Patina[39445:56395e] [com.apple.BoardServices:Injection] activating monitor for service com.apple.frontboard.workspace-service
+2026-09-01 15:56:56.714 Df Patina[39445:563acb] [com.apple.securityd:trust] (Trust 0x109800780) trustd returned 4
+2026-09-01 15:56:56.714 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] System Trust Evaluation yielded status(0)
+2026-09-01 15:56:56.714 Df Patina[39445:563acb] [com.apple.securityd:trust] (Trust 0x109800840) No pending evals, starting
+2026-09-01 15:56:56.714 A  Patina[39445:563acb] (Security) SecTrustEvaluateIfNecessaryFastAsync
+2026-09-01 15:56:56.714 Df Patina[39445:56395e] [com.apple.FrontBoard:Common] FBSWorkspace registering source: com.apple.frontboard.systemappservices
+2026-09-01 15:56:56.714 Df Patina[39445:563aa8] [com.apple.UIKit:BackgroundTask] Incrementing reference count for background assertion <BKSProcessAssertion: 0x102629180>
+2026-09-01 15:56:56.714 Df Patina[39445:563acb] [com.apple.xpc:connection] [0x102626f80] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-09-01 15:56:56.714 Df Patina[39445:563aa8] [com.apple.UIKit:BackgroundTask] Created background task <_UIBackgroundTaskInfo: 0x1024b79c0>: taskID = 1, taskName = Launch Background Task for Coalescing, creationTime = 39956 (elapsed = 0).
+2026-09-01 15:56:56.714 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UIApplicationSceneKeyboardSettings on FBSSceneSettings
+2026-09-01 15:56:56.714 Df Patina[39445:563acb] [com.apple.securityd:trust] (Trust 0x109800840) Completed async eval kickoff
+2026-09-01 15:56:56.714 Df Patina[39445:563acb] [com.apple.xpc:connection] [0x102626a80] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-09-01 15:56:56.715 Df Patina[39445:56395e] [com.apple.FrontBoard:Common] FBSWorkspace connected to endpoint : <BSServiceConnectionEndpoint: 0x1027f1020; target: com.apple.frontboard.systemappservices; service: com.apple.frontboard.workspace-service>
+2026-09-01 15:56:56.715 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneOcclusionSettings> on FBSSceneSettings
+2026-09-01 15:56:56.715 Df Patina[39445:56395e] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x1027657c0 com.apple.frontboard.systemappservices> attempting immediate handshake from activate
+2026-09-01 15:56:56.715 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneInterfaceProtectionSettings> on FBSSceneSettings
+2026-09-01 15:56:56.715 Df Patina[39445:56395e] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x1027657c0 com.apple.frontboard.systemappservices> sent handshake
+2026-09-01 15:56:56.715 Df Patina[39445:56395e] [com.apple.runningboard:general] Added observer for process assertions expiration warning: <_RBSExpirationWarningClient: 0x1027f2fa0>
+2026-09-01 15:56:56.715 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UISceneLayoutPreferencesHostSettingsExtension on FBSSceneSettings
+2026-09-01 15:56:56.715 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UISceneSafeAreaSettingsExtension on FBSSceneSettings
+2026-09-01 15:56:56.715 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UISceneLayoutPreferenceClientSettingsExtension on FBSSceneClientSettings
+2026-09-01 15:56:56.716 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UIHomeAffordanceHostSceneSettings> on FBSSceneSettings
+2026-09-01 15:56:56.716 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UISystemShellSceneHostingEnvironmentSettings on FBSSceneSettings
+2026-09-01 15:56:56.716 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UISceneRenderingEnvironmentSettings on FBSSceneSettings
+2026-09-01 15:56:56.716 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneRenderingEnvironmentClientSettings> on FBSSceneClientSettings
+2026-09-01 15:56:56.717 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneTransitioningHostSettings> on FBSSceneSettings
+2026-09-01 15:56:56.717 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneFocusSystemSettings> on FBSSceneSettings
+2026-09-01 15:56:56.717 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UISceneOrientationSettingsExtension on FBSSceneSettings
+2026-09-01 15:56:56.717 Df Patina[39445:563abb] [com.apple.securityd:trust] (Trust 0x109800840) trustd returned 4
+2026-09-01 15:56:56.717 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UISceneOrientationClientSettingsExtension on FBSSceneClientSettings
+2026-09-01 15:56:56.717 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Connection 1: TLS Trust result 0
+2026-09-01 15:56:56.717 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async_external_block_invoke_3(2148) [C1.1.1.1:2][0x1026051e0] Returning from external verify block with result: true
+2026-09-01 15:56:56.717 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UISceneWindowingControlClientSettings on FBSSceneClientSettings
+2026-09-01 15:56:56.717 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingContentSizePreferenceClientSettings> on FBSSceneClientSettings
+2026-09-01 15:56:56.718 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UISceneHostingTraitCollectionPropagationSettings on FBSSceneSettings
+2026-09-01 15:56:56.717 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_certificate_verify_callback(2430) [C1.1.1.1:2][0x1026051e0] Certificate verification result: OK
+2026-09-01 15:56:56.718 Df Patina[39445:56395e] [com.apple.UIKit:UIScreen] Evaluated capturing state as 0 on <UIScreen: 0x1026270c0> for initial
+2026-09-01 15:56:56.718 Df Patina[39445:56395e] [com.apple.UIKit:UIScreen] Evaluated capturing state as 0 on <UIScreen: 0x1026270c0> for CADisplay KVO
+2026-09-01 15:56:56.718 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingSheetPresentationSettings> on FBSSceneSettings
+2026-09-01 15:56:56.718 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingSheetPresentationClientSettings> on FBSSceneClientSettings
+2026-09-01 15:56:56.718 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client read_server_finished
+2026-09-01 15:56:56.718 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingEventDeferringSettings> on FBSSceneSettings
+2026-09-01 15:56:56.718 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client send_end_of_early_data
+2026-09-01 15:56:56.719 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client send_client_encrypted_extensions
+2026-09-01 15:56:56.719 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client send_client_certificate
+2026-09-01 15:56:56.719 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client complete_second_flight
+2026-09-01 15:56:56.719 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <UIKit__UITypedKeyValueSceneSettings> on FBSSceneSettings
+2026-09-01 15:56:56.719 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS 1.3 client done
+2026-09-01 15:56:56.719 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <UIKit__UITypedKeyValueSceneSettings> on FBSSceneClientSettings
+2026-09-01 15:56:56.719 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS client finish_client_handshake
+2026-09-01 15:56:56.719 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C1.1.1.1:2][0x1026051e0] Client handshake state: TLS client done
+2026-09-01 15:56:56.719 Df Patina[39445:563abb] [com.apple.network:boringssl] boringssl_context_info_handler(2812) [C1.1.1.1:2][0x1026051e0] Client handshake done
+2026-09-01 15:56:56.719 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingViewControllerPreferencePropagationClientSettings> on FBSSceneClientSettings
+2026-09-01 15:56:56.719 Df Patina[39445:563aa8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneZoomTransitionSettings> on FBSSceneSettings
+2026-09-01 15:56:56.719 Df Patina[39445:56395e] [com.apple.Accessibility:AXSupportCommon] Read CategoryName: per-app = 1, category name = (null)
+2026-09-01 15:56:56.719 Df Patina[39445:563aad] [com.apple.FrontBoard:SceneExtension] Realizing settings extension FBSSceneSettingsCore on FBSSceneSettings
+2026-09-01 15:56:56.719 Df Patina[39445:56395e] [com.apple.Accessibility:AXSupportCommon] Read CategoryName: per-app = 0, category name = (null)
+2026-09-01 15:56:56.719 A  Patina[39445:563abb] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:56.720 A  Patina[39445:563abb] (Security) SecKeyCopyAttributes
+2026-09-01 15:56:56.720 A  Patina[39445:563abb] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:56.720 Df Patina[39445:563abb] [com.apple.network:boringssl] nw_protocol_boringssl_signal_connected(895) [C1.1.1.1:2][0x1026051e0] TLS connected [server(0) version(0x0304) ciphersuite(TLS_AES_256_GCM_SHA384) group(0x11ec) signature_alg(0x0403) alpn(h2) resumed(0) offered_ticket(0) in_early_data(0) early_data_accepted(0) false_started(0) ocsp_received(0) sct_received(1) connect_time(122ms) flight_time(106ms) rtt(105ms) write_stalls(0) read_stalls(2) pake(0x0000)]
+2026-09-01 15:56:56.720 Df Patina[39445:563abb] [com.apple.network:connection] nw_flow_connected [C1.1.1.1 IPv4#84931aa6:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (CFNetworkConnection-2595862458)
+2026-09-01 15:56:56.720 Df Patina[39445:563abb] [com.apple.network:connection] [C1.1.1.1 IPv4#84931aa6:443 ready socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.150s
+2026-09-01 15:56:56.720 Df Patina[39445:563aad] [com.apple.FrontBoard:SceneExtension] Realizing settings extension FBSSceneClientSettingsCore on FBSSceneClientSettings
+2026-09-01 15:56:56.720 Df Patina[39445:563abb] [com.apple.network:connection] [C1.1.1 Hostname#b5c0af7c:443 ready resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.150s
+2026-09-01 15:56:56.720 Df Patina[39445:563abb] [com.apple.network:connection] [C1.1 Hostname#b5c0af7c:443 ready transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.150s
+2026-09-01 15:56:56.720 Df Patina[39445:563abb] [com.apple.network:connection] nw_flow_connected [C1 IPv4#84931aa6:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (endpoint_flow)
+2026-09-01 15:56:56.720 Df Patina[39445:563abb] [com.apple.network:connection] [C1 IPv4#84931aa6:443 ready parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_connect @0.150s
+2026-09-01 15:56:56.720 Df Patina[39445:563abb] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C1] reporting state ready
+2026-09-01 15:56:56.720 Df Patina[39445:563abb] [com.apple.xpc:connection] [0x102626f80] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-09-01 15:56:56.721 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Connection 1: connected successfully
+2026-09-01 15:56:56.721 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Connection 1: TLS handshake complete
+2026-09-01 15:56:56.721 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Connection 1: ready C(N) E(N)
+2026-09-01 15:56:56.721 Df Patina[39445:563abb] [com.apple.network:connection] [C1] event: client:connection_reused @0.151s
+2026-09-01 15:56:56.721 Df Patina[39445:563abb] [com.apple.network:connection] nw_protocol_socket_notify [C1.1.1.1:3] nw_protocol_notification_type_connection_idle is false
+2026-09-01 15:56:56.721 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Task <A5F8C523-9E50-463B-B3F1-83F959880E8E>.<1> now using Connection 1
+2026-09-01 15:56:56.721 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Task <A5F8C523-9E50-463B-B3F1-83F959880E8E>.<1> sent request, body N 0
+2026-09-01 15:56:56.722 Df Patina[39445:563aad] [com.apple.FrontBoard:SceneExtension] UIMutableApplicationSceneSettings setting counterpart class: UIApplicationSceneSettings
+2026-09-01 15:56:56.722 Df Patina[39445:563aad] [com.apple.FrontBoard:SceneExtension] UIMutableApplicationSceneClientSettings setting counterpart class: UIApplicationSceneClientSettings
+2026-09-01 15:56:56.723 Df Patina[39445:563aad] [com.apple.FrontBoard:SceneExtension] Realizing settings extension FBSSceneTransitionContextCore on FBSSceneTransitionContext
+2026-09-01 15:56:56.754 A  Patina[39445:563aad] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:56.754 A  Patina[39445:563aad] (Security) SecKeyCopyAttributes
+2026-09-01 15:56:56.754 A  Patina[39445:563aad] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:56.754 A  Patina[39445:563aad] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:56.754 A  Patina[39445:563aad] (Security) SecKeyCopyAttributes
+2026-09-01 15:56:56.754 A  Patina[39445:563aad] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:56.762 A  Patina[39445:563aad] (CoreFoundation) Updating Key-Value Observers Of Preferences
+2026-09-01 15:56:56.771 Df Patina[39445:56395e] [com.apple.dt.xctest:Default] Registering for test daemon availability notify post.
+2026-09-01 15:56:56.771 Df Patina[39445:56395e] [com.apple.dt.xctest:Default] notify_get_state check indicated test daemon not ready.
+2026-09-01 15:56:56.771 Df Patina[39445:56395e] [com.apple.dt.xctest:Default] notify_get_state check indicated test daemon not ready.
+2026-09-01 15:56:56.771 Df Patina[39445:56395e] [com.apple.dt.xctest:Default] notify_get_state check indicated test daemon not ready.
+2026-09-01 15:56:56.772 Df Patina[39445:56395e] [com.apple.UIKit:Application] Deactivation reason added: 11; deactivation reasons: 1024 -> 3072; animating application lifecycle event: 0
+2026-09-01 15:56:56.773 Df Patina[39445:56395e] [com.apple.UserNotifications:Connections] [cloud.patina.app] Creating a user notification center
+2026-09-01 15:56:56.773 Df Patina[39445:56395e] [com.apple.UIKit:Application] Deactivation reason removed: 10; deactivation reasons: 3072 -> 2048; animating application lifecycle event: 0
+2026-09-01 15:56:56.774 Df Patina[39445:56395e] [com.apple.UIKit:EventBus] Event Timing Profile for Touch: not found, path="/System/Library/EventTimingProfiles/Sim.Touch.plist"
+2026-09-01 15:56:56.774 Df Patina[39445:56395e] [com.apple.UIKit:EventBus] Event Timing Profile for Pencil: not found, path="/System/Library/EventTimingProfiles/Sim.Pencil.plist"
+2026-09-01 15:56:56.774 Df Patina[39445:56395e] [com.apple.UIKit:UpdateScheduler] Selected display: name=LCD (PurpleMain), id=1
+2026-09-01 15:56:56.840 Df Patina[39445:56395e] [com.apple.BoardServices:XPCErrors] [C:2] Alloc com.apple.backboard.hid-services.xpc
+2026-09-01 15:56:56.840 Df Patina[39445:56395e] [com.apple.xpc:connection] [0x102627840] activating connection: mach=false listener=false peer=false name=(anonymous)
+2026-09-01 15:56:56.841 Df Patina[39445:563abb] [com.apple.BackBoard:EventDelivery] BKSHIDEventDeliveryManager - connection activation
+2026-09-01 15:56:56.841 Df Patina[39445:56395e] [com.apple.app_launch_measurement:ApplicationLaunch] alm_acquire_pageins_recording_assertion: acquired pageins recording assertion!
+2026-09-01 15:56:56.844 Df Patina[39445:56395e] [com.apple.UIKit:BackgroundTask] Will add backgroundTask with taskName: Persistent SceneSession Map Update, expirationHandler: <__NSGlobalBlock__: 0x1e78c84e8>
+2026-09-01 15:56:56.844 Df Patina[39445:56395e] [com.apple.UIKit:BackgroundTask] Reusing background assertion <BKSProcessAssertion: 0x102629180>
+2026-09-01 15:56:56.844 Df Patina[39445:56395e] [com.apple.UIKit:BackgroundTask] Incrementing reference count for background assertion <BKSProcessAssertion: 0x102629180>
+2026-09-01 15:56:56.844 Df Patina[39445:56395e] [com.apple.UIKit:BackgroundTask] Created background task <_UIBackgroundTaskInfo: 0x109a12d80>: taskID = 2, taskName = Persistent SceneSession Map Update, creationTime = 39956 (elapsed = 0).
+2026-09-01 15:56:56.844 Df Patina[39445:56395e] [com.apple.UIKit:Application] Deactivation reason added: 5; deactivation reasons: 2048 -> 2080; animating application lifecycle event: 1
+2026-09-01 15:56:56.844 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Should send trait collection or coordinate space update, interface style 1 -> 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:56.845 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:56.845 Df Patina[39445:56395e] [com.apple.UIKit:HomeAffordanceObservation] Initializing: <_UIHomeAffordanceSceneNotifier: 0x109b58d90>; with scene: <UIWindowScene: 0x109a43e00>
+2026-09-01 15:56:56.845 Df Patina[39445:56395e] [com.apple.BacklightServices:scenes] 0x109b51080 setDelegate:<0x109b51b60 _UIBacklightEnvironment> hasDelegate:YES for environment:sceneID:cloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30
+2026-09-01 15:56:56.845 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:56.846 Df Patina[39445:56395e] [com.apple.UIKit:EventDeferring] [0x109b58e00] Initialized with scene: <UIWindowScene: 0x109a43e00>; behavior: <_UIEventDeferringBehavior_iOS: 0x109a4e1c0>; availableForProcess: 1, systemShellManagesKeyboardFocus: 1
+2026-09-01 15:56:56.847 Df Patina[39445:563abb] [com.apple.BackBoard:EventDelivery] BKSHIDEventObserver - connection activation
+2026-09-01 15:56:56.847 Df Patina[39445:56395e] [com.apple.BackBoard:EventDelivery] policyStatus:<BKSHIDEventDeliveryPolicyObserver: 0x109872460; process scope; status: target> was:none
+2026-09-01 15:56:56.847 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] Setting default evaluation strategy for UIUserInterfaceIdiomPhone to LastOneWins
+2026-09-01 15:56:56.847 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] Scene target of keyboard event deferring environment did change: 1; scene: UIWindowScene: 0x109a43e00; scene identity: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30
+2026-09-01 15:56:56.847 Df Patina[39445:56395e] [com.apple.UIKit:EventDeferring] [0x109b58e00] Scene target of event deferring environments did update: scene: 0x109a43e00; current systemShellManagesKeyboardFocus: 1; systemShellManagesKeyboardFocusForScene: 1; eligibleForRecordRemoval: 1;
+2026-09-01 15:56:56.847 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] Scene became target of keyboard event deferring environment: UIWindowScene: 0x109a43e00; scene identity: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30
+2026-09-01 15:56:56.847 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] Stack[KeyWindow] 0x109b518f0: Taking no further action for migration from LastOneWins -> SystemShellManaged as there are no scenes
+2026-09-01 15:56:56.847 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] Setting default evaluation strategy for UIUserInterfaceIdiomPhone to SystemShellManaged
+2026-09-01 15:56:56.847 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] Key window needs update: 0; currentKeyWindowScene: 0x0; evaluatedKeyWindowScene: 0x109a43e00; currentApplicationKeyWindow: 0x0; evaluatedApplicationKeyWindow: 0x0; reason: UIWindowScene: 0x109a43e00: Window scene became target of keyboard environment
+2026-09-01 15:56:56.847 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:56.847 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:56.848 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:56.879 Df Patina[39445:56395e] [com.apple.UIKit:Orientation] <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30) Scene updated orientation preferences: none -> ( Pu )
+2026-09-01 15:56:56.885 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] Key window API is scene-level: YES
+2026-09-01 15:56:56.885 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] UIWindowScene: 0x109a43e00: Window became key in scene: UIWindow: 0x1026a8800; contextId: 0xEC81FCDC: reason: UIWindowScene: 0x109a43e00: Window requested to become key in scene: 0x1026a8800
+2026-09-01 15:56:56.885 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] Key window needs update: 1; currentKeyWindowScene: 0x0; evaluatedKeyWindowScene: 0x109a43e00; currentApplicationKeyWindow: 0x0; evaluatedApplicationKeyWindow: 0x1026a8800; reason: UIWindowScene: 0x109a43e00: Window requested to become key in scene: 0x1026a8800
+2026-09-01 15:56:56.885 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] Window did become application key: UIWindow: 0x1026a8800; contextId: 0xEC81FCDC; scene identity: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30
+2026-09-01 15:56:56.885 Df Patina[39445:56395e] [com.apple.UIKit:EventDeferring] [0x109b58e00] Begin local event deferring requested for token: 0x1098714a0; environments: 1; reason: UIWindowScene: 0x109a43e00: Begin event deferring in keyboardFocus for window: 0x1026a8800
+2026-09-01 15:56:56.887 Df Patina[39445:563b35] [com.apple.BackBoard:EventDelivery] policyStatus:<BKSHIDEventDeliveryPolicyObserver: 0x109872460; token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30; status: ancestor> was:target
+2026-09-01 15:56:56.887 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:56.887 Df Patina[39445:56395e] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:cloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30  persistentID: F52660D9-06FA-4F29-B3DB-D15A6BB5CC30
+2026-09-01 15:56:56.887 Df Patina[39445:56395e] [com.apple.UIKit:Application] Ignoring already applied deactivation reason: 5; deactivation reasons: 2080
+2026-09-01 15:56:56.887 Df Patina[39445:56395e] [com.apple.UIKit:Application] Deactivation reason added: 12; deactivation reasons: 2080 -> 6176; animating application lifecycle event: 1
+2026-09-01 15:56:56.887 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] BackgroundSession <CCA6D144-7F50-450B-8EFA-F1D5E8DF36AE> client transitioning to foreground
+2026-09-01 15:56:56.887 Df Patina[39445:56395e] [com.apple.UIKit:Application] Deactivation reason removed: 11; deactivation reasons: 6176 -> 4128; animating application lifecycle event: 1
+2026-09-01 15:56:56.888 Df Patina[39445:56395e] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneIntelligenceSupportSettings> on FBSSceneSettings
+2026-09-01 15:56:56.888 Df Patina[39445:563abb] [com.apple.UIIntelligenceSupport:xpc] establishing connection to agent
+2026-09-01 15:56:56.888 Df Patina[39445:563abb] [com.apple.xpc:session] [0x10262b2a0] Session created.
+2026-09-01 15:56:56.888 Df Patina[39445:563abb] [com.apple.xpc:session] [0x10262b2a0] Session created from connection [0x109bbd180]
+2026-09-01 15:56:56.888 Df Patina[39445:563abb] [com.apple.xpc:connection] [0x109bbd180] activating connection: mach=true listener=false peer=false name=com.apple.uiintelligencesupport.agent
+2026-09-01 15:56:56.888 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:56.888 Df Patina[39445:563abb] [com.apple.xpc:session] [0x10262b2a0] Session activated
+2026-09-01 15:56:56.891 A  Patina[39445:56395e] (CoreFoundation) Updating Key-Value Observers Of Preferences
+2026-09-01 15:56:56.899 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Task <A5F8C523-9E50-463B-B3F1-83F959880E8E>.<1> received response, status 200 content U
+2026-09-01 15:56:56.899 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Task <A5F8C523-9E50-463B-B3F1-83F959880E8E>.<1> done using Connection 1
+2026-09-01 15:56:56.899 Df Patina[39445:563acb] [com.apple.network:connection] [C1] event: client:connection_idle @0.329s
+2026-09-01 15:56:56.899 Df Patina[39445:563acb] [com.apple.network:connection] nw_protocol_socket_notify [C1.1.1.1:3] nw_protocol_notification_type_connection_idle is true
+2026-09-01 15:56:56.899 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Task <A5F8C523-9E50-463B-B3F1-83F959880E8E>.<1> response ended
+2026-09-01 15:56:56.900 Df Patina[39445:563aad] [com.apple.CFNetwork:Summary] Task <A5F8C523-9E50-463B-B3F1-83F959880E8E>.<1> summary for task success {transaction_duration_ms=373, response_status=200, connection=1, protocol="h2", domain_lookup_duration_ms=1, connect_duration_ms=146, secure_connection_duration_ms=122, private_relay=false, request_start_ms=195, request_duration_ms=0, response_start_ms=373, response_duration_ms=0, request_bytes=163, request_throughput_kbps=11242, response_bytes=842, response_throughput_kbps=17185, cache_hit=false}
+2026-09-01 15:56:56.900 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Task <A5F8C523-9E50-463B-B3F1-83F959880E8E>.<1> finished successfully
+2026-09-01 15:56:56.901 Df Patina[39445:563abb] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.remoteConfig
+2026-09-01 15:56:56.902 Df Patina[39445:563abb] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.sessionReplay
+2026-09-01 15:56:56.903 Df Patina[39445:563abb] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.errorTracking
+2026-09-01 15:56:56.903 Df Patina[39445:563b36] [com.apple.CFNetwork:Default] Task <27B40080-753A-4D54-A2AA-E9C4D2440FC9>.<1> resuming, timeouts(10.0, 604800.0) qos(0x11) voucher((null)) activity(00000000-0000-0000-0000-000000000000)
+2026-09-01 15:56:56.904 Df Patina[39445:563aad] [com.apple.CFNetwork:Default] Connection 0: creating secure tcp or quic connection
+2026-09-01 15:56:56.904 Df Patina[39445:563aad] [com.apple.CFNetwork:Default] Connection 2: enabling TLS
+2026-09-01 15:56:56.904 Df Patina[39445:563aad] [com.apple.CFNetwork:Default] Connection 2: starting, TC(0x0)
+2026-09-01 15:56:56.904 Df Patina[39445:563aad] [com.apple.network:connection] [C2 E0F0F845-4962-4DFD-BE6B-202B45BB73D0 Hostname#5b2510a0:443 quic-connection, url: https://us.i.posthog.com/flags, definite, attribution: developer, context: com.apple.CFNetwork.NSURLSession.{903E1754-AA9A-44AC-8F48-3326CD3FF2FF}{(null)}{Y}{2}{0x0} (private), proc: 7BD5AB0A-94C0-3596-89AC-BEE2A47B73D2, delegated upid: 0] start
+2026-09-01 15:56:56.904 Df Patina[39445:563aad] [com.apple.network:connection] [C2 Hostname#5b2510a0:443 initial parent-flow ((null))] event: path:start @0.000s
+2026-09-01 15:56:56.904 Df Patina[39445:563aad] [com.apple.network:connection] [C2 Hostname#5b2510a0:443 waiting parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.000s, uuid: 01EB197E-0DCA-4044-8CBD-B371462ACC97
+2026-09-01 15:56:56.904 Df Patina[39445:563aad] [com.apple.network:connection] [C2 Hostname#5b2510a0:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.000s
+2026-09-01 15:56:56.904 Df Patina[39445:563aad] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C2] reporting state preparing
+2026-09-01 15:56:56.905 Df Patina[39445:563aad] [com.apple.network:connection] [C2 Hostname#5b2510a0:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_child @0.000s
+2026-09-01 15:56:56.905 Df Patina[39445:563aad] [com.apple.network:connection] [C2.1 Hostname#5b2510a0:443 initial path ((null))] event: path:start @0.000s
+2026-09-01 15:56:56.905 Df Patina[39445:563aad] [com.apple.network:connection] [C2.1 Hostname#5b2510a0:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.000s, uuid: 01EB197E-0DCA-4044-8CBD-B371462ACC97
+2026-09-01 15:56:56.905 Df Patina[39445:563aad] [com.apple.network:connection] [C2.1 Hostname#5b2510a0:443 in_progress transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: transform:start @0.000s
+2026-09-01 15:56:56.905 Df Patina[39445:563aad] [com.apple.network:connection] [C2.1.1 Hostname#5b2510a0:443 initial path ((null))] event: path:start @0.000s
+2026-09-01 15:56:56.905 Df Patina[39445:563aad] [com.apple.network:connection] [C2.1.1 Hostname#5b2510a0:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.000s, uuid: 63B38D01-8278-4959-A76B-0F4F463748BE
+2026-09-01 15:56:56.905 Df Patina[39445:563aad] [com.apple.network:connection] [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:start_dns @0.000s
+2026-09-01 15:56:56.906 Df Patina[39445:563aad] [com.apple.CFNetwork:Default] Task <27B40080-753A-4D54-A2AA-E9C4D2440FC9>.<1> setting up Connection 2
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#01933c11:443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#81b20064:443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#6e34b554.443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#11d082c3:443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#f522d1e5:443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#5be483ea:443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#450abb21:443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#b9881355:443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#e505d105:443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#942d2a64.443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#4a9fbf1f.443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#89123a91.443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#cae5a711.443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#42a6062a.443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#255d5b60.443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] nw_endpoint_resolver_update [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#7389bb0a.443
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] [C2.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:receive_dns @0.003s
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] [C2.1.1.1 IPv4#01933c11:443 initial path ((null))] event: path:start @0.003s
+2026-09-01 15:56:56.908 Df Patina[39445:563b36] [com.apple.network:connection] [C2.1.1.1 IPv4#01933c11:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.004s, uuid: C4F3A143-791C-4F82-9171-C3BF3A7A5F3E
+2026-09-01 15:56:56.909 Df Patina[39445:563b36] [com.apple.network:connection] [C2.1.1.1 IPv4#01933c11:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.004s
+2026-09-01 15:56:56.943 Df Patina[39445:563b35] [com.apple.network:connection] nw_socket_handle_socket_event [C2.1.1.1:3] Socket received CONNECTED event
+2026-09-01 15:56:56.944 Df Patina[39445:563b35] [com.apple.network:connection] nw_flow_connected [C2.1.1.1 IPv4#01933c11:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Transport protocol connected (socket)
+2026-09-01 15:56:56.944 Df Patina[39445:563b35] [com.apple.network:connection] [C2.1.1.1 IPv4#01933c11:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_transport @0.039s
+2026-09-01 15:56:56.944 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_session_apply_protocol_options_for_transport_block_invoke_2(2367) [C2.1.1.1:2][0x109b65460] TLS configured [server(0) min_version(0x0303) max_version(0x0304) name(redacted) tickets(false) false_start(false) enforce_ev(false) enforce_ats(false) ats_non_pfs_ciphersuite_allowed(false) cc_mode_enforced(false) ech(false) pqtls(true), pake(false) skip_ats_trust(false)]
+2026-09-01 15:56:56.944 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_info_handler(2806) [C2.1.1.1:2][0x109b65460] Client handshake started
+2026-09-01 15:56:56.944 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS client enter_early_data
+2026-09-01 15:56:56.944 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS client read_server_hello
+2026-09-01 15:56:56.973 Df Patina[39445:56395e] [com.apple.LocalAuthentication:Client] LA logging set up for this process.
+2026-09-01 15:56:56.973 Df Patina[39445:56395e] [com.apple.LocalAuthentication:Client,LAContext] Creating LAContext new cid:1
+2026-09-01 15:56:56.973 Df Patina[39445:56395e] [com.apple.xpc:connection] [0x109bbe800] activating connection: mach=true listener=false peer=false name=com.apple.CoreAuthentication.daemon
+2026-09-01 15:56:56.975 Df Patina[39445:56395e] [com.apple.LocalAuthentication:Client,LAContext] LAContext[1:2:0] created new cid:1
+2026-09-01 15:56:56.978 Df Patina[39445:56395e] [com.apple.LocalAuthentication:Client,Biometry] canEvaluatePolicy:1 on LAContext[1:2:0] cid:2 returned Error Domain=com.apple.LocalAuthentication Code=-7 "No identities are enrolled." UserInfo={NSDebugDescription=No identities are enrolled., NSLocalizedDescription=Biometry is not enrolled.}
+2026-09-01 15:56:56.978 Df Patina[39445:56395e] [com.apple.LocalAuthentication:Client] returned biometryType: 2
+2026-09-01 15:56:56.989 Df Patina[39445:56395e] [com.apple.network:activity] Create activity from XPC object <nw_activity 50:1 [ABA0FC43-DA9B-4120-B3FC-2358D0409854] (reporting strategy default)>
+2026-09-01 15:56:56.989 Df Patina[39445:56395e] [com.apple.network:activity] Create activity from XPC object <nw_activity 50:2 [3B2022F9-5055-44FB-972E-5417A47EF8D3] (reporting strategy default)>
+2026-09-01 15:56:56.989 Df Patina[39445:56395e] [com.apple.network:activity] Set activity <nw_activity 50:1 [ABA0FC43-DA9B-4120-B3FC-2358D0409854] (reporting strategy default)> as the global parent
+2026-09-01 15:56:56.989 Df Patina[39445:56395e] [com.apple.UIKit:BackgroundTask] Ending background task with UIBackgroundTaskIdentifier: 1
+2026-09-01 15:56:56.989 Df Patina[39445:56395e] [com.apple.UIKit:BackgroundTask] Ending task with identifier 1 and description: <_UIBackgroundTaskInfo: 0x1024b79c0>: taskID = 1, taskName = Launch Background Task for Coalescing, creationTime = 39956 (elapsed = 0), _expireHandler: (null)
+2026-09-01 15:56:56.989 Df Patina[39445:56395e] [com.apple.UIKit:BackgroundTask] Decrementing reference count for assertion <BKSProcessAssertion: 0x102629180> (used by background task with identifier 1: <_UIBackgroundTaskInfo: 0x1024b79c0>: taskID = 1, taskName = Launch Background Task for Coalescing, creationTime = 39956 (elapsed = 0))
+2026-09-01 15:56:56.989 Df Patina[39445:56395e] [com.apple.UIKit:UpdateScheduler] Target list changed: <CADisplay:LCD PurpleMain>
+2026-09-01 15:56:56.989 A  Patina[39445:563acb] (RunningBoardServices) didChangeInheritances
+2026-09-01 15:56:56.989 Df Patina[39445:56395e] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:cloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30  persistentID: F52660D9-06FA-4F29-B3DB-D15A6BB5CC30
+2026-09-01 15:56:56.989 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:56.994 A  Patina[39445:563acb] (RunningBoardServices) didChangeInheritances
+2026-09-01 15:56:57.005 A  Patina[39445:563b36] (Security) SecItemCopyMatching_ios
+2026-09-01 15:56:57.005 Df Patina[39445:563b36] [com.apple.securityd:secitemratelimit] Not internal release, disabling SIRL
+2026-09-01 15:56:57.006 Df Patina[39445:563b36] [com.apple.securityd:thread-local-client-debug] SecSecurityClientGet new thread!
+2026-09-01 15:56:57.006 Df Patina[39445:563b36] [com.apple.xpc:connection] [0x109bbc280] activating connection: mach=true listener=false peer=false name=com.apple.securityd
+2026-09-01 15:56:57.009 A  Patina[39445:563b36] (Security) SecItemCopyMatching_ios
+2026-09-01 15:56:57.009 A  Patina[39445:563b36] (Security) SecItemCopyMatching_ios
+2026-09-01 15:56:57.009 A  Patina[39445:563b36] (Security) SecItemCopyMatching_ios
+2026-09-01 15:56:57.014 E  Patina[39445:563b36] [com.patina.app:Supabase] 2026-09-01T20:56:57.013 [error] [Auth] [Auth/SessionStorage.live(clientID:):61] Failed to retrieve session: errSecItemNotFound: The item cannot be found.
+2026-09-01 15:56:57.014 A  Patina[39445:563b36] (Security) SecItemCopyMatching_ios
+2026-09-01 15:56:57.015 A  Patina[39445:563b36] (Security) SecItemCopyMatching_ios
+2026-09-01 15:56:57.015 A  Patina[39445:563b36] (Security) SecItemCopyMatching_ios
+2026-09-01 15:56:57.015 A  Patina[39445:563b36] (Security) SecItemCopyMatching_ios
+2026-09-01 15:56:57.016 E  Patina[39445:563b36] [com.patina.app:Supabase] 2026-09-01T20:56:57.016 [error] [Auth] [Auth/SessionStorage.live(clientID:):61] Failed to retrieve session: errSecItemNotFound: The item cannot be found.
+2026-09-01 15:56:57.061 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client read_hello_retry_request
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client read_server_hello
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client read_encrypted_extensions
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client read_certificate_request
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client read_server_certificate
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client read_server_certificate_verify
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async(2249) [C2.1.1.1:2][0x109b65460] Performing external trust evaluation
+2026-09-01 15:56:57.095 A  Patina[39445:563b35] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async_external(2234) [C2.1.1.1:2][0x109b65460] Asyncing for external verify block
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.CFNetwork:Default] Connection 2: asked to evaluate TLS Trust
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.CFNetwork:Default] Task <27B40080-753A-4D54-A2AA-E9C4D2440FC9>.<1> auth completion disp=1 cred=0x0
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.securityd:trust] (Trust 0x1024c7780) No pending evals, starting
+2026-09-01 15:56:57.095 A  Patina[39445:563b35] (Security) SecTrustEvaluateIfNecessaryFastAsync
+2026-09-01 15:56:57.095 Df Patina[39445:563b35] [com.apple.xpc:connection] [0x109bbe6c0] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-09-01 15:56:57.096 Df Patina[39445:563b35] [com.apple.securityd:trust] (Trust 0x1024c7780) Completed async eval kickoff
+2026-09-01 15:56:57.097 A  Patina[39445:563b35] (RunningBoardServices) didChangeInheritances
+2026-09-01 15:56:57.100 Df Patina[39445:563acb] [com.apple.securityd:trust] (Trust 0x1024c7780) trustd returned 4
+2026-09-01 15:56:57.100 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] System Trust Evaluation yielded status(0)
+2026-09-01 15:56:57.100 Df Patina[39445:563acb] [com.apple.securityd:trust] (Trust 0x109803000) No pending evals, starting
+2026-09-01 15:56:57.100 A  Patina[39445:563acb] (Security) SecTrustEvaluateIfNecessaryFastAsync
+2026-09-01 15:56:57.100 Df Patina[39445:563acb] [com.apple.xpc:connection] [0x109bbe940] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-09-01 15:56:57.100 Df Patina[39445:563acb] [com.apple.securityd:trust] (Trust 0x109803000) Completed async eval kickoff
+2026-09-01 15:56:57.100 Df Patina[39445:56395e] [com.apple.UIKit:EventDeferring] [0x109b58e00] Scene target of event deferring environments did update: scene: 0x109a43e00; current systemShellManagesKeyboardFocus: 1; systemShellManagesKeyboardFocusForScene: 1; eligibleForRecordRemoval: 1;
+2026-09-01 15:56:57.100 Df Patina[39445:563acb] [com.apple.xpc:connection] [0x109bbe6c0] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-09-01 15:56:57.100 Df Patina[39445:56395e] [com.apple.UIKit:KeyWindow] Scene became target of keyboard event deferring environment: UIWindowScene: 0x109a43e00; scene identity: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30
+2026-09-01 15:56:57.101 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:57.101 Df Patina[39445:56395e] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:cloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30  persistentID: F52660D9-06FA-4F29-B3DB-D15A6BB5CC30
+2026-09-01 15:56:57.101 Df Patina[39445:56395e] [com.apple.UIKit:Application] Deactivation reason removed: 12; deactivation reasons: 4128 -> 32; animating application lifecycle event: 1
+2026-09-01 15:56:57.102 Df Patina[39445:56395e] [com.apple.KeyboardArbiter:Client] Send setDeactivating: N (-DeactivationReason:SuspendedEventsOnly)
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.securityd:trust] (Trust 0x109803000) trustd returned 4
+2026-09-01 15:56:57.102 Df Patina[39445:56395e] [com.apple.UIKit:Application] Deactivation reason removed: 5; deactivation reasons: 32 -> 0; animating application lifecycle event: 0
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Connection 2: TLS Trust result 0
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async_external_block_invoke_3(2148) [C2.1.1.1:2][0x109b65460] Returning from external verify block with result: true
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_certificate_verify_callback(2430) [C2.1.1.1:2][0x109b65460] Certificate verification result: OK
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client read_server_finished
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client send_end_of_early_data
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client send_client_encrypted_extensions
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client send_client_certificate
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client complete_second_flight
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS 1.3 client done
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS client finish_client_handshake
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C2.1.1.1:2][0x109b65460] Client handshake state: TLS client done
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] boringssl_context_info_handler(2812) [C2.1.1.1:2][0x109b65460] Client handshake done
+2026-09-01 15:56:57.102 A  Patina[39445:563aa8] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:boringssl] nw_protocol_boringssl_signal_connected(895) [C2.1.1.1:2][0x109b65460] TLS connected [server(0) version(0x0304) ciphersuite(TLS_AES_128_GCM_SHA256) group(0x001d) signature_alg(0x0804) alpn(h2) resumed(0) offered_ticket(0) in_early_data(0) early_data_accepted(0) false_started(0) ocsp_received(0) sct_received(0) connect_time(158ms) flight_time(117ms) rtt(117ms) write_stalls(0) read_stalls(2) pake(0x0000)]
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:connection] nw_flow_connected [C2.1.1.1 IPv4#01933c11:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (CFNetworkConnection-2595862458)
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:connection] [C2.1.1.1 IPv4#01933c11:443 ready socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.198s
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:connection] [C2.1.1 Hostname#5b2510a0:443 ready resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.198s
+2026-09-01 15:56:57.102 Df Patina[39445:563aa8] [com.apple.network:connection] [C2.1 Hostname#5b2510a0:443 ready transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.198s
+2026-09-01 15:56:57.103 Df Patina[39445:563aa8] [com.apple.network:connection] nw_flow_connected [C2 IPv4#01933c11:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (endpoint_flow)
+2026-09-01 15:56:57.103 Df Patina[39445:563aa8] [com.apple.network:connection] [C2 IPv4#01933c11:443 ready parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_connect @0.198s
+2026-09-01 15:56:57.103 Df Patina[39445:563aa8] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C2] reporting state ready
+2026-09-01 15:56:57.103 Df Patina[39445:563aa8] [com.apple.xpc:connection] [0x109bbe940] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-09-01 15:56:57.103 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Connection 2: connected successfully
+2026-09-01 15:56:57.103 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Connection 2: TLS handshake complete
+2026-09-01 15:56:57.103 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Connection 2: ready C(N) E(N)
+2026-09-01 15:56:57.103 Df Patina[39445:563aa8] [com.apple.network:connection] [C2] event: client:connection_reused @0.199s
+2026-09-01 15:56:57.103 Df Patina[39445:563aa8] [com.apple.network:connection] nw_protocol_socket_notify [C2.1.1.1:3] nw_protocol_notification_type_connection_idle is false
+2026-09-01 15:56:57.103 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Task <27B40080-753A-4D54-A2AA-E9C4D2440FC9>.<1> now using Connection 2
+2026-09-01 15:56:57.104 Df Patina[39445:563aa8] [com.apple.CFNetwork:Default] Task <27B40080-753A-4D54-A2AA-E9C4D2440FC9>.<1> sent request, body S 416
+2026-09-01 15:56:57.104 Df Patina[39445:56395e] [com.apple.KeyboardArbiter:Client] startConnection
+2026-09-01 15:56:57.104 Df Patina[39445:56395e] [com.apple.xpc:connection] [0x109bbe6c0] activating connection: mach=true listener=false peer=false name=com.apple.UIKit.KeyboardManagement.hosted
+2026-09-01 15:56:57.111 Df Patina[39445:56395e] [com.apple.UserNotifications:Connections] [cloud.patina.app] Getting notification settings (async)
+2026-09-01 15:56:57.112 Df Patina[39445:56395e] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:cloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30  persistentID: F52660D9-06FA-4F29-B3DB-D15A6BB5CC30
+2026-09-01 15:56:57.112 Df Patina[39445:56395e] [com.apple.FrontBoard:SceneExtension] Realizing settings extension SBUISecureRenderingSettingsExtension on FBSSceneSettings
+2026-09-01 15:56:57.112 Df Patina[39445:56395e] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109a43e00> (F52660D9-06FA-4F29-B3DB-D15A6BB5CC30)
+2026-09-01 15:56:57.112 Df Patina[39445:563acb] [com.apple.xpc:connection] [0x109bbc000] activating connection: mach=true listener=false peer=false name=com.apple.usernotifications.listener
+2026-09-01 15:56:57.113 Df Patina[39445:56395e] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:cloud.patina.app-F52660D9-06FA-4F29-B3DB-D15A6BB5CC30  persistentID: F52660D9-06FA-4F29-B3DB-D15A6BB5CC30
+2026-09-01 15:56:57.113 Df Patina[39445:56395e] [com.apple.KeyboardArbiter:Client] handleKeyboardChange: set currentKeyboard:N (wasKeyboard:N)
+2026-09-01 15:56:57.116 Df Patina[39445:563aa8] [com.apple.UserNotifications:Connections] [cloud.patina.app] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-09-01 15:56:57.118 Df Patina[39445:56395e] [com.apple.UIKit:KeyboardSceneDelegate] forceReloadInputViews
+2026-09-01 15:56:57.118 Df Patina[39445:56395e] [com.apple.UIKit:KeyboardSceneDelegate] Reloading input views for key-window scene responder: <(null): 0x0; > force:Y
+2026-09-01 15:56:57.118 Df Patina[39445:56395e] [com.apple.UIKit:KeyboardArbiterClientLog] isWritingToolsHandlingKeyboardTracking:Y (WT ready:Y, Arbiter ready:Y)
+2026-09-01 15:56:57.157 Df Patina[39445:56395e] [com.apple.network:activity] <nw_activity 50:1 [ABA0FC43-DA9B-4120-B3FC-2358D0409854] (global parent) (reporting strategy default) complete (reason success)> complete with reason 2 (success), duration 1430ms
+2026-09-01 15:56:57.157 Df Patina[39445:56395e] [com.apple.network:activity] <nw_activity 50:2 [3B2022F9-5055-44FB-972E-5417A47EF8D3] (reporting strategy default) complete (reason success)> complete with reason 2 (success), duration 1430ms
+2026-09-01 15:56:57.157 Df Patina[39445:56395e] [com.apple.network:activity] Unsetting the global parent activity <nw_activity 50:1 [ABA0FC43-DA9B-4120-B3FC-2358D0409854] (global parent) (reporting strategy default) complete (reason success)>
+2026-09-01 15:56:57.157 Df Patina[39445:56395e] [com.apple.network:activity] Unset the global parent activity
+2026-09-01 15:56:57.158 Df Patina[39445:56395e] [com.apple.app_launch_measurement:ApplicationLaunch] alm_release_pageins_recording_assertion: releasing pageins recording assertion
+2026-09-01 15:56:57.227 A  Patina[39445:563abb] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:57.227 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Task <27B40080-753A-4D54-A2AA-E9C4D2440FC9>.<1> received response, status 200 content U
+2026-09-01 15:56:57.227 Df Patina[39445:56395e] [com.apple.Accessibility:AXCommon] Read Per-App on Init: Smart invert = (null)
+2026-09-01 15:56:57.227 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Task <27B40080-753A-4D54-A2AA-E9C4D2440FC9>.<1> done using Connection 2
+2026-09-01 15:56:57.227 Df Patina[39445:563abb] [com.apple.network:connection] [C2] event: client:connection_idle @0.323s
+2026-09-01 15:56:57.227 Df Patina[39445:563abb] [com.apple.network:connection] nw_protocol_socket_notify [C2.1.1.1:3] nw_protocol_notification_type_connection_idle is true
+2026-09-01 15:56:57.227 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Task <27B40080-753A-4D54-A2AA-E9C4D2440FC9>.<1> response ended
+2026-09-01 15:56:57.227 Df Patina[39445:563aa8] [com.apple.CFNetwork:Summary] Task <27B40080-753A-4D54-A2AA-E9C4D2440FC9>.<1> summary for task success {transaction_duration_ms=323, response_status=200, connection=2, protocol="h2", domain_lookup_duration_ms=3, connect_duration_ms=194, secure_connection_duration_ms=158, private_relay=false, request_start_ms=199, request_duration_ms=0, response_start_ms=323, response_duration_ms=0, request_bytes=589, request_throughput_kbps=22433, response_bytes=830, response_throughput_kbps=18597, cache_hit=false}
+2026-09-01 15:56:57.228 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Task <27B40080-753A-4D54-A2AA-E9C4D2440FC9>.<1> finished successfully
+2026-09-01 15:56:57.228 Df Patina[39445:563b35] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.sessionReplay
+2026-09-01 15:56:57.229 Df Patina[39445:563b35] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.requestId
+2026-09-01 15:56:57.229 Df Patina[39445:563b35] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.evaluatedAt
+2026-09-01 15:56:57.229 Df Patina[39445:563b35] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.flags
+2026-09-01 15:56:57.229 Df Patina[39445:563b35] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.enabledFeatureFlags
+2026-09-01 15:56:57.230 Df Patina[39445:563b35] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.enabledFeatureFlagPayloads
+2026-09-01 15:56:57.230 Df Patina[39445:563b35] [com.apple.CFNetwork:Default] Task <DB1DC6A6-E7BF-4ECB-A0EF-AC498C6DFB31>.<1> resuming, timeouts(10.0, 604800.0) qos(0x11) voucher((null)) activity(00000000-0000-0000-0000-000000000000)
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Connection 0: creating secure tcp or quic connection
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Connection 3: enabling TLS
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Connection 3: starting, TC(0x0)
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.network:connection] [C3 5CA71337-9ACE-4BD6-B272-1B44151532EB Hostname#5b2510a0:443 quic-connection, url: https://us.i.posthog.com/flags, definite, attribution: developer, context: com.apple.CFNetwork.NSURLSession.{2BA4B2E3-4113-43AA-99FC-0568BB1A6E66}{(null)}{Y}{2}{0x0} (private), proc: 7BD5AB0A-94C0-3596-89AC-BEE2A47B73D2, delegated upid: 0] start
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.network:connection] [C3 Hostname#5b2510a0:443 initial parent-flow ((null))] event: path:start @0.000s
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.network:connection] [C3 Hostname#5b2510a0:443 waiting parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.000s, uuid: 6AD5935F-A735-4C7E-9EBE-F3FBF8B490B3
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.network:connection] [C3 Hostname#5b2510a0:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.000s
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C3] reporting state preparing
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.network:connection] [C3 Hostname#5b2510a0:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_child @0.000s
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.network:connection] [C3.1 Hostname#5b2510a0:443 initial path ((null))] event: path:start @0.000s
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.network:connection] [C3.1 Hostname#5b2510a0:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.000s, uuid: 6AD5935F-A735-4C7E-9EBE-F3FBF8B490B3
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.network:connection] [C3.1 Hostname#5b2510a0:443 in_progress transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: transform:start @0.000s
+2026-09-01 15:56:57.231 Df Patina[39445:563abb] [com.apple.network:connection] [C3.1.1 Hostname#5b2510a0:443 initial path ((null))] event: path:start @0.000s
+2026-09-01 15:56:57.232 Df Patina[39445:563abb] [com.apple.network:connection] [C3.1.1 Hostname#5b2510a0:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.000s, uuid: BBE91EC2-4D98-4AA3-A7F8-EBE404963F7A
+2026-09-01 15:56:57.232 Df Patina[39445:563abb] [com.apple.network:connection] [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:start_dns @0.000s
+2026-09-01 15:56:57.232 Df Patina[39445:563abb] [com.apple.CFNetwork:Default] Task <DB1DC6A6-E7BF-4ECB-A0EF-AC498C6DFB31>.<1> setting up Connection 3
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#01933c11:443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#81b20064:443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#255d5b60.443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#11d082c3:443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#f522d1e5:443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#5be483ea:443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#450abb21:443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#b9881355:443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#e505d105:443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#ff37a581.443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#a375d076.443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#942d2a64.443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#255a6cbd.443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#7389bb0a.443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#cae5a711.443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] nw_endpoint_resolver_update [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#89123a91.443
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] [C3.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:receive_dns @0.001s
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] [C3.1.1.1 IPv4#01933c11:443 initial path ((null))] event: path:start @0.001s
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] [C3.1.1.1 IPv4#01933c11:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.002s, uuid: 4CF99BD1-E50F-4AB4-8D9A-DCD8EA4CE200
+2026-09-01 15:56:57.233 Df Patina[39445:563abb] [com.apple.network:connection] [C3.1.1.1 IPv4#01933c11:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.002s
+2026-09-01 15:56:57.275 Df Patina[39445:563b36] [com.apple.network:connection] nw_socket_handle_socket_event [C3.1.1.1:3] Socket received CONNECTED event
+2026-09-01 15:56:57.280 Df Patina[39445:563b36] [com.apple.network:connection] nw_flow_connected [C3.1.1.1 IPv4#01933c11:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Transport protocol connected (socket)
+2026-09-01 15:56:57.280 Df Patina[39445:563b36] [com.apple.network:connection] [C3.1.1.1 IPv4#01933c11:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_transport @0.049s
+2026-09-01 15:56:57.280 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_session_apply_protocol_options_for_transport_block_invoke_2(2367) [C3.1.1.1:2][0x102607c60] TLS configured [server(0) min_version(0x0303) max_version(0x0304) name(redacted) tickets(false) false_start(false) enforce_ev(false) enforce_ats(false) ats_non_pfs_ciphersuite_allowed(false) cc_mode_enforced(false) ech(false) pqtls(true), pake(false) skip_ats_trust(false)]
+2026-09-01 15:56:57.280 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_info_handler(2806) [C3.1.1.1:2][0x102607c60] Client handshake started
+2026-09-01 15:56:57.281 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS client enter_early_data
+2026-09-01 15:56:57.281 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS client read_server_hello
+2026-09-01 15:56:57.321 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client read_hello_retry_request
+2026-09-01 15:56:57.324 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client read_server_hello
+2026-09-01 15:56:57.324 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client read_encrypted_extensions
+2026-09-01 15:56:57.324 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client read_certificate_request
+2026-09-01 15:56:57.324 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client read_server_certificate
+2026-09-01 15:56:57.324 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client read_server_certificate_verify
+2026-09-01 15:56:57.324 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async(2249) [C3.1.1.1:2][0x102607c60] Performing external trust evaluation
+2026-09-01 15:56:57.324 A  Patina[39445:563b36] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:57.324 Df Patina[39445:563b36] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async_external(2234) [C3.1.1.1:2][0x102607c60] Asyncing for external verify block
+2026-09-01 15:56:57.324 Df Patina[39445:563b36] [com.apple.CFNetwork:Default] Connection 3: asked to evaluate TLS Trust
+2026-09-01 15:56:57.324 Df Patina[39445:563b36] [com.apple.CFNetwork:Default] Task <DB1DC6A6-E7BF-4ECB-A0EF-AC498C6DFB31>.<1> auth completion disp=1 cred=0x0
+2026-09-01 15:56:57.324 Df Patina[39445:563b36] [com.apple.securityd:trust] (Trust 0x109aa2400) No pending evals, starting
+2026-09-01 15:56:57.325 A  Patina[39445:563b36] (Security) SecTrustEvaluateIfNecessaryFastAsync
+2026-09-01 15:56:57.333 Df Patina[39445:563b36] [com.apple.xpc:connection] [0x109b7db80] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-09-01 15:56:57.333 Df Patina[39445:563b36] [com.apple.securityd:trust] (Trust 0x109aa2400) Completed async eval kickoff
+2026-09-01 15:56:57.334 Df Patina[39445:563b36] [com.apple.securityd:trust] (Trust 0x109aa2400) trustd returned 4
+2026-09-01 15:56:57.343 Df Patina[39445:563b36] [com.apple.CFNetwork:Default] System Trust Evaluation yielded status(0)
+2026-09-01 15:56:57.343 Df Patina[39445:563b36] [com.apple.securityd:trust] (Trust 0x109aa1bc0) No pending evals, starting
+2026-09-01 15:56:57.343 A  Patina[39445:563b36] (Security) SecTrustEvaluateIfNecessaryFastAsync
+2026-09-01 15:56:57.343 Df Patina[39445:563b36] [com.apple.xpc:connection] [0x109b7e300] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-09-01 15:56:57.343 Df Patina[39445:563b36] [com.apple.securityd:trust] (Trust 0x109aa1bc0) Completed async eval kickoff
+2026-09-01 15:56:57.343 Df Patina[39445:563b36] [com.apple.xpc:connection] [0x109b7db80] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-09-01 15:56:57.344 Df Patina[39445:563acb] [com.apple.securityd:trust] (Trust 0x109aa1bc0) trustd returned 4
+2026-09-01 15:56:57.351 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Connection 3: TLS Trust result 0
+2026-09-01 15:56:57.351 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async_external_block_invoke_3(2148) [C3.1.1.1:2][0x102607c60] Returning from external verify block with result: true
+2026-09-01 15:56:57.351 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_certificate_verify_callback(2430) [C3.1.1.1:2][0x102607c60] Certificate verification result: OK
+2026-09-01 15:56:57.351 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client read_server_finished
+2026-09-01 15:56:57.352 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client send_end_of_early_data
+2026-09-01 15:56:57.352 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client send_client_encrypted_extensions
+2026-09-01 15:56:57.352 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client send_client_certificate
+2026-09-01 15:56:57.352 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client complete_second_flight
+2026-09-01 15:56:57.352 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS 1.3 client done
+2026-09-01 15:56:57.352 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS client finish_client_handshake
+2026-09-01 15:56:57.352 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C3.1.1.1:2][0x102607c60] Client handshake state: TLS client done
+2026-09-01 15:56:57.352 Df Patina[39445:563acb] [com.apple.network:boringssl] boringssl_context_info_handler(2812) [C3.1.1.1:2][0x102607c60] Client handshake done
+2026-09-01 15:56:57.352 Df Patina[39445:563aa8] [com.apple.UIKit:BackgroundTask] Ending background task with UIBackgroundTaskIdentifier: 2
+2026-09-01 15:56:57.352 Df Patina[39445:563aa8] [com.apple.UIKit:BackgroundTask] Ending task with identifier 2 and description: <_UIBackgroundTaskInfo: 0x109a12d80>: taskID = 2, taskName = Persistent SceneSession Map Update, creationTime = 39956 (elapsed = 0), _expireHandler: <__NSGlobalBlock__: 0x1e78c84e8>
+2026-09-01 15:56:57.352 A  Patina[39445:563acb] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:57.352 Df Patina[39445:563aa8] [com.apple.UIKit:BackgroundTask] Decrementing reference count for assertion <BKSProcessAssertion: 0x102629180> (used by background task with identifier 2: <_UIBackgroundTaskInfo: 0x109a12d80>: taskID = 2, taskName = Persistent SceneSession Map Update, creationTime = 39956 (elapsed = 0))
+2026-09-01 15:56:57.352 Df Patina[39445:563aa8] [com.apple.UIKit:BackgroundTask] Will invalidate assertion: <BKSProcessAssertion: 0x102629180> for task identifier: 2
+2026-09-01 15:56:57.352 Df Patina[39445:563acb] [com.apple.network:boringssl] nw_protocol_boringssl_signal_connected(895) [C3.1.1.1:2][0x102607c60] TLS connected [server(0) version(0x0304) ciphersuite(TLS_AES_128_GCM_SHA256) group(0x001d) signature_alg(0x0804) alpn(h2) resumed(0) offered_ticket(0) in_early_data(0) early_data_accepted(0) false_started(0) ocsp_received(0) sct_received(0) connect_time(72ms) flight_time(40ms) rtt(40ms) write_stalls(0) read_stalls(2) pake(0x0000)]
+2026-09-01 15:56:57.353 Df Patina[39445:563acb] [com.apple.network:connection] nw_flow_connected [C3.1.1.1 IPv4#01933c11:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (CFNetworkConnection-2595862458)
+2026-09-01 15:56:57.361 Df Patina[39445:563acb] [com.apple.network:connection] [C3.1.1.1 IPv4#01933c11:443 ready socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.129s
+2026-09-01 15:56:57.361 Df Patina[39445:563acb] [com.apple.network:connection] [C3.1.1 Hostname#5b2510a0:443 ready resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.129s
+2026-09-01 15:56:57.361 Df Patina[39445:563acb] [com.apple.network:connection] [C3.1 Hostname#5b2510a0:443 ready transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.129s
+2026-09-01 15:56:57.361 Df Patina[39445:563acb] [com.apple.network:connection] nw_flow_connected [C3 IPv4#01933c11:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (endpoint_flow)
+2026-09-01 15:56:57.361 Df Patina[39445:563acb] [com.apple.network:connection] [C3 IPv4#01933c11:443 ready parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_connect @0.130s
+2026-09-01 15:56:57.361 Df Patina[39445:563acb] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C3] reporting state ready
+2026-09-01 15:56:57.361 Df Patina[39445:563acb] [com.apple.xpc:connection] [0x109b7e300] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-09-01 15:56:57.361 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Connection 3: connected successfully
+2026-09-01 15:56:57.361 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Connection 3: TLS handshake complete
+2026-09-01 15:56:57.362 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Connection 3: ready C(N) E(N)
+2026-09-01 15:56:57.362 Df Patina[39445:563acb] [com.apple.network:connection] [C3] event: client:connection_reused @0.130s
+2026-09-01 15:56:57.362 Df Patina[39445:563acb] [com.apple.network:connection] nw_protocol_socket_notify [C3.1.1.1:3] nw_protocol_notification_type_connection_idle is false
+2026-09-01 15:56:57.362 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Task <DB1DC6A6-E7BF-4ECB-A0EF-AC498C6DFB31>.<1> now using Connection 3
+2026-09-01 15:56:57.369 Df Patina[39445:563acb] [com.apple.CFNetwork:Default] Task <DB1DC6A6-E7BF-4ECB-A0EF-AC498C6DFB31>.<1> sent request, body S 416
+2026-09-01 15:56:57.467 A  Patina[39445:563b36] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:56:57.487 Df Patina[39445:563b35] [com.apple.CFNetwork:Default] Task <DB1DC6A6-E7BF-4ECB-A0EF-AC498C6DFB31>.<1> received response, status 200 content U
+2026-09-01 15:56:57.488 Df Patina[39445:563b35] [com.apple.CFNetwork:Default] Task <DB1DC6A6-E7BF-4ECB-A0EF-AC498C6DFB31>.<1> done using Connection 3
+2026-09-01 15:56:57.488 Df Patina[39445:563b35] [com.apple.network:connection] [C3] event: client:connection_idle @0.256s
+2026-09-01 15:56:57.488 Df Patina[39445:563b35] [com.apple.network:connection] nw_protocol_socket_notify [C3.1.1.1:3] nw_protocol_notification_type_connection_idle is true
+2026-09-01 15:56:57.488 Df Patina[39445:563b35] [com.apple.CFNetwork:Default] Task <DB1DC6A6-E7BF-4ECB-A0EF-AC498C6DFB31>.<1> response ended
+2026-09-01 15:56:57.488 Df Patina[39445:563aa8] [com.apple.CFNetwork:Summary] Task <DB1DC6A6-E7BF-4ECB-A0EF-AC498C6DFB31>.<1> summary for task success {transaction_duration_ms=257, response_status=200, connection=3, protocol="h2", domain_lookup_duration_ms=1, connect_duration_ms=128, secure_connection_duration_ms=72, private_relay=false, request_start_ms=138, request_duration_ms=0, response_start_ms=256, response_duration_ms=0, request_bytes=589, request_throughput_kbps=20044, response_bytes=829, response_throughput_kbps=7200, cache_hit=true}
+2026-09-01 15:56:57.488 Df Patina[39445:563aad] [com.apple.CFNetwork:Default] Task <DB1DC6A6-E7BF-4ECB-A0EF-AC498C6DFB31>.<1> finished successfully
+2026-09-01 15:56:57.492 Df Patina[39445:563acb] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.sessionReplay
+2026-09-01 15:56:57.498 Df Patina[39445:563acb] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.requestId
+2026-09-01 15:56:57.498 Df Patina[39445:563acb] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.evaluatedAt
+2026-09-01 15:56:57.499 Df Patina[39445:563acb] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.flags
+2026-09-01 15:56:57.507 Df Patina[39445:563acb] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.enabledFeatureFlags
+2026-09-01 15:56:57.507 Df Patina[39445:563acb] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/kody/Library/Developer/CoreSimulator/Devices/BD8D6AC8-BA6C-484B-B819-6E671FA72D8D/data/Containers/Data/Application/1B10D796-343B-4607-9039-36D460C40DF8/Library/Application Support/cloud.patina.app/phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG/posthog.enabledFeatureFlagPayloads
+2026-09-01 15:56:57.799 Df Patina[39445:56395e] [com.apple.Accessibility:AXCommon] Loading PDFKit
+2026-09-01 15:56:57.802 Df Patina[39445:56395e] [com.apple.BackBoard:Display] [FBSDisplaySource 1-1] silently connecting raw configuration: <FBSDisplayConfiguration: 0x102591a00; Main; mode: "402x874@3x 60Hz p3 SDR">
+2026-09-01 15:56:57.861 A  Patina[39445:563acb] (RunningBoardServices) didChangeInheritances
+2026-09-01 15:57:26.995 Df Patina[39445:563b36] [com.apple.CFNetwork:Default] Task <8E6D8572-A5A8-4EA3-B897-9CA94C276FBD>.<1> resuming, timeouts(10.0, 604800.0) qos(0x11) voucher((null)) activity(00000000-0000-0000-0000-000000000000)
+2026-09-01 15:57:26.996 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Connection 0: creating secure tcp or quic connection
+2026-09-01 15:57:26.997 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Connection 4: enabling TLS
+2026-09-01 15:57:26.997 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Connection 4: starting, TC(0x0)
+2026-09-01 15:57:26.997 Df Patina[39445:568fa2] [com.apple.network:connection] [C4 4FCC9581-D23D-49C7-8A3C-40E10E96D288 Hostname#5b2510a0:443 quic-connection, url: https://us.i.posthog.com/batch, definite, attribution: developer, context: com.apple.CFNetwork.NSURLSession.{6D6DBDC9-EEC0-42A1-9C0C-C1F5512F0715}{(null)}{Y}{2}{0x0} (private), proc: 7BD5AB0A-94C0-3596-89AC-BEE2A47B73D2, delegated upid: 0] start
+2026-09-01 15:57:26.997 Df Patina[39445:568fa2] [com.apple.network:connection] [C4 Hostname#5b2510a0:443 initial parent-flow ((null))] event: path:start @0.000s
+2026-09-01 15:57:26.997 Df Patina[39445:568fa2] [com.apple.network:connection] [C4 Hostname#5b2510a0:443 waiting parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.000s, uuid: 551111C0-2263-478B-B483-DC699122268E
+2026-09-01 15:57:26.997 Df Patina[39445:568fa2] [com.apple.network:connection] [C4 Hostname#5b2510a0:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.000s
+2026-09-01 15:57:26.997 Df Patina[39445:568fa2] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C4] reporting state preparing
+2026-09-01 15:57:26.998 Df Patina[39445:568fa2] [com.apple.network:connection] [C4 Hostname#5b2510a0:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_child @0.000s
+2026-09-01 15:57:26.998 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1 Hostname#5b2510a0:443 initial path ((null))] event: path:start @0.000s
+2026-09-01 15:57:26.998 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1 Hostname#5b2510a0:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.001s, uuid: 551111C0-2263-478B-B483-DC699122268E
+2026-09-01 15:57:26.998 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1 Hostname#5b2510a0:443 in_progress transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: transform:start @0.001s
+2026-09-01 15:57:26.998 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1 Hostname#5b2510a0:443 initial path ((null))] event: path:start @0.001s
+2026-09-01 15:57:26.998 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1 Hostname#5b2510a0:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.001s, uuid: F349A22C-1512-4B94-8AFA-AB5984861846
+2026-09-01 15:57:26.998 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:start_dns @0.001s
+2026-09-01 15:57:26.999 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Task <8E6D8572-A5A8-4EA3-B897-9CA94C276FBD>.<1> setting up Connection 4
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#5be483ea:443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#450abb21:443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#4a9fbf1f.443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#b9881355:443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#e505d105:443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#01933c11:443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#81b20064:443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#11d082c3:443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv4#f522d1e5:443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#cae5a711.443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#a375d076.443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#11d05e3c.443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#004b087e.443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#7389bb0a.443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#42a6062a.443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] nw_endpoint_resolver_update [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Adding endpoint handler for IPv6#89123a91.443
+2026-09-01 15:57:27.000 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1 Hostname#5b2510a0:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: resolver:receive_dns @0.003s
+2026-09-01 15:57:27.001 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1.1 IPv4#5be483ea:443 initial path ((null))] event: path:start @0.003s
+2026-09-01 15:57:27.001 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1.1 IPv4#5be483ea:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.003s, uuid: 58E6A31F-E545-44B4-90D5-298F78E328FE
+2026-09-01 15:57:27.001 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1.1 IPv4#5be483ea:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.004s
+2026-09-01 15:57:27.107 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1.2 IPv4#450abb21:443 initial path ((null))] event: path:start @0.109s
+2026-09-01 15:57:27.107 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1.2 IPv4#450abb21:443 waiting path (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: path:satisfied @0.110s, uuid: 28347F41-FA1E-4B62-B182-B0D9E78E8203
+2026-09-01 15:57:27.108 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1.2 IPv4#450abb21:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:start_connect @0.111s
+2026-09-01 15:57:27.114 Df Patina[39445:568fa2] [com.apple.network:connection] nw_socket_handle_socket_event [C4.1.1.1:3] Socket received CONNECTED event
+2026-09-01 15:57:27.114 Df Patina[39445:568fa2] [com.apple.network:connection] nw_flow_connected [C4.1.1.1 IPv4#5be483ea:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Transport protocol connected (socket)
+2026-09-01 15:57:27.114 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1.1 IPv4#5be483ea:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_transport @0.117s
+2026-09-01 15:57:27.115 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_session_apply_protocol_options_for_transport_block_invoke_2(2367) [C4.1.1.1:2][0x10b3be860] TLS configured [server(0) min_version(0x0303) max_version(0x0304) name(redacted) tickets(false) false_start(false) enforce_ev(false) enforce_ats(false) ats_non_pfs_ciphersuite_allowed(false) cc_mode_enforced(false) ech(false) pqtls(true), pake(false) skip_ats_trust(false)]
+2026-09-01 15:57:27.115 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2806) [C4.1.1.1:2][0x10b3be860] Client handshake started
+2026-09-01 15:57:27.115 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS client enter_early_data
+2026-09-01 15:57:27.115 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS client read_server_hello
+2026-09-01 15:57:27.160 Df Patina[39445:568fa2] [com.apple.network:connection] nw_socket_handle_socket_event [C4.1.1.2:3] Socket received CONNECTED event
+2026-09-01 15:57:27.161 Df Patina[39445:568fa2] [com.apple.network:connection] nw_flow_connected [C4.1.1.2 IPv4#450abb21:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Transport protocol connected (socket)
+2026-09-01 15:57:27.161 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1.2 IPv4#450abb21:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_transport @0.163s
+2026-09-01 15:57:27.161 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_session_apply_protocol_options_for_transport_block_invoke_2(2367) [C4.1.1.2:2][0x10b3be5e0] TLS configured [server(0) min_version(0x0303) max_version(0x0304) name(redacted) tickets(false) false_start(false) enforce_ev(false) enforce_ats(false) ats_non_pfs_ciphersuite_allowed(false) cc_mode_enforced(false) ech(false) pqtls(true), pake(false) skip_ats_trust(false)]
+2026-09-01 15:57:27.161 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2806) [C4.1.1.2:2][0x10b3be5e0] Client handshake started
+2026-09-01 15:57:27.162 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.2:2][0x10b3be5e0] Client handshake state: TLS client enter_early_data
+2026-09-01 15:57:27.162 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.2:2][0x10b3be5e0] Client handshake state: TLS client read_server_hello
+2026-09-01 15:57:27.185 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client read_hello_retry_request
+2026-09-01 15:57:27.186 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client read_server_hello
+2026-09-01 15:57:27.186 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client read_encrypted_extensions
+2026-09-01 15:57:27.186 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client read_certificate_request
+2026-09-01 15:57:27.186 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client read_server_certificate
+2026-09-01 15:57:27.186 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client read_server_certificate_verify
+2026-09-01 15:57:27.186 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async(2249) [C4.1.1.1:2][0x10b3be860] Performing external trust evaluation
+2026-09-01 15:57:27.186 A  Patina[39445:568fa2] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:57:27.186 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async_external(2234) [C4.1.1.1:2][0x10b3be860] Asyncing for external verify block
+2026-09-01 15:57:27.186 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Connection 4: asked to evaluate TLS Trust
+2026-09-01 15:57:27.187 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Task <8E6D8572-A5A8-4EA3-B897-9CA94C276FBD>.<1> auth completion disp=1 cred=0x0
+2026-09-01 15:57:27.187 Df Patina[39445:563b36] [com.apple.securityd:trust] (Trust 0x1201206c0) No pending evals, starting
+2026-09-01 15:57:27.187 A  Patina[39445:563b36] (Security) SecTrustEvaluateIfNecessaryFastAsync
+2026-09-01 15:57:27.188 Df Patina[39445:563b36] [com.apple.xpc:connection] [0x109b7ef80] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-09-01 15:57:27.188 Df Patina[39445:563b36] [com.apple.securityd:trust] (Trust 0x1201206c0) Completed async eval kickoff
+2026-09-01 15:57:27.191 Df Patina[39445:563b36] [com.apple.securityd:trust] (Trust 0x1201206c0) trustd returned 4
+2026-09-01 15:57:27.191 Df Patina[39445:563b36] [com.apple.CFNetwork:Default] System Trust Evaluation yielded status(0)
+2026-09-01 15:57:27.191 Df Patina[39445:563b36] [com.apple.securityd:trust] (Trust 0x120120540) No pending evals, starting
+2026-09-01 15:57:27.191 A  Patina[39445:563b36] (Security) SecTrustEvaluateIfNecessaryFastAsync
+2026-09-01 15:57:27.191 Df Patina[39445:563b36] [com.apple.xpc:connection] [0x109b7f0c0] activating connection: mach=true listener=false peer=false name=com.apple.trustd
+2026-09-01 15:57:27.192 Df Patina[39445:563b36] [com.apple.securityd:trust] (Trust 0x120120540) Completed async eval kickoff
+2026-09-01 15:57:27.192 Df Patina[39445:563b36] [com.apple.xpc:connection] [0x109b7ef80] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.securityd:trust] (Trust 0x120120540) trustd returned 4
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Connection 4: TLS Trust result 0
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_evaluate_trust_async_external_block_invoke_3(2148) [C4.1.1.1:2][0x10b3be860] Returning from external verify block with result: true
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_certificate_verify_callback(2430) [C4.1.1.1:2][0x10b3be860] Certificate verification result: OK
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client read_server_finished
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client send_end_of_early_data
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client send_client_encrypted_extensions
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client send_client_certificate
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client complete_second_flight
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS 1.3 client done
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS client finish_client_handshake
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2823) [C4.1.1.1:2][0x10b3be860] Client handshake state: TLS client done
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] boringssl_context_info_handler(2812) [C4.1.1.1:2][0x10b3be860] Client handshake done
+2026-09-01 15:57:27.194 A  Patina[39445:568fa2] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:boringssl] nw_protocol_boringssl_signal_connected(895) [C4.1.1.1:2][0x10b3be860] TLS connected [server(0) version(0x0304) ciphersuite(TLS_AES_128_GCM_SHA256) group(0x001d) signature_alg(0x0804) alpn(h2) resumed(0) offered_ticket(0) in_early_data(0) early_data_accepted(0) false_started(0) ocsp_received(0) sct_received(0) connect_time(79ms) flight_time(70ms) rtt(70ms) write_stalls(0) read_stalls(2) pake(0x0000)]
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:connection] nw_flow_connected [C4.1.1.1 IPv4#5be483ea:443 in_progress socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (CFNetworkConnection-2595862458)
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1.1 IPv4#5be483ea:443 ready socket-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.197s
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1.1 Hostname#5b2510a0:443 ready resolver (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.197s
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:connection] [C4.1 Hostname#5b2510a0:443 ready transform (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:child_finish_connect @0.197s
+2026-09-01 15:57:27.194 Df Patina[39445:568fa2] [com.apple.network:connection] nw_flow_connected [C4 IPv4#5be483ea:443 in_progress parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] Output protocol connected (endpoint_flow)
+2026-09-01 15:57:27.195 Df Patina[39445:568fa2] [com.apple.network:connection] [C4 IPv4#5be483ea:443 ready parent-flow (satisfied (Path is satisfied), interface: en0[802.11], uses wifi, LQM: unknown)] event: flow:finish_connect @0.197s
+2026-09-01 15:57:27.195 Df Patina[39445:568fa2] [com.apple.network:connection] nw_connection_report_state_with_handler_on_nw_queue [C4] reporting state ready
+2026-09-01 15:57:27.195 Df Patina[39445:568fa2] [com.apple.xpc:connection] [0x109b7f0c0] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+2026-09-01 15:57:27.195 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Connection 4: connected successfully
+2026-09-01 15:57:27.195 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Connection 4: TLS handshake complete
+2026-09-01 15:57:27.195 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Connection 4: ready C(N) E(N)
+2026-09-01 15:57:27.195 Df Patina[39445:568fa2] [com.apple.network:connection] [C4] event: client:connection_reused @0.198s
+2026-09-01 15:57:27.195 Df Patina[39445:568fa2] [com.apple.network:connection] nw_protocol_socket_notify [C4.1.1.1:3] nw_protocol_notification_type_connection_idle is false
+2026-09-01 15:57:27.195 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Task <8E6D8572-A5A8-4EA3-B897-9CA94C276FBD>.<1> now using Connection 4
+2026-09-01 15:57:27.195 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Task <8E6D8572-A5A8-4EA3-B897-9CA94C276FBD>.<1> sent request, body S 849
+2026-09-01 15:57:27.246 A  Patina[39445:563b36] (Security) SecKeyCopyPublicBytes
+2026-09-01 15:57:27.285 Df Patina[39445:563b36] [com.apple.CFNetwork:Default] Task <8E6D8572-A5A8-4EA3-B897-9CA94C276FBD>.<1> received response, status 200 content K
+2026-09-01 15:57:27.285 Df Patina[39445:563b36] [com.apple.CFNetwork:Default] Task <8E6D8572-A5A8-4EA3-B897-9CA94C276FBD>.<1> done using Connection 4
+2026-09-01 15:57:27.285 Df Patina[39445:563b36] [com.apple.network:connection] [C4] event: client:connection_idle @0.288s
+2026-09-01 15:57:27.285 Df Patina[39445:563b36] [com.apple.network:connection] nw_protocol_socket_notify [C4.1.1.1:3] nw_protocol_notification_type_connection_idle is true
+2026-09-01 15:57:27.285 Df Patina[39445:563b36] [com.apple.CFNetwork:Default] Task <8E6D8572-A5A8-4EA3-B897-9CA94C276FBD>.<1> response ended
+2026-09-01 15:57:27.286 Df Patina[39445:563b36] [com.apple.CFNetwork:Summary] Task <8E6D8572-A5A8-4EA3-B897-9CA94C276FBD>.<1> summary for task success {transaction_duration_ms=290, response_status=200, connection=4, protocol="h2", domain_lookup_duration_ms=2, connect_duration_ms=193, secure_connection_duration_ms=79, private_relay=false, request_start_ms=199, request_duration_ms=0, response_start_ms=289, response_duration_ms=0, request_bytes=1015, request_throughput_kbps=40209, response_bytes=251, response_throughput_kbps=2356, cache_hit=false}
+2026-09-01 15:57:27.287 Df Patina[39445:568fa2] [com.apple.CFNetwork:Default] Task <8E6D8572-A5A8-4EA3-B897-9CA94C276FBD>.<1> finished successfully
+Child process terminated with signal 15: Terminated

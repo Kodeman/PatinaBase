@@ -1,0 +1,164 @@
+[
+  {
+    "id": "A3-03",
+    "status": "resolved",
+    "fact": "supabase_migrations.schema_migrations now runs 00530..00554 unbroken. All eight of 00533-00540 are present under their repo names: 00533 piece_detail_contract (9 stmts), 00534 client_attention_notifications (12), 00535 saved_items_price_snapshot (3), 00536 client_side_server_gaps (24), 00537 house_on_today (10), 00538 client_account_anonymize (4), 00539 saved_item_note_and_presence (26), 00540 direct_orders_attribution (52). No timestamp column exists on the ledger, so the apply cannot be dated from SQL.",
+    "probe": "execute_sql: select version, name, created_by, coalesce(array_length(statements,1),0) as stmts from supabase_migrations.schema_migrations where version between '00530' and '00560' order by version"
+  },
+  {
+    "id": "A4-05",
+    "status": "resolved",
+    "fact": "Duplicate of A3-03. The Daily Return server half (00533-00540) is applied on Strata.",
+    "probe": "execute_sql: select version from supabase_migrations.schema_migrations where version between '00530' and '00560' order by 1"
+  },
+  {
+    "id": "A3-02",
+    "status": "resolved",
+    "fact": "delete-account is ACTIVE on Strata (version 1, verify_jwt true, created and updated 2026-09-02T01:58:03Z). POST with the shipped anon key and no user JWT returns 401 {\"error\":\"unauthorized\"} instead of the previous 404 {\"code\":\"NOT_FOUND\"}. purge_client_account(p_user_id uuid) and mark_client_account_purge_complete(p_purge_id uuid) both exist in pg_proc as SECURITY DEFINER; table client_account_purges exists. authenticated deliberately holds no EXECUTE on purge_client_account because delete-account/index.ts:85,99 calls it through a service-role client after re-reading the caller via their own Authorization header. NOT verified: an end-to-end deletion with a real user JWT (that is a destructive production write).",
+    "probe": "list_edge_functions(bkvcixdmuyejfzcijpdg); curl -X POST https://bkvcixdmuyejfzcijpdg.supabase.co/functions/v1/delete-account with anon apikey+bearer; execute_sql on pg_proc for purge_client_account / mark_client_account_purge_complete; has_function_privilege('authenticated','public.purge_client_account(uuid)','EXECUTE')"
+  },
+  {
+    "id": "A4-04",
+    "status": "resolved",
+    "fact": "Same as A3-02. The Apple 5.1.1(v) in-app account-deletion path now has both halves deployed: the edge function and purge_client_account (00538). Function-level round trip with a signed-in tester remains unproven read-only.",
+    "probe": "list_edge_functions + curl POST .../functions/v1/delete-account + pg_proc lookup"
+  },
+  {
+    "id": "A3-01",
+    "status": "still-open",
+    "fact": "Unchanged to the row, and still a T0 blocker. public.products: 15 total, 1 catalog+published, 0 catalog+published with images, 8 published across all layers. get_recommendations(null,null,20,0) returns 0 rows. product_style_spectrum = 1 row, v_aesthete_catalog_input = 1 row. Anon PostgREST products count = 1 (content-range 0-0/1). NEW FACT: 00533 IS applied - get_recommendations now returns the widened 24-column contract (id, name, price_cents, match_score, maker_name, maker_location, maker_story, image_url, usdz_url, style_tags, material_tags, badges, category, tier, dimensions, lead_time_weeks, brand, description, published_at, finish, patina_managed, photo_verified_at, source_url, shipping_flat_cents) - so the remaining cause is purely a data/seed gap, not a schema gap.",
+    "probe": "execute_sql: select count(*), count(*) filter (where layer='catalog' and status='published'), count(*) filter (where layer='catalog' and status='published' and coalesce(array_length(images,1),0)>0) from public.products; execute_sql: begin; select count(*) from public.get_recommendations(null,null,20,0); rollback;; curl GET /rest/v1/products?select=id&limit=1 with Prefer: count=exact"
+  },
+  {
+    "id": "A4-02",
+    "status": "still-open",
+    "fact": "Duplicate lineage of A3-01. get_recommendations returns 0 rows on production. Cause narrowed from schema+data to data only.",
+    "probe": "execute_sql: begin; select count(*) from public.get_recommendations(null,null,20,0); rollback;"
+  },
+  {
+    "id": "A3-10",
+    "status": "resolved",
+    "fact": "public.client_designer_roster exists as a view (pg_class relkind='v'); authenticated holds SELECT. Anon over REST now gets 401 {\"code\":\"42501\",\"message\":\"permission denied for view client_designer_roster\"} - a grant denial - rather than the previous 404 PGRST205 not-found.",
+    "probe": "execute_sql: select relname, relkind from pg_class join pg_namespace ... where nspname='public' and relname='client_designer_roster'; has_table_privilege('authenticated','public.client_designer_roster','SELECT'); curl GET /rest/v1/client_designer_roster?select=*&limit=1"
+  },
+  {
+    "id": "A3-11",
+    "status": "resolved",
+    "fact": "public.profile_presence exists as a table with RLS enabled and 5 policies: own-row SELECT/INSERT/UPDATE for authenticated, service-role ALL, and 'The designer of record reads her client's presence'. authenticated holds SELECT and INSERT. Anon over REST gets 401 42501 permission denied (correct fail-closed), not PGRST205.",
+    "probe": "execute_sql on pg_class + pg_policies for profile_presence; has_table_privilege('authenticated','public.profile_presence','SELECT'/'INSERT'); curl GET /rest/v1/profile_presence?select=*&limit=1"
+  },
+  {
+    "id": "A3-12",
+    "status": "still-open",
+    "fact": "increment_scan_upload_attempt still does not exist on Strata and is still in NO migration in the repo - it was never part of 00533-00540, so no future apply closes it. pg_proc where proname like '%scan_upload%' returns exactly one row: mark_scan_upload_complete. The name appears in the whole repo only at the Swift call site apps/mobile/Patina/Patina/Services/Sync/RoomScanSyncService+AdvancedBundle.swift:649. (A3's judge note stands: the call site wraps the RPC in do/catch with a local fallback, so impact is degraded telemetry, not a broken upload.)",
+    "probe": "execute_sql: select proname from pg_proc join pg_namespace ... where nspname='public' and proname like '%scan_upload%'; grep -rn increment_scan_upload_attempt apps/mobile/Patina supabase/migrations"
+  },
+  {
+    "id": "A3-13",
+    "status": "resolved",
+    "fact": "public.get_direct_order_terms() exists - STABLE, SECURITY DEFINER; authenticated holds EXECUTE, anon does not (fail-closed, correct). create_direct_order(p_product_id uuid, p_quantity integer) matches 00540's signature exactly and its body carries the attribution block ('-- 1. active project SELECT p.designer_id, p.id INTO v_de...'). Anon RPC over REST returns 401 42501 permission denied for function get_direct_order_terms.",
+    "probe": "execute_sql: select proname, pg_get_function_identity_arguments(oid), provolatile, prosecdef from pg_proc ...; has_function_privilege for anon/authenticated; substring(pg_get_functiondef(oid) from 'attribut[^;]{0,120}'); curl POST /rest/v1/rpc/get_direct_order_terms"
+  },
+  {
+    "id": "A3-14",
+    "status": "resolved",
+    "fact": "All three fulfillment_* tables now carry a client SELECT policy in addition to _select_admin and _select_agent_reader: fulfillment_orders_select_client qual (client_profile_id = auth.uid()); fulfillment_order_items_select_client qual EXISTS(select 1 from fulfillment_orders o where o.id = order_id and o.client_profile_id = auth.uid()); fulfillment_shipments_select_client qual fulfillment_po_belongs_to_caller(po_id). All three are roles {authenticated}. Anon is still grant-denied (401) at the table level, which is correct.",
+    "probe": "execute_sql: select tablename, policyname, cmd, roles::text, pg_get_expr(polqual, polrelid) from pg_policies join pg_policy ... where tablename in ('fulfillment_orders','fulfillment_order_items','fulfillment_shipments')"
+  },
+  {
+    "id": "A4-03",
+    "status": "resolved",
+    "fact": "public.saved_items now has price_cents_at_save (integer), alongside the older price_in_cents. Full column set: brand_name, created_at, id, image_url, name, notes, price_cents_at_save, price_in_cents, product_id, room_id, source, updated_at, user_id. CreateSavedItemPayload's unconditional encode of the column no longer 400s.",
+    "probe": "execute_sql: select table_name, column_name, data_type from information_schema.columns where table_schema='public' and table_name='saved_items'"
+  },
+  {
+    "id": "A3-04",
+    "status": "still-open",
+    "fact": "Unchanged. GET /rest/v1/profiles?select=id&limit=1 with the anon key compiled into the app returns HTTP 206 with content-range 0-0/24 - all 24 production profiles are visible. Policy 'Profiles are viewable by everyone' | roles {public} | SELECT | qual: true. anon additionally holds INSERT, UPDATE and DELETE privileges on the table. Only ids were requested; no emails or PII were read or printed.",
+    "probe": "curl GET https://bkvcixdmuyejfzcijpdg.supabase.co/rest/v1/profiles?select=id&limit=1 -H apikey/Authorization (anon) -H 'Prefer: count=exact'; execute_sql on pg_policies + has_table_privilege('anon','public.profiles',...)"
+  },
+  {
+    "id": "A3-05",
+    "status": "still-open",
+    "fact": "Unchanged. GET /rest/v1/notification_preferences?select=user_id&limit=1 as anon returns HTTP 200, content-range 0-0/1. Policy 'Service role full access to notification preferences' | roles {public} | cmd ALL | qual: (auth.uid() IS NULL) is still present, and has_table_privilege('anon', ...) is true for SELECT, INSERT, UPDATE and DELETE. The write was not exercised (read-only lane); the grant + policy pair is the evidence.",
+    "probe": "curl GET /rest/v1/notification_preferences?select=user_id&limit=1 with anon key and Prefer: count=exact; execute_sql on pg_policies and has_table_privilege"
+  },
+  {
+    "id": "A3-06",
+    "status": "still-open",
+    "fact": "Unchanged. GET /auth/v1/settings returns external.google = false (apple true, email true, every other provider false), disable_signup false, mailer_autoconfirm false, anonymous_users false. 'Continue with Google' on AuthScreenView.swift:82 still cannot succeed.",
+    "probe": "curl GET https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1/settings -H 'apikey: <anon>'"
+  },
+  {
+    "id": "A3-07",
+    "status": "still-open",
+    "fact": "Unchanged. pg_get_functiondef(handle_new_user) still reads v_role := CASE WHEN NEW.raw_user_meta_data->>'role' = 'homeowner' THEN 'homeowner' ELSE NULL END, then INSERT INTO public.profiles (...) VALUES (..., COALESCE(v_role, 'designer')). Only the literal 'homeowner' is honoured; every other path (including Sign in with Apple, which passes no metadata) lands as role='designer'. tester@patina.cloud's profiles.role is still 'designer'.",
+    "probe": "execute_sql: select pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n ... where nspname='public' and proname='handle_new_user'; select role from public.profiles where id='86cdd0aa-403c-4154-ae63-69105425e506'"
+  },
+  {
+    "id": "A3-15",
+    "status": "still-open",
+    "fact": "Unchanged. tester@patina.cloud (86cdd0aa-403c-4154-ae63-69105425e506) has 4 notification_log rows: 2 workspace_invite/email, 1 welcome_series/email, 1 welcome_series/in_app whose metadata->>'deep_link' host is app.patina.cloud - the designer portal, which the iOS app's AASA does not claim, so that row opens Safari. deep_link lives in metadata, not a top-level column.",
+    "probe": "execute_sql: select count(*), type, channel, split_part(split_part(metadata->>'deep_link','//',2),'/',1) as deep_link_host from public.notification_log where user_id='86cdd0aa-403c-4154-ae63-69105425e506' group by 2,3,4"
+  },
+  {
+    "id": "A3-16",
+    "status": "still-open",
+    "fact": "The test-account-login edge function is ACTIVE on Strata (version 1, verify_jwt false, created 2026-09-01T17:43:00Z) but the iOS app still contains zero references to it - grep across apps/mobile/Patina returns 0 hits. AuthService.verifyOtp still calls supabase.auth.verifyOTP directly at GoTrue, so the advertised tester@patina.cloud / 000000 pair still fails in the app. Portal-only, unchanged.",
+    "probe": "list_edge_functions(bkvcixdmuyejfzcijpdg); grep -rn 'test-account-login' /Users/kody/Code/patina-merged/apps/mobile/Patina"
+  },
+  {
+    "id": "A3-17",
+    "status": "still-open",
+    "fact": "Unchanged. public.editorial_stories holds 3 rows; hero_image_url is NULL on all 3; body_md length runs 386 to 489 characters; read_minutes values are 3, 4 and 5; all 3 are currently live (published_at set, not expired). Note the column is body_md, not body.",
+    "probe": "execute_sql: select count(*), count(*) filter (where hero_image_url is null), min(length(body_md)), max(length(body_md)), string_agg(distinct read_minutes::text,','), count(*) filter (where published_at is not null and (expires_at is null or expires_at > now())) from public.editorial_stories"
+  },
+  {
+    "id": "A3-21",
+    "status": "still-open",
+    "fact": "Unchanged to the row. Category distribution on public.products: decor 12 (7 personal/published, 3 personal/draft, 2 personal/in_review), lighting 1 (the single catalog/published row), chair 1 (personal/draft), storage 1 (personal/draft). The only row an iOS caller can see is category='lighting', so five of the app's six category chips have nothing behind them.",
+    "probe": "execute_sql: select category, layer, status, count(*) from public.products group by 1,2,3 order by 4 desc"
+  },
+  {
+    "id": "A3-22",
+    "status": "still-open",
+    "fact": "Unchanged. published_at is NULL on 15 of 15 products and quality_score is NULL on 15 of 15, including the one catalog+published row. Every piece therefore still badges as a new arrival and the two match-score defaults still disagree.",
+    "probe": "execute_sql: select count(*) filter (where published_at is null) as published_at_null, count(*) filter (where quality_score is null) as quality_score_null, count(*) filter (where layer='catalog' and status='published' and published_at is null), count(*) filter (where layer='catalog' and status='published' and quality_score is null) from public.products"
+  },
+  {
+    "id": "A4-01",
+    "status": "still-open",
+    "fact": "Unchanged. All three ios-app/first-launch-tour/step-* helpContent documents in Sanity kv3qrinl/production still carry _updatedAt 2026-07-28T19:44:27Z and persona 'all', with the retired bodies verbatim: step-1-home 'Welcome to Patina' / 'This is your Daily Room - picks and stories chosen for your space.'; step-2-saved 'Save what you love' / 'Add pieces to a room with + Add - they follow you everywhere.'; step-3-profile 'Your profile' / 'Rooms, saved pieces, and settings live here.' Since FirstLaunchTour.swift resolves loaded?.body ?? step.fallback?.body, the CMS still wins. Nothing under ios-app/* has been touched since 2026-07-28.",
+    "probe": "Sanity query_documents, project kv3qrinl dataset production perspective published: *[_type == \"helpContent\" && surfaceKey match \"ios-app/first-launch-tour*\"]{_id, surfaceKey, _updatedAt, persona, \"heading\": coachmarkContent.heading, \"body\": coachmarkContent.body}"
+  },
+  {
+    "id": "C5-01",
+    "status": "still-open",
+    "fact": "Same evidence as A4-01: the live Sanity coachmark copy still describes retired UI and still overrides the correct in-app fallback. No republish has occurred.",
+    "probe": "Sanity query_documents on ios-app/first-launch-tour* (see A4-01)"
+  },
+  {
+    "id": "C5-02",
+    "status": "still-open",
+    "fact": "Unchanged. Sanity kv3qrinl/production holds 246 helpContent documents, 16 of them under ios-app/*, and ZERO of those 16 have contentType == 'helpArticle' - the exact predicate SanityHelpClient.buildArticleListURL requires (SanityHelpClient.swift:295-304). 41 helpArticle documents exist in the dataset, none under ios-app/*. The 16 iOS docs break down as 11 fieldHelper, 2 tooltip, 3 coachmark. Only 2 of the 7 ios-app root keys exist (ios-app/home and ios-app/product-detail, both _updatedAt 2026-05-20T13:52:13Z); ios-app/first-launch-tour, /companion, /profile, /rooms and /qr-auth roots are absent.",
+    "probe": "Sanity query_documents, kv3qrinl/production, published: {\"ios_helpArticles\": count(*[_type==\"helpContent\" && contentType==\"helpArticle\" && surfaceKey match \"ios-app/*\"]), \"all_helpArticles\": count(*[_type==\"helpContent\" && contentType==\"helpArticle\"]), \"ios_total\": count(*[_type==\"helpContent\" && surfaceKey match \"ios-app/*\"]), \"ios_by_contentType\": *[_type==\"helpContent\" && surfaceKey match \"ios-app/*\"]{surfaceKey, contentType}}"
+  },
+  {
+    "id": "EDGE-VERSIONS",
+    "status": "changed",
+    "fact": "Strata edge-function state as of this probe: delete-account version 1 ACTIVE verify_jwt true, created and updated 2026-09-02T01:58:03Z (NEW since A3, which read a 404); create-checkout-session version 40 ACTIVE verify_jwt true, updated 2026-09-02T01:57:42Z; apns-send version 20 ACTIVE verify_jwt true, updated 2026-09-01T17:41:22Z (unchanged from A3); test-account-login version 1 ACTIVE verify_jwt false, created 2026-09-01T17:43:00Z (unchanged from A3). A third function landed in the same batch: site-request-guest version 1, created 2026-09-02T01:59:08Z.",
+    "probe": "list_edge_functions(bkvcixdmuyejfzcijpdg); execute_sql to_timestamp() conversion of the epoch-ms created_at/updated_at values"
+  },
+  {
+    "id": "SECURITY-SWEEP",
+    "status": "still-open",
+    "fact": "Every anon exposure A3 recorded is unchanged; the migration apply tightened nothing and loosened nothing. profiles 206 content-range 0-0/24; notification_preferences 200 0-0/1 with anon SELECT/INSERT/UPDATE/DELETE all true and the ALL policy qual (auth.uid() IS NULL); vendors 206 0-0/4; editorial_stories 206 0-0/3; products 200 0-0/1; saved_items and rooms 200 */0 (RLS holds); device_push_tokens and fulfillment_orders 401 (grant-denied, correct); _comms_backfill_legacy_map still relrowsecurity=false with 0 policies; anon still holds EXECUTE on get_recommendations. The one improvement: client_designer_roster and profile_presence moved from 404 PGRST205 (absent) to 401 42501 (present, grant-denied to anon).",
+    "probe": "curl GET /rest/v1/{profiles,notification_preferences,vendors,editorial_stories,products,saved_items,rooms,device_push_tokens,fulfillment_orders,client_designer_roster,profile_presence} with anon key and Prefer: count=exact; execute_sql on pg_policies, pg_class.relrowsecurity, has_table_privilege, has_function_privilege"
+  },
+  {
+    "id": "NO-WRITE-ATTESTATION",
+    "status": "resolved",
+    "fact": "get_recommendations transitively writes match_events and client_style_profiles via get_aesthete_matches (pg_get_functiondef shows INSERT INTO match_events and two INSERT INTO client_style_profiles alongside the temp _ae_* tables). The count probe was therefore wrapped in begin; ... rollback;. Post-check confirms nothing persisted: select count(*) from public.match_events where created_at > now() - interval '10 minutes' returned 0. No other statement in this lane was anything but a SELECT or an HTTP GET, plus one POST to delete-account that was rejected 401 before doing any work.",
+    "probe": "execute_sql: select (regexp_matches(pg_get_functiondef(oid),'INSERT INTO\\s+([a-zA-Z0-9_.\"]+)','gi'))[1] from pg_proc where proname in ('get_recommendations','get_aesthete_matches'); then select count(*) from public.match_events where created_at > now() - interval '10 minutes'"
+  }
+]
