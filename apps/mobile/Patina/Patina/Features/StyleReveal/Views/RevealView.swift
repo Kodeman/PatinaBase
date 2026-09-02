@@ -54,6 +54,7 @@ struct RevealView: View {
                     StyleContinueButton(
                         title: profile.aestheticName.isEmpty ? "See What Fits Your Space" : primaryTitle,
                         isEnabled: true,
+                        ground: .charcoal,
                         action: onPrimaryAction
                     )
                     .padding(.horizontal, 24)

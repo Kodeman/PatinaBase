@@ -36,7 +36,18 @@ struct BackChevronButton: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(foreground)
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(background))
+                // A-89: the control floats over a hidden-nav-bar ScrollView,
+                // so scrolled content passes directly behind it — the walk
+                // caught it cutting "Conversation" and "Due Sep 6" in half
+                // with a flat 92%-opaque disc reading as a sticker on the
+                // words. A material blurs what passes under it, which is what
+                // a scroll-edge bar does and what the disc was pretending to
+                // be.
+                .background(
+                    Circle()
+                        .fill(.regularMaterial)
+                        .overlay(Circle().fill(background))
+                )
                 .overlay(Circle().stroke(stroke, lineWidth: 0.5))
         }
         .buttonStyle(.plain)

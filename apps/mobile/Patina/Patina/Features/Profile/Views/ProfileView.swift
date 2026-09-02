@@ -34,27 +34,6 @@ struct ProfileView: View {
             VStack(spacing: 0) {
                 // Header
                 VStack(spacing: 0) {
-                    // Top-right `?` help-panel trigger. Placed in a leading-
-                    // edge HStack so it lives in the corner of the profile
-                    // header without disturbing the centered avatar layout.
-                    HStack {
-                        Spacer()
-                        Button {
-                            isHelpPanelPresented = true
-                        } label: {
-                            Image(systemName: "questionmark.circle")
-                                .font(.system(size: 17, weight: .regular))
-                                .foregroundStyle(PatinaColors.Text.secondary)
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Help")
-                        .accessibilityHint("Opens the help panel for your profile.")
-                        .accessibilityIdentifier("ProfileView.HelpButton")
-                    }
-                    .padding(.horizontal, 24)
-
                     // Avatar
                     Circle()
                         .fill(PatinaGradients.earth)
@@ -145,7 +124,7 @@ struct ProfileView: View {
 
                 // Actions
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("YOUR PROFILE")
+                    Text("MORE")
                         .font(PatinaTypography.monoMedium)
                         .foregroundStyle(PatinaColors.Text.secondary)
                         .tracking(1)
@@ -163,9 +142,8 @@ struct ProfileView: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 28)
-
-                Spacer().frame(height: 120)
             }
+            .companionBottomClearance()
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the avatar/name block above
@@ -175,6 +153,10 @@ struct ProfileView: View {
         // `PatinaTab`, never re-typed (B-7 a).
         .patinaScreen(title: isTabRoot ? PatinaTab.studio.canonicalName : nil)
         .onAppear {
+            viewModel.loadData(context: modelContext)
+        }
+        // C4-12 / R-03 (L1-B's note).
+        .refreshable {
             viewModel.loadData(context: modelContext)
         }
         // Contextual help panel — surfaces every Sanity article whose
@@ -198,13 +180,13 @@ struct ProfileView: View {
     private var stats: some View {
         if dynamicTypeSize.isAccessibilitySize {
             VStack(spacing: 14) {
-                statItem(value: "\(viewModel.roomCount)", label: "Rooms")
+                statItem(value: "\(viewModel.roomCount)", label: viewModel.roomCount == 1 ? "Room" : "Rooms")
                 statHorizontalDivider
                 savedStat
             }
         } else {
             HStack(spacing: 0) {
-                statItem(value: "\(viewModel.roomCount)", label: "Rooms")
+                statItem(value: "\(viewModel.roomCount)", label: viewModel.roomCount == 1 ? "Room" : "Rooms")
                 statDivider
                 savedStat
             }
