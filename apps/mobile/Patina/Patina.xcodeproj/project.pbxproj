@@ -17,6 +17,7 @@
 		CBB2D0CB2F1D65F8007686CD /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0CA2F1D65F8007686CD /* Storage */; };
 		CBB2D0CD2F1D65F8007686CD /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0CC2F1D65F8007686CD /* Supabase */; };
 		DE516B1700000000000000A3 /* PatinaDesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000A2 /* PatinaDesignKit */; };
+		DE516B1700000000000000B3 /* PatinaDesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000B2 /* PatinaDesignKit */; };
 		DE516B1700000000000000A4 /* PatinaDesignKit in Embed Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000A2 /* PatinaDesignKit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -163,6 +164,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DE516B1700000000000000B3 /* PatinaDesignKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -280,6 +282,9 @@
 				26C54B5540028E457738D2DD /* PatinaWidgetShared */,
 			);
 			name = PatinaTests;
+			packageProductDependencies = (
+				DE516B1700000000000000B2 /* PatinaDesignKit */,
+			);
 			productName = PatinaTests;
 			productReference = CBB2D0232F1D20F8007686CD /* PatinaTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -962,6 +967,10 @@
 			productName = Supabase;
 		};
 		DE516B1700000000000000A2 /* PatinaDesignKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PatinaDesignKit;
+		};
+		DE516B1700000000000000B2 /* PatinaDesignKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PatinaDesignKit;
 		};
