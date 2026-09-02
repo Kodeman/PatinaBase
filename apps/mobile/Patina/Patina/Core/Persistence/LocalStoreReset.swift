@@ -32,6 +32,10 @@ enum LocalStoreReset {
             try context.delete(model: DesignRequestDraft.self)
             try context.delete(model: SyncQueueItem.self)
             try context.delete(model: TableItemModel.self)
+            // C7-02: boards are in the container's schema now, so they are
+            // also in the wipe — a board named after the previous account's
+            // project was the one row this list had missed.
+            try context.delete(model: BoardModel.self)
             try context.save()
         } catch {
             PatinaLog.auth.error("[LocalStoreReset] SwiftData wipe failed: \(error.localizedDescription)")
@@ -94,6 +98,7 @@ enum LocalStoreReset {
             try context.delete(model: DesignRequestDraft.self)
             try context.delete(model: SyncQueueItem.self)
             try context.delete(model: TableItemModel.self)
+            try context.delete(model: BoardModel.self)
             try context.save()
         } catch {
             PatinaLog.auth.error("[LocalStoreReset] guest wipe failed: \(error.localizedDescription)")
