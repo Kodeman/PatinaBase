@@ -178,7 +178,8 @@ is not a design problem. It is eight days of unblocking, one archive, and a devi
 | Refuted / duplicates folded out | 28 / 189 |
 | Ledger-only rows folded in (`GAP1B-*`, `GAP7B-*`) | 24 |
 | Rows merged by root cause (`GAP7-03`, `GAP7-04` → `GAP7B-09`) | −2 |
-| **Findings this program owns** | **629** |
+| Filed by W0 · L0.7's coverage walk (`L07-01`…`L07-11`) *(amended 2026-09-02)* | +11 |
+| **Findings this program owns** | **640** *(amended 2026-09-02; was 629)* |
 | Audit lanes · screens photographed | 26 · 45 of 100 |
 | Device-verified findings | 0 |
 
@@ -194,26 +195,33 @@ L1-C's `CompanionInsetTests` asserts the *class*, not a screen list, so Room Set
 card and the thread composer are all covered by it — but the walker's W1 acceptance script names those
 three screens explicitly so the coverage is proved and not assumed.
 
-Of those 629, **four are closed by the production reconciliation below** and carry no work
+Of those 640, **four are closed by the production reconciliation below** and carry no work
 (`A3-03`, `A4-03`, `A4-04`, `A3-02` — all four premised on a migration gap that no longer exists).
 They are `tier: "closed"` in `findings.json` and appear in the reconciliation table, not in a lane
-table. **625 findings are scheduled.**
+table. **636 findings are scheduled.** *(amended 2026-09-02: was "of those 629 … 625 scheduled".)*
+
+**Every number in the four tables below was amended on 2026-09-02** by two changes recorded in full in
+§11: ruling **D1**'s re-tier of twelve rows (`build/waves/w0/retier-D1.md`) and the placement of
+**L0.7's eleven new findings** (`build/waves/w0/l0.7-coverage-walk.md`). The pre-amendment value is
+given beside each changed number. `build/findings.json` and `build/findings-by-lane.md` carry the
+amended figures as their live values; **§3's and §5's per-lane tables were deliberately not rewritten**
+— §11 names every line in them that is now stale.
 
 | Wave | Findings | blocker | major | minor | polish |
 |---|---:|---:|---:|---:|---:|
 | **W0** Unblock (days 1–3) | 34 | 8 | 19 | 7 | 0 |
-| **W1** The first five minutes and the daily surfaces (days 3–8) | 141 | 12 | 125 | 4 | 0 |
-| **W2** Build 2, the first tester week (days 10–17) | 349 | 0 | 121 | 188 | 40 |
-| **W3** After round one (backlog, unscheduled) | 101 | 0 | 5 | 45 | 51 |
-| **Scheduled** | **625** | **20** | **270** | **244** | **91** |
+| **W1** The first five minutes and the daily surfaces (days 3–8) | **137** *(amended; was 141)* | **14** *(was 12)* | **119** *(was 125)* | 4 | 0 |
+| **W2** Build 2, the first tester week (days 10–17) | **365** *(amended; was 349)* | 0 | **130** *(was 121)* | **195** *(was 188)* | 40 |
+| **W3** After round one (backlog, unscheduled) | **100** *(amended; was 101)* | 0 | 5 | **42** *(was 45)* | **53** *(was 51)* |
+| **Scheduled** | **636** *(was 625)* | **22** *(was 20)* | **273** *(was 270)* | **248** *(was 244)* | **93** *(was 91)* |
 | *closed by reconciliation* | *4* | *4* | *—* | *—* | *—* |
-| **Total** | **629** | **24** | **270** | **244** | **91** |
+| **Total** | **640** *(was 629)* | **26** *(was 24)* | **273** *(was 270)* | **248** *(was 244)* | **93** *(was 91)* |
 
 | Tier | blocker | major | minor | polish | Total | Wave |
 |---|---:|---:|---:|---:|---:|---|
-| **T0** — must fix before build 1 reaches a tester | 16 | 136 | 11 | 0 | **163** | W0 + W1 |
-| **T1** — before build 2, the first week | 4 | 129 | 188 | 40 | **361** | W2, **less the 12 promoted into W1 by D12** |
-| **T2** — after round one | 0 | 5 | 45 | 48 | **98** | W3 |
+| **T0** — must fix before build 1 reaches a tester | **18** *(amended; was 16)* | **138** *(was 136)* | 11 | 0 | **167** *(was 163)* | W0 + W1, **and 8 in W2** *(amended: D1 moved eight flags-off-only T0 rows to W2 with their tier held — they are T0-severity defects on a root no tester opens unless the kill switch is pulled)* |
+| **T1** — before build 2, the first week | 4 | **130** *(was 129)* | **195** *(was 188)* | 40 | **369** *(was 361)* | W2, **less the 12 promoted into W1 by D12** |
+| **T2** — after round one | 0 | 5 | **42** *(was 45)* | **50** *(was 48)* | **97** *(was 98)* | W3 |
 | **cut** — recorded, not scheduled | 0 | 0 | 0 | 3 | **3** | W3 |
 | **closed** — premise gone, see the reconciliation | 4 | 0 | 0 | 0 | **4** | — |
 
@@ -230,7 +238,7 @@ W1 lane table and struck from W2, never scheduled twice.
 | Lane | W0 | W1 | W2 | W3 | Total |
 |---|---:|---:|---:|---:|---:|
 | L0.1 Build & configuration (iOS, agent) | 18 | | 9 | 4 | **31** |
-| L0.2 Production backend (Kody-run; agent prepares and probes) | 3 | | 3 | 4 | **10** |
+| L0.2 Production backend (Kody-run; agent prepares and probes) | 3 | **1** *(amended)* | 3 | 4 | **11** *(was 10)* |
 | L0.2b The Document's read paths (portal + shared hooks, agent) | 0 | | | | **0** |
 | L0.3 The room is not empty (content; agent builds the pipeline) | 3 | | 2 | 1 | **6** |
 | L0.4 Help & tour content (Sanity; Kody authorizes) | 4 | | 1 | 1 | **6** |
@@ -238,20 +246,22 @@ W1 lane table and struck from W2, never scheduled twice.
 | L0.6 PostHog (Kody) | 1 | | | | **1** |
 | L0.7 Daily-surfaces coverage walk (agent; files findings, fixes nothing) | 0 | | | | **0** |
 | L1-A Welcome, sign-in, onboarding | | 27 | 41 | 11 | **79** |
-| L1-B Data, persistence, resilience | | 27 | 52 | 11 | **90** |
-| L1-C Layout, Companion, Dynamic Type | | 35 | 114 | 35 | **184** |
-| L1-D Tokens, dark mode, contrast, iconography | | 18 | 51 | 9 | **78** |
-| L1-E Copy | | 18 | 46 | 10 | **74** |
-| L1-F Notifications, messaging, widget, deep links | | 16 | 24 | 13 | **53** |
+| L1-B Data, persistence, resilience | | **28** *(was 27)* | 52 | 11 | **91** *(was 90)* |
+| L1-C Layout, Companion, Dynamic Type | | **28** *(was 35)* | **125** *(was 114)* | **33** *(was 35)* | **186** *(was 184)* |
+| L1-D Tokens, dark mode, contrast, iconography | | 18 | 51 | **11** *(was 9)* | **80** *(was 78)* |
+| L1-E Copy | | 18 | **48** *(was 46)* | 10 | **76** *(was 74)* |
+| L1-F Notifications, messaging, widget, deep links | | **17** *(was 16)* | **27** *(was 24)* | **12** *(was 13)* | **56** *(was 53)* |
 | L2-G Tests & gates | | | 6 | 1 | **7** |
-| **Total (scheduled)** | **34** | **141** | **349** | **101** | **625** |
+| **Total (scheduled)** | **34** | **137** *(was 141)* | **365** *(was 349)* | **100** *(was 101)* | **636** *(was 625)* |
 | *closed by reconciliation (L0.2 ×3, L1-A ×1)* | | | | | *4* |
 
 `L0.2b` and `L0.7` carry **zero** rows from the audit and exist anyway: L0.2b because 00555's own
 required code follow-ups land in files no lane owned (§0 guard rail 1), and L0.7 because the audit never
 walked the surfaces gate **G5** is written about — it will *produce* findings, not close them.
+*(Amended 2026-09-02: L0.7 produced eleven — `L07-01`…`L07-11` — and they are owned by the lanes above,
+which is why L0.7's own row is still 0. §11 places them.)*
 
-Tester-visible: **510 yes / 119 no**. Effort: **S 456 · M 151 · L 22**.
+Tester-visible: **521 yes / 119 no** *(amended 2026-09-02; was 510/119)*. Effort: **S 465 · M 153 · L 22** *(was S 456 · M 151 · L 22)*.
 
 Gate state at charter time (`research/G-gate.md`, all gate-verified):
 
@@ -3865,3 +3875,254 @@ rows appear only in §1's reconciliation table. The five T2 majors (`C6-10`, `C3
 `C3-07`) appear only in §5's W3 table. Per-table `_count:` lines and per-lane header counts were
 regenerated from `findings.json`, not edited by hand. Wave totals reconcile:
 **34 + 141 + 349 + 101 = 625 scheduled, + 4 closed = 629.**
+
+---
+
+## 11. W0 rulings, re-tier and closure (2026-09-02)
+
+Written by the **W0 closer** at wave close. Nothing in this section authorises a production write —
+every Kody-run step W0 produced is collected, in one order, in
+[`build/waves/w0/KODY-RUNBOOK.md`](waves/w0/KODY-RUNBOOK.md).
+
+### 11.1 Kody's rulings — the summary; `rulings-2026-09-02.md` is authoritative
+
+The full text, with the consequence spelled out per ruling, is
+[`build/rulings-2026-09-02.md`](rulings-2026-09-02.md). **Where a ruling differs from §6's
+recommendation the difference is stated there, and the ruling wins.** Sixteen rulings landed:
+
+| # | Ruling, in one line | Where it lands |
+|---|---|---|
+| **D1** | Round one = Leah's active design clients, and **`house-first` is ON for every tester**. `direct-orders` and `house-widget` stay off. | **Differs from §2's bar**, which says the four-tab bar stays off. The four-tab root is the shipped product; §11.2's re-tier is the consequence |
+| **D1a** | The bar is on at **first** launch: `house-first` resolves **true when PostHog has no answer**; an explicit `false` payload still wins (kill switch). | W0 · L0.1 — shipped (`88c148b3f`), with `FeatureFlagsDefaultTests` |
+| **D2** | Leah supplies ≥ 30 pieces this week; agent builds the pipeline and proves it locally; Kody runs the prod seed. Not in hand by end of day 6 → the honest "still curating" state. | W0 · L0.3 — pipeline shipped; the seed is runbook §J |
+| **D3** | Drop Google for round one. | W1 · L1-A |
+| **D4** | iPhone-only. | W0 · L0.1 — shipped; `UIDeviceFamily [1]` on app and appex |
+| **D5** | Ship the widget in build 1, fixed; it renders regardless of `house-widget`. | W1 · L1-F |
+| **D6** | Deployment target 26.0. | W0 · L0.1 — shipped; `MinimumOSVersion 26.0` |
+| **D7 + D11** | Wire the `test-account-login` fallback into the app **and** mint a clean demo account, `firstflight@patina.cloud`. | App half W1 · L1-A; the mint is runbook §D |
+| **D8** | 00555 goes to Strata **after** L0.2b merges and the designer portal is redeployed — day 2. | Runbook §A gates §B |
+| **DM-1** | Close the anon read now; accept counterparty column visibility for round one; the `profile_private` PII split is W2. | 00555 ships as drafted; W2 · L0.2 gains the split |
+| **D9** | APNs credentials are set on Strata. | Device row **D-07** is live, not blocked; runbook §E2 confirms read-only |
+| **D10** | A live Stripe key lands on Strata before build 1. | Device row **D-12** is live; runbook §E1 |
+| **D12** | The twelve promoted T1 rows stay in W1. | As already applied throughout §3 and §5 (⇧D12) |
+| **D13** | Write `increment_scan_upload_attempt` rather than delete the call. | W0 · L0.2 — written, and **renumbered 00556 → 00557** (see §11.4) |
+| **D14** | W1 merge order L1-C → L1-D → L1-B → L1-F → L1-A → L1-E. | §7 already carries it |
+| **D15** | The widget ships its own `PrivacyInfo.xcprivacy`. | W0 · L0.1 — shipped; both manifests are in the product |
+| **V7** | Log the D1 exception in `docs/vision/VISION-DECISIONS.md`: the iOS app (surface #2) **may** use a tab bar; The Document (surface #1) still may not. | Written by this closer, committed on `first-flight/integration` |
+
+**One standing assumption, restated because it constrains W1:** with `direct-orders` off and a live
+Stripe key on Strata, money moves in round one **only through invoices**.
+
+### 11.2 The D1 re-tier — twelve rows moved, nothing was re-scored
+
+Full pass, with the per-row reasoning and the two mechanisms it rests on:
+[`build/waves/w0/retier-D1.md`](waves/w0/retier-D1.md). Every one of the then-629 findings was given a
+`rootScope` read from its own evidence — **`both` 520 · `n/a` 81 · `flags-off-only` 17 ·
+`flags-on-only` 11** — against two facts in the source: the root is chosen once at launch
+(`ContentView.swift:149`), and on the four-tab root the floating Companion **retires entirely**
+(`CompanionOverlay.swift`), so every "the orb overprints content" finding is flags-off-only.
+
+**Eight flags-off-only rows leave W1 for W2 with their tier held** — `A1-03`, `A1-04`, `A4-07`, `A-88`,
+`A-64`, `C-03`, `C-28`, `C9-05`. **Four flags-on-only minors rise from T2/W3 to T1/W2** — `A1-13`,
+`B-52`, `C-34`, `C2-11`. All twelve carry `retieredBy: "D1 2026-09-02"` and a `retierNote`. **Lane is
+unchanged on every row**, and no severity was re-scored.
+
+By wave, before → after (D1 alone; L0.7's eleven are §11.3):
+
+| Wave | before | after D1 | Δ |
+|---|---:|---:|---:|
+| W0 | 34 | 34 | — |
+| W1 | 141 | 133 | −8 |
+| W2 | 349 | 361 | +12 |
+| W3 | 101 | 97 | −4 |
+| closed | 4 | 4 | — |
+| **Total** | **629** | **629** | — |
+
+By lane — **no lane's overall total changed**; only two lanes move rows at all:
+
+| Lane · wave | before | after D1 |
+|---|---:|---:|
+| W1 · L1-C | 35 | 28 |
+| W1 · L1-F | 16 | 15 |
+| W2 · L1-C | 114 | 123 |
+| W2 · L1-F | 24 | 27 |
+| W3 · L1-C | 35 | 33 |
+| W3 · L1-F | 13 | 11 |
+
+**Three things the pass deliberately did not change, and they are still Fable's call:** (1) severity —
+`C-33` was demoted *because the flag was off*, a reason D1 makes false, and `C-32` is a *minor*
+describing the app's primary navigation on day one; (2) `testerVisible: false` on six flags-on-only
+rows (`A1-13`, `B-52`, `C-32`, `C2-11`, `C6-39`, `C9-16`) set by judges whose stated reason was the flag
+being off — all six are tester-visible on the shipped root; (3) `A4-12`'s `fix` text ("target the
+round-one testers in PostHog") is now only half the story, because D1a moved the mechanism into the
+app's default table.
+
+**The evidence note the wave must carry:** the corpus barely observed the root it now ships. Verbatim
+launch lines in the ledgers show `GAP1`/`GAP2`/`GAP3`/`GAP6` launched with **no** flags argument,
+`GAP7` with `house-widget` only, and `C`/`A`/`P`/`R` flags-off. **`B` is the only walk of the four-tab
+root**, plus a handful of `GAP5` rows on iPad. W1's walkers launch without `-PatinaFlags` per D1a and
+will be the first real look at it — **treat a thin four-tab section in the ledgers as a coverage gap,
+not a clean bill.**
+
+### 11.3 L0.7's findings, placed
+
+The walk ran 13:26–14:28 UTC on 2026-09-02 against the local stack, on the **four-tab root** (D1), as a
+signed-in `activeProject` client, and closed the seed gap that made documents and message threads
+unreachable (`supabase/seed/first-flight-client-fixture.sql`, now in both `sql_paths` arrays). Findings:
+[`build/waves/w0/l0.7-coverage-walk.md`](waves/w0/l0.7-coverage-walk.md) §3; shot ledger
+`shots/w0-l0.7/ledger.md`.
+
+Eleven rows are now in `findings.json`, each with `sourceLane: "L0.7"`, a `ledger` pointing at the walk,
+and the placement reason in its `judgeNote`. **Lane follows the collator's rule** (the concern decides
+the lane, the folder is the tiebreaker); **tier is the walker's proposed tier**, with one recorded
+exception; wave is T0 → W1, T1 → W2, T2 → W3.
+
+| id | sev | tier | wave | lane | what it is |
+|---|---|---|---|---|---|
+| `L07-01` | blocker | T0 | **W1** | **L0.2** ⇢L1-E | Signing a proposal fails `studio_id_not_designer_studio` when the designer belongs to two active studios. Counterfactual proven in both directions. **The only backend row in W1** — the fix is a migration |
+| `L07-02` | blocker | T0 | **W1** | L1-F ⇢L1-C | On the four-tab root the message composer is drawn under the tab bar and **cannot be tapped**; a tap at the field's centre selects the Pieces tab |
+| `L07-03` | major | T0 | **W1** | L1-F ⇢L1-B | A failed send says nothing for ≥ 60 s, then the draft silently reappears. Sharpens `C4-04` |
+| `L07-05` | major | **T0** | **W1** | L1-B ⇢L1-C | The Studio hub renders stale counts as current with the backend down. **Tier promoted from the walker's T1** — see below |
+| `L07-04` | major | T1 | W2 | L1-E ⇢L1-C | An order's responsibility paragraph promises an address the screen never prints |
+| `L07-06` | minor | T1 | W2 | L1-C | Floating chrome painted over live content on four Studio screens, one of them a money figure |
+| `L07-07` | minor | T1 | W2 | L1-E ⇢L1-C | A `milestone`-tier proposal shows five line items and no money, with no word saying why |
+| `L07-09` | minor | T1 | W2 | L1-C | At `accessibility-extra-large` the sign sheet's labels break mid-word; at `large` **Cancel** is clipped |
+| `L07-08` | minor | T2 | W3 | L1-F | A responded decision stays in the feed as "A decision needs you" |
+| `L07-10` | polish | T2 | W3 | L1-D | Decision state uses red and green — filed **as a VISION §6 question**, not asserted as a defect |
+| `L07-11` | polish | T2 | W3 | L1-D | The tour's Skip / Next are system blue. **No retained shot** — written observation only |
+
+**The one tier change, and why.** `L07-05` moves from the walker's proposed T1 to **T0/W1**: the
+finding's own fix line says to apply it *"in the same wave"* as `R-03`, and `R-03` is T0/W1/L1-B; and
+under D1 the Studio hub is one of four day-one tab roots, which is exactly the surface class **G5a** is
+written about. Effort stays **S** because it is R-03's pattern applied a second time. One word from
+Fable reverses it.
+
+**Two placements worth a second look, recorded rather than settled.** `L07-06` covers `TOTAL $4,250.00`
+with a chrome chip — the class `C-46` / `GAP2-05` treat as *major*, scored *minor* here because that is
+what the walker who saw all four cases called it. `L07-09` was considered for promotion to T0 beside
+`GAP1B-01`/`GAP1B-02` and left at T1: those two are T0 because the controls are **unreachable**, and
+`01g`/`01h` prove these are reachable after a drag.
+
+**G5b, answered.** The walk ran; it produced **two blockers**. Per §2's G5b wording and §8's slip rule
+they are scheduled into W1 before build 1 (`L07-02` into L1-F, `L07-01` into L0.2 as a migration) —
+**or** named in What to Test. `L07-01`'s liveness for round one is a **read-only production probe that
+has not been run** (runbook §J1): if Leah belongs to one active studio it is latent; if two or more it
+blocks build 1 for her studio.
+
+**What the walk did not reach, in its own words:** project detail was never opened, so `C4-05` is
+unwalked; decision detail was not re-run at `accessibility-extra-large`; whether `.refreshable`
+actually fired on the failed refresh is `PLAUSIBLE`, not `CONFIRMED`; the software keyboard never
+appeared, so keyboard avoidance is untested at every size. One observation was **withdrawn** — a foreign
+`supabase db reset` deleted the threads fifteen seconds before the empty state was photographed.
+
+### 11.4 W0 exit state, per lane
+
+Read against §3's "W0 exits when" line. **Nothing here is a production claim** — no agent made a
+production write in this wave.
+
+| Lane | State | Evidence / what is left |
+|---|---|---|
+| **L0.1** Build & configuration | **Agent work DONE** · Kody-run pending | 12 commits, tip `299d2a73b`, merged `acef37f56`. `ios-gate.sh release` **exit 65 → exit 0** — the criterion W1's exit depends on. `unit` refuses without `IOS_GATE_UDID` (rc 2). Product-inspected on the merged tip: `CFBundleVersion 3` on app **and** appex, `MinimumOSVersion 26.0`, `UIDeviceFamily [1]`, `ITSAppUsesNonExemptEncryption false`, both privacy manifests present. **Open: `A2-07` (the archive itself), `A2-23`'s export half, `A2-24`/`G-12` (`aps-environment` on the exported `.app`) — all three are runbook §I, and none is closed by `release` being green. `A2-21` (the ASC rename) sits with L0.5.** So 14 of L0.1's 18 rows are closed in-branch, not 18 |
+| **L0.2** Production backend | **Draft DONE** · **Kody-run pending, and one ruling BLOCKS it** | 00555 and 00557 replay clean from the tree on `pnpm supabase:reset`; the whole SQL suite is `147/147 effective-green` with `KNOWN_FAILURES.md` matching exactly. `00556` is a **deliberate gap** — `increment_scan_upload_attempt` was renumbered off 00556 (taken by `admin-studios/build`) onto **00557**. **Blocked:** runbook §B2 needs Kody's ruling on `handle_new_user`'s `homeowner` fallback for **designer-portal self-signups** before the apply; the apply cannot be undone for that behaviour. Gains one W1 row (`L07-01`) |
+| **L0.2b** The Document's read paths | **Code DONE** · **NOT merged** · Kody-run pending | 3 commits on `first-flight/w0-l02b` (`ffdee7273`, `57f9e1ce8`, `fc82db841`). Deliberately **not** in the integration branch — it merges to `main` on its own (D8) and gates 00555. Four gates green including the full designer-portal jest tier (498 suites / 5948 tests). Runbook §A merges and deploys it |
+| **L0.3** Content pipeline | **Pipeline DONE** · **BLOCKED on Leah (D2)** | Merged `a2d364500`; the catalogue checker, the image uploader, the SQL emitter and 11 SQL test cases all green on the fixture. The release profile's ≥ 30-row gate **cannot pass on the fixture and is not meant to** — it becomes the real gate the day the manifest lands. Runbook §J carries the prod seed; **D2's fallback is called by this lane at end of day 6** |
+| **L0.4** Sanity help & tour | **Drafts DONE** · Kody-run pending | Four documents, exact ids and revisions, both routes (desk and MCP) and five probes in `sanity-publish-steps.md`. **No Sanity write was made.** Runbook §F. The six `?` doors are W1 code, not this lane |
+| **L0.5** App Store Connect | **Drafts DONE** · Kody-run pending · one dependency | `asc-runbook.md` + `asc-state-before.md` + the two texts. Four traps found by re-checking every command against the installed binary — chief among them that `--flag value` **silently drops the rest of the line** and every boolean must be `=`-joined. Runbook §G. **§G3 cannot run until the demo account exists (§D)** |
+| **L0.6** PostHog | **Kody-run pending** · **carries a live contradiction** | See §11.5. §3's L0.6 step 2 ("all three flags at 0%") and **D1a** cannot both be right |
+| **L0.7** Coverage walk | **DONE** | Merged `0ef84ae17`; eleven findings filed and placed (§11.3); the seed fixture closes the documents/threads gap. Kody-run: the one read-only probe at runbook §J1 |
+
+**Integration.** `first-flight/integration` tip **`0ef84ae1732393894e50f43dfc32e4ada6c87ef9`**, base
+`main` = `a4d665ad7`, four lanes merged `--no-ff` in the order L0.2 → L0.3 → L0.1 → L0.7, one conflict
+(`supabase/config.toml` `sql_paths`, resolved as the union and **proven at runtime** by a reset that
+loaded both seeds). Gate results on that tip: `pnpm install` 0 · `ios-gate.sh build` 0 (second attempt —
+the `GitCommit.swift` cost) · `release` 0 · `unit` **1552 tests / 170 suites passed** · `lint-delta` 0 ·
+`supabase:reset` 0 · SQL suite 147/147 · `type-check` 30/30. **`archive` was not run and is not a
+steward command** — it is R1 Step 2, on Kody's machine.
+
+⚠ **The draft under `build/migrations-draft/` is now STALE.** §"Global constraints" points at
+`build/migrations-draft/00555_ios_round_one_security.sql` as this program's migration. L0.2 moved the
+real file to **`supabase/migrations/00555_ios_round_one_security.sql`** and then changed it there (the
+`RL02-18` fix rounds, `c66206523` and `8a519f271`); the two files differ, and the tree copy is the one
+that applies. The stale draft was deliberately **not** committed with the wave record so there is only
+one candidate on the branch. `KODY-RUNBOOK.md` names the `supabase/migrations/` path throughout.
+
+### 11.5 Two contradictions this wave surfaced, both still open
+
+1. **PostHog's 0% rollout undoes D1.** §3 · L0.6 step 2 says all three flags go to **0% rollout**. D1a
+   makes a `false` payload the kill switch. PostHog does not omit a flag that evaluates false — it
+   returns it **with the value false** — so a 0% `house-first` arrives as an *answer*, the kill-switch
+   clause fires, and every tester loses the four-tab root on their **second** launch (launch 1 = no
+   payload = default true; launch 2 = cached false = off). Verified on the SDK side
+   (`PostHogRemoteConfig.getFeatureFlagResult`, posthog-ios 3.48.0, returns nil **only** when the key is
+   absent); **not** observed against the live project. **The resolution the runbook takes: `house-first`
+   at 100% / everyone / active, `direct-orders` and `house-widget` at 0% / active.** §3 · L0.6 step 2 is
+   superseded on this point and is left in place so the change is visible.
+2. **The demo proposal is priceless, permanently, unless one line changes first.**
+   `build/waves/w0/demo-account.sql:187` inserts the demo proposal with
+   `client_visibility_tier = 'milestone'`, and `get_client_proposal_bundle` nulls every per-line price
+   on that tier (`L07-07`). L0.7's note **N5 asked L0.2 to set it to `'full'` and it was not applied.**
+   This is one-way: `guard_proposal_copy_immutability` (00390:1178-1250) lists `client_visibility_tier`
+   among the columns a **non-draft** proposal may never change, and the row is inserted as `sent`.
+   **Runbook §D3 puts the decision in front of Kody before the seed runs**, because after it there is no
+   route back that does not mean a second proposal.
+
+### 11.6 Amended lane counts
+
+`build/findings.json` and `build/findings-by-lane.md` carry these as their live values; §1's tables are
+amended to match. **§3's and §5's per-lane tables were deliberately NOT rewritten** — the list of lines
+now stale is below, and `build/assemble.py` regenerates them from `findings.json` once the prose parts
+are updated.
+
+**W1 — 137 findings** *(was 141 at charter time; 133 after D1; 137 after L0.7)*:
+
+| W1 lane | charter | after D1 | after L0.7 | what changed |
+|---|---:|---:|---:|---|
+| **L0.2** | — | — | **1** | `L07-01` — the only backend row in W1 |
+| L1-A | 27 | 27 | 27 | — |
+| L1-B | 27 | 27 | **28** | `L07-05` |
+| L1-C | 35 | **28** | 28 | D1 struck `A1-03`, `A1-04`, `A4-07`, `A-88`, `A-64`, `C-03`, `C-28` |
+| L1-D | 18 | 18 | 18 | — |
+| L1-E | 18 | 18 | 18 | — |
+| L1-F | 16 | **15** | **17** | D1 struck `C9-05`; L0.7 added `L07-02`, `L07-03` |
+| **Total** | **141** | **133** | **137** | blocker **14** · major **119** · minor 4 · polish 0 |
+
+**W2 — 365** *(349 → 361 after D1 → 365)*: L0.1 9 · L0.2 3 · L0.3 2 · L0.4 1 · L1-A 41 · L1-B 52 ·
+**L1-C 125** · L1-D 51 · **L1-E 48** · **L1-F 27** · L2-G 6.
+**W3 — 100** *(101 → 97 → 100)*: L0.1 4 · L0.2 4 · L0.3 1 · L0.4 1 · L0.5 1 · L1-A 11 · L1-B 11 ·
+**L1-C 33** · **L1-D 11** · L1-E 10 · **L1-F 12** · L2-G 1.
+
+**The lines in §3 and §5 that are now stale** (`retier-D1.md` §8 gives line numbers; they were taken
+**before** §1's amendment added lines, so search by content, not by number):
+
+- §3 · W1 heading — "141 findings" → **137**; the sentence under it, "129 T0 rows plus the 12 T1 rows
+  D12 promotes", becomes **125 T0 rows plus the 12**.
+- §3 · W1 · L1-C — "(W1 · 35 — 29 T0 + 6 promoted …)" → **(W1 · 28 — 22 T0 + 6 promoted …)** and
+  `_count: 35 · blocker 3 · major 32 …_` → `_count: 28 · blocker 3 · major 25 …_`; strike `A1-03`,
+  `A1-04`, `A4-07`, `A-88`, `A-64`, `C-03`, `C-28`.
+- §3 · W1 · L1-B — count 27 → **28**, `_count: 28 · blocker 5 · major 22 · minor 1 · polish 0_`; add
+  `L07-05`.
+- §3 · W1 · L1-F — "(T0 · W1 · 16)" → **(T0 · W1 · 17)** and `_count: 16 …_` → `_count: 17 · blocker 1 ·
+  major 16 · minor 0 · polish 0_`; strike `C9-05`, add `L07-02` (blocker) and `L07-03`.
+- §3 · W1 — **a new L0.2 sub-section is owed** for `L07-01`, or it must be routed into an existing lane.
+  It is the only W1 row whose fix is SQL, and its apply is a Kody-run migration step.
+- §5 · W2 heading — "349 findings" → **365**; the capacity paragraph's "not 349" → **365**; its per-lane
+  load line "L1-C 114 … L1-F 24" → **L1-C 125 … L1-F 27**, and L1-E 46 → **48**.
+- §5 · W2 lane tables — L1-C `_count: 114 · blocker 0 · major 50 · minor 55 · polish 9_` →
+  `_count: 125 · blocker 0 · major 57 · minor 59 · polish 9_`; L1-F `_count: 24 …_` →
+  `_count: 27 · blocker 0 · major 5 · minor 18 · polish 4_`; L1-E `_count: 46 …_` →
+  `_count: 48 · blocker 0 · major 6 · minor 31 · polish 11_`.
+- §5 · W3 heading — "101 findings" → **100**. W3 is a by-area rollup `assemble.py` generates from
+  `findings.json`; re-running the script picks up the departures and the three arrivals.
+- §10's closing line — "34 + 141 + 349 + 101 = 625 scheduled, + 4 closed = 629" → **34 + 137 + 365 +
+  100 = 636 scheduled, + 4 closed = 640**.
+
+### 11.7 What W0 owes R1, in one list
+
+Every item is in [`build/waves/w0/KODY-RUNBOOK.md`](waves/w0/KODY-RUNBOOK.md) in the order it must run:
+**A** merge and deploy L0.2b · **B** apply 00555 (+ the ruling that gates it), regenerate, probe, walk
+The Document · **C** apply 00557 and probe · **D** mint the demo account and append the Vault
+allow-list · **E** confirm the Stripe key (D10) and the APNs env (D9), read-only · **F** publish the
+three tour bodies in Sanity · **G** the two ASC writes, the testers, the age rating, the name ·
+**H** the three PostHog flags and error tracking · **I** the archive dry run, the export and the
+entitlement check · **J** the two conditional steps — L0.7's studio probe, and the catalogue seed the
+day Leah's manifest lands.
