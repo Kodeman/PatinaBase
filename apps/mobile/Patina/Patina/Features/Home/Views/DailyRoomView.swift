@@ -185,6 +185,17 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                 presentPushPrimerIfEarned()
             }
         }
+        // C4-12 / R-03 (L1-B's note): a root whose data is stale or whose
+        // load failed offered no way to ask again short of a relaunch.
+        .refreshable {
+            viewModel.load()
+            await badges.refresh()
+            await requestStatus.refresh()
+            await viewModel.refreshProjectRooms()
+            await viewModel.refreshRecord()
+            await viewModel.refreshNewThisWeek()
+            await notificationsViewModel.load()
+        }
         .helpPanel(
             isPresented: $isHelpPanelPresented,
             surfaceKey: SurfaceKeys.IOSApp.Home.root
@@ -252,7 +263,9 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     dateString: viewModel.greetingDate.uppercased(),
                     greeting: TimeOfDay.current.greeting,
                     attentionCount: BadgeCountService.shared.attentionCount,
-                    onHelpTap: { isHelpPanelPresented = true },
+                    // Round one: no ios-app/* help articles exist, so the `?`
+                    // would open on an empty panel (C5-02). W2 restores it.
+                    onHelpTap: nil,
                     onStudioTap: { coordinator.navigate(to: .profile) },
                     onBellTap: { coordinator.navigate(to: .notifications) },
                     unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count,
@@ -367,9 +380,8 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                         .padding(.top, PatinaSpacing.md)
                         .accessibilityIdentifier("DailyRoomView.SignInLine")
                 }
-
-                Spacer().frame(height: 120)
             }
+            .companionBottomClearance()
         }
     }
 
