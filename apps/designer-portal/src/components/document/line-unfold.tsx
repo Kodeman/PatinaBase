@@ -40,6 +40,7 @@ import {
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { DateTextInput } from './date-text-input';
 import { DocumentAction, DocumentActionGroup } from './document-action';
+import { PieceArtifactPlate } from './piece-artifact-plate';
 
 type FFERow = any;
 
@@ -307,6 +308,7 @@ export function LineUnfold({
   isCommercialOrigin = false,
   onIncludeInRelease,
   canEditSelection = true,
+  showArtifactPlate = false,
 }: {
   item: FFERow;
   projectId: string;
@@ -320,6 +322,7 @@ export function LineUnfold({
   /** Enter the release ceremony with this line already ticked. */
   onIncludeInRelease?: () => void;
   canEditSelection?: boolean;
+  showArtifactPlate?: boolean;
 }) {
   const stamp = deriveLineStamp(item);
   const po = item.purchase_order ?? null;
@@ -385,6 +388,8 @@ export function LineUnfold({
 
   return (
     <div className="mb-2 mt-1 rounded-r-[5px] border-l-[3px] border-[var(--color-clay)] bg-[rgba(196,165,123,0.05)] px-4 py-3.5">
+      {showArtifactPlate && !isTradeLine && <PieceArtifactPlate item={item} />}
+
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Cell
           label="Purchase order"

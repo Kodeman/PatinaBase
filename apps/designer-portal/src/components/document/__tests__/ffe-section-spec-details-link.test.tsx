@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
+const mockLineUnfold = jest.fn(() => null);
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -70,7 +71,9 @@ jest.mock('../strata-mark', () => ({ StrataMark: () => null }));
 jest.mock('../strata-mini-rule', () => ({ StrataMiniRule: () => null }));
 // LineUnfold itself is out of this lane's ownership; stubbed so the test
 // exercises only what ffe-section.tsx renders around it.
-jest.mock('../line-unfold', () => ({ LineUnfold: () => null }));
+jest.mock('../line-unfold', () => ({
+  LineUnfold: (props: Record<string, unknown>) => mockLineUnfold(props),
+}));
 
 // R127/W4 — this suite mounts a region on its own, with no page to attach the
 // lens (OD-15 attaches `useLensDensity` in `page.tsx`), so nothing ever
@@ -91,8 +94,8 @@ afterEach(() => {
 import { FFESection } from '../ffe-section';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 
-const renderSection = () =>
-  render(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
+const renderSection = (mode: 'project' | 'install' = 'project') =>
+  render(<FFESection projectId="project-1" projectName="Ellsworth" mode={mode} />);
 
 const furnishing = {
   id: 'line-1',
@@ -131,6 +134,7 @@ jest.mock('@/hooks/use-section-work', () => {
 describe('SP-19/F57 — the unfolded FF&E line links to its spec-book entry', () => {
   beforeEach(() => {
     mockItems = [furnishing];
+    mockLineUnfold.mockClear();
   });
 
   it('offers no such act while folded', () => {
@@ -146,6 +150,42 @@ describe('SP-19/F57 — the unfolded FF&E line links to its spec-book entry', ()
     expect(act).toHaveAttribute(
       'href',
       '/doc/project-1/spec-book?ffeItemId=line-1',
+    );
+  });
+
+  it('unfolds the Piece named by a direct-link request', async () => {
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Ellsworth"
+        mode="project"
+        requestedLineId="line-1"
+      />,
+    );
+
+    await waitFor(() =>
+      expect(mockLineUnfold).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          item: expect.objectContaining({ id: 'line-1' }),
+          showArtifactPlate: true,
+        }),
+      ),
+    );
+  });
+
+  it('enables the artifact plate only for the Project/Pieces spread', () => {
+    const project = renderSection('project');
+    fireEvent.click(screen.getByRole('button', { name: /Walnut bed, king/ }));
+    expect(mockLineUnfold).toHaveBeenLastCalledWith(
+      expect.objectContaining({ showArtifactPlate: true }),
+    );
+
+    project.unmount();
+    mockLineUnfold.mockClear();
+    renderSection('install');
+    fireEvent.click(screen.getByRole('button', { name: /Walnut bed, king/ }));
+    expect(mockLineUnfold).toHaveBeenLastCalledWith(
+      expect.objectContaining({ showArtifactPlate: false }),
     );
   });
 });

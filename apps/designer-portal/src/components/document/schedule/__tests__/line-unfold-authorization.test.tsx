@@ -181,6 +181,105 @@ describe('LineUnfold · the authorization gate', () => {
   });
 });
 
+describe('LineUnfold · piece artifact plate', () => {
+  it('uses the joined product image, maker, and configuration language', () => {
+    renderUnfold({
+      showArtifactPlate: true,
+      item: {
+        ...item,
+        name: 'Halden Sofa',
+        quantity: 1,
+        product: {
+          id: 'product-1',
+          name: 'Halden Sofa',
+          brand: 'Hollowell Woodshop',
+          images: ['https://images.example.com/halden-sofa.jpg'],
+        },
+        spec: {
+          configuration_snapshot: {
+            selections: [
+              { groupName: 'Wood', valueLabel: 'Walnut' },
+              { groupName: 'Hardware Finish', valueLabel: 'Antique Brass' },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(
+      screen.getByRole('img', { name: 'Halden Sofa by Hollowell Woodshop' }),
+    ).toHaveAttribute(
+      'src',
+      'https://images.example.com/halden-sofa.jpg',
+    );
+    expect(screen.getByText('Maker').parentElement).toHaveTextContent(
+      'Maker · Hollowell Woodshop',
+    );
+    expect(screen.getByText('Source').parentElement).toHaveTextContent(
+      'Source · Winfield Workroom',
+    );
+    expect(screen.getByText('Walnut')).toBeInTheDocument();
+    expect(screen.getByText('Antique Brass')).toBeInTheDocument();
+  });
+
+  it('states missing image, maker, and configuration data without inventing it', () => {
+    renderUnfold({
+      showArtifactPlate: true,
+      item: { ...item, vendor_name: null },
+    });
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('Image not on file')).toBeInTheDocument();
+    expect(screen.getByText(/Maker/).parentElement).toHaveTextContent(
+      'Maker · Not recorded',
+    );
+    expect(screen.getByText('Source').parentElement).toHaveTextContent(
+      'Source · Not recorded',
+    );
+    expect(
+      screen.getByText('Configuration not recorded on this line.'),
+    ).toBeInTheDocument();
+  });
+
+  it('stays out of non-project unfolds', () => {
+    renderUnfold({ showArtifactPlate: false });
+
+    expect(screen.queryByText('Piece in hand')).not.toBeInTheDocument();
+    expect(screen.queryByText('Image not on file')).not.toBeInTheDocument();
+  });
+
+  it('stays out of trade-line unfolds even in project mode', () => {
+    renderUnfold({
+      showArtifactPlate: true,
+      item: { ...item, trade_scope_document_id: 'trade-scope-1' },
+    });
+
+    expect(screen.queryByText('Piece in hand')).not.toBeInTheDocument();
+  });
+
+  it('falls back honestly when the joined image cannot load', () => {
+    renderUnfold({
+      showArtifactPlate: true,
+      item: {
+        ...item,
+        product: {
+          brand: 'Hollowell Woodshop',
+          images: ['https://images.example.com/missing.jpg'],
+        },
+      },
+    });
+
+    fireEvent.error(
+      screen.getByRole('img', {
+        name: 'Roman shades, six windows by Hollowell Woodshop',
+      }),
+    );
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('Image not on file')).toBeInTheDocument();
+  });
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // R7 (F6) — where the lifecycle trail is allowed to appear
 // ══════════════════════════════════════════════════════════════════════════

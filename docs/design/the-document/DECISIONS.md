@@ -10638,3 +10638,24 @@ icons, and the 390 bar with a cross-project timer running. The `I152-deploy` sig
 TLS WebKit ship-bar run (D-B41) remain owed and are unaffected by this deploy.
 
 *Entries add: I152-adjust · last id = I152-adjust*
+
+### R128 · The Maker's Ledger — 2026-09-01
+
+Ruled by Kody at the designer-UI-polish cleanup review, where the parked lanes were
+put to him one at a time; the Maker's Ledger was taken as written. It was drafted as
+R127 in the parked lane's own notes and takes **R128** here, the Smart Lens having
+claimed R127 since.
+
+In the Project/Pieces spread, an unfolded furnishing line may lead with an artifact
+plate built from data already joined to that line: product image, brand as Maker,
+vendor as Source, and the current configuration snapshot. Collapsed lines keep their
+existing density. Install, Care, selection mode, and trade-presence lines do not gain
+the plate. Missing or failed imagery and absent provenance remain explicit; the plate
+adds no action, workflow state, query, schema, or invented fact.
+
+The plate sits **above** R126's 48px product crop rather than against it. The crop is
+what a *collapsed* catalog-linked line carries at the roster's own density; the plate
+is what that same line shows only once a reader unfolds it. A Piece therefore reads
+its 48px crop folded and its full plate unfolded, and neither replaces the other.
+
+*Entries add: R128 · last id = R128*
