@@ -86,3 +86,44 @@ Deno.test("buildIssueBody falls back to the author uuid and em-dashes empty cell
   assertStringIncludes(body, "| User agent | — |");
   assertStringIncludes(body, "_(bucket only — no note)_");
 });
+
+Deno.test("buildIssueBody escapes pipes and newlines in client-supplied cells", () => {
+  const body = buildIssueBody({
+    row: row({
+      screen_name: "Doc | Fake",
+      route: "/doc/1\n| Injected | row |",
+      viewport: "1512|857",
+      app_version: "2026.09.02\r\nnext line",
+      user_agent: "Mozilla | 5.0",
+    }),
+    screenshotUrl: null,
+  });
+
+  assertStringIncludes(body, "| Screen | Doc \\| Fake |");
+  assertStringIncludes(body, "| Route | /doc/1 \\| Injected \\| row \\| |");
+  assertStringIncludes(body, "| Viewport | 1512\\|857 |");
+  assertStringIncludes(body, "| App version | 2026.09.02 next line |");
+  assertStringIncludes(body, "| User agent | Mozilla \\| 5.0 |");
+  // One table row per field: the injected pipes never opened a new one.
+  assertEquals(body.split("\n").filter((l) => l.startsWith("| Route |")).length, 1);
+});
+
+Deno.test("buildIssueBody collapses a multi-line note into the quote", () => {
+  const body = buildIssueBody({
+    row: row({ note: "Totals\ngo\r\nblank" }),
+    screenshotUrl: null,
+  });
+  assertStringIncludes(body, "> Totals go blank");
+});
+
+Deno.test("buildIssueBody prints the reason when a path was not signed", () => {
+  const body = buildIssueBody({
+    row: row(),
+    screenshotUrl: null,
+    screenshotNote: "screenshot path not owned by author",
+  });
+  assertStringIncludes(
+    body,
+    "### Screenshot\nscreenshot path not owned by author",
+  );
+});

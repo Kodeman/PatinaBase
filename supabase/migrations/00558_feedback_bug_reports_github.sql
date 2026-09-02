@@ -26,6 +26,14 @@
 -- caught and warned, exactly as 00259 does. A tester's note is the point; the
 -- issue is the convenience.
 --
+-- Who can file: the PostHog flag `tester-notes` gates the WIDGET only. INSERT on
+-- public.feedback is open to every authenticated user (00255), so any signed-in
+-- account can write a row with report_kind='bug' and trip this trigger. The
+-- per-author rate limit below (20 bug rows an hour) is therefore the abuse
+-- bound, not the flag. A tester allowlist — a role, a table, or a claim checked
+-- here — is a follow-up decision for Kody, deliberately not taken in this
+-- migration.
+--
 -- Additive only: ADD COLUMN IF NOT EXISTS, DROP POLICY IF EXISTS + CREATE,
 -- CREATE OR REPLACE FUNCTION, DROP TRIGGER IF EXISTS + CREATE.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -73,7 +81,27 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, extensions
 AS $$
+DECLARE
+  -- The abuse bound: an honest tester never files twenty bugs in an hour, and
+  -- a scripted one gets a marked row instead of twenty GitHub issues.
+  recent_bugs INTEGER;
 BEGIN
+  SELECT count(*) INTO recent_bugs
+  FROM public.feedback f
+  WHERE f.created_by = NEW.created_by
+    AND f.report_kind = 'bug'
+    AND f.id <> NEW.id
+    AND f.created_at > now() - INTERVAL '1 hour';
+
+  IF recent_bugs >= 20 THEN
+    -- The note itself still stands; only the issue is withheld, and the widget
+    -- shows the reason on the row.
+    UPDATE public.feedback
+      SET github_issue_error = 'rate limited'
+      WHERE id = NEW.id;
+    RETURN NEW;
+  END IF;
+
   PERFORM public.invoke_edge_function(
     'feedback-github-issue',
     jsonb_build_object('record', to_jsonb(NEW))
@@ -85,7 +113,9 @@ EXCEPTION WHEN others THEN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.notify_feedback_bug_report() FROM PUBLIC, anon;
+-- Trigger-only: nothing calls this by name, and a caller who could would be
+-- invoking the edge function with a row of their choosing.
+REVOKE EXECUTE ON FUNCTION public.notify_feedback_bug_report() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS notify_feedback_bug_report_trigger ON public.feedback;
 CREATE TRIGGER notify_feedback_bug_report_trigger

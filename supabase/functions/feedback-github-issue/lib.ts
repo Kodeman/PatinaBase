@@ -62,10 +62,18 @@ export interface IssueBodyInput {
   authorEmail?: string | null;
   authorName?: string | null;
   screenshotUrl?: string | null;
+  /** Why there is no link, when a path was captured but not signed. */
+  screenshotNote?: string | null;
 }
 
+/**
+ * One table cell. Every value here is client-supplied (screen, route, viewport,
+ * app version, user agent), so a newline or a pipe would end the row and let
+ * the reporter forge the rest of the table — both are neutralised.
+ */
 function cell(value: string | number | null | undefined): string {
-  const s = value === null || value === undefined ? "" : String(value).trim();
+  const raw = value === null || value === undefined ? "" : String(value);
+  const s = raw.replace(/[\r\n]+/g, " ").replace(/\|/g, "\\|").trim();
   return s.length > 0 ? s : "—";
 }
 
@@ -74,6 +82,7 @@ export function buildIssueBody({
   authorEmail,
   authorName,
   screenshotUrl,
+  screenshotNote,
 }: IssueBodyInput): string {
   const author = [authorName?.trim(), authorEmail?.trim()]
     .filter((v) => v && v.length > 0)
@@ -102,6 +111,8 @@ export function buildIssueBody({
   if (screenshotUrl) {
     // The signed link expires; the storage path above lets it be re-signed.
     lines.push(`[Open the captured screen](${screenshotUrl})`);
+  } else if (screenshotNote) {
+    lines.push(screenshotNote);
   } else {
     lines.push("none");
   }
