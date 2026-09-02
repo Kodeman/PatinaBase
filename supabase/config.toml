@@ -438,6 +438,16 @@ verify_jwt = true
 [functions.parse-room-scan]
 verify_jwt = true
 
+# Tester Notes bug reports → GitHub issues (00557). Trigger-invoked only: the
+# AFTER INSERT trigger on public.feedback fires it through invoke_edge_function
+# (service-role bearer, the same trigger->edge bridge as waitlist-notify). No
+# browser calls it — and the function additionally decodes the JWT and requires
+# role == 'service_role' in-code before reading the row or writing the issue
+# back. verify_jwt = true is the platform default; explicit here for intent,
+# matching the other trigger/cron-invoked functions.
+[functions.feedback-github-issue]
+verify_jwt = true
+
 # Room View USDZ→GLB archival lane (R107, 00338). Cron-invoked every 15 min via
 # pg_cron -> invoke_edge_function (service-role Bearer, same cron->edge bridge as
 # the other Agent OS crons) and also callable with { scanId, force? }. It drives

@@ -12565,3 +12565,9 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.admin_set_studio_status(uuid, uuid, organization_status) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00557_feedback_bug_reports_github.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.notify_feedback_bug_report() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

@@ -14,6 +14,8 @@ const SIGNED_URL_TTL_SECONDS = 60 * 10; // 10 minutes — a detail-view read.
 export type FeedbackBucket = 'working' | 'not_working' | 'missing' | 'change';
 export type FeedbackWeight = 'low' | 'med' | 'high';
 export type FeedbackStatus = 'noted' | 'building' | 'shipped' | 'archived';
+/** A plain note, or a bug that files a GitHub issue on insert (00557). */
+export type FeedbackReportKind = 'note' | 'bug';
 
 export interface Feedback {
   id: string;
@@ -32,6 +34,11 @@ export interface Feedback {
   status: FeedbackStatus;
   resolution: string | null;
   shipped_seen_at: string | null;
+  report_kind: FeedbackReportKind;
+  user_agent: string | null;
+  github_issue_number: number | null;
+  github_issue_url: string | null;
+  github_issue_error: string | null;
 }
 
 export type FeedbackEventKind = 'status_change' | 'reply' | 'reaction';
@@ -64,6 +71,9 @@ export interface CreateFeedbackInput {
   element?: string | null;
   /** The pre-captured screen (R7.2.4). Uploaded before the row is written. */
   screenshot?: Blob | null;
+  /** 'bug' fires the GitHub-issue trigger (00557). Defaults to 'note'. */
+  report_kind?: FeedbackReportKind;
+  user_agent?: string | null;
 }
 
 const WEIGHT_RANK: Record<FeedbackWeight, number> = { high: 3, med: 2, low: 1 };
@@ -77,9 +87,13 @@ const WEIGHT_RANK: Record<FeedbackWeight, number> = { high: 3, med: 2, low: 1 };
  * super_admin sees all. Newest-first by default; 'weight' sort ranks high→low
  * then falls back to recency.
  */
-export function useFeedback(filters?: FeedbackFilters) {
+export function useFeedback(
+  filters?: FeedbackFilters,
+  options?: { refetchInterval?: number | false },
+) {
   return useQuery({
     queryKey: ['feedback', filters ?? {}],
+    refetchInterval: options?.refetchInterval,
     queryFn: async (): Promise<Feedback[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -229,6 +243,8 @@ export function useCreateFeedback() {
           viewport: input.viewport ?? null,
           element: input.element ?? null,
           screenshot_path,
+          report_kind: input.report_kind ?? 'note',
+          user_agent: input.user_agent ?? null,
         })
         .select('*')
         .single();

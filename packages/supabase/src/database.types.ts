@@ -5623,8 +5623,12 @@ export type Database = {
           created_at: string
           created_by: string
           element: string | null
+          github_issue_error: string | null
+          github_issue_number: number | null
+          github_issue_url: string | null
           id: string
           note: string | null
+          report_kind: string
           resolution: string | null
           route: string | null
           screen_name: string | null
@@ -5632,6 +5636,7 @@ export type Database = {
           shipped_seen_at: string | null
           status: string
           updated_at: string
+          user_agent: string | null
           viewport: string | null
           weight: string | null
         }
@@ -5641,8 +5646,12 @@ export type Database = {
           created_at?: string
           created_by?: string
           element?: string | null
+          github_issue_error?: string | null
+          github_issue_number?: number | null
+          github_issue_url?: string | null
           id?: string
           note?: string | null
+          report_kind?: string
           resolution?: string | null
           route?: string | null
           screen_name?: string | null
@@ -5650,6 +5659,7 @@ export type Database = {
           shipped_seen_at?: string | null
           status?: string
           updated_at?: string
+          user_agent?: string | null
           viewport?: string | null
           weight?: string | null
         }
@@ -5659,8 +5669,12 @@ export type Database = {
           created_at?: string
           created_by?: string
           element?: string | null
+          github_issue_error?: string | null
+          github_issue_number?: number | null
+          github_issue_url?: string | null
           id?: string
           note?: string | null
+          report_kind?: string
           resolution?: string | null
           route?: string | null
           screen_name?: string | null
@@ -5668,6 +5682,7 @@ export type Database = {
           shipped_seen_at?: string | null
           status?: string
           updated_at?: string
+          user_agent?: string | null
           viewport?: string | null
           weight?: string | null
         }
@@ -33671,8 +33686,12 @@ export type Database = {
           created_at: string
           created_by: string
           element: string | null
+          github_issue_error: string | null
+          github_issue_number: number | null
+          github_issue_url: string | null
           id: string
           note: string | null
+          report_kind: string
           resolution: string | null
           route: string | null
           screen_name: string | null
@@ -33680,6 +33699,7 @@ export type Database = {
           shipped_seen_at: string | null
           status: string
           updated_at: string
+          user_agent: string | null
           viewport: string | null
           weight: string | null
         }

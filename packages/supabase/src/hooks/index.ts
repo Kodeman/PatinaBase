@@ -1659,6 +1659,7 @@ export type {
   FeedbackBucket,
   FeedbackWeight,
   FeedbackStatus,
+  FeedbackReportKind,
   FeedbackEvent,
   FeedbackEventKind,
   FeedbackFilters,
