@@ -145,13 +145,20 @@ public final class BackgroundScanUploader: NSObject {
 
     /// Enqueue an artifact for background upload. Returns immediately.
     public func upload(_ descriptor: UploadDescriptor) async throws {
-        // Best-effort token refresh before building the request so the bearer
-        // we attach has a fresh TTL. If the user is signed out entirely, the
-        // refresh will fail (typically silently) and `buildRequest` below will
-        // throw `.missingSession` — that error propagates up to
-        // `RoomScanSyncService.uploadArtifactViaBackground` and is recorded
-        // as the artifact's lastError instead of being silently swallowed.
-        try? await SupabaseClientManager.shared.client.auth.refreshSession()
+        // C7-15: this used to be `refreshSession()`, forced, before EVERY
+        // artifact — and a bundle is a manifest plus a USDZ plus a world map
+        // plus meshes plus depth plus photos. GoTrue rotates the refresh
+        // token on each call and rate-limits `/token`, so a bundle uploading
+        // its parts in parallel was a credible route to a 429 or a rotation
+        // race that signs the person out mid-scan.
+        //
+        // `auth.session` returns the current session and refreshes only when
+        // it has actually expired, which is the guarantee the forced call was
+        // standing in for. Still best-effort: a signed-out user makes this
+        // throw, and `buildRequest` below then throws `.missingSession`,
+        // which propagates to `RoomScanSyncService.uploadArtifactViaBackground`
+        // and is recorded as the artifact's lastError.
+        _ = try? await SupabaseClientManager.shared.client.auth.session
         let request = try buildRequest(for: descriptor)
         let task = session.uploadTask(with: request, fromFile: descriptor.fileURL)
         inflight[task] = Tracker(descriptor)

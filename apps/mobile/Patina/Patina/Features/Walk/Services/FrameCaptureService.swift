@@ -54,6 +54,15 @@ public final class FrameCaptureService {
     public let scoringEngine = FrameScoringEngine()
     private let logger = Logger(subsystem: "com.patina.app", category: "FrameCapture")
 
+    /// C7-05: one context for the session, not one per captured frame.
+    /// `CIContext()` compiles kernels and allocates GPU state on
+    /// construction, and this one was being built inside the compression
+    /// path, on the main actor, every two seconds for the whole walk.
+    /// GPU-backed and thread-safe, the way `PosedPhotoService` already does
+    /// it — which is why it is `nonisolated` and the encode can leave the
+    /// main actor.
+    private nonisolated let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+
     // MARK: - Initialization
 
     public init() {
@@ -243,23 +252,33 @@ public final class FrameCaptureService {
         // Resize for storage efficiency
         let resizedImage = resizeImage(orientedImage, targetSize: targetImageSize)
 
-        // Convert to UIImage and compress to HEIC
-        let context = CIContext()
-        if let cgImage = context.createCGImage(resizedImage, from: resizedImage.extent) {
-            let uiImage = UIImage(cgImage: cgImage)
+        // C7-05: the render and the HEIC encode leave the main actor. They
+        // are the expensive half of the per-frame path and they ran on the
+        // actor driving the scan's own UI, every two seconds, mid-walk.
+        let context = ciContext
+        let quality = compressionQuality
+        frame.imageData = await Task.detached(priority: .utility) {
+            Self.encode(resizedImage, context: context, quality: quality)
+        }.value
 
-            // Compress to HEIC
-            if let heicData = uiImage.heicData(compressionQuality: compressionQuality) {
-                frame.imageData = heicData
-                logger.debug("Compressed frame to \(heicData.count / 1024)KB HEIC")
-            } else if let jpegData = uiImage.jpegData(compressionQuality: compressionQuality) {
-                // Fallback to JPEG if HEIC fails
-                frame.imageData = jpegData
-                logger.debug("Compressed frame to \(jpegData.count / 1024)KB JPEG (HEIC fallback)")
-            }
+        if let bytes = frame.imageData {
+            logger.debug("Compressed frame to \(bytes.count / 1024)KB")
         }
 
         return frame
+    }
+
+    /// Render and compress off the main actor. HEIC, falling back to JPEG on
+    /// a device or image the HEIC encoder refuses.
+    private nonisolated static func encode(
+        _ image: CIImage,
+        context: CIContext,
+        quality: CGFloat
+    ) -> Data? {
+        guard let cgImage = context.createCGImage(image, from: image.extent) else { return nil }
+        let uiImage = UIImage(cgImage: cgImage)
+        return uiImage.heicData(compressionQuality: quality)
+            ?? uiImage.jpegData(compressionQuality: quality)
     }
 
     /// Resizes a CIImage to fit within target dimensions while maintaining aspect ratio.

@@ -152,4 +152,37 @@ struct BackgroundScanUploaderVerificationTests {
         #expect(stored == sha)
         #expect(BackgroundScanUploader.verificationOutcome(expected: sha, stored: stored) == .accept)
     }
+
+    // MARK: - C7-15: one session read per artifact, not one forced refresh
+
+    /// A bundle is a manifest + a USDZ + a world map + meshes + depth +
+    /// photos, and `upload(_:)` ran a forced `refreshSession()` before each
+    /// one. GoTrue rotates the refresh token on every call and rate-limits
+    /// `/token`; with parallel bundles that is a credible 429 or a rotation
+    /// race that signs the person out mid-scan. `auth.session` refreshes only
+    /// when the session has actually expired.
+    @Test
+    func theUploadPathReadsTheSessionRatherThanForcingARefresh() throws {
+        let source = try SourcePin.read("Patina/Services/Sync/BackgroundScanUploader.swift")
+        let uploadBody = try #require(
+            source.components(separatedBy: "public func upload(_ descriptor: UploadDescriptor)").last?
+                .components(separatedBy: "// MARK: - Request construction").first
+        )
+        let code = uploadBody
+            .split(separator: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        #expect(code.contains("auth.session"))
+        #expect(code.contains("refreshSession()") == false)
+    }
+
+    /// A real 401 is still the one place a forced refresh belongs.
+    @Test
+    func aFourOhOneStillForcesOneRefresh() throws {
+        let source = try SourcePin.read("Patina/Services/Sync/BackgroundScanUploader.swift")
+        let retry = try #require(
+            source.components(separatedBy: "private func refreshSessionAndRetry(").last
+        )
+        #expect(retry.contains("auth.refreshSession()"))
+    }
 }
