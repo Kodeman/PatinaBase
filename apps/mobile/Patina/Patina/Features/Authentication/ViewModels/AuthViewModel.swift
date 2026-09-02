@@ -52,6 +52,30 @@ public final class AuthViewModel {
     /// Success message (e.g., for password reset)
     public var successMessage: String?
 
+    /// P-22 — the ONE thing the form's status region says right now.
+    ///
+    /// A failed code used to leave the green "We emailed you a 6-digit code"
+    /// banner on screen directly above the red "Token has expired or is
+    /// invalid" — two banners, different widths, both pushing Verify off the
+    /// bottom of the sheet. An error replaces the success; there is never
+    /// more than one.
+    public var status: AuthFormStatus? {
+        if let errorMessage { return .failure(errorMessage) }
+        if let successMessage { return .success(successMessage) }
+        return nil
+    }
+
+    /// P-20 — why the button is inert, said under the field.
+    ///
+    /// `tester@@patina.` produced no message at all: the submit button simply
+    /// stayed disabled and the sheet was pixel-identical to the empty state.
+    /// Silent until the reader has typed something, so an untouched field is
+    /// never scolded.
+    public var emailValidationMessage: String? {
+        guard !email.isEmpty, !isValidEmail else { return nil }
+        return "That doesn't look like an email address yet."
+    }
+
     /// Whether password reset was successful
     public var showResetSuccess: Bool = false
 
@@ -191,7 +215,7 @@ public final class AuthViewModel {
             magicLinkCooldown = 60
             showOtpEntry = true
             otpToken = ""
-            successMessage = "We emailed you a 6-digit code"
+            successMessage = "We emailed you a 6-digit sign-in code"
             startCooldownTimer()
         } catch {
             // Error is already set in authService
@@ -208,6 +232,22 @@ public final class AuthViewModel {
         otpToken = ""
         isVerifyingOtp = false
         authService.clearError()
+    }
+
+    /// C1-37 — six digits entered is the submit.
+    ///
+    /// The field caps at six and Verify enables at six, but nothing submitted:
+    /// the reader had to dismiss the number pad (which was covering the
+    /// button) and tap. Called from the field's `onChange`.
+    @MainActor
+    public func otpTokenChanged(_ newValue: String) async {
+        let digits = newValue.filter(\.isNumber)
+        let trimmed = String(digits.prefix(6))
+        if trimmed != otpToken {
+            otpToken = trimmed
+        }
+        guard trimmed.count == 6, !isVerifyingOtp else { return }
+        await verifyOtp()
     }
 
     /// Verify the 6-digit OTP code the user pasted from their email.
@@ -229,6 +269,9 @@ public final class AuthViewModel {
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
             self.isVerifyingOtp = true
+            // P-22: the send's success line has done its job. Whatever this
+            // attempt lands on replaces it — it never sits above a failure.
+            self.successMessage = nil
             defer { self.isVerifyingOtp = false }
             do {
                 try await self.authService.verifyOtp(email: email, token: token)
@@ -243,13 +286,14 @@ public final class AuthViewModel {
         await task.value
     }
 
-    /// Resend magic link
+    /// Resend the sign-in code.
     @MainActor
     public func resendMagicLink() async {
         guard magicLinkCooldown == 0 else { return }
         do {
             try await authService.sendMagicLink(email: magicLinkEmail)
             magicLinkCooldown = 60
+            successMessage = "We emailed you a new sign-in code"
             startCooldownTimer()
         } catch {
             // Error is already set in authService
@@ -368,6 +412,26 @@ public final class AuthViewModel {
         showOtpEntry = false
         otpToken = ""
         isVerifyingOtp = false
+    }
+}
+
+// MARK: - Form status (P-22)
+
+/// One region, one message. The view renders whichever case is present and
+/// never stacks them.
+public enum AuthFormStatus: Equatable, Sendable {
+    case success(String)
+    case failure(String)
+
+    public var message: String {
+        switch self {
+        case .success(let message), .failure(let message): return message
+        }
+    }
+
+    public var isFailure: Bool {
+        if case .failure = self { return true }
+        return false
     }
 }
 

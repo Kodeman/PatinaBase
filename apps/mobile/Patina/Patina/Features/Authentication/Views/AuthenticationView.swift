@@ -43,11 +43,17 @@ public struct AuthenticationView: View {
                 }
                 .padding(PatinaSpacing.xl)
             }
+            .dismissKeyboardOnScroll()
             .background(PatinaColors.Background.primary)
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cancel") {
+                        // P-29: this sheet's failure dies with this sheet.
+                        // Without the clear, "Invalid login credentials"
+                        // survived the dismiss and rendered on the Welcome
+                        // root, shifting the button stack 33 pt.
+                        viewModel.clearForm()
                         dismiss()
                     }
                     .foregroundStyle(PatinaColors.Text.secondary)
@@ -55,6 +61,9 @@ public struct AuthenticationView: View {
             }
             .task {
                 await runUITestAuthBootstrapIfNeeded()
+            }
+            .onDisappear {
+                AuthService.shared.clearError()
             }
         }
     }
@@ -131,7 +140,7 @@ public struct AuthenticationView: View {
         case .signIn:
             return "Welcome back to Patina"
         case .signUp:
-            return "Join the furniture discovery journey"
+            return "Save your rooms and pieces, and pick them up on any device."
         case .magicLink:
             return "We'll email you a sign-in code — no password needed"
         case .resetPassword:
@@ -143,31 +152,7 @@ public struct AuthenticationView: View {
 
     private var formContent: some View {
         VStack(spacing: PatinaSpacing.md) {
-            // Success message (e.g., password reset, magic link sent)
-            if let success = viewModel.successMessage {
-                HStack(spacing: PatinaSpacing.sm) {
-                    Image(systemName: viewModel.magicLinkSent ? "envelope.fill" : "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text(success)
-                        .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(.green)
-                }
-                .padding(PatinaSpacing.md)
-                .frame(maxWidth: .infinity)
-                .background(Color.green.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
-            }
-
-            // Error message
-            if let error = viewModel.errorMessage {
-                Text(error)
-                    .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(.red)
-                    .padding(PatinaSpacing.md)
-                    .background(Color.red.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
-                    .accessibilityIdentifier("auth.form.errorBanner")
-            }
+            statusRegion
 
             // Email-not-confirmed recovery state (production blocks
             // password sign-in until the verification link is clicked).
@@ -191,14 +176,26 @@ public struct AuthenticationView: View {
                 }
 
                 // Email
-                AuthTextField(
-                    "Email",
-                    text: $viewModel.email,
-                    icon: "envelope",
-                    keyboardType: .emailAddress,
-                    autocapitalization: .never
-                )
-                .accessibilityIdentifier("auth.form.emailField")
+                VStack(alignment: .leading, spacing: PatinaSpacing.xs) {
+                    AuthTextField(
+                        "Email",
+                        text: $viewModel.email,
+                        icon: "envelope",
+                        keyboardType: .emailAddress,
+                        autocapitalization: .never
+                    )
+                    .accessibilityIdentifier("auth.form.emailField")
+
+                    // P-20: the button is inert and now says why. Silent
+                    // until something has been typed.
+                    if let message = viewModel.emailValidationMessage {
+                        Text(message)
+                            .font(PatinaTypography.caption)
+                            .foregroundStyle(PatinaColors.Text.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("auth.form.emailValidation")
+                    }
+                }
 
                 // Password (not for reset or magic link)
                 if viewModel.mode != .resetPassword && viewModel.mode != .magicLink {
@@ -217,7 +214,36 @@ public struct AuthenticationView: View {
         }
     }
 
-    // MARK: - Magic Link Sent
+    // MARK: - Status (P-22)
+
+    /// ONE region. A failure replaces the send's success line rather than
+    /// stacking under it; both used to show at once, in different widths, and
+    /// together they pushed Verify off the bottom of the sheet.
+    ///
+    /// The message carries its own meaning; the tint is a second-order cue,
+    /// not the carrier (VISION §6). Neither case fills a coloured panel.
+    @ViewBuilder
+    private var statusRegion: some View {
+        if let status = viewModel.status {
+            HStack(alignment: .top, spacing: PatinaSpacing.sm) {
+                Image(systemName: status.isFailure ? "exclamationmark.circle" : "envelope")
+                    .font(.system(size: 15, weight: .regular))
+                Text(status.message)
+                    .font(PatinaTypography.bodySmall)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(
+                status.isFailure ? PatinaColors.terracotta : PatinaColors.Text.secondary
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier(
+                status.isFailure ? "auth.form.errorBanner" : "auth.form.statusBanner"
+            )
+        }
+    }
+
+    // MARK: - Sign-in code sent
 
     private var magicLinkSentView: some View {
         VStack(spacing: PatinaSpacing.lg) {
@@ -231,7 +257,7 @@ public struct AuthenticationView: View {
                 .font(PatinaTypography.h3)
                 .foregroundStyle(PatinaColors.Text.primary)
 
-            Text("We sent a magic link to")
+            Text("We sent a sign-in code to")
                 .font(PatinaTypography.body)
                 .foregroundStyle(PatinaColors.Text.secondary)
 
@@ -239,7 +265,7 @@ public struct AuthenticationView: View {
                 .font(PatinaTypography.bodyMedium)
                 .foregroundStyle(PatinaColors.Text.primary)
 
-            Text("Click the link in the email to sign in.")
+            Text("Open the email and enter the code to sign in.")
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
@@ -257,7 +283,7 @@ public struct AuthenticationView: View {
                     } else {
                         Text(viewModel.magicLinkCooldown > 0
                              ? "Resend in \(viewModel.magicLinkCooldown)s"
-                             : "Resend magic link")
+                             : "Resend the code")
                     }
                 }
                 .font(PatinaTypography.bodyMedium)
@@ -322,7 +348,8 @@ public struct AuthenticationView: View {
                 .font(PatinaTypography.bodyMedium)
                 .foregroundStyle(PatinaColors.Text.primary)
 
-            // 6-digit code field
+            // 6-digit code field. C9-08: a number pad has no Return key, so
+            // it gets the shared Done bar.
             TextField("000000", text: $viewModel.otpToken)
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
@@ -335,20 +362,18 @@ public struct AuthenticationView: View {
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
                         .stroke(PatinaColors.clay.opacity(0.2), lineWidth: 1)
                 )
+                .keyboardDoneToolbar()
                 .onChange(of: viewModel.otpToken) { _, newValue in
-                    // Strip any non-digit characters (paste, autofill,
-                    // anything else) and cap at 6 characters.
-                    let digits = newValue.filter(\.isNumber)
-                    let trimmed = String(digits.prefix(6))
-                    if trimmed != newValue {
-                        viewModel.otpToken = trimmed
-                    }
+                    // C1-37: strips non-digits, caps at six — and the sixth
+                    // digit IS the submit. The reader no longer has to put a
+                    // number pad away to reach a button it is covering.
+                    Task { await viewModel.otpTokenChanged(newValue) }
                 }
                 .accessibilityIdentifier("auth.otp.tokenField")
 
-            // Verify button. On success the auth state listener sets the
-            // session and the phase observer in AppCoordinator tears down
-            // the sheet automatically — no `dismiss()` needed here.
+            // Verify button, directly under the field. On success the auth
+            // state listener sets the session and the phase observer in
+            // AppCoordinator tears down the sheet — no `dismiss()` here.
             Button {
                 Task {
                     await viewModel.verifyOtp()
@@ -357,22 +382,18 @@ public struct AuthenticationView: View {
                 HStack {
                     if viewModel.isVerifyingOtp {
                         ProgressView()
-                            .tint(.white)
+                            .tint(PatinaColors.Text.inverse)
                     } else {
                         Text("Verify")
                     }
                 }
                 .font(PatinaTypography.bodyMedium)
-                .foregroundStyle(PatinaColors.Text.inverse)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, PatinaSpacing.md)
-                .background(
-                    (viewModel.otpToken.count == 6 && !viewModel.isVerifyingOtp)
-                    ? PatinaColors.Interactive.active
-                    : PatinaColors.clay
-                )
-                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
             }
+            .buttonStyle(AuthFilledButtonStyle(
+                isEnabled: viewModel.otpToken.count == 6 && !viewModel.isVerifyingOtp
+            ))
             .disabled(viewModel.otpToken.count != 6 || viewModel.isVerifyingOtp)
             .accessibilityIdentifier("auth.otp.verifyButton")
 
@@ -437,19 +458,20 @@ public struct AuthenticationView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            // Resend success indicator
+            // Resend confirmation. The third colour-coded panel on this screen
+            // until P-22 collapsed the other two: same shape as `statusRegion`,
+            // so the sheet has one way of saying a thing happened.
             if viewModel.verificationResendSuccess {
-                HStack(spacing: PatinaSpacing.sm) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                HStack(alignment: .top, spacing: PatinaSpacing.sm) {
+                    Image(systemName: "envelope")
+                        .font(.system(size: 15, weight: .regular))
                     Text("Verification email sent")
                         .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(.green)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
                 }
-                .padding(PatinaSpacing.md)
-                .frame(maxWidth: .infinity)
-                .background(Color.green.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md))
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             // Resend button
@@ -507,18 +529,16 @@ public struct AuthenticationView: View {
             HStack {
                 if viewModel.isLoading {
                     ProgressView()
-                        .tint(.white)
+                        .tint(PatinaColors.Text.inverse)
                 } else {
                     Text(submitButtonTitle)
                 }
             }
             .font(PatinaTypography.bodyMedium)
-            .foregroundStyle(PatinaColors.Text.inverse)
             .frame(maxWidth: .infinity)
             .padding(.vertical, PatinaSpacing.md)
-            .background(viewModel.isFormValid ? PatinaColors.Interactive.active : PatinaColors.clay)
-            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
         }
+        .buttonStyle(AuthFilledButtonStyle(isEnabled: viewModel.isFormValid && !viewModel.isLoading))
         .disabled(!viewModel.isFormValid || viewModel.isLoading)
         .accessibilityIdentifier("auth.form.primaryButton")
     }
@@ -526,13 +546,13 @@ public struct AuthenticationView: View {
     private var submitButtonTitle: String {
         switch viewModel.mode {
         case .signIn:
-            return "Sign In"
+            return "Sign in"
         case .signUp:
-            return "Create Account"
+            return "Create account"
         case .magicLink:
             return "Email me a code"
         case .resetPassword:
-            return "Send Reset Link"
+            return "Send reset link"
         }
     }
 
@@ -585,6 +605,12 @@ public struct AuthenticationView: View {
     }
 
     // MARK: - Mode Switcher
+    //
+    // GAP1B-08 (L1-C's note A-L1C-1, applied here because this is L1-A's file):
+    // these links measured 17.0 pt. A Button whose label is bare Text hit-tests
+    // the glyph bounds, so each one gets its own `.frame(minHeight: 44)` plus
+    // `.contentShape(Rectangle())` — per link, never per row, so the two that
+    // sit side by side stay separately targetable.
 
     private var modeSwitcher: some View {
         VStack(spacing: PatinaSpacing.sm) {
@@ -596,16 +622,20 @@ public struct AuthenticationView: View {
                     }
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
 
                     Text("·")
                         .foregroundStyle(PatinaColors.Text.muted)
 
-                    Button("Use magic link") {
+                    Button("Email me a code") {
                         viewModel.mode = .magicLink
                         viewModel.clearForm()
                     }
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
             }
 
@@ -616,6 +646,8 @@ public struct AuthenticationView: View {
                 }
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.secondary)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
 
             // The email-code path unifies sign-up and sign-in, so it never
@@ -629,17 +661,41 @@ public struct AuthenticationView: View {
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.Text.muted)
 
-                    Button(viewModel.mode == .signIn ? "Sign Up" : "Sign In") {
+                    Button(viewModel.mode == .signIn ? "Sign up" : "Sign in") {
                         viewModel.mode = viewModel.mode == .signIn ? .signUp : .signIn
                         viewModel.clearForm()
                     }
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.secondary)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("auth.form.modeSwitcherButton")
                 }
             }
         }
         .padding(.top, PatinaSpacing.md)
+    }
+}
+
+// MARK: - Filled button (C3-06)
+//
+// The auth form painted its DISABLED state in `PatinaColors.clay` — the
+// warmest, most tappable-looking colour in the palette — and its ENABLED
+// state in neutral charcoal. There was no other disabled affordance: no
+// opacity change, and the label stayed `Text.inverse` either way. One filled
+// style, dimmed when it is dead.
+
+struct AuthFilledButtonStyle: ButtonStyle {
+    let isEnabled: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(PatinaColors.Text.inverse)
+            .background(PatinaColors.Interactive.active)
+            .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.9 : 1.0) : 0.4)
+            .scaleEffect(configuration.isPressed && isEnabled ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
