@@ -16,7 +16,7 @@
 import SwiftUI
 import Supabase
 
-struct ThreadDetailView: View {
+struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
     let threadId: String
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel: ThreadDetailViewModel
