@@ -9,8 +9,11 @@
 // invite link also sidesteps prod's email-confirm requirement).
 //
 // Structure mirrors designer-invite/index.ts (render-from-DB + the single
-// sendCompliantEmail chokepoint). Unlike designer-invite (admin-domain only),
-// the caller here must be an ACTIVE owner/admin of the TARGET organization.
+// sendCompliantEmail chokepoint). The caller must be an ACTIVE owner/admin of
+// the TARGET organization, OR a platform admin (roles.domain = 'admin') — the
+// admin portal's studio roster invites through this same function (00556). The
+// response reports which of the two acted as `actorKind`. Either way the
+// organization itself must be `active`, else 409 organization_not_active.
 //
 // ── LOAD-BEARING ORDER ──────────────────────────────────────────────────────
 // The organization_members row (status='invited') is inserted BEFORE any
@@ -29,8 +32,8 @@
 // idempotent alongside 00290's trigger (same value, either order).
 //
 // verify_jwt = true (config.toml). The platform verifies the caller's JWT; we
-// then resolve the caller and require an active owner/admin membership in the
-// target organization before doing anything.
+// then resolve the caller and require either an active owner/admin membership
+// in the target organization or an admin-domain role before doing anything.
 //
 // Required env (auto-injected by the platform):
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -50,6 +53,8 @@ import { sendCompliantEmail } from '../_shared/send-email.ts';
 import {
   type InviteEmailOutcome,
   inviteEmailOutcome,
+  isInvitableOrgStatus,
+  resolveInviteActor,
   TEMPLATE_MISSING_OUTCOME,
 } from './lib.ts';
 
@@ -169,7 +174,18 @@ async function handleInvite(req: Request): Promise<Response> {
     return json({ error: 'invalid_job_title' }, 400);
   }
 
-  // ── Caller authz: active owner/admin of the target organization ──────────
+  // ── Target organization (email copy; the gates fire after authz) ─────────
+  // Fetched here for the studio name. Existence and status are GATED BELOW,
+  // after authz — an unauthorized caller must not learn from a 404/409 whether
+  // an organization id exists or what state it is in.
+  const { data: org } = await admin
+    .from('organizations')
+    .select('name, status')
+    .eq('id', organizationId)
+    .maybeSingle();
+  const studioName = (org as { name?: string } | null)?.name?.trim() || 'the studio';
+
+  // ── Caller authz: active owner/admin of the org, else a platform admin ────
   const { data: callerMembership, error: authzError } = await admin
     .from('organization_members')
     .select('role, status')
@@ -182,15 +198,38 @@ async function handleInvite(req: Request): Promise<Response> {
     console.error('workspace-member-invite: authz query failed', authzError);
     return json({ error: 'authz_query_failed' }, 500);
   }
-  if (!callerMembership) return json({ error: 'forbidden' }, 403);
 
-  // Studio name (for the email) + inviter name (for the email).
-  const { data: org } = await admin
-    .from('organizations')
-    .select('name')
-    .eq('id', organizationId)
-    .maybeSingle();
-  const studioName = (org as { name?: string } | null)?.name?.trim() || 'the studio';
+  // Platform-admin bypass — the admin portal's studio roster invites through
+  // this same function. Same check as designer-invite/index.ts callerIsAdmin()
+  // and apps/admin-portal getAuthenticatedAdmin(); kept local so no _shared
+  // edit forces a fleet-wide redeploy.
+  let isPlatformAdmin = false;
+  if (!callerMembership) {
+    const { data: adminRoles, error: adminRoleError } = await admin
+      .from('user_roles')
+      .select('role_id, roles!inner(domain)')
+      .eq('user_id', caller.id)
+      .eq('roles.domain', 'admin');
+    if (adminRoleError) {
+      console.error('workspace-member-invite: admin role check failed', adminRoleError);
+      return json({ error: 'authz_query_failed' }, 500);
+    }
+    isPlatformAdmin = (adminRoles?.length ?? 0) > 0;
+  }
+
+  const actorKind = resolveInviteActor({
+    membership: callerMembership,
+    isPlatformAdmin,
+  });
+  if (!actorKind) return json({ error: 'forbidden' }, 403);
+
+  // Authorized — only now may the caller learn about the organization itself.
+  // A suspended/deactivated studio takes no new invites from anyone, studio
+  // admin or platform admin (00556 makes organizations.status load-bearing).
+  if (!org) return json({ error: 'organization_not_found' }, 404);
+  if (!isInvitableOrgStatus((org as { status?: string } | null)?.status)) {
+    return json({ error: 'organization_not_active' }, 409);
+  }
 
   const { data: inviterProfile } = await admin
     .from('profiles')
@@ -201,7 +240,7 @@ async function handleInvite(req: Request): Promise<Response> {
     (inviterProfile as any)?.full_name?.trim() ||
     (inviterProfile as any)?.business_name?.trim() ||
     (inviterProfile as any)?.display_name?.trim() ||
-    'A studio admin';
+    (actorKind === 'platform_admin' ? 'The Patina team' : 'A studio admin');
 
   // 1. Generate the token first so it can ride inside the invite redirect.
   const token = crypto.randomUUID(); // 36 chars — fits invitation_token VARCHAR(64)
@@ -346,6 +385,7 @@ async function handleInvite(req: Request): Promise<Response> {
       organizationId,
       teammateType,
       memberRole,
+      actorKind,
       ...outcome,
       ...(includeActionLink ? { actionLink } : {}),
     });
