@@ -72,6 +72,20 @@ struct PatinaLogger {
         }
     }
 
+    /// Notice-level message — os_log's default level, and the lowest one that
+    /// survives into a Release build's log archive, so it is the level a
+    /// TestFlight tester's Console session can actually read. Use it only for
+    /// the handful of facts a release-build diagnosis needs; `debug` and `info`
+    /// are still the right home for everything else.
+    func notice(_ message: String, privacy: OSLogPrivacy = .public) {
+        switch privacy {
+        case .private:
+            logger.notice("\(message, privacy: .private)")
+        default:
+            logger.notice("\(message, privacy: .public)")
+        }
+    }
+
     /// Informational message — persisted, useful for flow tracing.
     func info(_ message: String, privacy: OSLogPrivacy = .public) {
         switch privacy {

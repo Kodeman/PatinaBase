@@ -128,7 +128,9 @@ struct DailyStoryCard: View {
     }
 }
 
+#if DEBUG
 #Preview {
     DailyStoryCard(story: .preview)
         .background(PatinaColors.Background.primary)
 }
+#endif

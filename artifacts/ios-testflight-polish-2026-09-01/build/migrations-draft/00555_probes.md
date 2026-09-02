@@ -4,9 +4,59 @@ Read-only verification for `00555_ios_round_one_security.sql`. Nothing here muta
 Every probe states the **before** (what Strata answers today, measured 2026-09-01) and the
 **after** (what it must answer once the migration is applied).
 
-Companion test script: `00555_ios_round_one_security.test.sql` (destination
-`supabase/tests/rls/`). The repo's tests are plain psql scripts with `DO`/`ASSERT`, not pgTAP,
-and the local gate is the **whole suite** via `scripts/run-sql-tests.sh`, not the one file.
+> ## ⚠ The migration and its test no longer live in this folder
+>
+> This folder held **drafts**. They were superseded on 2026-09-02 and deleted, because they had
+> diverged from the real files by 207 and 131 diff lines respectively and still carried three
+> hazards the tree copies fixed: no `handle_new_user` body (the draft told the applier to "copy it
+> from the live definition at apply time"), an inline recursive `WITH CHECK` that raises
+> `42P17 infinite recursion detected in policy for relation "profiles"` on the owner's first
+> display-name write, and a vacuous `LIKE '%homeowner%'` assertion that passes against the
+> *unfixed* function.
+>
+> **The only copies are:**
+>
+> | | |
+> |---|---|
+> | migration | `supabase/migrations/00555_ios_round_one_security.sql` |
+> | test | `supabase/tests/rls/00555_ios_round_one_security.test.sql` |
+> | sibling migration | `supabase/migrations/00557_increment_scan_upload_attempt.sql` (renumbered from 00556 — see below) |
+> | sibling test | `supabase/tests/rls/00557_increment_scan_upload_attempt.test.sql` |
+>
+> `PROGRAM.md` §3 L0.2 still points readers at `build/migrations-draft/`. It means these files.
+>
+> **The apply sequence is not here either.** It is
+> `artifacts/ios-testflight-polish-2026-09-01/build/waves/w0/KODY-RUNBOOK.md`, which opens with the
+> Step 0 deploy gate (**D8**) and the Step 0b ruling gate, and ends with the rollback. This file is
+> only the probe half of that runbook's Step 5.
+
+The repo's tests are plain psql scripts with `DO`/`ASSERT`, not pgTAP, and the local gate is the
+**whole suite** via `scripts/run-sql-tests.sh`, not the one file.
+
+---
+
+## Exit-criteria cross-reference
+
+`PROGRAM.md` §3 L0.2's exit criteria say *"Probes 1-5 and 9b/9d/9f return the after values"*. Those
+names are **not** this file's section numbers — read the map, not the digits.
+
+| PROGRAM.md exit criterion | Section in this file | What it asserts |
+|---|---|---|
+| Probe 1 | **§1** | anon can no longer read `profiles` |
+| Probe 2 | **§2** | anon can no longer read *or write* `notification_preferences` |
+| Probe 3 (3a/3b/3c) | **§3** | `vendors` — public face kept, trade file and `*` gone |
+| Probe 4 | **§5** | the iOS product read (the `vendors!products_vendor_id_fkey` embed) still works as a guest |
+| Probe 5 | **§11** | the designer portal's own HTTP route, a **different principal** — `app.patina.cloud/api/catalog/vendors` must not answer 200 with trade columns |
+| **9b** — the `FOR ALL` / `TO PUBLIC` / `auth.uid() IS NULL` policy sweep | **§9b** | 0 rows |
+| **9d** — the `vendors` column allowlist | **§9d** | the 24 public-face columns, and only those |
+| **9f** — the identity-column pins | **§9f** | **both** of `profiles`' UPDATE policies pin `is_designer`; the owner's is the one-way ratchet; the sibling's `USING` reads the OLD row over both client strings; `designer_clients` carries the two RESTRICTIVE write policies, reading `user_roles` and **not** `profiles.role`; `handle_new_user` is 00313 verbatim |
+
+The two RPC probes keep their own headings and are **not** part of the exit criteria:
+§9 (`search_shareable_designers`) and §9a (`list_vendor_profiles`). §9f carries every half of the
+identity-column check — the two policies' clauses (§9f-i), the roster mint (§9f-ia), `anon`'s grants on
+`designer_clients` (§9f-ib), `handle_new_user`'s body (§9f-ii), the three REVOKEs with no probe of
+their own (§9f-iii), the definer views and the two authority tables (§9f-iv), and the two `INSERT`
+policies plus `can_view_profile`'s roster-leg authority (§9f-v).
 
 ---
 
@@ -17,10 +67,19 @@ export PROJECT_REF=bkvcixdmuyejfzcijpdg
 export SB_URL="https://${PROJECT_REF}.supabase.co"
 
 # The Strata anon key — the same one compiled into the iOS binary. It is a
-# committed literal, not a secret: apps/client-portal/wrangler.jsonc:23
-# ("NEXT_PUBLIC_SUPABASE_ANON_KEY").
-export ANON_KEY='<value from apps/client-portal/wrangler.jsonc:23>'
+# committed literal, not a secret: apps/client-portal/wrangler.jsonc
+# ("NEXT_PUBLIC_SUPABASE_ANON_KEY"). Read it, do not retype it.
+export ANON_KEY="$(python3 -c "
+import json,re,pathlib
+raw = pathlib.Path('apps/client-portal/wrangler.jsonc').read_text()
+raw = re.sub(r'^\s*//.*$', '', raw, flags=re.M)
+print(json.loads(raw)['vars']['NEXT_PUBLIC_SUPABASE_ANON_KEY'])
+")"
+echo "ANON_KEY length: ${#ANON_KEY}"        # non-zero, and starts eyJ
 ```
+
+Run that from the repo root. If the length prints `0`, you are in the wrong directory — fix that
+rather than pasting a key in by hand.
 
 ### `STRATA_DB_URL` (needed only for the apply step and the SQL probes)
 
@@ -49,28 +108,43 @@ the probe does not have to run against prod.
 
 ```bash
 # (a) LOCAL — password grant against a seeded account. Fastest, repeatable.
-#     Any seeded local user works; the seeds live in supabase/seed/.
+#     The seeded client is client@patina.dev / password123 (supabase/seed/).
 export LOCAL_URL='http://127.0.0.1:54321'
-export LOCAL_ANON='<anon key from `supabase status`>'
+export LOCAL_ANON="$(supabase status -o env | grep -m1 '^ANON_KEY=' | cut -d= -f2- | tr -d '"')"
+echo "LOCAL_ANON: ${#LOCAL_ANON} chars"
 USER_JWT=$(curl -sS -X POST "$LOCAL_URL/auth/v1/token?grant_type=password" \
   -H "apikey: $LOCAL_ANON" -H 'Content-Type: application/json' \
-  -d '{"email":"<seeded email>","password":"<seeded password>"}' \
+  -d '{"email":"client@patina.dev","password":"password123"}' \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
 export USER_JWT
 ```
 
 ```bash
 # (b) PROD — there is no password to grant. mailer_autoconfirm is false and the app
-#     signs in with an emailed OTP (A3 §Auth), so this is a two-step with a mailbox:
+#     signs in with an emailed OTP (A3 §Auth), so this is a two-step with a mailbox.
+#     D7/D11 retire tester@patina.cloud; the demo identity is firstflight@patina.cloud
+#     (build/waves/w0/demo-account.md).
+export PROBE_EMAIL='firstflight@patina.cloud'
+
 curl -sS -X POST "$SB_URL/auth/v1/otp" \
   -H "apikey: $ANON_KEY" -H 'Content-Type: application/json' \
-  -d '{"email":"tester@patina.cloud","create_user":false}'
-# …read the 6-digit code from the mailbox, then:
+  -d "{\"email\":\"$PROBE_EMAIL\",\"create_user\":false}"
+
+# Read the 6-digit code out of the mailbox, then type it at this prompt rather than
+# editing it into a command. The leading space keeps the code out of shell history.
+ read -rs OTP_CODE && export OTP_CODE
+
 USER_JWT=$(curl -sS -X POST "$SB_URL/auth/v1/verify" \
   -H "apikey: $ANON_KEY" -H 'Content-Type: application/json' \
-  -d '{"type":"email","email":"tester@patina.cloud","token":"<code>"}' \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+  -d "$(python3 -c "
+import json, os
+print(json.dumps({'type': 'email',
+                  'email': os.environ['PROBE_EMAIL'],
+                  'token': os.environ['OTP_CODE']}))
+")" | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
 export USER_JWT
+unset OTP_CODE
+echo "USER_JWT: ${#USER_JWT} chars"
 ```
 
 > The `000000` test code does **not** work here. `test-account-login` mints a GoTrue
@@ -330,23 +404,33 @@ readers are listed in the migration's READERS block §3; anything *else* returni
 ## 9 · search_shareable_designers (the replacement for the iOS designer search)
 
 ```bash
-# 9a — a signed-in user finds a designer they have no relationship with
-curl -sS -o /tmp/p9.json -w '%{http_code}\n' \
+# 9-i — a signed-in user finds a designer they have no relationship with
+curl -sS -o /tmp/p9_i.json -w '%{http_code}\n' \
   -X POST "$SB_URL/rest/v1/rpc/search_shareable_designers" \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
   -H 'Content-Type: application/json' -d '{"p_query":"kody"}'
-cat /tmp/p9.json
+cat /tmp/p9_i.json
 # after: 200, rows of {id, display_name, business_name, avatar_url} — and NO email key
-python3 -c "import json;d=json.load(open('/tmp/p9.json'));print('email leaked' if any('email' in r for r in d) else 'no email', len(d))"
+python3 -c "import json;d=json.load(open('/tmp/p9_i.json'));print('email leaked' if any('email' in r for r in d) else 'no email', len(d))"
 
-# 9b — the two-character floor stops directory enumeration
-curl -sS -o /tmp/p9b.json -w '%{http_code}\n' \
+# 9-ii — the two-character floor stops directory enumeration
+curl -sS -o /tmp/p9_ii.json -w '%{http_code}\n' \
   -X POST "$SB_URL/rest/v1/rpc/search_shareable_designers" \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
   -H 'Content-Type: application/json' -d '{"p_query":""}'
 # after: 200 []
 
-# 9c — closed to the anon key
+# 9-iii — and a WILDCARD does not defeat the floor. '%a' is two characters, and
+#         before the 2026-09-02 escaping fix it matched every name containing
+#         'a' — exactly what the floor exists to prevent.
+curl -sS -o /tmp/p9_iii.json -w '%{http_code}\n' \
+  -X POST "$SB_URL/rest/v1/rpc/search_shareable_designers" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+  -H 'Content-Type: application/json' -d '{"p_query":"%a"}'
+python3 -c "import json;print(len(json.load(open('/tmp/p9_iii.json'))))"
+# after: 200, 0 rows
+
+# 9-iv — closed to the anon key
 curl -sS -o /dev/null -w '%{http_code}\n' \
   -X POST "$SB_URL/rest/v1/rpc/search_shareable_designers" \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
@@ -354,18 +438,18 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 # after: 401 / 42501
 ```
 
-## 9b · list_vendor_profiles (the replacement for the designer-portal vendor picker)
+## 9a · list_vendor_profiles (the replacement for the designer-portal vendor picker)
 
 ```bash
-# 9b-i — a signed-in caller gets the vendor directory, no PII
-curl -sS -o /tmp/p9d.json -w '%{http_code}\n' \
+# 9a-i — a signed-in caller gets the vendor directory, no PII
+curl -sS -o /tmp/p9a_i.json -w '%{http_code}\n' \
   -X POST "$SB_URL/rest/v1/rpc/list_vendor_profiles" \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
   -H 'Content-Type: application/json' -d '{}'
-python3 -c "import json;d=json.load(open('/tmp/p9d.json'));print(len(d), sorted(d[0].keys()) if d else 'EMPTY')"
+python3 -c "import json;d=json.load(open('/tmp/p9a_i.json'));print(len(d), sorted(d[0].keys()) if d else 'EMPTY')"
 # after: 200, keys exactly ['avatar_url', 'full_name', 'id'] — no email, no phone
 
-# 9b-ii — closed to the anon key
+# 9a-ii — closed to the anon key
 curl -sS -o /dev/null -w '%{http_code}\n' \
   -X POST "$SB_URL/rest/v1/rpc/list_vendor_profiles" \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
@@ -373,28 +457,394 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 # after: 401 / 42501
 ```
 
-## 9c · Role self-elevation is closed
+## 9b · EXIT CRITERION — nothing `FOR ALL` + `TO PUBLIC` + `auth.uid() IS NULL` survives
 
-00013 shipped `"Users can update own profile"` as `USING`-only with no column restriction, so any
-authenticated caller could set their own `profiles.role` to `'designer'`. 00555 section (a2) adds a
-`WITH CHECK` that pins the column, and gives `handle_new_user` a homeowner default. Read-only check:
+This is the sweep `PROGRAM.md` §3 L0.2 calls **probe 9b**. Read-only, `$STRATA_DB_URL`.
 
 ```sql
--- 9c-i. the policy now carries a WITH CHECK, and it names role
-SELECT polname, pg_get_expr(polwithcheck, polrelid) AS with_check
+SELECT n.nspname, c.relname, p.polname
+FROM pg_policy p
+JOIN pg_class c     ON c.oid = p.polrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE p.polcmd = '*' AND p.polroles = '{0}'
+  AND pg_get_expr(p.polqual, p.polrelid) = '(auth.uid() IS NULL)';
+```
+
+| | expected |
+|---|---|
+| before | 8 rows (the seven marketing-rail policies plus `notification_preferences`) |
+| **after** | **0 rows** |
+
+That shape grants the table to the unauthenticated key and nothing to `service_role`, which is
+`BYPASSRLS` and never needed it. A surviving row means a `DROP POLICY IF EXISTS` in §d did not
+match the policy's real name — read the name off `pg_policy`, do not guess it.
+
+## 9d · EXIT CRITERION — the `vendors` column allowlist
+
+This is **probe 9d**. Read-only, `$STRATA_DB_URL`.
+
+```sql
+SELECT column_name
+FROM information_schema.column_privileges
+WHERE table_schema = 'public' AND table_name = 'vendors'
+  AND grantee = 'anon' AND privilege_type = 'SELECT'
+ORDER BY column_name;
+```
+
+| | expected |
+|---|---|
+| before | all 37 columns |
+| **after** | the **24** public-face columns only |
+
+None of these may appear: `notes`, `trade_terms`, `contact_info`, `preferred_contact`,
+`orders_email`, `trade_account_email`, `trade_portal_url`, `trade_account_established_at`,
+`default_payment_terms`, `nomination_status`, `nominated_by`, `nominated_at`,
+`contact_profile_id`. `id` **must** appear — a column allowlist that forgot `id` would still pass
+an ACL-shape check while breaking every products embed (probe 4).
+
+## 9f · EXIT CRITERION — the identity columns are pinned, and the mint is closed
+
+00013 shipped `"Users can update own profile"` as `USING`-only with no column restriction, so any
+authenticated caller could set their own `profiles.is_designer` to `true` — the column the whole
+designer-side rail reads as authority — and their own `profiles.role` to anything at all. 00555
+section (a2) closes both, on **both** of the table's permissive `UPDATE` policies, and (a2)(i-c) closes
+the roster-row primitive that reached the second one.
+
+**`role` is a LABEL; `is_designer` is the AUTHORITY.** That distinction is ruling **B2 v3(b)** and it is
+what fix round 3 rebuilt this section around. The designer-side RPCs read `is_designer`, never `role`:
+`claim_design_request` and the `open_design_requests` view (00286), `accept_design_request` (00330),
+`design_request_submit` (00285), `_can_manage_configurable_product`, and 00555's own
+`search_shareable_designers`. `profiles_select_admin` reads `user_roles`. And after **RF2-01** so do the
+two RESTRICTIVE policies on `designer_clients`.
+
+**The owner policy is a one-way RATCHET, not a freeze** — ruling **B2 v3(c)**, new in fix round 3:
+
+| column | permitted new value on the owner's own row |
+|---|---|
+| `role` | unchanged, **or** `'homeowner'` |
+| `is_designer` | unchanged, **or** `false` |
+
+Never upward, in either column. The downgrade leg is not a loosening for its own sake: it is A3-07's
+fix. An Apple/Google sign-up lands `role = 'designer'` (`handle_new_user`, unchanged since 00013 —
+see §9f-ii), and `supabase-swift` cannot attach creation metadata to an OAuth sign-in, so the app
+corrects its own row afterwards. The contract is `build/waves/w1/l1-a-notes.md`; the local behaviour
+cases are 7i–7i5 in `00555_ios_round_one_security.test.sql`.
+
+**`profiles` carries TWO permissive `UPDATE` policies, and this probe wants BOTH.** The second is
+`"Designers can update their client profiles"` (00017:19). Postgres ORs the permissive `WITH CHECK`s
+for an `UPDATE`, and a policy whose `WITH CHECK` is NULL reuses its own `USING` — so as 00017 shipped
+it, a new row had to satisfy only one of the two and the pin above was skipped entirely.
+
+**The sibling's pin is on the OLD row** (fix round 2's correction). Pinning only its `WITH CHECK` to
+literals is satisfied *by construction* when the caller is DEMOTING a designer. Reproduced over HTTP as
+a seeded homeowner: mint a roster row naming the seeded designer as your client, then
+`PATCH {"role":"homeowner","is_designer":false}` → 204, then `PATCH {"display_name":"PWNED"}` → 204.
+The victim went from `designer | t | Leah Hartwell` to `homeowner | f | PWNED`. The same predicates now
+also sit in the policy's `USING`, which reads the OLD row, so a designer, admin or vendor on a roster
+is not a row this policy can select at all.
+
+**And the sibling reads TWO client strings** — ruling **B2 v3(e)**, finding RF2-06, new in fix round 3.
+`role IN ('homeowner','client')`, not the single literal. `profiles.role` has no `CHECK` constraint and
+no enum; `public.comms_resolve_role` (00103:37-42) treats every non-admin/designer/vendor role as a
+client; `public.roles` carries a `client` row in the `consumer` domain. With `'homeowner'` alone a
+designer whose client row said `'client'` could not rename that client at all — the policy selected no
+row, the `PATCH` answered `200 []`, and the rename silently did nothing.
+
+**And the sibling now asks what the CALLER is, not only what the target row is** — finding **RF3-03**,
+new in fix round 3 pass 2. Both clauses open with the same two-signal predicate the `designer_clients`
+restrictive policies read: `current_profile_is_designer() IS TRUE OR EXISTS (user_roles ⨝ roles,
+domain IN ('designer','admin'))`. Never `profiles.role`. Until this pass the roster row was the entire
+admission test, and the restrictive policies below govern only **new** writes — this migration
+deliberately deletes no existing roster row — so every row minted **before** 00555 by a non-designer
+kept its holder a profile write and, through `can_view_profile`'s roster leg, a PII read. Measured with
+a roster row planted as `service_role` for a non-designer signup: `PATCH display_name` → 200, renamed;
+`GET select=id,email,phone` → 200. The predicate turns that into a lockout with no data change and
+nothing to backfill; **B7a** in the runbook is the audit that says whether production has such an
+owner, and it is now a hard stop. Local behaviour case: **7m**.
+
+**And the roster row itself can no longer be minted by a non-designer.** 00555 (a2)(i-c) adds two
+RESTRICTIVE policies on `public.designer_clients` — `designer_clients_writer_is_designer` (INSERT) and
+`designer_clients_updater_is_designer` (UPDATE) — because both permissive write policies on that table
+are satisfied by `designer_id = auth.uid()` (00014's `USING (auth.uid() = designer_id)` with no
+`WITH CHECK`, and 00316's `is_studio_comember(designer_id)`, whose first branch is
+`p_owner = auth.uid()`). Restrictive policies AND onto the OR of the permissive set, so this holds
+whichever leg admitted the row.
+
+**Their predicate reads `user_roles` and `is_designer`, and NOT `profiles.role`** — finding **RF2-01**,
+the blocker fix round 3 opened with. Fix round 2 shipped them with an
+`OR current_profile_role() IN ('designer','admin','super_admin')` leg, reasoning that a portal
+self-signup carries `role = 'designer'` before any grant lands. But `handle_new_user` gives **every**
+email/password signup that label, so the leg read *"anyone who can complete a signup form may mint a
+roster row"* — restoring, in the policy written to close it, the exact primitive behind the
+profile-takeover chain above. Local behaviour cases: **7j** (the self-signup shape is refused, in both
+the INSERT and the UPDATE direction) and **7k** (a real designer, and an admin-domain grant holder with
+`is_designer` false, both succeed).
+
+Read-only check:
+
+```sql
+-- 9f-i. BOTH UPDATE policies carry a WITH CHECK and PIN is_designer; the owner
+-- policy is the ratchet; the sibling reads the OLD row over both client strings.
+--
+-- Match the COMPARISON, not the column name: `is_designer` is a substring of
+-- `current_profile_is_designer()`, so an earlier `ILIKE '%is_designer%'` form
+-- was satisfied by a with_check that pinned nothing (RF-06). Postgres also
+-- DEPARSES `a IS NOT DISTINCT FROM b` as `NOT (a IS DISTINCT FROM b)`, which is
+-- why the owner row is matched on that spelling. And match the client strings
+-- QUOTED: the bare words `client` and `designer_clients` are all over the
+-- sibling's EXISTS subquery.
+SELECT polname,
+       pg_get_expr(polwithcheck, polrelid) AS with_check,
+       pg_get_expr(polwithcheck, polrelid) ILIKE '%NOT (is_designer IS DISTINCT FROM%'
+         OR pg_get_expr(polwithcheck, polrelid) ILIKE '%is_designer IS NOT TRUE%'
+         AS pins_is_designer,
+       pg_get_expr(polwithcheck, polrelid) ILIKE '%is_designer = false%'
+         AND pg_get_expr(polwithcheck, polrelid) NOT ILIKE '%is_designer = true%'
+         AS ratchet_floor,
+       pg_get_expr(polqual, polrelid) ILIKE '%is_designer IS NOT TRUE%'
+         AS using_reads_old_row,
+       pg_get_expr(polqual, polrelid) ILIKE '%''homeowner''%'
+         AND pg_get_expr(polqual, polrelid) ILIKE '%''client''%'
+         AS using_client_vocab,
+       COALESCE(pg_get_expr(polqual, polrelid), '') ILIKE '%current_profile_is_designer%'
+         AND COALESCE(pg_get_expr(polqual, polrelid), '') ILIKE '%user_roles%'
+         AND COALESCE(pg_get_expr(polwithcheck, polrelid), '') ILIKE '%current_profile_is_designer%'
+         AND COALESCE(pg_get_expr(polwithcheck, polrelid), '') ILIKE '%user_roles%'
+         AS checks_caller_authority
 FROM pg_policy
 WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
--- want: "Users can update own profile", with_check NOT NULL and containing 'role'
+-- want TWO rows, each with a NON-NULL with_check and pins_is_designer = t:
+--   "Users can update own profile"
+--     -> … AND ((NOT (role IS DISTINCT FROM current_profile_role()))
+--               OR (role = 'homeowner'::text))
+--         AND ((NOT (is_designer IS DISTINCT FROM current_profile_is_designer()))
+--               OR (is_designer = false))
+--        (the inline subquery form raises 42P17 and is NOT what shipped —
+--         both pins go through their own SECURITY DEFINER helper)
+--        ratchet_floor       = t   ← ruling B2 v3(c). An f here breaks L1-A.
+--        using_reads_old_row = f   ← correct: this policy's USING is
+--                                    `auth.uid() = id` and its pin is the helper
+--        using_client_vocab  = f   ← correct: it has no vocabulary list
+--        checks_caller_authority = f ← correct: the caller IS the target row
+--                                    here, so `auth.uid() = id` is the whole
+--                                    authority question
+--   "Designers can update their client profiles"
+--     -> … AND (role = ANY (ARRAY['homeowner'::text, 'client'::text]))
+--         AND (is_designer IS NOT TRUE), in BOTH clauses
+--        ratchet_floor       = f   ← correct: a self-downgrade leg has no
+--                                    business on a policy that edits OTHER
+--                                    people's rows. A t here needs reading now.
+--        using_reads_old_row = t   ← an f is the demotion hole
+--        using_client_vocab  = t   ← an f is RF2-06: a 'client'-labelled client
+--                                    cannot be renamed by their own designer
+--        checks_caller_authority = t ← an f is RF3-03: a roster row minted
+--                                    BEFORE 00555 by a non-designer still buys
+--                                    its holder a profile write, because the
+--                                    restrictive policies only govern new writes
+-- A NULL with_check, or a with_check that does not pin is_designer, on EITHER
+-- row means self-elevation is open whatever the other row says. One row back
+-- means the sibling was dropped, not fixed.
 
--- 9c-ii. the server default is in place
-SELECT pg_get_functiondef(p.oid) LIKE '%homeowner%' AS defaults_homeowner
+-- 9f-ia. the enabling primitive: only a designer may write designer_clients,
+-- and "designer" means user_roles or is_designer — never profiles.role.
+SELECT polname, polcmd, polpermissive,
+       (COALESCE(pg_get_expr(polqual, polrelid), '')
+          || COALESCE(pg_get_expr(polwithcheck, polrelid), ''))
+         ILIKE '%user_roles%'            AS reads_user_roles,
+       (COALESCE(pg_get_expr(polqual, polrelid), '')
+          || COALESCE(pg_get_expr(polwithcheck, polrelid), ''))
+         ILIKE '%current_profile_role%'  AS reads_profile_role
+FROM pg_policy
+WHERE polrelid = 'public.designer_clients'::regclass
+  AND polname IN ('designer_clients_writer_is_designer',
+                  'designer_clients_updater_is_designer');
+-- want TWO rows, polpermissive = f on both, polcmd = 'a' (INSERT) and 'w'
+-- (UPDATE), reads_user_roles = t and reads_profile_role = f on BOTH.
+-- reads_profile_role = t is RF2-01 reopened: handle_new_user labels every
+-- email/password signup 'designer', so that leg hands the mint to anyone who
+-- can complete a signup form.
+
+-- 9f-ib. and anon holds no WRITE on the table (RF2-08). It carried the full
+-- arwdDxtm set from the pre-flip creation default; the write half is the
+-- roster-mint primitive, reachable with the key in the iOS binary.
+--
+-- ⚠ CORRECTED 2026-09-02, fix round 3 pass 2 (RF3-01). This probe used to read
+-- `count(*)` and `-- want: 0`, which contradicted the migration it is checking:
+-- 00555 does `GRANT SELECT ON public.designer_clients TO anon` and then ASSERTs
+-- has_table_privilege('anon', …, 'SELECT'). Measured on a clean stack after
+-- `pnpm supabase:reset`: one grant, relacl `anon=r/postgres`. An operator
+-- following the old line would have "fixed" a passing apply back into a broken
+-- one.
+--
+-- WHY THE SELECT IS LOAD-BEARING, so nobody removes it again: storage.objects
+-- carries "Designers manage discovery folio objects" (00224:165) whose USING
+-- reads designer_clients, and Postgres checks the ACL of every table named in a
+-- relation's policy set at EXECUTOR INIT — before filtering those policies by
+-- role. That policy is TO authenticated; the check is not. Revoking SELECT
+-- therefore raises `42501 permission denied for table designer_clients` on every
+-- ANON read of storage.objects, and took
+-- supabase/tests/storage/project_documents_caller_binding_test.sql and
+-- supabase/tests/mood_boards/share_security_test.sql red on a fresh stack.
+-- The grant opens no read: RLS is on, and the only policy admitting anon is
+-- 00014's `auth.uid() = designer_id`, which is NULL for an anon caller.
+--
+-- Asked as the SET rather than the count, so a returned write grant still fails
+-- it. (The client's own roster read is public.client_designer_roster (00536), a
+-- security_invoker = false view granted only to authenticated — that is why no
+-- anon READER of this table exists even though the grant does.)
+--
+-- ⚠ CORRECTED AGAIN 2026-09-02, fix round 3 pass 3 (RF3-18). Pass 2 wrote this
+-- against information_schema.table_privileges and called it a check that "fails
+-- on a verb nobody thought to list". It was not: information_schema is defined
+-- by the SQL standard and enumerates only the standard verbs, so PG 17's
+-- MAINTAIN is invisible to it — and MAINTAIN is exactly the verb 00555 revokes
+-- by name on three tables, because an enumerated REVOKE silently leaves it
+-- behind. A returned MAINTAIN grant read as exactly 'SELECT' and passed.
+-- pg_class.relacl through aclexplode() is Postgres' own representation and
+-- carries every privilege type the server knows.
+SELECT COALESCE(string_agg(DISTINCT a.privilege_type, ',' ORDER BY a.privilege_type), '<none>')
+         AS anon_grants
+FROM pg_class c, aclexplode(c.relacl) a
+WHERE c.oid = 'public.designer_clients'::regclass
+  AND a.grantee = 'anon'::regrole::oid;
+-- want: SELECT   (exactly that string — one grant, and it is SELECT)
+
+-- 9f-ii. handle_new_user is 00313 VERBATIM — the default does NOT move.
+-- Ruling B2 v3(a). Match the COALESCE, which is the exact line the two reverted
+-- cuts replaced, and reject raw_app_meta_data outright: that token appears
+-- nowhere in 00313, so its presence means a provider branch crept back in.
+-- `LIKE '%homeowner%'` proves nothing — 00313's body carries the literal twice
+-- (the CASE arm that honours an explicit client hint, and its SECURITY comment).
+--
+-- Corrected 2026-09-02 FOUR times, which is the reason this comment is long:
+-- by W0 · L0.2 because the draft's probe could not fail; in fix round 1 when B2
+-- v1 flipped the fallback to 'homeowner'; in fix round 2 when B2 v2's provider
+-- CASE turned out to hand the Google button the designer default; and in fix
+-- round 3 when ruling B2 v3 reverted the provider CASE altogether and moved the
+-- relabel to the app (W1 · L1-A) and to client-invite's accept handler.
+SELECT pg_get_functiondef(p.oid) LIKE '%COALESCE(v_role, ''designer'')%'
+   AND pg_get_functiondef(p.oid) NOT LIKE '%raw_app_meta_data%' AS trigger_is_00313
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND p.proname = 'handle_new_user';
 -- want: true
+
+-- 9f-iii. the REVOKEs that have no probe of their own (RF2-09, RF2-10, and the
+-- two fix round 3 pass 2 extends: RF3-07 on designer_clients, RF3-11 on
+-- authenticated's EXECUTE).
+SELECT has_table_privilege('authenticated', 'public.profiles', 'TRUNCATE')
+         AS authenticated_can_truncate,      -- want f. RLS does NOT constrain TRUNCATE
+       has_table_privilege('authenticated', 'public.profiles', 'REFERENCES')
+         AS authenticated_can_reference,     -- want f
+       has_table_privilege('authenticated', 'public.designer_clients', 'TRUNCATE')
+         AS authenticated_can_truncate_dc,   -- want f (RF3-07). One statement empties
+                                             -- every designer↔client relationship
+       has_table_privilege('authenticated', 'public.designer_clients', 'REFERENCES')
+         AS authenticated_can_reference_dc,  -- want f (RF3-07)
+       has_function_privilege('public', 'public.handle_new_user()', 'EXECUTE')
+         AS public_can_execute_trigger_fn,   -- want f. A trigger needs no EXECUTE to fire
+       has_function_privilege('authenticated', 'public.handle_new_user()', 'EXECUTE')
+         AS authenticated_can_execute_trigger_fn;  -- want f (RF3-11). The first pass
+                                             -- revoked PUBLIC and anon and left this one
+
+-- 9f-iv. fix round 3 pass 3 — the four definer views closed to the SIGNED-IN key
+-- as well as to anon (RF3-17), and the two AUTHORITY tables (RF3-19).
+--
+-- §(d) revokes user_engagement_scores / consumer_funnel / designer_funnel /
+-- conversion_funnel FROM PUBLIC, anon AND authenticated, and pass 2 asserted
+-- only anon. user_engagement_scores is a security_invoker = false view
+-- projecting id, email and role over profiles, so it bypasses every policy in
+-- §(a) by construction: a signed-in reader there makes the whole profiles fix
+-- decorative.
+SELECT bool_or(has_table_privilege(g, v::regclass, 'SELECT')) AS any_view_readable
+FROM unnest(ARRAY['anon','authenticated']) g,
+     unnest(ARRAY['public.user_engagement_scores','public.consumer_funnel',
+                  'public.designer_funnel','public.conversion_funnel']) v;
+-- want: false
+
+SELECT bool_or(has_table_privilege('anon', t::regclass, v)) AS anon_can_write_authority
+FROM unnest(ARRAY['public.user_roles','public.roles']) t,
+     unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES']) v;
+-- want: false. Neither table has EVER carried a write POLICY — 00021 creates
+-- exactly two policies on them and both are SELECT — so every write grant was a
+-- grant with no caller, on the two tables ruling B2 v3(b) makes the source of
+-- all authority in this migration.
+
+SELECT t AS relation,
+       has_table_privilege('authenticated', t::regclass, 'SELECT') AS sel,
+       has_table_privilege('authenticated', t::regclass, 'UPDATE') AS upd_for_share,
+       has_table_privilege('authenticated', t::regclass, 'INSERT') AS ins,
+       has_table_privilege('authenticated', t::regclass, 'DELETE') AS del
+FROM unnest(ARRAY['public.user_roles','public.roles']) t;
+-- want: sel = t, upd_for_share = t, ins = f, del = f on BOTH rows.
+--
+-- ⚠ upd_for_share = t IS THE ANSWER — do not "fix" it to f. `SELECT … FOR SHARE`
+-- is charged to the UPDATE privilege, and 00511's set_project_studio_id() is a
+-- SECURITY INVOKER trigger on public.projects that row-share-locks both tables
+-- on every authenticated project write. Revoking UPDATE takes every project
+-- insert with it — measured: the first cut of RF3-19 took
+-- supabase/tests/edge_api/public_sd_hardening_contract_test.sql red with
+-- `permission denied for table roles` from set_project_studio_id() line 151.
+-- It opens nothing: RLS is enabled on both and neither carries an UPDATE
+-- POLICY, so a real UPDATE statement is still refused. anon does not keep it
+-- and does not need it — the same trigger FOR SHAREs public.designer_clients,
+-- where 00555 leaves anon holding SELECT and nothing else.
+
+-- 9f-v. fix round 3 pass 3 — the two INSERT policies and the roster-leg
+-- authority inside can_view_profile (RF3-02, RF3-13, RF3-14).
+SELECT polname,
+       (pg_get_expr(polwithcheck, polrelid) ILIKE '%''homeowner''%'
+        AND pg_get_expr(polwithcheck, polrelid) ILIKE '%''client''%')     AS client_vocab,
+       (pg_get_expr(polwithcheck, polrelid) ILIKE '%''vendor''::text%'
+         OR pg_get_expr(polwithcheck, polrelid) ILIKE '%''admin''::text%') AS spoof_labels,
+       (pg_get_expr(polwithcheck, polrelid) ILIKE '%is_designer IS NOT TRUE%')
+                                                                          AS pins_is_designer,
+       (pg_get_expr(polwithcheck, polrelid) ILIKE '%current_profile_is_designer%'
+        AND pg_get_expr(polwithcheck, polrelid) ILIKE '%user_roles%')     AS checks_caller_authority
+FROM pg_policy
+WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'a'
+ORDER BY polname;
+-- want TWO rows:
+--   Designers can create homeowner profiles | t | f | t | t
+--   Users can insert own profile            | t | f | t | f
+--
+-- spoof_labels = f on BOTH, and the `::text` in that pattern is load-bearing:
+-- the sibling's caller-authority EXISTS deparses as
+-- `r.domain = ANY (ARRAY['designer'::role_domain, 'admin'::role_domain])`, so a
+-- bare '%''admin''%' reports t on a perfectly correct policy. profiles.role is
+-- text, so its vocabulary literals always render 'x'::text.
+--
+-- checks_caller_authority = t on the SIBLING is RF3-13: 00017 shipped that
+-- policy TO PUBLIC with `auth.uid() IS NOT NULL AND role = 'homeowner'` — a
+-- name that said designers over a predicate that said anyone signed in — and it
+-- accepts an ARBITRARY id, so it was the last INSERT route by which a
+-- self-signup could plant a profiles row for somebody else. f on the OWNER row
+-- is right: there the caller IS the target, and `auth.uid() = id` answers it.
+
+SELECT (length(prosrc) - length(replace(prosrc,'dp.is_designer IS TRUE',''))) / length('dp.is_designer IS TRUE') = 2
+   AND (length(prosrc) - length(replace(prosrc,'ur.user_id = dc.designer_id',''))) / length('ur.user_id = dc.designer_id') = 2
+         AS roster_legs_check_authority
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname = 'can_view_profile';
+-- want: true (RF3-14).
+--
+-- BOTH roster legs must require the roster row's designer_id to hold designer
+-- authority — profiles.is_designer, or a designer/admin user_roles grant.
+-- TWO occurrences of each marker, because one leg is not both legs, and the
+-- TEAMMATE leg is the one that matters most: is_studio_comember's first branch
+-- is `p_owner = auth.uid()` (00315), so a roster row a caller minted for
+-- THEMSELVES satisfies it, and narrowing only the direct leg would have left
+-- the same read open through the other door.
+--
+-- This is the READ half of the legacy roster row. Pass 2 closed its WRITE
+-- (RF3-03) and reported the read still answering 200 with email and phone; this
+-- is what closes it. THE ROW ITSELF is untouched by either — that is a data
+-- job, KODY-RUNBOOK B7a/B7b.
 ```
 
 The *write* half of this check (attempting the elevation as a real user) runs **locally only**, as
-case 7 of `00555_ios_round_one_security.test.sql`. It is not run against production.
+cases 6e/6f/6f2, 7, 7h, 7j and 7k of `00555_ios_round_one_security.test.sql` — 7h is the cross-account
+direction, 7j is the self-signup mint, 7k is the legitimate designer path that none of the refusals may
+break. It is not run against production.
 
 ## 10 · The marketing rail is closed to anon
 
@@ -458,12 +908,8 @@ FROM pg_policy WHERE polrelid = 'public.profiles'::regclass ORDER BY polname;
 --        profiles_select_agent_reader  (r, agent_reader, true)
 --        "Users can insert own profile" WITH CHECK no longer mentions auth.uid() IS NULL
 
--- 12b. nothing PUBLIC + auth.uid() IS NULL + FOR ALL survives
-SELECT n.nspname, c.relname, p.polname
-FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid JOIN pg_namespace n ON n.oid=c.relnamespace
-WHERE p.polcmd='*' AND p.polroles='{0}'
-  AND pg_get_expr(p.polqual,p.polrelid) = '(auth.uid() IS NULL)';
--- after: 0 rows
+-- 12b. MOVED. The PUBLIC + FOR ALL + auth.uid() IS NULL sweep is an exit
+--      criterion, so it has its own heading: see § 9b above. Run it there.
 
 -- 12c. helper lockdown
 SELECT p.proname,
@@ -474,16 +920,8 @@ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
 WHERE n.nspname='public' AND p.proname IN ('can_view_profile','search_shareable_designers');
 -- after: both  f, t, t, {search_path=public}
 
--- 12d. vendors column allowlist
-SELECT column_name
-FROM information_schema.column_privileges
-WHERE table_schema='public' AND table_name='vendors'
-  AND grantee='anon' AND privilege_type='SELECT'
-ORDER BY column_name;
--- after: the 24 public-face columns only — no notes, trade_terms, contact_info,
---        preferred_contact, orders_email, trade_account_email, trade_portal_url,
---        trade_account_established_at, default_payment_terms, nomination_status,
---        nominated_by, nominated_at, contact_profile_id
+-- 12d. MOVED. The vendors column allowlist is an exit criterion, so it has its
+--      own heading: see § 9d above. Run it there.
 
 -- 12e. the definer views
 SELECT c.relname, array_to_string(c.relacl,' ') AS acl
@@ -526,84 +964,30 @@ mcp__claude_ai_Supabase__get_advisors(project_id=bkvcixdmuyejfzcijpdg, type="sec
 
 ---
 
-## The apply step (Kody-run)
+## The apply step is not in this file
 
-**Re-check the gap first.** The premise recorded in `research/A3-prod.md` — that
-`00533–00540` are unapplied — was **re-verified on 2026-09-01 and is no longer true**:
-`supabase_migrations.schema_migrations` runs `00530…00554` unbroken, and every object A3
-listed as missing now exists (`client_designer_roster`, `profile_presence`,
-`get_direct_order_terms`, `notify_client_attention`, `purge_client_account`,
-`products.photo_verified_at` — all probed directly, not read off the ledger).
-
-That said, other programs mint numbers in this band, so run the census immediately before
-applying, and treat any gap it shows as a blocker:
+It used to be. It was removed on 2026-09-02, because it had become a **second, diverging copy** of the
+apply sequence — and the copy carried the exact mistake that produced this fix round:
 
 ```bash
-ls supabase/migrations/*.sql | sort | tail -5      # confirm this file is still the head+1
-supabase migration list                             # local vs Strata, side by side
+ls supabase/migrations/*.sql | sort | tail -5      # ← CANNOT SEE A PEER BRANCH
 ```
 
-```sql
--- and the authoritative read
-SELECT version FROM supabase_migrations.schema_migrations WHERE version >= '00528' ORDER BY version;
-```
+That census reported `00556` free while `00556_admin_studio_management.sql` was sitting on
+`admin-studios/build` and was already applied to the shared local stack. It also carried a
+`<the file body>` placeholder inside an `apply_migration` call, against the program's no-placeholder
+rule.
 
-**Apply this ONE file, not the branch.** `supabase db push` reconciles by version and pushes
-every local migration Strata does not have. Today that set is empty, but it will not stay
-empty while other lanes are drawing numbers, and a `db push` that silently drags someone
-else's unshipped migration is exactly the incident this band has already produced twice.
+**The apply sequence lives in exactly one place:**
 
-Targeted apply, either form:
+> `artifacts/ios-testflight-polish-2026-09-01/build/waves/w0/KODY-RUNBOOK.md`
 
-```bash
-# (1) psql, then the ledger row
-psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 \
-  -f supabase/migrations/00555_ios_round_one_security.sql
-psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
-  "INSERT INTO supabase_migrations.schema_migrations (version, name)
-   VALUES ('00555','ios_round_one_security') ON CONFLICT DO NOTHING;"
-```
+It opens with **Step 0a**, the deploy gate (**D8** — the designer portal must carry L0.2b's `getUser()`
+guard and the `list_vendor_profiles` swap, verified behaviourally with a `401`, before anything is
+applied), and **Step 0b**, the ruling gate (**N3b** — the `handle_new_user` role flip). It carries the
+band re-check that *can* see peer branches, both `psql -f` applies with their ledger rows, the
+regeneration steps, this file's probe checklist by heading, the advisor check, the portal walk, and the
+rollback.
 
-```
-# (2) Supabase MCP — writes the ledger row itself
-mcp__claude_ai_Supabase__apply_migration(
-  project_id = "bkvcixdmuyejfzcijpdg",
-  name       = "00555_ios_round_one_security",
-  query      = <the file body>)
-```
+This file is the **probe half** of that runbook's Step 5, and nothing else.
 
-⚠ The Bash prod-mutation hook does **not** cover Supabase MCP writes (recorded in
-`project_studio_invite_onboarding_fixes_2026_09_01`). Form (2) will not be stopped by the
-guard rail, so it needs the same explicit ship request that form (1) does.
-
-**Then, in order:**
-
-1. `python3 scripts/generate-legacy-grants.py` — this migration adds GRANT/REVOKE, so
-   `supabase/seed/00-legacy-grants.sql` must be regenerated or a fresh local stack diverges
-   from prod ACLs. Never hand-edit that file.
-2. `pnpm db:generate` && `git diff --exit-code packages/supabase/src/database.types.ts`
-   (a new view and two new functions land in the public schema).
-3. **`scripts/run-sql-tests.sh`** against **local**, not prod. That is the gate — it runs
-   every file under `supabase/tests/**` and scores them against
-   `supabase/tests/KNOWN_FAILURES.md`. Running only
-   `00555_ios_round_one_security.test.sql` proves the new policies work and proves nothing
-   about the ~40 existing suites that insert into `profiles`, `designer_clients` and
-   `organization_members` under a role. Several of those are the ones most likely to break.
-4. Probes 1–13 above against prod.
-5. The four REQUIRED CODE FOLLOW-UPS in the migration banner — `ScanSharingService.swift`
-   (RPC swap), both `api/catalog/vendors` routes (guard + named columns), and
-   `useVendorProfiles` — ship in the same PR. The first is a TestFlight blocker; the second
-   is a live leak today and should arguably land *before* the migration.
-
-**Rollback.** Everything here is reversible with a forward migration; there is no data
-change. The statements that restore the old behavior if the counterparty predicate turns out
-to be too tight are:
-
-```sql
-CREATE POLICY "Profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
-GRANT SELECT ON public.profiles TO anon;
-```
-
-Do not reach for that without saying so — it re-opens the exposure this file exists to close.
-If the problem is one missing relationship rather than the whole predicate, add a leg to
-`can_view_profile` instead; it is `CREATE OR REPLACE` and needs no policy churn.

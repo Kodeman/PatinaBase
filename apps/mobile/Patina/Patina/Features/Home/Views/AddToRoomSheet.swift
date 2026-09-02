@@ -93,6 +93,7 @@ struct AddToRoomSheet: View {
     }
 }
 
+#if DEBUG
 #Preview {
     AddToRoomSheet(
         product: Product.previewProducts[0],
@@ -101,3 +102,4 @@ struct AddToRoomSheet: View {
         onNewRoom: { }
     )
 }
+#endif

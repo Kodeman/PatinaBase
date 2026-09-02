@@ -7,7 +7,10 @@
 //
 
 import Foundation
-import PostHog
+// @_spi(Experimental) reaches `PostHogConfig.errorTrackingConfig`, which is the
+// only way to turn crash autocapture on in posthog-ios 3.48.0. It also imports
+// the whole public surface, so this replaces the plain `import PostHog`.
+@_spi(Experimental) import PostHog
 import AppTrackingTransparency
 
 /// Service for PostHog analytics integration
@@ -49,6 +52,16 @@ public final class PostHogService {
     /// Call this in AppDelegate or App init
     public func initialize() {
         guard !isInitialized else { return }
+        // The kill switch, and it has to be here rather than only at the call
+        // site: this is a singleton anything can reach. Off in Debug, so a
+        // developer's launch no longer reports into the production project the
+        // first tester round is meant to measure — and no longer resolves flags
+        // against a locally seeded identity.
+        guard AppConfiguration.analyticsEnabled else {
+            PatinaLog.ui.debug("[PostHog] analyticsEnabled is false, analytics disabled")
+            isEnabled = false
+            return
+        }
         guard !apiKey.isEmpty else {
             PatinaLog.ui.debug("[PostHog] No API key configured, analytics disabled")
             isEnabled = false
@@ -60,6 +73,11 @@ public final class PostHogService {
         config.captureApplicationLifecycleEvents = true
         config.sendFeatureFlagEvent = false
         config.debug = AppConfiguration.isDebug
+        // Build 1 is the crash-discovery round. Without this a tester's crash
+        // reaches nobody: crashes are persisted to disk and sent as `$exception`
+        // on the NEXT launch. Automatically disabled while a debugger is
+        // attached, so it costs a local run nothing.
+        config.errorTrackingConfig.autoCapture = true
 
         PostHogSDK.shared.setup(config)
         PostHogSDK.shared.register(["surface": "patina-ios"])
@@ -165,6 +183,24 @@ public final class PostHogService {
     /// synchronously — no wait, no notification. That is what makes a
     /// launch-time flag resolution possible at all; see `FeatureFlags`.
     public var isFeatureFlagSourceLive: Bool { isEnabled && isInitialized }
+
+    /// The flag as PostHog can answer it *now*, or `nil` when PostHog has no
+    /// answer for this key at all — no cached payload yet, or the key is not in
+    /// the payload it has.
+    ///
+    /// `isFeatureEnabled` cannot express that: it maps an absent flag to
+    /// `false`, and `FeatureFlags` needs the difference — a `false` from
+    /// PostHog is the kill switch and beats the per-flag default, while silence
+    /// does not. `getFeatureFlagResult` is documented to return nil "if the
+    /// flag doesn't exist" (posthog-ios 3.48.0, PostHogSDK.swift:1453).
+    public func featureFlagAnswer(_ flag: String) -> Bool? {
+        guard isEnabled else { return nil }
+        guard let result = PostHogSDK.shared.getFeatureFlagResult(flag) else { return nil }
+        // A multivariate flag answers with a variant string; any variant means
+        // the flag is on, which is how `isFeatureEnabled` reads it too.
+        if result.variant != nil { return true }
+        return result.enabled
+    }
 
     /// Get feature flag value
     /// - Parameter flag: Feature flag key
