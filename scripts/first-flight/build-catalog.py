@@ -12,10 +12,16 @@ returns nothing, `get_aesthete_matches`' spectrum-only candidate path finds
 nothing, and the product is invisible however well the rest of the row is
 filled in. See scripts/first-flight/build-spectrums.py.
 
+`--editorial` adds the three `editorial_stories` rows the charter's row
+contract ends with: a required hero image, and `read_minutes` derived from the
+body rather than typed next to it (A3-17, GAP8-12).
+
 Usage:
   build-catalog.py --check   MANIFEST [--profile fixture|release]
+                             [--editorial MANIFEST]
   build-catalog.py --emit    MANIFEST --out FILE
                              [--profile fixture|release]
+                             [--editorial MANIFEST]
                              [--storage-base-url URL] [--uploader-uid UUID]
                              [--assigned-by UUID]
 
@@ -127,6 +133,44 @@ OPTIONAL_COLUMNS = (
 )
 
 ALL_COLUMNS = REQUIRED_COLUMNS + OPTIONAL_COLUMNS
+
+# ─── editorial ─────────────────────────────────────────────────────────────
+# `editorial_stories` (00143) is the "today's story" card on the iOS home.
+# Three rows exist on Strata and all three carry `hero_image_url NULL` and a
+# read_minutes of 4 / 3 / 5 over bodies of 489 / 386 / 387 characters (A3-17,
+# GAP8-12). The manifest carries their ids, so an apply UPDATES them in place
+# rather than adding a fourth story to a surface that shows one.
+EDITORIAL_REQUIRED = ("slug", "tag", "title", "hero_image")
+EDITORIAL_OPTIONAL = (
+    "story_id",
+    "subtitle",
+    "maker_name",
+    "maker_location",
+    "body_file",
+    "body_md",
+    "featured_slug",
+    "published_offset_days",
+    "sort_order",
+)
+
+# Reading speed for prose. read_minutes is DERIVED — never read from the
+# manifest — because the column's whole defect is that somebody typed a number
+# next to a body that does not support it. The SQL test recomputes the same
+# expression in Postgres so the two cannot drift.
+WORDS_PER_MINUTE = 200
+MIN_STORIES = 3
+
+# Tester-visible editorial copy. steward.md §7.12 and the patina-brand-voice
+# skill; checked here because these strings reach a reader with no review step
+# between the manifest and the home screen.
+BANNED_COPY = (
+    "artificial intelligence",
+    "machine learning",
+    "journey",
+    "curated",
+    "elevated",
+    "bespoke",
+)
 
 
 def load_spectrums():
@@ -562,6 +606,258 @@ def _check_manifest(rows, errors, profile, path):
         )
 
 
+# ─── the editorial reader ──────────────────────────────────────────────────
+
+
+class Story(object):
+    """One validated editorial row, already in the shape the SQL wants."""
+
+    def __init__(self):
+        self.story_id = None
+        self.slug = None
+        self.tag = None
+        self.title = None
+        self.subtitle = None
+        self.maker_name = None
+        self.maker_location = None
+        self.body = None
+        self.read_minutes = None
+        self.hero_path = None
+        self.featured_slug = None
+        self.featured_product_id = None
+        self.published_offset_days = None
+        self.sort_order = None
+        self.line = None
+
+
+def read_minutes(body):
+    """Minutes at WORDS_PER_MINUTE, rounded half up, never below 1.
+
+    `(words + 100) // 200` is floor(words / 200 + 0.5) in integers, which is
+    what the SQL test recomputes.
+    """
+    words = len((body or "").split())
+    return max(1, (words + WORDS_PER_MINUTE // 2) // WORDS_PER_MINUTE)
+
+
+def story_uuid(slug):
+    return str(uuid.uuid5(FIRST_FLIGHT_NS, "editorial/" + slug))
+
+
+def hero_object_name(story_id, ext):
+    return str(uuid.uuid5(FIRST_FLIGHT_NS, "%s/hero" % story_id)) + ext
+
+
+def hero_storage_path(uploader_uid, story_id, ext):
+    return "%s/editorial/%s/%s" % (
+        uploader_uid,
+        story_id,
+        hero_object_name(story_id, ext),
+    )
+
+
+def _banned_copy(value, field, errors, where):
+    lowered = (value or "").lower()
+    for word in BANNED_COPY:
+        if word in lowered:
+            errors.append("%s: %s contains %r, which the brand voice bans"
+                          % (where, field, word))
+    if re.search(r"\bA\.?I\.?\b", value or ""):
+        errors.append("%s: %s says 'AI', which nothing a tester reads may"
+                      % (where, field))
+
+
+def load_editorial(path, catalog_rows, profile="release"):
+    """Parse and validate the editorial manifest. Raises ManifestError."""
+    manifest_dir = os.path.dirname(os.path.abspath(path))
+    catalog_slugs = set(r.slug for r in catalog_rows if r.slug)
+    errors = []
+    stories = []
+
+    with open(path, "r", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ManifestError(["%s: 0 data rows (no header)" % path])
+        missing = [c for c in EDITORIAL_REQUIRED if c not in reader.fieldnames]
+        if missing:
+            raise ManifestError(
+                ["%s: header is missing required column(s): %s"
+                 % (path, ", ".join(missing))]
+            )
+        for lineno, raw in enumerate(reader, start=2):
+            if not any((v or "").strip() for v in raw.values()):
+                continue
+            stories.append(_parse_story(raw, lineno, manifest_dir, catalog_slugs, errors))
+
+    if not stories:
+        raise ManifestError(["%s: 0 data rows" % path])
+
+    seen_slug = {}
+    seen_id = {}
+    for story in stories:
+        if story.slug:
+            if story.slug in seen_slug:
+                errors.append("line %d: duplicate story slug %r (first seen on line %d)"
+                              % (story.line, story.slug, seen_slug[story.slug]))
+            else:
+                seen_slug[story.slug] = story.line
+        if story.story_id:
+            if story.story_id in seen_id:
+                errors.append("line %d: duplicate story_id %s (first seen on line %d)"
+                              % (story.line, story.story_id, seen_id[story.story_id]))
+            else:
+                seen_id[story.story_id] = story.line
+
+    if profile == "release" and len(stories) < MIN_STORIES:
+        errors.append("%s: %d editorial story/stories, below the round-one floor of %d"
+                      % (path, len(stories), MIN_STORIES))
+
+    for index, story in enumerate(stories):
+        if story.published_offset_days is None:
+            story.published_offset_days = index + 1
+        if story.sort_order is None:
+            story.sort_order = 100 - 10 * index
+
+    if errors:
+        raise ManifestError(errors)
+    return stories
+
+
+def _parse_story(raw, lineno, manifest_dir, catalog_slugs, errors):
+    where = "line %d (%s)" % (lineno, (raw.get("slug") or "<no slug>").strip())
+    story = Story()
+    story.line = lineno
+
+    for column in EDITORIAL_REQUIRED:
+        if _blank(raw.get(column)):
+            errors.append("%s: %s is required and is blank" % (where, column))
+
+    story.slug = _text(raw.get("slug"))
+    if story.slug and not re.match(r"^[a-z0-9]+(?:-[a-z0-9]+)*$", story.slug):
+        errors.append("%s: slug %r must be lowercase words joined by single hyphens"
+                      % (where, story.slug))
+
+    given_id = _text(raw.get("story_id"))
+    if given_id:
+        try:
+            story.story_id = str(uuid.UUID(given_id))
+        except ValueError:
+            errors.append("%s: story_id %r is not a uuid" % (where, given_id))
+    elif story.slug:
+        story.story_id = story_uuid(story.slug)
+
+    story.tag = _text(raw.get("tag"))
+    story.title = _text(raw.get("title"))
+    story.subtitle = _text(raw.get("subtitle"))
+    story.maker_name = _text(raw.get("maker_name"))
+    story.maker_location = _text(raw.get("maker_location"))
+    for field in ("tag", "title", "subtitle", "maker_name", "maker_location"):
+        _banned_copy(getattr(story, field), field, errors, where)
+
+    body_md = _text(raw.get("body_md"))
+    body_file = _text(raw.get("body_file"))
+    if body_md and body_file:
+        errors.append("%s: give body_md or body_file, not both" % where)
+    elif body_file:
+        resolved = body_file if os.path.isabs(body_file) else os.path.join(
+            manifest_dir, body_file)
+        resolved = os.path.normpath(resolved)
+        if not os.path.isfile(resolved):
+            errors.append("%s: body_file not found: %s" % (where, body_file))
+        else:
+            with open(resolved, "r") as handle:
+                story.body = handle.read().strip()
+    elif body_md:
+        story.body = body_md
+    else:
+        errors.append("%s: a story needs a body — give body_md or body_file" % where)
+
+    if story.body:
+        _banned_copy(story.body, "body", errors, where)
+        story.read_minutes = read_minutes(story.body)
+
+    hero = _text(raw.get("hero_image"))
+    if hero:
+        story.hero_path = _image(hero, manifest_dir, errors, where, "hero_image")
+
+    story.featured_slug = _text(raw.get("featured_slug"))
+    if story.featured_slug:
+        if story.featured_slug not in catalog_slugs:
+            errors.append(
+                "%s: featured_slug %r is not in the catalogue manifest — the "
+                "featured_product_id foreign key would fail"
+                % (where, story.featured_slug))
+        else:
+            story.featured_product_id = product_uuid(story.featured_slug)
+
+    story.published_offset_days = _int(
+        raw.get("published_offset_days"), "published_offset_days", errors, where,
+        low=0, high=3650)
+    story.sort_order = _int(raw.get("sort_order"), "sort_order", errors, where)
+    return story
+
+
+def render_editorial_sql(stories, storage_base_url, uploader_uid):
+    out = io.StringIO()
+    out.write(
+        "\n-- ─── editorial stories ───────────────────────────────────────────────────\n"
+        "-- A3-17 / GAP8-12. `read_minutes` is DERIVED from the body at %d words a\n"
+        "-- minute, rounded half up — never taken from the manifest, because the\n"
+        "-- defect being fixed is a typed number over a body that does not support\n"
+        "-- it. `hero_gradient_key` and `maker_avatar_gradient_key` are left alone:\n"
+        "-- they are the fallback the app uses when there is no photograph, and this\n"
+        "-- apply is what gives it one.\n" % WORDS_PER_MINUTE
+    )
+    for story in stories:
+        ext = os.path.splitext(story.hero_path)[1].lower()
+        hero_url = "%s/%s" % (
+            storage_base_url.rstrip("/"),
+            hero_storage_path(uploader_uid, story.story_id, ext),
+        )
+        out.write(
+            "\n-- %s — %d word(s), %d minute(s)\n"
+            "INSERT INTO public.editorial_stories (\n"
+            "  id, tag, title, subtitle, body_md, read_minutes, hero_image_url,\n"
+            "  maker_name, maker_location, featured_product_id, published_at, sort_order\n"
+            ") VALUES (\n"
+            "  %s::uuid, %s, %s, %s,\n"
+            "  %s,\n"
+            "  %d, %s,\n"
+            "  %s, %s, %s,\n"
+            "  now() - interval '%d days', %d\n"
+            ")\n"
+            "ON CONFLICT (id) DO UPDATE SET\n"
+            "  tag = EXCLUDED.tag, title = EXCLUDED.title,\n"
+            "  subtitle = EXCLUDED.subtitle, body_md = EXCLUDED.body_md,\n"
+            "  read_minutes = EXCLUDED.read_minutes,\n"
+            "  hero_image_url = EXCLUDED.hero_image_url,\n"
+            "  maker_name = EXCLUDED.maker_name,\n"
+            "  maker_location = EXCLUDED.maker_location,\n"
+            "  featured_product_id = EXCLUDED.featured_product_id,\n"
+            "  published_at = EXCLUDED.published_at,\n"
+            "  sort_order = EXCLUDED.sort_order, updated_at = now();\n"
+            % (
+                story.slug,
+                len(story.body.split()),
+                story.read_minutes,
+                q(story.story_id),
+                q(story.tag),
+                q(story.title),
+                q(story.subtitle),
+                q(story.body),
+                story.read_minutes,
+                q(hero_url),
+                q(story.maker_name),
+                q(story.maker_location),
+                (q(story.featured_product_id) + "::uuid")
+                if story.featured_product_id else "NULL",
+                story.published_offset_days,
+                story.sort_order,
+            )
+        )
+    return out.getvalue()
+
+
 def _assign_dates(rows, now):
     """Fill published_at where the manifest left it blank.
 
@@ -616,7 +912,7 @@ def q_published(row):
 
 
 def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="release",
-               manifest_name="<manifest>"):
+               manifest_name="<manifest>", stories=None):
     out = io.StringIO()
 
     out.write(
@@ -848,6 +1144,9 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
             )
         )
 
+    if stories:
+        out.write(render_editorial_sql(stories, storage_base_url, uploader_uid))
+
     out.write(
         "\n-- ─── the refusal, restated as an assertion ───────────────────────────────\n"
         "-- A publishable row with no spectrum is invisible to get_aesthete_matches.\n"
@@ -882,6 +1181,11 @@ def main(argv=None):
         "--profile", choices=("fixture", "release"), default="release",
         help="release enforces the charter's floors (>=30 rows, 6 categories, "
              ">=3 makers); fixture checks the row contract only",
+    )
+    parser.add_argument(
+        "--editorial", metavar="MANIFEST", default=None,
+        help="editorial-stories manifest; read_minutes is derived from each "
+             "body and a hero image is required (A3-17, GAP8-12)",
     )
     parser.add_argument("--storage-base-url", default=LOCAL_STORAGE_BASE_URL)
     parser.add_argument("--uploader-uid", default=LOCAL_UPLOADER_UID)
@@ -918,6 +1222,29 @@ def main(argv=None):
         )
     )
 
+    stories = None
+    if args.editorial:
+        try:
+            stories = load_editorial(args.editorial, rows, profile=args.profile)
+        except ManifestError as exc:
+            for message in exc.errors:
+                sys.stderr.write("error: %s\n" % message)
+            sys.stderr.write(
+                "\n%s: %d error(s) — nothing emitted\n"
+                % (args.editorial, len(exc.errors))
+            )
+            return 1
+        print(
+            "%s: %d editorial story/stories · read minutes %s (derived at %d wpm, "
+            "never read from the manifest)"
+            % (
+                args.editorial,
+                len(stories),
+                "/".join(str(s.read_minutes) for s in stories),
+                WORDS_PER_MINUTE,
+            )
+        )
+
     if args.check:
         return 0
 
@@ -932,6 +1259,7 @@ def main(argv=None):
         assigned_by=args.assigned_by or args.uploader_uid,
         profile=args.profile,
         manifest_name=os.path.basename(path),
+        stories=stories,
     )
     directory = os.path.dirname(os.path.abspath(args.out))
     if directory and not os.path.isdir(directory):

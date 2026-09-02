@@ -19,6 +19,11 @@
 -- Rows whose manifest cell was blank carry a staggered seeding timestamp;
 -- that is the only thing the column asserts.
 --
+-- `photo_verified_at` is written as now() where the manifest's
+-- `photo_verified` box is ticked. The manifest carries a boolean, not a
+-- moment, so the column records THIS SEEDING PASS rather than claiming to
+-- know when the photograph was checked. It is never the publish date.
+--
 -- Every optional column the manifest left blank is written as NULL. A piece
 -- with no lead time has no lead time; the app omits the line rather than
 -- printing a placeholder.
@@ -34,14 +39,65 @@
 -- seed file in this tree opens a transaction, and psql's -1 is what makes the
 -- production apply all-or-nothing.
 
+-- ─── the slug guard, before anything is written ──────────────────────────
+-- Idempotency is keyed on the derived id, not the slug, and products.slug
+-- carries no unique index. A manifest slug that already belongs to a
+-- different row would therefore INSERT a second, near-identical published
+-- piece rather than update the first. Stop instead: the collision is a
+-- decision for a person, not a thing to resolve automatically.
+DO $ff$
+DECLARE
+  v_slug text;
+  v_id uuid;
+BEGIN
+  SELECT p.slug, p.id INTO v_slug, v_id FROM public.products p
+   WHERE p.slug = 'ff-fixture-oak-dining-table' AND p.id <> '85b1952a-4427-5360-8632-a088a9acd024'::uuid LIMIT 1;
+  IF v_slug IS NOT NULL THEN
+    RAISE EXCEPTION 'slug % already exists on a different row (%) — resolve by hand before seeding', v_slug, v_id;
+  END IF;
+  SELECT p.slug, p.id INTO v_slug, v_id FROM public.products p
+   WHERE p.slug = 'ff-fixture-turned-leg-side-chair' AND p.id <> '33ef1884-2a20-5467-879b-4a3e91cde8a9'::uuid LIMIT 1;
+  IF v_slug IS NOT NULL THEN
+    RAISE EXCEPTION 'slug % already exists on a different row (%) — resolve by hand before seeding', v_slug, v_id;
+  END IF;
+  SELECT p.slug, p.id INTO v_slug, v_id FROM public.products p
+   WHERE p.slug = 'ff-fixture-enamel-dome-pendant' AND p.id <> '1a666c28-9477-52b9-86ed-a09a6fd7eebb'::uuid LIMIT 1;
+  IF v_slug IS NOT NULL THEN
+    RAISE EXCEPTION 'slug % already exists on a different row (%) — resolve by hand before seeding', v_slug, v_id;
+  END IF;
+  SELECT p.slug, p.id INTO v_slug, v_id FROM public.products p
+   WHERE p.slug = 'ff-fixture-glazed-stoneware-planter' AND p.id <> '744a5f21-feb6-5f1b-a036-f1fba4f182d2'::uuid LIMIT 1;
+  IF v_slug IS NOT NULL THEN
+    RAISE EXCEPTION 'slug % already exists on a different row (%) — resolve by hand before seeding', v_slug, v_id;
+  END IF;
+  SELECT p.slug, p.id INTO v_slug, v_id FROM public.products p
+   WHERE p.slug = 'ff-fixture-flatweave-dining-rug' AND p.id <> '4c2b6fed-5877-558e-b4ec-bf24a12a9abc'::uuid LIMIT 1;
+  IF v_slug IS NOT NULL THEN
+    RAISE EXCEPTION 'slug % already exists on a different row (%) — resolve by hand before seeding', v_slug, v_id;
+  END IF;
+  SELECT p.slug, p.id INTO v_slug, v_id FROM public.products p
+   WHERE p.slug = 'ff-fixture-painted-pine-sideboard' AND p.id <> 'bd9b7e9f-6555-5d8f-bc58-a5fd80eddadf'::uuid LIMIT 1;
+  IF v_slug IS NOT NULL THEN
+    RAISE EXCEPTION 'slug % already exists on a different row (%) — resolve by hand before seeding', v_slug, v_id;
+  END IF;
+END
+$ff$;
+
 -- ─── makers ──────────────────────────────────────────────────────────────
 -- vendors has no unique constraint on name, so ON CONFLICT is unavailable:
 -- resolve by lower(name), insert when absent, and refuse an ambiguous name
 -- rather than pick one. `maker_name` must never resolve to 'Unknown Maker' —
 -- Product.resolvedMakerName drops those rows client-side.
+-- An existing vendor is UPDATED, not left alone: is_patina_catalog is
+-- what gates create_direct_order (A3-20), and made_in reaches the app as
+-- `maker_location`. Both are COALESCEd — this apply fills what the row does
+-- not know and overwrites nothing it does — and every vendor whose
+-- is_patina_catalog it actually changes is announced, so the flip lands in
+-- the apply report rather than happening quietly to production data.
 DO $ff$
 DECLARE
   v_n int;
+  v_was boolean;
 BEGIN
 
   SELECT count(*) INTO v_n FROM public.vendors WHERE lower(name) = lower('Fixture Chairworks');
@@ -51,7 +107,15 @@ BEGIN
     INSERT INTO public.vendors (name, made_in, website, is_patina_catalog)
     VALUES ('Fixture Chairworks', 'Bath, Maine', NULL, true);
   ELSE
-    UPDATE public.vendors SET is_patina_catalog = true WHERE lower(name) = lower('Fixture Chairworks');
+    SELECT is_patina_catalog INTO v_was FROM public.vendors WHERE lower(name) = lower('Fixture Chairworks');
+    UPDATE public.vendors SET
+      is_patina_catalog = true,
+      made_in = COALESCE(public.vendors.made_in, 'Bath, Maine'),
+      website = COALESCE(public.vendors.website, NULL)
+     WHERE lower(name) = lower('Fixture Chairworks');
+    IF v_was IS DISTINCT FROM true THEN
+      RAISE NOTICE 'vendor % is_patina_catalog % -> true (pre-existing row)', 'Fixture Chairworks', v_was;
+    END IF;
   END IF;
 
   SELECT count(*) INTO v_n FROM public.vendors WHERE lower(name) = lower('Fixture Metalworks');
@@ -61,7 +125,15 @@ BEGIN
     INSERT INTO public.vendors (name, made_in, website, is_patina_catalog)
     VALUES ('Fixture Metalworks', 'Portland, Oregon', NULL, true);
   ELSE
-    UPDATE public.vendors SET is_patina_catalog = true WHERE lower(name) = lower('Fixture Metalworks');
+    SELECT is_patina_catalog INTO v_was FROM public.vendors WHERE lower(name) = lower('Fixture Metalworks');
+    UPDATE public.vendors SET
+      is_patina_catalog = true,
+      made_in = COALESCE(public.vendors.made_in, 'Portland, Oregon'),
+      website = COALESCE(public.vendors.website, NULL)
+     WHERE lower(name) = lower('Fixture Metalworks');
+    IF v_was IS DISTINCT FROM true THEN
+      RAISE NOTICE 'vendor % is_patina_catalog % -> true (pre-existing row)', 'Fixture Metalworks', v_was;
+    END IF;
   END IF;
 
   SELECT count(*) INTO v_n FROM public.vendors WHERE lower(name) = lower('Fixture Pottery');
@@ -71,7 +143,15 @@ BEGIN
     INSERT INTO public.vendors (name, made_in, website, is_patina_catalog)
     VALUES ('Fixture Pottery', 'Asheville, North Carolina', NULL, true);
   ELSE
-    UPDATE public.vendors SET is_patina_catalog = true WHERE lower(name) = lower('Fixture Pottery');
+    SELECT is_patina_catalog INTO v_was FROM public.vendors WHERE lower(name) = lower('Fixture Pottery');
+    UPDATE public.vendors SET
+      is_patina_catalog = true,
+      made_in = COALESCE(public.vendors.made_in, 'Asheville, North Carolina'),
+      website = COALESCE(public.vendors.website, NULL)
+     WHERE lower(name) = lower('Fixture Pottery');
+    IF v_was IS DISTINCT FROM true THEN
+      RAISE NOTICE 'vendor % is_patina_catalog % -> true (pre-existing row)', 'Fixture Pottery', v_was;
+    END IF;
   END IF;
 
   SELECT count(*) INTO v_n FROM public.vendors WHERE lower(name) = lower('Fixture Weavers');
@@ -81,7 +161,15 @@ BEGIN
     INSERT INTO public.vendors (name, made_in, website, is_patina_catalog)
     VALUES ('Fixture Weavers', 'Chattanooga, Tennessee', NULL, true);
   ELSE
-    UPDATE public.vendors SET is_patina_catalog = true WHERE lower(name) = lower('Fixture Weavers');
+    SELECT is_patina_catalog INTO v_was FROM public.vendors WHERE lower(name) = lower('Fixture Weavers');
+    UPDATE public.vendors SET
+      is_patina_catalog = true,
+      made_in = COALESCE(public.vendors.made_in, 'Chattanooga, Tennessee'),
+      website = COALESCE(public.vendors.website, NULL)
+     WHERE lower(name) = lower('Fixture Weavers');
+    IF v_was IS DISTINCT FROM true THEN
+      RAISE NOTICE 'vendor % is_patina_catalog % -> true (pre-existing row)', 'Fixture Weavers', v_was;
+    END IF;
   END IF;
 
   SELECT count(*) INTO v_n FROM public.vendors WHERE lower(name) = lower('Fixture Woodshop');
@@ -91,7 +179,15 @@ BEGIN
     INSERT INTO public.vendors (name, made_in, website, is_patina_catalog)
     VALUES ('Fixture Woodshop', 'Aarhus, Denmark', NULL, true);
   ELSE
-    UPDATE public.vendors SET is_patina_catalog = true WHERE lower(name) = lower('Fixture Woodshop');
+    SELECT is_patina_catalog INTO v_was FROM public.vendors WHERE lower(name) = lower('Fixture Woodshop');
+    UPDATE public.vendors SET
+      is_patina_catalog = true,
+      made_in = COALESCE(public.vendors.made_in, 'Aarhus, Denmark'),
+      website = COALESCE(public.vendors.website, NULL)
+     WHERE lower(name) = lower('Fixture Woodshop');
+    IF v_was IS DISTINCT FROM true THEN
+      RAISE NOTICE 'vendor % is_patina_catalog % -> true (pre-existing row)', 'Fixture Woodshop', v_was;
+    END IF;
   END IF;
 END
 $ff$;
@@ -156,7 +252,7 @@ INSERT INTO public.products (
   'Original shellac', '{"depth": 20, "height": 36, "unit": "in", "width": 18}'::jsonb, 6,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/33ef1884-2a20-5467-879b-4a3e91cde8a9/5acf9c6f-5ed7-51d2-9404-3148d2a4f21d.jpg'],
   NULL, 84, now() - interval '2881 minutes',
-  now() - interval '2881 minutes', NULL,
+  now(), NULL,
   (SELECT id FROM public.vendors WHERE lower(name) = lower('Fixture Chairworks') LIMIT 1),
   'a0000000-0000-0000-0000-000000000001', now() - interval '2881 minutes'
 )
@@ -285,7 +381,7 @@ INSERT INTO public.products (
   photo_verified_at, shipping_flat_cents, vendor_id,
   captured_by, captured_at
 ) VALUES (
-  '4c2b6fed-5877-558e-b4ec-bf24a12a9abc', 'Fixture Flatweave Dining Rug', 'ff-fixture-flatweave-dining-rug', 'Fixture Weavers', 'A fixture row. Flatweave wool, woven to size.',
+  '4c2b6fed-5877-558e-b4ec-bf24a12a9abc', 'Fixture Flatweave Dining Rug', 'ff-fixture-flatweave-dining-rug', 'Fixture Weavers', 'A fixture row. Flatweave wool, woven to size — the pale rug running under the table in this photograph.',
   'textiles', 'published', 'catalog',
   145000, ARRAY['wool', 'cotton'], ARRAY['Coastal'], ARRAY['sourced'],
   NULL, '{"depth": 96, "unit": "in", "width": 120}'::jsonb, 12,
@@ -330,7 +426,7 @@ INSERT INTO public.products (
   photo_verified_at, shipping_flat_cents, vendor_id,
   captured_by, captured_at
 ) VALUES (
-  'bd9b7e9f-6555-5d8f-bc58-a5fd80eddadf', 'Fixture Painted Pine Sideboard', 'ff-fixture-painted-pine-sideboard', 'Fixture Woodshop', 'A fixture row. Painted pine case with unlacquered brass pulls.',
+  'bd9b7e9f-6555-5d8f-bc58-a5fd80eddadf', 'Fixture Painted Pine Sideboard', 'ff-fixture-painted-pine-sideboard', 'Fixture Woodshop', 'A fixture row, and the only one whose photograph shows the room rather than the piece: the repository holds five product photographs and the fixture needs six categories.',
   'storage', 'published', 'catalog',
   260000, ARRAY['pine', 'brass'], ARRAY['Transitional'], ARRAY['maker_piece'],
   'Hand-painted', '{"depth": 18, "height": 32, "unit": "in", "width": 72}'::jsonb, 8,
@@ -367,6 +463,86 @@ ON CONFLICT (product_id) DO UPDATE SET
   boldness = EXCLUDED.boldness, craftsmanship = EXCLUDED.craftsmanship,
   source = EXCLUDED.source, confidence = EXCLUDED.confidence,
   updated_at = now();
+
+-- ─── editorial stories ───────────────────────────────────────────────────
+-- A3-17 / GAP8-12. `read_minutes` is DERIVED from the body at 200 words a
+-- minute, rounded half up — never taken from the manifest, because the
+-- defect being fixed is a typed number over a body that does not support
+-- it. `hero_gradient_key` and `maker_avatar_gradient_key` are left alone:
+-- they are the fallback the app uses when there is no photograph, and this
+-- apply is what gives it one.
+
+-- grain-whisperer-of-maine — 95 word(s), 1 minute(s)
+INSERT INTO public.editorial_stories (
+  id, tag, title, subtitle, body_md, read_minutes, hero_image_url,
+  maker_name, maker_location, featured_product_id, published_at, sort_order
+) VALUES (
+  'a8b3f8a0-1111-4111-8111-1d1a1a1a1a01'::uuid, 'Maker Spotlight', 'The Grain Whisperer of Maine', 'Jonathan Chilton on 40 years of listening to wood',
+  'For four decades, Jonathan Chilton has been making chairs in a small shop on the coast of Maine. He doesn''t sketch first. He listens. "Every board has a direction it wants to go," he says, running his palm across a slab of black walnut drying in the corner. "My job is to find that direction and follow it."
+
+The lounge chair you see on your home screen today began three years ago, as a tree felled by a winter storm. Chilton bought the log from a neighbor for the price of a tank of gas.',
+  1, 'http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/editorial/a8b3f8a0-1111-4111-8111-1d1a1a1a1a01/9de230aa-3f3f-5264-ba89-4f4b2ac540f6.jpg',
+  'Jonathan Chilton', 'Freeport, Maine', '33ef1884-2a20-5467-879b-4a3e91cde8a9'::uuid,
+  now() - interval '1 days', 100
+)
+ON CONFLICT (id) DO UPDATE SET
+  tag = EXCLUDED.tag, title = EXCLUDED.title,
+  subtitle = EXCLUDED.subtitle, body_md = EXCLUDED.body_md,
+  read_minutes = EXCLUDED.read_minutes,
+  hero_image_url = EXCLUDED.hero_image_url,
+  maker_name = EXCLUDED.maker_name,
+  maker_location = EXCLUDED.maker_location,
+  featured_product_id = EXCLUDED.featured_product_id,
+  published_at = EXCLUDED.published_at,
+  sort_order = EXCLUDED.sort_order, updated_at = now();
+
+-- the-slow-shape-of-home — 72 word(s), 1 minute(s)
+INSERT INTO public.editorial_stories (
+  id, tag, title, subtitle, body_md, read_minutes, hero_image_url,
+  maker_name, maker_location, featured_product_id, published_at, sort_order
+) VALUES (
+  'a8b3f8a0-2222-4222-8222-2d2a2a2a2a02'::uuid, 'Editor''s Note', 'Patina: The slow shape of home', 'Why the things you live with should age the way you do — gracefully, with intention',
+  'Patina is not a finish. It is a record. Every nick on the table is a Tuesday in March, every soft seat the shape of a thousand evenings. The pieces we choose to live with become a quiet autobiography.
+
+This is the idea at the heart of every recommendation you''ll see here: furniture that gets better with use, made by people who care whether you''re still using it twenty years from now.',
+  1, 'http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/editorial/a8b3f8a0-2222-4222-8222-2d2a2a2a2a02/9e9fac2b-e7e1-508f-8773-0b22f29c5ee8.jpg',
+  'Patina Editorial', 'New York, NY', NULL,
+  now() - interval '2 days', 90
+)
+ON CONFLICT (id) DO UPDATE SET
+  tag = EXCLUDED.tag, title = EXCLUDED.title,
+  subtitle = EXCLUDED.subtitle, body_md = EXCLUDED.body_md,
+  read_minutes = EXCLUDED.read_minutes,
+  hero_image_url = EXCLUDED.hero_image_url,
+  maker_name = EXCLUDED.maker_name,
+  maker_location = EXCLUDED.maker_location,
+  featured_product_id = EXCLUDED.featured_product_id,
+  published_at = EXCLUDED.published_at,
+  sort_order = EXCLUDED.sort_order, updated_at = now();
+
+-- imperfect-linen — 71 word(s), 1 minute(s)
+INSERT INTO public.editorial_stories (
+  id, tag, title, subtitle, body_md, read_minutes, hero_image_url,
+  maker_name, maker_location, featured_product_id, published_at, sort_order
+) VALUES (
+  'a8b3f8a0-3333-4333-8333-3d3a3a3a3a03'::uuid, 'Material Study', 'A defense of imperfect linen', 'On wrinkles, slubs, and the quiet honesty of natural fibers',
+  'A linen sofa wrinkles the first time you sit on it. This is not a flaw. It is the fabric remembering you were there.
+
+The contemporary aversion to wrinkles is largely an artifact of synthetic textiles, which iron themselves flat the way nothing in nature ever does. Real linen — the kind that started as a flax plant — has slubs. It softens with washing. It deepens in color. It records.',
+  1, 'http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/editorial/a8b3f8a0-3333-4333-8333-3d3a3a3a3a03/8de3bbf7-51c9-5c20-8d87-dfa59de490fc.jpg',
+  'Patina Editorial', 'Portland, OR', NULL,
+  now() - interval '3 days', 80
+)
+ON CONFLICT (id) DO UPDATE SET
+  tag = EXCLUDED.tag, title = EXCLUDED.title,
+  subtitle = EXCLUDED.subtitle, body_md = EXCLUDED.body_md,
+  read_minutes = EXCLUDED.read_minutes,
+  hero_image_url = EXCLUDED.hero_image_url,
+  maker_name = EXCLUDED.maker_name,
+  maker_location = EXCLUDED.maker_location,
+  featured_product_id = EXCLUDED.featured_product_id,
+  published_at = EXCLUDED.published_at,
+  sort_order = EXCLUDED.sort_order, updated_at = now();
 
 -- ─── the refusal, restated as an assertion ───────────────────────────────
 -- A publishable row with no spectrum is invisible to get_aesthete_matches.

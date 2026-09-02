@@ -138,6 +138,11 @@ def put_object(base_url, service_key, object_path, body, content_type, overwrite
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--manifest", required=True)
+    parser.add_argument(
+        "--editorial", metavar="MANIFEST", default=None,
+        help="also upload each editorial story's hero image to "
+             "<uploader uid>/editorial/<story id>/<uuid>.<ext>",
+    )
     parser.add_argument("--supabase-url", default=os.environ.get("SUPABASE_URL"))
     parser.add_argument(
         "--service-key", default=os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -172,41 +177,64 @@ def main(argv=None):
         sys.stderr.write("%s: manifest is invalid — nothing uploaded\n" % args.manifest)
         return 1
 
+    stories = []
+    if args.editorial:
+        try:
+            stories = BC.load_editorial(args.editorial, rows, profile=args.profile)
+        except BC.ManifestError as exc:
+            for message in exc.errors:
+                sys.stderr.write("error: %s\n" % message)
+            sys.stderr.write(
+                "%s: editorial manifest is invalid — nothing uploaded\n"
+                % args.editorial
+            )
+            return 1
+
     planned = []
     errors = []
+
+    def plan(label, path, object_path):
+        ext = os.path.splitext(path)[1].lower()
+        content_type = EXT_MIME.get(ext) or mimetypes.guess_type(path)[0]
+        if content_type not in ALLOWED_MIME:
+            errors.append(
+                "%s: %s is %s, which the %s bucket rejects"
+                % (label, os.path.basename(path), content_type, BUCKET)
+            )
+            return
+        edge = long_edge(path)
+        if edge and edge > BC.MAX_LONG_EDGE_PX and not args.allow_oversize:
+            errors.append(
+                "%s: %s is %d px on the long edge, over %d — run "
+                "`sips -Z %d %s` first, or pass --allow-oversize"
+                % (
+                    label,
+                    os.path.basename(path),
+                    edge,
+                    BC.MAX_LONG_EDGE_PX,
+                    BC.MAX_LONG_EDGE_PX,
+                    path,
+                )
+            )
+            return
+        planned.append((label, path, object_path, content_type))
+
     for row in rows:
         for index, path in enumerate(row.images):
             ext = os.path.splitext(path)[1].lower()
-            content_type = EXT_MIME.get(ext) or mimetypes.guess_type(path)[0]
-            if content_type not in ALLOWED_MIME:
-                errors.append(
-                    "%s: %s is %s, which the %s bucket rejects"
-                    % (row.slug, os.path.basename(path), content_type, BUCKET)
-                )
-                continue
-            edge = long_edge(path)
-            if edge and edge > BC.MAX_LONG_EDGE_PX and not args.allow_oversize:
-                errors.append(
-                    "%s: %s is %d px on the long edge, over %d — run "
-                    "`sips -Z %d %s` first, or pass --allow-oversize"
-                    % (
-                        row.slug,
-                        os.path.basename(path),
-                        edge,
-                        BC.MAX_LONG_EDGE_PX,
-                        BC.MAX_LONG_EDGE_PX,
-                        path,
-                    )
-                )
-                continue
-            planned.append(
-                (
-                    row.slug,
-                    path,
-                    BC.image_storage_path(args.uploader_uid, row.product_id, index, ext),
-                    content_type,
-                )
+            plan(
+                row.slug,
+                path,
+                BC.image_storage_path(args.uploader_uid, row.product_id, index, ext),
             )
+
+    for story in stories:
+        ext = os.path.splitext(story.hero_path)[1].lower()
+        plan(
+            "editorial/" + story.slug,
+            story.hero_path,
+            BC.hero_storage_path(args.uploader_uid, story.story_id, ext),
+        )
 
     for message in errors:
         sys.stderr.write("error: %s\n" % message)
@@ -250,10 +278,15 @@ def main(argv=None):
         % (len(planned) - failures, failures, public_base)
     )
     print(
-        "Emit the matching SQL with:\n"
-        "  python3 scripts/first-flight/build-catalog.py --emit %s --out <file> "
-        "--storage-base-url %s --uploader-uid %s"
-        % (args.manifest, public_base, args.uploader_uid)
+        "Emit the matching SQL with (CATALOG_SQL is the file you will apply):\n"
+        "  python3 scripts/first-flight/build-catalog.py --emit %s%s "
+        '--out "$CATALOG_SQL" --storage-base-url %s --uploader-uid %s'
+        % (
+            args.manifest,
+            (" --editorial %s" % args.editorial) if args.editorial else "",
+            public_base,
+            args.uploader_uid,
+        )
     )
     return 1 if failures else 0
 

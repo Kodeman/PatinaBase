@@ -269,6 +269,84 @@ BEGIN
     v_makers, v_no_spectrum, v_hot_link, v_unbacked, v_require_storage;
 END $$;
 
+-- ─── case 11: the editorial stories ────────────────────────────────────────
+-- The charter's L0.3 row contract ends "plus 3 editorial stories with real hero
+-- images and read_minutes derived from the body (A3-17, GAP8-12)". Today's
+-- three rows (00143_editorial_stories.sql:143-198) carry hero_image_url NULL
+-- and read_minutes 4 / 3 / 5 over bodies of 489 / 386 / 387 characters.
+--
+-- Scope is every row a tester can actually see, because that is what the two
+-- findings are about: published, unexpired. read_minutes is recomputed here in
+-- Postgres with the same 200-words-per-minute, round-half-up rule
+-- scripts/first-flight/build-catalog.py applies, so the column cannot drift
+-- from the body it describes.
+
+DO $$
+DECLARE
+  v_visible     int;
+  v_no_hero     int;
+  v_no_body     int;
+  v_bad_minutes int;
+  v_hero_unbacked int;
+  v_require_storage bool := current_setting('first_flight.require_storage')::int = 1;
+BEGIN
+  SELECT count(*) INTO v_visible
+    FROM public.editorial_stories e
+   WHERE e.published_at IS NOT NULL AND e.published_at <= now()
+     AND (e.expires_at IS NULL OR e.expires_at > now());
+  ASSERT v_visible >= 3,
+    format('FAIL 11a: %s editorial story/stories are visible to a tester, want >= 3',
+           v_visible);
+
+  SELECT count(*) INTO v_no_hero
+    FROM public.editorial_stories e
+   WHERE e.published_at IS NOT NULL AND e.published_at <= now()
+     AND (e.expires_at IS NULL OR e.expires_at > now())
+     AND (e.hero_image_url IS NULL OR btrim(e.hero_image_url) = '');
+  ASSERT v_no_hero = 0,
+    format('FAIL 11b: %s visible editorial story/stories have no hero image, so '
+           'the card renders as a gradient rectangle (A3-17)', v_no_hero);
+
+  SELECT count(*) INTO v_no_body
+    FROM public.editorial_stories e
+   WHERE e.published_at IS NOT NULL AND e.published_at <= now()
+     AND (e.expires_at IS NULL OR e.expires_at > now())
+     AND (e.body_md IS NULL OR btrim(e.body_md) = '');
+  ASSERT v_no_body = 0,
+    format('FAIL 11c: %s visible editorial story/stories have no body', v_no_body);
+
+  SELECT count(*) INTO v_bad_minutes
+    FROM public.editorial_stories e
+   WHERE e.published_at IS NOT NULL AND e.published_at <= now()
+     AND (e.expires_at IS NULL OR e.expires_at > now())
+     AND e.body_md IS NOT NULL AND btrim(e.body_md) <> ''
+     AND e.read_minutes <> GREATEST(1, floor(
+           COALESCE(array_length(regexp_split_to_array(btrim(e.body_md), '\s+'), 1), 0)
+           / 200.0 + 0.5)::int);
+  ASSERT v_bad_minutes = 0,
+    format('FAIL 11d: %s visible editorial story/stories claim a read time their '
+           'body does not support (GAP8-12)', v_bad_minutes);
+
+  SELECT count(*) INTO v_hero_unbacked
+    FROM public.editorial_stories e
+   WHERE e.published_at IS NOT NULL AND e.published_at <= now()
+     AND (e.expires_at IS NULL OR e.expires_at > now())
+     AND e.hero_image_url LIKE '%/object/public/product-images/%'
+     AND NOT EXISTS (
+       SELECT 1 FROM storage.objects o
+        WHERE o.bucket_id = 'product-images'
+          AND o.name = split_part(e.hero_image_url,
+                                  '/object/public/product-images/', 2));
+  IF v_require_storage THEN
+    ASSERT v_hero_unbacked = 0,
+      format('FAIL 11e: %s editorial hero image URL(s) have no storage.objects '
+             'row behind them', v_hero_unbacked);
+  END IF;
+
+  RAISE NOTICE 'first-flight editorial: visible=% no_hero=% no_body=% bad_read_minutes=% hero_unbacked=%',
+    v_visible, v_no_hero, v_no_body, v_bad_minutes, v_hero_unbacked;
+END $$;
+
 -- ─── the whole-stack picture, reported and not asserted ────────────────────
 -- On production these numbers are the scoped ones. Locally they also count the
 -- pre-existing dev-seed catalogue rows other lanes' fixtures depend on, so
