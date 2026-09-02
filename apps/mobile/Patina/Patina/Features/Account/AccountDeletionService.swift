@@ -36,11 +36,26 @@ final class AccountDeletionService {
     /// C5: the homeowner never reads the server's words. One sentence, ours,
     /// naming the one thing she can do next.
     static let failureCopy =
-        "We couldn't close your account just now. Try again, or write to hello@patina.cloud."
+        "We couldn't delete your account just now. Try again, or write to hello@patina.cloud."
 
-    static let confirmationTitle = "Close your account?"
-    static let confirmationBody =
-        "This removes your account and everything Patina keeps on this device. It can't be undone."
+    /// A-101 — App Store Review 5.1.1(v), and L1-E's copy deck (W1, three
+    /// rows). The dialog said "Close your account?" while the row that opened
+    /// it and the button both said "Delete account" — three names for one act —
+    /// and it scoped the deletion to the phone while the account, its projects,
+    /// proposals and invoices live on the server.
+    ///
+    /// Grounded in `delete-account/index.ts` + 00538: the auth user is
+    /// soft-deleted and `purge_client_account` removes rooms, scans, saved
+    /// items and the threads the client started, but never writes to
+    /// `proposals`, `projects`, `invoices`, `client_decisions` or
+    /// `designer_clients` — those survive indefinitely against a tombstoned
+    /// profile. There is no purge window in the code, so the sentence does not
+    /// invent one.
+    static let confirmationTitle = "Delete account"
+    static let confirmationBody = "This deletes your Patina account, including your saved "
+        + "rooms, pieces, and messages. Any project you completed with a designer stays in "
+        + "our records \u{2014} with your name and contact details removed \u{2014} as required "
+        + "for our legal and accounting obligations. This can't be undone."
 
     /// Delete the signed-in account and wipe the device-local store.
     ///

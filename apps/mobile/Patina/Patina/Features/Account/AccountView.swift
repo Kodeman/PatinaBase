@@ -35,16 +35,18 @@ struct AccountView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: PatinaSpacing.xl) {
-                // Header
-                headerSection
+                if authService.isAuthenticated {
+                    headerSection
+                    accountSection
+                    actionsSection
+                } else {
+                    // B-12 / C1-14: a guest used to land on
+                    // person.circle.fill, "Not signed in", "Email —",
+                    // "Member since —" and one button that opened a QR
+                    // scanner needing the session they do not have.
+                    signedOutSection
+                }
 
-                // Account info
-                accountSection
-
-                // Actions
-                actionsSection
-
-                // Footer
                 footerSection
             }
             .padding(.horizontal, PatinaSpacing.lg)
@@ -104,6 +106,37 @@ struct AccountView: View {
         }
     }
 
+    // MARK: - Signed out (B-12, C1-14)
+
+    /// One sentence and a door. The QR row is hidden here: "Sign in on the
+    /// web" approves a PORTAL sign-in from a session this reader has not got.
+    private var signedOutSection: some View {
+        VStack(spacing: PatinaSpacing.lg) {
+            Image(systemName: "person.circle")
+                .font(.system(size: 56))
+                .foregroundStyle(PatinaColors.Text.muted)
+                .padding(.top, PatinaSpacing.lg)
+
+            Text("You're looking around without an account.")
+                .font(PatinaTypography.bodyMedium)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Sign in to see your projects, decisions, proposals and invoices.")
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            PatinaButton("Sign in or create your account", style: .primary) {
+                coordinator.presentedSheet = .auth
+            }
+            .accessibilityIdentifier("AccountView.SignInButton")
+        }
+        .padding(.horizontal, PatinaSpacing.sm)
+    }
+
     // MARK: - Header
 
     private var headerSection: some View {
@@ -157,7 +190,8 @@ struct AccountView: View {
             sectionHeader("Actions")
 
             VStack(spacing: PatinaSpacing.md) {
-                // Sign in on the web
+                // Sign in on the web — approves a PORTAL sign-in with this
+                // session, so it belongs to a signed-in reader only (C1-14).
                 Button {
                     // Swap the active sheet from Account → QR scanner.
                     // `.sheet(item:)` animates the change; no manual delay
@@ -180,28 +214,26 @@ struct AccountView: View {
                 }
 
                 // Sign Out
-                if authService.isAuthenticated {
-                    PatinaButton("Sign Out", style: .secondary) {
-                        showingSignOutAlert = true
-                    }
+                PatinaButton("Sign out", style: .secondary) {
+                    showingSignOutAlert = true
+                }
 
-                    Button("Delete account") {
-                        showingDeleteAlert = true
-                    }
-                    .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.terracotta)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(Rectangle())
-                    .accessibilityIdentifier("AccountView.DeleteAccountButton")
+                Button("Delete account") {
+                    showingDeleteAlert = true
+                }
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.terracotta)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityIdentifier("AccountView.DeleteAccountButton")
 
-                    if let deleteFailureMessage {
-                        Text(deleteFailureMessage)
-                            .font(PatinaTypography.caption)
-                            .foregroundStyle(PatinaColors.Text.secondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("AccountView.DeleteAccountFailure")
-                    }
+                if let deleteFailureMessage {
+                    Text(deleteFailureMessage)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("AccountView.DeleteAccountFailure")
                 }
             }
         }

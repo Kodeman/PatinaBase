@@ -30,7 +30,9 @@ struct AccountActionsTests {
     @Test("a deletion failure is rendered in Patina's voice, never the server's")
     func deletionFailureCopyCarriesNoVendorText() {
         let copy = AccountDeletionService.failureCopy
-        #expect(copy == "We couldn't close your account just now. Try again, or write to hello@patina.cloud.")
+        // A-101 / L1-E copy deck (W1): "close" → "delete", so the row, the
+        // confirmation and this sentence all use one verb.
+        #expect(copy == "We couldn't delete your account just now. Try again, or write to hello@patina.cloud.")
         #expect(!copy.lowercased().contains("error"))
         #expect(!copy.contains("500"))
         #expect(!copy.contains("401"))
@@ -41,11 +43,17 @@ struct AccountActionsTests {
         #expect(AccountDeletionError.failed.errorDescription == AccountDeletionService.failureCopy)
     }
 
+    /// A-101 (T0/blocker, App Store Review 5.1.1(v)) rewrote both strings: the
+    /// old copy scoped deletion to "this device" while the account, its
+    /// projects, proposals and invoices live on the server, and "Close" was a
+    /// third name for an act the row and the button both called "Delete
+    /// account". The final text is L1-E's copy deck; `DeleteAccountCopyTests`
+    /// pins its claims one by one.
     @Test("the confirmation names what it removes and says it is final")
     func deletionConfirmationCopyIsHonest() {
-        #expect(AccountDeletionService.confirmationTitle == "Close your account?")
-        #expect(AccountDeletionService.confirmationBody
-            == "This removes your account and everything Patina keeps on this device. It can't be undone.")
+        #expect(AccountDeletionService.confirmationTitle == "Delete account")
+        #expect(AccountDeletionService.confirmationBody.contains("deletes your Patina account"))
+        #expect(AccountDeletionService.confirmationBody.contains("can't be undone"))
     }
 
     @Test("Settings offers Sign Out and Delete account directly")
