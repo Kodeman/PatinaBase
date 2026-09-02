@@ -689,6 +689,8 @@ struct ProductDetailView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     ProductDetailView(product: Product.previewProducts[0])
 }
+#endif

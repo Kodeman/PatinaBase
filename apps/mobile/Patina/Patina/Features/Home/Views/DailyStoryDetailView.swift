@@ -209,8 +209,10 @@ struct DailyStoryDetailView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     NavigationStack {
         DailyStoryDetailView(story: .preview, featuredProduct: Product.previewProducts[0])
     }
 }
+#endif

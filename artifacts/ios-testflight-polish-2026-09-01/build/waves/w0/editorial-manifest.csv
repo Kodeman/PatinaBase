@@ -1,0 +1,4 @@
+story_id,slug,tag,title,subtitle,maker_name,maker_location,body_file,body_md,hero_image,featured_slug,published_offset_days,sort_order
+a8b3f8a0-1111-4111-8111-1d1a1a1a1a01,grain-whisperer-of-maine,Maker Spotlight,,,,,editorial-bodies/grain-whisperer-of-maine.md,,,,,
+a8b3f8a0-2222-4222-8222-2d2a2a2a2a02,the-slow-shape-of-home,Editor's Note,,,,,editorial-bodies/the-slow-shape-of-home.md,,,,,
+a8b3f8a0-3333-4333-8333-3d3a3a3a3a03,imperfect-linen,Material Study,,,,,editorial-bodies/imperfect-linen.md,,,,,

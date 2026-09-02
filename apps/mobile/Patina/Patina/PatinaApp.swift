@@ -69,10 +69,11 @@ struct PatinaApp: App {
             AppSettings.shared.hasCompletedOnboarding = false
             AppSettings.shared.roomCount = 0
         }
-        // Initialize PostHog analytics (skip during UI testing). It runs first
-        // because `FeatureFlags` reads the payload its SDK persisted, and the
+        // Initialize PostHog analytics (skip during UI testing, and skip when
+        // the analytics kill switch is off — Debug). It runs first because
+        // `FeatureFlags` reads the payload its SDK persisted, and the
         // coordinator below reads `FeatureFlags`.
-        if !Self.isUITesting {
+        if !Self.isUITesting && AppConfiguration.analyticsEnabled {
             PostHogService.shared.initialize()
         }
 

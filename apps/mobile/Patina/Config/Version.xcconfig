@@ -1,0 +1,20 @@
+// Version.xcconfig
+//
+// The ONE source of Patina's version numbers, for every target and every
+// configuration. `CURRENT_PROJECT_VERSION` and `MARKETING_VERSION` are deleted
+// from all eight target configurations in project.pbxproj — Xcode resolves a
+// target-level setting ABOVE an xcconfig, so leaving even one in place would
+// silently win and this file would be decoration.
+//
+// App Store Connect already holds build "2" for cloud.patina.app (uploaded
+// 2026-05-12). CURRENT_PROJECT_VERSION must stay strictly greater than every
+// number `asc builds list --app 6762007888 --paginate` returns, or the upload
+// is rejected before anyone sees it.
+//
+// The app and the widget appex must resolve the SAME build number or
+// processing fails with ITMS-90473; one file for both targets is how that is
+// guaranteed rather than remembered. `ExportOptions.plist` sets
+// `manageAppVersionAndBuildNumber` to false so nothing downstream moves it.
+
+CURRENT_PROJECT_VERSION = 3
+MARKETING_VERSION = 1.0

@@ -16,8 +16,9 @@
 //       local stack.
 //    2. `--uitesting` — all off unless the launch argument above names them.
 //       (PostHog is not initialized under `--uitesting` at all.)
-//    3. PostHog's own persisted flag payload, read synchronously.
-//    4. `false`.
+//    3. PostHog's own persisted flag payload, read synchronously — including a
+//       payload that says `false`, which is the kill switch and beats step 4.
+//    4. `defaults`, per flag. Not a blanket `false` (D1a).
 //
 //  Why step 3 is a synchronous read and not a bounded wait: PostHog fetches
 //  flags asynchronously after `setup()`, so a first cut waited up to 1.5 s on
@@ -35,10 +36,17 @@
 //  3.48). `isFeatureEnabled` therefore answers from the last session's payload
 //  with no wait at all.
 //
-//  The cost is explicit and accepted: on the very first launch after install
-//  there is no payload yet, so every flag is off for that session and correct
-//  from the second launch on. A flag that must be honoured on first launch
-//  needs a splash blocked on resolution — a product decision, not this file's.
+//  The cost the first draft accepted — every flag off on the very first launch
+//  after install, correct only from the second — is what D1a (2026-09-02)
+//  overturns for `house-first`: the four-tab root is the shipped product for
+//  round one, so it has to be there on the launch a tester actually opens
+//  first. The mechanism is a per-flag default, not a splash blocked on
+//  resolution: PostHog's answer is still read synchronously and still wins,
+//  including when it says `false`. The default only fills the silence.
+//
+//  That distinction needs a three-state source. `isEnabled(_:) -> Bool`
+//  collapsed "PostHog says no" and "PostHog has never heard of this key" into
+//  the same answer, and the kill switch depends on telling them apart.
 //
 
 import Foundation
@@ -47,8 +55,11 @@ import Foundation
 /// only so the resolution order can be tested without a live PostHog.
 @MainActor
 protocol FeatureFlagProvider {
-    /// The flag's value as the source can answer it *now*, synchronously.
-    func isEnabled(_ key: String) -> Bool
+    /// The flag's value as the source can answer it *now*, synchronously, or
+    /// `nil` when the source has no answer for this key at all — a fresh
+    /// install with no cached payload, or analytics off. `nil` is not `false`:
+    /// `false` is a decision and beats the default table.
+    func value(for key: String) -> Bool?
 }
 
 @MainActor
@@ -61,6 +72,22 @@ final class FeatureFlags {
     }
 
     static let shared = FeatureFlags()
+
+    /// What a flag resolves to when the source has no answer — a fresh install
+    /// with no cached payload and no launch argument. D1a: `house-first` is
+    /// **true** here because the four-tab root is what round one ships (D1) and
+    /// a tester's first launch is the one that matters. The other two stay
+    /// fail-closed: the Buy path and the widget's in-app promotion are opt-in.
+    ///
+    /// A PostHog payload saying `false` still wins — that is the kill switch,
+    /// and it is why this table is consulted only for a `nil` answer.
+    private static let defaults: [Flag: Bool] = [
+        .houseFirst: true,
+        .directOrders: false,
+        .houseWidget: false
+    ]
+
+    static func defaultValue(for flag: Flag) -> Bool { defaults[flag] ?? false }
 
     /// The DEBUG override argument, followed by a comma-separated list of
     /// `Flag` raw values.
@@ -76,6 +103,9 @@ final class FeatureFlags {
 
     init() {}
 
+    /// Unresolved is `false`, deliberately: `resolveAtLaunch` fills every flag,
+    /// so a `nil` here means resolution never ran, which is a bug state and not
+    /// a state the default table should dress up as a decision.
     func isOn(_ flag: Flag) -> Bool { values[flag] ?? false }
 
     /// Launch entry point — called from `PatinaApp.init()`, after
@@ -113,11 +143,16 @@ final class FeatureFlags {
             logResolution(source: "launch-arguments")
             return
         }
-        values = Dictionary(
-            uniqueKeysWithValues: Flag.allCases.map { ($0, provider.isEnabled($0.rawValue)) }
-        )
+        var answeredByPostHog = false
+        values = Dictionary(uniqueKeysWithValues: Flag.allCases.map { flag in
+            guard let answer = provider.value(for: flag.rawValue) else {
+                return (flag, Self.defaultValue(for: flag))
+            }
+            answeredByPostHog = true
+            return (flag, answer)
+        })
         isResolved = true
-        logResolution(source: "posthog-cache")
+        logResolution(source: answeredByPostHog ? "posthog-cache" : "defaults")
     }
 
     private func write(to mirror: FeatureFlagMirror) {
@@ -136,13 +171,27 @@ final class FeatureFlags {
 
     /// A walk has no other way to see which flags a launch resolved — nothing
     /// reads them until W3 mounts the tab bar.
+    ///
+    /// Emitted **unconditionally at notice level**, not under `#if DEBUG`.
+    /// Runbook H4's evidence is a two-launch probe on a **Release** build —
+    /// launch 2 is the one that reads a cached PostHog payload, and
+    /// `posthog-cache` with `house-first` absent from `on=[…]` is the D1/D1a
+    /// contradiction, live. A `#if DEBUG` body cannot answer that question:
+    /// the line does not exist in the build under test, and in a Debug build
+    /// `AppConfiguration.analyticsEnabled` is false so the provider always
+    /// answers nil and the source can only ever read `defaults`. `notice` is
+    /// the lowest os_log level that survives into a Release log archive, so
+    /// this is readable over Console from a TestFlight device.
+    ///
+    /// It carries flag **keys** and a branch name — `house-first`,
+    /// `direct-orders`, `house-widget`, `launch-arguments` / `posthog-cache` /
+    /// `defaults`. No user id, no distinct id, no payload. That is what makes
+    /// it safe to ship at a persisted level.
     private func logResolution(source: String) {
-        #if DEBUG
         let on = Flag.allCases.filter { isOn($0) }.map(\.rawValue)
-        PatinaLog.ui.debug(
+        PatinaLog.ui.notice(
             "[FeatureFlags] resolved via \(source): on=[\(on.joined(separator: ","))]"
         )
-        #endif
     }
 
     // MARK: - Launch arguments
@@ -224,13 +273,17 @@ struct FeatureFlagMirror {
 }
 
 /// PostHog as the flag source, read from the payload its SDK persisted on a
-/// previous launch. `isFeatureEnabled` already answers `false` for every key
-/// when analytics is off (no API key) or when no payload has ever been
-/// cached — which is exactly the fallback this resolution wants.
+/// previous launch.
+///
+/// `isFeatureEnabled` cannot be used here: it collapses an absent key into
+/// `false`, and D1a needs "PostHog has never heard of this key" (fresh install,
+/// analytics off) told apart from "PostHog says no" (the kill switch).
+/// `PostHogService.featureFlagAnswer` wraps `getFeatureFlagResult`, which is
+/// documented to return nil "if the flag doesn't exist".
 @MainActor
 struct PostHogFeatureFlagProvider: FeatureFlagProvider {
-    func isEnabled(_ key: String) -> Bool {
-        guard PostHogService.shared.isFeatureFlagSourceLive else { return false }
-        return PostHogService.shared.isFeatureEnabled(key)
+    func value(for key: String) -> Bool? {
+        guard PostHogService.shared.isFeatureFlagSourceLive else { return nil }
+        return PostHogService.shared.featureFlagAnswer(key)
     }
 }
