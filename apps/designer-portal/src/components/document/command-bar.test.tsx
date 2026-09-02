@@ -53,10 +53,13 @@ jest.mock('@/hooks/use-auth', () => ({
 }));
 
 let mockCallSheetFlag = false;
+let mockTesterNotesFlag = false;
 jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: (name: string) => ({
-    value: name === 'call-sheet' ? mockCallSheetFlag : false,
-  }),
+  useFeatureFlag: (name: string) => {
+    if (name === 'call-sheet') return { value: mockCallSheetFlag };
+    if (name === 'tester-notes') return { value: mockTesterNotesFlag };
+    return { value: false };
+  },
 }));
 
 // Trap 2 (patina-testing): command-bar.tsx → ./overlays/post-sheet →
@@ -101,6 +104,7 @@ function deskRow(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   mockCallSheetFlag = false;
+  mockTesterNotesFlag = false;
   mockPathname.mockReturnValue('/desk');
   mockDeskData.mockReturnValue({ folders: [], chips: [] });
   mockPush.mockClear();
@@ -760,5 +764,37 @@ describe('F08 — the ⌘K invoice door names its scope', () => {
     openPalette();
 
     expect(screen.getByText('Draw an invoice · Ellsworth')).toBeInTheDocument();
+  });
+});
+
+describe('the "Leave a note" doorway follows the tester-notes flag', () => {
+  // Without the flag the Tester Notes widget is not mounted at all, so the row
+  // would dispatch `document:open-feedback` into nothing — a door onto a wall.
+  function typeForTheNoteRow() {
+    render(
+      <>
+        <FindAnythingButton />
+        <CommandBar />
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+      target: { value: 'leave a note' },
+    });
+  }
+
+  it('offers no note row with the flag off', () => {
+    mockTesterNotesFlag = false;
+    typeForTheNoteRow();
+
+    expect(screen.queryByText('Leave a note')).not.toBeInTheDocument();
+  });
+
+  it('offers the note row with the flag on', () => {
+    mockTesterNotesFlag = true;
+    typeForTheNoteRow();
+
+    expect(screen.getByText('Leave a note')).toBeInTheDocument();
+    expect(screen.getByText('feedback on this screen')).toBeInTheDocument();
   });
 });
