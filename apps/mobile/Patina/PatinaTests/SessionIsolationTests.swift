@@ -279,6 +279,23 @@ struct SessionIsolationTests {
         // account's own portrait on launch.
         out["StyleProfileStore.swift"] = "on disk — cleared by LocalStoreReset.wipeUserScopedData"
 
+        // W1 · L1-A. Neither holds a row belonging to an account.
+        //
+        // `AuthProviderCatalog` (A3-06 / D3) holds the answer to "which sign-in
+        // providers does THIS GoTrue deployment have enabled" — a fact about
+        // the server, identical for everybody, and only ever read while signed
+        // OUT. Resetting it on a session change would re-fetch the same list.
+        out["AuthProviderCatalog.swift"] = "server configuration, not session state — same list for everyone"
+
+        // `OnboardingCompletion` (B-21) is deliberately account-keyed and
+        // deliberately survives a sign-out: its whole job is to remember that
+        // account A finished onboarding on this phone, so A does not meet the
+        // intro again on the next sign-in. Clearing it on the SessionScope seam
+        // would re-create the finding it closes. Nothing in it is readable as
+        // another account's data — the record is a set of user ids, and every
+        // read is `hasCompleted(userId:)` against the id that just signed in.
+        out["OnboardingCompletion.swift"] = "account-keyed by design; surviving sign-out is the fix (B-21)"
+
         // Scan pipeline. Its rows are SwiftData, wiped by `LocalStoreReset`;
         // the in-memory parts are queue mechanics and file bookkeeping.
         for file in [
