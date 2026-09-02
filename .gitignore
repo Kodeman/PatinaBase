@@ -110,3 +110,13 @@ packages/patina-design-system/.dssync-tailwind.css
 
 # Parcel build cache (extension bundler)
 .parcel-cache/
+
+# 2026-09-01 cleanup: artifact QA scratch and build leftovers
+**/node_modules
+*.bak
+artifacts/**/deck-qa/
+artifacts/**/review-shots/
+artifacts/**/shots-mb/
+artifacts/.*/
+artifacts/**/cws-upload/
+apps/mobile/Mobile.xcworkspace/xcuserdata/
