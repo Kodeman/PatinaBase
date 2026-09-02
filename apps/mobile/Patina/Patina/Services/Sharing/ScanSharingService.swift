@@ -382,14 +382,23 @@ public final class ScanSharingService {
 
     /// Search for designers by name.
     ///
-    /// 00555 drops the world-readable `profiles` policy this used to lean on
-    /// and revokes anon, so the old `.from("profiles")` query returns nothing
-    /// and the picker goes silently empty. The RPC is the only path that still
-    /// answers, and it returns no email — the old query handed any signed-in
-    /// client every designer's address.
+    /// **No caller today.** `grep -rn 'searchDesigners' apps/mobile
+    /// --include='*.swift'` finds this declaration, the contract test and these
+    /// comments — no view, view model or coordinator in Patina or in Capture
+    /// calls it. So the change below fixes no visible screen, and the earlier
+    /// framing ("the share-with-a-designer picker goes silently empty") named a
+    /// picker that does not exist.
+    ///
+    /// What it does do: the old body was `.from("profiles")` free-text over
+    /// every `is_designer = true` row, selecting `email` among other columns —
+    /// it handed any signed-in client every designer's address. 00555 drops the
+    /// world-readable `profiles` policy and revokes anon, so that query answers
+    /// nothing afterwards. Routing through `search_shareable_designers`, which
+    /// returns no email at all, means whoever writes the share picker inherits
+    /// a path that cannot reintroduce the leak.
     ///
     /// The client floor stays at 3 characters even though the RPC's own floor
-    /// is 2: it saves a round trip and it is the behaviour this screen already
+    /// is 2: it saves a round trip and it is the behaviour this method already
     /// had.
     public func searchDesigners(query: String) async throws -> [DesignerSearchResult] {
         guard await getCurrentUserId() != nil else {
