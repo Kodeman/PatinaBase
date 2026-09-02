@@ -102,7 +102,7 @@ struct SettingsView: View {
                         settingsButtonRow(
                             icon: "rectangle.portrait.and.arrow.right",
                             iconColor: PatinaColors.agedOak,
-                            label: "Sign Out"
+                            label: "Sign out"
                         ) {
                             showingSignOutConfirmation = true
                         }
@@ -142,7 +142,7 @@ struct SettingsView: View {
                     settingsToggleRow(
                         icon: "hand.tap",
                         iconColor: PatinaColors.agedOak,
-                        label: "Haptic Feedback",
+                        label: "Haptic feedback",
                         isOn: Binding(
                             get: { settings.hapticsEnabled },
                             set: { settings.setHapticsEnabled($0) }
@@ -174,10 +174,10 @@ struct SettingsView: View {
 
                 // Support group
                 settingsGroup(title: "Support") {
-                    settingsButtonRow(icon: "envelope", iconColor: PatinaColors.clay, label: "Contact Us") {
+                    settingsButtonRow(icon: "envelope", iconColor: PatinaColors.clay, label: "Contact us") {
                         openLink("mailto:hello@patina.cloud")
                     }
-                    settingsButtonRow(icon: "doc.text", iconColor: PatinaColors.agedOak, label: "Terms & Privacy") {
+                    settingsButtonRow(icon: "doc.text", iconColor: PatinaColors.agedOak, label: "Terms & privacy") {
                         openLink("https://patina.cloud/terms")
                     }
                 }
