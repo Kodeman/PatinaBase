@@ -57,14 +57,21 @@ converts a live leak into a live outage on `app.patina.cloud`, and VISION ranks 
 app. Everything else is parallel; **G** waits only on **D**.
 
 Two blocks carried a decision that had to be made **before** the command ran. **Both are now ruled —
-see "Fix round (2026-09-02)" at the foot of this file. Neither is a gate any more, and neither needs an
+see the fix-round sections at the foot of this file. Neither is a gate any more, and neither needs an
 edit before its block runs.** The originals, for the record:
 
 1. **B2 — `handle_new_user`'s `homeowner` fallback.** After 00555, designer-portal self-signups are
    written `role = 'homeowner'` and then labelled `client` in every comms thread. Three options, one
    ruling line to fill in. Every account created between the apply and a fix carries the wrong role.
-   → **Ruled: the default follows the identity provider.** Apple → `homeowner`, everything else →
-   `designer`. Already in the migration.
+   → **Ruled three times; `B2 v3` is the one in force** and it supersedes v1 and v2 wherever they still
+   appear on this page. **The trigger does not move at all** — it is 00313 verbatim, so every signup
+   with no explicit hint still lands `designer` and the portals are unchanged. `profiles.role` is a
+   LABEL; authority is `user_roles` or `profiles.is_designer`. The client relabel happens in the two
+   places that know the answer: the iOS app self-downgrades its own row after an Apple/Google sign-in
+   (permitted by a new one-way ratchet on the own-row `UPDATE` policy — W1 · L1-A, contract in
+   `waves/w1/l1-a-notes.md`), and `client-invite`'s accept handler writes `homeowner` as `service_role`
+   (runbook **A10**, with a one-time backfill at **B7b**). Full statement and reasoning: "Fix round 3"
+   below, and runbook **B2**.
 2. **D2 — the demo proposal's `client_visibility_tier`.** `demo-account.sql:187` says `'milestone'`, so
    the tester opens an $18,500 proposal with five line names and no money (`L07-07`). It is **one-way**:
    `guard_proposal_copy_immutability` forbids changing that column on a non-draft proposal, and the row
@@ -468,3 +475,291 @@ vendors routes did — `createServerClient()` + `getUser()` and nothing else —
 scope. They are not the trade-file leak (no equivalent column split exists on those tables), but the
 authorization gap is identical and their write verbs are just as open. **This is a W2 row, filed here
 so it is not rediscovered as a surprise.**
+
+---
+
+## Fix round 3 (2026-09-02)
+
+A third adversarial pass returned twelve findings — **one blocker (RF2-01), one major (RF2-02), ten
+minors** — and Fable issued **ruling B2 v3**, which reverses the direction fix rounds 1 and 2 took on
+`handle_new_user`. **All twelve are addressed.** This round is unusual in the same way round 2 was, only
+more so: **it deletes work the two previous rounds added**, and the reason is worth reading before the
+next security migration is written anywhere in this repo.
+
+Nothing here was a production write: no `psql` against Strata, no Supabase MCP write, no `asc`, no
+Sanity write, no PostHog change, no `wrangler`, no `deploy-portal.sh`, no `functions deploy`, no
+`db push`. The only edge-function change is to the file in the tree; **deploying it is a Kody-run step
+(runbook A10)**.
+
+### RULING B2 v3 (Fable, 2026-09-02) — recorded verbatim
+
+> **(a)** `profiles.role` is a **LABEL**, never an authorization input. `handle_new_user` keeps the
+> pre-00555 default (`'designer'` for any signup without an explicit role hint — portals unchanged,
+> Apple/Google on the portals unchanged); an explicit `'homeowner'` hint still wins.
+>
+> **(b)** Authority comes only from `user_roles` (`roles.domain IN ('designer','admin')`) or
+> `profiles.is_designer`, which are written only by `service_role` / SECURITY DEFINER paths. Every
+> policy or function this migration adds that decides authority predicates on those two, never on
+> `profiles.role`.
+>
+> **(c)** The own-row `profiles` `UPDATE` policy allows `role` to change **ONLY** to `'homeowner'` (a
+> self-downgrade; never upward) and `is_designer` only to `false`; the iOS app performs that
+> self-downgrade after Apple/Google sign-in (that is W1 · L1-A's A3-07 fix).
+>
+> **(d)** The `client-invite` edge function's accept path sets `profiles.role = 'homeowner'` for the
+> accepting user as `service_role` (RF2-02) — `supabase/functions/client-invite/index.ts`
+> `handleAccept`; a Kody-run deploy step in Block A, and already-accepted clients need a one-time
+> backfill.
+>
+> **(e)** The sibling policy `"Designers can update their client profiles"` treats
+> `role IN ('homeowner','client')` as the client vocabulary in `USING` and `WITH CHECK` (RF2-06), with
+> a W2 note that the `'client'` / `'homeowner'` split must be reconciled.
+
+It supersedes B2 v1 and B2 v2 **in the migration, in the runbook and on this page**, and is recorded
+verbatim in all three.
+
+### The commits
+
+| # | Branch | Commit | Findings | What |
+|---|---|---|---|---|
+| 1 | `first-flight/integration` | `70f002bc0` | RF2-01, RF2-06 … RF2-11, B2 v3(a)(b)(c)(e) | `fix(db): drop the profiles.role authority leg, ratchet the own-row pin, and revert handle_new_user to 00313` |
+| 2 | `first-flight/integration` | `3d9770574` | RF2-02, B2 v3(d) | `fix(edge): label the accepting user a homeowner in client-invite's accept path` |
+| 3 | `first-flight/integration` | *this commit* | RF2-03, RF2-04, RF2-05, RF2-12 | `docs(first-flight): record ruling B2 v3 and fix round 3 across the runbook, the probes, the wave report and the W1 note` |
+
+Commit 1 is one commit for eight findings because all eight live in
+`00555_ios_round_one_security.sql`, its test and the regenerated grants seed, and cannot be separated by
+pathspec. Row 3 says *this commit* for the obvious reason — a commit cannot carry its own hash.
+
+### The finding that says the last two rounds were WRONG
+
+**RF2-01 (blocker) — the roster-mint policy read `profiles.role`, and `handle_new_user` hands that
+label to everyone.**
+
+Fix round 2 closed the roster mint with two RESTRICTIVE policies on `public.designer_clients`, and gave
+them this predicate:
+
+```sql
+public.current_profile_is_designer() IS TRUE
+OR public.current_profile_role() IN ('designer', 'admin', 'super_admin')
+```
+
+The stated reason for the second leg was that a designer who self-signs up on the portal carries
+`profiles.role = 'designer'` with `is_designer` still false until an invite or an admin grant lands, so
+an `is_designer`-only test would lock them out of their own Add Client flow. That reason is true and the
+conclusion was still wrong, because `handle_new_user` gives **every** email/password signup that same
+label — which fix round 2 itself had just finished arguing, one section away, when it wrote B2 v2. The
+leg therefore read: *anyone who can complete a signup form may mint a roster row.* That row is the
+primitive behind the entire profile-takeover chain (a) spends three sections closing: it admits the
+caller to `"Designers can update their client profiles"` on `profiles`, to `can_view_profile`'s roster
+leg, and to every predicate in the schema that resolves a relationship through `designer_clients`. Fix
+round 2 restored the vulnerability inside the policy written to close it.
+
+Reproduced over HTTP on a freshly-reset local stack, against a **real** signup made through
+`POST /auth/v1/signup` — not a hand-seeded row:
+
+```
+POST /auth/v1/signup {email: ff-r3-selfsignup-…@patina.test, password: …}
+  → profiles: role=designer | is_designer=f | designer/admin grant=f
+```
+
+**The fix:** both policies now read only the two authority signals ruling B2 v3(b) names —
+
+```sql
+public.current_profile_is_designer() IS TRUE
+OR EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+            WHERE ur.user_id = (SELECT auth.uid())
+              AND r.domain IN ('designer','admin'))
+```
+
+`domain` rather than a name list, because names change and domains do not (`independent_designer`,
+`studio_admin`, `studio_designer`, `studio_owner` are the designer domain; `ml_operator`,
+`quality_control`, `super_admin`, `support_agent` the admin one). The `user_roles` leg is not redundant
+with `is_designer` even though 00290's trigger syncs one from the other: that trigger is
+`AFTER INSERT ON user_roles`, so a grant written before 00290 or while the trigger was dropped leaves
+`is_designer` false on a real designer. The `EXISTS` is inline rather than a helper, exactly as
+`profiles_select_admin`'s is — evaluated as the invoker, over the caller's own rows, nothing new to
+grant.
+
+**And the "locked-out self-signup designer" was never a hard case.** That account is refused by
+`claim_design_request` (00286), `accept_design_request` (00330), `design_request_submit` (00285) and
+`search_shareable_designers` — every one of which reads `is_designer`. Admitting it *here and nowhere
+else* would have been the inconsistency, not the fix.
+
+New behaviour cases: **7j** (the self-signup shape refused, INSERT and UPDATE directions) and **7k** —
+which is the half a refusal-only suite cannot cover: a real designer mints a roster row (7k1), renames
+a rostered client (7k2/7k3), still cannot promote them (7k4), and an **admin-domain grant holder with
+`is_designer` false** succeeds through the `user_roles` leg alone (7k5).
+
+### The ruling that reverses fix rounds 1 and 2
+
+**RF2-02 (major) — `handle_new_user` should not have been touched at all.**
+
+Round 1 flipped `COALESCE(v_role,'designer')` to `'homeowner'`; round 2 replaced it with a `CASE` on
+`raw_app_meta_data->>'provider'`, allowlisting `email` to `designer`. **v3 reverts to 00313 verbatim.**
+
+The smaller problem with v2 was the one round 2 already caught in its own first cut — an allowlist
+pointed at the privileged value hands `designer` to every provider it does not name. The larger problem
+is the shape: **which button somebody tapped is not which kind of account they are.** A designer can
+sign in with Apple. A client can sign up with an email and a password — the client portal's own
+invite-accept form does exactly that (`AcceptInviteForm.tsx:64`), a fact round 2 wrote down, filed as
+"on the W2 list", and then built a trigger default on top of anyway. v2 would have written a wrong
+label for both, silently, at the one moment the row is created and nobody is watching.
+
+**And the label was never the boundary.** Nothing in the schema grants authority from `profiles.role`.
+That is what makes RF2-01 and RF2-02 the same finding wearing two hats: round 2 simultaneously treated
+`role` as too dangerous to let a user write and as trustworthy enough to gate the roster mint on. Both
+cannot be true. v3 picks the first: `role` is a label, and it is corrected where the answer is known —
+
+- **the iOS app**, after an Apple/Google sign-in, self-downgrades its own row (ruling (c)). The own-row
+  `UPDATE` policy is now a one-way **ratchet** — `role` may become `'homeowner'`, `is_designer` may
+  become `false`, never upward. Contract written out for W1 · L1-A in
+  `build/waves/w1/l1-a-notes.md`; cases 7i–7i5.
+- **`client-invite`'s accept handler** (ruling (d)), as `service_role`, for a client who arrives
+  through an invitation. Deploy step **A10**; one-time backfill **B7b**; case 11i.
+
+§11 of the test file is rewritten: 11a (Apple) and 11b (portal email) now **both** assert `designer`,
+which is the assertion that flipped, and 11e–11h prove there is no provider logic left to get wrong.
+
+**One implementation note that is not cosmetic.** Ruling (c) states the pin as
+`role IN (current_profile_role(), 'homeowner')`. It is implemented as
+`role IS NOT DISTINCT FROM current_profile_role() OR role = 'homeowner'`, because `profiles.is_designer`
+is **nullable** and `NULL IN (NULL, false)` evaluates to `NULL`, which a `WITH CHECK` treats as a
+refusal — a legacy row with `is_designer` NULL could not have written its own `display_name`. Same
+semantics, NULL-safe.
+
+### The rest
+
+| id | Verdict | What changed |
+|---|---|---|
+| **RF2-03** (minor) | **fixed** | Ruling B2 v3 recorded **verbatim** in the migration banner, runbook **B2** and this page, with an explicit "supersedes v1/v2" line in each and a what-changed table in the runbook. Every comment in the migration that still explains v1 or v2 is kept as HISTORY and labelled as such. |
+| **RF2-04** (minor) | **fixed** | Runbook **B9** had no rollback for anything fix rounds 1–2 added. It now carries `DROP POLICY IF EXISTS` for both restrictive `designer_clients` policies (with a warning to prefer granting the account a designer role over reopening the mint) and for both `profiles` INSERT legs — each `DROP` paired with its `CREATE` in one statement, because dropping one INSERT policy and not the other leaves the survivor as an OR-branch around the pin you were removing. It also states which changes have **no** rollback and why. |
+| **RF2-05** (minor) | **fixed** | New **B7a**, two read-only audits that run *before* B5's apply, because RF2-01 narrows who may write `designer_clients` and nothing said who that costs on production. Audit 1 groups every roster owner by `role` / `is_designer` / grant with a five-row reading table naming the one shape that loses the write (`designer` + `is_designer f` + no grant — the self-signup). Audit 2 counts orphan roster rows, because audit 1 joins `profiles` and a row whose `designer_id` has no profile would be invisible to it; `client_without_profile` is expected non-zero (Add Client before the client has an account) and is explained rather than left to alarm. |
+| **RF2-06** (minor) | **fixed** | The sibling policy's `role = 'homeowner'` was too narrow. `profiles.role` has **no CHECK constraint**; `comms_resolve_role` (00103:37-42) treats every non-admin/designer/vendor role as a client; `public.roles` carries a `client` row in the `consumer` domain; and this migration's own fixture uses it (`Cleo`, `role='client'`, Dana's rostered client). A designer whose client row said `'client'` could not rename that client **at all** — the policy selected no row and the `PATCH` answered `200 []`. Both clauses now read `role IN ('homeowner','client')`, with the split itself filed as a W2 reconciliation. Case **7k2** is the regression guard, and it starts by asserting Cleo is still labelled `'client'` so a fixture edit cannot silently retire the coverage. |
+| **RF2-07** (minor) | **fixed** | `"Users can insert own profile"` pinned `role IS NOT DISTINCT FROM 'homeowner'`. Under B2 v3(a) that is the same category error: it forced the policy to guess which label a row was entitled to, and it guessed wrong for a designer re-creating a lost profiles row. The leg is now `auth.uid() = id AND is_designer IS NOT TRUE` — the authority column only. Case **6f** is **inverted**: the own-row INSERT with `role` omitted must now LAND with the column default. 00017's INSERT sibling keeps its own `role = 'homeowner'` literal (its contract, not an authority check) plus the `is_designer` pin, and a new ASSERT proves the own-row leg did not quietly keep a role pin. |
+| **RF2-08** (minor) | **fixed, and the verification found a real reader** | The brief said to revoke `anon` on `designer_clients` *after verifying no anon reader exists*. A grep over `apps/`, `packages/` and `supabase/functions/` found none — and that was the wrong place to look. `storage.objects` carries `"Designers manage discovery folio objects"` (00224:165), whose `USING` reads `designer_clients`, and **Postgres checks the ACL of every table named in a relation's policy set at executor init, BEFORE filtering those policies by role.** The policy is `TO authenticated`; the check is not. Revoking SELECT made every **anon** read of `storage.objects` raise `42501` and took two unrelated suites red (`storage/project_documents_caller_binding_test.sql`, `mood_boards/share_security_test.sql`). Final shape: `REVOKE ALL PRIVILEGES … FROM anon` then `GRANT SELECT … TO anon`. The write half — the roster-mint primitive, reachable with the key in the iOS binary — is gone; the SELECT satisfies a permission check and returns **zero rows**, because RLS admits anon only through 00014's `auth.uid() = designer_id` and `auth.uid()` is NULL. New case **8c** asserts all of it, including 8c5, which reads `storage.objects` as anon so that **00555's own suite** catches this rather than two suites in other directories. |
+| **RF2-09** (minor) | **fixed** | `REVOKE TRUNCATE, REFERENCES ON public.profiles FROM authenticated`. `GRANT SELECT, INSERT, UPDATE` is additive and did not clear what the pre-flip creation default handed out (the full `arwdDxtm`). **RLS does not constrain TRUNCATE** — a grantee empties the table in one statement, every policy above it notwithstanding. `TRIGGER` and `MAINTAIN` are deliberately left: not reachable through PostgREST, and clearing them would be a change this migration cannot test. |
+| **RF2-10** (minor) | **fixed** | `REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon`. A SECURITY DEFINER function in the PostgREST-exposed `public` schema with a `PUBLIC` EXECUTE grant. A direct call raises `0A000` (it is a trigger function), so this is exposed surface with no caller rather than a live hole — and a trigger needs no EXECUTE to fire, which is why the revoke is safe. Same hygiene 00290 applied to `fc_sync_is_designer_from_role`. |
+| **RF2-11** (minor) | **fixed** | All five new functions moved from `SET search_path TO 'public'` to `SET search_path = public, pg_temp`, naming `pg_temp` explicitly instead of leaving it implicitly at the front of the path where a caller-created temp object can shadow a schema one. `handle_new_user` keeps 00313's spelling — B2 v3(a) says verbatim, and the graft guard checks the body. The §10 assertion was updated to match and now covers `list_vendor_profiles` too, which it had been missing. |
+| **RF2-12** (minor) | **fixed** | Runbook **B8** step 3 asked Kody to screenshot "the comms vendor picker". There is no such screen — `useVendorProfiles` has no UI consumer, which **A3 and A6 of the same runbook already say**. The step is removed (B8 is now four items: vendors catalogue, vendor detail, People directory, roster/team avatars), with the grep that would prove a lane has wired it up since, and a note that `list_vendor_profiles` still ships and is covered by probe §9a. A walk step aimed at a screen that does not exist is worse than a missing one: it cannot pass, so it gets marked done without being done. |
+
+### Two things this round checked and deliberately did NOT change
+
+- **`list_vendor_profiles`' `p.role = 'vendor'`** looks like a B2 v3(b) violation and is not. It selects
+  a **directory**, not an authority — the caller-side predicate is `auth.uid() IS NOT NULL`. There is no
+  `is_designer` analogue for vendors and no vendor domain in `public.roles`. And the label is not
+  self-servable after this migration: a client may write `role` only to `'homeowner'`, and the INSERT
+  legs either omit it or pin `'homeowner'`, so `'vendor'` reaches a row only through `service_role`.
+- **`can_view_profile`'s legs.** Every one is a relationship term — roster, project, proposal, invoice,
+  engaged lead, direct order, live scan share, live thread, studio/org co-membership. None reads
+  `profiles.role`, and none should: "do these two people know each other" is never a question about a
+  label. The reasoning is recorded in the function's header so the next reviewer does not re-derive it.
+
+### The HTTP attack matrix, re-run
+
+Freshly reset local stack. Actors: a **real** `POST /auth/v1/signup` account
+(`role=designer`, `is_designer=f`, no designer/admin grant — the shape RF2-01 was about),
+`client@patina.dev` (`homeowner`), and `designer@patina.dev` (Leah — `designer`, `is_designer=t`,
+two grants). All calls are PostgREST with a password-grant JWT.
+
+```
+1. self-signup — the roster mint MUST be refused
+   POST /rest/v1/designer_clients {designer_id: self, client_id: <Leah>}   403  42501 "…violates row-level security policy \"designer_cl…"
+   POST /rest/v1/designer_clients {designer_id: self, client_id: self}     403  42501  same policy
+   rows minted by that account                                             0
+
+2. a seeded designer — the roster mint MUST be allowed
+   POST  /rest/v1/designer_clients {designer_id: Leah, client_id: <new>}   201
+   PATCH /rest/v1/designer_clients (re-point)                              204
+
+3. own role UPGRADE — MUST be refused
+   PATCH /rest/v1/profiles?id=eq.<self> {"role":"designer"}                403  42501
+   PATCH /rest/v1/profiles?id=eq.<self> {"is_designer":true}               403  42501
+   client after                                                            homeowner | false
+
+4. own DOWNGRADE — MUST be allowed (ruling B2 v3(c), the A3-07 fix)
+   self-signup before                                                      designer
+   PATCH /rest/v1/profiles?id=eq.<self> {"role":"homeowner"}               204
+   PATCH … the same call again (the app runs it every sign-in)             204   idempotent
+   self-signup after                                                       homeowner
+   PATCH /rest/v1/profiles?id=eq.<self> {"role":"designer"}   (climb back) 403  42501
+   self-signup final                                                       homeowner
+   PATCH /rest/v1/profiles?id=eq.<self> {"display_name":…}                 204   no 42P17
+
+5. CROSS-ACCOUNT demote / rename of a real designer — MUST be refused
+   Leah before                                                             designer | true | Leah Hartwell
+   POST  /rest/v1/designer_clients {designer_id: client, client_id: Leah}  403  42501
+   PATCH /rest/v1/profiles?id=eq.<Leah> {"role":"homeowner",
+                                         "is_designer":false}              200  []      ← no row selectable
+   PATCH /rest/v1/profiles?id=eq.<Leah> {"display_name":"PWNED"}           200  []
+   Leah after                                                              designer | true | Leah Hartwell
+   rows minted by the client                                               0
+
+6. a designer edits their ROSTERED client — MUST be allowed
+   PATCH /rest/v1/profiles?id=eq.<client> {"display_name":"Client User R3b"}
+                                                                           200  [{"id":"a0000000-…-005","display_name":"Client User R3b"}]
+   PATCH /rest/v1/profiles?id=eq.<client> {"is_designer":true}             403  42501   still cannot promote
+
+7. anon
+   GET  /rest/v1/profiles?select=id                                        401  42501
+   GET  /rest/v1/designer_clients?select=id                                200  []      ← grant kept, RLS empty (RF2-08)
+   POST /rest/v1/designer_clients                                          401  42501
+```
+
+The two refusals in (5) answer **`200 []`** rather than `403`, and that is the correct shape: the
+policy's `USING` no longer selects the row, so the statement matches nothing. A `403` would mean the row
+was selected and the check refused it. (6)'s `200` carries the row, which is the contrast that makes
+(5)'s emptiness mean something — a policy that refuses everything passes every case in (1), (3) and (5)
+and would still be broken.
+
+### Gates, re-run on `first-flight/integration`
+
+| Gate | Result |
+|---|---|
+| `pnpm supabase:reset` | **0** — 511 migrations, head `00557`; marker probe confirms the loaded 00555 is this branch's (`designer_clients_writer_is_designer` reads `user_roles` → `true`) |
+| `bash scripts/run-sql-tests.sh` | **0** — `total: 147 · green: 126 · expected-fail: 21 · unexpected-fail: 0 · effective-green: 147 / 147`. All 21 expected-fail names are in `KNOWN_FAILURES.md`; none new, none listed-and-silently-green. `PASS supabase/tests/rls/00555_ios_round_one_security.test.sql` and `PASS …/00557_increment_scan_upload_attempt.test.sql` |
+| `python3 scripts/generate-legacy-grants.py` | **0** — `baseline + 2097 replayed statements`; the seed **DID** change this round (+30 lines, 5 new statements: the `profiles` TRUNCATE/REFERENCES revoke, the `designer_clients` revoke + two grants, and the `handle_new_user` EXECUTE revoke) and is committed |
+| HTTP attack matrix (above) | **0** — six behaviours, all as specified |
+| `deno check --config supabase/functions/deno.json supabase/functions/client-invite/index.ts` | **0** — `Check … client-invite/index.ts`. No `deno.lock` written at the repo root |
+| deno test for `client-invite` | **n/a — the function has no test file.** Per the brief, the constraint is recorded as a comment at the write instead: own id only, after the invitation is validated and marked accepted, and never fatal |
+| `npx prettier --check supabase/functions/client-invite/index.ts` | **advisory warn, pre-existing.** The husky pre-commit hook reports formatting drift on this file and says so is advisory locally. The drift is NOT from this round: the same check fails on `HEAD~1`'s copy of the file, before any change here. Left alone rather than reformatted, so the diff stays the behaviour change |
+
+No iOS gate was run and no Swift file was touched.
+
+### One trap this round paid for, worth carrying forward
+
+**The local Supabase stack is shared across worktrees, and `supabase db reset` installs the migrations
+of whichever checkout runs it.** Three of this round's runs were destroyed mid-flight by a concurrent
+`supabase stop --no-backup && supabase start` from another agent's worktree — once crashing the DB
+during 00555's apply (`SqlError: Connection error`), once leaving the ledger at 97 rows / head `00099`
+while a foreign reset replayed, and once producing a suite run against a half-restored database whose
+failures (`public.project_parties does not exist`) had nothing to do with any change here. **A red suite
+on a shared stack is not evidence until you have checked who else is holding it.** The gate row above
+was taken after messaging the other session and re-verifying both the ledger head **and** a
+content marker proving the loaded 00555 was this branch's file — a ledger row alone would not have
+caught a peer's older copy of the same migration number.
+
+### Documents amended in fix round 3
+
+`00555_ios_round_one_security.sql` — ruling B2 v3 verbatim in the banner with a what-changed list;
+`handle_new_user` reverted to 00313 with its own guard rewritten to read the `COALESCE`; the two
+restrictive `designer_clients` policies re-predicated; the own-row `UPDATE` policy turned into a
+ratchet; the sibling given the two-string vocabulary; the own-row `INSERT` leg un-pinned on `role`;
+four new REVOKE/GRANT statements; `search_path = public, pg_temp` on all five helpers; the
+`search_shareable_designers` and `list_vendor_profiles` and `can_view_profile` verdicts recorded; the
+verification block rewritten to match; a client-invite entry in REQUIRED CODE FOLLOW-UPS and in AFTER
+APPLY.
+`00555_ios_round_one_security.test.sql` — §11 rewritten (11a/11b flipped), §11i added, 7i–7i5, 7j, 7k,
+8c and 6f/6f2 added or inverted, the `Sig` fixture and its two guards added, §10's ACL block extended.
+`client-invite/index.ts` — the accept-path relabel, with the constraint comment standing in for the
+absent test file.
+`KODY-RUNBOOK.md` — **A10** (deploy `client-invite`) new; the block table updated; **B2** replaced with
+v3 and a v2→v3 diff table; **B7a** (two pre-apply audits) and **B7b** (the one-time backfill) new;
+B7's §9f row and measured shapes rebuilt around `ratchet_floor`, `using_client_vocab`,
+`reads_user_roles` and `reads_profile_role`, with three new one-line ACL checks; **B8** step 3 removed;
+**B9** given the missing rollbacks.
+`00555_probes.md` — §9f rewritten end to end, §9f-ia extended with the role/user_roles columns, §9f-ib
+and §9f-iii new, §9f-ii inverted with its fourth correction dated; the exit-criteria row updated.
+`PROGRAM.md` §11.4 — L0.2 is no longer "one ruling BLOCKS it".
+`waves/w1/l1-a-notes.md` — **new**, the W1 · L1-A contract for the self-downgrade: the exact call, five
+rules, the per-sign-in behaviour table, the accepted consequence for a designer signing into the client
+app, and a device-free verification recipe.

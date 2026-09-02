@@ -20,7 +20,7 @@ with the placeholder in it.)
 
 | Block | What it does | Gated by | Reversible? |
 |---|---|---|---|
-| **A** | Merge L0.2b to `main` and redeploy the designer portal | nothing | yes — `wrangler rollback` |
+| **A** | Merge L0.2b to `main`, redeploy the designer portal, deploy `client-invite` (A10) | nothing | yes — `wrangler rollback`; the function redeploys from `git` |
 | **B** | Apply **00555** (the security migration), regenerate, probe, walk The Document | **A** (B2's ruling is now made — see B2) | partly — see B9 |
 | **C** | Apply **00557** (`increment_scan_upload_attempt`) and probe | B (same session) | no rollback needed |
 | **D** | Mint `firstflight@patina.cloud` and append the Vault allow-list | nothing (B may run before or after) | mostly — one row is permanent |
@@ -272,15 +272,64 @@ only on the write verbs.
 So **G3 may now be written as "the exposure is closed"** — but only once A6 has actually returned
 `401` on all five paths. Until then it is closed in the branch, not in production.
 
+### A10 — deploy the `client-invite` edge function (ruling B2 v3(d))
+
+**New in fix round 3.** Nothing above depends on it and nothing below is blocked by it, but it belongs
+in Block A because it ships with the same merge and it is the second half of the fix `l1-a-notes.md`
+describes.
+
+**What it proves.** That a client who accepts a designer's invitation stops being labelled a designer.
+`handle_new_user` gives every email/password sign-up `profiles.role = 'designer'` — that is the
+pre-00555 default and ruling **B2 v3(a)** deliberately leaves it alone — and the client portal's
+invite-accept form signs up over email/password with **no role hint**
+(`AcceptInviteForm.tsx:64`). `handleAccept` is the one server-side moment that knows the caller is a
+client, so it now writes `role = 'homeowner'` there as `service_role`.
+
+The function is deployed from `main` after A2's merge. It imports `_shared/branded-email.ts` and
+`_shared/studio-identity.ts`, but this change touches **neither**, so no other function needs
+redeploying.
+
+```bash
+cd "$REPO"
+git log --oneline -2 origin/main -- supabase/functions/client-invite/index.ts
+grep -n "accept role relabel" supabase/functions/client-invite/index.ts
+
+supabase functions deploy client-invite --project-ref bkvcixdmuyejfzcijpdg
+```
+
+The `grep` must print a line before you deploy — it is the only cheap proof that the checkout you are
+deploying from carries the change rather than the pre-round-3 file.
+
+**Verify** (read-only, and it does not need a real invitation):
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -X POST "https://bkvcixdmuyejfzcijpdg.supabase.co/functions/v1/client-invite/accept" \
+  -H "apikey: $ANON_KEY" -H 'Content-Type: application/json' -d '{}'
+```
+**Want `401`** (`unauthorized` — no Authorization header). A `404` means the function is not deployed;
+a `500` means it is deployed and broken, and A8's rollback does not cover edge functions — redeploy the
+previous revision from `git`.
+
+The behavioural check belongs to the next real invitation: accept one, then read the accepting user's
+`profiles.role` (Block B7 has the query). Clients who accepted **before** this deploy keep the wrong
+label until the one-time backfill in **B7** runs.
+
 ---
 
 ## Block B — apply 00555, the security migration
 
 **What it proves.** That the two live anon-key exposures are shut: all 24 production `profiles` rows
 (emails, Stripe customer ids, phones, addresses) and `notification_preferences` with SELECT/INSERT/
-UPDATE/DELETE. Plus the `vendors` public-face/trade-file column split, the `profiles.role`
-self-elevation close on **both** UPDATE policies, and seven `FOR ALL / TO PUBLIC / auth.uid() IS NULL`
-policies dropped. Rulings in force: **DM-1** and **D8**.
+UPDATE/DELETE. Plus the `vendors` public-face/trade-file column split; the `profiles.is_designer`
+authority pin on **both** UPDATE policies and both INSERT policies; the two RESTRICTIVE write policies
+that stop a non-designer minting a `designer_clients` row; `anon` losing `designer_clients` entirely;
+and seven `FOR ALL / TO PUBLIC / auth.uid() IS NULL` policies dropped. Rulings in force: **DM-1**,
+**D8**, and **B2 v3** (B2 below — read it, it changed).
+
+**Block B now carries two steps that are not the migration:** the read-only pre-apply audits at
+**B7a**, which say who RF2-01 costs on production, and the one-time label backfill at **B7b**. B7a runs
+*before* B5.
 
 **Never `supabase db push`.** Strata's ledger and this tree do not match; `db push` would drag every
 migration Strata lacks, including any a peer branch has minted. Both files go on with `psql -f`, one at
@@ -322,92 +371,111 @@ and the `curl` prints **`401`**. A `200` means the guard is not live and applyin
 leak into a live outage. A `500` means the migration already went on ahead of the deploy — go straight
 to B9.
 
-### B2 — ✅ RULED. Nothing to decide here; read it and carry on.
+### B2 — ✅ RULED (v3). Nothing to decide here; read it and carry on.
 
-> **Ruling B2 (Fable, 2026-09-02; direction corrected the same day): `handle_new_user`'s default role
-> is decided by the identity provider, and the allowlist names the provider that keeps the PRIVILEGED
-> value.** An **email/password** signup — the designer portal's own signup page, and nothing else —
-> keeps `designer`, the pre-00555 default. **Every other provider** (Apple, Google, and any OAuth
-> provider added later), and any row whose `raw_app_meta_data` is missing or unrecognised, lands
-> `homeowner`. An explicit `role` hint in `raw_user_meta_data` still wins, exactly as today. **It is
-> already in the migration: there is no blank to fill and no step to add.**
+> **FABLE RULING B2 v3 (2026-09-02) — supersedes B2 v1 and B2 v2 wherever they appear in the
+> migration, this runbook and `wave-report.md`.**
+>
+> **(a)** `profiles.role` is a **LABEL**, never an authorization input. `handle_new_user` keeps the
+> pre-00555 default (`'designer'` for any signup without an explicit role hint — portals unchanged,
+> Apple/Google on the portals unchanged); an explicit `'homeowner'` hint still wins.
+>
+> **(b)** Authority comes only from `user_roles` (`roles.domain IN ('designer','admin')`) or
+> `profiles.is_designer`, which are written only by `service_role` / SECURITY DEFINER paths. Every
+> policy or function this migration adds that decides authority predicates on those two, never on
+> `profiles.role`.
+>
+> **(c)** The own-row `profiles` `UPDATE` policy allows `role` to change **ONLY** to `'homeowner'` (a
+> self-downgrade; never upward) and `is_designer` only to `false`; the iOS app performs that
+> self-downgrade after Apple/Google sign-in (that is W1 · L1-A's A3-07 fix; the exact contract is in
+> `build/waves/w1/l1-a-notes.md`).
+>
+> **(d)** The `client-invite` edge function's accept path sets `profiles.role = 'homeowner'` for the
+> accepting user as `service_role` — `supabase/functions/client-invite/index.ts` `handleAccept`.
+> Deployed at **A10**; already-accepted clients need the one-time backfill in **B7**.
+>
+> **(e)** The sibling policy `"Designers can update their client profiles"` treats
+> `role IN ('homeowner','client')` as the client vocabulary in `USING` and `WITH CHECK`, with a W2 note
+> that the `'client'` / `'homeowner'` split must be reconciled.
+>
+> **All of it is already in the files. There is no blank to fill and no step to add here.**
 
-**What the earlier draft would have done, and why it was wrong.** It changed the fallback from
-`COALESCE(v_role, 'designer')` (00313:64) to `COALESCE(v_role, 'homeowner')`. That is right for the iOS
-app — it is what stops an Apple sign-up silently becoming a designer — but the **same** fallback is
-taken by **designer-portal self-signups**, and they are not the same people. Verified on the local
-stack, 2026-09-02:
+**What v3 changes, against the version of this page you may have read before:**
 
-- `apps/designer-portal/src/app/auth/signup/page.tsx:147-157` calls `supabase.auth.signUp` with
-  `options.data = { name, company, phone }` — **no `role`**.
-- `handle_new_user` honours exactly one client-supplied role string, `'homeowner'`; anything else falls
-  through to the default.
-- A flat `'homeowner'` default would therefore have written every portal self-signup designer as
-  `role = 'homeowner'`, and `public.comms_resolve_role` (00103:37-42) would then have labelled that
-  person **`client`** in every comms thread.
+| | v2 (superseded) | **v3** |
+|---|---|---|
+| `handle_new_user` | a `CASE` on `raw_app_meta_data->>'provider'`; `email` → `designer`, everything else → `homeowner` | **00313 verbatim** — `COALESCE(v_role,'designer')`, no provider branch |
+| own-row `UPDATE` | `role` and `is_designer` FROZEN | a one-way **ratchet**: `role` may fall to `'homeowner'`, `is_designer` to `false` |
+| `designer_clients` restrictive policies | `is_designer` **or** `role IN ('designer','admin','super_admin')` | `is_designer` **or** a `user_roles` grant in the designer/admin **domain** |
+| own-row `INSERT` | pinned `role = 'homeowner'` and `is_designer IS NOT TRUE` | pins **`is_designer` only** |
+| sibling `UPDATE` | `role = 'homeowner'` | `role IN ('homeowner','client')` |
+| A3-07's fix lives | in the trigger | in the app (L1-A) and in `client-invite` (A10) |
 
-**And why the FIRST provider-shaped cut was also wrong.** It read
-`WHEN provider = 'apple' THEN 'homeowner' … ELSE 'designer'`, which is an allowlist pointed at the
-privileged value. `AuthService.signInWithGoogle` (`:399-421`, wired at `ContentView.swift:48`,
-`AuthSheet.swift:59`) sits on the same Welcome screen as the Apple button and calls
-`signInWithOAuth`, which carries no `data:` parameter — so a Google sign-up is exactly as
-metadata-less as an Apple one and fell straight through to `designer`. Proved in a rolled-back
-transaction: `{"provider":"google","providers":["google"]}` → `designer`, and a row with no
-`raw_app_meta_data` at all → `designer`. Ruling D3 takes the Google button off the screen in W1, but a
-trigger default must not depend on a client-side button being absent, and an `ELSE 'designer'` hands
-the same bug to every provider added after this file.
+**Why the two earlier cuts were wrong.**
 
-**What the migration does instead** (00555 §a2(ii)):
+*v1* changed `COALESCE(v_role, 'designer')` (00313:64) to `COALESCE(v_role, 'homeowner')`. Right for the
+iOS app; wrong for the **designer portal's own signup page**, which also sends no role
+(`apps/designer-portal/src/app/auth/signup/page.tsx:147-157` sends `{ name, company, phone }`). Every
+portal self-signup designer would have been written `role = 'homeowner'` and then labelled **`client`**
+in every comms thread by `public.comms_resolve_role` (00103:37-42).
+
+*v2* replaced the constant with a provider `CASE`. Two things were wrong with it. The smaller one is
+that its first cut pointed the allowlist at the privileged value (`ELSE 'designer'`), which handed
+`designer` to the Google button beside the Apple one and to every provider added later. The larger one
+is the shape itself: **which button somebody tapped is not which kind of account they are.** A designer
+can sign in with Apple. A client can sign up with an email and a password — the client portal's own
+invite-accept form does exactly that (`AcceptInviteForm.tsx:64`). A trigger guessing from the provider
+writes a wrong label for both, silently, at the one moment nobody is watching.
+
+**And the label was never the boundary.** Nothing in the schema grants authority from `profiles.role`:
+`claim_design_request` / `open_design_requests` (00286), `accept_design_request` (00330),
+`design_request_submit` (00285) and `search_shareable_designers` all read `profiles.is_designer`;
+`profiles_select_admin` reads `user_roles`; and after **RF2-01** so do the two restrictive policies on
+`designer_clients`. That last one is why v2 mattered: fix round 2's roster predicate carried an
+`OR current_profile_role() IN ('designer','admin','super_admin')` leg, and since `handle_new_user` gives
+**every** email/password signup that label, the leg read *"anyone who can complete a signup form may
+mint a roster row"* — the exact primitive the restrictive policy was added to close.
+
+**What the migration does instead** (00555 §a2(ii)) — this is 00313's body, unmodified:
 
 ```sql
 v_role := CASE
   WHEN NEW.raw_user_meta_data->>'role' = 'homeowner' THEN 'homeowner'
-  WHEN NEW.raw_app_meta_data->>'provider' = 'email'
-       AND NOT EXISTS (                    -- and NO other provider is named
-         SELECT 1 FROM jsonb_array_elements_text(
-                  CASE WHEN jsonb_typeof(NEW.raw_app_meta_data->'providers') = 'array'
-                       THEN NEW.raw_app_meta_data->'providers' ELSE '[]'::jsonb END
-                ) AS other(name)
-          WHERE other.name <> 'email')
-    THEN 'designer'
-  ELSE 'homeowner'
+  ELSE NULL
 END;
+...
+INSERT INTO public.profiles (id, email, display_name, role)
+VALUES (NEW.id, NEW.email, v_display_name, COALESCE(v_role, 'designer'))
+ON CONFLICT (id) DO NOTHING;
 ```
 
-Three things worth knowing about that shape:
+00313's security rule is untouched: `raw_user_meta_data` is **client-controlled**, so exactly one client
+string is honoured — the literal `'homeowner'` — and anything else (including a forged `'super_admin'`)
+is ignored and falls to the default. `user_roles` is untouched too: every signup still gets the
+`app_user` grant, and `profiles.is_designer` is still synced from `user_roles` by 00290's trigger.
 
-1. **`raw_app_meta_data` is written by GoTrue, never by the client.** `signupNewUser` sets
-   `{"provider": "<name>", "providers": ["<name>"]}` on the user model *before* the row is inserted, so
-   it is populated at the moment this trigger fires — the same pair every seeded row in
-   `supabase/seed/dev-accounts.sql` carries. A caller can forge `raw_user_meta_data`; it cannot forge
-   this.
-2. **Both legs are checked**, because `provider` is the deprecated half of the pair (GoTrue's own
-   source marks it so) and an account that links a second identity accumulates names in `providers`
-   while `provider` keeps the first. The designer branch therefore requires the scalar to read `email`
-   **and** no other name to appear in the array. Anything else falls to the unprivileged side, which is
-   where an unrecognised shape belongs.
-3. **`email` is the only provider that identifies ONE surface.** Every OAuth provider Patina has or
-   adds is reached from the iOS Welcome screen; email/password signup is the portal's page. (The
-   client-portal invite-accept form also signs up over email with no role hint and so also lands
-   `designer` here — unchanged from every migration since 00013, and corrected immediately afterwards
-   by `/api/auth/invite/accept` as `service_role`. Not introduced by this file; on the W2 list.)
+**Regression cover, so it cannot drift back quietly.**
+`supabase/tests/rls/00555_ios_round_one_security.test.sql`:
 
-`user_roles` is untouched by this ruling — every signup still gets the `app_user` grant, and
-`profiles.is_designer` is still synced from `user_roles` by 00290's trigger. B2 decides the
-`profiles.role` **string** only: what 00050's onboarding automation, 00103/00104's comms
-participant-role derivation and 00038's funnel views read.
+- **§11** inserts eight real `auth.users` rows. **11a Apple → `designer`** and **11b email, no hint →
+  `designer`** are the two that flipped meaning in v3; 11c an explicit hint → `homeowner`; **11d** a
+  forged `super_admin` hint → `designer` **and no admin `user_roles` row**; 11e–11h (providers-array
+  only, Google, no `raw_app_meta_data`, email+google linked) all → `designer`, because there is no
+  provider logic left to get wrong.
+- **§11i** runs the two relabel paths: `client-invite`'s `service_role` write lands, and the same write
+  attempted by an ordinary caller against **another** id does not.
+- **§7i–7i5** are the ratchet: the self-downgrade lands, it is idempotent, and it does not turn back.
+- **§7j** mints a roster row as the account fix round 2 let through — `role = 'designer'`,
+  `is_designer` false, no grant — and must be refused. **§7k** is the other half: a real designer, and
+  an admin-domain grant holder with `is_designer` false, both succeed, and a `'client'`-labelled
+  rostered client can still be renamed.
+- **§10** asserts `handle_new_user`'s definition still carries `COALESCE(v_role, 'designer')` and does
+  **not** mention `raw_app_meta_data` — that token appears nowhere in 00313, so its presence means a
+  provider branch crept back in. A `LIKE '%homeowner%'` guard would prove nothing: 00313's body carries
+  the literal twice.
 
-**Regression cover, so it cannot drift back quietly:**
-`supabase/tests/rls/00555_ios_round_one_security.test.sql` §11 inserts **eight** real `auth.users`
-rows — 11a Apple → `homeowner`; 11b email, no hint → `designer`; 11c explicit hint → `homeowner`;
-11d forged `super_admin` hint on Apple → `homeowner` (ignored); 11e `providers`-array-only Apple →
-`homeowner`; **11f Google → `homeowner`**; **11g no `raw_app_meta_data` at all → `homeowner`**;
-**11h email + google linked → `homeowner`**. 11f and 11g are the two rows that passed silently as
-`designer` before the direction was corrected. §10 asserts the function definition branches on
-`raw_app_meta_data` (which appears nowhere in 00313, so the guard cannot pass over a skipped graft)
-**and** that it carries `ELSE 'homeowner'` and not `ELSE 'designer'`.
-
-**One line in the apply report: "B2 ruled provider-shaped, email-allowlisted; already in the file."**
+**One line in the apply report: "B2 v3 — the trigger is 00313 verbatim; the relabel moved to the app
+(L1-A) and to client-invite (A10)."**
 
 ### B3 — re-check the migration band with a command that can see peer branches
 
@@ -499,6 +567,136 @@ carries a `getSupabase() as any` cast with two comment lines, added only because
 a Strata that has 00555, that cast comes out. It is a one-line task for the lane that owns the file, not
 something to hand-edit here.
 
+### B7a — TWO READ-ONLY AUDITS, **before** B5's apply (RF2-05)
+
+New in fix round 3, and they belong *before* the apply rather than after it: **RF2-01 narrows who may
+write `public.designer_clients`, and these two queries say who that costs on production.** Run them at
+B3 time, in the same session, and paste both outputs into the apply report. Nothing here writes.
+
+**Audit 1 — every roster owner, by the signals the new policy actually reads.**
+
+```bash
+psql "$STRATA_DB_URL" -X -q -c "
+SELECT p.role                                   AS profile_role,
+       COALESCE(p.is_designer, false)           AS is_designer,
+       EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+                WHERE ur.user_id = p.id AND r.domain IN ('designer','admin'))
+                                                AS has_grant,
+       count(DISTINCT dc.designer_id)           AS owners,
+       count(*)                                 AS roster_rows
+  FROM designer_clients dc
+  JOIN profiles p ON p.id = dc.designer_id
+ GROUP BY 1,2,3
+ ORDER BY 4 DESC;"
+```
+
+**The shape to want** is that every row has `is_designer = t` **or** `has_grant = t`. Those owners keep
+writing. A row with **both false** is an account that could mint a roster row before 00555 and cannot
+after it — read `profile_role` on that row before deciding:
+
+| `profile_role` | `is_designer` | `has_grant` | reading |
+|---|---|---|---|
+| `designer` | `t` | either | fine — the ordinary designer |
+| `designer` | `f` | `t` | fine — grant present, `is_designer` not yet synced (00290) |
+| `admin` / `super_admin` | `f` | `t` | fine — the admin-domain leg |
+| **`designer`** | **`f`** | **`f`** | ⚠ **the self-signup shape.** Has the label, no authority. Loses the write. Decide per account: if it is a real designer, an admin grant restores them; if it is a stray signup, that is the vulnerability RF2-01 closed |
+| `homeowner` / `client` | `f` | `f` | ⚠ should not exist as a roster **owner** at all — investigate the rows before applying |
+
+If the last two categories are empty, RF2-01 costs production nothing and you can apply without a
+second thought. If they are not, the affected accounts are named by:
+
+```bash
+psql "$STRATA_DB_URL" -X -q -c "
+SELECT DISTINCT p.id, p.email, p.role, p.is_designer
+  FROM designer_clients dc
+  JOIN profiles p ON p.id = dc.designer_id
+ WHERE COALESCE(p.is_designer, false) = false
+   AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+                    WHERE ur.user_id = p.id AND r.domain IN ('designer','admin'))
+ ORDER BY p.email;"
+```
+
+**Existing rows are not touched** — the restrictive policies are `INSERT` and `UPDATE` only, and
+`SELECT` is deliberately untouched — so a lost write does not hide anyone's existing roster. The cost
+is that the account can no longer add a client until it holds a grant.
+
+**Audit 2 — orphan roster rows.** The predicate above joins `profiles`; a roster row whose
+`designer_id` has no `profiles` row would vanish from audit 1's counts entirely and would be invisible
+to the whole analysis.
+
+```bash
+psql "$STRATA_DB_URL" -X -q -c "
+SELECT count(*) FILTER (WHERE p.id IS NULL)  AS designer_without_profile,
+       count(*) FILTER (WHERE dc.client_id IS NOT NULL AND c.id IS NULL)
+                                             AS client_without_profile,
+       count(*)                              AS total_rows
+  FROM designer_clients dc
+  LEFT JOIN profiles p ON p.id = dc.designer_id
+  LEFT JOIN profiles c ON c.id = dc.client_id;"
+```
+
+**Want `designer_without_profile = 0`.** `designer_clients.designer_id` is FK'd to `profiles(id)`, so a
+non-zero count means the FK is missing or NOT VALID on Strata — stop and read it, because audit 1's
+numbers are then incomplete. `client_without_profile` is **expected to be non-zero and is fine**: a
+roster row created by the designer-portal Add Client flow before the client has an account carries
+`client_name` / `client_email` with a NULL `client_id`, and only the NULL-`client_id` case is filtered
+out of the count above.
+
+### B7b — the one-time backfill for clients who already accepted (ruling B2 v3(d))
+
+`client-invite`'s accept handler now writes `role = 'homeowner'` (A10), but only for **future**
+acceptances. Clients who accepted before that deploy are still labelled `designer` by
+`handle_new_user`'s default. This sweeps them up. It is the **only write in Block B other than the
+migration**, and it is deliberately narrow.
+
+**Preview first — read-only, and it names every row the UPDATE would touch:**
+
+```bash
+psql "$STRATA_DB_URL" -X -q -c "
+SELECT p.id, p.email, p.role, COALESCE(p.is_designer,false) AS is_designer,
+       ci.accepted_at
+  FROM client_invitations ci
+  JOIN profiles p ON p.id = ci.accepted_by
+ WHERE ci.accepted_at IS NOT NULL
+   AND p.role <> 'homeowner'
+   AND COALESCE(p.is_designer, false) = false
+   AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+                    WHERE ur.user_id = p.id AND r.domain IN ('designer','admin'))
+ ORDER BY ci.accepted_at DESC;"
+```
+
+**Read the list before running the UPDATE.** Every row should be recognisably a client of Leah's or of
+another designer. The two guards after `p.role <> 'homeowner'` are what keep a real designer from being
+relabelled because they once accepted a client invitation addressed to their own mailbox: if
+`is_designer` is true, or a designer/admin grant exists, the row is excluded. Anyone excluded that way
+is also someone the app would relabel on sign-in, so if the exclusion surprises you, that is worth
+knowing before Block D.
+
+**Then the write, with the same predicate:**
+
+```bash
+psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c "
+UPDATE profiles p
+   SET role = 'homeowner', updated_at = now()
+  FROM client_invitations ci
+ WHERE ci.accepted_by = p.id
+   AND ci.accepted_at IS NOT NULL
+   AND p.role <> 'homeowner'
+   AND COALESCE(p.is_designer, false) = false
+   AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+                    WHERE ur.user_id = p.id AND r.domain IN ('designer','admin'));"
+```
+
+`UPDATE n` must equal the preview's row count. Re-running it is a no-op (`UPDATE 0`) because
+`p.role <> 'homeowner'` no longer matches.
+
+**Rollback:** there is none that is honest — the previous value was `designer` for every affected row,
+so restoring it is `SET role = 'designer'` for exactly the ids the preview printed. **Save the preview
+output** to `apply-log/` before running the write; that file is the rollback.
+
+This is a **label** change. It moves nothing about what those accounts can do: `is_designer` and
+`user_roles` are untouched by both statements, and the predicate excludes anyone who holds either.
+
 ### B7 — the read-only probes
 
 Full script with before/after values: [`../../migrations-draft/00555_probes.md`](../../migrations-draft/00555_probes.md)
@@ -517,7 +715,7 @@ PROGRAM.md's exit criteria name probes that are not the file's section numbers. 
 | Probe 5 | **§11** | `app.patina.cloud/api/catalog/vendors` unauthenticated: **`401`** — not a 200 carrying trade columns, and not a 500. **Plus the three admin paths from A6** (RF-04) |
 | **9b** | **§9b** | the `FOR ALL` / `TO PUBLIC` / `auth.uid() IS NULL` sweep returns **0 rows** |
 | **9d** | **§9d** | `vendors` anon column allowlist = the **24** public-face columns, `id` among them |
-| **9f** | **§9f** | **BOTH** `UPDATE` policies on `profiles` PIN `is_designer`; the sibling's `USING` reads the OLD row; and `designer_clients` carries the two RESTRICTIVE write policies |
+| **9f** | **§9f** | **BOTH** `UPDATE` policies on `profiles` PIN `is_designer`; the owner's is the one-way **ratchet** (B2 v3(c)); the sibling's `USING` reads the OLD row over **both** client strings; and `designer_clients` carries the two RESTRICTIVE write policies, predicating on `user_roles` and **not** on `profiles.role` |
 
 **9f is the blocker probe and it wants TWO rows.** `profiles` carries two permissive `UPDATE` policies;
 Postgres ORs the permissive `WITH CHECK`s, and a permissive policy whose `WITH CHECK` is NULL reuses its
@@ -527,42 +725,61 @@ two rows one of which has a null `with_check`, the hole is open.
 Probe 4 fails loudly if the column allowlist forgot `id`. Probe 5 is a **different principal** from
 probes 1-3 (the portal's own server-side client, not the anon key) — **G3 needs both**.
 
-**The 9d and 9f shapes, measured on the LOCAL stack after `pnpm supabase:reset` (2026-09-02)**, so you
-know what "after" looks like before you run them against Strata:
+**The 9d and 9f shapes, measured on the LOCAL stack after `pnpm supabase:reset` (2026-09-02, fix
+round 3)**, so you know what "after" looks like before you run them against Strata:
 
 ```
--- 9f
-                 policyname                 |  cmd   | has_with_check | names_role | pins_is_designer | using_pins_old_row
---------------------------------------------+--------+----------------+------------+------------------+--------------------
- Designers can update their client profiles | UPDATE | t              | t          | t                | t
- Users can update own profile               | UPDATE | t              | t          | t                | f
+-- 9f, profiles
+                 policyname                 |  cmd   | has_with_check | pins_is_designer | ratchet_floor | using_pins_old_row | using_client_vocab
+--------------------------------------------+--------+----------------+------------------+---------------+--------------------+--------------------
+ Designers can update their client profiles | UPDATE | t              | t                | f             | t                  | t
+ Users can update own profile               | UPDATE | t              | t                | t             | f                  | f
 (2 rows)
 
--- 9f, designer_clients
-              policyname              |  cmd   | permissive
---------------------------------------+--------+-------------
- designer_clients_updater_is_designer | UPDATE | RESTRICTIVE
- designer_clients_writer_is_designer  | INSERT | RESTRICTIVE
+-- 9f-ia, designer_clients
+              policyname              |  cmd   | permissive  | reads_user_roles | reads_profile_role
+--------------------------------------+--------+-------------+------------------+--------------------
+ designer_clients_updater_is_designer | UPDATE | RESTRICTIVE | t                | f
+ designer_clients_writer_is_designer  | INSERT | RESTRICTIVE | t                | f
 (2 rows)
+
+-- 9f-ii, handle_new_user is 00313 verbatim
+ t
 
 -- 9d
 24
 ```
 
-**`using_pins_old_row` is `f` on the owner policy and that is correct** — its `USING` is
-`auth.uid() = id` and its pin lives in the `WITH CHECK`, through the SECURITY DEFINER helper. On the
-SIBLING it must be `t`, and an `f` there is the demotion hole: a `WITH CHECK` pinned to the literals
-`role = 'homeowner' AND is_designer IS NOT TRUE` is satisfied *by construction* when the caller is
-turning a designer INTO a homeowner. That was live in the 2026-09-02 first cut and is what RF-01
-closed.
+**Four of those columns say the opposite thing on the two rows, and every one of them is deliberate.**
+
+- **`using_pins_old_row` is `f` on the OWNER policy and `t` on the SIBLING.** The owner's `USING` is
+  `auth.uid() = id` and its pin lives in the `WITH CHECK`, through the SECURITY DEFINER helper. On the
+  sibling it must be `t`: an `f` there is the demotion hole RF-01 closed — a `WITH CHECK` pinned to
+  literals is satisfied *by construction* when the caller is turning a designer INTO a homeowner.
+- **`ratchet_floor` is `t` on the OWNER policy and `f` on the SIBLING.** This is new in fix round 3 and
+  it is ruling **B2 v3(c)**: the owner's `WITH CHECK` is a one-way ratchet, `role` may fall to
+  `'homeowner'` and `is_designer` to `false`, never upward. An `f` on the owner row means the ratchet
+  is gone and the iOS app's A3-07 fix (W1 · L1-A) will start 403-ing. A `t` on the sibling row would
+  mean somebody put a self-downgrade leg on a policy that edits **other people's** rows — read it
+  immediately.
+- **`using_client_vocab` is `t` on the SIBLING and `f` on the OWNER.** Ruling **B2 v3(e)**: the sibling
+  must read `role IN ('homeowner','client')`, because production and the fixtures both carry clients
+  under both strings and `'homeowner'` alone left a designer unable to rename their own client. The
+  owner policy has no vocabulary list at all, so `f` is right there. The probe matches the **quoted**
+  strings — the bare words `client` and `designer_clients` are all over the sibling's `EXISTS`
+  subquery, so an unquoted match would pass on a policy that had dropped the literal.
+- **`reads_profile_role` is `f` on BOTH `designer_clients` rows, and `reads_user_roles` is `t`.** That
+  is finding **RF2-01**. Fix round 2 shipped these two with an
+  `OR current_profile_role() IN ('designer','admin','super_admin')` leg — and `handle_new_user` gives
+  **every** email/password signup exactly that label, so the leg read *"anyone who completed a signup
+  form may mint a roster row"*. A `t` in `reads_profile_role` means the vulnerability is back.
 
 **`pins_is_designer` is not decoration, and it matches the COMPARISON rather than the column name.**
 `profiles.role` is a label; `profiles.is_designer` is the column the designer-side RPCs actually read as
 authority — `claim_design_request` and the `open_design_requests` view (00286),
 `accept_design_request` (00330), `design_request_submit` (00285),
-`_can_manage_configurable_product`, and 00555's own `search_shareable_designers`. A `with_check` that
-pins `role` and not `is_designer` closes the label and leaves the door. And an earlier version of this
-probe asked `with_check ILIKE '%is_designer%'`, which the substring inside
+`_can_manage_configurable_product`, and 00555's own `search_shareable_designers`. An earlier version of
+this probe asked `with_check ILIKE '%is_designer%'`, which the substring inside
 `current_profile_is_designer()` satisfies on its own — it would have passed over a `WITH CHECK` that
 pinned nothing (RF-06). Note also that Postgres DEPARSES `a IS NOT DISTINCT FROM b` as
 `NOT (a IS DISTINCT FROM b)`, which is the spelling the owner row is matched on.
@@ -572,17 +789,28 @@ Reproduce them directly with, respectively:
 ```bash
 psql "$STRATA_DB_URL" -X -q -c \
   "SELECT policyname, cmd, (with_check IS NOT NULL) AS has_with_check,
-          (with_check ILIKE '%role%')                                AS names_role,
           (with_check ILIKE '%NOT (is_designer IS DISTINCT FROM%'
            OR with_check ILIKE '%is_designer IS NOT TRUE%')          AS pins_is_designer,
-          (qual ILIKE '%is_designer IS NOT TRUE%')                   AS using_pins_old_row
+          (with_check ILIKE '%is_designer = false%'
+           AND with_check NOT ILIKE '%is_designer = true%')          AS ratchet_floor,
+          (qual ILIKE '%is_designer IS NOT TRUE%')                   AS using_pins_old_row,
+          (qual ILIKE '%''homeowner''%' AND qual ILIKE '%''client''%') AS using_client_vocab
      FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND cmd='UPDATE'
     ORDER BY policyname;"
 
 psql "$STRATA_DB_URL" -X -q -c \
-  "SELECT policyname, cmd, permissive FROM pg_policies
-     WHERE schemaname='public' AND tablename='designer_clients'
-       AND policyname LIKE 'designer_clients_%is_designer' ORDER BY policyname;"
+  "SELECT policyname, cmd, permissive,
+          (COALESCE(qual,'')||COALESCE(with_check,'')) ILIKE '%user_roles%'           AS reads_user_roles,
+          (COALESCE(qual,'')||COALESCE(with_check,'')) ILIKE '%current_profile_role%' AS reads_profile_role
+     FROM pg_policies
+    WHERE schemaname='public' AND tablename='designer_clients'
+      AND policyname LIKE 'designer_clients_%is_designer' ORDER BY policyname;"
+
+psql "$STRATA_DB_URL" -X -q -tAc \
+  "SELECT pg_get_functiondef(p.oid) LIKE '%COALESCE(v_role, ''designer'')%'
+      AND pg_get_functiondef(p.oid) NOT LIKE '%raw_app_meta_data%'
+     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'handle_new_user';"
 
 psql "$STRATA_DB_URL" -X -q -tAc \
   "SELECT count(*) FROM information_schema.column_privileges
@@ -590,9 +818,28 @@ psql "$STRATA_DB_URL" -X -q -tAc \
       AND grantee='anon' AND privilege_type='SELECT';"
 ```
 
-**Two `profiles` rows in the shape above, two RESTRICTIVE `designer_clients` rows, and the count
-`24`.** Anything else and the hole is open — go back to `00555_probes.md` §9d / §9f / §9f-ia for the
-full column list and the policy predicates.
+**Two `profiles` rows in the shape above, two RESTRICTIVE `designer_clients` rows with
+`reads_profile_role = f`, `handle_new_user` → `t`, and the count `24`.** Anything else and something is
+open — go back to `00555_probes.md` §9d / §9f / §9f-ia / §9f-ii for the full column list and the policy
+predicates.
+
+**Three more one-line ACL checks, new in fix round 3** (RF2-08 / RF2-09 / RF2-10):
+
+```bash
+psql "$STRATA_DB_URL" -X -q -tAc \
+  "SELECT count(*) FROM information_schema.table_privileges
+    WHERE table_schema='public' AND table_name='designer_clients' AND grantee='anon';"
+# want 0 — anon held the full arwdDxtm set and has no reader (RF2-08)
+
+psql "$STRATA_DB_URL" -X -q -tAc \
+  "SELECT has_table_privilege('authenticated','public.profiles','TRUNCATE')
+       OR has_table_privilege('authenticated','public.profiles','REFERENCES');"
+# want f — RLS does not constrain TRUNCATE (RF2-09)
+
+psql "$STRATA_DB_URL" -X -q -tAc \
+  "SELECT has_function_privilege('public','public.handle_new_user()','EXECUTE');"
+# want f — a trigger function needs no EXECUTE grant to fire (RF2-10)
+```
 
 **Advisors** (read-only; you or an agent):
 
@@ -618,17 +865,34 @@ current_profile_role — the UPDATE policy denies every write"* if its grant did
 mkdir -p /Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/shots/w0/l0.2b-portal-after
 ```
 
-Signed in as yourself on `app.patina.cloud`, screenshot each of the five:
+Signed in as yourself on `app.patina.cloud`, screenshot each of the four:
 
 1. The **vendors catalogue** page renders its rows.
 2. A **vendor detail** opens, with its trade fields (you are signed in — they belong there).
-3. The **comms vendor picker** lists vendors and does **not** show an error state. *(This is the one
-   00555 changes the mechanism of: the picker now reads `list_vendor_profiles` instead of `profiles`.)*
-4. The **People directory** shows names, emails and phones.
-5. **Roster and team avatars** resolve — no nameless rows.
+3. The **People directory** shows names, emails and phones.
+4. **Roster and team avatars** resolve — no nameless rows.
 
 Screenshots to `artifacts/ios-testflight-polish-2026-09-01/shots/w0/l0.2b-portal-after/`.
 **Any regression here is an immediate rollback, not a follow-up.**
+
+**This list used to have a fifth item — "the comms vendor picker lists vendors and does not show an
+error state" — and it was removed in fix round 3 (RF2-12) because there is no such screen.**
+`useVendorProfiles` has no UI consumer: the grep returns only the hook's definition, the package barrel
+that re-exports it, and its own test. **A6 and A3 already say this** about the same hook, in the same
+runbook, and B8 asked you to screenshot it anyway. A walk step aimed at a screen that does not exist is
+worse than a missing one: it cannot pass, so it either gets marked done without being done or it stalls
+the block. Re-run the grep if you want to confirm nothing landed since:
+
+```bash
+cd "$REPO"
+grep -rn 'useVendorProfiles' apps packages --include='*.ts' --include='*.tsx' | grep -v '\.test\.'
+```
+
+If that returns anything under `apps/`, a lane has wired it up since this was written — put the step
+back and screenshot it.
+
+The `list_vendor_profiles` RPC still ships and is still correct: the hook must not throw `42501` the
+moment someone does wire it up, and probe **§9a** in `00555_probes.md` covers the function directly.
 
 ### B9 — rollback
 
@@ -642,8 +906,10 @@ psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
 ```
 
 That restores the read path the portal and both apps used before 00555. It does **not** undo the
-`vendors` column split, the dropped marketing-rail policies, or the `WITH CHECK` on
-`"Users can update own profile"`. If one of *those* is the regression, the narrower undos:
+`vendors` column split, the dropped marketing-rail policies, the `WITH CHECK` on
+`"Users can update own profile"`, the two RESTRICTIVE policies on `designer_clients`, or the
+`is_designer` pin on the `profiles` INSERT legs. If one of *those* is the regression, the narrower
+undos, each independent of the others:
 
 ```bash
 psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
@@ -654,6 +920,52 @@ psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
    CREATE POLICY \"Users can update own profile\" ON public.profiles
      FOR UPDATE USING (auth.uid() = id);"
 ```
+
+**The roster mint (RF2-01), if a real designer turns out to be locked out of Add Client.** Dropping
+these two restores the pre-00555 posture on `public.designer_clients`, where **any** authenticated
+account can mint a roster row — which is the primitive behind the profile-takeover chain, so prefer
+granting the affected account a designer-domain `user_roles` row over reaching for this. B7a's audit is
+what tells you which of the two you are actually looking at.
+
+```bash
+psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
+  "DROP POLICY IF EXISTS designer_clients_writer_is_designer  ON public.designer_clients;
+   DROP POLICY IF EXISTS designer_clients_updater_is_designer ON public.designer_clients;"
+```
+
+**The `profiles` INSERT leg**, if some path that legitimately inserts its own profiles row starts
+failing. 00013's original had `WITH CHECK ((auth.uid() = id) OR (auth.uid() IS NULL))`; the second leg
+is the anon write hole and must **not** come back, so the undo restores only the first half — which is
+00555's own policy minus the `is_designer` pin.
+
+```bash
+psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
+  "DROP POLICY IF EXISTS \"Users can insert own profile\" ON public.profiles;
+   CREATE POLICY \"Users can insert own profile\" ON public.profiles
+     FOR INSERT TO authenticated
+     WITH CHECK ((SELECT auth.uid()) = id);"
+```
+
+And the 00017 INSERT sibling, whose only 00555 change is the `is_designer` pin and the re-scope from
+`PUBLIC` to `authenticated`:
+
+```bash
+psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
+  "DROP POLICY IF EXISTS \"Designers can create homeowner profiles\" ON public.profiles;
+   CREATE POLICY \"Designers can create homeowner profiles\" ON public.profiles
+     FOR INSERT TO authenticated
+     WITH CHECK ((SELECT auth.uid()) IS NOT NULL AND role = 'homeowner');"
+```
+
+⚠ **Dropping either INSERT policy without re-creating it locks out the path it serves**, and dropping
+only one of the two leaves the other as an OR-branch around the pin you were trying to remove — which
+is the OR-branch mistake this migration spent two fix rounds on. Run the `DROP` and the `CREATE` in the
+same statement, as written above.
+
+**Not rolled back by any of this:** the `REVOKE`s. `designer_clients` from `anon` (RF2-08), `TRUNCATE`
+and `REFERENCES` on `profiles` from `authenticated` (RF2-09), and `EXECUTE` on `handle_new_user` from
+`PUBLIC` (RF2-10) have no callers by construction — if one of them is somehow the regression, the undo
+is the matching `GRANT`, and it is worth a hard look at what was using it.
 
 ### B10 — two things you are being told, not asked
 

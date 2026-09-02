@@ -49,11 +49,13 @@ names are **not** this file's section numbers — read the map, not the digits.
 | Probe 5 | **§11** | the designer portal's own HTTP route, a **different principal** — `app.patina.cloud/api/catalog/vendors` must not answer 200 with trade columns |
 | **9b** — the `FOR ALL` / `TO PUBLIC` / `auth.uid() IS NULL` policy sweep | **§9b** | 0 rows |
 | **9d** — the `vendors` column allowlist | **§9d** | the 24 public-face columns, and only those |
-| **9f** — the UPDATE `WITH CHECK` | **§9f** | **both** of `profiles`' UPDATE policies have a non-null `with_check` naming `role` **and `is_designer`** |
+| **9f** — the identity-column pins | **§9f** | **both** of `profiles`' UPDATE policies pin `is_designer`; the owner's is the one-way ratchet; the sibling's `USING` reads the OLD row over both client strings; `designer_clients` carries the two RESTRICTIVE write policies, reading `user_roles` and **not** `profiles.role`; `handle_new_user` is 00313 verbatim |
 
 The two RPC probes keep their own headings and are **not** part of the exit criteria:
-§9 (`search_shareable_designers`) and §9a (`list_vendor_profiles`). §9f carries both halves of the
-role-elevation check — the policy's `WITH CHECK` and `handle_new_user`'s server-side default.
+§9 (`search_shareable_designers`) and §9a (`list_vendor_profiles`). §9f carries every half of the
+identity-column check — the two policies' clauses (§9f-i), the roster mint (§9f-ia), `anon`'s grants on
+`designer_clients` (§9f-ib), `handle_new_user`'s body (§9f-ii), and the three REVOKEs with no probe of
+their own (§9f-iii).
 
 ---
 
@@ -499,37 +501,53 @@ None of these may appear: `notes`, `trade_terms`, `contact_info`, `preferred_con
 `contact_profile_id`. `id` **must** appear — a column allowlist that forgot `id` would still pass
 an ACL-shape check while breaking every products embed (probe 4).
 
-## 9f · EXIT CRITERION — self-elevation is closed (the UPDATE `WITH CHECK`)
+## 9f · EXIT CRITERION — the identity columns are pinned, and the mint is closed
 
 00013 shipped `"Users can update own profile"` as `USING`-only with no column restriction, so any
-authenticated caller could set their own `profiles.role` to `'designer'` — and their own
-`profiles.is_designer` to `true`. 00555 section (a2) adds a `WITH CHECK` pinning **both** columns, and
-gives `handle_new_user` a provider-derived default (ruling B2).
+authenticated caller could set their own `profiles.is_designer` to `true` — the column the whole
+designer-side rail reads as authority — and their own `profiles.role` to anything at all. 00555
+section (a2) closes both, on **both** of the table's permissive `UPDATE` policies, and (a2)(i-c) closes
+the roster-row primitive that reached the second one.
 
-**`role` is a label; `is_designer` is the authority.** The designer-side RPCs read `is_designer`, not
-`role`: `claim_design_request` and the `open_design_requests` view (00286), `accept_design_request`
-(00330), `design_request_submit` (00285), `_can_manage_configurable_product`, and 00555's own
-`search_shareable_designers`. A `WITH CHECK` that pins `role` alone closes the label and leaves the
-door — a homeowner PATCHes `is_designer = true` and walks into the design-request pool.
+**`role` is a LABEL; `is_designer` is the AUTHORITY.** That distinction is ruling **B2 v3(b)** and it is
+what fix round 3 rebuilt this section around. The designer-side RPCs read `is_designer`, never `role`:
+`claim_design_request` and the `open_design_requests` view (00286), `accept_design_request` (00330),
+`design_request_submit` (00285), `_can_manage_configurable_product`, and 00555's own
+`search_shareable_designers`. `profiles_select_admin` reads `user_roles`. And after **RF2-01** so do the
+two RESTRICTIVE policies on `designer_clients`.
+
+**The owner policy is a one-way RATCHET, not a freeze** — ruling **B2 v3(c)**, new in fix round 3:
+
+| column | permitted new value on the owner's own row |
+|---|---|
+| `role` | unchanged, **or** `'homeowner'` |
+| `is_designer` | unchanged, **or** `false` |
+
+Never upward, in either column. The downgrade leg is not a loosening for its own sake: it is A3-07's
+fix. An Apple/Google sign-up lands `role = 'designer'` (`handle_new_user`, unchanged since 00013 —
+see §9f-ii), and `supabase-swift` cannot attach creation metadata to an OAuth sign-in, so the app
+corrects its own row afterwards. The contract is `build/waves/w1/l1-a-notes.md`; the local behaviour
+cases are 7i–7i5 in `00555_ios_round_one_security.test.sql`.
 
 **`profiles` carries TWO permissive `UPDATE` policies, and this probe wants BOTH.** The second is
 `"Designers can update their client profiles"` (00017:19). Postgres ORs the permissive `WITH CHECK`s
 for an `UPDATE`, and a policy whose `WITH CHECK` is NULL reuses its own `USING` — so as 00017 shipped
-it, a new row had to satisfy only one of the two and the pin above was skipped entirely. The roster row
-that satisfies it is self-servable: `designer_clients`' own policy is `FOR ALL` / `TO PUBLIC` /
-`USING (auth.uid() = designer_id)` with no `WITH CHECK` (00014:110) and `authenticated` holds `INSERT`,
-so the whole bypass was two statements — reproduced locally, a homeowner reached `role = 'designer'`.
-00555 section (a2)(i-b) re-creates that policy `TO authenticated` with the two column predicates in
-**both** clauses.
+it, a new row had to satisfy only one of the two and the pin above was skipped entirely.
 
-**The sibling's pin is on the OLD row, and that is the correction fix round 2 made.** Pinning only its
-`WITH CHECK` to the literals `role = 'homeowner' AND is_designer IS NOT TRUE` — the 2026-09-02 first
-cut — is satisfied *by construction* when the caller is DEMOTING a designer. Reproduced over HTTP on a
-local stack as the seeded homeowner: mint a roster row naming the seeded designer as your client, then
+**The sibling's pin is on the OLD row** (fix round 2's correction). Pinning only its `WITH CHECK` to
+literals is satisfied *by construction* when the caller is DEMOTING a designer. Reproduced over HTTP as
+a seeded homeowner: mint a roster row naming the seeded designer as your client, then
 `PATCH {"role":"homeowner","is_designer":false}` → 204, then `PATCH {"display_name":"PWNED"}` → 204.
 The victim went from `designer | t | Leah Hartwell` to `homeowner | f | PWNED`. The same predicates now
 also sit in the policy's `USING`, which reads the OLD row, so a designer, admin or vendor on a roster
 is not a row this policy can select at all.
+
+**And the sibling reads TWO client strings** — ruling **B2 v3(e)**, finding RF2-06, new in fix round 3.
+`role IN ('homeowner','client')`, not the single literal. `profiles.role` has no `CHECK` constraint and
+no enum; `public.comms_resolve_role` (00103:37-42) treats every non-admin/designer/vendor role as a
+client; `public.roles` carries a `client` row in the `consumer` domain. With `'homeowner'` alone a
+designer whose client row said `'client'` could not rename that client at all — the policy selected no
+row, the `PATCH` answered `200 []`, and the rename silently did nothing.
 
 **And the roster row itself can no longer be minted by a non-designer.** 00555 (a2)(i-c) adds two
 RESTRICTIVE policies on `public.designer_clients` — `designer_clients_writer_is_designer` (INSERT) and
@@ -539,71 +557,129 @@ are satisfied by `designer_id = auth.uid()` (00014's `USING (auth.uid() = design
 `p_owner = auth.uid()`). Restrictive policies AND onto the OR of the permissive set, so this holds
 whichever leg admitted the row.
 
+**Their predicate reads `user_roles` and `is_designer`, and NOT `profiles.role`** — finding **RF2-01**,
+the blocker fix round 3 opened with. Fix round 2 shipped them with an
+`OR current_profile_role() IN ('designer','admin','super_admin')` leg, reasoning that a portal
+self-signup carries `role = 'designer'` before any grant lands. But `handle_new_user` gives **every**
+email/password signup that label, so the leg read *"anyone who can complete a signup form may mint a
+roster row"* — restoring, in the policy written to close it, the exact primitive behind the
+profile-takeover chain above. Local behaviour cases: **7j** (the self-signup shape is refused, in both
+the INSERT and the UPDATE direction) and **7k** (a real designer, and an admin-domain grant holder with
+`is_designer` false, both succeed).
+
 Read-only check:
 
 ```sql
--- 9f-i. BOTH UPDATE policies carry a WITH CHECK, and both PIN is_designer.
+-- 9f-i. BOTH UPDATE policies carry a WITH CHECK and PIN is_designer; the owner
+-- policy is the ratchet; the sibling reads the OLD row over both client strings.
+--
 -- Match the COMPARISON, not the column name: `is_designer` is a substring of
 -- `current_profile_is_designer()`, so an earlier `ILIKE '%is_designer%'` form
--- was satisfied by a with_check that pinned nothing. Postgres also DEPARSES
--- `a IS NOT DISTINCT FROM b` as `NOT (a IS DISTINCT FROM b)`, which is why the
--- owner row is matched on that spelling.
+-- was satisfied by a with_check that pinned nothing (RF-06). Postgres also
+-- DEPARSES `a IS NOT DISTINCT FROM b` as `NOT (a IS DISTINCT FROM b)`, which is
+-- why the owner row is matched on that spelling. And match the client strings
+-- QUOTED: the bare words `client` and `designer_clients` are all over the
+-- sibling's EXISTS subquery.
 SELECT polname,
        pg_get_expr(polwithcheck, polrelid) AS with_check,
        pg_get_expr(polwithcheck, polrelid) ILIKE '%NOT (is_designer IS DISTINCT FROM%'
          OR pg_get_expr(polwithcheck, polrelid) ILIKE '%is_designer IS NOT TRUE%'
          AS pins_is_designer,
+       pg_get_expr(polwithcheck, polrelid) ILIKE '%is_designer = false%'
+         AND pg_get_expr(polwithcheck, polrelid) NOT ILIKE '%is_designer = true%'
+         AS ratchet_floor,
        pg_get_expr(polqual, polrelid) ILIKE '%is_designer IS NOT TRUE%'
-         AS using_reads_old_row
+         AS using_reads_old_row,
+       pg_get_expr(polqual, polrelid) ILIKE '%''homeowner''%'
+         AND pg_get_expr(polqual, polrelid) ILIKE '%''client''%'
+         AS using_client_vocab
 FROM pg_policy
 WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
 -- want TWO rows, each with a NON-NULL with_check and pins_is_designer = t:
 --   "Users can update own profile"
---     -> … AND role IS NOT DISTINCT FROM current_profile_role()
---        AND is_designer IS NOT DISTINCT FROM current_profile_is_designer()
+--     -> … AND ((NOT (role IS DISTINCT FROM current_profile_role()))
+--               OR (role = 'homeowner'::text))
+--         AND ((NOT (is_designer IS DISTINCT FROM current_profile_is_designer()))
+--               OR (is_designer = false))
 --        (the inline subquery form raises 42P17 and is NOT what shipped —
 --         both pins go through their own SECURITY DEFINER helper)
---        using_reads_old_row = f on this row, and that is correct: the owner
---        policy's USING is `auth.uid() = id` and its pin is the helper.
+--        ratchet_floor       = t   ← ruling B2 v3(c). An f here breaks L1-A.
+--        using_reads_old_row = f   ← correct: this policy's USING is
+--                                    `auth.uid() = id` and its pin is the helper
+--        using_client_vocab  = f   ← correct: it has no vocabulary list
 --   "Designers can update their client profiles"
---     -> … AND role = 'homeowner' AND is_designer IS NOT TRUE, in BOTH clauses,
---        so using_reads_old_row = t. An f here is the demotion hole.
+--     -> … AND (role = ANY (ARRAY['homeowner'::text, 'client'::text]))
+--         AND (is_designer IS NOT TRUE), in BOTH clauses
+--        ratchet_floor       = f   ← correct: a self-downgrade leg has no
+--                                    business on a policy that edits OTHER
+--                                    people's rows. A t here needs reading now.
+--        using_reads_old_row = t   ← an f is the demotion hole
+--        using_client_vocab  = t   ← an f is RF2-06: a 'client'-labelled client
+--                                    cannot be renamed by their own designer
 -- A NULL with_check, or a with_check that does not pin is_designer, on EITHER
 -- row means self-elevation is open whatever the other row says. One row back
 -- means the sibling was dropped, not fixed.
 
--- 9f-ia. the enabling primitive: only a designer may write designer_clients.
-SELECT polname, polcmd, polpermissive
+-- 9f-ia. the enabling primitive: only a designer may write designer_clients,
+-- and "designer" means user_roles or is_designer — never profiles.role.
+SELECT polname, polcmd, polpermissive,
+       (COALESCE(pg_get_expr(polqual, polrelid), '')
+          || COALESCE(pg_get_expr(polwithcheck, polrelid), ''))
+         ILIKE '%user_roles%'            AS reads_user_roles,
+       (COALESCE(pg_get_expr(polqual, polrelid), '')
+          || COALESCE(pg_get_expr(polwithcheck, polrelid), ''))
+         ILIKE '%current_profile_role%'  AS reads_profile_role
 FROM pg_policy
 WHERE polrelid = 'public.designer_clients'::regclass
   AND polname IN ('designer_clients_writer_is_designer',
                   'designer_clients_updater_is_designer');
--- want TWO rows, polpermissive = f on both, polcmd = 'a' (INSERT) and 'w' (UPDATE).
+-- want TWO rows, polpermissive = f on both, polcmd = 'a' (INSERT) and 'w'
+-- (UPDATE), reads_user_roles = t and reads_profile_role = f on BOTH.
+-- reads_profile_role = t is RF2-01 reopened: handle_new_user labels every
+-- email/password signup 'designer', so that leg hands the mint to anyone who
+-- can complete a signup form.
 
--- 9f-ii. the server default follows the identity provider (ruling B2), and the
--- ALLOWLIST names the provider that keeps the PRIVILEGED value.
--- Match the BRANCH and its DIRECTION, not the word: 00313's body already
--- contains the literal 'homeowner' twice (the CASE arm that honours an explicit
--- client hint, and its SECURITY comment), so `LIKE '%homeowner%'` returns true
--- on the UNFIXED function. `raw_app_meta_data` appears nowhere in 00313, so it
--- is the clean discriminator for the graft; `ELSE 'homeowner'` is the
--- discriminator for the direction. Corrected 2026-09-02 THREE times: by W0 ·
--- L0.2 because the draft's probe could not fail; in fix round 1 when B2
--- replaced the flat fallback with the provider CASE; and in fix round 2 when
--- that CASE's `ELSE 'designer'` turned out to hand the Google button (and every
--- provider added later) the designer default.
-SELECT pg_get_functiondef(p.oid) LIKE '%raw_app_meta_data%'
-   AND pg_get_functiondef(p.oid) LIKE '%''email''%'
-   AND pg_get_functiondef(p.oid) LIKE '%ELSE ''homeowner''%'
-   AND pg_get_functiondef(p.oid) NOT LIKE '%ELSE ''designer''%' AS provider_default
+-- 9f-ib. and anon holds nothing on the table at all (RF2-08). It carried the
+-- full arwdDxtm set from the pre-flip creation default and has no reader: the
+-- client's own roster read is public.client_designer_roster (00536), a
+-- security_invoker = false view granted only to authenticated.
+SELECT count(*) AS anon_grants
+FROM information_schema.table_privileges
+WHERE table_schema = 'public' AND table_name = 'designer_clients' AND grantee = 'anon';
+-- want: 0
+
+-- 9f-ii. handle_new_user is 00313 VERBATIM — the default does NOT move.
+-- Ruling B2 v3(a). Match the COALESCE, which is the exact line the two reverted
+-- cuts replaced, and reject raw_app_meta_data outright: that token appears
+-- nowhere in 00313, so its presence means a provider branch crept back in.
+-- `LIKE '%homeowner%'` proves nothing — 00313's body carries the literal twice
+-- (the CASE arm that honours an explicit client hint, and its SECURITY comment).
+--
+-- Corrected 2026-09-02 FOUR times, which is the reason this comment is long:
+-- by W0 · L0.2 because the draft's probe could not fail; in fix round 1 when B2
+-- v1 flipped the fallback to 'homeowner'; in fix round 2 when B2 v2's provider
+-- CASE turned out to hand the Google button the designer default; and in fix
+-- round 3 when ruling B2 v3 reverted the provider CASE altogether and moved the
+-- relabel to the app (W1 · L1-A) and to client-invite's accept handler.
+SELECT pg_get_functiondef(p.oid) LIKE '%COALESCE(v_role, ''designer'')%'
+   AND pg_get_functiondef(p.oid) NOT LIKE '%raw_app_meta_data%' AS trigger_is_00313
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND p.proname = 'handle_new_user';
 -- want: true
+
+-- 9f-iii. the two REVOKEs that have no probe of their own (RF2-09, RF2-10).
+SELECT has_table_privilege('authenticated', 'public.profiles', 'TRUNCATE')
+         AS authenticated_can_truncate,      -- want f. RLS does NOT constrain TRUNCATE
+       has_table_privilege('authenticated', 'public.profiles', 'REFERENCES')
+         AS authenticated_can_reference,     -- want f
+       has_function_privilege('public', 'public.handle_new_user()', 'EXECUTE')
+         AS public_can_execute_trigger_fn;   -- want f. A trigger needs no EXECUTE to fire
 ```
 
 The *write* half of this check (attempting the elevation as a real user) runs **locally only**, as
-cases 6e/6f, 7 and 7h of `00555_ios_round_one_security.test.sql` — 7h is the cross-account direction.
-It is not run against production.
+cases 6e/6f/6f2, 7, 7h, 7j and 7k of `00555_ios_round_one_security.test.sql` — 7h is the cross-account
+direction, 7j is the self-signup mint, 7k is the legitimate designer path that none of the refusals may
+break. It is not run against production.
 
 ## 10 · The marketing rail is closed to anon
 
