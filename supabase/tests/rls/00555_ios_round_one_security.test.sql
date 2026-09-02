@@ -61,8 +61,11 @@
 --      ELSE and tries to demote and rename them. 7k is the legitimate designer
 --      path the whole section must not break: a real designer mints a roster
 --      row and renames a rostered client, including one labelled 'client'
---      rather than 'homeowner' (ruling B2 v3(e)). (profile_cards was CUT from
---      00555; 7a asserts it is absent.)
+--      rather than 'homeowner' (ruling B2 v3(e)). 7m is the LEGACY row the
+--      restrictive policies cannot reach — planted out of band, the way a
+--      pre-00555 row exists — and it must no longer buy its non-designer holder
+--      a rename (7m1) or an invoice-email rewrite (7m2). (profile_cards was CUT
+--      from 00555; 7a asserts it is absent.)
 --   8. search_shareable_designers — finds by name, never returns email,
 --      enforces the 2-char floor including against a WILDCARD query (8h),
 --      and the LIMIT, closed to anon.
@@ -73,10 +76,11 @@
 --  10. Helper lockdown, and the policy set by NAME (which is a shape check, not
 --      a behaviour check — sections 2 and 8 are the behaviour). Also the ACL
 --      changes fix round 3 added: anon holds nothing on designer_clients
---      (RF2-08), authenticated holds no TRUNCATE/REFERENCES on profiles
---      (RF2-09), handle_new_user is not EXECUTEable by PUBLIC or anon
---      (RF2-10), and all five helpers pin `search_path=public, pg_temp`
---      (RF2-11).
+--      (RF2-08) and holds EXACTLY {SELECT} there (RF3-01), authenticated holds
+--      no TRUNCATE/REFERENCES on profiles (RF2-09) or on designer_clients
+--      (RF3-07), handle_new_user is not EXECUTEable by PUBLIC, anon or
+--      authenticated (RF2-10 / RF3-11), and all five helpers pin
+--      `search_path=public, pg_temp` (RF2-11).
 --  11. handle_new_user's default role — ruling B2 v3(a): UNCHANGED from 00313.
 --      Every signup with no honored 'homeowner' hint lands 'designer',
 --      whatever provider it came in on.
@@ -1355,6 +1359,72 @@ BEGIN
   RAISE NOTICE '00555 legitimate-designer roster assertions passed.';
 END $$;
 
+-- ─── 7m. the LEGACY roster row — RF3-03 ────────────────────────────────────
+--
+-- 7e0/7j prove a non-designer can no longer MINT a roster row. They say nothing
+-- about a row that already exists, and this migration deliberately deletes none:
+-- the restrictive policies in §a2(i-c) are INSERT and UPDATE only. Before this
+-- pass "Designers can update their client profiles" asked nothing at all about
+-- the caller — a roster row plus `dc.designer_id = auth.uid()` was the whole
+-- admission test — so every pre-00555 row minted by a non-designer kept the
+-- profile write.
+--
+-- The row here is planted out of band (this script runs as the RLS-exempt
+-- superuser), which is exactly the shape of a row that predates the migration.
+-- Sig is the self-signup: label 'designer', is_designer FALSE, no designer- or
+-- admin-domain grant.
+DO $$
+DECLARE
+  name_now TEXT;
+BEGIN
+  UPDATE public.profiles SET display_name = 'Mal Unrelated'
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
+
+  INSERT INTO public.designer_clients (id, designer_id, client_id, status)
+  VALUES ('dc555000-0000-4000-8000-0000000000aa',
+          '51000000-0000-4000-8000-000000000008',
+          'a0000000-0000-4000-8000-000000000003', 'active')
+  ON CONFLICT DO NOTHING;
+
+  -- 7m1: the rename the legacy row used to buy.
+  PERFORM pg_temp.assume_user('51000000-0000-4000-8000-000000000008');
+  BEGIN
+    UPDATE public.profiles SET display_name = 'PWNED BY LEGACY ROW'
+     WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT display_name INTO name_now FROM public.profiles
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  ASSERT name_now = 'Mal Unrelated',
+    'FAIL 7m1: a non-designer holding a PRE-00555 roster row rewrote a homeowner''s profile — '
+    'the sibling UPDATE policy is not checking the caller''s own authority (RF3-03). Got '
+      || COALESCE(name_now, '<null>');
+
+  -- 7m2: and the same row must not buy an email rewrite either. That column is
+  --      the FIRST-CHOICE invoice recipient (invoice-send/index.ts:204), so this
+  --      is redirection, not a cosmetic edit.
+  PERFORM pg_temp.assume_user('51000000-0000-4000-8000-000000000008');
+  BEGIN
+    UPDATE public.profiles SET email = 'attacker@evil.invalid'
+     WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT (SELECT email FROM public.profiles
+           WHERE id = 'a0000000-0000-4000-8000-000000000003')
+         = 'p555-mal@test.invalid',
+    'FAIL 7m2: a legacy roster row let a non-designer redirect a homeowner''s invoice email';
+
+  DELETE FROM public.designer_clients WHERE id = 'dc555000-0000-4000-8000-0000000000aa';
+
+  RAISE NOTICE '00555 legacy-roster-row assertions passed.';
+END $$;
+
 -- ─── 8. search_shareable_designers ─────────────────────────────────────────
 
 DO $$
@@ -1649,6 +1719,12 @@ BEGIN
     'anon can execute handle_new_user';
   ASSERT NOT has_function_privilege('public'::name, 'public.handle_new_user()', 'EXECUTE'),
     'PUBLIC can execute handle_new_user';
+  -- RF3-11: authenticated too. The first pass of fix round 3 revoked PUBLIC and
+  -- anon and left authenticated holding EXECUTE, which contradicted its own
+  -- "exposed surface with no caller" rationale. A trigger needs no EXECUTE grant
+  -- to fire, so nothing legitimate reads this.
+  ASSERT NOT has_function_privilege('authenticated'::name, 'public.handle_new_user()', 'EXECUTE'),
+    'authenticated can execute handle_new_user';
 
   ASSERT NOT has_table_privilege('authenticated'::name, 'public.profiles'::regclass, 'DELETE'),
     'authenticated still holds DELETE on profiles';
@@ -1688,6 +1764,22 @@ BEGIN
     'anon still holds MAINTAIN on designer_clients';
   ASSERT has_table_privilege('authenticated'::name, 'public.designer_clients'::regclass, 'INSERT'),
     'authenticated lost INSERT on designer_clients — the Add Client flow is broken';
+  -- RF3-01: SELECT is the only thing anon keeps. The six assertions above name
+  -- verbs one at a time; this one fails on a verb nobody listed, which is what
+  -- lets the operator-facing probe say "want 1" safely.
+  ASSERT (
+    SELECT string_agg(privilege_type, ',' ORDER BY privilege_type)
+    FROM information_schema.table_privileges
+    WHERE table_schema = 'public' AND table_name = 'designer_clients'
+      AND grantee = 'anon'
+  ) = 'SELECT', 'anon holds something other than exactly SELECT on designer_clients';
+  -- RF3-07: the TRUNCATE/REFERENCES pair the profiles block clears, on the
+  -- roster table this section calls load-bearing. Measured before the fix:
+  -- designer_clients authenticated=arwdDxtm, profiles authenticated=arwtm.
+  ASSERT NOT has_table_privilege('authenticated'::name, 'public.designer_clients'::regclass, 'TRUNCATE'),
+    'authenticated still holds TRUNCATE on designer_clients — one statement empties every roster relationship';
+  ASSERT NOT has_table_privilege('authenticated'::name, 'public.designer_clients'::regclass, 'REFERENCES'),
+    'authenticated still holds REFERENCES on designer_clients';
 
   -- RF2-01: neither restrictive policy reads profiles.role. The guard names the
   -- helper, not the word "role" — `role` is a substring of half this predicate.

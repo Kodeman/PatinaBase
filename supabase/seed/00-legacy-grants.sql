@@ -12520,7 +12520,13 @@ END $g$;
 
 -- 00555_ios_round_one_security.sql
 DO $g$ BEGIN
-  REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon;
+  REVOKE TRUNCATE, REFERENCES ON public.designer_clients FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
