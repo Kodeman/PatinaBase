@@ -516,10 +516,57 @@ CREATE POLICY profiles_select_agent_reader ON public.profiles
 -- handle_new_user() (the real signup path) is SECURITY DEFINER and owned by
 -- postgres, and every invite path uses service_role — neither is subject to
 -- this policy, so the leg has no legitimate caller.
+--
+-- The two column pins are the INSERT half of (a2) below, and they are not
+-- decorative: profiles.role's column DEFAULT is 'designer' and is_designer is
+-- nullable, so an INSERT that simply OMITS role lands a designer. (a2) closes
+-- self-elevation on UPDATE; without these, the same elevation is one INSERT
+-- away for any live auth.users row that has no profiles row yet — a partially
+-- completed delete-account, a backfill gap, a failed trigger. The window is
+-- narrow (handle_new_user always writes the row, authenticated has no DELETE
+-- after this migration, and profiles_id_fkey stops a fabricated uuid), which
+-- is why this is a door matching a window rather than a live hole.
+--
+-- Pinned to literals rather than to a helper: there is no OLD row to read on an
+-- INSERT, and no legitimate authenticated INSERT of a profiles row exists in
+-- the codebase at all — every profile write outside handle_new_user() is an
+-- adminClient / edge-function upsert as service_role (admin-portal
+-- users + applications onboard, designer-portal clients/invite,
+-- designer-invite, workspace-member-invite), all BYPASSRLS.
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile" ON public.profiles
   FOR INSERT TO authenticated
-  WITH CHECK ((SELECT auth.uid()) = id);
+  WITH CHECK (
+    (SELECT auth.uid()) = id
+    AND role IS NOT DISTINCT FROM 'homeowner'
+    AND is_designer IS NOT TRUE
+  );
+
+-- The sibling INSERT policy, 00017's "Designers can create homeowner profiles",
+-- for the same reason: it pins `role = 'homeowner'` and says nothing about
+-- is_designer, and is_designer is the column designer authority actually reads
+-- (00286/00330/00285 — see (a2)(i-a)). Postgres ORs permissive WITH CHECKs, so
+-- leaving it unpinned would OR straight around the line above and let any
+-- authenticated caller insert `role = 'homeowner', is_designer = true` for an
+-- arbitrary id. Also re-scoped from PUBLIC to authenticated, matching the
+-- UPDATE sibling below; anon no longer holds INSERT on this table at all, so
+-- the re-scope is a statement of intent rather than a behaviour change.
+DROP POLICY IF EXISTS "Designers can create homeowner profiles" ON public.profiles;
+CREATE POLICY "Designers can create homeowner profiles" ON public.profiles
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    (SELECT auth.uid()) IS NOT NULL
+    AND role = 'homeowner'
+    AND is_designer IS NOT TRUE
+  );
+
+COMMENT ON POLICY "Designers can create homeowner profiles" ON public.profiles IS
+  'A designer adding a client may insert a profiles row for them. WITH CHECK '
+  'pins role = ''homeowner'' (00017) AND is_designer IS NOT TRUE (00555) — the '
+  'label and the authority. Without the second pin this policy ORs around the '
+  'column pins on "Users can insert own profile" and any authenticated caller '
+  'can mint a designer-authority row. Re-scoped to authenticated (was PUBLIC) '
+  'in 00555. The arbitrary-id half is unchanged and is CAVEAT 1 in this file.';
 
 -- Grant hygiene, mirroring 00510: a grant no caller may use is a grant waiting
 -- for a policy mistake. REVOKE ALL PRIVILEGES rather than an enumerated list —
@@ -685,10 +732,34 @@ COMMENT ON POLICY "Users can update own profile" ON public.profiles IS
 -- compares the TARGET row's new role to the CALLER's role, and would deny every
 -- legitimate designer edit of a client profile.
 --
--- What this does NOT close, stated rather than implied: designer_clients is
--- still INSERTable with an arbitrary client_id, so a manufactured roster row
--- still reaches a stranger's NON-role columns. That is a WITH CHECK on another
--- table's policy and a live Add Client flow -- W2, tracked, not smuggled in here.
+-- THE PIN IS ON THE OLD ROW, NOT ON A LITERAL — and that distinction is the
+-- whole fix. An earlier cut of this migration pinned the WITH CHECK to the
+-- literals `role = 'homeowner' AND is_designer IS NOT TRUE`, which a DEMOTION
+-- satisfies by construction. Reproduced over HTTP on a local stack, as the
+-- seeded homeowner client@patina.dev against the seeded designer Leah:
+--   POST  /rest/v1/designer_clients {designer_id: self, client_id: <Leah>} → 201
+--   PATCH /rest/v1/profiles?id=eq.<Leah> {"role":"homeowner","is_designer":false} → 204
+--   PATCH /rest/v1/profiles?id=eq.<Leah> {"display_name":"PWNED"}                → 204
+-- Leah went from `designer | t | Leah Hartwell` to `homeowner | f | PWNED`,
+-- which strips exactly the authority the rest of this section defends
+-- (search_shareable_designers, open_design_requests, claim/accept_design_request
+-- all read is_designer) and corrupts the name every surface renders.
+--
+-- The fix is to put the two column predicates in the USING clause as well. An
+-- UPDATE policy's USING sees the OLD row — there is no OLD in a WITH CHECK,
+-- which is why (i-a) needed a SECURITY DEFINER helper, and why this policy does
+-- not: the target row here is not the caller's own, so the OLD value is right
+-- there. USING makes the policy select only rows that are ALREADY a homeowner
+-- with no designer authority; WITH CHECK keeps them that way. A designer, an
+-- admin or a vendor on someone's roster is not a row this policy can touch at
+-- all, in either direction.
+--
+-- What this does NOT close, stated rather than implied: a caller who really IS
+-- a designer can still roster an arbitrary homeowner (designer_clients accepts
+-- any client_id) and rewrite that homeowner's non-authority columns. That is a
+-- live Add Client flow and a W2 item, tracked, not smuggled in here. What it
+-- DOES close is the same trick run by a non-designer, and the demotion of any
+-- designer by anyone — see the restrictive policy on designer_clients below.
 DROP POLICY IF EXISTS "Designers can update their client profiles" ON public.profiles;
 CREATE POLICY "Designers can update their client profiles" ON public.profiles
   FOR UPDATE TO authenticated
@@ -698,6 +769,8 @@ CREATE POLICY "Designers can update their client profiles" ON public.profiles
       WHERE dc.client_id = profiles.id
         AND dc.designer_id = (SELECT auth.uid())
     )
+    AND role = 'homeowner'
+    AND is_designer IS NOT TRUE
   )
   WITH CHECK (
     EXISTS (
@@ -710,16 +783,91 @@ CREATE POLICY "Designers can update their client profiles" ON public.profiles
   );
 
 COMMENT ON POLICY "Designers can update their client profiles" ON public.profiles IS
-  'A designer may edit a profile on their designer_clients roster. WITH CHECK '
-  'pins the edited row to role = ''homeowner'' AND is_designer IS NOT TRUE — '
-  'the label and the authority. The role half matches the INSERT sibling '
-  '"Designers can create homeowner profiles" from the same migration (00017); '
-  'the is_designer half is what stops the same self-roster trick reaching the '
-  'design-request pool (00286/00330), which reads is_designer and not role. '
-  'Without a WITH CHECK at all this policy fell back to its USING and became '
-  'an OR-branch around the pins on "Users can update own profile" — a '
-  'self-inserted designer_clients row was a full self-elevation. Re-scoped to '
-  'authenticated (was PUBLIC) in 00555.';
+  'A designer may edit a profile on their designer_clients roster. BOTH clauses '
+  'carry role = ''homeowner'' AND is_designer IS NOT TRUE: the USING half reads '
+  'the OLD row, so a designer, admin or vendor on a roster is not selectable by '
+  'this policy at all and cannot be demoted or renamed through it; the WITH '
+  'CHECK half reads the NEW row, so an editable client cannot be promoted. '
+  'Pinning only the WITH CHECK to those literals — the 2026-09-02 first cut — '
+  'left demotion wide open, because a demotion satisfies the literals. The '
+  'role half matches the INSERT sibling "Designers can create homeowner '
+  'profiles" (00017); the is_designer half is the authority the design-request '
+  'pool (00286/00330) reads. Without a WITH CHECK at all this policy fell back '
+  'to its USING and became an OR-branch around the pins on "Users can update '
+  'own profile". Re-scoped to authenticated (was PUBLIC) in 00555.';
+
+-- ─── (i-c) the ENABLING PRIMITIVE: who may mint a designer_clients row ─────
+--
+-- Everything in (i-b) is damage control over a roster row an attacker writes
+-- themselves. public.designer_clients carries TWO permissive write policies and
+-- neither asks whether the writer is a designer:
+--   00014:110 "Designers can manage their clients" — FOR ALL, TO PUBLIC,
+--             USING (auth.uid() = designer_id), NO WITH CHECK (so it reuses
+--             its USING as the check);
+--   00316:39  "designer_clients_studio_rw"        — FOR ALL, TO authenticated,
+--             USING/WITH CHECK is_studio_comember(designer_id), and
+--             is_studio_comember's FIRST branch is `p_owner = auth.uid()`.
+-- So `INSERT INTO designer_clients (designer_id, client_id) VALUES (me, anyone)`
+-- succeeds for ANY authenticated account, including a homeowner who has never
+-- been near a studio. That single row is what admits the caller to the sibling
+-- policy above, to can_view_profile's roster leg, and to every other predicate
+-- in the schema that resolves a relationship through designer_clients.
+--
+-- A RESTRICTIVE policy rather than an edit to the two permissive ones: Postgres
+-- ANDs restrictive policies onto the OR of the permissive set, so this holds no
+-- matter which permissive leg admitted the row and survives a future migration
+-- that adds a third. Scoped to INSERT and UPDATE — the write legs that mint or
+-- re-point the relationship. SELECT is deliberately untouched: 00536 already
+-- ruled that the client's own read goes through the public.client_designer_roster
+-- view rather than a base-table policy, and narrowing SELECT here would be a
+-- second, unrelated change.
+--
+-- The predicate reads BOTH designer signals, because they can legitimately
+-- disagree. profiles.is_designer is set by 00290's trigger off a
+-- DESIGNER-DOMAIN user_roles grant, and handle_new_user writes every signup an
+-- 'app_user' grant — so a designer who self-signed-up on the portal carries
+-- profiles.role = 'designer' with is_designer still false until an invite or an
+-- admin grant lands. is_designer alone would lock those designers out of their
+-- own Add Client flow. Both columns are now server-controlled (the pins above),
+-- so neither is a caller-supplied input.
+DROP POLICY IF EXISTS designer_clients_writer_is_designer ON public.designer_clients;
+CREATE POLICY designer_clients_writer_is_designer ON public.designer_clients
+  AS RESTRICTIVE
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.current_profile_is_designer() IS TRUE
+    OR public.current_profile_role() IN ('designer', 'admin', 'super_admin')
+  );
+
+DROP POLICY IF EXISTS designer_clients_updater_is_designer ON public.designer_clients;
+CREATE POLICY designer_clients_updater_is_designer ON public.designer_clients
+  AS RESTRICTIVE
+  FOR UPDATE TO authenticated
+  USING (
+    public.current_profile_is_designer() IS TRUE
+    OR public.current_profile_role() IN ('designer', 'admin', 'super_admin')
+  )
+  WITH CHECK (
+    public.current_profile_is_designer() IS TRUE
+    OR public.current_profile_role() IN ('designer', 'admin', 'super_admin')
+  );
+
+COMMENT ON POLICY designer_clients_writer_is_designer ON public.designer_clients IS
+  'RESTRICTIVE: only a designer may create a roster row. Both permissive write '
+  'policies on this table (00014 "Designers can manage their clients", 00316 '
+  '"designer_clients_studio_rw") are satisfied by designer_id = auth.uid(), so '
+  'before 00555 any authenticated account could mint the relationship row that '
+  'admits it to "Designers can update their client profiles" on profiles and to '
+  'can_view_profile''s roster leg. Reads both designer signals because a '
+  'self-signed-up portal designer has role = ''designer'' before 00290''s '
+  'trigger sets is_designer. Added 00555.';
+
+COMMENT ON POLICY designer_clients_updater_is_designer ON public.designer_clients IS
+  'RESTRICTIVE: only a designer may re-point an existing roster row. Same '
+  'predicate and same reasoning as designer_clients_writer_is_designer — the '
+  'INSERT leg is the mint, this one stops a legacy row being aimed at a new '
+  'client_id by a caller who is no longer (or never was) a designer. '
+  'Added 00555.';
 
 -- (ii) the server-side default. handle_new_user() is SECURITY DEFINER and owned
 -- by postgres, so it is not subject to the policy above.
@@ -743,17 +891,34 @@ COMMENT ON POLICY "Designers can update their client profiles" ON public.profile
 -- (pg_get_functiondef LIKE '%homeowner%') is satisfied twice over by 00313's
 -- own body — it would report success over a skipped step. Both are fixed here.
 --
--- ── RULING B2 (Fable, 2026-09-02) ─────────────────────────────────────────
--- The default role is decided by the IDENTITY PROVIDER, not by one constant:
+-- ── RULING B2 (Fable, 2026-09-02; direction corrected the same day) ───────
+-- The default role is decided by the IDENTITY PROVIDER, not by one constant,
+-- and the allowlist names the surface that keeps the PRIVILEGED value:
 --
---   Apple id-token sign-in  → 'homeowner'   (the iOS app is the only Apple
---                                            sign-in surface Patina has)
---   everything else         → 'designer'    (the pre-00555 default; the
---                                            designer portal's self-signup
---                                            page sends no role metadata and
---                                            must stay a designer)
+--   email/password provider → 'designer'    (the pre-00555 default. This is
+--                                            the designer portal's own
+--                                            self-signup page and nothing
+--                                            else: it sends no role metadata
+--                                            and must stay a designer)
+--   every other provider    → 'homeowner'   (apple, google, and any OAuth
+--                                            provider added later; also a row
+--                                            carrying no raw_app_meta_data)
 --   explicit role metadata  → wins, as today (00313: only the literal
 --                                            'homeowner' is honored)
+--
+-- The first cut of this ruling had the allowlist pointed the other way —
+-- `WHEN provider = 'apple' THEN 'homeowner' ELSE 'designer'` — which reopened
+-- A3-07 for the SECOND button on the same screen. AuthService.signInWithGoogle
+-- (:399-421, wired at ContentView.swift:48, AuthSheet.swift:59,
+-- AuthViewModel.swift:314) calls signInWithOAuth, which carries no `data:`
+-- parameter, exactly as signInWithIdToken does not: a round-one homeowner who
+-- tapped "Continue with Google" landed as a designer. Proved in a rolled-back
+-- transaction: {"provider":"google","providers":["google"]} → 'designer', and a
+-- row with no raw_app_meta_data at all → 'designer'. Ruling D3 removes the
+-- Google button from the Welcome screen in W1, but a trigger default must not
+-- depend on a client-side button being absent, and an allowlist that defaults
+-- the UNKNOWN provider to the privileged value hands the same bug to every
+-- provider added after this file.
 --
 -- WHY it is needed at all: an Apple sign-up carries no creation metadata
 -- (supabase-swift's signInWithIdToken has no data: parameter), so it fell
@@ -762,7 +927,7 @@ COMMENT ON POLICY "Designers can update their client profiles" ON public.profile
 -- after sign-in) works only through the self-elevation hole (i) above closes,
 -- so with that hole shut the default MUST move to the server.
 --
--- WHY it is provider-shaped rather than a flat 'homeowner': the earlier draft
+-- WHY it is provider-shaped rather than a flat 'homeowner': an earlier draft
 -- flipped the constant, which fixed the Apple path and broke the portal's own
 -- self-signup page (apps/designer-portal/src/app/auth/signup/page.tsx:147-157
 -- sends name/company/phone and NO role) — every portal designer would have
@@ -771,6 +936,18 @@ COMMENT ON POLICY "Designers can update their client profiles" ON public.profile
 -- provider serves both surfaces with no client-controlled input: GoTrue writes
 -- raw_app_meta_data server-side and the client cannot set it.
 --
+-- WHY the allowlist names 'email' and not the OAuth providers: 'email' is the
+-- only provider that identifies ONE surface. Every OAuth provider Patina has or
+-- adds is reached from the iOS app's Welcome screen, and none of them can carry
+-- creation metadata (neither signInWithIdToken nor signInWithOAuth takes a
+-- `data:` parameter in supabase-swift), so an OAuth row is a homeowner by
+-- construction. The client portal's invite-accept form also signs up over
+-- email/password with no role hint (AcceptInviteForm.tsx:64) and therefore also
+-- lands 'designer' from this trigger — unchanged from every migration since
+-- 00013, and corrected immediately afterwards by /api/auth/invite/accept, which
+-- runs as service_role. Not a regression this file introduces, and not one it
+-- fixes; it is on the same W2 list as the rest of the role vocabulary.
+--
 -- HOW the provider is read. GoTrue populates raw_app_meta_data at the SAME
 -- INSERT that fires this trigger — signupNewUser sets
 --   {"provider": "<name>", "providers": ["<name>"]}
@@ -778,11 +955,12 @@ COMMENT ON POLICY "Designers can update their client profiles" ON public.profile
 -- supabase/seed/dev-accounts.sql carries the pair. `provider` is nonetheless
 -- the DEPRECATED half of that pair (GoTrue's own source marks it "TODO:
 -- Deprecate"), and an account that later links a second identity accumulates
--- names in `providers` while `provider` keeps the first. Both legs are checked
--- here rather than betting the round on the deprecated one: `provider = 'apple'`
--- OR `providers` containing 'apple'. jsonb_exists() is the function spelling of
--- the `?` operator, used so no driver that rewrites `?` as a bind placeholder
--- can mangle this line.
+-- names in `providers` while `provider` keeps the first. So the designer branch
+-- requires BOTH legs to say email and only email: the `provider` scalar reads
+-- 'email' AND no OTHER name appears in the `providers` array. A row that names
+-- email alongside anything else, a row with only an array, and a row with no
+-- raw_app_meta_data at all all fall to 'homeowner' — the unprivileged side,
+-- which is where an unrecognised shape belongs.
 --
 -- The authoritative role table is public.user_roles — this function still
 -- writes 'app_user' there for every signup regardless of provider — and
@@ -811,15 +989,30 @@ BEGIN
   -- action, never from signup metadata.)
   --
   -- With no honored hint the default comes from the identity provider
-  -- (RULING B2): Apple is the iOS app and only the iOS app, so it lands a
-  -- homeowner; every other provider keeps the pre-00555 'designer' default that
-  -- the designer portal's metadata-less self-signup depends on.
+  -- (RULING B2). The allowlist names the surface that keeps the PRIVILEGED
+  -- value: an email/password signup is the designer portal's own self-signup
+  -- page and keeps the pre-00555 'designer' default it depends on. Every other
+  -- provider — apple, google, anything added later — and any row whose
+  -- raw_app_meta_data is missing or unrecognised lands 'homeowner'. Defaulting
+  -- the UNKNOWN provider to 'designer' is what made an Apple sign-up a designer
+  -- (A3-07) and would have done the same for the Google button beside it.
   -- raw_app_meta_data is written by GoTrue, never by the client.
   v_role := CASE
     WHEN NEW.raw_user_meta_data->>'role' = 'homeowner' THEN 'homeowner'
-    WHEN NEW.raw_app_meta_data->>'provider' = 'apple' THEN 'homeowner'
-    WHEN jsonb_exists(NEW.raw_app_meta_data->'providers', 'apple') THEN 'homeowner'
-    ELSE 'designer'
+    WHEN NEW.raw_app_meta_data->>'provider' = 'email'
+         AND NOT EXISTS (
+           SELECT 1
+             FROM jsonb_array_elements_text(
+                    CASE
+                      WHEN jsonb_typeof(NEW.raw_app_meta_data->'providers') = 'array'
+                        THEN NEW.raw_app_meta_data->'providers'
+                      ELSE '[]'::jsonb
+                    END
+                  ) AS other(name)
+            WHERE other.name <> 'email'
+         )
+      THEN 'designer'
+    ELSE 'homeowner'
   END;
 
   -- Display name from metadata (email/password path sends display_name; other
@@ -856,12 +1049,13 @@ COMMENT ON FUNCTION public.handle_new_user() IS
   'user_roles ''app_user'' grant. A client-supplied raw_user_meta_data role '
   'hint is honored ONLY for the literal ''homeowner'' (00313). With no honored '
   'hint the default is decided by the identity provider as of 00555 (ruling '
-  'B2): raw_app_meta_data provider/providers naming ''apple'' — the iOS app, '
-  'and the only Apple sign-in surface — lands ''homeowner''; every other '
-  'provider keeps the pre-00555 ''designer'' default that the designer '
-  'portal''s metadata-less self-signup depends on. From 00013 through 00313 '
-  'every metadata-less signup fell back to ''designer'', which is how an Apple '
-  'sign-up became a designer.';
+  'B2), as an ALLOWLIST on the privileged value: raw_app_meta_data naming '
+  '''email'' and only ''email'' — the designer portal''s metadata-less '
+  'self-signup — keeps the pre-00555 ''designer'' default; every other '
+  'provider (apple, google, any OAuth added later) and any missing or '
+  'unrecognised raw_app_meta_data lands ''homeowner''. From 00013 through '
+  '00313 every metadata-less signup fell back to ''designer'', which is how '
+  'both an Apple and a Google sign-up became a designer.';
 
 -- ─── public.profile_cards: CUT, deliberately ──────────────────────────────
 -- An earlier draft created a narrow `profile_cards` view here (security_invoker,
@@ -1230,11 +1424,15 @@ GRANT SELECT ON public.conversion_funnel      TO service_role;
 --     Handled in (a): the `OR (auth.uid() IS NULL)` leg is removed.
 --
 -- ALSO SEEN, not an `auth.uid() IS NULL` policy but adjacent and worth a ruling:
---   profiles "Designers can create homeowner profiles" is
+--   profiles "Designers can create homeowner profiles" was
 --   `WITH CHECK ((auth.uid() IS NOT NULL) AND (role = 'homeowner'))` — any
 --   authenticated user may insert a profiles row with any id, as long as the
---   role string is 'homeowner'. Left untouched here; flagged for the same
---   review. It is also one of the self-assertion routes named in CAVEAT 1.
+--   role string is 'homeowner'. PARTLY handled in (a): the policy is re-scoped
+--   to authenticated and now also pins `is_designer IS NOT TRUE`, because
+--   without that it ORed around the pins on "Users can insert own profile" and
+--   the authority column was insertable outright. The ARBITRARY-ID half is
+--   untouched and stays a ruling for the same review — it is one of the
+--   self-assertion routes named in CAVEAT 1.
 
 DROP POLICY IF EXISTS "Service role full access on audience_segments"    ON public.audience_segments;
 DROP POLICY IF EXISTS "Service role full access on automated_sequences"  ON public.automated_sequences;
@@ -1278,6 +1476,24 @@ BEGIN
       AND polname  = 'Users can insert own profile'
       AND pg_get_expr(polwithcheck, polrelid) ILIKE '%auth.uid() IS NULL%'
   ), 'the anon leg of "Users can insert own profile" survived';
+
+  -- and the INSERT leg pins the same two columns the UPDATE leg does. Postgres
+  -- ORs the permissive WITH CHECKs, so BOTH policies have to carry the pin or
+  -- neither does: profiles.role DEFAULTs to 'designer' and is_designer is
+  -- nullable, so an unpinned INSERT is a one-statement elevation for any live
+  -- auth.users row that has no profiles row yet.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polcmd = 'a' AND p.polpermissive
+      AND NOT (pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer IS NOT TRUE%')
+  ), 'a permissive INSERT policy on profiles does not pin is_designer — a homeowner can insert themselves designer authority';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polcmd = 'a' AND p.polpermissive
+      AND NOT (pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%role%homeowner%')
+  ), 'a permissive INSERT policy on profiles does not pin role to homeowner — the column DEFAULT is designer';
 
   -- anon keeps nothing on profiles or notification_preferences
   ASSERT NOT has_table_privilege('anon', 'public.profiles'::regclass, 'SELECT'),
@@ -1375,38 +1591,80 @@ BEGIN
     'authenticated cannot execute current_profile_role — the UPDATE policy denies every write';
 
   -- is_designer is the AUTHORITY column (00286/00330/00285 read it, not role),
-  -- so both permissive UPDATE policies must name it in their WITH CHECK. A
-  -- polwithcheck that is merely non-NULL says nothing about which columns it
-  -- pins — these two read the expression.
+  -- so both permissive UPDATE policies must PIN it. These guards match the
+  -- COMPARISON, not the column name: an earlier cut asserted
+  -- `ILIKE '%is_designer%'`, which the substring inside
+  -- current_profile_is_designer() satisfies all on its own — so a future edit
+  -- to `AND public.current_profile_is_designer() IS NOT NULL`, which pins
+  -- nothing, would have passed every one of them. Same failure the
+  -- handle_new_user guard below corrects: read the expression, not the word.
+  --
+  -- Postgres DEPARSES `a IS NOT DISTINCT FROM b` as `NOT (a IS DISTINCT FROM b)`,
+  -- so the guard has to accept the rendered spelling as well as the source one.
+  -- Both are listed rather than only the rendered form, so this line still reads
+  -- as the pin it is checking.
   ASSERT (
-    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer%'
+    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer IS NOT DISTINCT FROM%'
+        OR pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%NOT (is_designer IS DISTINCT FROM%'
     FROM pg_policy p
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Users can update own profile'
-  ), '"Users can update own profile" WITH CHECK does not pin is_designer — a homeowner can PATCH themselves into the design-request pool';
+  ), '"Users can update own profile" WITH CHECK does not pin is_designer to its current value — a homeowner can PATCH themselves into the design-request pool';
   ASSERT (
-    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer%'
+    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer IS NOT TRUE%'
     FROM pg_policy p
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Designers can update their client profiles'
   ), '"Designers can update their client profiles" WITH CHECK does not pin is_designer — a self-inserted designer_clients row still reaches designer authority';
+  -- and the OLD-row half, which is what stops a DEMOTION. Pinning only the new
+  -- row to `role = 'homeowner' AND is_designer IS NOT TRUE` is satisfied by
+  -- construction when the attacker is turning a designer INTO a homeowner.
+  ASSERT (
+    SELECT pg_get_expr(p.polqual, p.polrelid) ILIKE '%is_designer IS NOT TRUE%'
+       AND pg_get_expr(p.polqual, p.polrelid) ILIKE '%role%homeowner%'
+    FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Designers can update their client profiles'
+  ), '"Designers can update their client profiles" USING does not read the OLD row''s role/is_designer — a rostered designer can be demoted and renamed';
   ASSERT NOT has_function_privilege('anon', 'public.current_profile_is_designer()', 'EXECUTE'),
     'anon can execute current_profile_is_designer';
   ASSERT has_function_privilege('authenticated', 'public.current_profile_is_designer()', 'EXECUTE'),
     'authenticated cannot execute current_profile_is_designer — the UPDATE policy denies every write';
 
-  -- Read the provider BRANCH, not the word. 00313's body already contains the
-  -- literal 'homeowner' twice (the CASE arm and its SECURITY comment), so a
-  -- LIKE '%homeowner%' guard passes on the UNFIXED function and would report
-  -- success over a skipped edit. raw_app_meta_data appears nowhere in 00313, so
-  -- it is the clean discriminator for ruling B2's graft.
+  -- the enabling primitive: designer_clients may only be written by a designer.
+  -- Restrictive, so it ANDs onto whichever permissive leg admitted the row.
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.designer_clients'::regclass
+      AND p.polname  = 'designer_clients_writer_is_designer'
+      AND NOT p.polpermissive
+      AND p.polcmd = 'a'
+  ), 'designer_clients has no restrictive INSERT policy — any authenticated account can mint the roster row that reaches a stranger''s profile';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.designer_clients'::regclass
+      AND p.polname  = 'designer_clients_updater_is_designer'
+      AND NOT p.polpermissive
+      AND p.polcmd = 'w'
+  ), 'designer_clients has no restrictive UPDATE policy — a legacy roster row can be re-pointed by a non-designer';
+
+  -- Read the provider BRANCH, and its DIRECTION, not the word. 00313's body
+  -- already contains the literal 'homeowner' twice (the CASE arm and its
+  -- SECURITY comment), so a LIKE '%homeowner%' guard passes on the UNFIXED
+  -- function and would report success over a skipped edit. raw_app_meta_data
+  -- appears nowhere in 00313, so it is the clean discriminator for the graft —
+  -- and `ELSE 'homeowner'` is the discriminator for the allowlist pointing the
+  -- right way. The first cut of ruling B2 shipped `ELSE 'designer'`, which
+  -- passed a graft-only guard while defaulting every unknown provider (google
+  -- included) to the privileged value.
   ASSERT (
     SELECT pg_get_functiondef(p.oid) LIKE '%raw_app_meta_data%'
-       AND pg_get_functiondef(p.oid) LIKE '%''apple''%'
-       AND pg_get_functiondef(p.oid) LIKE '%ELSE ''designer''%'
+       AND pg_get_functiondef(p.oid) LIKE '%''email''%'
+       AND pg_get_functiondef(p.oid) LIKE '%ELSE ''homeowner''%'
+       AND pg_get_functiondef(p.oid) NOT LIKE '%ELSE ''designer''%'
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public' AND p.proname = 'handle_new_user'
-  ), 'handle_new_user() does not branch its default role on the identity provider (ruling B2)';
+  ), 'handle_new_user() does not default an unknown identity provider to homeowner (ruling B2)';
   ASSERT NOT has_function_privilege('anon', 'public.search_shareable_designers(text)', 'EXECUTE'),
     'anon can execute search_shareable_designers';
   ASSERT has_function_privilege('authenticated', 'public.search_shareable_designers(text)', 'EXECUTE'),
@@ -1556,10 +1814,11 @@ COMMIT;
 --   • python3 scripts/generate-legacy-grants.py  (this file adds GRANT/REVOKE,
 --     so supabase/seed/00-legacy-grants.sql must be regenerated or a fresh
 --     local stack will diverge from prod ACLs)
---   • pnpm db:generate                            (public schema changed: FOUR
+--   • pnpm db:generate                            (public schema changed: FIVE
 --     new functions — can_view_profile, current_profile_role,
---     search_shareable_designers, list_vendor_profiles — and NO new view;
---     profile_cards was cut from this migration)
+--     current_profile_is_designer, search_shareable_designers,
+--     list_vendor_profiles — and NO new view; profile_cards was cut from this
+--     migration)
 --   • scripts/run-sql-tests.sh                    (the whole suite vs
 --     KNOWN_FAILURES.md — that, not the single file, is the local gate)
 --   • the anon/authenticated probes in 00555_probes.md

@@ -42,14 +42,21 @@
 --   5. vendors as anon — the public columns read (5a-5b), the trade file does
 --      not (5c-5d), and products JOIN vendors resolves (5e), which is the
 --      column-grant design's whole reason for existing.
---   6. profiles INSERT — the anon leg is gone; a user may still insert own row.
+--   6. profiles INSERT — the anon leg is gone; a user may still insert own row;
+--      and neither permissive INSERT policy will accept role='designer' or
+--      is_designer=true (6e/6f), because profiles.role DEFAULTs to 'designer'
+--      and an unpinned INSERT is a one-statement version of case 7.
 --   7. self-elevation — the owner may edit their row but may change neither
 --      their role (7c/7e) nor their is_designer (7f/7f2), on either of the
---      table's two permissive UPDATE policies, and both WITH CHECKs name the
---      is_designer column (7f3/7f4). is_designer is the one that carries
---      AUTHORITY: 00286/00330/00285 and search_shareable_designers all gate on
---      it, not on role. (profile_cards was CUT from 00555; 7a asserts it is
---      absent.)
+--      table's two permissive UPDATE policies; the roster row that used to
+--      reach the sibling policy can no longer be minted at all (7e0); both
+--      WITH CHECKs pin the is_designer COMPARISON, not merely name the column
+--      (7f3/7f4), and the sibling's USING reads the OLD row (7f5). is_designer
+--      is the one that carries AUTHORITY: 00286/00330/00285 and
+--      search_shareable_designers all gate on it, not on role.
+--      7h runs the CROSS-ACCOUNT direction — the attacker rosters somebody
+--      ELSE and tries to demote and rename them. (profile_cards was CUT from
+--      00555; 7a asserts it is absent.)
 --   8. search_shareable_designers — finds by name, never returns email,
 --      enforces the 2-char floor including against a WILDCARD query (8h),
 --      and the LIMIT, closed to anon.
@@ -580,7 +587,8 @@ END $$;
 
 DO $$
 DECLARE
-  n INTEGER;
+  n          INTEGER;
+  role_after TEXT;
 BEGIN
   -- 6a: the anon leg is gone from the policy text.
   ASSERT NOT EXISTS (
@@ -614,6 +622,70 @@ BEGIN
     NULL;
   END;
   PERFORM pg_temp.reset_role();
+
+  -- 6e / 6f: the INSERT leg pins the same two columns the UPDATE leg does.
+  --
+  -- Case 7 closes self-elevation on UPDATE. The INSERT half is a separate door
+  -- onto the same room: profiles.role's column DEFAULT is 'designer' and
+  -- is_designer is nullable, so a row inserted with role omitted lands a
+  -- designer, and a row inserted with is_designer = true lands designer
+  -- AUTHORITY. The window is a live auth.users row with no profiles row —
+  -- handle_new_user normally writes it, so this is narrow, but it is reachable
+  -- through a partial delete-account or a backfill gap, and the section (a2)
+  -- claim is about both columns, not only about UPDATE.
+  --
+  -- Both permissive INSERT policies matter: Postgres ORs the WITH CHECKs, so
+  -- "Designers can create homeowner profiles" (00017) unpinned would OR around
+  -- "Users can insert own profile" pinned. That second policy accepts ANY id,
+  -- so the attempt below aims at a fresh one.
+  --
+  -- The two target ids get REAL auth.users rows whose trigger-made profiles row
+  -- is then deleted, rather than being fabricated uuids. profiles_id_fkey would
+  -- reject a fabricated uuid on its own and the case would pass without the
+  -- policy doing any work — which is precisely the window this pair is about:
+  -- a live auth.users row with no profiles row.
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role)
+  VALUES
+    ('77777777-7777-4777-8777-777777777777', 'p555-mint@test.invalid',    '', NOW(), NOW(), NOW(),
+     '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+    ('76767676-7676-4676-8676-767676767676', 'p555-default@test.invalid', '', NOW(), NOW(), NOW(),
+     '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  DELETE FROM public.profiles
+   WHERE id IN ('77777777-7777-4777-8777-777777777777',
+                '76767676-7676-4676-8676-767676767676');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  BEGIN
+    INSERT INTO public.profiles (id, email, role, is_designer)
+    VALUES ('77777777-7777-4777-8777-777777777777', 'p555-mint@test.invalid',
+            'homeowner', TRUE);
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT COUNT(*) INTO n FROM public.profiles
+   WHERE id = '77777777-7777-4777-8777-777777777777';
+  ASSERT n = 0,
+    'FAIL 6e: an authenticated user inserted a profiles row carrying is_designer = true — '
+    'designer authority is mintable through the INSERT leg';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  BEGIN
+    -- role omitted on purpose: the column DEFAULT is 'designer'.
+    INSERT INTO public.profiles (id, email)
+    VALUES ('76767676-7676-4676-8676-767676767676', 'p555-default@test.invalid');
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT role INTO role_after FROM public.profiles
+   WHERE id = '76767676-7676-4676-8676-767676767676';
+  ASSERT role_after IS NULL OR role_after = 'homeowner',
+    'FAIL 6f: an authenticated user inserted a profiles row with role omitted and it '
+    'landed as ' || COALESCE(role_after, '<null>') || ' — the column DEFAULT is ''designer''';
 END $$;
 
 -- ─── 7. self-elevation (was: profile_cards, cut from 00555) ────────────────
@@ -734,15 +806,43 @@ BEGIN
   -- the check — so as 00017 shipped it, a new row only had to satisfy ONE of
   -- the two policies and 7c's role pin was simply skipped.
   --
-  -- The roster row that satisfies the sibling is self-servable:
+  -- The roster row that satisfies the sibling WAS self-servable:
   -- designer_clients' own policy is FOR ALL / TO PUBLIC / USING
-  -- (auth.uid() = designer_id) with no WITH CHECK (00014:110), and
-  -- authenticated holds INSERT. So the vector is two statements, not one, and
-  -- 7c alone reported the hole closed while it was open.
+  -- (auth.uid() = designer_id) with no WITH CHECK (00014:110), 00316's studio
+  -- policy resolves is_studio_comember(designer_id) through a `p_owner =
+  -- auth.uid()` self-branch, and authenticated holds INSERT. So the vector was
+  -- two statements, not one, and 7c alone reported the hole closed while it was
+  -- open.
+  --
+  -- 7e0: 00555 closes the mint itself, with a RESTRICTIVE policy on
+  -- designer_clients. Mal is a homeowner; the INSERT must now be refused. This
+  -- is asserted before the elevation attempts, because if the mint were still
+  -- open the two cases below would be testing damage control rather than the
+  -- fix.
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  BEGIN
+    INSERT INTO public.designer_clients (designer_id, client_id)
+    VALUES ('a0000000-0000-4000-8000-000000000003',
+            'a0000000-0000-4000-8000-000000000003');
+    ASSERT FALSE,
+      'FAIL 7e0: a homeowner minted a designer_clients row naming themselves as '
+      'the designer — the primitive behind 7e/7f2/7h is still open';
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  -- The roster row is now planted OUT of band (as the superuser running this
+  -- script, which is RLS-exempt) so 7e and 7f2 still test what they were
+  -- written to test: given a roster row by any means, the profiles UPDATE
+  -- policies must still refuse the elevation. Belt and braces — 7e0 is the
+  -- belt.
   INSERT INTO public.designer_clients (designer_id, client_id)
   VALUES ('a0000000-0000-4000-8000-000000000003',
-          'a0000000-0000-4000-8000-000000000003');
+          'a0000000-0000-4000-8000-000000000003')
+  ON CONFLICT DO NOTHING;
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
   BEGIN
     UPDATE public.profiles SET role = 'designer'
      WHERE id = 'a0000000-0000-4000-8000-000000000003';
@@ -784,20 +884,56 @@ BEGIN
       || ' — the sibling UPDATE policy pins role but not designer authority';
 
   -- 7f3: the structural half of 7f/7f2 — BOTH permissive UPDATE policies must
-  --      name is_designer in their WITH CHECK. A non-NULL polwithcheck (7e2)
-  --      says nothing about which columns it pins.
+  --      PIN is_designer in their WITH CHECK. A non-NULL polwithcheck (7e2)
+  --      says nothing about which columns it pins, and — the trap these two
+  --      cases fell into on their first pass — matching the column NAME says
+  --      nothing about the comparison: `is_designer` is a substring of
+  --      `current_profile_is_designer()`, so `AND
+  --      public.current_profile_is_designer() IS NOT NULL`, which pins
+  --      nothing at all, satisfied the earlier `ILIKE '%is_designer%'` form.
+  --      Match the comparison instead. Postgres DEPARSES
+  --      `a IS NOT DISTINCT FROM b` as `NOT (a IS DISTINCT FROM b)`, so both
+  --      spellings are accepted — the source one is kept in the list so the
+  --      line still reads as the pin it checks.
   ASSERT (
-    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer%'
+    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer IS NOT DISTINCT FROM%'
+        OR pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%NOT (is_designer IS DISTINCT FROM%'
     FROM pg_policy p
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Users can update own profile'
-  ), 'FAIL 7f3: "Users can update own profile" WITH CHECK does not name is_designer';
+  ), 'FAIL 7f3: "Users can update own profile" WITH CHECK does not pin is_designer to its current value';
   ASSERT (
-    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer%'
+    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer IS NOT TRUE%'
     FROM pg_policy p
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Designers can update their client profiles'
-  ), 'FAIL 7f4: "Designers can update their client profiles" WITH CHECK does not name is_designer';
+  ), 'FAIL 7f4: "Designers can update their client profiles" WITH CHECK does not pin is_designer';
+
+  -- 7f5: and the sibling's USING must read the OLD row's role/is_designer.
+  --      A WITH CHECK pinned to the LITERALS role='homeowner' AND
+  --      is_designer IS NOT TRUE is satisfied by construction when the caller
+  --      is DEMOTING a designer — see 7h, which is the behaviour half.
+  ASSERT (
+    SELECT pg_get_expr(p.polqual, p.polrelid) ILIKE '%is_designer IS NOT TRUE%'
+       AND pg_get_expr(p.polqual, p.polrelid) ILIKE '%role%homeowner%'
+    FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Designers can update their client profiles'
+  ), 'FAIL 7f5: "Designers can update their client profiles" USING does not read the OLD row''s role/is_designer — a rostered designer can be demoted';
+
+  -- 7f6: the restrictive policies that close the mint (7e0's structural half).
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.designer_clients'::regclass
+      AND p.polname  = 'designer_clients_writer_is_designer'
+      AND NOT p.polpermissive AND p.polcmd = 'a'
+  ), 'FAIL 7f6: designer_clients has no restrictive INSERT policy — any authenticated account can mint the roster row';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.designer_clients'::regclass
+      AND p.polname  = 'designer_clients_updater_is_designer'
+      AND NOT p.polpermissive AND p.polcmd = 'w'
+  ), 'FAIL 7f7: designer_clients has no restrictive UPDATE policy — a legacy roster row can be re-pointed by a non-designer';
 
   -- 7e2: the structural half. A future migration that re-creates the sibling
   -- without a WITH CHECK re-opens 7e, and 7e's own fixture (a self-roster row)
@@ -828,6 +964,107 @@ BEGIN
     SELECT p.prosecdef FROM pg_proc p JOIN pg_namespace nn ON nn.oid = p.pronamespace
     WHERE nn.nspname = 'public' AND p.proname = 'current_profile_is_designer'
   ), 'FAIL 7g3: current_profile_is_designer must be SECURITY DEFINER or the policy recurses (42P17)';
+END $$;
+
+-- ─── 7h. the CROSS-ACCOUNT direction ───────────────────────────────────────
+--
+-- Every case above runs the attack at the attacker's OWN row: Mal tries to
+-- promote Mal. The first fix round closed that and left the mirror image wide
+-- open, because the sibling policy's WITH CHECK pinned the LITERALS
+-- `role = 'homeowner' AND is_designer IS NOT TRUE` — which a DEMOTION satisfies
+-- by construction. Reproduced over HTTP on a freshly-reset stack as the seeded
+-- homeowner client@patina.dev:
+--
+--   POST  /rest/v1/designer_clients {designer_id: self, client_id: <Leah>} → 201
+--   PATCH /rest/v1/profiles?id=eq.<Leah> {"role":"homeowner",
+--                                        "is_designer":false}              → 204
+--   PATCH /rest/v1/profiles?id=eq.<Leah> {"display_name":"PWNED",
+--                                        "full_name":"PWNED"}              → 204
+--   → designer|t|Leah Hartwell became homeowner|f|PWNED
+--
+-- That strips exactly the authority 00555 argues for — search_shareable_designers
+-- (`p.is_designer IS TRUE`), open_design_requests, claim/accept_design_request —
+-- and corrupts the name every surface renders. Mal is the attacker; Dana is the
+-- victim and is a REAL designer (role='designer', is_designer=true), which is
+-- the whole point: the literal pins can only be violated by a promotion, and
+-- this is a demotion.
+DO $$
+DECLARE
+  role_before  TEXT;
+  role_after   TEXT;
+  dsg_before   BOOLEAN;
+  dsg_after    BOOLEAN;
+  name_before  TEXT;
+  name_after   TEXT;
+BEGIN
+  SELECT role, is_designer, display_name
+    INTO role_before, dsg_before, name_before
+    FROM public.profiles WHERE id = 'd0000000-0000-4000-8000-000000000001';
+  ASSERT role_before = 'designer' AND dsg_before IS TRUE,
+    'FIXTURE 7h: Dana must be a real designer for the demotion to be real, got '
+      || COALESCE(role_before, '<null>') || '/' || COALESCE(dsg_before::text, '<null>');
+
+  -- 7h1: the mint, aimed at somebody else. Same refusal as 7e0 — this is the
+  -- statement that made the whole chain reachable.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  BEGIN
+    INSERT INTO public.designer_clients (designer_id, client_id)
+    VALUES ('a0000000-0000-4000-8000-000000000003',
+            'd0000000-0000-4000-8000-000000000001');
+    ASSERT FALSE,
+      'FAIL 7h1: a homeowner rostered a designer as their own client — one PATCH '
+      'from demoting them';
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  -- Plant the row out of band, so 7h2/7h3 test the profiles policies rather
+  -- than re-testing 7h1.
+  INSERT INTO public.designer_clients (designer_id, client_id)
+  VALUES ('a0000000-0000-4000-8000-000000000003',
+          'd0000000-0000-4000-8000-000000000001')
+  ON CONFLICT DO NOTHING;
+
+  -- 7h2: the demotion.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  BEGIN
+    UPDATE public.profiles
+       SET role = 'homeowner', is_designer = FALSE
+     WHERE id = 'd0000000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT role, is_designer INTO role_after, dsg_after
+    FROM public.profiles WHERE id = 'd0000000-0000-4000-8000-000000000001';
+  ASSERT role_after IS NOT DISTINCT FROM role_before
+     AND dsg_after  IS NOT DISTINCT FROM dsg_before,
+    'FAIL 7h2: a stranger demoted a designer through a roster row they wrote — '
+      || COALESCE(role_before, '<null>') || '/' || COALESCE(dsg_before::text, '<null>')
+      || ' became ' || COALESCE(role_after, '<null>') || '/'
+      || COALESCE(dsg_after::text, '<null>');
+
+  -- 7h3: and the rename, which is the half that shows on every surface.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  BEGIN
+    UPDATE public.profiles
+       SET display_name = 'PWNED', full_name = 'PWNED'
+     WHERE id = 'd0000000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT display_name INTO name_after
+    FROM public.profiles WHERE id = 'd0000000-0000-4000-8000-000000000001';
+  ASSERT name_after IS NOT DISTINCT FROM name_before,
+    'FAIL 7h3: a stranger rewrote a designer''s display_name through a roster row '
+      || 'they wrote — ' || COALESCE(name_before, '<null>') || ' became '
+      || COALESCE(name_after, '<null>');
+
+  RAISE NOTICE '00555 cross-account profile-takeover assertions passed.';
 END $$;
 
 -- ─── 8. search_shareable_designers ─────────────────────────────────────────
@@ -1033,17 +1270,22 @@ BEGIN
       AND p.polname  = 'Users can update own profile'
   ), 'the WITH CHECK does not mention role — it does not pin it';
 
-  -- Read the provider BRANCH, not the word. 00313's body already contains the
-  -- literal 'homeowner' twice, so LIKE '%homeowner%' passes on the UNFIXED
-  -- function; raw_app_meta_data appears nowhere in 00313, so it is the clean
-  -- discriminator. Section 11 below is the behavioural half of this guard.
+  -- Read the provider BRANCH and its DIRECTION, not the word. 00313's body
+  -- already contains the literal 'homeowner' twice, so LIKE '%homeowner%'
+  -- passes on the UNFIXED function; raw_app_meta_data appears nowhere in 00313,
+  -- so it is the clean discriminator for the graft. `ELSE 'homeowner'` is the
+  -- discriminator for the allowlist pointing the right way — the first cut of
+  -- B2 shipped `ELSE 'designer'` and passed a graft-only guard while defaulting
+  -- google, and every provider added later, to designer. Section 11 below is
+  -- the behavioural half of this guard.
   ASSERT (
     SELECT pg_get_functiondef(p.oid) LIKE '%raw_app_meta_data%'
-       AND pg_get_functiondef(p.oid) LIKE '%''apple''%'
-       AND pg_get_functiondef(p.oid) LIKE '%ELSE ''designer''%'
+       AND pg_get_functiondef(p.oid) LIKE '%''email''%'
+       AND pg_get_functiondef(p.oid) LIKE '%ELSE ''homeowner''%'
+       AND pg_get_functiondef(p.oid) NOT LIKE '%ELSE ''designer''%'
     FROM pg_proc p JOIN pg_namespace nn ON nn.oid = p.pronamespace
     WHERE nn.nspname = 'public' AND p.proname = 'handle_new_user'
-  ), 'handle_new_user() does not branch its default role on the identity provider (ruling B2)';
+  ), 'handle_new_user() does not default an unknown identity provider to homeowner (ruling B2)';
 
   ASSERT NOT has_table_privilege('authenticated'::name, 'public.profiles'::regclass, 'DELETE'),
     'authenticated still holds DELETE on profiles';
@@ -1061,13 +1303,21 @@ END $$;
 -- closes, so the default has to move to the server or the app cannot stop
 -- writing its own role.
 --
--- B2's shape matters as much as its direction. Flipping the one constant to
--- 'homeowner' would have fixed the iOS path and broken the designer portal's
--- own self-signup, which also sends no role — so the default is read from
--- raw_app_meta_data, which GoTrue writes and a client cannot:
---   apple          → homeowner  (the iOS app is the only Apple sign-in surface)
---   anything else  → designer   (the pre-00555 default the portal depends on)
---   an explicit 'homeowner' hint still wins, on either provider.
+-- B2's shape matters as much as its direction, and the DIRECTION is what the
+-- first cut got wrong. Flipping the one constant to 'homeowner' would have
+-- fixed the iOS path and broken the designer portal's own self-signup, which
+-- also sends no role — so the default is read from raw_app_meta_data, which
+-- GoTrue writes and a client cannot. But `WHEN provider='apple' … ELSE
+-- 'designer'` is an allowlist pointed at the PRIVILEGED value: it left
+-- AuthService.signInWithGoogle (:399-421, the second button on the same Welcome
+-- screen, and equally metadata-less — signInWithOAuth takes no `data:`) landing
+-- as a designer, which is A3-07 verbatim, and handed the same bug to every
+-- provider added later. The allowlist now names the ONE surface that keeps the
+-- privileged value:
+--   email, and only email → designer   (the portal's own self-signup page)
+--   anything else         → homeowner  (apple, google, any OAuth added later,
+--                                       and a row with no raw_app_meta_data)
+--   an explicit 'homeowner' hint still wins, on any provider.
 --
 -- These are BEHAVIOUR cases on purpose. The catalog assertion in section 10 is
 -- a text match on the function definition; it can only prove the token is
@@ -1076,6 +1326,8 @@ END $$;
 -- Both legs of the provider read are exercised: 11a carries the
 -- {"provider": …, "providers": […]} pair GoTrue writes at signup, 11e carries
 -- only the `providers` array (the non-deprecated half), and both land homeowner.
+-- 11f and 11g are the two rows that passed silently as designer before the
+-- direction was corrected.
 
 DO $$
 DECLARE
@@ -1146,6 +1398,48 @@ BEGIN
   SELECT role INTO v_role FROM public.profiles WHERE id = 'b0000000-0000-4000-8000-00000000f005';
   ASSERT v_role = 'homeowner',
     'FAIL 11e: a providers-array-only Apple signup must land as homeowner, got '
+      || COALESCE(v_role, '<null>');
+
+  -- 11f: the Google button, which is the case the first cut of B2 missed.
+  --      AuthService.signInWithGoogle ships beside the Apple button on the
+  --      Patina Welcome screen (ContentView.swift:48, AuthSheet.swift:59) and
+  --      signInWithOAuth carries no `data:` parameter, so a Google sign-up is
+  --      exactly as metadata-less as an Apple one. Under `ELSE 'designer'` this
+  --      row landed as a designer and no test in the file noticed.
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role, raw_app_meta_data)
+  VALUES ('b0000000-0000-4000-8000-00000000f006', 'p555-google@test.invalid', '', NOW(), NOW(), NOW(),
+          '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+          '{"provider":"google","providers":["google"]}'::jsonb);
+  SELECT role INTO v_role FROM public.profiles WHERE id = 'b0000000-0000-4000-8000-00000000f006';
+  ASSERT v_role = 'homeowner',
+    'FAIL 11f: a Google signup must land as homeowner — the allowlist names the '
+      || 'provider that keeps ''designer'', not the ones that lose it. Got '
+      || COALESCE(v_role, '<null>');
+
+  -- 11g: no raw_app_meta_data at all. GoTrue always writes the pair, so this is
+  --      a shape that should not occur — which is the reason to pin it: an
+  --      unrecognised row must fall to the UNPRIVILEGED side, not inherit
+  --      designer authority from a bare ELSE.
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role)
+  VALUES ('b0000000-0000-4000-8000-00000000f007', 'p555-nometa@test.invalid', '', NOW(), NOW(), NOW(),
+          '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  SELECT role INTO v_role FROM public.profiles WHERE id = 'b0000000-0000-4000-8000-00000000f007';
+  ASSERT v_role = 'homeowner',
+    'FAIL 11g: a signup with no raw_app_meta_data must land as homeowner, got '
+      || COALESCE(v_role, '<null>');
+
+  -- 11h: an account that names email ALONGSIDE another provider is not the
+  --      portal's self-signup and does not get the designer default.
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role, raw_app_meta_data)
+  VALUES ('b0000000-0000-4000-8000-00000000f008', 'p555-linked@test.invalid', '', NOW(), NOW(), NOW(),
+          '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+          '{"provider":"email","providers":["email","google"]}'::jsonb);
+  SELECT role INTO v_role FROM public.profiles WHERE id = 'b0000000-0000-4000-8000-00000000f008';
+  ASSERT v_role = 'homeowner',
+    'FAIL 11h: a linked-identity row naming a second provider must land as homeowner, got '
       || COALESCE(v_role, '<null>');
 
   RAISE NOTICE '00555 handle_new_user behaviour assertions passed.';
