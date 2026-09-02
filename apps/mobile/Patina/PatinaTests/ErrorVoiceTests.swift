@@ -62,7 +62,7 @@ struct ErrorVoiceTests {
         let canonical: Set<String> = [
             "Something went wrong.",
             "Something went wrong. Try again.",
-            "That didn't go through. Try again.",
+            "That didn't go through. Try again."
         ]
         #expect(CompanionAPIError.badRequest(message: "x").errorDescription.map(canonical.contains) == true)
         #expect(CompanionAPIError.serverError(statusCode: 500).errorDescription.map(canonical.contains) == true)

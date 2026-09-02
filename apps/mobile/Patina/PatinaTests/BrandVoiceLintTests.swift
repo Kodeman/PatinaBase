@@ -22,11 +22,11 @@ import Foundation
 struct BrandVoiceLintTests {
 
     private static let bannedWords = [
-        "journey", "curated", "curation", "elevated", "disrupt", "revolutioniz",
+        "journey", "curated", "curation", "elevated", "disrupt", "revolutioniz"
     ]
 
     private static let aiWords = [
-        "artificial intelligence", "machine learning", " gpt", " llm",
+        "artificial intelligence", "machine learning", " gpt", " llm"
     ]
 
     private static func lint(_ source: String, file: String) {
@@ -68,7 +68,7 @@ struct BrandVoiceLintTests {
             "Patina/Features/ARPlacement/ViewModels/ARPlacementViewModel.swift",
             "Patina/Services/DesignServices/DesignServicesService.swift",
             "Patina/Features/DesignServices/DesignRequestFlowView+Steps.swift",
-            "Patina/Services/Companion/Models/CompanionAPIModels.swift",
+            "Patina/Services/Companion/Models/CompanionAPIModels.swift"
         ]
         for path in paths {
             let relative = path.hasPrefix("PatinaDesignKit/") ? "../\(path)" : path
