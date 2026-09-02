@@ -18,6 +18,7 @@ import Supabase
 
 struct ThreadDetailView: View {
     let threadId: String
+    @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel: ThreadDetailViewModel
 
     init(threadId: String) {
@@ -27,6 +28,7 @@ struct ThreadDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            header
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -39,6 +41,8 @@ struct ThreadDetailView: View {
                                 action: { Task { await viewModel.load() } }
                             )
                             .padding(.top, 60)
+                        } else if viewModel.visibleMessages.isEmpty {
+                            emptyState
                         } else {
                             ForEach(chatItems()) { item in
                                 row(for: item)
@@ -55,7 +59,21 @@ struct ThreadDetailView: View {
                     }
                 }
             }
+            sendFailureBanner
             composer
+                // L07-02, blocker: on the four-tab root the composer was the
+                // last child of a plain VStack with no bottom clearance, so the
+                // bar was drawn over it and won the hit test — a tap at the
+                // text field's own centre selected the Pieces tab. One owner,
+                // one seam: the metric the money screens already read.
+                //
+                // `coordinator.isHouseFirstRoot` rather than a live
+                // `FeatureFlags` read, per `MoneyScreenMetrics`' own note: the
+                // root is resolved once at launch and a late PostHog payload
+                // must not move a screen under someone's thumb.
+                .padding(.bottom, CompanionHearthMetrics.pinnedFooterClearance(
+                    houseFirst: coordinator.isHouseFirstRoot
+                ))
         }
         .background(PatinaColors.Background.primary)
         .task {
@@ -63,11 +81,98 @@ struct ThreadDetailView: View {
             viewModel.startLiveUpdates()
         }
         .onDisappear { viewModel.stopLiveUpdates() }
-        // U18: standard pushed-screen chrome. This screen has no in-body
-        // header to source a title from (Group B before this change: system
-        // bar, no navigationTitle) — chrome title left nil rather than
-        // inventing unsanctioned copy; a per-thread title is a follow-up.
+        // U18: standard pushed-screen chrome. The in-body header below carries
+        // the conversation's name, so the chrome adds only the back chevron —
+        // the same shape `NotificationFeedView` takes.
         .patinaScreen(title: nil)
+    }
+
+    // MARK: - Header (C-13)
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            avatar
+            VStack(alignment: .leading, spacing: 2) {
+                Text(viewModel.header?.title ?? ThreadHeader.unnamed)
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .lineLimit(1)
+                if let projectName = viewModel.header?.projectName, !projectName.isEmpty {
+                    Text(projectName)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("ThreadDetailView.Header")
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+        }
+    }
+
+    /// Initials when the thread names someone, the app's own mark when it does
+    /// not — never an invented letter.
+    private var avatar: some View {
+        ZStack {
+            Circle()
+                .fill(PatinaColors.Background.secondary)
+                .frame(width: 34, height: 34)
+            let initials = viewModel.header?.initials ?? ""
+            if initials.isEmpty {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 14))
+                    .foregroundStyle(PatinaColors.Text.muted)
+            } else {
+                Text(initials)
+                    .font(PatinaTypography.monoLabel)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    // MARK: - Empty state (C-14)
+
+    private var emptyState: some View {
+        PatinaEmptyState(
+            icon: "bubble.left.and.bubble.right",
+            title: ThreadTranscript.emptyTitle(counterpart: viewModel.header?.name),
+            message: ThreadTranscript.emptyMessage
+        )
+        .padding(.top, 48)
+        .accessibilityIdentifier("ThreadDetailView.EmptyState")
+    }
+
+    // MARK: - The failed send (C4-04, L07-03)
+
+    @ViewBuilder
+    private var sendFailureBanner: some View {
+        if let sendError = viewModel.sendError {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(sendError)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Try again") {
+                    Task { await viewModel.retrySend() }
+                }
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.interactive)
+                .disabled(viewModel.isSending)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(PatinaColors.Background.secondary)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("ThreadDetailView.SendFailure")
+        }
     }
 
     // MARK: - Transcript rows
@@ -99,7 +204,8 @@ struct ThreadDetailView: View {
     /// on the last, and spacing tightens inside the group.
     private func chatItems() -> [ChatItem] {
         let calendar = Calendar.current
-        let messages = viewModel.messages
+        // C-14: the studio's own bookkeeping is not the client's transcript.
+        let messages = viewModel.visibleMessages
         var items: [ChatItem] = []
         var previousDate: Date?
 

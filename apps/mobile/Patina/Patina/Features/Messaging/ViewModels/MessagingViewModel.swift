@@ -196,6 +196,79 @@ final class ThreadListViewModel {
 
 // MARK: - Thread detail
 
+/// Who the client is talking to, and about what.
+///
+/// `C-13`: the whole accessibility tree of the thread was `Back`, a day
+/// separator, one system line, the composer and Send. No title, no name, no
+/// avatar — after arriving from a button labelled "Message your designer". The
+/// screen said `.patinaScreen(title: nil)` and its own comment conceded it:
+/// *"chrome title left nil rather than inventing unsanctioned copy; a
+/// per-thread title is a follow-up."*
+struct ThreadHeader: Equatable {
+    /// The counterpart's name, or nil when the thread has none to give.
+    let name: String?
+    /// The project the thread hangs off, when it has one.
+    let projectName: String?
+
+    /// What the app calls this conversation when it cannot name a person.
+    static let unnamed = "Your designer"
+
+    var title: String { name ?? Self.unnamed }
+
+    /// Up to two initials for the avatar. Empty when there is no name, and the
+    /// avatar then draws the app's own mark rather than a made-up letter.
+    var initials: String {
+        guard let name else { return "" }
+        return name
+            .split(separator: " ")
+            .prefix(2)
+            .compactMap { $0.first.map(String.init) }
+            .joined()
+            .uppercased()
+    }
+
+    /// Build from the thread summary the inbox already fetches. Purely a
+    /// projection, so it can be tested without a session.
+    static func from(summary: RemoteCommsThreadSummary, me: String?, names: [String: String]) -> ThreadHeader {
+        let counterpart = summary.activeParticipants.first { $0.profile_id.lowercased() != me }
+        let name = counterpart.flatMap { names[$0.profile_id.lowercased()] }
+        return ThreadHeader(name: name, projectName: summary.projects?.name)
+    }
+}
+
+/// What belongs in a transcript a homeowner reads.
+///
+/// `C-14`: the thread's only content was `"Project conversation opened."` — a
+/// system row `rpc_start_project_thread` INSERTs so the record stays legible to
+/// the designer (`00103_comms_rpcs.sql:167`, re-emitted at
+/// `00540_direct_orders_attribution.sql:702`). It is production reality, not a
+/// local seed artefact, and it is bookkeeping addressed to the studio. Under it
+/// sat ~600 pt of dead space and then the composer.
+enum ThreadTranscript {
+
+    /// The audit lines the backend seeds. Matched exactly rather than by
+    /// `system` alone: a system row that actually tells the client something
+    /// still belongs on screen.
+    static let auditLines: Set<String> = ["Project conversation opened."]
+
+    static func isAudit(_ message: RemoteCommsMessage) -> Bool {
+        message.system && auditLines.contains(message.body.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    static func visible(_ messages: [RemoteCommsMessage]) -> [RemoteCommsMessage] {
+        messages.filter { !isAudit($0) }
+    }
+
+    /// The invitation that replaces it. It says who and what, and claims
+    /// nothing about how fast anyone answers — the app cannot know that.
+    static func emptyTitle(counterpart: String?) -> String {
+        guard let counterpart, !counterpart.isEmpty else { return "Say hello" }
+        return "Say hello to \(counterpart.split(separator: " ").first.map(String.init) ?? counterpart)"
+    }
+
+    static let emptyMessage = "Messages here go straight to your designer."
+}
+
 @Observable
 @MainActor
 final class ThreadDetailViewModel {
@@ -206,7 +279,27 @@ final class ThreadDetailViewModel {
     var draft: String = ""
     var isLoading: Bool = false
     var isSending: Bool = false
+    /// The LOAD failure. Rendered in place of the transcript, because there is
+    /// no transcript to render.
     var error: String?
+    /// The SEND failure, which is a different thing on a different part of the
+    /// screen (`C4-04`, `L07-03`).
+    ///
+    /// One `error` could not be both. `ThreadDetailView` rendered it at exactly
+    /// one place — `} else if let error = viewModel.error, viewModel.messages
+    /// .isEmpty {` — and every real thread has messages, because the backend
+    /// seeds one (`00103_comms_rpcs.sql:167`). So a send that failed restored
+    /// the draft and set a message nothing could draw: twelve seconds of
+    /// nothing, then, after `URLSession.shared`'s 60 s timeout, the sentence
+    /// silently reappearing in the composer.
+    var sendError: String?
+    /// The last body a failed send was carrying, so Retry re-sends THAT rather
+    /// than whatever is in the composer now.
+    private(set) var failedSendBody: String?
+    private(set) var header: ThreadHeader?
+
+    /// The transcript minus the studio's own bookkeeping (`C-14`).
+    var visibleMessages: [RemoteCommsMessage] { ThreadTranscript.visible(messages) }
 
     /// Realtime channel for live INSERTs on `comms_messages` for this
     /// thread. Held as `nonisolated(unsafe)` because it's only mutated on
@@ -233,29 +326,77 @@ final class ThreadDetailViewModel {
             #endif
         }
         isLoading = false
+        await loadHeader()
+    }
+
+    /// Who this conversation is with (`C-13`).
+    ///
+    /// Read from the summaries `BadgeCountService` has already fetched when it
+    /// has them, and from the inbox's own existing round trip when it does not.
+    /// No new client method: `Core/Network/MessagingAPIClient.swift` is another
+    /// lane's file this wave, and `listThreadSummaries()` already carries the
+    /// participants and the project name.
+    func loadHeader() async {
+        let me = ThreadListViewModel.currentUserId()
+        var summary = BadgeCountService.shared.threadSummaries.first { $0.id == threadId }
+        if summary == nil {
+            summary = try? await MessagingAPIClient.shared.listThreadSummaries()
+                .first { $0.id == threadId }
+        }
+        guard let summary else { return }
+
+        let counterpartIds = summary.activeParticipants
+            .filter { $0.profile_id.lowercased() != me }
+            .map(\.profile_id)
+        let names = counterpartIds.isEmpty
+            ? [:]
+            : await ProfileLookupService.shared.names(for: counterpartIds)
+        header = ThreadHeader.from(summary: summary, me: me, names: names)
     }
 
     func send() async {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isSending else { return }
-        isSending = true
-        let body = trimmed
         draft = ""
+        await send(body: trimmed)
+    }
+
+    /// Send the body a failed attempt was carrying, not whatever is in the
+    /// composer now — the person may have typed something else while the first
+    /// one was in the air.
+    func retrySend() async {
+        guard let body = failedSendBody, !isSending else { return }
+        await send(body: body)
+    }
+
+    private func send(body: String) async {
+        isSending = true
+        sendError = nil
         do {
             let saved = try await MessagingAPIClient.shared.sendMessage(threadId: threadId, body: body)
             // Optimistic append; the realtime echo will be deduped by id
             // in `apply(remote:)`.
             apply(remote: saved)
+            failedSendBody = nil
+            if draft == body { draft = "" }
         } catch {
-            // Restore the draft so the user doesn't lose what they typed.
-            draft = body
-            self.error = "Couldn't send"
+            // Restore the draft so the user doesn't lose what they typed, and
+            // SAY so — the restore alone is what read as the message silently
+            // reappearing a minute later (L07-03).
+            if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { draft = body }
+            failedSendBody = body
+            sendError = Self.sendFailureLine
             #if DEBUG
             PatinaLog.ui.error("[Messaging] send failed: \(error.localizedDescription)")
             #endif
         }
         isSending = false
     }
+
+    /// The invoice screen's failure banner is the model: one sentence that says
+    /// nothing was lost, and a recovery beside it. It names no vendor and no
+    /// server string.
+    static let sendFailureLine = "We couldn't send that. Nothing was lost — your message is still here."
 
     /// Open a Supabase Realtime subscription for new messages on this
     /// thread. Safe to call repeatedly — the prior subscription is
