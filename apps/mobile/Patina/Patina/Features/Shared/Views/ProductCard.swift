@@ -154,13 +154,15 @@ public struct ProductCard: View {
             .overlay(alignment: .bottomLeading) {
                 if let price = data.formattedPrice {
                     Text(price)
-                        .font(.custom("PlayfairDisplay-Medium", size: 11, relativeTo: .caption2))
-                        .foregroundStyle(PatinaColors.offWhite)
+                        .font(PatinaTypography.captionMedium)
+                        .foregroundStyle(PatinaColors.OnDark.primary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(
-                            Capsule().fill(PatinaColors.charcoal.opacity(0.7))
-                        )
+                        // C-27: a 70 %-opacity capsule over a light tile is a
+                        // wash, and the price is the one thing on the tile a
+                        // tester is reading. The scrim makes the ratio
+                        // independent of the photograph.
+                        .patinaChromeScrim()
                         .padding(6)
                 }
             }
@@ -168,15 +170,18 @@ public struct ProductCard: View {
 
     // MARK: - Thumbnail
 
-    @ViewBuilder
     private var thumbnail: some View {
-        if let urlString = data.imageURL, let url = URL(string: urlString) {
-            // R15: route the app's last remote image through PatinaAsyncImage
-            // so loading/failure states share the branded placeholder.
-            PatinaAsyncImage(url: url, contentMode: .fill)
-        } else {
-            PatinaGradients.warm
-        }
+        // R15: route the app's last remote image through PatinaAsyncImage so
+        // loading/failure states share the branded placeholder. A-36: the
+        // no-URL case went to a bare gradient, which is how a piece with no
+        // photograph rendered as a flat colour rectangle still carrying a
+        // heart, a ⋯ and a match badge. `PatinaAsyncImage` says which piece it
+        // is instead.
+        PatinaAsyncImage(
+            url: data.imageURL.flatMap(URL.init(string:)),
+            contentMode: .fill,
+            caption: data.name
+        )
     }
 }
 
