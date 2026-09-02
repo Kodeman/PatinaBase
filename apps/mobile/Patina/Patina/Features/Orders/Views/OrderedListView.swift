@@ -186,7 +186,7 @@ struct OrderCard: View {
     private var actionRows: some View {
         VStack(spacing: 0) {
             Rectangle()
-                .fill(PatinaColors.pearl)
+                .fill(PatinaColors.Border.hairline)
                 .frame(height: 1)
             if let trackingURL {
                 cardAction(CarrierTracking.label(carrier: order.carrier)) {
@@ -195,7 +195,7 @@ struct OrderCard: View {
             }
             if order.isAttributed {
                 if trackingURL != nil {
-                    Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                    Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
                 }
                 cardAction(messageLabel, action: onMessage)
             }
@@ -275,6 +275,6 @@ struct OrderRail: View {
     private func fill(for index: Int) -> Color {
         if index < currentIndex { return PatinaColors.clay }
         if index == currentIndex { return PatinaColors.Text.primary }
-        return PatinaColors.pearl
+        return PatinaColors.Border.strong
     }
 }

@@ -217,7 +217,7 @@ struct OrderSheet: View {
                 .overlay(alignment: .top) {
                     Rectangle()
                         .frame(height: 1)
-                        .foregroundStyle(PatinaColors.pearl)
+                        .foregroundStyle(PatinaColors.Border.hairline)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("OrderSheet.Money.\(row.label)")

@@ -78,11 +78,11 @@ struct PurchaseActionBar: View {
                         .frame(height: 52)
                         .background(
                             Capsule()
-                                .fill(isSaved ? PatinaColors.clay : Color.clear)
+                                .fill(isSaved ? PatinaColors.Interactive.active : Color.clear)
                         )
                         .overlay(
                             Capsule()
-                                .stroke(PatinaColors.pearl, lineWidth: isSaved ? 0 : 1)
+                                .stroke(PatinaColors.Border.strong, lineWidth: isSaved ? 0 : 1)
                         )
                 }
                 .accessibilityIdentifier("PurchaseActionBar.AddToRoom")
