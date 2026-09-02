@@ -171,13 +171,27 @@ final class FeatureFlags {
 
     /// A walk has no other way to see which flags a launch resolved — nothing
     /// reads them until W3 mounts the tab bar.
+    ///
+    /// Emitted **unconditionally at notice level**, not under `#if DEBUG`.
+    /// Runbook H4's evidence is a two-launch probe on a **Release** build —
+    /// launch 2 is the one that reads a cached PostHog payload, and
+    /// `posthog-cache` with `house-first` absent from `on=[…]` is the D1/D1a
+    /// contradiction, live. A `#if DEBUG` body cannot answer that question:
+    /// the line does not exist in the build under test, and in a Debug build
+    /// `AppConfiguration.analyticsEnabled` is false so the provider always
+    /// answers nil and the source can only ever read `defaults`. `notice` is
+    /// the lowest os_log level that survives into a Release log archive, so
+    /// this is readable over Console from a TestFlight device.
+    ///
+    /// It carries flag **keys** and a branch name — `house-first`,
+    /// `direct-orders`, `house-widget`, `launch-arguments` / `posthog-cache` /
+    /// `defaults`. No user id, no distinct id, no payload. That is what makes
+    /// it safe to ship at a persisted level.
     private func logResolution(source: String) {
-        #if DEBUG
         let on = Flag.allCases.filter { isOn($0) }.map(\.rawValue)
-        PatinaLog.ui.debug(
+        PatinaLog.ui.notice(
             "[FeatureFlags] resolved via \(source): on=[\(on.joined(separator: ","))]"
         )
-        #endif
     }
 
     // MARK: - Launch arguments
