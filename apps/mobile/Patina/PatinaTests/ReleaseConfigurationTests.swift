@@ -91,4 +91,19 @@ struct ReleaseConfigurationTests {
     func minimumOSVersionIsTwentySixPointZero() {
         #expect(appInfo["MinimumOSVersion"] as? String == "26.0")
     }
+
+    // MARK: - A2-06 — export compliance
+
+    /// Without this key every upload parks in "Missing Compliance" until
+    /// someone answers the question by hand in the App Store Connect UI. The
+    /// app uses HTTPS/TLS plus Apple and swift-crypto for standard purposes,
+    /// which is exempt.
+    @Test("the app answers the export-compliance question in the binary")
+    func encryptionComplianceIsDeclared() throws {
+        let declared = try #require(
+            appInfo["ITSAppUsesNonExemptEncryption"] as? Bool,
+            "ITSAppUsesNonExemptEncryption is absent — every upload parks in Missing Compliance"
+        )
+        #expect(declared == false)
+    }
 }
