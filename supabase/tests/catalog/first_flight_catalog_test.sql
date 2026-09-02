@@ -12,6 +12,10 @@
 --   6. every publishable first-flight row has a non-null spectrum
 --   7. published_at present; designer_selection is not most of the shelf
 --   8. no image points outside the product-images bucket
+--   9. no tag outside the four-word provenance allow-list
+--  10. every image URL is backed by a real storage.objects row
+--  11. every tester-visible editorial story has a hero image and an honest
+--      read time
 --
 -- SCOPE, and why it is the id and not a tag. Assertions cover the rows this
 -- lane's pipeline produced, identified by
@@ -45,11 +49,27 @@
 -- belongs: on production, with `-v min_publishable=30` in the Kody-run
 -- acceptance step. Every other assertion here is absolute.
 --
+-- THE STORAGE FLOOR (case 10). `products.images` holds public URLs into the
+-- `product-images` bucket, and a URL with no object behind it renders exactly
+-- like no image at all — a flat colour block — while every count above still
+-- reads clean. `supabase db reset` recreates the database and, with it, drops
+-- the bucket's objects, so on a local stack the photographs exist only after
+-- `scripts/first-flight/upload-catalog-images.py` has run AGAINST THE STACK AS
+-- IT IS NOW. The order is therefore: reset, THEN upload, THEN this file.
+--
+-- `require_storage` defaults to **0**, under which case 10 reports the unbacked
+-- count as a NOTICE instead of asserting: `scripts/run-sql-tests.sh` runs every
+-- file under supabase/tests/ with no -v, and a bare reset legitimately has no
+-- objects yet. The lane's own gate and the production acceptance step pass
+-- `-v require_storage=1` and assert. The number is printed either way, so an
+-- unbacked catalogue is never silent.
+--
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 --     -X -q -v ON_ERROR_STOP=1 \
 --     -f supabase/tests/catalog/first_flight_catalog_test.sql
---   # production acceptance, Kody-run:  … -v min_publishable=30 …
+--   # after the local image upload:      … -v require_storage=1 …
+--   # production acceptance, Kody-run:  … -v min_publishable=30 -v require_storage=1 …
 --
 -- Wrapped in one transaction and ROLLBACKed, so it can be re-run with no side
 -- effects. Nothing here writes to a business table.
@@ -60,12 +80,18 @@
 \set min_publishable 6
 \endif
 
+\if :{?require_storage}
+\else
+\set require_storage 0
+\endif
+
 BEGIN;
 
 -- psql does NOT interpolate :variables inside a dollar-quoted body, so the
 -- floor is handed to the DO block through a GUC instead.
 \o /dev/null
 SELECT set_config('first_flight.min_publishable', :'min_publishable', true);
+SELECT set_config('first_flight.require_storage', :'require_storage', true);
 
 -- The scope, resolved once. uuid_generate_v5 is schema-qualified: a bare call
 -- fails on Strata with 42883 because the push session's search_path does not
@@ -98,6 +124,8 @@ DECLARE
   v_makers          int;
   v_hot_link        int;
   v_internal_tags   text[];
+  v_unbacked        int;
+  v_require_storage bool := current_setting('first_flight.require_storage')::int = 1;
   v_categories_ok CONSTANT text[] :=
     ARRAY['seating','tables','lighting','storage','decor','textiles'];
   v_tags_ok CONSTANT text[] :=
@@ -214,9 +242,31 @@ BEGIN
     format('FAIL 9: tags outside the provenance allow-list would render to a '
            'tester as verified claims: %s', v_internal_tags);
 
-  RAISE NOTICE 'first-flight catalogue: publishable=% imageless=% makerless=% categories=% new_this_week=% makers=% without_spectrum=% hot_linked=%',
+  -- Case 10: a public URL with no object behind it renders exactly like no
+  -- image at all, while cases 2 and 8 still read clean. `supabase db reset`
+  -- drops the bucket's objects with the database, so locally the photographs
+  -- exist only after upload-catalog-images.py has run against the stack as it
+  -- is now. Reported by default (run-sql-tests.sh passes no -v on a bare
+  -- reset); asserted under -v require_storage=1.
+  SELECT count(*) INTO v_unbacked
+    FROM public.products p
+    JOIN _ff_scope s ON s.id = p.id
+    CROSS JOIN LATERAL unnest(p.images) img
+   WHERE img LIKE '%/object/public/product-images/%'
+     AND NOT EXISTS (
+       SELECT 1 FROM storage.objects o
+        WHERE o.bucket_id = 'product-images'
+          AND o.name = split_part(img, '/object/public/product-images/', 2));
+  IF v_require_storage THEN
+    ASSERT v_unbacked = 0,
+      format('FAIL 10: %s first-flight image URL(s) have no storage.objects row '
+             'behind them — run scripts/first-flight/upload-catalog-images.py '
+             'AFTER the reset, not before', v_unbacked);
+  END IF;
+
+  RAISE NOTICE 'first-flight catalogue: publishable=% imageless=% makerless=% categories=% new_this_week=% makers=% without_spectrum=% hot_linked=% images_unbacked=% (asserted=%)',
     v_publishable, v_imageless, v_makerless, v_categories, v_new_this_week,
-    v_makers, v_no_spectrum, v_hot_link;
+    v_makers, v_no_spectrum, v_hot_link, v_unbacked, v_require_storage;
 END $$;
 
 -- ─── the whole-stack picture, reported and not asserted ────────────────────
