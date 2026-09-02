@@ -399,7 +399,7 @@ describe('PhaseAdvanceControl', () => {
     expect(action.querySelector('[data-action-hit]')).toBeInTheDocument();
   });
 
-  it('shows the authoritative RPC rejection inline and never announces success', () => {
+  it('maps the authoritative RPC rejection inline and never announces success', () => {
     mockMutate
       .mockImplementationOnce((_variables: unknown, options: MutationOptions) =>
         options.onError({
@@ -442,6 +442,10 @@ describe('PhaseAdvanceControl', () => {
       [
         'advance_project_phase: phase status changed (expected in_progress, found completed)',
         'The schedule changed while this handoff was running. Refresh it before trying again.',
+      ],
+      [
+        'advance_project_phase: multiple live main phases are unsupported',
+        'More than one phase in this project is live at once. Resolve the duplicate before this handoff.',
       ],
       [
         'upstream returned 500',

@@ -194,6 +194,9 @@ function errorMessage(error: unknown) {
   ) {
     return 'Patina could not reach the server. Check your connection and try again.';
   }
+  if (raw.includes('multiple live main phases')) {
+    return 'More than one phase in this project is live at once. Resolve the duplicate before this handoff.';
+  }
 
   return 'The server rejected this phase handoff. Refresh the schedule and try again.';
 }
@@ -403,6 +406,7 @@ export function PhaseAdvanceControl({
         onError: (error) => {
           pendingPhaseRef.current = null;
           setPendingPhaseId(null);
+          console.error('[phase-advance] handoff rejected', error);
           if (authorityKeyRef.current !== requestAuthorityKey) return;
 
           setNoticeByPhase((current) => ({
