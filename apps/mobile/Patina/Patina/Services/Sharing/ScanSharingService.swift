@@ -102,17 +102,28 @@ struct RoomScanAssociationInsert: Encodable {
     let shared_at: String
 }
 
-/// Designer search result
+/// Designer search result.
+///
+/// Decodes two different rows. `search_shareable_designers` (00555 §a3)
+/// returns `id, display_name, business_name, avatar_url` and never an email;
+/// the `getRecentDesigners()` embed below still selects `email, full_name`.
+/// So every field but `id` is optional, and `resolvedName` picks whichever
+/// name the row actually carried.
 public struct DesignerSearchResult: Identifiable, Codable {
     public let id: UUID
-    public let email: String
+    public let email: String?
+    public let displayName: String?
     public let fullName: String?
     public let avatarUrl: String?
     public let businessName: String?
 
+    /// The primary line the picker renders.
+    public var resolvedName: String? { displayName ?? fullName ?? businessName }
+
     enum CodingKeys: String, CodingKey {
         case id
         case email
+        case displayName = "display_name"
         case fullName = "full_name"
         case avatarUrl = "avatar_url"
         case businessName = "business_name"
@@ -358,7 +369,28 @@ public final class ScanSharingService {
         }
     }
 
-    /// Search for designers by email or name
+    /// The 00555 §a3 RPC. Named here so the contract test can assert it
+    /// without a network round trip.
+    static let searchDesignersRPC = "search_shareable_designers"
+
+    // `nonisolated` + `Sendable`, the shape RoomScanRPCParams.swift already
+    // uses: supabase-swift's rpc(_:params:) requires a Sendable parameter, and
+    // a plain nested type inherits this class's @MainActor isolation.
+    nonisolated struct SearchShareableDesignersParams: Encodable, Sendable {
+        let p_query: String
+    }
+
+    /// Search for designers by name.
+    ///
+    /// 00555 drops the world-readable `profiles` policy this used to lean on
+    /// and revokes anon, so the old `.from("profiles")` query returns nothing
+    /// and the picker goes silently empty. The RPC is the only path that still
+    /// answers, and it returns no email — the old query handed any signed-in
+    /// client every designer's address.
+    ///
+    /// The client floor stays at 3 characters even though the RPC's own floor
+    /// is 2: it saves a round trip and it is the behaviour this screen already
+    /// had.
     public func searchDesigners(query: String) async throws -> [DesignerSearchResult] {
         guard await getCurrentUserId() != nil else {
             throw ScanSharingError.notAuthenticated
@@ -369,13 +401,8 @@ public final class ScanSharingService {
         }
 
         do {
-            // Search profiles that have is_designer = true
             let response: [DesignerSearchResult] = try await supabase.database
-                .from("profiles")
-                .select("id, email, full_name, avatar_url, business_name")
-                .eq("is_designer", value: true)
-                .or("email.ilike.%\(query)%,full_name.ilike.%\(query)%,business_name.ilike.%\(query)%")
-                .limit(10)
+                .rpc(Self.searchDesignersRPC, params: SearchShareableDesignersParams(p_query: query))
                 .execute()
                 .value
 
@@ -420,6 +447,9 @@ public final class ScanSharingService {
                     designers.append(DesignerSearchResult(
                         id: designer.id,
                         email: designer.email,
+                        // The embed above selects no display_name, so
+                        // resolvedName falls through to fullName here.
+                        displayName: nil,
                         fullName: designer.fullName,
                         avatarUrl: designer.avatarUrl,
                         businessName: designer.businessName
