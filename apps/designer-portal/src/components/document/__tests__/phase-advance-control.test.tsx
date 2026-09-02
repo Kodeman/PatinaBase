@@ -403,7 +403,7 @@ describe('PhaseAdvanceControl', () => {
     mockMutate
       .mockImplementationOnce((_variables: unknown, options: MutationOptions) =>
         options.onError({
-          message: 'Phase blocked: Client approves stone is still pending',
+          message: 'advance_project_phase: 1 unresolved phase blocker(s)',
         }),
       )
       .mockImplementationOnce((_variables: unknown, options: MutationOptions) =>
@@ -415,7 +415,10 @@ describe('PhaseAdvanceControl', () => {
     fireEvent.click(action);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Phase blocked: Client approves stone is still pending',
+      'This phase still has open blockers. Resolve them in Coordination, then try again.',
+    );
+    expect(screen.queryByRole('alert')).not.toHaveTextContent(
+      'advance_project_phase',
     );
     expect(screen.queryByText(/is complete/)).not.toBeInTheDocument();
 
@@ -424,6 +427,42 @@ describe('PhaseAdvanceControl', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Design Development is complete. No direct phases follow it.',
     );
+  });
+
+  it('translates raw phase-handoff rejections into designer-facing copy', () => {
+    const cases: Array<[string, string]> = [
+      [
+        'advance_project_phase: cross-project handoff is unsupported',
+        'A phase here is connected to a phase in another project. Make it an independent root, then reconnect it inside this project if needed.',
+      ],
+      [
+        'advance_project_phase: canonical main successor is ambiguous',
+        'More than one phase is connected next. Repair the schedule so this phase has one exact successor.',
+      ],
+      [
+        'advance_project_phase: phase status changed (expected in_progress, found completed)',
+        'The schedule changed while this handoff was running. Refresh it before trying again.',
+      ],
+      [
+        'upstream returned 500',
+        'The server rejected this phase handoff. Refresh the schedule and try again.',
+      ],
+    ];
+
+    for (const [raw, copy] of cases) {
+      mockMutate.mockImplementationOnce(
+        (_variables: unknown, options: MutationOptions) =>
+          options.onError({ message: raw }),
+      );
+
+      const { unmount } = render(
+        <PhaseAdvanceControl projectId="project-1" phases={[mainActive]} />,
+      );
+      fireEvent.click(completeDevelopmentButton());
+
+      expect(screen.getByRole('alert')).toHaveTextContent(copy);
+      unmount();
+    }
   });
 
   it('clears stale receipt feedback when authoritative phase rows or project change', () => {
