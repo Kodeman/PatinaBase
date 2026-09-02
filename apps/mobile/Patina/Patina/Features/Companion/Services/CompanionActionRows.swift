@@ -34,7 +34,7 @@ extension CompanionActionProvider {
     }
 
     static func profileRow() -> CompanionActionItem {
-        item("person.circle", "Your profile", "Style · Settings · Portal",
+        item("person.circle", "Your studio", "Style · Settings",
              route: .profile, id: "profile")
     }
 
@@ -49,7 +49,7 @@ extension CompanionActionProvider {
     // MARK: - Studio links
 
     static func studioRow() -> CompanionActionItem {
-        item("rectangle.grid.1x2", "Your studio", "Projects · Messages · Decisions",
+        item("rectangle.grid.1x2", "Your projects", "Projects",
              route: .projectList, id: "your_studio")
     }
 
