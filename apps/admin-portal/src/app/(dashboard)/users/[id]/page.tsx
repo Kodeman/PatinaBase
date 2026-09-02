@@ -29,6 +29,7 @@ import { VerifyEmailDialog } from '@/components/users/VerifyEmailDialog';
 import { EditUserDialog } from '@/components/users/EditUserDialog';
 import { UserRoleManager } from '@/components/users/UserRoleManager';
 import { UserSecurityPanel } from '@/components/users/UserSecurityPanel';
+import { UserStudiosTab } from '@/components/users/UserStudiosTab';
 import { useUserActivity } from '@/hooks/use-users';
 import type { User } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -199,6 +200,7 @@ export default function UserDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="roles">Roles & Permissions</TabsTrigger>
+          <TabsTrigger value="studios">Studios</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
@@ -264,6 +266,11 @@ export default function UserDetailPage() {
         {/* Roles & Permissions Tab */}
         <TabsContent value="roles" className="space-y-6">
           <UserRoleManager user={user} />
+        </TabsContent>
+
+        {/* Studios Tab */}
+        <TabsContent value="studios">
+          <UserStudiosTab userId={userId} />
         </TabsContent>
 
         {/* Sessions Tab */}

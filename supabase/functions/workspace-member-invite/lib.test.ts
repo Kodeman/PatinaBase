@@ -7,6 +7,8 @@ import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   type InviteEmailOutcome,
   inviteEmailOutcome,
+  isInvitableOrgStatus,
+  resolveInviteActor,
   TEMPLATE_MISSING_OUTCOME,
 } from "./lib.ts";
 
@@ -79,5 +81,57 @@ Deno.test("every outcome spreads into the invite body without shadowing it", () 
       body.email_status === "failed",
       typeof body.email_error === "string",
     );
+  }
+});
+
+// ── Actor resolution + org-status gate (00556 platform-admin bypass) ────────
+
+Deno.test("an active owner/admin membership resolves to 'org_admin'", () => {
+  assertEquals(
+    resolveInviteActor({
+      membership: { role: "owner", status: "active" },
+      isPlatformAdmin: false,
+    }),
+    "org_admin",
+  );
+});
+
+Deno.test("a platform admin with no membership resolves to 'platform_admin'", () => {
+  assertEquals(
+    resolveInviteActor({ membership: null, isPlatformAdmin: true }),
+    "platform_admin",
+  );
+});
+
+Deno.test("a caller who is both is attributed to the studio, not the platform", () => {
+  assertEquals(
+    resolveInviteActor({
+      membership: { role: "admin", status: "active" },
+      isPlatformAdmin: true,
+    }),
+    "org_admin",
+  );
+});
+
+Deno.test("neither membership nor admin role resolves to null (403)", () => {
+  assertEquals(
+    resolveInviteActor({ membership: null, isPlatformAdmin: false }),
+    null,
+  );
+});
+
+Deno.test("only an active organization is invitable", () => {
+  assertEquals(isInvitableOrgStatus("active"), true);
+  for (
+    const status of [
+      "suspended",
+      "deactivated",
+      "pending_approval",
+      "",
+      null,
+      undefined,
+    ]
+  ) {
+    assertEquals(isInvitableOrgStatus(status), false);
   }
 });

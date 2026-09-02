@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersService, CreateUserRequest, UpdateUserRequest } from '@/services/users';
+import { studiosService } from '@/services/studios';
 import type { User } from '@/types';
 
 // Query keys
@@ -11,7 +12,17 @@ export const userKeys = {
   detail: (id: string) => [...userKeys.details(), id] as const,
   sessions: (userId: string) => [...userKeys.all, 'sessions', userId] as const,
   activity: (userId: string) => [...userKeys.all, 'activity', userId] as const,
+  studios: (userId: string) => [...userKeys.all, 'studios', userId] as const,
 };
+
+// Fetch a user's studio memberships (Studios tab on the user detail page)
+export function useUserStudios(userId: string) {
+  return useQuery({
+    queryKey: userKeys.studios(userId),
+    queryFn: () => studiosService.getUserStudios(userId),
+    enabled: !!userId,
+  });
+}
 
 // Fetch single user
 export function useUser(userId: string) {

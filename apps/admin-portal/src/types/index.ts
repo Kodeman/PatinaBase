@@ -617,3 +617,76 @@ export interface RolloutConfig {
   percent: number;
   rules?: any[];
 }
+
+// ============================================================================
+// STUDIO MANAGEMENT TYPES (admin-portal Part B — studios on top of users)
+// ============================================================================
+
+export type StudioStatus = 'active' | 'suspended' | 'pending_approval' | 'deactivated';
+export type StudioTier = 'free' | 'professional' | 'enterprise';
+export type StudioMemberRole = 'owner' | 'admin' | 'member' | 'guest';
+export type StudioMemberStatus = 'active' | 'invited' | 'suspended' | 'removed';
+
+export interface StudioOwner {
+  id: string;
+  email: string;
+  displayName?: string;
+  avatarUrl?: string;
+}
+
+export interface Studio {
+  id: string;
+  name: string;
+  slug: string;
+  status: StudioStatus;
+  subscriptionTier: StudioTier;
+  subscriptionExpiresAt?: string;
+  website?: string;
+  description?: string;
+  email?: string;
+  phone?: string;
+  logoUrl?: string;
+  address?: Record<string, unknown> | null;
+  businessVerified: boolean;
+  businessVerifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  owner: StudioOwner | null;
+  memberCount: number;
+  invitedCount: number;
+  projectCount: number;
+}
+
+export interface StudioMember {
+  id: string;
+  organizationId: string;
+  userId: string;
+  role: StudioMemberRole;
+  status: StudioMemberStatus;
+  jobTitle?: string;
+  staffRole?: string;
+  invitedBy?: string;
+  invitationExpiresAt?: string;
+  joinedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  profile: StudioOwner | null;
+}
+
+export interface StudioProject {
+  id: string;
+  name: string;
+  status?: string;
+  createdAt: string;
+}
+
+export interface UserStudioMembership {
+  organizationId: string;
+  organizationName: string;
+  organizationSlug: string;
+  organizationStatus: StudioStatus;
+  role: StudioMemberRole;
+  status: StudioMemberStatus;
+  jobTitle?: string;
+  staffRole?: string;
+}
