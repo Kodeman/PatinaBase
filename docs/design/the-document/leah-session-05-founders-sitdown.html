@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Founders' Sit-Down — Leah Session 05 · Patina</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --off-white: #EDE9E4; --warm-white: #FAF7F2; --soft-cream: #F5F2ED;
+    --pearl: #E5E2DD; --clay: #A3927C; --mocha: #655B52; --charcoal: #3F3B37;
+    --sage: #A8B5A0; --dusty-blue: #8B9CAD; --terracotta: #D4A090; --golden: #E8C547;
+    --muted: rgba(101,91,82,0.55); --line: rgba(101,91,82,0.18); --line-soft: rgba(101,91,82,0.10);
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-body: 'Inter', -apple-system, sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font-body); background:var(--off-white); color:var(--charcoal); line-height:1.6; -webkit-font-smoothing:antialiased; }
+  .strata-mark { display:flex; flex-direction:column; gap:3px; width:60px; }
+  .strata-mark span { height:1px; display:block; }
+  .strata-mark span:nth-child(1){background:var(--mocha);width:100%;}
+  .strata-mark span:nth-child(2){background:var(--clay);width:75%;}
+  .strata-mark span:nth-child(3){background:var(--clay);width:45%;opacity:.5;}
+  .wrap { max-width: 880px; margin: 0 auto; padding: 4rem 2rem 8rem; }
+  .eyebrow { font-family:var(--font-mono); font-size:.7rem; letter-spacing:.18em; text-transform:uppercase; color:var(--clay); display:block; margin-bottom:.75rem; }
+  h1 { font-family:var(--font-display); font-weight:400; font-size:clamp(2.6rem,6vw,4rem); line-height:1.05; letter-spacing:-.01em; }
+  h1 em { font-style:italic; color:var(--clay); }
+  h2 { font-family:var(--font-display); font-weight:400; font-size:1.9rem; line-height:1.2; }
+  .lede { font-family:var(--font-display); font-size:1.25rem; line-height:1.5; color:var(--mocha); max-width:62ch; margin-top:1.25rem; }
+  .meta-row { display:flex; gap:3rem; margin-top:2.5rem; flex-wrap:wrap; }
+  .meta-row > div { display:flex; flex-direction:column; gap:.3rem; }
+  .meta-label { font-family:var(--font-mono); font-size:.65rem; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  .meta-value { font-family:var(--font-display); font-size:1.05rem; }
+  .rules { margin-top:2.5rem; padding:1.5rem 2rem; background:var(--soft-cream); border-left:3px solid var(--clay); }
+  .rules p { font-size:.95rem; color:var(--mocha); }
+  .rules strong { color:var(--charcoal); font-weight:600; }
+  .block { margin-top:5rem; padding-top:3rem; border-top:1px solid var(--line); }
+  .block-head { display:flex; justify-content:space-between; align-items:flex-start; gap:2rem; margin-bottom:1rem; }
+  .block-time { font-family:var(--font-mono); font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); white-space:nowrap; padding-top:.6rem; }
+  .intent { font-size:.98rem; color:var(--mocha); max-width:68ch; margin-bottom:1.75rem; }
+  .intent strong { color:var(--charcoal); }
+  .q { margin:1.5rem 0; padding-left:1.5rem; border-left:2px solid var(--line); }
+  .q-num { font-family:var(--font-mono); font-size:.65rem; letter-spacing:.14em; text-transform:uppercase; color:var(--clay); margin-bottom:.3rem; }
+  .q-text { font-family:var(--font-display); font-size:1.2rem; line-height:1.35; color:var(--charcoal); }
+  .q-why { font-size:.85rem; color:var(--muted); margin-top:.35rem; font-style:italic; }
+  textarea { width:100%; margin-top:.75rem; min-height:72px; padding:.85rem 1rem; border:1px solid var(--line); background:var(--warm-white); font-family:var(--font-body); font-size:.95rem; color:var(--charcoal); resize:vertical; line-height:1.55; }
+  textarea:focus { outline:none; border-color:var(--clay); }
+  .stimulus { margin:1.75rem 0; padding:1.75rem 2rem; background:var(--warm-white); border-top:2px solid var(--mocha); }
+  .stimulus .label { font-family:var(--font-mono); font-size:.65rem; letter-spacing:.14em; text-transform:uppercase; color:var(--clay); margin-bottom:.75rem; }
+  .stimulus .body { font-family:var(--font-display); font-size:1.15rem; line-height:1.5; color:var(--charcoal); }
+  .stimulus .src { margin-top:.75rem; font-family:var(--font-mono); font-size:.68rem; color:var(--muted); }
+  .signal { display:flex; gap:.6rem; align-items:center; margin-top:1.5rem; flex-wrap:wrap; }
+  .signal .label { font-family:var(--font-mono); font-size:.65rem; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-right:.4rem; }
+  .signal button { font-family:var(--font-mono); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; padding:.45rem 1rem; background:transparent; border:1px solid var(--line); color:var(--mocha); cursor:pointer; }
+  .signal button.on-green { background:var(--sage); border-color:var(--sage); color:var(--charcoal); }
+  .signal button.on-yellow { background:var(--golden); border-color:var(--golden); color:var(--charcoal); }
+  .signal button.on-red { background:var(--terracotta); border-color:var(--terracotta); color:var(--charcoal); }
+  .toolbar { position:fixed; bottom:0; left:0; right:0; background:var(--charcoal); padding:.85rem 2rem; display:flex; justify-content:space-between; align-items:center; z-index:10; }
+  .toolbar .status { font-family:var(--font-mono); font-size:.7rem; color:rgba(237,233,228,.6); letter-spacing:.06em; }
+  .toolbar button { font-family:var(--font-mono); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; padding:.6rem 1.4rem; background:var(--clay); border:none; color:var(--charcoal); cursor:pointer; }
+  .toolbar button:hover { background:var(--golden); }
+  @media (max-width:640px){ .wrap{padding:2.5rem 1.25rem 8rem;} .block-head{flex-direction:column;gap:.25rem;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="strata-mark"><span></span><span></span><span></span></div>
+  <div style="margin-top:2.5rem;">
+    <span class="eyebrow">Leah Session 05 · The Founders' Sit-Down</span>
+    <h1>Everything <em>Patina.</em><br>One table, two founders.</h1>
+    <p class="lede">Five conversations in one sitting: her workflow, the MVP wedge, the money, the partners, the client's hands — and at the end, the story you tell together, with your faces on it.</p>
+  </div>
+
+  <div class="meta-row">
+    <div><span class="meta-label">Format</span><span class="meta-value">~110 min · seven blocks</span></div>
+    <div><span class="meta-label">Session id</span><span class="meta-value">L5 (on write-up)</span></div>
+    <div><span class="meta-label">Capture</span><span class="meta-value">Type inline · Export notes below</span></div>
+  </div>
+
+  <div class="rules">
+    <p><strong>Ground rules for yourself.</strong> Blocks 1–5 are an interview — she talks, you follow the energy, you don't pitch. Ask "walk me through the last time," never "would you ever." When she reacts to a proposal, chase the <em>why</em> behind the flinch. Block 6 flips the direction: that's the one place you pitch, then co-write. If a block runs hot, let it run — the signal buttons remember what got skipped.</p>
+  </div>
+
+  <!-- BLOCK 0 -->
+  <div class="block">
+    <div class="block-head"><h2>0 · Arrival</h2><div class="block-time">5 min</div></div>
+    <p class="intent">Name what today is: not a status meeting, not a demo. You're borrowing her expertise for the four biggest open calls in the company, and then asking her to put her name on the front of it. Tell her the first hour is hers — you're mostly going to listen.</p>
+  </div>
+
+  <!-- BLOCK 1 -->
+  <div class="block">
+    <div class="block-head"><h2>1 · The workflow, as it actually is</h2><div class="block-time">25 min</div></div>
+    <p class="intent"><strong>Goal: a time-and-pain map of one real project.</strong> Everything else in the session hangs off this. Don't accept generalities — anchor on a single recent project and walk it start to install.</p>
+    <div class="q"><div class="q-num">1.1</div><div class="q-text">Pick your most recent project. Walk me through it — first client contact to today. Where did the hours actually go?</div><div class="q-why">Listen for phases she rushes past (comfortable) vs. phases she sighs at (the wedge lives there).</div><textarea data-k="q11" placeholder="Project · phases · where hours went…"></textarea></div>
+    <div class="q"><div class="q-num">1.2</div><div class="q-text">Of a typical ten-hour project week, how does it split — client communication, sourcing, documentation, chasing orders, actual design?</div><div class="q-why">Get real numbers, even rough. This ratio is the MVP argument.</div><textarea data-k="q12" placeholder="Hours split…"></textarea></div>
+    <div class="q"><div class="q-num">1.3</div><div class="q-text">The blog draft has the two-hour retrace — hunting for the Vermont credenza you'd already found once. How often does that actually happen? What did it cost you last month?</div><div class="q-why">Validates the founding pain with a frequency and a dollar figure.</div><textarea data-k="q13" placeholder="Frequency · recent example · cost…"></textarea></div>
+    <div class="q"><div class="q-num">1.4</div><div class="q-text">Which tool in your stack would you refuse to give up? Which one do you resent every time you open it?</div><div class="q-why">The refused one is the bar Patina must clear; the resented one is the opening.</div><textarea data-k="q14" placeholder="Keeps · resents…"></textarea></div>
+    <div class="q"><div class="q-num">1.5</div><div class="q-text">Where do projects stall — and when they stall, what is the client doing?</div><div class="q-why">Stall points are where a client experience earns its keep (Block 5 callback).</div><textarea data-k="q15" placeholder="Stall points · client behavior…"></textarea></div>
+    <div class="signal"><span class="label">Block signal</span><button data-sig="b1" data-v="green">Green</button><button data-sig="b1" data-v="yellow">Yellow</button><button data-sig="b1" data-v="red">Red</button></div>
+  </div>
+
+  <!-- BLOCK 2 -->
+  <div class="block">
+    <div class="block-head"><h2>2 · The MVP wedge</h2><div class="block-time">15 min</div></div>
+    <p class="intent"><strong>Goal: force a choice.</strong> Patina today spans the capture extension, the Aesthete Engine, the Designer Portal (the Document), and a consumer iOS app. She doesn't get to say "all of it."</p>
+    <div class="q"><div class="q-num">2.1</div><div class="q-text">If Patina could do exactly one thing perfectly by launch, which: never lose a piece again (capture + memory) · recommendations that actually match taste · a client-facing experience that makes you look like a bigger studio · procurement that runs itself?</div><div class="q-why">Make her rank all four, not pick one. The gap between #1 and #2 matters.</div><textarea data-k="q21" placeholder="Ranking 1–4 · reasoning…"></textarea></div>
+    <div class="q"><div class="q-num">2.2</div><div class="q-text">Which of those four would make you text a designer friend about Patina, unprompted?</div><div class="q-why">Growth wedge ≠ utility wedge. If they differ, that's a finding.</div><textarea data-k="q22" placeholder="The tell-a-friend feature…"></textarea></div>
+    <div class="q"><div class="q-num">2.3</div><div class="q-text">What would you pay for today, this month, as a working designer — and what would you expect free forever?</div><div class="q-why">Her free/paid line previews every designer's. Feeds Block 3.</div><textarea data-k="q23" placeholder="Pay-for · free-forever…"></textarea></div>
+    <div class="signal"><span class="label">Block signal</span><button data-sig="b2" data-v="green">Green</button><button data-sig="b2" data-v="yellow">Yellow</button><button data-sig="b2" data-v="red">Red</button></div>
+  </div>
+
+  <!-- BLOCK 3 -->
+  <div class="block">
+    <div class="block-head"><h2>3 · The money</h2><div class="block-time">15 min</div></div>
+    <p class="intent"><strong>Goal: stress-test the v4 model against a working designer's reality.</strong> Don't present the whole deck — read each proposal aloud, watch her face, chase the flinch.</p>
+    <div class="stimulus"><div class="label">Proposal 1 · The project fee</div><div class="body">The client pays a 4% platform fee on total project value, line-itemed on the invoice. A $30K refresh pays $1,200; a $250K home pays $10K. The designer never pays it.</div><div class="src">v4 advisor recommendation · Stream 02</div></div>
+    <div class="q"><div class="q-num">3.1</div><div class="q-text">Would your clients accept that line item? At what project size does it break — and what would the platform have to visibly do to justify it?</div><textarea data-k="q31" placeholder="Accept? · break point · justification…"></textarea></div>
+    <div class="stimulus"><div class="label">Proposal 2 · The 25% Pledge</div><div class="body">A quarter of every marketplace commission dollar goes back to designers as teaching royalties — contractual, in the ToS, forever. Paid for curation, maker sourcing, style teaching, reviews.</div><div class="src">v4 advisor recommendation · Stream 03</div></div>
+    <div class="q"><div class="q-num">3.2</div><div class="q-text">Honestly: would you teach for that? Would the designers you know? Or is the tool itself the payment and the royalty a distraction?</div><textarea data-k="q32" placeholder="Teach-for-royalty read…"></textarea></div>
+    <div class="q"><div class="q-num">3.3</div><div class="q-text">18% blended take on maker sales, built on trade pricing. You hold those vendor relationships today — does that number survive contact with them?</div><textarea data-k="q33" placeholder="Trade-margin reality check…"></textarea></div>
+    <div class="q"><div class="q-num">3.4</div><div class="q-text">How do you charge now — flat, hourly, percentage of FF&E? Where does Patina layer in without eating your own margin?</div><textarea data-k="q34" placeholder="Her model · where Patina layers…"></textarea></div>
+    <div class="signal"><span class="label">Block signal</span><button data-sig="b3" data-v="green">Green</button><button data-sig="b3" data-v="yellow">Yellow</button><button data-sig="b3" data-v="red">Red</button></div>
+  </div>
+
+  <!-- BLOCK 4 -->
+  <div class="block">
+    <div class="block-head"><h2>4 · The partners</h2><div class="block-time">10 min</div></div>
+    <p class="intent"><strong>Goal: define "Patina-grade" and the partnership shape.</strong> Ten Midwest heritage makers are already seeded in the Vendor Pipeline — use them as the concrete test.</p>
+    <div class="q"><div class="q-num">4.1</div><div class="q-text">What makes a maker Patina-grade? Name a maker you'd stake your name on, and one you'd never let near the catalog — what separates them?</div><textarea data-k="q41" placeholder="Criteria · yes-example · no-example…"></textarea></div>
+    <div class="q"><div class="q-num">4.2</div><div class="q-text">What do those makers actually want that they don't get from reps, showrooms, or 1stDibs?</div><div class="q-why">The recruiting pitch for the supply side, in her words.</div><textarea data-k="q42" placeholder="Maker wants…"></textarea></div>
+    <div class="q"><div class="q-num">4.3</div><div class="q-text">Mechanically: who holds the trade account, who ships, who eats a damaged piece? What's the minimum a partnership agreement must nail down?</div><textarea data-k="q43" placeholder="Mechanics · must-haves…"></textarea></div>
+    <div class="q"><div class="q-num">4.4</div><div class="q-text">Beyond makers — photographers, workrooms, GCs, receivers. Which adjacent partner would change your projects most?</div><textarea data-k="q44" placeholder="Adjacent partners…"></textarea></div>
+    <div class="signal"><span class="label">Block signal</span><button data-sig="b4" data-v="green">Green</button><button data-sig="b4" data-v="yellow">Yellow</button><button data-sig="b4" data-v="red">Red</button></div>
+  </div>
+
+  <!-- BLOCK 5 -->
+  <div class="block">
+    <div class="block-head"><h2>5 · The client's hands</h2><div class="block-time">15 min</div></div>
+    <p class="intent"><strong>Goal: design the client experience from her clients' actual behavior.</strong> Mobile and web are different rooms — figure out which moments belong in which.</p>
+    <div class="q"><div class="q-num">5.1</div><div class="q-text">What does a client of yours see today — emails, PDFs, a Pinterest board? Where do they get confused, and where do they get anxious?</div><textarea data-k="q51" placeholder="Today's client surface · confusion · anxiety…"></textarea></div>
+    <div class="q"><div class="q-num">5.2</div><div class="q-text">Take the big moments — first concept reveal, approvals, the long wait on lead times, install day. What should each one feel like, and which have you seen done beautifully anywhere?</div><textarea data-k="q52" placeholder="Moment by moment…"></textarea></div>
+    <div class="q"><div class="q-num">5.3</div><div class="q-text">Which of those moments belong on their phone, and which deserve a laptop and a glass of wine? Would your clients actually scan their own rooms?</div><div class="q-why">Splits the mobile/web surface honestly; tests the AR assumption with real clients.</div><textarea data-k="q53" placeholder="Phone vs web · AR appetite…"></textarea></div>
+    <div class="q"><div class="q-num">5.4</div><div class="q-text">Finish this sentence: a client should close Patina feeling ______.</div><textarea data-k="q54" placeholder="The feeling, verbatim…"></textarea></div>
+    <div class="signal"><span class="label">Block signal</span><button data-sig="b5" data-v="green">Green</button><button data-sig="b5" data-v="yellow">Yellow</button><button data-sig="b5" data-v="red">Red</button></div>
+  </div>
+
+  <!-- BLOCK 6 -->
+  <div class="block">
+    <div class="block-head"><h2>6 · The story, with faces on it</h2><div class="block-time">15 min</div></div>
+    <p class="intent"><strong>Direction flips: now you pitch.</strong> The position — Patina is a crafted product made by two people whose names and faces are on it, exactly like the pieces it champions. Handmade software, Madison, Wisconsin. Designer-taught, never "AI-powered." Then read her back her own words:</p>
+    <div class="stimulus"><div class="label">From her draft · "Why We're Building Patina"</div><div class="body">"That's why Kody and I started Patina. Not because we wanted to build another furniture marketplace, but because we wanted to build something that actually fits the way designers' minds work… a tool that gets better with time, that learns from every piece you save."</div><div class="src">Strata · Content/Blog-01 · with her byline: co-founder &amp; design director, Madison, WI</div></div>
+    <div class="q"><div class="q-num">6.1</div><div class="q-text">You wrote this months ago. Does it still feel true? What would you change today?</div><textarea data-k="q61" placeholder="Her read on her own draft…"></textarea></div>
+    <div class="q"><div class="q-num">6.2</div><div class="q-text">Faces on the product — where's your comfort line? Name and bio · photo on the site · founder video · a recurring voice (blog, short video, teaching notes). Which cadence could you actually sustain?</div><div class="q-why">Get a real commitment level, not enthusiasm. Undersell and overdeliver beats the reverse.</div><textarea data-k="q62" placeholder="Comfort line · sustainable cadence…"></textarea></div>
+    <div class="q"><div class="q-num">6.3</div><div class="q-text">The origin, in fact-check form: how do we tell the story of the two of us — how it started, why Madison, why "patina"? What's the one detail that must be in it, and anything off-limits?</div><textarea data-k="q63" placeholder="The beats · must-keep detail · off-limits…"></textarea></div>
+    <div class="q"><div class="q-num">6.4</div><div class="q-text">Three years out — what do you want to be known for, personally, because Patina existed?</div><textarea data-k="q64" placeholder="Her three-year answer…"></textarea></div>
+    <div class="signal"><span class="label">Block signal</span><button data-sig="b6" data-v="green">Green</button><button data-sig="b6" data-v="yellow">Yellow</button><button data-sig="b6" data-v="red">Red</button></div>
+  </div>
+
+  <!-- BLOCK 7 -->
+  <div class="block">
+    <div class="block-head"><h2>7 · Close</h2><div class="block-time">5 min</div></div>
+    <p class="intent">Read back the three biggest things you heard. Then commitments: what she owns next (e.g., blog edits, the maker shortlist, a photo day), what you own next, and when you sit down again. Export the notes below before you stand up.</p>
+    <div class="q"><div class="q-num">7.1</div><div class="q-text">Commitments &amp; dates.</div><textarea data-k="q71" placeholder="She owns… · I own… · next sit-down…"></textarea></div>
+  </div>
+
+</div>
+
+<div class="toolbar">
+  <span class="status" id="status">Notes autosave in this browser.</span>
+  <button id="export">Export notes (.md)</button>
+</div>
+
+<script>
+  const KEY='leah-s05-notes';
+  const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){return{}}};
+  let state=load();
+  document.querySelectorAll('textarea').forEach(t=>{
+    t.value=state[t.dataset.k]||'';
+    t.addEventListener('input',()=>{state[t.dataset.k]=t.value;localStorage.setItem(KEY,JSON.stringify(state));
+      document.getElementById('status').textContent='Saved '+new Date().toLocaleTimeString();});
+  });
+  document.querySelectorAll('.signal button').forEach(b=>{
+    const k='sig_'+b.dataset.sig;
+    const paint=()=>{document.querySelectorAll(`[data-sig="${b.dataset.sig}"]`).forEach(x=>x.className='');
+      const v=state[k]; if(v){document.querySelector(`[data-sig="${b.dataset.sig}"][data-v="${v}"]`).className='on-'+v;}};
+    b.addEventListener('click',()=>{state[k]=b.dataset.v;localStorage.setItem(KEY,JSON.stringify(state));paint();});
+    paint();
+  });
+  document.getElementById('export').addEventListener('click',()=>{
+    const blocks=[['1 · Workflow','b1',['q11','q12','q13','q14','q15']],['2 · MVP wedge','b2',['q21','q22','q23']],
+      ['3 · Money','b3',['q31','q32','q33','q34']],['4 · Partners','b4',['q41','q42','q43','q44']],
+      ['5 · Client experience','b5',['q51','q52','q53','q54']],['6 · Founding story','b6',['q61','q62','q63','q64']],
+      ['7 · Close',null,['q71']]];
+    let md=`# Leah Session 05 — raw notes\n\nDate: ${new Date().toISOString().slice(0,10)}\n`;
+    blocks.forEach(([name,sig,qs])=>{
+      md+=`\n## ${name}${sig&&state['sig_'+sig]?` — signal: ${state['sig_'+sig].toUpperCase()}`:''}\n`;
+      qs.forEach(q=>{const label=document.querySelector(`[data-k="${q}"]`).closest('.q').querySelector('.q-text').textContent;
+        md+=`\n**${label}**\n\n${state[q]||'_—_'}\n`;});
+    });
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([md],{type:'text/markdown'}));
+    a.download=`leah-session-05-raw-notes-${new Date().toISOString().slice(0,10)}.md`;
+    a.click();
+  });
+</script>
+</body>
+</html>
