@@ -681,6 +681,49 @@ BEGIN
     'FAIL 7c: an authenticated user raised their own profiles.role from '
       || COALESCE(role_was, '<null>') || ' to ' || COALESCE(role_now, '<null>');
 
+  -- 7e: and may not reach the same elevation through the SIBLING policy.
+  --
+  -- profiles carries a SECOND permissive UPDATE policy, "Designers can update
+  -- their client profiles" (00017:19). Postgres ORs the permissive WITH CHECKs
+  -- for an UPDATE, and a policy with a NULL WITH CHECK reuses its own USING as
+  -- the check — so as 00017 shipped it, a new row only had to satisfy ONE of
+  -- the two policies and 7c's role pin was simply skipped.
+  --
+  -- The roster row that satisfies the sibling is self-servable:
+  -- designer_clients' own policy is FOR ALL / TO PUBLIC / USING
+  -- (auth.uid() = designer_id) with no WITH CHECK (00014:110), and
+  -- authenticated holds INSERT. So the vector is two statements, not one, and
+  -- 7c alone reported the hole closed while it was open.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  INSERT INTO public.designer_clients (designer_id, client_id)
+  VALUES ('a0000000-0000-4000-8000-000000000003',
+          'a0000000-0000-4000-8000-000000000003');
+  BEGIN
+    UPDATE public.profiles SET role = 'designer'
+     WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT role INTO role_now FROM public.profiles
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  ASSERT role_now IS NOT DISTINCT FROM role_was,
+    'FAIL 7e: a self-inserted designer_clients row let an authenticated user '
+      || 'raise their own profiles.role from ' || COALESCE(role_was, '<null>')
+      || ' to ' || COALESCE(role_now, '<null>')
+      || ' — the sibling UPDATE policy has no WITH CHECK';
+
+  -- 7e2: the structural half. A future migration that re-creates the sibling
+  -- without a WITH CHECK re-opens 7e, and 7e's own fixture (a self-roster row)
+  -- is subtle enough to be lost in a rewrite. Assert the shape too.
+  ASSERT (
+    SELECT p.polwithcheck IS NOT NULL FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Designers can update their client profiles'
+  ), 'FAIL 7e2: "Designers can update their client profiles" has no WITH CHECK, '
+     'so it reuses its USING and bypasses the role pin on "Users can update own profile"';
+
   -- 7d: and the helper the policy leans on is closed to the anon key.
   ASSERT NOT has_function_privilege('anon'::name, 'public.current_profile_role()', 'EXECUTE'),
     'FAIL 7d: anon can execute current_profile_role';

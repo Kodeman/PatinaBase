@@ -578,6 +578,70 @@ COMMENT ON POLICY "Users can update own profile" ON public.profiles IS
   'value: a role change is a service_role / admin operation, never a client '
   'write. Added 00555 (was USING-only since 00013).';
 
+-- (i-b) the SIBLING policy, without which (i) is decorative.
+--
+-- profiles carries a SECOND permissive UPDATE policy, "Designers can update
+-- their client profiles" (00017:19): FOR UPDATE, TO PUBLIC, USING the
+-- designer_clients EXISTS below, and NO WITH CHECK. Postgres ORs the permissive
+-- WITH CHECKs for an UPDATE, and a policy whose WITH CHECK is NULL reuses its
+-- own USING as the check — so the new row need satisfy only ONE of the two
+-- policies, and the role pin in (i) is skipped entirely.
+--
+-- The roster row that satisfies it is self-servable: designer_clients' own
+-- policy is FOR ALL / TO PUBLIC / USING (auth.uid() = designer_id) with no
+-- WITH CHECK (00014:110), and authenticated holds INSERT. Reproduced on a local
+-- stack with the rest of this migration applied, as a seeded homeowner:
+--   UPDATE profiles SET role='designer'      -> RLS denial
+--   INSERT designer_clients(self, self)      -> INSERT 0 1
+--   UPDATE profiles SET role='designer'      -> UPDATE 1, role = designer
+--
+-- The check below is not new policy: it is the check this policy's own INSERT
+-- sibling has carried since the same file — "Designers can create homeowner
+-- profiles" is WITH CHECK (auth.uid() IS NOT NULL AND role = 'homeowner').
+-- A designer may edit a roster client's row; they may not turn that client into
+-- a designer, a vendor or an admin, and they may not turn THEMSELVES into one
+-- by rostering themselves.
+--
+-- NOT a trigger: service_role bypasses RLS but not triggers, and neither do the
+-- SECURITY DEFINER functions on the invite/onboarding rail (00551-00554) that
+-- legitimately set profiles.role — auth.role() reads 'authenticated' inside
+-- them, so a JWT-based exemption cannot tell them from a client write.
+-- NOT a RESTRICTIVE policy comparing role to current_profile_role(): that
+-- compares the TARGET row's new role to the CALLER's role, and would deny every
+-- legitimate designer edit of a client profile.
+--
+-- What this does NOT close, stated rather than implied: designer_clients is
+-- still INSERTable with an arbitrary client_id, so a manufactured roster row
+-- still reaches a stranger's NON-role columns. That is a WITH CHECK on another
+-- table's policy and a live Add Client flow -- W2, tracked, not smuggled in here.
+DROP POLICY IF EXISTS "Designers can update their client profiles" ON public.profiles;
+CREATE POLICY "Designers can update their client profiles" ON public.profiles
+  FOR UPDATE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.designer_clients dc
+      WHERE dc.client_id = profiles.id
+        AND dc.designer_id = (SELECT auth.uid())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.designer_clients dc
+      WHERE dc.client_id = profiles.id
+        AND dc.designer_id = (SELECT auth.uid())
+    )
+    AND role = 'homeowner'
+  );
+
+COMMENT ON POLICY "Designers can update their client profiles" ON public.profiles IS
+  'A designer may edit a profile on their designer_clients roster. WITH CHECK '
+  'pins the edited row to role = ''homeowner'', matching the INSERT sibling '
+  '"Designers can create homeowner profiles" from the same migration (00017). '
+  'Without it this policy''s NULL WITH CHECK fell back to its USING and became '
+  'an OR-branch around the role pin on "Users can update own profile" — a '
+  'self-inserted designer_clients row was a full self-elevation. Re-scoped to '
+  'authenticated (was PUBLIC) in 00555.';
+
 -- (ii) the server-side default. handle_new_user() is SECURITY DEFINER and owned
 -- by postgres, so it is not subject to the policy above.
 --
@@ -1172,6 +1236,18 @@ BEGIN
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Users can update own profile'
   ), '"Users can update own profile" still has no WITH CHECK — role self-elevation is open';
+  -- and the sibling, without which the line above is decorative: a permissive
+  -- UPDATE policy with a NULL WITH CHECK reuses its USING and ORs around the pin.
+  ASSERT (
+    SELECT p.polwithcheck IS NOT NULL FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Designers can update their client profiles'
+  ), '"Designers can update their client profiles" still has no WITH CHECK — a self-inserted designer_clients row bypasses the role pin';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polcmd = 'w' AND p.polpermissive AND p.polwithcheck IS NULL
+  ), 'a permissive UPDATE policy on profiles has no WITH CHECK — it reuses its USING and re-opens role self-elevation';
   ASSERT NOT has_function_privilege('anon', 'public.current_profile_role()', 'EXECUTE'),
     'anon can execute current_profile_role';
   ASSERT has_function_privilege('authenticated', 'public.current_profile_role()', 'EXECUTE'),
