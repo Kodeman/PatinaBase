@@ -4,7 +4,12 @@
 //
 //  Pins the launch-time flag resolution every flag-gated lane and every local
 //  walk depends on: DEBUG launch-arg override → PostHog's persisted payload →
-//  false, resolved once, synchronously, and held for the session.
+//  the per-flag default table, resolved once, synchronously, and held for the
+//  session.
+//
+//  The per-flag defaults themselves (D1a) are pinned next door in
+//  `FeatureFlagsDefaultTests`. This suite is about the ORDER, so its stub
+//  answers explicitly rather than leaning on what a default happens to be.
 //
 
 import Foundation
@@ -17,6 +22,11 @@ struct FeatureFlagsTests {
     /// A provider whose answers are set by the test, counting reads so the
     /// "PostHog is not consulted under an override" and "resolved exactly
     /// once" claims are assertions and not narration.
+    ///
+    /// `enabled` names the flags the payload says yes to; every other flag is
+    /// answered with an explicit `false`, i.e. a payload that HAS an opinion.
+    /// "No payload at all" is a different case and lives in
+    /// `FeatureFlagsDefaultTests`.
     private final class StubProvider: FeatureFlagProvider {
         var enabled: Set<String>
         private(set) var readCount = 0
@@ -25,7 +35,7 @@ struct FeatureFlagsTests {
             self.enabled = enabled
         }
 
-        func isEnabled(_ key: String) -> Bool {
+        func value(for key: String) -> Bool? {
             readCount += 1
             return enabled.contains(key)
         }
@@ -77,8 +87,11 @@ struct FeatureFlagsTests {
         #expect(!flags.isOn(.houseWidget))
     }
 
-    @Test("a source with no cached payload resolves every flag to false")
-    func noCachedPayloadResolvesToFalse() throws {
+    /// A payload that HAS an opinion and says no to everything — the kill
+    /// switch in its strongest form. The no-payload case, where the per-flag
+    /// defaults apply instead, is `FeatureFlagsDefaultTests`.
+    @Test("a payload that says no resolves every flag to false")
+    func aPayloadSayingNoResolvesToFalse() throws {
         let flags = FeatureFlags()
 
         flags.resolveAtLaunch(arguments: ["Patina"], provider: StubProvider(),

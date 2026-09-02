@@ -9,10 +9,20 @@
 #   build               compile the app (generic iOS Simulator, no signing)
 #   unit                build + run PatinaTests   (Swift Testing)
 #   ui                  build + run PatinaUITests (XCTest UI)
+#   release             compile Release for a generic iOS device (no signing)
+#   archive             Release archive with automatic signing — KODY'S MACHINE ONLY
 #   lint                full SwiftLint over the project
 #   lint-delta [BASE]   FAIL if a touched file gained SwiftLint warnings vs BASE
 #                       (BASE defaults to `main`; compares per-file counts)
 #   all                 build + unit + lint-delta   (standard codemod / new-file gate)
+#
+# `release` is deliberately NOT part of `all`: it is a whole-module optimised
+# compile of ~92k LOC and `all` runs on every fix round in every concurrent
+# lane. Wire it in beside `all`, not inside it, until L2-G measures the cost.
+# `archive` is in neither — it needs an authenticated Xcode account, network
+# round trips to App Store Connect and a distribution keychain that can prompt.
+#
+# The unit/ui tiers require IOS_GATE_UDID. See sim_destination().
 #
 # Exit non-zero on any failure. Designed to be safe to run from any CWD.
 set -euo pipefail
@@ -26,6 +36,10 @@ SCHEME="Patina"
 CONFIG="$PROJECT_DIR/.swiftlint.yml"
 PROJECT_DIR_REL="${PROJECT_DIR#"$REPO_ROOT"/}"       # apps/mobile/Patina
 
+# --- per-worktree DerivedData: six lanes compiling into one shared tree -------
+# produces transient failures the Daily Return already paid for.
+DERIVED="$PROJECT_DIR/.build/DerivedData"
+
 # ---- pretty-printer (optional) ------------------------------------------------
 run_xcb() {
   if command -v xcbeautify >/dev/null 2>&1; then
@@ -35,15 +49,18 @@ run_xcb() {
   fi
 }
 
-# ---- resolve a concrete booted-or-bootable iOS simulator for test tiers --------
+# --- the destination is explicit, or the gate refuses to guess -----------------
+# Before this, `simctl list … | head -1`, which with six lane clones named
+# ff-w1-* plus the protected review device 973D1724-90BF-4A0A-B02D-481D561547B3
+# present will happily run one lane's tests on another lane's clone. That is the
+# program's Hard Rule 1, broken by the gate that enforces it.
 sim_destination() {
-  local udid
-  udid="$(xcrun simctl list devices available 2>/dev/null \
-    | grep -iE 'iPhone (17|16|Air)' | grep -oE '[0-9A-F-]{36}' | head -1 || true)"
-  if [[ -z "$udid" ]]; then
-    echo "ERROR: no available iPhone simulator found" >&2; exit 2
+  if [[ -n "${IOS_GATE_UDID:-}" ]]; then
+    echo "platform=iOS Simulator,id=$IOS_GATE_UDID"; return 0
   fi
-  echo "platform=iOS Simulator,id=$udid"
+  echo "ERROR: IOS_GATE_UDID is unset. The unit/ui tiers need an explicit clone udid." >&2
+  echo "       export IOS_GATE_UDID=<this lane's own clone>  (never 'booted')"        >&2
+  exit 2
 }
 
 cmd_build() {
@@ -51,6 +68,7 @@ cmd_build() {
   run_xcb xcodebuild build \
     -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
     -destination 'generic/platform=iOS Simulator' \
+    -derivedDataPath "$DERIVED" \
     CODE_SIGNING_ALLOWED=NO
 }
 
@@ -60,7 +78,27 @@ cmd_test() {
   run_xcb xcodebuild test \
     -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
     -destination "$dest" -only-testing:"$target" \
+    -derivedDataPath "$DERIVED" \
     CODE_SIGNING_ALLOWED=NO
+}
+
+cmd_release() {
+  echo "▶ release compile (generic iOS device, no signing)"
+  run_xcb xcodebuild build \
+    -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+    -destination 'generic/platform=iOS' \
+    -derivedDataPath "$DERIVED" \
+    CODE_SIGNING_ALLOWED=NO
+}
+
+cmd_archive() {
+  echo "▶ archive (Release, automatic signing) — Kody's machine only"
+  run_xcb xcodebuild archive \
+    -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+    -destination 'generic/platform=iOS' \
+    -archivePath "$PROJECT_DIR/.build/archives/Patina.xcarchive" \
+    -derivedDataPath "$DERIVED" \
+    -allowProvisioningUpdates
 }
 
 cmd_lint() {
@@ -154,10 +192,12 @@ main() {
     build)       cmd_build ;;
     unit)        cmd_build && cmd_test PatinaTests ;;
     ui)          cmd_build && cmd_test PatinaUITests ;;
+    release)     cmd_release ;;
+    archive)     cmd_archive ;;
     lint)        cmd_lint ;;
     lint-delta)  cmd_lint_delta "${1:-main}" ;;
     all)         cmd_build && cmd_test PatinaTests && cmd_lint_delta "${1:-main}" ;;
-    *) echo "usage: $0 {build|unit|ui|lint|lint-delta [BASE]|all}" >&2; exit 64 ;;
+    *) echo "usage: $0 {build|unit|ui|release|archive|lint|lint-delta [BASE]|all}" >&2; exit 64 ;;
   esac
 }
 main "$@"
