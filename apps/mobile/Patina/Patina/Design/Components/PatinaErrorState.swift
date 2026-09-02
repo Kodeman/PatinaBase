@@ -38,7 +38,7 @@ struct PatinaErrorState: View {
 }
 
 #Preview("With retry") {
-    PatinaErrorState(message: "Something went wrong loading this.", action: {})
+    PatinaErrorState(message: "Something went wrong.", action: {})
         .padding(.top, 60)
         .padding(.horizontal, 32)
         .frame(maxWidth: .infinity)
@@ -46,7 +46,7 @@ struct PatinaErrorState: View {
 }
 
 #Preview("No retry") {
-    PatinaErrorState(message: "Something went wrong loading this.")
+    PatinaErrorState(message: "Something went wrong.")
         .padding(.top, 60)
         .padding(.horizontal, 32)
         .frame(maxWidth: .infinity)

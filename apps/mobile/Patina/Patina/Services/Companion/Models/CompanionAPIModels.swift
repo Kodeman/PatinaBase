@@ -281,14 +281,20 @@ public enum CompanionAPIError: LocalizedError {
         switch self {
         case .unauthorized:
             return "Please sign in to continue"
-        case .badRequest(let message):
-            return message
-        case .serverError(let code):
-            return "Something went wrong (error \(code)). Please try again."
+        case .badRequest:
+            // C5-11: was `return message` — the server's own raw text,
+            // verbatim. Same defect class as DesignServicesError's two
+            // raw arms; fixed here too, though not separately cited by
+            // line in the finding.
+            return "That didn't go through. Try again."
+        case .serverError:
+            // Was `"Something went wrong (error \(code)). Please try
+            // again."` — never a status code in front of a homeowner.
+            return "Something went wrong. Try again."
         case .networkError:
             return "Check your connection and try again"
         case .decodingError:
-            return "Something went wrong. Please try again."
+            return "Something went wrong. Try again."
         case .noToken:
             return "Please sign in to use the Companion"
         case .rateLimited(let retryAfter):

@@ -199,12 +199,18 @@ nonisolated public enum DesignServicesError: Error, LocalizedError, Equatable, S
             return "That request could not be found."
         case .alreadySubmitted:
             return "This request has already been sent."
-        case .invalidRequest(let message):
-            return message
-        case .networkError(let message):
-            return "Network error: \(message)"
+        case .invalidRequest:
+            // C5-11: was `return message` — a raw Postgres/RPC string,
+            // verbatim, to a homeowner. The associated value stays on the
+            // case (a caller may still log it) but the description is now
+            // one fixed sentence.
+            return "We couldn't process your request. Try again."
+        case .networkError:
+            // Was `"Network error: \(message)"` — same defect, the other
+            // raw arm this finding names.
+            return "Check your connection and try again."
         case .submissionFailed:
-            return "Failed to submit your request. Please try again."
+            return "We couldn't send your request. Nothing was lost — try again."
         }
     }
 

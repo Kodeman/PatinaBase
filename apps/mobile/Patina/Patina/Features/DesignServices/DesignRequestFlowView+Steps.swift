@@ -167,7 +167,10 @@ extension DesignRequestFlowView {
                 }
 
                 if let error = coordinator?.lastError {
-                    Text(error.errorDescription ?? "Something went wrong.")
+                    // C4-09/C5-11: `errorDescription` is now always one of
+                    // `DesignServicesError`'s fixed sentences (no raw arm
+                    // left), so this `??` branch is a defensive default only.
+                    Text(error.errorDescription ?? "Something went wrong. Try again.")
                         .font(PatinaTypography.caption)
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
