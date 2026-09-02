@@ -205,7 +205,13 @@ async function handleAccept(req: Request): Promise<Response> {
   if (new Date(inv.expires_at).getTime() < Date.now()) {
     return json({ error: 'expired' }, 410);
   }
-  if (user.email && user.email.toLowerCase() !== inv.email.toLowerCase()) {
+  // Fail CLOSED on a caller with no email (RF3-12). The guard used to read
+  // `if (user.email && …)`, so an auth.users row carrying no email — a
+  // phone/OTP-only account — skipped the comparison entirely and could accept
+  // any unexpired token it held. That was already wrong for the roster link;
+  // ruling B2 v3(d) puts a profiles write on this path too, so the guard now
+  // decides who gets relabelled as well as who gets rostered.
+  if (!user.email || user.email.toLowerCase() !== inv.email.toLowerCase()) {
     return json({ error: 'email_mismatch' }, 403);
   }
 
