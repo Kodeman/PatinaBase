@@ -4,6 +4,21 @@ import { CreateStudioDialog } from '@/components/studios/CreateStudioDialog';
 // Mirrors add-vendor-dialog.test.tsx's pattern: mock the mutation hook and
 // the UserSearchPicker (which has its own debounced search hook), keep the
 // dialog chrome itself real.
+//
+// jest.setup.js also mocks next/navigation, but its useRouter() mints a new
+// `push: jest.fn()` on every call — fine for components that never assert on
+// navigation, but it means no test can hold a stable reference to `push`.
+// Override it locally (same pattern as admin-product-card.test.tsx) so the
+// navigation test below can assert on a single, stable mock.
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+    back: jest.fn(),
+  }),
+}));
 
 const mockMutateAsync = jest.fn();
 const mockReset = jest.fn();
@@ -42,6 +57,38 @@ describe('CreateStudioDialog', () => {
     jest.clearAllMocks();
     isPending = false;
     mockMutateAsync.mockResolvedValue({ studioId: 'studio-1' });
+  });
+
+  it('navigates to the new studio after a successful create', async () => {
+    // mutateAsync resolves in the real shape: studiosService.createStudio()
+    // unwraps the API route's { data: { studioId } } envelope down to
+    // { studioId }, which is what the beforeEach mock below returns.
+    render(<CreateStudioDialog open onOpenChange={jest.fn()} />);
+
+    fireEvent.click(screen.getByTestId('pick-user'));
+    fireEvent.change(screen.getByLabelText(/studio name/i), {
+      target: { value: 'Acme Studio' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /create studio/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(mockPush).toHaveBeenCalledWith('/studios/studio-1');
+  });
+
+  it('closes without navigating when the create response is missing a studioId', async () => {
+    mockMutateAsync.mockResolvedValue({} as { studioId: string });
+    const onOpenChange = jest.fn();
+    render(<CreateStudioDialog open onOpenChange={onOpenChange} />);
+
+    fireEvent.click(screen.getByTestId('pick-user'));
+    fireEvent.change(screen.getByLabelText(/studio name/i), {
+      target: { value: 'Acme Studio' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /create studio/i }));
+
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('renders nothing when closed', () => {

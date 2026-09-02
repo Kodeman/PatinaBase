@@ -44,6 +44,17 @@ export function CreateStudioDialog({ open, onOpenChange }: CreateStudioDialogPro
     if (!valid || !owner) return;
     try {
       const result = await createStudio.mutateAsync({ ownerUserId: owner.id, name: name.trim() });
+      // mutateAsync resolves with whatever the mutationFn returns, so a
+      // response shape drift (e.g. the API route changing its envelope) would
+      // otherwise show the success toast and close the dialog while
+      // router.push silently no-ops on `/studios/undefined` — which reads to
+      // the admin as "nothing happened, still on /studios". Confirm we have a
+      // real id before treating the create as navigable.
+      if (!result?.studioId) {
+        toast.error('Studio created, but no id was returned. Refresh to find it.');
+        onOpenChange(false);
+        return;
+      }
       toast.success('Studio created');
       onOpenChange(false);
       router.push(`/studios/${result.studioId}` as any);
