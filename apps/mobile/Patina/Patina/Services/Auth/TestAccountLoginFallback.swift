@@ -32,21 +32,22 @@
 import Foundation
 import Supabase
 
+/// The function's success body. A 403 carries `{error}` and no hash. File
+/// scope so its `CodingKeys` is not two levels deep (SwiftLint `nesting`).
+struct TestAccountLoginResponse: Decodable, Sendable {
+    let tokenHash: String?
+
+    enum CodingKeys: String, CodingKey {
+        case tokenHash = "token_hash"
+    }
+}
+
 struct TestAccountLoginFallback: Sendable {
 
     static let functionName = "test-account-login"
 
-    /// The function's success body. A 403 carries `{error}` and no hash.
-    struct Response: Decodable, Sendable {
-        let tokenHash: String?
-
-        enum CodingKeys: String, CodingKey {
-            case tokenHash = "token_hash"
-        }
-    }
-
     /// POST `{email, code}` and return the body. Injected in tests.
-    var mintTokenHash: @Sendable (_ email: String, _ code: String) async throws -> Response
+    var mintTokenHash: @Sendable (_ email: String, _ code: String) async throws -> TestAccountLoginResponse
     /// Redeem the minted hash. Injected in tests.
     var redeem: @Sendable (_ tokenHash: String) async throws -> Bool
 

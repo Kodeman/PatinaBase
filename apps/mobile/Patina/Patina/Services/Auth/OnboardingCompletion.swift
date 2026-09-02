@@ -150,12 +150,13 @@ struct OnboardingCompletion: Sendable {
             return false
         }
     }
+}
 
-    private struct StyleSignalRow: Decodable, Sendable {
-        let userId: String
+/// File scope so its `CodingKeys` is not two levels deep (SwiftLint `nesting`).
+private struct StyleSignalRow: Decodable, Sendable {
+    let userId: String
 
-        enum CodingKeys: String, CodingKey {
-            case userId = "user_id"
-        }
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
     }
 }
