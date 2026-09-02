@@ -206,7 +206,7 @@ INSERT INTO public.products (
   420000, ARRAY['white oak', 'tung oil'], ARRAY['Warm Modern'], ARRAY['maker_piece'],
   'Hand-rubbed tung oil', '{"depth": 40, "height": 30, "unit": "in", "width": 96}'::jsonb, 10,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/85b1952a-4427-5360-8632-a088a9acd024/c61abfc5-6024-5138-9654-a4d383f881c1.jpg'],
-  NULL, NULL, now() - interval '0 minutes',
+  NULL, 76, now() - interval '0 minutes',
   NULL, NULL,
   (SELECT id FROM public.vendors WHERE lower(name) = lower('Fixture Woodshop') LIMIT 1),
   'a0000000-0000-0000-0000-000000000001', now() - interval '0 minutes'
@@ -296,7 +296,7 @@ INSERT INTO public.products (
   34000, ARRAY['steel', 'enamel'], ARRAY['Modern Industrial'], ARRAY['maker_piece'],
   'Matte enamel', '{"depth": 16, "height": 11, "unit": "in", "width": 16}'::jsonb, 4,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/1a666c28-9477-52b9-86ed-a09a6fd7eebb/e5e50860-93ba-55c9-a23f-42dcbd35cb29.jpg'],
-  NULL, NULL, now() - interval '5762 minutes',
+  NULL, 71, now() - interval '5762 minutes',
   NULL, NULL,
   (SELECT id FROM public.vendors WHERE lower(name) = lower('Fixture Metalworks') LIMIT 1),
   'a0000000-0000-0000-0000-000000000001', now() - interval '5762 minutes'
@@ -341,7 +341,7 @@ INSERT INTO public.products (
   12000, ARRAY['stoneware'], ARRAY['Japandi'], ARRAY['maker_piece'],
   'Satin glaze', '{"depth": 7, "height": 6, "unit": "in", "width": 7}'::jsonb, NULL,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/744a5f21-feb6-5f1b-a036-f1fba4f182d2/f8e13faf-5152-5451-a2d6-34f5d98cf06f.jpg'],
-  NULL, NULL, now() - interval '10083 minutes',
+  NULL, 64, now() - interval '10083 minutes',
   NULL, NULL,
   (SELECT id FROM public.vendors WHERE lower(name) = lower('Fixture Pottery') LIMIT 1),
   'a0000000-0000-0000-0000-000000000001', now() - interval '10083 minutes'
@@ -386,7 +386,7 @@ INSERT INTO public.products (
   145000, ARRAY['wool', 'cotton'], ARRAY['Coastal'], ARRAY['sourced'],
   NULL, '{"depth": 96, "unit": "in", "width": 120}'::jsonb, 12,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/4c2b6fed-5877-558e-b4ec-bf24a12a9abc/c164b4af-1db8-5872-ab36-0078c7e94b6b.jpg'],
-  NULL, NULL, now() - interval '33124 minutes',
+  NULL, 68, now() - interval '33124 minutes',
   NULL, NULL,
   (SELECT id FROM public.vendors WHERE lower(name) = lower('Fixture Weavers') LIMIT 1),
   'a0000000-0000-0000-0000-000000000001', now() - interval '33124 minutes'
@@ -431,7 +431,7 @@ INSERT INTO public.products (
   260000, ARRAY['pine', 'brass'], ARRAY['Transitional'], ARRAY['maker_piece'],
   'Hand-painted', '{"depth": 18, "height": 32, "unit": "in", "width": 72}'::jsonb, 8,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/bd9b7e9f-6555-5d8f-bc58-a5fd80eddadf/12b5e91a-ac1a-5ef3-bece-ed9fa6f3f170.jpg'],
-  NULL, NULL, now() - interval '56165 minutes',
+  NULL, 58, now() - interval '56165 minutes',
   NULL, NULL,
   (SELECT id FROM public.vendors WHERE lower(name) = lower('Fixture Woodshop') LIMIT 1),
   'a0000000-0000-0000-0000-000000000001', now() - interval '56165 minutes'

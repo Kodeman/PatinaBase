@@ -101,6 +101,16 @@ MAX_HIGH_QUALITY_SHARE = 1.0 / 3.0
 HIGH_QUALITY_MIN_SAMPLE = 9
 DESIGNER_SELECTION_THRESHOLD = 80
 
+# quality_score is an OPTIONAL column, and left blank it is not merely missing —
+# get_recommendations reads COALESCE(quality_score, 0), so an unscored piece
+# sorts below every scored one and can never reach designer_selection tier. A
+# release manifest where some rows are scored and some are not therefore ships a
+# silently two-class shelf. The floor is 1.0: on the RELEASE profile every row
+# carries a score. It is deliberately not applied to the fixture profile, which
+# exists to exercise mechanics on a handful of rows, nor to a partial file Leah
+# is still filling in — those run --profile fixture.
+MIN_SCORED_SHARE = 1.0
+
 REQUIRED_COLUMNS = (
     "slug",
     "name",
@@ -603,6 +613,26 @@ def _check_manifest(rows, errors, profile, path):
     if len(makers) < MIN_MAKERS:
         errors.append(
             "%s: %d maker(s), below the floor of %d" % (path, len(makers), MIN_MAKERS)
+        )
+
+    # Every release row carries a quality_score. See MIN_SCORED_SHARE: a blank
+    # cell is not neutral, it is a zero in get_recommendations' ordering, so a
+    # half-scored manifest ships a shelf whose unscored half can never surface.
+    # The cap above (MAX_HIGH_QUALITY_SHARE) still applies, so "score them all"
+    # cannot be satisfied by scoring them all 80+.
+    if rows and len(scored) < MIN_SCORED_SHARE * len(rows):
+        unscored = [r.slug or "line %d" % r.line for r in rows if r.quality_score is None]
+        errors.append(
+            "%s: %d of %d rows carry quality_score (floor is %d%% on the release "
+            "profile) — an unscored piece reads as 0 in get_recommendations and "
+            "sorts below every scored one. Unscored: %s"
+            % (
+                path,
+                len(scored),
+                len(rows),
+                int(round(MIN_SCORED_SHARE * 100)),
+                ", ".join(unscored[:10]) + ("…" if len(unscored) > 10 else ""),
+            )
         )
 
 
@@ -1180,7 +1210,8 @@ def main(argv=None):
     parser.add_argument(
         "--profile", choices=("fixture", "release"), default="release",
         help="release enforces the charter's floors (>=30 rows, 6 categories, "
-             ">=3 makers); fixture checks the row contract only",
+             ">=3 makers, 100%% of rows scored); fixture checks the row "
+             "contract only",
     )
     parser.add_argument(
         "--editorial", metavar="MANIFEST", default=None,
