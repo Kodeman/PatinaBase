@@ -386,8 +386,13 @@ FROM pg_policy
 WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
 -- want: "Users can update own profile", with_check NOT NULL and containing 'role'
 
--- 9c-ii. the server default is in place
-SELECT pg_get_functiondef(p.oid) LIKE '%homeowner%' AS defaults_homeowner
+-- 9c-ii. the server default is in place.
+-- Match the fallback EXPRESSION, not the word: 00313's body already contains
+-- the literal 'homeowner' twice (the CASE arm that honours an explicit client
+-- hint, and its SECURITY comment), so `LIKE '%homeowner%'` returns true on the
+-- UNFIXED function. Corrected 2026-09-02 by W0 · L0.2 — the draft's version of
+-- this probe could not fail.
+SELECT pg_get_functiondef(p.oid) LIKE '%COALESCE(v_role, ''homeowner'')%' AS defaults_homeowner
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND p.proname = 'handle_new_user';
 -- want: true

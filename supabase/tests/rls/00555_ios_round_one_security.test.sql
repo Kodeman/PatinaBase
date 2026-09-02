@@ -680,16 +680,71 @@ BEGIN
       AND p.polname  = 'Users can update own profile'
   ), 'the WITH CHECK does not mention role — it does not pin it';
 
+  -- Read the fallback EXPRESSION, not the word. 00313's body already contains
+  -- the literal 'homeowner' twice, so LIKE '%homeowner%' passes on the UNFIXED
+  -- function. Section 11 below is the behavioural half of this guard.
   ASSERT (
-    SELECT pg_get_functiondef(p.oid) LIKE '%homeowner%'
+    SELECT pg_get_functiondef(p.oid) LIKE '%COALESCE(v_role, ''homeowner'')%'
     FROM pg_proc p JOIN pg_namespace nn ON nn.oid = p.pronamespace
     WHERE nn.nspname = 'public' AND p.proname = 'handle_new_user'
-  ), 'handle_new_user() does not default a metadata-less signup to homeowner';
+  ), 'handle_new_user() still falls back to designer for a metadata-less signup';
 
   ASSERT NOT has_table_privilege('authenticated'::name, 'public.profiles'::regclass, 'DELETE'),
     'authenticated still holds DELETE on profiles';
 
   RAISE NOTICE '00555 security assertions passed.';
+END $$;
+
+-- ─── 11. handle_new_user defaults a metadata-less signup to homeowner ──────
+--
+-- 00555 §a2(ii). 00313 shipped COALESCE(v_role, 'designer'), so an Apple
+-- sign-up — which carries no creation metadata at all, because
+-- supabase-swift's signInWithIdToken has no data: parameter — landed as a
+-- DESIGNER. A3-07's client-side remedy (the app writing its own role after
+-- sign-in) depended on the self-elevation hole case 7 closes, so the default
+-- has to move to the server or the app cannot stop writing its own role.
+--
+-- These are BEHAVIOUR cases on purpose. The catalog assertion in section 10 is
+-- a text match on the function definition; it can only prove the token is
+-- there. Only an actual auth.users INSERT proves the trigger writes the role.
+
+DO $$
+DECLARE
+  v_role text;
+BEGIN
+  -- 11a: no metadata at all — the Apple / Field path, and the one that broke.
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role)
+  VALUES ('b0000000-0000-4000-8000-00000000f001', 'p555-apple@test.invalid', '', NOW(), NOW(), NOW(),
+          '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  SELECT role INTO v_role FROM public.profiles WHERE id = 'b0000000-0000-4000-8000-00000000f001';
+  ASSERT v_role = 'homeowner',
+    'FAIL 11a: a metadata-less signup must land as homeowner, got ' || COALESCE(v_role, '<null>');
+
+  -- 11b: the explicit client hint the iOS app sends still works
+  --      (AuthService.swift:437 and :563 both send role: "homeowner").
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role, raw_user_meta_data)
+  VALUES ('b0000000-0000-4000-8000-00000000f002', 'p555-hinted@test.invalid', '', NOW(), NOW(), NOW(),
+          '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+          '{"role":"homeowner"}'::jsonb);
+  SELECT role INTO v_role FROM public.profiles WHERE id = 'b0000000-0000-4000-8000-00000000f002';
+  ASSERT v_role = 'homeowner',
+    'FAIL 11b: an explicit homeowner hint must be honored, got ' || COALESCE(v_role, '<null>');
+
+  -- 11c: 00313's security rule survives the change — raw_user_meta_data is
+  --      CLIENT-CONTROLLED, so a forged elevated hint must be ignored and fall
+  --      through to the default, NOT be written as given.
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role, raw_user_meta_data)
+  VALUES ('b0000000-0000-4000-8000-00000000f003', 'p555-forger@test.invalid', '', NOW(), NOW(), NOW(),
+          '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+          '{"role":"super_admin"}'::jsonb);
+  SELECT role INTO v_role FROM public.profiles WHERE id = 'b0000000-0000-4000-8000-00000000f003';
+  ASSERT v_role = 'homeowner',
+    'FAIL 11c: a forged role hint must be ignored, got ' || COALESCE(v_role, '<null>');
+
+  RAISE NOTICE '00555 handle_new_user behaviour assertions passed.';
 END $$;
 
 -- ROLLBACK so the test is idempotent.

@@ -2,12 +2,18 @@
 -- 00555 — iOS First Flight round one: close the ANON reads on profiles,
 --         notification_preferences, vendors and four SECURITY DEFINER views
 --
--- NUMBER IS PROVISIONAL. Head on main at draft time is 00554
--- (00554_onboarding_review_fixes.sql). Concurrent sessions are minting numbers
--- in the same band, so re-check `ls supabase/migrations/*.sql | sort | tail`
--- and renumber THIS file (name + this banner) before it moves into
--- supabase/migrations/. It has never been applied anywhere, so editing it in
--- place is the correct remediation until it lands.
+-- Number re-checked against `ls supabase/migrations/*.sql | sort -V | tail -3`
+-- on 2026-09-02 immediately before this file moved into supabase/migrations/:
+-- head was 00554_onboarding_review_fixes.sql, so 00555 stands. Concurrent
+-- sessions mint in this band — re-check again before the prod apply and
+-- renumber THIS file (name + this banner) on collision. It has never been
+-- applied anywhere, so editing it in place is the correct remediation until it
+-- lands.
+--
+-- Function lineage (skill: patina-db-migrations step 2):
+--   handle_new_user  00013 → 00023 → 00028 → 00039 → 00040 → 00126 → 00313 → (this)
+--                    body grafted verbatim from 00313, one token changed; see (a2)(ii)
+--   can_view_profile / search_shareable_designers / list_vendor_profiles  new here
 --
 -- ── WHAT THIS FIXES, STATED PLAINLY ────────────────────────────────────────
 --
@@ -522,18 +528,104 @@ COMMENT ON POLICY "Users can update own profile" ON public.profiles IS
   'write. Added 00555 (was USING-only since 00013).';
 
 -- (ii) the server-side default. handle_new_user() is SECURITY DEFINER and owned
--- by postgres, so it is not subject to the policy above. Today it COALESCEs
--- raw_user_meta_data->>'role' with a fallback that resolves to 'designer' on a
--- metadata-less signup — which is exactly what an Apple sign-up is, and exactly
--- how A3-07's tester became a designer. Re-declare the function with the SAME
--- body except for the fallback:
+-- by postgres, so it is not subject to the policy above.
 --
---     v_role := COALESCE(NULLIF(NEW.raw_user_meta_data->>'role', ''), 'homeowner');
+-- Lineage: 00013 → 00023 → 00028 → 00039 → 00040 → 00126 → 00313 → (this).
+-- The body below is grafted VERBATIM from
+-- 00313_handle_new_user_client_role_hint.sql, which is the
+--   grep -rln "CREATE OR REPLACE FUNCTION[^(]*handle_new_user" \
+--     supabase/migrations/*.sql | sort | tail -1
+-- winner. The ONLY delta is the last argument of the COALESCE at the INSERT:
+-- 'designer' → 'homeowner'. 00313's security rule is untouched — a
+-- client-supplied role hint is honored ONLY when it is the literal 'homeowner',
+-- so raw_user_meta_data can never self-assign an elevated role.
 --
--- The full body is NOT reproduced here: it must be copied from the live
--- definition at apply time (pg_get_functiondef) so no unrelated drift is lost.
--- Whoever applies this file does that edit as a named step in the runbook, and
--- the assertion below fails the transaction if it was skipped.
+-- An earlier draft of this migration left the body out and asked whoever
+-- applied the file to paste it in at apply time. That is not replayable: a
+-- local `supabase db reset` would produce a database where this function is
+-- unchanged, and the guard that was supposed to catch it
+-- (pg_get_functiondef LIKE '%homeowner%') is satisfied twice over by 00313's
+-- own body — it would report success over a skipped step. Both are fixed here.
+--
+-- WHY the default moves: an Apple sign-up carries no creation metadata at all
+-- (supabase-swift's signInWithIdToken has no data: parameter), so it fell
+-- through to 00313's 'designer' fallback — which is how A3-07's tester became a
+-- designer. A3-07's proposed client-side remedy (the app writing its own role
+-- after sign-in) works only through the self-elevation hole (i) above closes,
+-- so with that hole shut the default MUST move to the server.
+--
+-- CONSEQUENCE, stated rather than hidden: the designer portal's own self-signup
+-- page (apps/designer-portal/src/app/auth/signup/page.tsx:147-157) sends
+-- name/company/phone and NO role, so a designer signing up there now lands as
+-- profiles.role = 'homeowner' instead of 'designer'. The authoritative role
+-- table is public.user_roles — this function still writes 'app_user' there —
+-- and profiles.is_designer is synced from user_roles by 00290's trigger, so
+-- designer AUTHORITY is unaffected. What changes is the three places that
+-- branch on the profiles.role STRING: 00050's designer-onboarding automation,
+-- 00103/00104's comms participant-role derivation, and 00038's funnel views.
+-- Real designers arrive by studio invite (service_role, which sets the role
+-- explicitly). The self-signup path is put in front of Kody as integration note
+-- N3 rather than decided here.
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_default_role_id UUID;
+  v_role         TEXT;
+  v_display_name TEXT;
+BEGIN
+  -- Role hint from signup metadata. SECURITY: raw_user_meta_data is
+  -- CLIENT-CONTROLLED (set via signUp(data:) / signInWithOTP(data:)), so we
+  -- must NOT trust an arbitrary value — a caller could otherwise self-assign
+  -- 'admin'/'super_admin'. Only the single safe client value 'homeowner' is
+  -- honored; anything else is ignored and falls through to the default below.
+  -- (Elevated roles are granted exclusively server-side via user_roles / admin
+  -- action, never from signup metadata.)
+  v_role := CASE
+    WHEN NEW.raw_user_meta_data->>'role' = 'homeowner' THEN 'homeowner'
+    ELSE NULL
+  END;
+
+  -- Display name from metadata (email/password path sends display_name; other
+  -- providers may send full_name). Nullable — never blocks signup.
+  v_display_name := NULLIF(NEW.raw_user_meta_data->>'display_name', '');
+  IF v_display_name IS NULL THEN
+    v_display_name := NULLIF(NEW.raw_user_meta_data->>'full_name', '');
+  END IF;
+
+  INSERT INTO public.profiles (id, email, display_name, role)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    v_display_name,
+    COALESCE(v_role, 'homeowner')
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  -- Default new signups to 'app_user' (consumer) in the authoritative
+  -- user_roles table. Role can be elevated later by an admin or org flow.
+  SELECT id INTO v_default_role_id FROM public.roles WHERE name = 'app_user' LIMIT 1;
+  IF v_default_role_id IS NOT NULL THEN
+    INSERT INTO public.user_roles (user_id, role_id)
+    VALUES (NEW.id, v_default_role_id)
+    ON CONFLICT (user_id, role_id) DO NOTHING;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.handle_new_user() IS
+  'auth.users INSERT trigger. Creates the profiles row and the default '
+  'user_roles ''app_user'' grant. A client-supplied raw_user_meta_data role '
+  'hint is honored ONLY for the literal ''homeowner'' (00313); every other '
+  'value, and the metadata-less OAuth/Apple path, falls back to ''homeowner'' '
+  'as of 00555 — it fell back to ''designer'' from 00013 through 00313, which '
+  'is how a metadata-less Apple sign-up became a designer.';
 
 -- ─── public.profile_cards: CUT, deliberately ──────────────────────────────
 -- An earlier draft created a narrow `profile_cards` view here (security_invoker,
@@ -1002,11 +1094,15 @@ BEGIN
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Users can update own profile'
   ), '"Users can update own profile" still has no WITH CHECK — role self-elevation is open';
+  -- Read the fallback EXPRESSION, not the word. 00313's body already contains
+  -- the literal 'homeowner' twice (the CASE arm and its SECURITY comment), so
+  -- a LIKE '%homeowner%' guard passes on the UNFIXED function and would report
+  -- success over a skipped edit.
   ASSERT (
-    SELECT pg_get_functiondef(p.oid) LIKE '%homeowner%'
+    SELECT pg_get_functiondef(p.oid) LIKE '%COALESCE(v_role, ''homeowner'')%'
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public' AND p.proname = 'handle_new_user'
-  ), 'handle_new_user() does not default a metadata-less signup to homeowner';
+  ), 'handle_new_user() still falls back to designer for a metadata-less signup';
   ASSERT NOT has_function_privilege('anon', 'public.search_shareable_designers(text)', 'EXECUTE'),
     'anon can execute search_shareable_designers';
   ASSERT has_function_privilege('authenticated', 'public.search_shareable_designers(text)', 'EXECUTE'),
