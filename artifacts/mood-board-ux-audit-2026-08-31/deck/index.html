@@ -1,0 +1,963 @@
+<title>The Board, Under Load</title>
+<style>
+/* ============================================================
+   THE BOARD, UNDER LOAD — Mood Board Suite UX Audit
+   Self-contained. No external fonts, scripts, or images.
+   House palette (Patina · The Document series): bone paper / drafting
+   ink / verdigris (healthy, protect) / brass (waived, caution, ruling)
+   / oxblood (broken, P1). Type: bookish serif display, system sans
+   body, mono for evidence, labels and data.
+   ============================================================ */
+
+:root{
+  --paper:#E7E9E3;
+  --paper-2:#F3F4F0;
+  --card:#FBFBF8;
+  --ink:#16202B;
+  --ink-2:#33404E;
+  --slate:#5D6773;
+  --rule:rgba(22,32,43,.14);
+  --rule-2:rgba(22,32,43,.28);
+  --verdigris:#2F6F63;
+  --verdigris-soft:rgba(47,111,99,.10);
+  --brass:#9A6B1F;
+  --brass-soft:rgba(154,107,31,.10);
+  --oxblood:#8A3A32;
+  --oxblood-soft:rgba(138,58,50,.09);
+  --grid:rgba(22,32,43,.045);
+  --shadow:0 1px 0 rgba(22,32,43,.05), 0 10px 30px -22px rgba(22,32,43,.5);
+  --lift:0 2px 10px -6px rgba(22,32,43,.5);
+
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+    --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+    --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+    --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+    --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+    --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+    --grid:rgba(230,233,229,.04);
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+    --lift:0 2px 10px -6px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+  --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+  --grid:rgba(230,233,229,.04);
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+  --lift:0 2px 10px -6px rgba(0,0,0,.8);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+html{-webkit-text-size-adjust:100%}
+
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.55;
+  overflow-x:hidden;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck shell ---------- */
+#deck{ height:100dvh; overflow-y:auto; overflow-x:hidden; scroll-snap-type:y proximity; }
+#deck:focus{outline:none}
+.slide{
+  min-height:100dvh;
+  scroll-snap-align:start;
+  display:flex; align-items:center;
+  padding:clamp(24px,4.5vh,60px) clamp(20px,5vw,80px) clamp(64px,9vh,90px);
+  border-bottom:1px solid var(--rule);
+  position:relative;
+}
+.slide:last-child{padding-bottom:130px}
+.inner{
+  width:100%; max-width:1180px; margin:0 auto;
+  display:grid; grid-template-columns:132px minmax(0,1fr);
+  gap:clamp(18px,3vw,44px); align-items:start;
+}
+@media (max-width:860px){ .inner{grid-template-columns:minmax(0,1fr);gap:14px} }
+.gutter{position:sticky;top:0;padding-top:.5rem}
+.main{min-width:0}
+.slide.wide .inner{grid-template-columns:minmax(0,1fr);max-width:1320px;gap:0}
+.slide.wide .gutter{position:static;padding:0;display:flex;align-items:center;gap:12px;margin-bottom:.3rem}
+.slide.wide .gutter .num{margin-top:0}
+.slide.wide .gutter .tick{display:none}
+
+/* ---------- type ---------- */
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate);display:block}
+.gutter .num{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--verdigris);display:block;margin-top:6px}
+.gutter .tick{display:block;width:34px;height:2px;background:var(--verdigris);margin-top:12px;opacity:.55}
+@media (max-width:860px){ .gutter .tick{display:none} .gutter{position:static} }
+
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.012em;margin:0;text-wrap:balance}
+h1{font-size:clamp(2.3rem,6vw,4.2rem);line-height:1.04}
+h2{font-size:clamp(1.55rem,3.2vw,2.55rem);line-height:1.12;margin-bottom:.5rem}
+h3{font-size:clamp(1rem,1.6vw,1.24rem);line-height:1.25}
+.lede{font-size:clamp(1rem,1.4vw,1.15rem);color:var(--ink-2);max-width:66ch;margin:.85rem 0 0}
+p{margin:.7rem 0;max-width:70ch}
+.small{font-size:.85rem;color:var(--slate);line-height:1.5}
+strong{font-weight:650;color:var(--ink)}
+em{font-style:italic}
+.vd{color:var(--verdigris)} .br{color:var(--brass)} .ox{color:var(--oxblood)}
+code,.mono{font-family:var(--mono);font-size:.82em}
+code{background:var(--oxblood-soft);color:var(--oxblood);padding:.08em .38em;border-radius:3px;word-break:break-word}
+
+/* ---------- cover ---------- */
+.cover .inner{grid-template-columns:minmax(0,1fr)}
+.wordmark{display:flex;align-items:center;gap:10px;margin-bottom:clamp(20px,5vh,44px)}
+.wordmark svg{display:block}
+.wordmark span{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--slate)}
+.cover-quote{
+  font-family:var(--display);font-size:clamp(1.3rem,2.6vw,1.85rem);line-height:1.3;
+  color:var(--ink-2);font-style:italic;border-left:3px solid var(--oxblood);
+  padding-left:clamp(14px,2vw,24px);margin:clamp(22px,4vh,38px) 0 0;max-width:42ch;
+}
+.cover-meta{
+  margin-top:clamp(24px,5vh,48px);display:flex;flex-wrap:wrap;gap:10px 28px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);
+  border-top:1px solid var(--rule);padding-top:16px;
+}
+.cover-meta b{color:var(--ink);font-weight:500}
+
+/* ---------- cards & grids ---------- */
+.grid{display:grid;gap:13px;margin-top:1.05rem}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:960px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)} }
+
+.card{background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:15px 17px;box-shadow:var(--shadow);min-width:0}
+.card h3{margin-bottom:.3rem}
+.card p{margin:.35rem 0}
+.card .small{margin-top:.4rem}
+.card.accent{border-left:3px solid var(--verdigris)}
+.card.warn{border-left:3px solid var(--brass)}
+.card.bad{border-left:3px solid var(--oxblood)}
+.card.tight{padding:11px 13px}
+.card.tight p{font-size:.85rem;color:var(--slate);line-height:1.45;margin:.2rem 0 0}
+
+.kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--slate);display:block;margin-bottom:.35rem}
+
+/* ---------- pull quotes ---------- */
+.quote{border-left:3px solid var(--verdigris);padding:2px 0 2px 16px;margin:14px 0}
+.quote p{font-family:var(--display);font-style:italic;font-size:clamp(1rem,1.45vw,1.16rem);line-height:1.42;color:var(--ink);margin:0}
+.quote .attr{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);margin-top:8px;display:block}
+.quote.ox{border-left-color:var(--oxblood)}
+.quote.br{border-left-color:var(--brass)}
+
+/* ---------- persona quote slide ---------- */
+.persona-head{display:flex;align-items:center;gap:14px;margin-bottom:.4rem}
+.persona-avatar{
+  width:52px;height:52px;border-radius:50%;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--verdigris-soft);border:1px solid var(--verdigris);
+  font-family:var(--display);font-style:italic;font-size:1.4rem;color:var(--verdigris);
+}
+.persona-head.ox .persona-avatar{background:var(--oxblood-soft);border-color:var(--oxblood);color:var(--oxblood)}
+.persona-name{font-family:var(--display);font-size:1.2rem;color:var(--ink);display:block}
+.persona-role{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+.persona-quotes{display:flex;flex-direction:column;gap:16px;margin-top:1.1rem}
+.persona-quotes .quote p{font-size:clamp(1.02rem,1.6vw,1.28rem);line-height:1.46}
+.persona-frame{
+  margin-top:1.1rem;border:1px solid var(--rule-2);border-radius:6px;
+  background:var(--paper-2);padding:12px 16px;
+}
+.persona-frame p{margin:0;font-size:.95rem;color:var(--ink-2);max-width:64ch}
+.persona-frame .kicker{color:var(--oxblood)}
+
+/* ---------- evidence / rpc console ---------- */
+.console{
+  background:#171E17;border:1px solid var(--rule-2);border-left:3px solid var(--oxblood);
+  border-radius:6px;padding:12px 15px;margin:10px 0;min-width:0;
+}
+:root[data-theme="dark"] .console{background:#0C1310}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .console{background:#0C1310} }
+.console .where{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#8FAE95;display:block;margin-bottom:7px}
+.console .line{font-family:var(--mono);font-size:.82rem;line-height:1.6;color:#D9E5DA;white-space:pre-wrap;word-break:break-word;margin:0}
+.console .line.err{color:#F0A99A}
+.console .line .tag{color:#7FCBB0}
+
+.evidence{background:var(--paper-2);border:1px solid var(--rule);border-left:3px solid var(--brass);border-radius:5px;padding:12px 14px;min-width:0}
+.evidence .where{font-family:var(--mono);font-size:10.5px;color:var(--brass);letter-spacing:.04em;display:block;margin-bottom:6px;word-break:break-word}
+.evidence .what{font-family:var(--mono);font-size:.79rem;color:var(--ink);background:var(--card);border:1px dashed var(--rule-2);border-radius:4px;padding:7px 9px;display:block;margin-bottom:7px;white-space:normal;word-break:break-word;line-height:1.5}
+.evidence .read{font-size:.82rem;color:var(--slate);line-height:1.45;margin:0}
+
+/* ---------- fork diagram (stranded path) ---------- */
+.fork{margin-top:1.2rem}
+.fork-in{display:flex;justify-content:center;margin-bottom:2px}
+.fork-node{
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink);background:var(--card);border:1px solid var(--rule-2);border-radius:999px;
+  padding:8px 20px;box-shadow:var(--shadow);
+}
+.fork-arrows{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
+@media (max-width:760px){ .fork-arrows{grid-template-columns:1fr} }
+.fork-arrow{display:flex;flex-direction:column;align-items:center;gap:4px}
+.fork-arrow svg{display:block}
+.fork-arrow .lab{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);text-align:center}
+.fork-arrow.dead .lab{color:var(--slate);text-decoration:line-through;text-decoration-color:var(--rule-2)}
+.fork-arrow.live .lab{color:var(--oxblood);font-weight:600}
+.fork-lanes{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:10px}
+@media (max-width:760px){ .fork-lanes{grid-template-columns:1fr} }
+.lane{border-radius:8px;padding:16px 18px;border:1px solid var(--rule)}
+.lane.healthy{background:var(--verdigris-soft);border-color:var(--verdigris)}
+.lane.broken{background:var(--oxblood-soft);border-color:var(--oxblood)}
+.lane .lane-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px}
+.lane .lane-title{font-family:var(--display);font-size:1.08rem;color:var(--ink)}
+.lane .lane-tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase}
+.lane.healthy .lane-tag{color:var(--verdigris)}
+.lane.broken .lane-tag{color:var(--oxblood)}
+.lane ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.lane li{display:flex;align-items:baseline;gap:9px;font-size:.92rem;color:var(--ink-2)}
+.lane li .mk{font-family:var(--mono);font-weight:700;flex:0 0 auto}
+.lane.healthy li .mk{color:var(--verdigris)}
+.lane.broken li .mk{color:var(--oxblood)}
+.fork-note{margin-top:14px}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:.8rem}
+th,td{text-align:left;padding:8px 13px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.4}
+th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);font-weight:500;background:var(--paper-2)}
+tr:last-child td{border-bottom:none}
+td.lead{color:var(--ink);font-weight:600;white-space:nowrap}
+td.eff{font-family:var(--mono);white-space:nowrap}
+.pill{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:1.5px 8px;border-radius:999px;border:1px solid var(--rule-2)}
+.pill.s{color:var(--verdigris);border-color:var(--verdigris);background:var(--verdigris-soft)}
+.pill.m{color:var(--brass);border-color:var(--brass);background:var(--brass-soft)}
+.pill.l{color:var(--oxblood);border-color:var(--oxblood);background:var(--oxblood-soft)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:9px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate)}
+.legend b{font-weight:500}
+
+/* ---------- lists ---------- */
+ul.plain{list-style:none;padding:0;margin:.6rem 0}
+ul.plain li{padding-left:20px;position:relative;margin:.42rem 0;max-width:72ch;font-size:.93rem;color:var(--ink-2)}
+ul.plain li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:1.5px;background:var(--verdigris)}
+ul.plain li strong{color:var(--ink)}
+ul.plain.ox li::before{background:var(--oxblood)}
+
+/* ---------- path cards (A/B/C) ---------- */
+.path-thesis{
+  font-family:var(--display);font-style:italic;font-size:clamp(1.05rem,1.7vw,1.3rem);
+  color:var(--ink-2);line-height:1.4;max-width:60ch;margin:.6rem 0 0;
+}
+.path-cols{display:grid;grid-template-columns:1.4fr 1fr;gap:22px;margin-top:1.1rem}
+@media (max-width:900px){ .path-cols{grid-template-columns:1fr} }
+.not-do{
+  border:1px dashed var(--rule-2);border-radius:6px;background:var(--paper-2);
+  padding:13px 16px;margin-top:.9rem;
+}
+.not-do .kicker{color:var(--oxblood)}
+.not-do p{margin:0;font-size:.9rem;color:var(--slate);max-width:none}
+.meter-row{display:flex;gap:22px;margin-top:1rem;flex-wrap:wrap}
+.meter{display:flex;flex-direction:column;gap:4px}
+.meter .kicker{margin-bottom:0}
+.meter .val{font-family:var(--mono);font-size:.95rem}
+.meter .val.s{color:var(--verdigris)} .meter .val.m{color:var(--brass)} .meter .val.l{color:var(--oxblood)}
+
+/* ---------- callout / note ---------- */
+.callout{border:1px solid var(--verdigris);background:var(--verdigris-soft);border-radius:6px;padding:13px 16px;margin-top:1.05rem}
+.callout p{margin:0;font-size:.93rem;color:var(--ink);max-width:none}
+.callout .kicker{color:var(--verdigris)}
+.callout.br{border-color:var(--brass);background:var(--brass-soft)}
+.callout.br .kicker{color:var(--brass)}
+.callout.ox{border-color:var(--oxblood);background:var(--oxblood-soft)}
+.callout.ox .kicker{color:var(--oxblood)}
+
+/* ---------- ask / ruling cards ---------- */
+.ruling{border:1px solid var(--rule);border-radius:6px;background:var(--card);padding:14px 16px;min-width:0;position:relative}
+.ruling .letter{
+  font-family:var(--display);font-size:1.3rem;color:var(--brass);
+  display:block;margin-bottom:.2rem;
+}
+.ruling p{margin:.3rem 0 0;font-size:.92rem;color:var(--ink-2)}
+.ruling .rev{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);display:block;margin-top:.5rem}
+
+.status-line{
+  margin-top:1.4rem;display:inline-flex;align-items:center;gap:9px;
+  font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--brass);background:var(--brass-soft);border:1px solid var(--brass);
+  border-radius:999px;padding:8px 18px;
+}
+.status-line .dot{width:7px;height:7px;border-radius:50%;background:var(--brass);flex:0 0 auto}
+
+/* ---------- numbered sequence ---------- */
+.seq{display:flex;flex-direction:column;gap:14px;margin-top:1.1rem}
+.seq-item{display:flex;gap:16px;align-items:flex-start}
+.seq-num{
+  font-family:var(--display);font-size:1.5rem;color:var(--verdigris);flex:0 0 auto;
+  width:40px;line-height:1;
+}
+.seq-item:nth-child(2) .seq-num{color:var(--brass)}
+.seq-item:nth-child(3) .seq-num{color:var(--oxblood)}
+.seq-body p{margin:.15rem 0 0;font-size:.96rem;color:var(--ink-2);max-width:66ch}
+.seq-body h3{margin-bottom:.15rem}
+
+/* ---------- chrome ---------- */
+#progress{position:fixed;top:0;left:0;height:2px;background:var(--oxblood);width:0;z-index:60;transition:width .18s linear}
+@media (prefers-reduced-motion: reduce){ #progress{transition:none} }
+#chrome{
+  position:fixed;right:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);z-index:60;
+  display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--rule);
+  border-radius:999px;padding:5px 6px 5px 13px;box-shadow:var(--shadow);
+}
+#counter{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--slate);min-width:52px}
+#counter b{color:var(--ink);font-weight:600}
+.navbtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink);
+  width:28px;height:28px;border-radius:999px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;font-size:13px;line-height:1;
+  font-family:var(--mono);padding:0;
+}
+.navbtn:hover{border-color:var(--oxblood);color:var(--oxblood)}
+.navbtn:focus-visible{outline:2px solid var(--oxblood);outline-offset:2px}
+#hint{
+  position:fixed;left:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);z-index:60;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);opacity:.75;
+}
+@media (max-width:700px){ #hint{display:none} }
+
+/* reveal */
+.slide .main > *, .slide .gutter > *{opacity:0;transform:translateY(8px);transition:opacity .5s ease, transform .5s ease}
+.slide.seen .main > *, .slide.seen .gutter > *{opacity:1;transform:none}
+.slide.seen .main > *:nth-child(2){transition-delay:.06s}
+.slide.seen .main > *:nth-child(3){transition-delay:.12s}
+.slide.seen .main > *:nth-child(4){transition-delay:.17s}
+.slide.seen .main > *:nth-child(5){transition-delay:.21s}
+@media (prefers-reduced-motion: reduce){
+  .slide .main > *, .slide .gutter > *{opacity:1;transform:none;transition:none}
+}
+</style>
+
+<div id="progress" role="presentation"></div>
+
+<div id="deck" tabindex="-1">
+
+<!-- ============ 01 · COVER ============ -->
+<section class="slide cover" data-label="Cover">
+  <div class="inner">
+    <div class="main">
+      <div class="wordmark">
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".35"/>
+          <path d="M5 16.5 L11 5.5 L17 16.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <line x1="7.6" y1="12" x2="14.4" y2="12" stroke="currentColor" stroke-width="1.1" opacity=".55"/>
+        </svg>
+        <span>Patina · The Document · UX Audit</span>
+      </div>
+
+      <h1>The Board,<br>Under Load</h1>
+      <p class="lede">An audit of the mood board suite, four weeks after GA — tested in production, then read against the acceptance ledger, then run through a five-lens panel.</p>
+
+      <blockquote class="cover-quote">All new client work now lands on the path where creation, group drag, and duplicate are broken — and Share was never wired in.</blockquote>
+
+      <div class="cover-meta">
+        <span>31 Aug 2026</span>
+        <span>Method · <b>1 prod session · 2 QA passes · 5-lens expert panel · 2 designer personas</b></span>
+        <span>Status · <b>audit complete — awaiting ruling</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 · WHAT WE DID ============ -->
+<section class="slide" data-label="Method">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · Method</span><span class="num">02</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>We tested it live, before reading what it was supposed to do.</h2>
+      <p class="lede">Signed in to production as super_admin (Middle Studio), we exercised both board-ownership surfaces and wrote findings cold. Only after that did we cross-check against the GA acceptance ledger and its waived rows — then convened a panel to read the code underneath.</p>
+
+      <div class="grid g2">
+        <div class="card accent">
+          <span class="kicker">Prod session · project path</span>
+          <p>Creation, canvas gestures, autosave, Present, Export, Save-as-template, zoom, and stress-add — on a scratch project's board.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">Prod session · proposal path</span>
+          <p>A focused follow-up cross-check of every P1 on the legacy drafting-room board surface — the one path with Share.</p>
+        </div>
+        <div class="card">
+          <span class="kicker">Panel · 3 expert lenses</span>
+          <p>Canvas interaction, visual/UI design, and information architecture — each reading the room's own code against the ledger.</p>
+        </div>
+        <div class="card">
+          <span class="kicker">Panel · 2 designer personas</span>
+          <p>Marisol (solo residential) and Devon (9-person studio lead) walked the live product end to end, in character.</p>
+        </div>
+      </div>
+
+      <div class="callout br">
+        <span class="kicker">A pattern, not a coincidence</span>
+        <p>Findings were written before reading the ledger — then checked against it. The GA ledger's waived rows predicted two of the observed production failures.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 · THE DIAGNOSIS ============ -->
+<section class="slide" data-label="Diagnosis">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · The diagnosis</span><span class="num">03</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>One sentence, and it has to hold the whole audit.</h2>
+      <blockquote class="quote" style="margin-top:1.3rem">
+        <p>The room itself is <span class="vd">above class average</span> — clean canvas/persistence seam, genuinely good command engine, rich multi-select, faithful templates, solid exports — but a post-GA document-kind split <span class="ox">silently stranded the healthy proposal-owned path</span>, so <strong class="ox">all new client work lands on the project-owned path</strong>, where <span class="ox">creation, group drag, and duplicate are broken</span> and <span class="ox">Share was never wired in</span>.</p>
+      </blockquote>
+      <p class="small" style="margin-top:1rem">This is the spine of everything that follows: a strong instrument, with the only door new clients can reach opening onto its broken half.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 · PROTECT LIST ============ -->
+<section class="slide" data-label="What's strong">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · What's already good</span><span class="num">04</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>This is not a teardown. The room is above class average.</h2>
+      <blockquote class="quote" style="margin-top:1rem">
+        <p>The canvas owns transient gesture/view state only and emits one semantic commit per gesture; it imports no persistence, fetching or auth&nbsp;&mdash;&nbsp;rare discipline for an in-house canvas.</p>
+        <span class="attr">Canvas interaction expert</span>
+      </blockquote>
+
+      <div class="grid g3" style="margin-top:1rem">
+        <div class="card accent tight">
+          <span class="kicker">Command engine</span>
+          <p><strong>revertFailedStructuralTransition</strong> — a three-way inverse that rolls back only the failed write's fields and preserves later unrelated edits.</p>
+        </div>
+        <div class="card accent tight">
+          <span class="kicker">Smart guides + group resize</span>
+          <p>Alignment and equal-spacing guides at a screen-constant tolerance; group resize scales proportionally about the anchored corner — the hard case, done right.</p>
+        </div>
+        <div class="card accent tight">
+          <span class="kicker">Templates</span>
+          <p>Materialization reproduces sections, items, positions and rotation exactly, and correctly offers "promote to selection" on owner-linked pieces.</p>
+        </div>
+        <div class="card accent tight">
+          <span class="kicker">Share dialog</span>
+          <p>"The best-designed dialog in the set" — label, expiry, one-time-reveal link, select-on-focus, an explicit only-a-hash-is-stored note.</p>
+        </div>
+        <div class="card accent tight">
+          <span class="kicker">Export trio + ⌘K</span>
+          <p>PNG, composition PDF and spec-sheet PDF all succeed cleanly; ⌘K recents are instant and correctly scoped.</p>
+        </div>
+        <div class="card accent tight">
+          <span class="kicker">Discipline, elsewhere</span>
+          <p>44px touch targets nearly everywhere; allow-listed return paths; a legible "Working boards vs Signed direction" lifecycle split.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 · THE STRANDED PATH ============ -->
+<section class="slide wide" data-label="The fracture">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · The fracture</span><span class="num">05</span></div>
+    <div class="main">
+      <h2>Every new client document is funneled onto the broken path.</h2>
+      <p class="lede">Two board-ownership paths exist in this codebase. One is healthy. The other is where every new agreement now lands, because new agreements lost their Boards facet.</p>
+
+      <div class="fork">
+        <div class="fork-in"><span class="fork-node">New client agreement created</span></div>
+        <div class="fork-arrows">
+          <div class="fork-arrow dead">
+            <svg width="20" height="34" viewBox="0 0 20 34" aria-hidden="true"><line x1="10" y1="1" x2="10" y2="26" stroke="currentColor" stroke-width="2" stroke-dasharray="3 4" opacity=".55"/><path d="M3 20 L17 27" stroke="currentColor" stroke-width="2" opacity=".55"/><path d="M17 20 L3 27" stroke="currentColor" stroke-width="2" opacity=".55"/></svg>
+            <span class="lab">Unreachable — legacy fixtures only</span>
+          </div>
+          <div class="fork-arrow live">
+            <svg width="20" height="34" viewBox="0 0 20 34" aria-hidden="true"><line x1="10" y1="1" x2="10" y2="24" stroke="currentColor" stroke-width="2"/><path d="M3 18 L10 27 L17 18" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            <span class="lab">100% of new work, today</span>
+          </div>
+        </div>
+
+        <div class="fork-lanes">
+          <div class="lane healthy">
+            <div class="lane-head"><span class="lane-title">Proposal-owned path</span><span class="lane-tag">Healthy</span></div>
+            <ul>
+              <li><span class="mk">✓</span> Blank board creation</li>
+              <li><span class="mk">✓</span> Multi-select group drag</li>
+              <li><span class="mk">✓</span> Cmd+D duplicate</li>
+              <li><span class="mk">✓</span> Share — full dialog in the room toolbar</li>
+            </ul>
+          </div>
+          <div class="lane broken">
+            <div class="lane-head"><span class="lane-title">Project-owned path</span><span class="lane-tag">Broken</span></div>
+            <ul>
+              <li><span class="mk">✗</span> Blank board creation — fails 100%</li>
+              <li><span class="mk">✗</span> Multi-select group drag — reverts</li>
+              <li><span class="mk">✗</span> Cmd+D duplicate — reverts</li>
+              <li><span class="mk">✗</span> Share — no entry point exists anywhere</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout ox fork-note">
+          <span class="kicker">The twist</span>
+          <p>New agreements lost their Boards facet when the commercial-document split shipped — an unannounced side effect, not a decision. The only surviving Boards-capable, Share-capable drafting room is a handful of pre-existing legacy proposals nobody can create fresh.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 · DEFECT — BLANK CREATION ============ -->
+<section class="slide" data-label="Defect 01">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Defect 01</span><span class="num">06</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The top, default option in the New Board picker fails every time.</h2>
+      <p class="lede">"Blank board" is the first card in the picker. On a project board it throws a raw RPC name straight into the user's toast.</p>
+
+      <div class="console">
+        <span class="where">console · repeated, identical both times</span>
+        <p class="line err">Error logged: <span class="tag">AppError</span>: Project board changes require apply_board_room_state</p>
+        <p class="line err">Toast — "Error — Project board changes require apply_board_room_state."</p>
+      </div>
+
+      <div class="evidence">
+        <span class="where">packages/supabase/src/hooks/use-boards.ts:594&ndash;596 · boards-builder.tsx:179&ndash;189</span>
+        <span class="what">useUpsertBoard() throws by design when the owner is a project. BoardsBuilder.handleBlank() calls it unconditionally for both owner kinds.</span>
+        <p class="read">The Patina starter templates work fine from the same dialog — they route through the owner-aware <code>materialize_board_template</code> RPC instead. That RPC is the fix template.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 · DEFECT — GROUP DRAG + DUPLICATE ============ -->
+<section class="slide" data-label="Defect 02">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Defect 02</span><span class="num">07</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Group drag and duplicate fail on the same broken leg.</h2>
+
+      <div class="grid g2">
+        <div class="console">
+          <span class="where">console · marquee-drag a 3-pin selection</span>
+          <p class="line err">3× POST rpc/apply_board_room_state → 400</p>
+          <p class="line err"><span class="tag">AppError</span>: invalid board fields (×2)</p>
+          <p class="line err"><span class="tag">AppError</span>: invalid board item (×1)</p>
+          <p class="line">Banner — "That change was reverted because it could not be saved."</p>
+        </div>
+        <div class="console">
+          <span class="where">console · Cmd+D on a plain, unmodified note</span>
+          <p class="line err">Toast — "Error — invalid board item"</p>
+          <p class="line err">POST rpc/apply_board_room_state → 400 (×2)</p>
+          <p class="line">Reproduced on both a modified product and a plain note — identical.</p>
+        </div>
+      </div>
+
+      <div class="callout br" style="margin-top:1.1rem">
+        <span class="kicker">The waived rows were the defect map</span>
+        <p>AC1.11 waived exactly this assertion at GA: <em>"an explicit persisted multi-drag delta assertion remains."</em> It has now manifested as a real production bug, on the only path new work can reach.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 · DEFECT — SHARE + FRONT DOOR ============ -->
+<section class="slide" data-label="Defect 03–04">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Defect 03&ndash;04</span><span class="num">08</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Share was never wired in — and new work can't find the door that has it.</h2>
+
+      <div class="grid g2">
+        <div class="card bad">
+          <span class="kicker">D3 · Share, absent</span>
+          <p>A hard <code>owner.kind === 'proposal'</code> gate — confirmed absent from the room toolbar, the "More" menu, Present mode, and the Boards list. No per-row menu, no messaging.</p>
+          <p class="small">Backend mint/resolve/revoke for project-owned shares already Passed at GA (AC2.16). This is a one-line UI gate sitting on top of finished, tested work.</p>
+        </div>
+        <div class="card bad">
+          <span class="kicker">D4 · The front door, missing</span>
+          <p><code>commercialDocumentExperience()</code> maps every new agreement to the facet-less <code>ServiceAgreementDraftingRoom</code> — zero import of <code>BoardsBuilder</code>.</p>
+          <p class="small">An unannounced side effect of the later commercial-document-kind split, postdating GA. No PRD or ruling addresses it.</p>
+        </div>
+      </div>
+      <p class="small" style="margin-top:1rem">Both need a ruling on where boards belong going forward — see the ask, slide 17.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 · MARISOL ============ -->
+<section class="slide" data-label="Marisol">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · The voices</span><span class="num">09</span><span class="tick"></span></div>
+    <div class="main">
+      <div class="persona-head">
+        <span class="persona-avatar">M</span>
+        <div><span class="persona-name">Marisol</span><span class="persona-role">Solo residential designer</span></div>
+      </div>
+
+      <div class="persona-quotes">
+        <blockquote class="quote">
+          <p>Client signed yesterday. Tonight, 20 minutes, one board, presenting tomorrow at 10am from my laptop, then I want to leave a link for her and her partner to react overnight.</p>
+        </blockquote>
+        <blockquote class="quote ox">
+          <p>I go to open the new agreement and look for a Boards tab. It's not there&hellip; that's already five minutes gone figuring out where a board even lives for a brand-new client.</p>
+        </blockquote>
+        <blockquote class="quote ox">
+          <p>There is no Share button anywhere on this board&hellip; the "leave them a link" half of tonight's job is simply not possible from where I ended up.</p>
+        </blockquote>
+      </div>
+
+      <div class="persona-frame">
+        <span class="kicker">The verdict</span>
+        <p>The one job the board was made for — finish tonight, leave the link — is impossible end-to-end, on the only path a new client can reach.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 · DEVON ============ -->
+<section class="slide" data-label="Devon">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · The voices</span><span class="num">10</span><span class="tick"></span></div>
+    <div class="main">
+      <div class="persona-head ox">
+        <span class="persona-avatar">D</span>
+        <div><span class="persona-name">Devon</span><span class="persona-role">Senior designer, 9-person studio</span></div>
+      </div>
+
+      <div class="persona-quotes">
+        <blockquote class="quote ox">
+          <p>Monday I go to seed three "coastal calm" bedroom boards. Blank board is the top, most obvious choice in the New Board picker — it throws a raw RPC error every time.</p>
+        </blockquote>
+        <blockquote class="quote">
+          <p>There's no internal annotation layer at all&hellip; I'd have to screenshot-and-Slack, disconnected from the board. No presence either, so I can't even walk a junior through it live in-app.</p>
+        </blockquote>
+        <blockquote class="quote">
+          <p>Friday, the principal wants approved / procurement / stalled across 5 projects&hellip; I'd have to open all 5 projects' Boards facets and read verdict summaries card by card.</p>
+        </blockquote>
+      </div>
+
+      <div class="persona-frame">
+        <span class="kicker">The verdict</span>
+        <p>Delegation lands every junior on the broken path. There's no direction layer for a lead to speak into a board. There's no Friday rollup.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · FIX-NOW TABLE ============ -->
+<section class="slide wide" data-label="Fix now">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Fix now</span><span class="num">11</span></div>
+    <div class="main">
+      <h2>Ten defects, mostly small, all path-independent.</h2>
+      <p class="lede">Do these regardless of which direction comes next — most are one bug family plus a handful of one-line-to-small wires.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>#</th><th>Defect</th><th>Root cause</th><th>Effort</th></tr></thead>
+          <tbody>
+            <tr><td class="lead">D1</td><td>Blank-board creation fails on project boards</td><td>useUpsertBoard throws by design; BoardsBuilder calls it unconditionally</td><td class="eff"><span class="pill s">S</span></td></tr>
+            <tr><td class="lead">D2</td><td>Group drag + Cmd+D duplicate fail on project boards</td><td>One bug family in apply_board_room_state's project leg; AC1.11 waived exactly this</td><td class="eff"><span class="pill m">S&ndash;M</span></td></tr>
+            <tr><td class="lead">D3</td><td>No Share on project boards</td><td>Explicit owner.kind==='proposal' gate; backend already works and passed</td><td class="eff"><span class="pill s">S</span></td></tr>
+            <tr><td class="lead">D4</td><td>Boards front door missing for new work</td><td>commercialDocumentExperience() routes all new agreements to a facet-less room</td><td class="eff"><span class="pill m">M</span></td></tr>
+            <tr><td class="lead">D5</td><td>Desk recents strip regression</td><td>Mounted at GA, deleted by the Desk-roster rewrite, no replacement</td><td class="eff"><span class="pill s">S</span></td></tr>
+            <tr><td class="lead">D6</td><td>Cover-generation edge function failing in prod</td><td>Non-2xx on room exit; passed local-stack only at GA</td><td class="eff"><span class="pill m">S&ndash;M</span></td></tr>
+            <tr><td class="lead">D7</td><td>Raw backend errors shown to users</td><td>Controller interpolates normalized.message straight into the toast</td><td class="eff"><span class="pill s">S</span></td></tr>
+            <tr><td class="lead">D8</td><td>Failed save blocks room exit, no retry</td><td>requestExit refuses while persistenceError is set; no retry affordance</td><td class="eff"><span class="pill s">S</span></td></tr>
+            <tr><td class="lead">D9</td><td>URL unfurl inert</td><td>SOURCE URL field stores text and fetches nothing</td><td class="eff"><span class="pill m">M</span></td></tr>
+            <tr><td class="lead">D10</td><td>Broken "Furniture plan by zone" starter asset</td><td>Seeded template ships a missing image</td><td class="eff"><span class="pill s">S</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="legend"><span><span class="pill s">S</span> hours-scale</span><span><span class="pill m">M</span> days-scale</span></div>
+
+      <div class="callout" style="margin-top:1.1rem">
+        <span class="kicker">Why first</span>
+        <p>D1&ndash;D8 are small, severe, and mostly one bug family plus three one-line-to-small wires. No direction bet matters until the suite is credible on the path all new work takes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 · PATH A ============ -->
+<section class="slide" data-label="Path A">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act V · Three paths &middot; A</span><span class="num">12</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The Steady Hand</h2>
+      <p class="path-thesis">Make the canvas hand-feel genuinely Figma-class.</p>
+
+      <div class="path-cols">
+        <div>
+          <span class="kicker">Core moves</span>
+          <ul class="plain">
+            <li><strong>Drag threshold + no re-stack</strong> — stop promoting an item to the front on every nudge.</li>
+            <li><strong>Shift = constrain</strong> — revisits AC1.13; Figma, FigJam and Canva all read Shift this way.</li>
+            <li><strong>Untangle Alt's triple booking</strong> — duplicate, snap-suppress, and resize-from-centre currently collide.</li>
+            <li><strong>24px hit-areas + directional cursors</strong> on resize/rotate handles.</li>
+            <li><strong>Cascade placement</strong> on every add, not just multi-file uploads.</li>
+            <li><strong>Visible zoom controls</strong> at all widths — the canvas already ships the cluster; the shell suppresses it.</li>
+          </ul>
+        </div>
+        <div>
+          <div class="not-do">
+            <span class="kicker">What it does NOT do</span>
+            <p>Nothing for sharing, clients, or studio workflows.</p>
+          </div>
+          <div class="meter-row">
+            <div class="meter"><span class="kicker">Effort</span><span class="val m">M</span></div>
+            <div class="meter"><span class="kicker">Risk</span><span class="val s">Low</span></div>
+          </div>
+          <p class="small" style="margin-top:.8rem">Mostly BoardRoomCanvas.tsx + shell. Visual-regression and e2e coverage already exist for this surface.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 · PATH B ============ -->
+<section class="slide" data-label="Path B">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act V · Three paths &middot; B</span><span class="num">13</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The Client Loop</h2>
+      <p class="path-thesis">Complete the moment the board was made for: designer finishes at 9pm, client reacts overnight, approved pins march into procurement.</p>
+
+      <div class="path-cols">
+        <div>
+          <span class="kicker">Core moves</span>
+          <ul class="plain">
+            <li><strong>Share parity everywhere boards appear</strong> — D3 plus list-card discoverability.</li>
+            <li><strong>A lightweight verdict-capable guest link</strong> — revisits Ruling #2's "guest never offers verdicts" boundary, kept token-scoped and revocable, tap reactions only.</li>
+            <li><strong>Visible verdict → send-to-schedule flow</strong> — an explicit "approved pieces → purchase pipeline" moment.</li>
+            <li><strong>Edit/present placeholder parity</strong>, closing the waived four-surface parity AC.</li>
+            <li><strong>Prefetch assets before Present</strong> for client-wifi resilience.</li>
+            <li><strong>A cross-project verdict rollup</strong> — "boards awaiting reaction / approved / stalled."</li>
+          </ul>
+        </div>
+        <div>
+          <div class="not-do">
+            <span class="kicker">What it does NOT do</span>
+            <p>Canvas hand-feel, studio delegation.</p>
+          </div>
+          <div class="meter-row">
+            <div class="meter"><span class="kicker">Effort</span><span class="val m">M&ndash;L</span></div>
+            <div class="meter"><span class="kicker">Risk</span><span class="val m">Medium</span></div>
+          </div>
+          <p class="small" style="margin-top:.8rem">Guest-verdict security must stay structural — this is a revenue-adjacent guest surface, and migrations touch Strata.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 · PATH C ============ -->
+<section class="slide" data-label="Path C">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act V · Three paths &middot; C</span><span class="num">14</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The Studio Engine</h2>
+      <p class="path-thesis">Make boards work for teams and volume.</p>
+
+      <div class="path-cols">
+        <div>
+          <span class="kicker">Core moves</span>
+          <ul class="plain">
+            <li><strong>Real URL unfurl</strong> — the sourcing wedge, feeding the price-true procurement spine.</li>
+            <li><strong>Bulk "promote all"</strong> on template materialization — a 3x manual tax today, per template reuse.</li>
+            <li><strong>Internal direction layer</strong>, distinct from client verdicts — never scoped in the PRD.</li>
+            <li><strong>Cross-project boards view</strong> — mount the orphaned recents strip, then a studio-wide status rollup.</li>
+            <li><strong>Naming prompt at creation</strong> — kills "Board 2."</li>
+            <li><strong>Archived-boards list</strong> and studio-template asset validation at save.</li>
+          </ul>
+        </div>
+        <div>
+          <div class="not-do">
+            <span class="kicker">What it does NOT do</span>
+            <p>Hand-feel polish, guest client loop.</p>
+          </div>
+          <div class="meter-row">
+            <div class="meter"><span class="kicker">Effort</span><span class="val l">L</span></div>
+            <div class="meter"><span class="kicker">Risk</span><span class="val m">Medium</span></div>
+          </div>
+          <p class="small" style="margin-top:.8rem">New surface area, but little touches the canvas itself. Prioritize if studio-seat growth is the quarter's goal.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 · COMPARISON ============ -->
+<section class="slide wide" data-label="Comparison">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act V · Side by side</span><span class="num">15</span></div>
+    <div class="main">
+      <h2>Three paths, one choice per cycle.</h2>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th></th><th>A &middot; The Steady Hand</th><th>B &middot; The Client Loop</th><th>C &middot; The Studio Engine</th></tr></thead>
+          <tbody>
+            <tr><td class="lead">Who it serves</td><td>Every designer, every session</td><td>Solo designers and their clients</td><td>Studios delegating across teams</td></tr>
+            <tr><td class="lead">Differentiator impact</td><td>Trust and quality baseline — not differentiating alone</td><td>Completes the actual differentiator: board &rarr; reaction &rarr; procurement</td><td>Enables studio-seat growth</td></tr>
+            <tr><td class="lead">Effort</td><td class="eff"><span class="pill m">M</span></td><td class="eff"><span class="pill m">M&ndash;L</span></td><td class="eff"><span class="pill l">L</span></td></tr>
+            <tr><td class="lead">Risk</td><td class="eff"><span class="pill s">Low</span></td><td class="eff"><span class="pill m">Medium</span></td><td class="eff"><span class="pill m">Medium</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 · RECOMMENDATION ============ -->
+<section class="slide" data-label="Recommendation">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act V · Recommendation</span><span class="num">16</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Fix-now first. Then the loop the board was built for.</h2>
+
+      <div class="seq">
+        <div class="seq-item">
+          <span class="seq-num">1</span>
+          <div class="seq-body">
+            <h3>Fix-now list first, this week</h3>
+            <p>D1&ndash;D8 are small, severe, and mostly one bug family plus three small wires. The suite is embarrassing on exactly the path all new work takes; no direction bet matters until it's credible.</p>
+          </div>
+        </div>
+        <div class="seq-item">
+          <span class="seq-num">2</span>
+          <div class="seq-body">
+            <h3>Then Path B, with Path A's core folded in as hygiene</h3>
+            <p>It completes Patina's actual differentiator. Both personas independently named the same gap: Marisol can't leave the link, Devon can't report on reactions. Path A's threshold, re-stack, cascade and zoom-button fixes are small enough to ride along in B's wave.</p>
+          </div>
+        </div>
+        <div class="seq-item">
+          <span class="seq-num">3</span>
+          <div class="seq-body">
+            <h3>Path A's depth and Path C wait for the next cycle</h3>
+            <p>Prioritize C first if studio-seat growth is the quarter's goal.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 17 · THE ASK ============ -->
+<section class="slide wide" data-label="The ask">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act VI · The ask</span><span class="num">17</span></div>
+    <div class="main">
+      <h2>Four rulings, next R### after R127.</h2>
+
+      <div class="grid g2">
+        <div class="ruling">
+          <span class="letter">a</span>
+          <p><strong>Where does the boards front door live for new work?</strong> Restore a Boards facet on new agreements, or commit to the project surface as canonical (D4).</p>
+        </div>
+        <div class="ruling">
+          <span class="letter">b</span>
+          <p><strong>May guest links carry lightweight verdicts?</strong> Token-scoped, revocable, tap-reaction only.</p>
+          <span class="rev">Revises Ruling #2's boundary</span>
+        </div>
+        <div class="ruling">
+          <span class="letter">c</span>
+          <p><strong>Shift-constrain convention change.</strong> Shift should constrain aspect, matching Figma, FigJam and Canva.</p>
+          <span class="rev">Revises AC1.13</span>
+        </div>
+        <div class="ruling">
+          <span class="letter">d</span>
+          <p><strong>Confirm the desk recents strip returns.</strong> Built, tested, orphaned by the 08-26 Desk rewrite.</p>
+          <span class="rev">Re-affirms Ruling #1</span>
+        </div>
+      </div>
+
+      <div class="status-line"><span class="dot"></span> Status: audit complete — awaiting ruling</div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /#deck -->
+
+<div id="chrome">
+  <span id="counter"><b>01</b> / 17</span>
+  <button class="navbtn" id="prev" type="button" aria-label="Previous slide">&#8592;</button>
+  <button class="navbtn" id="next" type="button" aria-label="Next slide">&#8594;</button>
+</div>
+<div id="hint">&larr; &rarr; or space to navigate</div>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var current = 0;
+
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+  function setCurrent(i){
+    current = Math.max(0, Math.min(slides.length - 1, i));
+    counter.innerHTML = '<b>' + pad(current + 1) + '</b> / ' + slides.length;
+    progress.style.width = (((current + 1) / slides.length) * 100) + '%';
+  }
+
+  function go(i){
+    var t = Math.max(0, Math.min(slides.length - 1, i));
+    deck.scrollTop = deck.scrollTop + slides[t].getBoundingClientRect().top;
+    slides[t].classList.add('seen');
+    setCurrent(t);
+  }
+
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){
+          e.target.classList.add('seen');
+          if (e.intersectionRatio > 0.5) setCurrent(slides.indexOf(e.target));
+        }
+      });
+    }, { threshold: [0.12, 0.55] });
+    slides.forEach(function(s){ io.observe(s); });
+  } else {
+    slides.forEach(function(s){ s.classList.add('seen'); });
+  }
+
+  deck.addEventListener('scroll', function(){
+    var mid = deck.scrollTop + deck.clientHeight * 0.4;
+    for (var i = 0; i < slides.length; i++){
+      if (slides[i].offsetTop <= mid) setCurrent(i);
+    }
+  }, { passive: true });
+
+  document.getElementById('prev').addEventListener('click', function(){ go(current - 1); });
+  document.getElementById('next').addEventListener('click', function(){ go(current + 1); });
+
+  document.addEventListener('keydown', function(e){
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    switch (e.key){
+      case 'ArrowRight': case 'PageDown': go(current + 1); e.preventDefault(); break;
+      case 'ArrowLeft':  case 'PageUp':   go(current - 1); e.preventDefault(); break;
+      case ' ': go(current + (e.shiftKey ? -1 : 1)); e.preventDefault(); break;
+      case 'Home': go(0); e.preventDefault(); break;
+      case 'End': go(slides.length - 1); e.preventDefault(); break;
+    }
+  });
+
+  setCurrent(0);
+})();
+</script>
