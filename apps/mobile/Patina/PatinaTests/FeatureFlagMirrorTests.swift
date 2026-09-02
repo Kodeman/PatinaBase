@@ -18,7 +18,7 @@ struct FeatureFlagMirrorTests {
     private final class StubProvider: FeatureFlagProvider {
         let enabled: Set<String>
         init(enabled: Set<String>) { self.enabled = enabled }
-        func isEnabled(_ key: String) -> Bool { enabled.contains(key) }
+        func value(for key: String) -> Bool? { enabled.contains(key) }
     }
 
     private func freshDefaults() throws -> UserDefaults {
