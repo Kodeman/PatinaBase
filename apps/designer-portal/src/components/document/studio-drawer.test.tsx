@@ -274,12 +274,17 @@ describe('StudioDrawer', () => {
     ).toHaveTextContent('You and 2 others');
   });
 
-  it('does not badge shipped feedback — the Tester pill carries that dot now', () => {
+  it('keeps the feedback doorway out of Ledgers even with shipped notes unseen', () => {
     mockUnseenFeedback = [{ id: 'feedback-1' }];
     render(<StudioDrawer />);
     fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
 
-    expect(screen.queryByText(/Shipped/i)).not.toBeInTheDocument();
+    // Unseen shipped notes used to badge a "Leave a note" row here; the row and
+    // its badge both moved to the Tester pill.
+    const menu = screen.getByRole('group', { name: 'Ledgers' });
+    expect(
+      within(menu).queryByRole('button', { name: /Leave a note/i }),
+    ).not.toBeInTheDocument();
   });
 });
 

@@ -1,10 +1,19 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TesterWidget } from '../tester-widget';
 
 let mockFlag = { value: true, isLoading: false };
 let mockUser: { id: string } | undefined = { id: 'me' };
 let mockUnseen: Array<{ id: string }> = [];
 const mockMutateAsync = jest.fn().mockResolvedValue({ id: 'note-1' });
+// The screenshot the opener captures — every doorway runs through
+// openFeedbackSheet(), so a blob must reach the form on a plain pill click.
+let mockShot: Blob | null = new Blob(['png'], { type: 'image/png' });
+const mockCapture = jest.fn(() => Promise.resolve(mockShot));
+
+jest.mock('@/lib/document/feedback', () => ({
+  ...jest.requireActual('@/lib/document/feedback'),
+  captureScreenshot: () => mockCapture(),
+}));
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 
@@ -40,12 +49,30 @@ function pill() {
   return screen.queryByRole('button', { name: /TESTER/i });
 }
 
+/**
+ * Every doorway runs the screenshot capture, which lands a beat after the open;
+ * act() lets that settle so no test asserts against a half-opened panel.
+ */
+async function openPanel(act_: () => void) {
+  await act(async () => {
+    act_();
+  });
+}
+
 describe('TesterWidget', () => {
+  beforeAll(() => {
+    // jsdom has no object URLs; the form previews the shot with one.
+    (URL as unknown as { createObjectURL: unknown }).createObjectURL = () => 'blob:shot';
+    (URL as unknown as { revokeObjectURL: unknown }).revokeObjectURL = () => undefined;
+  });
+
   beforeEach(() => {
     mockFlag = { value: true, isLoading: false };
     mockUser = { id: 'me' };
     mockUnseen = [];
+    mockShot = new Blob(['png'], { type: 'image/png' });
     mockMutateAsync.mockClear();
+    mockCapture.mockClear();
   });
 
   it('renders nothing while the flag is loading', () => {
@@ -71,15 +98,15 @@ describe('TesterWidget', () => {
     expect(pill()).toBeInTheDocument();
   });
 
-  it('opens the capture form on the New note tab', () => {
+  it('opens the capture form on the New note tab', async () => {
     render(<TesterWidget />);
-    fireEvent.click(pill()!);
+    await openPanel(() => fireEvent.click(pill()!));
     expect(screen.getByRole('radiogroup', { name: 'Bucket' })).toBeInTheDocument();
   });
 
-  it('turns the bug switch on when the bucket is Not working', () => {
+  it('turns the bug switch on when the bucket is Not working', async () => {
     render(<TesterWidget />);
-    fireEvent.click(pill()!);
+    await openPanel(() => fireEvent.click(pill()!));
 
     const bug = screen.getByRole('switch', {
       name: /File as a bug/i,
@@ -92,7 +119,7 @@ describe('TesterWidget', () => {
 
   it('submits a bug with report_kind and the user agent', async () => {
     render(<TesterWidget />);
-    fireEvent.click(pill()!);
+    await openPanel(() => fireEvent.click(pill()!));
     fireEvent.click(screen.getByRole('radio', { name: 'Not working' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Note' }), {
       target: { value: 'Totals go blank' },
@@ -110,7 +137,7 @@ describe('TesterWidget', () => {
 
   it('submits a plain note as report_kind note', async () => {
     render(<TesterWidget />);
-    fireEvent.click(pill()!);
+    await openPanel(() => fireEvent.click(pill()!));
     fireEvent.click(screen.getByRole('radio', { name: 'Missing' }));
     fireEvent.click(screen.getByRole('button', { name: /Leave note/i }));
 
@@ -124,15 +151,17 @@ describe('TesterWidget', () => {
     expect(screen.getByRole('radiogroup', { name: 'Bucket' })).toBeInTheDocument();
   });
 
-  it('opens on ⌘⇧F', () => {
+  it('opens on ⌘⇧F', async () => {
     render(<TesterWidget />);
-    fireEvent.keyDown(window, { key: 'F', metaKey: true, shiftKey: true });
+    await openPanel(() =>
+      fireEvent.keyDown(window, { key: 'F', metaKey: true, shiftKey: true }),
+    );
     expect(screen.getByRole('radiogroup', { name: 'Bucket' })).toBeInTheDocument();
   });
 
-  it('shows Past notes on its tab and routes its empty action back to New note', () => {
+  it('shows Past notes on its tab and routes its empty action back to New note', async () => {
     render(<TesterWidget />);
-    fireEvent.click(pill()!);
+    await openPanel(() => fireEvent.click(pill()!));
     fireEvent.click(screen.getByRole('tab', { name: 'Past notes' }));
 
     const ledger = screen.getByRole('button', { name: 'Feedback ledger' });
@@ -140,6 +169,54 @@ describe('TesterWidget', () => {
 
     fireEvent.click(ledger);
     expect(screen.getByRole('radiogroup', { name: 'Bucket' })).toBeInTheDocument();
+  });
+
+  it('does nothing on ⌘⇧F when the flag is off', () => {
+    mockFlag = { value: false, isLoading: false };
+    render(<TesterWidget />);
+    fireEvent.keyDown(window, { key: 'F', metaKey: true, shiftKey: true });
+
+    expect(
+      screen.queryByRole('radiogroup', { name: 'Bucket' }),
+    ).not.toBeInTheDocument();
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('carries the captured screenshot when the pill is the doorway', async () => {
+    render(<TesterWidget />);
+    await openPanel(() => fireEvent.click(pill()!));
+    expect(mockCapture).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Missing' }));
+    fireEvent.click(screen.getByRole('button', { name: /Leave note/i }));
+
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1));
+    expect(mockMutateAsync.mock.calls[0][0].screenshot).toBeInstanceOf(Blob);
+  });
+
+  it('keeps a half-written note through a trip to Past notes', async () => {
+    render(<TesterWidget />);
+    await openPanel(() => fireEvent.click(pill()!));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Note' }), {
+      target: { value: 'Half a thought' },
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Past notes' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'New note' }));
+
+    expect(screen.getByRole('textbox', { name: 'Note' })).toHaveValue(
+      'Half a thought',
+    );
+  });
+
+  it('pre-selects the bucket a doorway asked for', () => {
+    render(<TesterWidget />);
+    fireEvent(
+      window,
+      new CustomEvent('document:open-feedback', { detail: { bucket: 'working' } }),
+    );
+
+    expect(screen.getByRole('radio', { name: 'Working' })).toBeChecked();
   });
 
   it('carries a dot when shipped notes are unseen', () => {
