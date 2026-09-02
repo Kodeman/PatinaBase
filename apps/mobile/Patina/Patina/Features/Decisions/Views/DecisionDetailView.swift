@@ -15,6 +15,7 @@ struct DecisionDetailView: View {
     let decisionId: String
     @State private var viewModel = DecisionDetailViewModel()
     @Environment(\.appCoordinator) private var coordinator
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -67,7 +68,7 @@ struct DecisionDetailView: View {
                 },
                 onCancel: { viewModel.cancelDeferral() }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents(DecisionSheetDetents.detents(for: dynamicTypeSize))
         }
         .sheet(isPresented: consentSheetBinding) {
             if let option = pendingOption {
@@ -85,7 +86,7 @@ struct DecisionDetailView: View {
                     },
                     onCancel: { viewModel.cancelSelection() }
                 )
-                .presentationDetents([.medium, .large])
+                .presentationDetents(DecisionSheetDetents.detents(for: dynamicTypeSize))
             }
         }
     }
@@ -348,6 +349,25 @@ struct DecisionDetailView: View {
     }
 }
 
+// MARK: - Sheet detents
+
+/// GAP1B-01 / GAP1B-02. Both decision sheets were declared
+/// `.presentationDetents([.medium, .large])`, and a sheet offered `.medium`
+/// rests there. At `accessibility-extra-large` the content grew ~2.5x inside
+/// a half-screen sheet: Approve rendered ~17 pt of its 49.9 pt on an 874 pt
+/// display, Cancel sat 58 pt below the edge, and `showsIndicators: false`
+/// hid that the sheet scrolled at all. The consent sheet is the app's
+/// e-signature surface — it had no reachable primary act and no reachable
+/// way out.
+///
+/// Above `.accessibility1` there is one honest answer and it is the whole
+/// screen. Below it the two-detent sheet is unchanged.
+enum DecisionSheetDetents {
+    static func detents(for size: DynamicTypeSize) -> Set<PresentationDetent> {
+        size.isAccessibilitySize ? [.large] : [.medium, .large]
+    }
+}
+
 // MARK: - Consent Sheet
 
 enum DecisionConsentValidation {
@@ -420,6 +440,15 @@ private struct DecisionConsentSheet: View {
                     .accessibilityIdentifier("decisionConsent.signatureField")
                 }
 
+            }
+            .padding(24)
+        }
+        .background(PatinaColors.Background.primary)
+        .patinaTopBand()
+        // GAP1B-01: the act does not travel with the scroll. An inset keeps
+        // both controls on screen at every text size and every offset.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 12) {
                 PatinaButton(
                     "Approve",
                     style: .clay,
@@ -435,15 +464,19 @@ private struct DecisionConsentSheet: View {
                 }
                 .accessibilityIdentifier("decisionConsent.approve")
 
-                PatinaButton("Cancel", style: .ghost, isEnabled: !isSubmitting) {
+                // GAP1B-07: `.ghost` renders as bare left-aligned text and
+                // measured 17.6 pt against the 44 pt floor. `.secondary` is
+                // the same component, full width and 52 pt tall.
+                PatinaButton("Cancel", style: .secondary, isEnabled: !isSubmitting) {
                     onCancel()
                     dismiss()
                 }
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 16)
+            .background(PatinaColors.Background.primary)
         }
-        .background(PatinaColors.Background.primary)
-        .patinaTopBand()
     }
 }
 
