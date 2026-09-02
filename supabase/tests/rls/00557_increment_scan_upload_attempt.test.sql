@@ -83,6 +83,18 @@ END;
 $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION pg_temp.assume_user(UUID) TO PUBLIC;
 
+-- The unauthenticated key. auth.uid() reads NULL under it, which is the whole
+-- of the safety argument for granting anon EXECUTE (section 3b).
+CREATE OR REPLACE FUNCTION pg_temp.assume_anon()
+RETURNS VOID AS $$
+BEGIN
+  PERFORM set_config('role', 'anon', true);
+  PERFORM set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  EXECUTE 'SET LOCAL ROLE anon';
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_anon() TO PUBLIC;
+
 CREATE OR REPLACE FUNCTION pg_temp.reset_role()
 RETURNS VOID AS $$
 BEGIN
@@ -145,6 +157,51 @@ BEGIN
   SELECT upload_attempt_count INTO n
     FROM public.room_scans WHERE id = '56000000-0000-4000-8000-000000000001'::uuid;
   ASSERT n = 3, 'FAIL 3: a non-owner advanced another user''s attempt counter to ' || n;
+END $$;
+
+-- ─── 3b. the anon EXECUTE grant is safe, demonstrated rather than asserted ──
+--
+-- Section 4 proves the grant EXISTS. That is not the claim the migration makes.
+-- Its claim is behavioural: anon holding EXECUTE is not a hole because the
+-- function is SECURITY INVOKER, so an anon caller runs with auth.uid() = NULL,
+-- `user_id = NULL` is never true, and the UPDATE matches zero rows. anon does
+-- hold UPDATE on room_scans (legacy blanket grant), so the guard is the
+-- predicate, not the table ACL — which is exactly why this case has to run the
+-- function rather than read a catalogue.
+--
+-- What it catches, MEASURED rather than assumed. The case was run in isolation
+-- against four variants of the function on a local stack:
+--
+--   A  shipped shape (INVOKER + owner gate)          -> passes
+--   B  owner gate removed, still INVOKER             -> passes
+--   C  SECURITY DEFINER, owner gate kept             -> passes
+--   D  SECURITY DEFINER *and* owner gate removed     -> FAILS, counter 3 -> 4
+--
+-- So anon is guarded twice over, not once: the function's own owner gate, and
+-- room_scans' RLS ("Users can manage their room scans", FOR ALL, USING
+-- auth.uid() = user_id, which an INVOKER call still passes through). B and C
+-- each break one leg and the other still holds. This case is the guard on the
+-- COMPOSITION, which is the thing no catalogue assertion can see; section 4
+-- keeps its own prosecdef assertion because this case does not subsume it.
+
+DO $$
+DECLARE
+  n integer;
+BEGIN
+  PERFORM pg_temp.assume_anon();
+  BEGIN
+    PERFORM public.increment_scan_upload_attempt('56000000-0000-4000-8000-000000000001'::uuid);
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;   -- a tighter future ACL is a fine outcome; a changed counter is not
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT upload_attempt_count INTO n
+    FROM public.room_scans WHERE id = '56000000-0000-4000-8000-000000000001'::uuid;
+  ASSERT n = 3,
+    'FAIL 3b: the anon key advanced a scan''s attempt counter to ' || n
+      || ' — increment_scan_upload_attempt is no longer SECURITY INVOKER, or its '
+      || 'user_id = auth.uid() predicate is gone';
 END $$;
 
 -- ─── 4. ACL parity with mark_scan_upload_complete (00082) ──────────────────
