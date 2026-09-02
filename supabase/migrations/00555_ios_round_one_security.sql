@@ -141,10 +141,28 @@
 --   1. apps/mobile/Patina/Patina/Services/Sharing/ScanSharingService.swift:373-380
 --      searchDesigners() must move to the RPC created below. Today it is an
 --      unscoped free-text search over every `is_designer = true` profile that
---      hands any signed-in client every designer's EMAIL. After this migration
---      it returns [] and the share picker goes empty.
---      Replace the `.from("profiles").select(...)` chain with
+--      hands any signed-in client every designer's EMAIL. THAT is the reason
+--      for the change. Replace the `.from("profiles").select(...)` chain with
 --      `.rpc("search_shareable_designers", params: ["p_query": query])`.
+--      (Done on first-flight/w0-l02, commit c93cff358.)
+--
+--      ⚠ SCOPE, corrected 2026-09-02. An earlier draft of this block said the
+--      share-with-a-designer picker "goes silently empty" after this migration.
+--      It does not, because there is no picker:
+--        grep -rn --include="*.swift" 'searchDesigners|getRecentDesigners' apps/mobile/
+--      returns only ScanSharingService.swift itself and its new contract test.
+--      No view in EITHER iOS app calls this API. So nothing user-visible was at
+--      risk and nothing user-visible changed — do not schedule a walker against
+--      a screen that does not exist. The swap is still correct and still
+--      required; the justification on the record is the email leak, not a
+--      broken screen.
+--
+--      Its sibling getRecentDesigners() (:416) is left as-is. It embeds
+--      `profiles!designer_id(id, email, …)` for a designer the caller has a
+--      LIVE room-scan share with, so after this migration it resolves through
+--      can_view_profile's scan-share leg rather than breaking — and the email
+--      it returns is counterparty column visibility, which DM-1 accepted for
+--      round one and W2's profile_private split closes.
 --
 --   2. apps/designer-portal/src/app/api/catalog/vendors/route.ts:5-13 and
 --      apps/designer-portal/src/app/api/catalog/vendors/[id]/route.ts:5-18.
@@ -695,6 +713,13 @@ COMMENT ON FUNCTION public.handle_new_user() IS
 -- Guards: a two-character minimum (an empty query must not enumerate the
 -- directory), LIMIT 20, and ILIKE only on name-shaped columns — never on email,
 -- so the function cannot be used to confirm whether an address has an account.
+--
+-- p_query's LIKE metacharacters are escaped before interpolation. p_query is a
+-- parameter, so this was never injection — but `%` and `_` are wildcards INSIDE
+-- the pattern, and `'%a'` is two characters that match every name containing an
+-- 'a', which is precisely what the two-character floor exists to prevent. With
+-- the escape, the floor means what it says. ESCAPE '\' is stated explicitly
+-- rather than relying on standard_conforming_strings.
 
 CREATE OR REPLACE FUNCTION public.search_shareable_designers(p_query text)
 RETURNS TABLE (
@@ -708,18 +733,25 @@ STABLE
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
+  WITH q AS (
+    SELECT '%' || replace(replace(replace(btrim(COALESCE(p_query, '')),
+                                          '\', '\\'),
+                                  '%', '\%'),
+                          '_', '\_') || '%' AS pattern,
+           length(btrim(COALESCE(p_query, ''))) AS raw_len
+  )
   SELECT p.id,
          COALESCE(NULLIF(btrim(p.display_name), ''), p.full_name) AS display_name,
          p.business_name,
          p.avatar_url
-  FROM profiles p
+  FROM profiles p, q
   WHERE (SELECT auth.uid()) IS NOT NULL
     AND p.is_designer IS TRUE
-    AND length(btrim(COALESCE(p_query, ''))) >= 2
+    AND q.raw_len >= 2
     AND (
-      p.display_name  ILIKE '%' || btrim(p_query) || '%'
-      OR p.full_name     ILIKE '%' || btrim(p_query) || '%'
-      OR p.business_name ILIKE '%' || btrim(p_query) || '%'
+      p.display_name  ILIKE q.pattern ESCAPE '\'
+      OR p.full_name     ILIKE q.pattern ESCAPE '\'
+      OR p.business_name ILIKE q.pattern ESCAPE '\'
     )
   ORDER BY COALESCE(NULLIF(btrim(p.display_name), ''), p.full_name, p.business_name)
   LIMIT 20;
