@@ -46,11 +46,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # the wrong category rather than failing loudly (A3-21).
 PRODUCT_CATEGORIES = ("seating", "tables", "lighting", "storage", "decor", "textiles")
 
-# `get_recommendations` projects `products.tags` as `badges`, so a tag is
-# tester-visible copy. Only these may be written; everything else is rejected
-# rather than shipped as an unreviewed label. `first_flight` is added to every
-# row by the generator as the provenance marker the SQL test scopes on.
-PROVENANCE_TAG = "first_flight"
+# `get_recommendations` projects `products.tags` as `badges`, and
+# ProductDetailView.swift:484-505 renders them under a "PROVENANCE" heading
+# whose help text calls them "verified claims about materials, craft, and
+# origin". A tag is therefore tester-visible copy making a verification claim.
+# Only these four may be written; everything else is rejected rather than
+# shipped as an unreviewed label — and NO internal marker goes in here.
 ALLOWED_TAGS = ("maker_piece", "designers_pick", "sourced", "made_to_order")
 
 # The catalogue owner's own folder, per the image path convention
@@ -64,6 +65,12 @@ LOCAL_STORAGE_BASE_URL = (
 # Deterministic ids: build-catalog.py and upload-catalog-images.py derive the
 # same product id and the same object name from the manifest alone, so neither
 # needs to read the other's output and a re-run overwrites rather than orphans.
+#
+# The id is also the provenance marker. `id = uuid_generate_v5(FIRST_FLIGHT_NS,
+# slug)` identifies a row this pipeline produced, so nothing internal has to be
+# smuggled into a tester-visible column to make the seed's own rows countable.
+# extensions.uuid_generate_v5 (uuid-ossp) computes the identical value in SQL —
+# schema-qualified, because a bare call fails on Strata with 42883.
 FIRST_FLIGHT_NS = uuid.UUID("f1a57f11-9c74-4b3e-9c2f-1e5a0b7d4c10")
 
 ALLOWED_IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".avif", ".heic")
@@ -652,7 +659,9 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
                     image_storage_path(uploader_uid, row.product_id, index, ext),
                 )
             )
-        tags = [PROVENANCE_TAG] + row.tags
+        # Only Leah's own allow-listed provenance words. No internal marker:
+        # these render to a tester under a "verified claims" heading.
+        tags = list(row.tags)
         out.write(
             "\nINSERT INTO public.products (\n"
             "  id, name, slug, brand, description, category, status, layer,\n"
@@ -748,12 +757,13 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
         "    FROM public.products p\n"
         "    LEFT JOIN LATERAL public._aesthete_product_spectrum(p.id) sp ON true\n"
         "   WHERE p.layer = 'catalog' AND p.status = 'published'\n"
-        "     AND %s = ANY(p.tags)\n"
+        "     AND p.slug IS NOT NULL\n"
+        "     AND p.id = extensions.uuid_generate_v5(%s::uuid, p.slug)\n"
         "     AND sp.spectrums IS NULL;\n"
         "  IF v_missing > 0 THEN\n"
         "    RAISE EXCEPTION '%% first-flight row(s) have no spectrum and would be invisible', v_missing;\n"
         "  END IF;\n"
-        "END\n$ff$;\n\n" % q(PROVENANCE_TAG)
+        "END\n$ff$;\n\n" % q(str(FIRST_FLIGHT_NS))
     )
     return out.getvalue()
 

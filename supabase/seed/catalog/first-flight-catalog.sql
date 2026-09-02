@@ -107,7 +107,7 @@ INSERT INTO public.products (
 ) VALUES (
   '85b1952a-4427-5360-8632-a088a9acd024', 'Fixture Oak Dining Table', 'ff-fixture-oak-dining-table', 'Fixture Woodshop', 'A fixture row. Solid white oak with a hand-rubbed oil finish.',
   'tables', 'published', 'catalog',
-  420000, ARRAY['white oak', 'tung oil'], ARRAY['Warm Modern'], ARRAY['first_flight', 'maker_piece'],
+  420000, ARRAY['white oak', 'tung oil'], ARRAY['Warm Modern'], ARRAY['maker_piece'],
   'Hand-rubbed tung oil', '{"depth": 40, "height": 30, "unit": "in", "width": 96}'::jsonb, 10,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/85b1952a-4427-5360-8632-a088a9acd024/c61abfc5-6024-5138-9654-a4d383f881c1.jpg'],
   NULL, NULL, now() - interval '0 minutes',
@@ -152,7 +152,7 @@ INSERT INTO public.products (
 ) VALUES (
   '33ef1884-2a20-5467-879b-4a3e91cde8a9', 'Fixture Turned-Leg Side Chair', 'ff-fixture-turned-leg-side-chair', 'Fixture Chairworks', 'A fixture row. Turned legs, caned seat, original finish left alone.',
   'seating', 'published', 'catalog',
-  89000, ARRAY['ash', 'cane'], ARRAY['Rustic'], ARRAY['first_flight', 'maker_piece'],
+  89000, ARRAY['ash', 'cane'], ARRAY['Rustic'], ARRAY['maker_piece'],
   'Original shellac', '{"depth": 20, "height": 36, "unit": "in", "width": 18}'::jsonb, 6,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/33ef1884-2a20-5467-879b-4a3e91cde8a9/5acf9c6f-5ed7-51d2-9404-3148d2a4f21d.jpg'],
   NULL, 84, now() - interval '2881 minutes',
@@ -197,7 +197,7 @@ INSERT INTO public.products (
 ) VALUES (
   '1a666c28-9477-52b9-86ed-a09a6fd7eebb', 'Fixture Enamel Dome Pendant', 'ff-fixture-enamel-dome-pendant', 'Fixture Metalworks', 'A fixture row. Spun steel dome in a soft matte enamel.',
   'lighting', 'published', 'catalog',
-  34000, ARRAY['steel', 'enamel'], ARRAY['Modern Industrial'], ARRAY['first_flight', 'maker_piece'],
+  34000, ARRAY['steel', 'enamel'], ARRAY['Modern Industrial'], ARRAY['maker_piece'],
   'Matte enamel', '{"depth": 16, "height": 11, "unit": "in", "width": 16}'::jsonb, 4,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/1a666c28-9477-52b9-86ed-a09a6fd7eebb/e5e50860-93ba-55c9-a23f-42dcbd35cb29.jpg'],
   NULL, NULL, now() - interval '5762 minutes',
@@ -242,7 +242,7 @@ INSERT INTO public.products (
 ) VALUES (
   '744a5f21-feb6-5f1b-a036-f1fba4f182d2', 'Fixture Glazed Stoneware Planter', 'ff-fixture-glazed-stoneware-planter', 'Fixture Pottery', 'A fixture row. Wheel-thrown stoneware in a single soft glaze.',
   'decor', 'published', 'catalog',
-  12000, ARRAY['stoneware'], ARRAY['Japandi'], ARRAY['first_flight', 'maker_piece'],
+  12000, ARRAY['stoneware'], ARRAY['Japandi'], ARRAY['maker_piece'],
   'Satin glaze', '{"depth": 7, "height": 6, "unit": "in", "width": 7}'::jsonb, NULL,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/744a5f21-feb6-5f1b-a036-f1fba4f182d2/f8e13faf-5152-5451-a2d6-34f5d98cf06f.jpg'],
   NULL, NULL, now() - interval '10083 minutes',
@@ -287,7 +287,7 @@ INSERT INTO public.products (
 ) VALUES (
   '4c2b6fed-5877-558e-b4ec-bf24a12a9abc', 'Fixture Flatweave Dining Rug', 'ff-fixture-flatweave-dining-rug', 'Fixture Weavers', 'A fixture row. Flatweave wool, woven to size.',
   'textiles', 'published', 'catalog',
-  145000, ARRAY['wool', 'cotton'], ARRAY['Coastal'], ARRAY['first_flight', 'sourced'],
+  145000, ARRAY['wool', 'cotton'], ARRAY['Coastal'], ARRAY['sourced'],
   NULL, '{"depth": 96, "unit": "in", "width": 120}'::jsonb, 12,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/4c2b6fed-5877-558e-b4ec-bf24a12a9abc/c164b4af-1db8-5872-ab36-0078c7e94b6b.jpg'],
   NULL, NULL, now() - interval '33124 minutes',
@@ -332,7 +332,7 @@ INSERT INTO public.products (
 ) VALUES (
   'bd9b7e9f-6555-5d8f-bc58-a5fd80eddadf', 'Fixture Painted Pine Sideboard', 'ff-fixture-painted-pine-sideboard', 'Fixture Woodshop', 'A fixture row. Painted pine case with unlacquered brass pulls.',
   'storage', 'published', 'catalog',
-  260000, ARRAY['pine', 'brass'], ARRAY['Transitional'], ARRAY['first_flight', 'maker_piece'],
+  260000, ARRAY['pine', 'brass'], ARRAY['Transitional'], ARRAY['maker_piece'],
   'Hand-painted', '{"depth": 18, "height": 32, "unit": "in", "width": 72}'::jsonb, 8,
   ARRAY['http://127.0.0.1:54321/storage/v1/object/public/product-images/a0000000-0000-0000-0000-000000000001/bd9b7e9f-6555-5d8f-bc58-a5fd80eddadf/12b5e91a-ac1a-5ef3-bece-ed9fa6f3f170.jpg'],
   NULL, NULL, now() - interval '56165 minutes',
@@ -380,7 +380,8 @@ BEGIN
     FROM public.products p
     LEFT JOIN LATERAL public._aesthete_product_spectrum(p.id) sp ON true
    WHERE p.layer = 'catalog' AND p.status = 'published'
-     AND 'first_flight' = ANY(p.tags)
+     AND p.slug IS NOT NULL
+     AND p.id = extensions.uuid_generate_v5('f1a57f11-9c74-4b3e-9c2f-1e5a0b7d4c10'::uuid, p.slug)
      AND sp.spectrums IS NULL;
   IF v_missing > 0 THEN
     RAISE EXCEPTION '% first-flight row(s) have no spectrum and would be invisible', v_missing;

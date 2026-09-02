@@ -217,6 +217,56 @@ def main():
         errs = errors_for(bc, path)
         check("8b an allow-listed tag is accepted", not errs, repr(errs))
 
+        print("8b. no internal marker reaches products.tags")
+        # get_recommendations projects tags as `badges`, and
+        # ProductDetailView.swift:484-505 renders them under a "PROVENANCE"
+        # heading calling them verified claims. Only Leah's words go there.
+        path = write_manifest(tmp, [row(tags="maker_piece")])
+        rows = bc.load_manifest(path, profile="fixture")
+        sql = bc.render_sql(
+            rows,
+            storage_base_url="http://x/y",
+            uploader_uid=bc.LOCAL_UPLOADER_UID,
+            assigned_by=bc.LOCAL_UPLOADER_UID,
+            profile="fixture",
+        )
+        statements = "\n".join(
+            line for line in sql.splitlines() if not line.lstrip().startswith("--")
+        )
+        check(
+            "8b-i tags carry only the manifest's allow-listed words",
+            "ARRAY['maker_piece']" in statements,
+            "not found",
+        )
+        check(
+            "8b-ii no 'first_flight' marker in any emitted statement",
+            "first_flight" not in statements,
+            "internal marker emitted",
+        )
+        path = write_manifest(tmp, [row(tags="")])
+        rows = bc.load_manifest(path, profile="fixture")
+        statements = "\n".join(
+            line
+            for line in bc.render_sql(
+                rows,
+                storage_base_url="http://x/y",
+                uploader_uid=bc.LOCAL_UPLOADER_UID,
+                assigned_by=bc.LOCAL_UPLOADER_UID,
+                profile="fixture",
+            ).splitlines()
+            if not line.lstrip().startswith("--")
+        )
+        check(
+            "8b-iii no manifest tags means an empty badge array",
+            "ARRAY[]::text[]" in statements,
+            "not found",
+        )
+        check(
+            "8b-iv the seed's own guard scopes on the derived id",
+            "extensions.uuid_generate_v5(" in statements,
+            "not found",
+        )
+
         print("9. a missing image file is rejected")
         path = write_manifest(tmp, [row(image_1=os.path.join(tmp, "nope.jpg"))])
         errs = errors_for(bc, path)
