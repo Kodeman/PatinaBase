@@ -36,6 +36,28 @@ final class BadgeCountService {
     /// Comms threads with an unread counterpart message.
     private(set) var unreadMessageCount: Int = 0
 
+    /// Unread DELIVERED updates in the bell — the number the bell badge draws.
+    ///
+    /// It lives here, and only here, because it used to live in two places:
+    /// Today held its own `NotificationsViewModel` in `@State` and computed the
+    /// badge from it, while the feed held a second one, and `markRead` mutated
+    /// only the feed's. So a client read every row, popped back, and the bell
+    /// still badged three (`C2-07`). A badge that lies is the fastest way to
+    /// teach someone to stop looking at it.
+    ///
+    /// Studio-composed fallback rows never count: they were never delivered,
+    /// so they have no arrival and no read state to report (`C5`). They are
+    /// already spoken for by `attentionCount`, which is the OTHER half of
+    /// VISION's one-number rule — this is the delivered half, on one surface.
+    private(set) var unreadNotificationCount: Int = 0
+
+    /// Publish the feed's own rows into the one count every surface reads.
+    /// Called by `NotificationsViewModel` on load and after each mark-read, so
+    /// the bell can never disagree with the list behind it.
+    func applyNotificationRows(_ rows: [AppNotification]) {
+        unreadNotificationCount = rows.filter { !$0.isStudioFallback && !$0.isRead }.count
+    }
+
     /// Proposals still awaiting the client's signature (sent/viewed, not
     /// expired). Wave 2 / D.1 money rail.
     private(set) var proposalsAwaitingSignatureCount: Int = 0
@@ -177,6 +199,7 @@ final class BadgeCountService {
         guard AuthService.shared.isAuthenticated else {
             pendingDecisionCount = 0
             unreadMessageCount = 0
+            unreadNotificationCount = 0
             proposalsAwaitingSignatureCount = 0
             payableInvoiceCount = 0
             projectCount = 0
@@ -291,6 +314,7 @@ final class BadgeCountService {
         inFlightRefresh = nil
         pendingDecisionCount = 0
         unreadMessageCount = 0
+        unreadNotificationCount = 0
         proposalsAwaitingSignatureCount = 0
         payableInvoiceCount = 0
         projectCount = 0

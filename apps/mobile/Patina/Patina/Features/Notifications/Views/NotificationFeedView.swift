@@ -51,19 +51,62 @@ struct NotificationFeedView: View {
 
     // MARK: - Content
 
+    /// What the feed is allowed to say, given what it actually knows.
+    ///
+    /// `A-80`: the feed drew its EMPTY state — "Nothing yet — Updates from your
+    /// designer will land here." — in the same frame whose Companion caption
+    /// read "5 THINGS NEED YOUR EYE", and five rows appeared seconds later.
+    /// `isLoading` is false until `.task` runs, which is at least a frame after
+    /// the body first evaluates, so the old chain fell straight through to
+    /// "nothing" before anything had been asked. Empty is a claim; it needs an
+    /// answer behind it. Pure and static so the order is testable without a
+    /// live session.
+    enum FeedState: Equatable {
+        case guest
+        case loading
+        case failed(String)
+        case empty
+        case rows
+    }
+
+    static func state(
+        isAuthenticated: Bool,
+        hasResolved: Bool,
+        isLoading: Bool,
+        error: String?,
+        rowCount: Int
+    ) -> FeedState {
+        // Wave 1 E.1: a guest's first look at this feed used to be an error
+        // screen. Invite, don't apologize.
+        guard isAuthenticated else { return .guest }
+        if rowCount > 0 { return .rows }
+        if let error { return .failed(error) }
+        if isLoading || !hasResolved { return .loading }
+        return .empty
+    }
+
+    private var feedState: FeedState {
+        Self.state(
+            isAuthenticated: AuthService.shared.isAuthenticated,
+            hasResolved: viewModel.hasResolved,
+            isLoading: viewModel.isLoading,
+            error: viewModel.error,
+            rowCount: viewModel.notifications.count
+        )
+    }
+
     @ViewBuilder
     private var content: some View {
-        if !AuthService.shared.isAuthenticated {
-            // Wave 1 E.1: a guest's first look at this feed used to be an
-            // error screen. Invite, don't apologize.
+        switch feedState {
+        case .guest:
             guestInviteView
-        } else if viewModel.isLoading && viewModel.notifications.isEmpty {
+        case .loading:
             loadingView
-        } else if let error = viewModel.error, viewModel.notifications.isEmpty {
+        case .failed(let error):
             errorView(error)
-        } else if viewModel.notifications.isEmpty {
+        case .empty:
             emptyView
-        } else {
+        case .rows:
             // R26: rows live in a plain List (full-bleed, separators hidden —
             // the row draws its own hairline) so native `.swipeActions` work.
             // The API only supports marking opened (no unread reversal), so
