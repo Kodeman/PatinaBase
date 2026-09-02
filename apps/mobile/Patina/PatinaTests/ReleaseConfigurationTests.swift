@@ -63,4 +63,32 @@ struct ReleaseConfigurationTests {
         #expect(widget["CFBundleShortVersionString"] as? String
                 == appInfo["CFBundleShortVersionString"] as? String)
     }
+
+    // MARK: - A2-03 / C7-11 (D4) — iPhone only
+
+    /// Round one is an invited iPhone cohort. Shipping the iPad idiom with no
+    /// iPad design, no size-class handling anywhere in 435 files and a
+    /// portrait-only orientation set is the ITMS-90474 shape, and it puts a
+    /// portrait phone layout on an iPad for anyone who installs there first.
+    @Test("the app declares the iPhone device family and nothing else")
+    func appIsIPhoneOnly() throws {
+        let families = try #require(appInfo["UIDeviceFamily"] as? [Int])
+        #expect(families == [1])
+    }
+
+    @Test("the widget appex declares the iPhone device family and nothing else")
+    func widgetIsIPhoneOnly() throws {
+        let families = try #require(try widgetInfo()["UIDeviceFamily"] as? [Int])
+        #expect(families == [1])
+    }
+
+    // MARK: - A2-13 (D6) — the deployment floor
+
+    /// The only availability gates in the app are four `#available(iOS 26.0, *)`
+    /// checks. A 26.5 floor excluded every tester on 26.0–26.4 from the invite
+    /// with no signal on either end.
+    @Test("the deployment floor is 26.0, matching the only gates in the code")
+    func minimumOSVersionIsTwentySixPointZero() {
+        #expect(appInfo["MinimumOSVersion"] as? String == "26.0")
+    }
 }
