@@ -681,8 +681,10 @@
 				INFOPLIST_FILE = Patina/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Patina uses your camera to walk through your space together and visualize furniture in your room.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Patina uses Face ID to securely confirm sign-in requests from the web";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Have a voice conversation with Patina about your space and style.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Patina uses motion data to detect when your device is steady for capturing the best room photos.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Patina saves AR previews and room captures to your photo library when you ask";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Save room designs and furniture visualizations to your photo library.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speak naturally with Patina instead of typing.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -728,8 +730,10 @@
 				INFOPLIST_FILE = Patina/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Patina uses your camera to walk through your space together and visualize furniture in your room.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Patina uses Face ID to securely confirm sign-in requests from the web";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Have a voice conversation with Patina about your space and style.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Patina uses motion data to detect when your device is steady for capturing the best room photos.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Patina saves AR previews and room captures to your photo library when you ask";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Save room designs and furniture visualizations to your photo library.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speak naturally with Patina instead of typing.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

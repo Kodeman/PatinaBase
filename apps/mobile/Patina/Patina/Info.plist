@@ -4,16 +4,6 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>NSFaceIDUsageDescription</key>
-	<string>Patina uses Face ID to securely confirm sign-in requests from the web</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Patina uses the camera to scan QR codes for secure sign-in and to capture your rooms</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Patina uses the microphone so you can speak with the Companion instead of typing</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Patina uses speech recognition to turn your spoken requests into Companion conversations</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Patina saves AR previews and room captures to your photo library when you ask</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
