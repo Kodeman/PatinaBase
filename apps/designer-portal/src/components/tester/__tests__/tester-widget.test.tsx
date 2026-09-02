@@ -268,6 +268,29 @@ describe('TesterWidget', () => {
     expect(mockMutateAsync.mock.calls[0][0].screenshot).toBeInstanceOf(Blob);
   });
 
+  it('recaptures the screenshot for a second note in the same panel session', async () => {
+    render(<TesterWidget />);
+    await openPanel(() => fireEvent.click(pill()!));
+    expect(mockCapture).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Missing' }));
+    fireEvent.click(screen.getByRole('button', { name: /Leave note/i }));
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1));
+
+    // The post-submit reset must recapture right away — a second note in the
+    // same panel session must never silently submit with a stale/empty shot.
+    // Two captures so far: the panel-open capture (fed note 1) and the
+    // post-submit-1 reset capture (about to feed note 2).
+    await waitFor(() => expect(mockCapture).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Missing' }));
+    fireEvent.click(screen.getByRole('button', { name: /Leave note/i }));
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(2));
+
+    expect(mockMutateAsync.mock.calls[0][0].screenshot).toBeInstanceOf(Blob);
+    expect(mockMutateAsync.mock.calls[1][0].screenshot).toBeInstanceOf(Blob);
+  });
+
   it('keeps a half-written note through a trip to Past notes', async () => {
     render(<TesterWidget />);
     await openPanel(() => fireEvent.click(pill()!));

@@ -227,7 +227,7 @@ export async function handler(
   const url = issue?.html_url ?? null;
   if (!number) return await fail("github response had no issue number", 502);
 
-  const { error: writeErr } = await admin
+  const { data: written, error: writeErr } = await admin
     .from("feedback")
     .update({
       github_issue_number: number,
@@ -237,8 +237,27 @@ export async function handler(
     .eq("id", feedbackId)
     // Same guard as the claim: a row that already carries a number belongs to
     // whichever invocation filed it, and its link must not be overwritten.
-    .is("github_issue_number", null);
+    .is("github_issue_number", null)
+    .select("id");
   if (writeErr) return json({ ok: false, error: writeErr.message, number, url }, 500);
+
+  if (!written || written.length === 0) {
+    // The claim should make this unreachable, but a stale claim (CLAIM_TTL_MS)
+    // can let a second invocation through to file its own GitHub issue before
+    // the first writes back — this row now already carries someone else's
+    // issue number, and this invocation's #${number} is an orphaned duplicate
+    // on GitHub with no link home in the row.
+    const { data: existing } = await admin
+      .from("feedback")
+      .select("github_issue_number")
+      .eq("id", feedbackId)
+      .maybeSingle();
+    console.error(
+      `feedback-github-issue: lost the write-back race for ${feedbackId} — ` +
+        `filed #${number}, but the row already carries #${existing?.github_issue_number ?? "unknown"}`,
+    );
+    return json({ ok: false, error: "lost-race", number, url }, 409);
+  }
 
   return json({ ok: true, number, url });
 }

@@ -39,6 +39,13 @@ interface FakeState {
   row: Record<string, unknown> | null;
   profile: Record<string, unknown> | null;
   claimAllowed: boolean;
+  /**
+   * Governs only the final write-back (the update that sets
+   * github_issue_number to a real value) — independent of claimAllowed, so a
+   * test can let the claim through and still lose the write-back race, the
+   * way a stale claim reclaimed by a second invocation would.
+   */
+  writeBackAllowed: boolean;
   updates: Record<string, unknown>[];
   /**
    * The filters each write carried, positionally parallel to `updates`. The
@@ -54,6 +61,7 @@ function fakeClient(state: FakeState) {
   class Builder {
     isUpdate = false;
     isFeedback: boolean;
+    updateValues: Record<string, unknown> | null = null;
     // Filled as the chain is built; handed to state.filters at update() time,
     // by reference, because the filters follow the update in the chain.
     filters: string[] = [];
@@ -81,6 +89,7 @@ function fakeClient(state: FakeState) {
     }
     update(values: Record<string, unknown>) {
       this.isUpdate = true;
+      this.updateValues = values;
       state.updates.push(values);
       state.filters.push(this.filters);
       return this;
@@ -91,12 +100,21 @@ function fakeClient(state: FakeState) {
         error: null,
       });
     }
-    // Awaiting the builder resolves the write; a claim that lost returns no rows.
+    // Awaiting the builder resolves the write; a claim that lost returns no
+    // rows. The write-back (the update that actually sets a real
+    // github_issue_number) is gated by its own flag so a test can let the
+    // claim through and still lose the final write.
     then(
       resolve: (value: { data: unknown; error: null }) => unknown,
       reject?: (reason: unknown) => unknown,
     ) {
-      const data = state.claimAllowed ? [{ id: state.row?.id }] : [];
+      const isWriteBack =
+        this.isUpdate &&
+        this.updateValues != null &&
+        Object.prototype.hasOwnProperty.call(this.updateValues, "github_issue_number") &&
+        this.updateValues.github_issue_number != null;
+      const allowed = isWriteBack ? state.writeBackAllowed : state.claimAllowed;
+      const data = allowed ? [{ id: state.row?.id }] : [];
       return Promise.resolve({ data, error: null }).then(resolve, reject);
     }
   }
@@ -142,6 +160,7 @@ function state(overrides: Partial<FakeState> = {}): FakeState {
     row: bugRow(),
     profile: { email: "leah@example.com", full_name: "Leah", display_name: null },
     claimAllowed: true,
+    writeBackAllowed: true,
     updates: [],
     filters: [],
     signedFor: [],
@@ -283,6 +302,46 @@ Deno.test("writes the issue number and url on success", async () => {
   assertStringIncludes(sentBody, "[Tester] Document: Totals go blank");
   // The author owns the path, so it was signed — for two weeks.
   assertEquals(s.signedFor, [[`${AUTHOR}/shot.png`, 14 * 24 * 60 * 60]]);
+});
+
+Deno.test("returns lost-race and logs when another invocation already won the write-back", async () => {
+  const s = state({ writeBackAllowed: false });
+  const errors: unknown[][] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    errors.push(args);
+  };
+  try {
+    const res = await handler(
+      post({ record: { id: s.row!.id } }),
+      makeDeps(s, {
+        env: { GITHUB_TOKEN: "t" },
+        fetchImpl: () =>
+          Promise.resolve(
+            new Response(
+              JSON.stringify({ number: 7, html_url: "https://github.com/o/r/issues/7" }),
+              { status: 201 },
+            ),
+          ),
+      }),
+    );
+
+    assertEquals(res.status, 409);
+    assertEquals(await res.clone().json(), {
+      ok: false,
+      error: "lost-race",
+      number: 7,
+      url: "https://github.com/o/r/issues/7",
+    });
+    // The claim succeeded and GitHub was called (an issue was filed), but the
+    // write-back lost — logged, not silently dropped.
+    assertEquals(errors.length, 1);
+    assertStringIncludes(String(errors[0][0]), "lost the write-back race");
+    // Both issue numbers: the one this invocation just filed (#7)…
+    assertStringIncludes(String(errors[0][0]), "#7");
+  } finally {
+    console.error = originalError;
+  }
 });
 
 Deno.test("guards the claim on the issue number and lets a stale claim through", async () => {

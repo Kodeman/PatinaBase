@@ -21,7 +21,13 @@ import {
   type FeedbackBucket,
   type FeedbackWeight,
 } from '@patina/supabase';
-import { BUCKETS, WEIGHTS, bucketMeta, captureContext } from '@/lib/document/feedback';
+import {
+  BUCKETS,
+  WEIGHTS,
+  bucketMeta,
+  captureContext,
+  captureScreenshot,
+} from '@/lib/document/feedback';
 
 const YELLOW = '#ffd60a';
 
@@ -102,9 +108,16 @@ export function FeedbackForm({
       setBugTouched(false);
       // The panel stays open after a send, so the next note starts from a
       // clean form — including the screenshot, which belonged to the screen
-      // she reported, not to whatever she looks at next.
+      // she reported, not to whatever she looks at next. Re-capture right
+      // away: without this, a second note in the same panel session would
+      // silently submit with the stale (cleared) shot.
       setShot(null);
       setIncludeShot(true);
+      setCapturing(true);
+      captureScreenshot().then((next) => {
+        setShot(next);
+        setCapturing(false);
+      });
     } catch {
       // Never lose what she wrote: inline error, note preserved.
       setError('Couldn’t leave the note. It’s still here — try again.');
