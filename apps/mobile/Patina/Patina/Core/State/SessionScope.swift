@@ -54,7 +54,8 @@ enum SessionScope {
             NotificationManager.shared,
             RoomSyncCoordinator.shared,
             CompanionService.shared,
-            PieceActChannel.shared
+            PieceActChannel.shared,
+            MatchScoreResolver.shared
         ]
     }
 
@@ -101,6 +102,10 @@ extension DesignRequestStatusService: SessionScoped {}
 extension OrdersService: SessionScoped {}
 extension StudioHubViewModel: SessionScoped {}
 extension SettingsService: SessionScoped {}
+
+/// The session's one answer per piece. It is scored against the account's
+/// taste portrait, so it is the previous account's opinion of the piece.
+extension MatchScoreResolver: SessionScoped {}
 
 // The rest already had a clearing method, so the conformance is the whole edit.
 

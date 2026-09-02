@@ -191,9 +191,27 @@ struct Product: Identifiable, Hashable, Codable {
         PatinaCurrency.formatWholeDollars(cents: priceCents)
     }
 
+    /// A-34: after a five-question quiz every recommendation stamped 40–46%,
+    /// which a person reads as the quiz having failed — the app asked five
+    /// questions, promised to show them their home, then scored its own
+    /// answer at four out of ten. The number was never a percentage anybody
+    /// could act on; it is a rank. So the card says where the piece sits, not
+    /// a figure that invites arithmetic.
+    ///
+    /// `0` is "we have no score for this piece", not "a bad match": the
+    /// decoder's default, and what `MatchScoreResolver` hands back for a
+    /// piece opened by id in a session that never scored it (C-11).
     var matchLabel: String {
-        "\(matchScore)% match"
+        switch matchScore {
+        case 70...: return "Strong match"
+        case 50..<70: return "Good match"
+        case 1..<50: return "Worth a look"
+        default: return "Not scored yet"
+        }
     }
+
+    /// Whether `matchLabel` is describing a score the app actually has.
+    var hasMatchScore: Bool { matchScore > 0 }
 
     var hasARModel: Bool {
         usdzURL != nil

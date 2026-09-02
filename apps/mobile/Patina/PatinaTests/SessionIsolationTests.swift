@@ -100,7 +100,7 @@ struct SessionIsolationTests {
     @Test("the participant list is not empty and holds no duplicates")
     func theParticipantsAreDistinct() {
         let participants = SessionScope.participants()
-        #expect(participants.count == 11)
+        #expect(participants.count == 12)
         let identities = Set(participants.map { ObjectIdentifier($0) })
         #expect(identities.count == participants.count)
     }
@@ -233,7 +233,8 @@ struct SessionIsolationTests {
         "NotificationManager.swift",
         "RoomSyncCoordinator.swift",
         "CompanionService.swift",
-        "PieceActChannel.swift"
+        "PieceActChannel.swift",
+        "MatchScoreResolver.swift"
     ]
 
     /// Every other `static let shared` in the app, and why it is not one.
@@ -278,6 +279,12 @@ struct SessionIsolationTests {
         // which also fires `nil → A` at every cold launch and would wipe the
         // account's own portrait on launch.
         out["StyleProfileStore.swift"] = "on disk — cleared by LocalStoreReset.wipeUserScopedData"
+
+        // The record of a store this launch had to start over. A device fact
+        // about this process, not a cache of the account, and it is cleared
+        // by the person reading the notice — resetting it on an account
+        // change would swallow the one sentence that explains the loss.
+        out["LocalStoreRecovery.swift"] = "a device fact about this launch, acknowledged by the reader"
 
         // Scan pipeline. Its rows are SwiftData, wiped by `LocalStoreReset`;
         // the in-memory parts are queue mechanics and file bookkeeping.

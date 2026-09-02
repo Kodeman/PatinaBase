@@ -283,11 +283,17 @@ public final class RoomModel {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// Average match score across saved items, or nil if empty.
+    /// Average match score across saved items, or nil when none of them
+    /// carries one.
+    ///
+    /// C-11: a piece saved from a screen that never scored it stores `0`, and
+    /// averaging that in publishes a room match the pieces do not support.
+    /// An unscored piece is left out of the average rather than counted as a
+    /// bad one.
     public var averageMatchScore: Int? {
-        guard !items.isEmpty else { return nil }
-        let total = items.reduce(0) { $0 + $1.matchScore }
-        return total / items.count
+        let scored = items.filter { $0.matchScore > 0 }
+        guard !scored.isEmpty else { return nil }
+        return scored.reduce(0) { $0 + $1.matchScore } / scored.count
     }
 
     /// Number of saved items that have an AR model.

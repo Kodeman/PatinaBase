@@ -64,9 +64,14 @@ actor ProductAPIClient {
             #endif
             throw ProductAPIError.http(status: http.statusCode)
         }
-        let items = ProductAPIClient.withholdingUnresolvedMakers(
+        let decoded = ProductAPIClient.withholdingUnresolvedMakers(
             try ProductAPIClient.decodeProducts(from: data)
         )
+        // C-11: the unscoped feed and the room-scoped feed are the same RPC
+        // with a different `p_room_id`, and they disagree about the same
+        // piece by 16 points. The first answer the session got is the one it
+        // keeps — the tester is not shown a number that moves under them.
+        let items = await MainActor.run { MatchScoreResolver.shared.reconciling(decoded) }
         return RecommendationsResponse(items: items, total: items.count, roomId: roomId, roomName: nil)
     }
 
@@ -169,7 +174,13 @@ actor ProductAPIClient {
             .decode([FailableDecodable<RawProductWithVendor>].self, from: data)
             .compactMap(\.value)
         guard let raw = rawProducts.first else { throw ProductAPIError.notFound }
-        return raw.toProduct()
+        // C-11: this read has no match score. It used to print
+        // `quality_score ?? 50` as one, which is how a piece the grid scored
+        // 73 read 50 on its own detail, one tap later.
+        let product = raw.toProduct()
+        return await MainActor.run {
+            MatchScoreResolver.shared.applyingKnownScores([product])
+        }[0]
     }
 
     /// The saved pieces' products, fetched **by id, withdrawn ones included**.
@@ -203,7 +214,10 @@ actor ProductAPIClient {
             PatinaLog.ui.debug("[ProductAPI] Dropped \(dropped) malformed saved-piece row(s)")
         }
         #endif
-        return wrapped.compactMap(\.value).map { $0.toProduct() }
+        let products = wrapped.compactMap(\.value).map { $0.toProduct() }
+        return await MainActor.run {
+            MatchScoreResolver.shared.applyingKnownScores(products)
+        }
     }
 
     // MARK: - Interactions
@@ -295,7 +309,12 @@ private struct RawProductWithVendor: Decodable {
             id: id,
             name: name,
             priceCents: price_retail ?? 0,
-            matchScore: quality_score ?? 50,
+            // C-11: `quality_score` is not a match — it is the catalogue's
+            // own rating, and it is NULL on every row today, so this printed
+            // a flat 50% on a piece the grid had just scored 73. The by-id
+            // read carries no score; `MatchScoreResolver` supplies the
+            // session's, or the piece stays unscored and says so.
+            matchScore: 0,
             makerName: vendors?.name ?? "Unknown",
             makerLocation: vendors?.made_in,
             makerStory: vendors?.brand_story,
