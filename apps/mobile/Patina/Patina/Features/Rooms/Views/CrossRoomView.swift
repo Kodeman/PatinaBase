@@ -45,8 +45,8 @@ struct CrossRoomView: View {
                             }
                         }
                     }
-                    Spacer().frame(height: 120)
                 }
+                .companionBottomClearance()
             }
         }
         .background(PatinaColors.Background.primary.ignoresSafeArea())

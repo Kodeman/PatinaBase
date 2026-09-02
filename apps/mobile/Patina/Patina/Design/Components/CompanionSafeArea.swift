@@ -188,6 +188,37 @@ private struct CompanionHearthReservation: ViewModifier {
     }
 }
 
+/// The one bottom clearance a scroll container reserves for whatever owns the
+/// bottom edge — the bar on the house-first root, the dock on the flag-off
+/// fallback (`C9-04`).
+///
+/// Twenty screens used to carry their own figure: 100 here, 120 there, 190
+/// somewhere else, none of them derived from `CompanionHearthMetrics`, so a
+/// change to the Hearth or to the bar re-collided silently. `MoneyScreenChrome`
+/// named that defect and fixed it for the ten money screens; this is the same
+/// answer for the rest, and `CompanionInsetTests` is what stops the twenty
+/// coming back.
+///
+/// It reads `isHouseFirstRoot` itself rather than taking it as a parameter so
+/// no call site repeats `coordinator.isHouseFirstRoot` — one seam, read once,
+/// at the container that needs it.
+enum CompanionBottomClearance {
+    static func height(houseFirst: Bool) -> CGFloat {
+        CompanionHearthMetrics.pinnedFooterClearance(houseFirst: houseFirst)
+    }
+}
+
+private struct CompanionBottomClearanceModifier: ViewModifier {
+    @Environment(\.appCoordinator) private var coordinator
+
+    func body(content: Content) -> some View {
+        content.padding(
+            .bottom,
+            CompanionBottomClearance.height(houseFirst: coordinator.isHouseFirstRoot)
+        )
+    }
+}
+
 extension View {
     func companionHearthReservation(isActive: Bool = true) -> some View {
         modifier(CompanionHearthReservation(isActive: isActive))
@@ -196,6 +227,11 @@ extension View {
     /// Source-compatible name retained for existing and in-flight call sites.
     func companionSafeArea() -> some View {
         companionHearthReservation()
+    }
+
+    /// Bottom clearance for a scroll container that hosts the Companion.
+    func companionBottomClearance() -> some View {
+        modifier(CompanionBottomClearanceModifier())
     }
 }
 

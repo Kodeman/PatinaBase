@@ -19,7 +19,7 @@ struct DocumentListView: View {
                 header
                 content
             }
-            .padding(.bottom, 120)
+            .companionBottomClearance()
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
