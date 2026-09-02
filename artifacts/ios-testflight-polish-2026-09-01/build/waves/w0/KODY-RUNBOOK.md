@@ -42,10 +42,12 @@ Document (surface #1) above the iOS app (surface #2): *The Document never breaks
 
 ## Block A — merge L0.2b and redeploy the designer portal
 
-**What it proves.** That `https://app.patina.cloud/api/catalog/vendors` no longer hands all thirteen
-internal trade columns to an unauthenticated `curl` — the third exposure, the one that is not the app's
-and that 00555 does **not** fix (it converts it to a 500). This is half of gate **G3**, and it is the
-gate on Block B.
+**What it proves.** That the designer portal's **four** vendors routes —
+`/api/catalog/vendors`, `/api/catalog/vendors/[id]`, `/api/admin/catalog/vendors` and
+`/api/admin/catalog/vendors/[id]` — no longer hand the thirteen internal trade columns to an
+unauthenticated `curl`, or to a signed-in homeowner. That is the third exposure, the one that is not
+the app's and that 00555 does **not** fix (it converts it to a 500). This is half of gate **G3**, and
+it is the gate on Block B.
 
 ### A0 — variables
 
@@ -94,9 +96,18 @@ Confirm the guard is really on `main` before spending a deploy:
 
 ```bash
 cd "$REPO"
-git log --oneline -3 -- apps/designer-portal/src/app/api/catalog/vendors packages/supabase/src/hooks/use-comms.ts
-grep -n 'Unauthorized' apps/designer-portal/src/app/api/catalog/vendors/route.ts
-grep -n 'Unauthorized' 'apps/designer-portal/src/app/api/catalog/vendors/[id]/route.ts'
+git log --oneline -4 -- apps/designer-portal/src/app/api/catalog/vendors \
+  apps/designer-portal/src/app/api/admin/catalog/vendors \
+  packages/supabase/src/hooks/use-comms.ts
+# FOUR route files, not two — RF-04 found the same defect on the admin pair.
+# Every one must call the role helper, and none may still say select('*').
+grep -rn 'getAuthenticatedDesignerAdmin' \
+  apps/designer-portal/src/app/api/catalog/vendors \
+  apps/designer-portal/src/app/api/admin/catalog/vendors
+grep -rn "select('\*')" \
+  apps/designer-portal/src/app/api/catalog/vendors \
+  apps/designer-portal/src/app/api/admin/catalog/vendors \
+  | grep -vE ':[0-9]+: *(//|\*)'     # comment lines filtered — want NO hits left
 grep -n 'list_vendor_profiles' packages/supabase/src/hooks/use-comms.ts
 ```
 
@@ -115,6 +126,28 @@ grep -rn useVendorProfiles apps packages --include='*.ts' --include='*.tsx'
 
 Three hits or fewer (`hooks/index.ts`, `use-comms.ts`, the test) → latent, proceed. A hit in a portal
 page → do not leave the A→B window open overnight.
+
+### A3b — ⚠ ONE PRECONDITION THAT WILL 503 FOUR ROUTES IF IT IS MISSING
+
+L0.2b's guard resolves the caller's role with a **service-role** client, and
+`createAdminClient()` throws when `SUPABASE_SERVICE_ROLE_KEY` is not in the runtime environment. That
+key is **not** in `apps/designer-portal/wrangler.jsonc` (grep it — there is no such `var`), so on
+Cloudflare it can only be a Worker **secret**. If it is not set, all four vendors routes —
+`/api/catalog/vendors`, `/api/catalog/vendors/[id]`, `/api/admin/catalog/vendors`,
+`/api/admin/catalog/vendors/[id]` — answer **503 "Role check unavailable"** to everybody, including
+Leah. (503, not 500: the helper distinguishes a role *refusal* from a role *outage* so nobody spends an
+afternoon on permissions during a config problem — RF-07.) The same key is already required by
+`POST /api/clients/invite`, so if invites work in production today it is set; check anyway, it is one
+command:
+
+```bash
+cd "$REPO"
+npx wrangler secret list --name "$PORTAL"
+```
+
+Want `SUPABASE_SERVICE_ROLE_KEY` in the list. If it is absent, set it before A4
+(`npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name "$PORTAL"`, value from the Strata dashboard
+→ Project Settings → API → `service_role`) and never write it into a file.
 
 ### A4 — deploy
 
@@ -174,6 +207,24 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://app.patina.cloud/api/catalog/v
 **Want `401`.** That uuid is the shape, not a real row — the guard must fire before the lookup, so a
 nonexistent id must still answer 401 and never 404.
 
+**The two admin routes carry the same defect and the same fix (RF-04), so probe them too.** They were
+untouched by the first RL02B-01 commit — five handlers, all `getUser()`-only, all `select('*')` on the
+same table:
+
+```bash
+for p in /api/admin/catalog/vendors "/api/admin/catalog/vendors/$VENDOR_ID"; do
+  printf '%-46s %s\n' "$p" "$(curl -s -o /dev/null -w '%{http_code}' "https://app.patina.cloud$p")"
+done
+curl -s -X POST https://app.patina.cloud/api/admin/catalog/vendors \
+  -H 'Content-Type: application/json' -d '{"name":"probe-should-not-exist"}' \
+  -o /dev/null -w 'POST %{http_code}\n'
+```
+**Want `401` on all three.** The POST matters as much as the reads: `vendors` carries a permissive
+`Authenticated users can insert vendors` policy, so before RF-04 any signed-in session could create
+rows through that handler. Its write verbs are now **admin-domain only** — a designer gets `403
+"Forbidden: admin role required"`, which is the thing to check in A7's signed-in walk if you are signed
+in as Leah rather than as an admin.
+
 ### A7 — the signed-in half (this is a walk, not a probe)
 
 Signed in to `app.patina.cloud` as yourself, in a browser: the vendors catalogue page still lists
@@ -208,12 +259,18 @@ before A4. Read the echoed value against your own note before confirming the pro
 
 ### A9 — one thing to know before Block B
 
-The guard added by L0.2b **authenticates but does not authorize**. All four portals share one
+**This paragraph used to say the guard authenticates but does not authorize. It no longer does, and
+the history is worth keeping.** L0.2b's first cut added `getUser()` only. All four portals share one
 cookie name on `.patina.cloud` and the designer-portal middleware passes `/api/*` through, so a
-homeowner signed in at `client.patina.cloud` can still read a vendor's trade file by typing a
-`app.patina.cloud/api/catalog/vendors/` URL with a real vendor id on the end. That is a strict improvement on the
-anon leak and it does **not** block anything here — it is recorded so **G3 is not written as "the
-exposure is closed"** when what closed is the unauthenticated half.
+homeowner signed in at `client.patina.cloud` could still read a vendor's trade file by typing an
+`app.patina.cloud/api/catalog/vendors/<id>` URL — round one's own cohort, holding a session the route
+accepted. RL02B-01 (fix round 1) put both `/api/catalog/vendors` routes behind
+`getAuthenticatedDesignerAdmin`; **RF-04** (fix round 2) found the same five handlers still open on
+`/api/admin/catalog/vendors` and `/api/admin/catalog/vendors/[id]` and closed those too, admin-domain
+only on the write verbs.
+
+So **G3 may now be written as "the exposure is closed"** — but only once A6 has actually returned
+`401` on all five paths. Until then it is closed in the branch, not in production.
 
 ---
 
@@ -267,10 +324,13 @@ to B9.
 
 ### B2 — ✅ RULED. Nothing to decide here; read it and carry on.
 
-> **Ruling B2 (Fable, 2026-09-02): `handle_new_user`'s default role is decided by the identity
-> provider.** Apple → `homeowner`. Everything else → `designer`, the pre-00555 default. An explicit
-> `role` hint in `raw_user_meta_data` still wins, exactly as today. **It is already in the migration:
-> there is no blank to fill and no step to add.**
+> **Ruling B2 (Fable, 2026-09-02; direction corrected the same day): `handle_new_user`'s default role
+> is decided by the identity provider, and the allowlist names the provider that keeps the PRIVILEGED
+> value.** An **email/password** signup — the designer portal's own signup page, and nothing else —
+> keeps `designer`, the pre-00555 default. **Every other provider** (Apple, Google, and any OAuth
+> provider added later), and any row whose `raw_app_meta_data` is missing or unrecognised, lands
+> `homeowner`. An explicit `role` hint in `raw_user_meta_data` still wins, exactly as today. **It is
+> already in the migration: there is no blank to fill and no step to add.**
 
 **What the earlier draft would have done, and why it was wrong.** It changed the fallback from
 `COALESCE(v_role, 'designer')` (00313:64) to `COALESCE(v_role, 'homeowner')`. That is right for the iOS
@@ -286,14 +346,31 @@ stack, 2026-09-02:
   `role = 'homeowner'`, and `public.comms_resolve_role` (00103:37-42) would then have labelled that
   person **`client`** in every comms thread.
 
+**And why the FIRST provider-shaped cut was also wrong.** It read
+`WHEN provider = 'apple' THEN 'homeowner' … ELSE 'designer'`, which is an allowlist pointed at the
+privileged value. `AuthService.signInWithGoogle` (`:399-421`, wired at `ContentView.swift:48`,
+`AuthSheet.swift:59`) sits on the same Welcome screen as the Apple button and calls
+`signInWithOAuth`, which carries no `data:` parameter — so a Google sign-up is exactly as
+metadata-less as an Apple one and fell straight through to `designer`. Proved in a rolled-back
+transaction: `{"provider":"google","providers":["google"]}` → `designer`, and a row with no
+`raw_app_meta_data` at all → `designer`. Ruling D3 takes the Google button off the screen in W1, but a
+trigger default must not depend on a client-side button being absent, and an `ELSE 'designer'` hands
+the same bug to every provider added after this file.
+
 **What the migration does instead** (00555 §a2(ii)):
 
 ```sql
 v_role := CASE
-  WHEN NEW.raw_user_meta_data->>'role' = 'homeowner'             THEN 'homeowner'
-  WHEN NEW.raw_app_meta_data->>'provider' = 'apple'              THEN 'homeowner'
-  WHEN jsonb_exists(NEW.raw_app_meta_data->'providers', 'apple') THEN 'homeowner'
-  ELSE 'designer'
+  WHEN NEW.raw_user_meta_data->>'role' = 'homeowner' THEN 'homeowner'
+  WHEN NEW.raw_app_meta_data->>'provider' = 'email'
+       AND NOT EXISTS (                    -- and NO other provider is named
+         SELECT 1 FROM jsonb_array_elements_text(
+                  CASE WHEN jsonb_typeof(NEW.raw_app_meta_data->'providers') = 'array'
+                       THEN NEW.raw_app_meta_data->'providers' ELSE '[]'::jsonb END
+                ) AS other(name)
+          WHERE other.name <> 'email')
+    THEN 'designer'
+  ELSE 'homeowner'
 END;
 ```
 
@@ -304,12 +381,16 @@ Three things worth knowing about that shape:
    it is populated at the moment this trigger fires — the same pair every seeded row in
    `supabase/seed/dev-accounts.sql` carries. A caller can forge `raw_user_meta_data`; it cannot forge
    this.
-2. **Both legs are checked** because `provider` is the deprecated half of the pair (GoTrue's own source
-   marks it so) and an account that later links a second identity accumulates names in `providers`
-   while `provider` keeps the first. `jsonb_exists()` is the function spelling of the `?` operator,
-   used so no driver that rewrites `?` as a bind placeholder can mangle the line.
-3. **Apple is the iOS app and only the iOS app.** Patina has no other Apple sign-in surface, so
-   "provider = apple" is a precise proxy for "this signup came through `cloud.patina.app`".
+2. **Both legs are checked**, because `provider` is the deprecated half of the pair (GoTrue's own
+   source marks it so) and an account that links a second identity accumulates names in `providers`
+   while `provider` keeps the first. The designer branch therefore requires the scalar to read `email`
+   **and** no other name to appear in the array. Anything else falls to the unprivileged side, which is
+   where an unrecognised shape belongs.
+3. **`email` is the only provider that identifies ONE surface.** Every OAuth provider Patina has or
+   adds is reached from the iOS Welcome screen; email/password signup is the portal's page. (The
+   client-portal invite-accept form also signs up over email with no role hint and so also lands
+   `designer` here — unchanged from every migration since 00013, and corrected immediately afterwards
+   by `/api/auth/invite/accept` as `service_role`. Not introduced by this file; on the W2 list.)
 
 `user_roles` is untouched by this ruling — every signup still gets the `app_user` grant, and
 `profiles.is_designer` is still synced from `user_roles` by 00290's trigger. B2 decides the
@@ -317,13 +398,16 @@ Three things worth knowing about that shape:
 participant-role derivation and 00038's funnel views read.
 
 **Regression cover, so it cannot drift back quietly:**
-`supabase/tests/rls/00555_ios_round_one_security.test.sql` §11 inserts five real `auth.users` rows —
-11a Apple → `homeowner`; 11b email, no hint → `designer`; 11c explicit hint → `homeowner`; 11d forged
-`super_admin` hint on Apple → `homeowner` (ignored); 11e `providers`-array-only Apple → `homeowner`.
-§10 asserts the function definition actually branches on `raw_app_meta_data`, which appears nowhere in
-00313 — so the guard cannot pass over a skipped graft.
+`supabase/tests/rls/00555_ios_round_one_security.test.sql` §11 inserts **eight** real `auth.users`
+rows — 11a Apple → `homeowner`; 11b email, no hint → `designer`; 11c explicit hint → `homeowner`;
+11d forged `super_admin` hint on Apple → `homeowner` (ignored); 11e `providers`-array-only Apple →
+`homeowner`; **11f Google → `homeowner`**; **11g no `raw_app_meta_data` at all → `homeowner`**;
+**11h email + google linked → `homeowner`**. 11f and 11g are the two rows that passed silently as
+`designer` before the direction was corrected. §10 asserts the function definition branches on
+`raw_app_meta_data` (which appears nowhere in 00313, so the guard cannot pass over a skipped graft)
+**and** that it carries `ELSE 'homeowner'` and not `ELSE 'designer'`.
 
-**One line in the apply report: "B2 ruled provider-shaped; already in the file."**
+**One line in the apply report: "B2 ruled provider-shaped, email-allowlisted; already in the file."**
 
 ### B3 — re-check the migration band with a command that can see peer branches
 
@@ -430,10 +514,10 @@ PROGRAM.md's exit criteria name probes that are not the file's section numbers. 
 | Probe 2 | **§2** | `notification_preferences` as anon: was `200` → now **`401`** |
 | Probe 3 | **§3** | `vendors` public face `200`; `notes`/`trade_terms` **`401`**; `select=*` **`401`** |
 | Probe 4 | **§5** | the iOS product read with its `vendors!products_vendor_id_fkey` embed still `200` **with a non-null maker** |
-| Probe 5 | **§11** | `app.patina.cloud/api/catalog/vendors` unauthenticated: **`401`** — not a 200 carrying trade columns, and not a 500 |
+| Probe 5 | **§11** | `app.patina.cloud/api/catalog/vendors` unauthenticated: **`401`** — not a 200 carrying trade columns, and not a 500. **Plus the three admin paths from A6** (RF-04) |
 | **9b** | **§9b** | the `FOR ALL` / `TO PUBLIC` / `auth.uid() IS NULL` sweep returns **0 rows** |
 | **9d** | **§9d** | `vendors` anon column allowlist = the **24** public-face columns, `id` among them |
-| **9f** | **§9f** | **BOTH** `UPDATE` policies on `profiles` have a non-null `with_check`, and **both name `is_designer`** as well as `role` |
+| **9f** | **§9f** | **BOTH** `UPDATE` policies on `profiles` PIN `is_designer`; the sibling's `USING` reads the OLD row; and `designer_clients` carries the two RESTRICTIVE write policies |
 
 **9f is the blocker probe and it wants TWO rows.** `profiles` carries two permissive `UPDATE` policies;
 Postgres ORs the permissive `WITH CHECK`s, and a permissive policy whose `WITH CHECK` is NULL reuses its
@@ -448,33 +532,57 @@ know what "after" looks like before you run them against Strata:
 
 ```
 -- 9f
-                 policyname                 |  cmd   | has_with_check | pins_role | pins_is_designer
---------------------------------------------+--------+----------------+-----------+------------------
- Designers can update their client profiles | UPDATE | t              | t         | t
- Users can update own profile               | UPDATE | t              | t         | t
+                 policyname                 |  cmd   | has_with_check | names_role | pins_is_designer | using_pins_old_row
+--------------------------------------------+--------+----------------+------------+------------------+--------------------
+ Designers can update their client profiles | UPDATE | t              | t          | t                | t
+ Users can update own profile               | UPDATE | t              | t          | t                | f
+(2 rows)
+
+-- 9f, designer_clients
+              policyname              |  cmd   | permissive
+--------------------------------------+--------+-------------
+ designer_clients_updater_is_designer | UPDATE | RESTRICTIVE
+ designer_clients_writer_is_designer  | INSERT | RESTRICTIVE
 (2 rows)
 
 -- 9d
 24
 ```
 
-**`pins_is_designer` is not decoration.** `profiles.role` is a label; `profiles.is_designer` is the
-column the designer-side RPCs actually read as authority — `claim_design_request` and the
-`open_design_requests` view (00286), `accept_design_request` (00330), `design_request_submit` (00285),
+**`using_pins_old_row` is `f` on the owner policy and that is correct** — its `USING` is
+`auth.uid() = id` and its pin lives in the `WITH CHECK`, through the SECURITY DEFINER helper. On the
+SIBLING it must be `t`, and an `f` there is the demotion hole: a `WITH CHECK` pinned to the literals
+`role = 'homeowner' AND is_designer IS NOT TRUE` is satisfied *by construction* when the caller is
+turning a designer INTO a homeowner. That was live in the 2026-09-02 first cut and is what RF-01
+closed.
+
+**`pins_is_designer` is not decoration, and it matches the COMPARISON rather than the column name.**
+`profiles.role` is a label; `profiles.is_designer` is the column the designer-side RPCs actually read as
+authority — `claim_design_request` and the `open_design_requests` view (00286),
+`accept_design_request` (00330), `design_request_submit` (00285),
 `_can_manage_configurable_product`, and 00555's own `search_shareable_designers`. A `with_check` that
-pins `role` and not `is_designer` closes the label and leaves the door: a homeowner PATCHes
-`is_designer = true` and walks into the design-request pool with `role` still reading `homeowner`. Four
-`t`s or the hole is open.
+pins `role` and not `is_designer` closes the label and leaves the door. And an earlier version of this
+probe asked `with_check ILIKE '%is_designer%'`, which the substring inside
+`current_profile_is_designer()` satisfies on its own — it would have passed over a `WITH CHECK` that
+pinned nothing (RF-06). Note also that Postgres DEPARSES `a IS NOT DISTINCT FROM b` as
+`NOT (a IS DISTINCT FROM b)`, which is the spelling the owner row is matched on.
 
 Reproduce them directly with, respectively:
 
 ```bash
 psql "$STRATA_DB_URL" -X -q -c \
   "SELECT policyname, cmd, (with_check IS NOT NULL) AS has_with_check,
-          (with_check ILIKE '%role%')        AS pins_role,
-          (with_check ILIKE '%is_designer%') AS pins_is_designer
+          (with_check ILIKE '%role%')                                AS names_role,
+          (with_check ILIKE '%NOT (is_designer IS DISTINCT FROM%'
+           OR with_check ILIKE '%is_designer IS NOT TRUE%')          AS pins_is_designer,
+          (qual ILIKE '%is_designer IS NOT TRUE%')                   AS using_pins_old_row
      FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND cmd='UPDATE'
     ORDER BY policyname;"
+
+psql "$STRATA_DB_URL" -X -q -c \
+  "SELECT policyname, cmd, permissive FROM pg_policies
+     WHERE schemaname='public' AND tablename='designer_clients'
+       AND policyname LIKE 'designer_clients_%is_designer' ORDER BY policyname;"
 
 psql "$STRATA_DB_URL" -X -q -tAc \
   "SELECT count(*) FROM information_schema.column_privileges
@@ -482,8 +590,9 @@ psql "$STRATA_DB_URL" -X -q -tAc \
       AND grantee='anon' AND privilege_type='SELECT';"
 ```
 
-**Two rows, both `t`, and the count `24`.** Anything else and the hole is open — go back to
-`00555_probes.md` §9d / §9f for the full column list and the policy predicates.
+**Two `profiles` rows in the shape above, two RESTRICTIVE `designer_clients` rows, and the count
+`24`.** Anything else and the hole is open — go back to `00555_probes.md` §9d / §9f / §9f-ia for the
+full column list and the policy predicates.
 
 **Advisors** (read-only; you or an agent):
 
@@ -494,9 +603,11 @@ or the dashboard: project `bkvcixdmuyejfzcijpdg` → Advisors → Security.
 
 The `security_definer_view` **ERROR count must still be 21**. 00555 creates no view at all
 (`profile_cards` was cut), so the count cannot move for that reason; a 22nd means something else was
-added and needs reading. 00555's four new functions — `can_view_profile`, `current_profile_role`,
-`search_shareable_designers`, `list_vendor_profiles` — are SECURITY DEFINER with a pinned `search_path`,
-so none of them should raise `function_search_path_mutable`. `current_profile_role` is the one to check
+added and needs reading. 00555's five new functions — `can_view_profile`, `current_profile_role`,
+`current_profile_is_designer`, `search_shareable_designers`, `list_vendor_profiles` — are SECURITY
+DEFINER with a pinned `search_path`, so none of them should raise `function_search_path_mutable`.
+(`current_profile_is_designer` was added in fix round 1 and is the fifth; a checklist that still says
+four is pre-2026-09-02.) `current_profile_role` is the one to check
 by name: it is the smallest of the four and the `profiles` UPDATE policy cannot work without it. The
 migration's own verification block fails the transaction with *"authenticated cannot execute
 current_profile_role — the UPDATE policy denies every write"* if its grant did not land.

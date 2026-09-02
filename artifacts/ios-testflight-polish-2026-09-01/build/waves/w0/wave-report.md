@@ -282,3 +282,189 @@ says why; **H4** replaces the "known hole" paragraph with how to read the line o
 the RL01-01 acceptance), `migrations-draft/00555_probes.md` (§9f-i now checks `is_designer` on both
 policies; §9f-ii matched the old flat fallback and would have returned **false** against the shipped
 function — corrected to the provider branch), `catalog-manifest-README.md` (the fifth whole-file rule).
+
+---
+
+## Fix round 2 (2026-09-02)
+
+A second adversarial pass over the fix round returned eight findings — three blockers, one major, four
+minors. **All eight are addressed.** Two of them say the first fix round was wrong rather than
+incomplete, and both are worth reading before the next security migration is written.
+
+Nothing here was a production write: no `psql`, no Supabase MCP write, no `asc`, no Sanity write, no
+PostHog change, no `wrangler`, no `deploy-portal.sh`, no `functions deploy`, no `db push`.
+
+### The commits
+
+| # | Branch | Commit | Findings | What |
+|---|---|---|---|---|
+| 1 | `first-flight/w0-l02b` | `f0b464f66` | RF-04, RF-07, RF-08 | `fix(portal): gate the admin vendors routes too, and tell a role refusal from a role outage` |
+| 2 | `first-flight/integration` | `8b330c8fc` | RF-01, RF-02, RF-05, RF-06 | `fix(db): pin the sibling policy to the OLD row, close the roster mint, and point ruling B2's allowlist the right way` |
+| 3 | `first-flight/integration` | `ed0bbfb13` | RF-03 | `docs(first-flight): correct RL03-19's stated reason — quality_score gates the TIER, not the order` |
+| 4 | `first-flight/integration` | *this commit* | — | `docs(first-flight): record fix round 2 in the runbook, the probes and the wave report` |
+
+Commit 2 is one commit for four findings because all four live in
+`00555_ios_round_one_security.sql` and its test and cannot be separated by pathspec. Row 4 says
+*this commit* rather than a sha for the obvious reason — a commit cannot carry its own hash.
+
+### The two findings that say the first round was WRONG
+
+**RF-01 (blocker) — the `is_designer` pin was one-directional, and the roster row was self-servable.**
+Fix round 1 gave `"Designers can update their client profiles"` a `WITH CHECK` pinned to the LITERALS
+`role = 'homeowner' AND is_designer IS NOT TRUE`, and wrote in the migration that a manufactured roster
+row reaching a stranger's non-role columns was "W2, tracked, not smuggled in here". Both halves were
+wrong. A **demotion satisfies those literals by construction**, so any authenticated account could
+roster a real designer and then rewrite them. Reproduced over HTTP on a fresh local stack as the seeded
+homeowner `client@patina.dev`: `POST /rest/v1/designer_clients {designer_id: self, client_id: <Leah>}`
+→ 201, `PATCH /rest/v1/profiles?id=eq.<Leah> {"role":"homeowner","is_designer":false}` → 204,
+`PATCH … {"display_name":"PWNED","full_name":"PWNED"}` → 204. `designer | t | Leah Hartwell` became
+`homeowner | f | PWNED`. That strips the exact authority the rest of §(a2) defends
+(`search_shareable_designers`, `open_design_requests`, `claim`/`accept_design_request`) and corrupts the
+name every surface renders.
+
+Closed in two places, because one would have been the same mistake again:
+
+- **The pin now reads the OLD row.** The two column predicates are in the policy's `USING` as well as
+  its `WITH CHECK`. An `UPDATE` policy's `USING` sees the old tuple — there is no `OLD` in a
+  `WITH CHECK`, which is why the owner policy needed a SECURITY DEFINER helper and this one does not:
+  the target row is not the caller's own, so the old value is right there. A designer, admin or vendor
+  on somebody's roster is now not a row this policy can select at all, in either direction.
+- **The mint is closed.** `public.designer_clients` gains two RESTRICTIVE policies,
+  `designer_clients_writer_is_designer` (INSERT) and `designer_clients_updater_is_designer` (UPDATE).
+  Both of the table's permissive write policies are satisfied by `designer_id = auth.uid()` — 00014's
+  `FOR ALL / TO PUBLIC / USING (auth.uid() = designer_id)` with no `WITH CHECK`, and 00316's
+  `is_studio_comember(designer_id)`, whose **first branch is `p_owner = auth.uid()`**. Editing either
+  one would have left the other as an OR-branch; a restrictive policy ANDs onto the OR of the whole
+  permissive set and survives a third being added later. The predicate reads BOTH designer signals
+  (`current_profile_is_designer() IS TRUE OR current_profile_role() IN ('designer','admin','super_admin')`)
+  because they legitimately disagree: 00290's trigger sets `is_designer` off a **designer-domain**
+  `user_roles` grant, and `handle_new_user` gives every signup `app_user` — so a designer who
+  self-signed-up on the portal has `role = 'designer'` with `is_designer` still false until an invite
+  or an admin grant lands, and an `is_designer`-only test would have locked them out of their own Add
+  Client flow.
+
+New test case **7h** runs the cross-account direction, which no case in the suite did; **7e0** asserts
+the mint is refused; **7e/7f2** keep their old coverage by planting the roster row out of band, so they
+still test the profiles policies rather than re-testing 7e0.
+
+**RF-02 (blocker) — ruling B2's allowlist pointed at the privileged value.** The first cut read
+`WHEN provider = 'apple' THEN 'homeowner' … ELSE 'designer'`.
+`AuthService.signInWithGoogle` (`:399-421`, wired at `ContentView.swift:48`, `AuthSheet.swift:59`,
+`AuthViewModel.swift:314`) sits on the same Welcome screen and calls `signInWithOAuth`, which carries no
+`data:` parameter — so a Google sign-up is exactly as metadata-less as an Apple one and fell through to
+`designer`. That is A3-07 verbatim, on the button beside the one the ruling was written for. Ruling D3
+removes the Google button in W1, but a trigger default must not depend on a client-side button being
+absent, and an `ELSE 'designer'` hands the same bug to every provider added after this file.
+
+**Ruling B2 is therefore restated, not reversed: the allowlist names the provider that KEEPS the
+privileged value.** An email/password signup — the designer portal's own signup page, and the only
+surface that is — keeps `designer`; every other provider, and any row whose `raw_app_meta_data` is
+missing or unrecognised, lands `homeowner`; an explicit `homeowner` hint still wins. The `email` branch
+requires the `provider` scalar to read `email` **and** no other name to appear in the `providers` array,
+so a linked identity does not inherit the default. Test §11 grows from five cases to eight: **11f**
+Google → homeowner and **11g** no `raw_app_meta_data` → homeowner are the two rows that passed silently
+as designer before, and **11h** covers email + google linked. §10's catalog assertion now also requires
+`ELSE 'homeowner'` and rejects `ELSE 'designer'` — the graft-only version passed on the wrong direction.
+
+The client portal's invite-accept form (`AcceptInviteForm.tsx:64`) also signs up over email with no role
+hint and so also lands `designer` here. That is unchanged from every migration since 00013 and is
+corrected immediately afterwards by `/api/auth/invite/accept` as `service_role`. Stated in the migration
+rather than left for the next reviewer to rediscover; it is on the W2 list, not this round's.
+
+### The rest
+
+| id | Verdict | What changed |
+|---|---|---|
+| **RF-04** (blocker) | **fixed** | The same defect RL02B-01 closed was still open one directory over: `/api/admin/catalog/vendors` and `.../[id]`, five handlers, all `createServerClient()` + `getUser()` + `select('*')` on the same table, in the same portal whose middleware returns early on `isApiRoute`. The write verbs were worse than the read — `Authenticated users can insert vendors` is a permissive INSERT policy for `authenticated`. All five now go through `getAuthenticatedDesignerAdmin`; GET is designer-or-admin, POST/PATCH/DELETE are **admin-domain only**. `select('*')` is gone from every read and both write returns. The two column lists moved to `src/lib/vendor-columns.ts` — four route files read this table, and one copy per file is one copy per file to widen by accident. |
+| **RF-03** (major) | **fixed** | RL03-19's stated reason was false and it was printed to a human in four places. `get_recommendations`' only `ORDER BY` is `m.rank` from `get_aesthete_matches`, and `quality_score` appears **nowhere** in that function's matching logic (read off 00244 and 00533) — its sole use is the tier label `WHEN COALESCE(p.quality_score, 0) >= 80 THEN 'designer_selection'`. So "an unscored piece sorts below every scored one" was wrong; "can never reach designer_selection tier" was right. The floor stands on the tier argument alone. All four sites rewritten: `MIN_SCORED_SHARE`'s comment, the checker's error string, `catalog-manifest-README.md` (both the column row and the whole-file-rules paragraph Leah works from), and catalogue test case 7c. |
+| **RF-05** (minor) | **fixed** | `profiles`' INSERT leg pinned neither column, and `profiles.role`'s DEFAULT is `'designer'` — so an INSERT with role omitted lands a designer, and `is_designer = true` was insertable outright. `"Users can insert own profile"` gains `role IS NOT DISTINCT FROM 'homeowner' AND is_designer IS NOT TRUE`; 00017's `"Designers can create homeowner profiles"` gains the `is_designer` half and is re-scoped `TO authenticated` (it would otherwise OR around the first). Cases **6e/6f** cover both, against **real `auth.users` rows whose trigger-made profiles row is deleted first** — a fabricated uuid is stopped by `profiles_id_fkey` and the case would have passed with the policy doing nothing. Reachability is still narrow (a live `auth.users` row with no `profiles` row) and the migration says so. |
+| **RF-06** (minor) | **fixed** | The new guards matched the helper's NAME, not the pin: all four were `ILIKE '%is_designer%'`, which the substring inside `current_profile_is_designer()` satisfies on its own — `AND public.current_profile_is_designer() IS NOT NULL`, which pins nothing, would have passed every one. Now matched on the comparison: `is_designer IS NOT DISTINCT FROM` on the owner policy, `is_designer IS NOT TRUE` on the sibling, plus a new guard that the sibling's `USING` reads the old row. **One thing the fix taught:** Postgres DEPARSES `a IS NOT DISTINCT FROM b` as `NOT (a IS DISTINCT FROM b)`, so the first attempt at this guard failed the migration's own ASSERT on apply — which is the guard working. Both spellings are accepted, with the source one kept so the line still reads as the pin it checks. |
+| **RF-07** (minor) | **fixed** | `getAuthenticatedDesignerAdmin` discarded the role query's error, so a transient DB failure produced `data = null` and a flat 403 "Forbidden: designer or admin role required" for a real designer — while `middleware.ts`, which fails OPEN in the same situation, admitted the same person to the shell. The route stays fail-closed; a lookup failure (and a `createAdminClient()` throw on a missing key) is now a logged **503 "Role check unavailable"**, so nobody chases their permissions during an outage. The `SUPABASE_SERVICE_ROLE_KEY` half is real: it is **not** in `apps/designer-portal/wrangler.jsonc` (grep confirms 0 hits), so it can only be a Worker secret — **runbook A3b** checks `wrangler secret list` before the deploy, because without it all four vendors routes 503 to everybody. |
+| **RF-08** (minor) | **fixed** | Two case names said "a signed-in caller", which is precisely what RL02B-01 stopped serving, and they passed only through the `beforeEach` role default. Both now say "a designer caller" and set the role mock themselves. The mock also **applies** its `.in('roles.domain', …)` filter instead of echoing its rows — without that it reported the new admin-only gate working while it did nothing; three cases went red when the filter was added and are green on the real predicate. |
+
+### The HTTP proof, re-run
+
+On a freshly reset local stack, as `client@patina.dev` (`a0000000-…-005`, `homeowner`,
+`is_designer = f`), victim `a0000000-…-004` (`designer`, `is_designer = t`, `Leah Hartwell`):
+
+```
+PATCH /rest/v1/profiles?id=eq.<self>   {"is_designer":true}
+  → 403 42501  new row violates row-level security policy for table "profiles"
+
+POST  /rest/v1/designer_clients {designer_id: self, client_id: <Leah>}
+  → 403 42501  … violates row-level security policy "designer_clients_writer_is_designer"
+POST  /rest/v1/designer_clients {designer_id: self, client_id: self}
+  → 403 42501  same policy                       (RF-01's primitive, both directions)
+
+PATCH /rest/v1/profiles?id=eq.<Leah>   {"role":"homeowner","is_designer":false}
+  → 200 []     no row selectable — the USING pin, not a refusal
+PATCH /rest/v1/profiles?id=eq.<Leah>   {"display_name":"PWNED","full_name":"PWNED"}
+  → 200 []
+
+SELECT role, is_designer, display_name FROM profiles WHERE id = <Leah>
+  → designer | t | Leah Hartwell                  (unchanged)
+SELECT count(*) FROM designer_clients WHERE designer_id = <self>
+  → 0                                             (nothing minted)
+
+PATCH /rest/v1/profiles?id=eq.<self>   {"display_name":"Client User"}
+  → 200        the owner's own write still lands — no 42P17
+```
+
+The two demotion PATCHes answer **200 `[]`** rather than 403, and that is the correct shape: the
+policy's `USING` no longer selects the row, so the statement matches nothing. A 403 would mean the row
+was selected and the check refused it.
+
+**The legitimate designer paths still work**, probed as `designer@patina.dev` on the same stack:
+`POST /rest/v1/designer_clients` → **201**, `PATCH /rest/v1/designer_clients` → **204**,
+`PATCH /rest/v1/profiles` on their rostered homeowner client's `display_name` → **204** and the value
+lands, while `PATCH {"is_designer":true}` on that same client → **403 42501**.
+
+### Gates, re-run on `first-flight/integration`
+
+| Gate | Result |
+|---|---|
+| `pnpm supabase:reset` | **0** — head `00557 / 00555 / 00554 / 00553` |
+| `bash scripts/run-sql-tests.sh` | **0** — `total: 147 · green: 126 · expected-fail: 21 · unexpected-fail: 0 · effective-green: 147 / 147`. Every expected-fail name is in `KNOWN_FAILURES.md`; none new, none silently green |
+| `python3 scripts/generate-legacy-grants.py` | **0** — `baseline + 2092 replayed statements`; **the seed did NOT change** and is not in this commit set. Fix round 2 adds policies only, no GRANT or REVOKE |
+| `python3 scripts/first-flight/build-catalog.py --check catalog-fixture.csv --profile fixture` | **0** — `6 rows · 6 categories · 5 makers · 3 published inside 7 days · 6 with a spectrum`. On `--profile release` the only error is the 30-row floor, so the RL03-19 score floor still passes the fixture |
+| `ios-gate.sh build` | **0** — `** BUILD SUCCEEDED **` |
+| `ios-gate.sh release` | **0** — `** BUILD SUCCEEDED **` |
+| `ios-gate.sh unit` | **0** — `✔ Test run with 1552 tests in 170 suites passed after 4.659 seconds.` |
+| `ios-gate.sh lint-delta main` | **0** — `✓ lint-delta: no new warnings in touched files` |
+
+### Gates, re-run on `first-flight/w0-l02b`
+
+| Gate | Result |
+|---|---|
+| `pnpm --filter designer-portal test -- src/app/api/catalog/vendors` | **0** — **25 passed / 25** (was 11) |
+| full `pnpm --filter designer-portal test` | **0** — **498 suites / 5966 tests**. The first run reported one suite failed with `signal=SIGSEGV` in a jest worker and **zero failed tests**; that suite passes alone and the whole suite passes on re-run — a worker crash, not a regression |
+| `pnpm --filter designer-portal build` | **0** — `✓ Compiled successfully in 20.6s` |
+| `pnpm type-check` | **0** — 30/30 |
+
+`IOS_GATE_UDID` was a private clone (`ff-w0-fix2`, `BB5F8D32-C1C0-4FFB-9B7C-075DF72D3836`) taken from
+the protected review device and deleted afterwards; `973D1724-90BF-4A0A-B02D-481D561547B3` was rebooted.
+
+### Documents amended in fix round 2
+
+`KODY-RUNBOOK.md` — Block A's "what it proves" now names **four** routes; **A2**'s pre-deploy grep
+covers all four files and checks for a surviving `select('*')`; **A3b** is new (the
+`SUPABASE_SERVICE_ROLE_KEY` Worker-secret precondition, and what a missing one looks like: 503, not
+403); **A6** gains the three admin-route probes including the POST; **A9** no longer says the guard
+authenticates but does not authorize, and says what closed it and when; **B2** is restated with the
+email allowlist, the Google reasoning and the eight §11 cases; **B7**'s probe no longer matches
+`ILIKE '%is_designer%'`, gains the `using_pins_old_row` column and the `designer_clients` restrictive
+check, and carries the measured local shape of both; the advisors note now says **five** new functions.
+`migrations-draft/00555_probes.md` — §9f rewritten (old-row pin, comparison-matching, the deparse note),
+**§9f-ia** added for the restrictive policies, §9f-ii inverted with its third correction dated.
+`catalog-manifest-README.md` — the `quality_score` row and the whole-file-rules paragraph now say what
+the score actually decides. `00555_ios_round_one_security.sql`'s AFTER-APPLY block says **FIVE** new
+functions.
+
+### One thing this round did NOT do, stated rather than implied
+
+`/api/admin/catalog/products`, `/api/admin/catalog/products/[id]` (+ `publish`/`unpublish`) and
+`/api/admin/catalog/categories`, `/api/admin/catalog/categories/[id]` carry the **same shape** as the
+vendors routes did — `createServerClient()` + `getUser()` and nothing else — and were not in RF-04's
+scope. They are not the trade-file leak (no equivalent column split exists on those tables), but the
+authorization gap is identical and their write verbs are just as open. **This is a W2 row, filed here
+so it is not rediscovered as a surprise.**

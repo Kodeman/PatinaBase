@@ -519,17 +519,42 @@ it, a new row had to satisfy only one of the two and the pin above was skipped e
 that satisfies it is self-servable: `designer_clients`' own policy is `FOR ALL` / `TO PUBLIC` /
 `USING (auth.uid() = designer_id)` with no `WITH CHECK` (00014:110) and `authenticated` holds `INSERT`,
 so the whole bypass was two statements — reproduced locally, a homeowner reached `role = 'designer'`.
-00555 section (a2)(i-b) re-creates that policy `TO authenticated` with
-`WITH CHECK (… AND role = 'homeowner' AND is_designer IS NOT TRUE)`: the role half matches its INSERT
-sibling from the same 00017 file, the `is_designer` half is what stops the same trick reaching the pool.
+00555 section (a2)(i-b) re-creates that policy `TO authenticated` with the two column predicates in
+**both** clauses.
+
+**The sibling's pin is on the OLD row, and that is the correction fix round 2 made.** Pinning only its
+`WITH CHECK` to the literals `role = 'homeowner' AND is_designer IS NOT TRUE` — the 2026-09-02 first
+cut — is satisfied *by construction* when the caller is DEMOTING a designer. Reproduced over HTTP on a
+local stack as the seeded homeowner: mint a roster row naming the seeded designer as your client, then
+`PATCH {"role":"homeowner","is_designer":false}` → 204, then `PATCH {"display_name":"PWNED"}` → 204.
+The victim went from `designer | t | Leah Hartwell` to `homeowner | f | PWNED`. The same predicates now
+also sit in the policy's `USING`, which reads the OLD row, so a designer, admin or vendor on a roster
+is not a row this policy can select at all.
+
+**And the roster row itself can no longer be minted by a non-designer.** 00555 (a2)(i-c) adds two
+RESTRICTIVE policies on `public.designer_clients` — `designer_clients_writer_is_designer` (INSERT) and
+`designer_clients_updater_is_designer` (UPDATE) — because both permissive write policies on that table
+are satisfied by `designer_id = auth.uid()` (00014's `USING (auth.uid() = designer_id)` with no
+`WITH CHECK`, and 00316's `is_studio_comember(designer_id)`, whose first branch is
+`p_owner = auth.uid()`). Restrictive policies AND onto the OR of the permissive set, so this holds
+whichever leg admitted the row.
 
 Read-only check:
 
 ```sql
--- 9f-i. BOTH UPDATE policies carry a WITH CHECK, and both name role AND is_designer
+-- 9f-i. BOTH UPDATE policies carry a WITH CHECK, and both PIN is_designer.
+-- Match the COMPARISON, not the column name: `is_designer` is a substring of
+-- `current_profile_is_designer()`, so an earlier `ILIKE '%is_designer%'` form
+-- was satisfied by a with_check that pinned nothing. Postgres also DEPARSES
+-- `a IS NOT DISTINCT FROM b` as `NOT (a IS DISTINCT FROM b)`, which is why the
+-- owner row is matched on that spelling.
 SELECT polname,
        pg_get_expr(polwithcheck, polrelid) AS with_check,
-       pg_get_expr(polwithcheck, polrelid) ILIKE '%is_designer%' AS pins_is_designer
+       pg_get_expr(polwithcheck, polrelid) ILIKE '%NOT (is_designer IS DISTINCT FROM%'
+         OR pg_get_expr(polwithcheck, polrelid) ILIKE '%is_designer IS NOT TRUE%'
+         AS pins_is_designer,
+       pg_get_expr(polqual, polrelid) ILIKE '%is_designer IS NOT TRUE%'
+         AS using_reads_old_row
 FROM pg_policy
 WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
 -- want TWO rows, each with a NON-NULL with_check and pins_is_designer = t:
@@ -538,30 +563,47 @@ WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
 --        AND is_designer IS NOT DISTINCT FROM current_profile_is_designer()
 --        (the inline subquery form raises 42P17 and is NOT what shipped —
 --         both pins go through their own SECURITY DEFINER helper)
+--        using_reads_old_row = f on this row, and that is correct: the owner
+--        policy's USING is `auth.uid() = id` and its pin is the helper.
 --   "Designers can update their client profiles"
---     -> … AND role = 'homeowner' AND is_designer IS NOT TRUE
--- A NULL with_check, or a with_check that does not name is_designer, on EITHER
+--     -> … AND role = 'homeowner' AND is_designer IS NOT TRUE, in BOTH clauses,
+--        so using_reads_old_row = t. An f here is the demotion hole.
+-- A NULL with_check, or a with_check that does not pin is_designer, on EITHER
 -- row means self-elevation is open whatever the other row says. One row back
 -- means the sibling was dropped, not fixed.
 
--- 9f-ii. the server default follows the identity provider (ruling B2).
--- Match the BRANCH, not the word: 00313's body already contains the literal
--- 'homeowner' twice (the CASE arm that honours an explicit client hint, and its
--- SECURITY comment), so `LIKE '%homeowner%'` returns true on the UNFIXED
--- function. `raw_app_meta_data` appears nowhere in 00313, so it is the clean
--- discriminator. Corrected 2026-09-02 (twice: once by W0 · L0.2 because the
--- draft's probe could not fail, and again in the fix round when B2 replaced the
--- flat 'homeowner' fallback with the provider CASE).
+-- 9f-ia. the enabling primitive: only a designer may write designer_clients.
+SELECT polname, polcmd, polpermissive
+FROM pg_policy
+WHERE polrelid = 'public.designer_clients'::regclass
+  AND polname IN ('designer_clients_writer_is_designer',
+                  'designer_clients_updater_is_designer');
+-- want TWO rows, polpermissive = f on both, polcmd = 'a' (INSERT) and 'w' (UPDATE).
+
+-- 9f-ii. the server default follows the identity provider (ruling B2), and the
+-- ALLOWLIST names the provider that keeps the PRIVILEGED value.
+-- Match the BRANCH and its DIRECTION, not the word: 00313's body already
+-- contains the literal 'homeowner' twice (the CASE arm that honours an explicit
+-- client hint, and its SECURITY comment), so `LIKE '%homeowner%'` returns true
+-- on the UNFIXED function. `raw_app_meta_data` appears nowhere in 00313, so it
+-- is the clean discriminator for the graft; `ELSE 'homeowner'` is the
+-- discriminator for the direction. Corrected 2026-09-02 THREE times: by W0 ·
+-- L0.2 because the draft's probe could not fail; in fix round 1 when B2
+-- replaced the flat fallback with the provider CASE; and in fix round 2 when
+-- that CASE's `ELSE 'designer'` turned out to hand the Google button (and every
+-- provider added later) the designer default.
 SELECT pg_get_functiondef(p.oid) LIKE '%raw_app_meta_data%'
-   AND pg_get_functiondef(p.oid) LIKE '%''apple''%'
-   AND pg_get_functiondef(p.oid) LIKE '%ELSE ''designer''%' AS provider_default
+   AND pg_get_functiondef(p.oid) LIKE '%''email''%'
+   AND pg_get_functiondef(p.oid) LIKE '%ELSE ''homeowner''%'
+   AND pg_get_functiondef(p.oid) NOT LIKE '%ELSE ''designer''%' AS provider_default
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND p.proname = 'handle_new_user';
 -- want: true
 ```
 
 The *write* half of this check (attempting the elevation as a real user) runs **locally only**, as
-case 7 of `00555_ios_round_one_security.test.sql`. It is not run against production.
+cases 6e/6f, 7 and 7h of `00555_ios_round_one_security.test.sql` — 7h is the cross-account direction.
+It is not run against production.
 
 ## 10 · The marketing rail is closed to anon
 
