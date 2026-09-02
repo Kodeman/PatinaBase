@@ -62,7 +62,7 @@ struct StyleResultView: View {
                 .padding(.top, 24)
                 .accessibilityIdentifier("StyleResultView.ViewRecommendations")
 
-                Text("Your portrait stays on this device and can be reset in Settings.")
+                Text("Your portrait is yours — reset it any time in Settings.")
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
                     .multilineTextAlignment(.center)

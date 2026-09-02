@@ -220,7 +220,7 @@ struct CameraPermissionView: View {
                 .accessibilityIdentifier("cameraPermission.deniedManualEntryButton")
 
                 Button(action: openSettings) {
-                    Text("Open Settings")
+                    Text("Open settings")
                         .font(PatinaTypography.bodyMedium)
                         .foregroundStyle(PatinaColors.offWhite)
                         .frame(maxWidth: .infinity, minHeight: 50)

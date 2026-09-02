@@ -6,15 +6,44 @@
 //  and saves into the account's own decision.
 //
 
+import SwiftData
 import SwiftUI
 
 struct LocalStoreClaimSheet: View {
     let onKeep: () -> Void
     let onStartFresh: () -> Void
 
+    /// A-79 (L1-E copy deck) — the title claimed "the room and the pieces"
+    /// whatever was actually there; the evidence session had 0 rooms and 1
+    /// piece. The counts come from the same store `LocalStoreClaim.hasGuestWork`
+    /// counts, read here rather than on `LocalStoreClaim` itself, which is
+    /// L1-B's file this wave.
+    @Environment(\.modelContext) private var modelContext
+
+    /// rooms only · pieces only · both. Never rendered at zero — the sheet is
+    /// only presented when `LocalStoreClaim.shouldAsk` found guest work.
+    static func title(rooms: Int, pieces: Int) -> String {
+        let roomPhrase = "\(rooms) room\(rooms == 1 ? "" : "s")"
+        let piecePhrase = "\(pieces) piece\(pieces == 1 ? "" : "s")"
+        switch (rooms > 0, pieces > 0) {
+        case (true, true):
+            return "Keep the \(roomPhrase) and \(piecePhrase) you saved on this phone?"
+        case (true, false):
+            return "Keep the \(roomPhrase) you saved on this phone?"
+        default:
+            return "Keep the \(piecePhrase) you saved on this phone?"
+        }
+    }
+
+    private var title: String {
+        let rooms = (try? modelContext.fetchCount(FetchDescriptor<RoomModel>())) ?? 0
+        let pieces = (try? modelContext.fetchCount(FetchDescriptor<TableItemModel>())) ?? 0
+        return Self.title(rooms: rooms, pieces: pieces)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Keep the room and the pieces you saved on this phone?")
+            Text(title)
                 .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)

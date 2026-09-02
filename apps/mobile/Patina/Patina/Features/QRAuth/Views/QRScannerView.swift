@@ -53,28 +53,12 @@ public struct QRScannerView: View {
                 errorOverlay
             }
 
-            // Top bar — help button on the left, close on the right.
+            // Top bar — close on the right. L0.4 took the `?` door out
+            // (integration note from L1-C): the Sanity articles behind it are
+            // not published for round one, and a door onto an empty room is
+            // worse than no door. `.helpPanel(...)` below stays mounted.
             VStack {
                 HStack {
-                    // `?` help-panel trigger — surfaces the QR sign-in
-                    // articles (what is QR sign-in, security model, etc.).
-                    Button {
-                        isHelpPanelPresented = true
-                    } label: {
-                        Image(systemName: "questionmark")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(PatinaColors.Text.primary)
-                            .frame(width: 36, height: 36)
-                            .background(
-                                Circle()
-                                    .fill(PatinaColors.Background.secondary.opacity(0.8))
-                            )
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Help")
-                    .accessibilityHint("Opens the help panel for QR sign-in.")
-                    .accessibilityIdentifier("QRScannerView.HelpButton")
                     Spacer()
                     closeButton
                 }
@@ -198,7 +182,7 @@ public struct QRScannerView: View {
 
             if viewModel.hasRequestedPermission {
                 // Permission was denied - show settings button
-                PatinaButton("Open Settings", style: .primary, action: viewModel.openSettings)
+                PatinaButton("Open settings", style: .primary, action: viewModel.openSettings)
             } else {
                 // Permission not yet requested
                 PatinaButton("Allow Camera Access", style: .primary) {
