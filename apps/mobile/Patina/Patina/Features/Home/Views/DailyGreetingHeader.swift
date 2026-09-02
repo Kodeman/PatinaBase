@@ -75,10 +75,7 @@ struct DailyGreetingHeader: View {
                     titleColumn
                     HStack(spacing: 4) {
                         controlCluster
-                        if showsStudioControl {
-                            studioControl
-                                .firstLaunchTourAnchor(.profileMonogram)
-                        }
+                        anchoredStudioControl
                         Spacer(minLength: 0)
                     }
                 }
@@ -87,21 +84,31 @@ struct DailyGreetingHeader: View {
                     titleColumn
                     Spacer()
                     controlCluster
-                    if showsStudioControl {
-                        studioControl
-                            // First-launch tour anchor — Step 3 popover attaches
-                            // to the same slot the monogram held; the control
-                            // there is now labelled, and carries the count. The
-                            // anchor travels with the control: on the house-first
-                            // root the door is the bar's Studio tab and the
-                            // anchor is mounted there instead.
-                            .firstLaunchTourAnchor(.profileMonogram)
-                    }
+                    anchoredStudioControl
                 }
             }
         }
         .padding(.top, 56)
         .padding(.horizontal, PatinaSpacing.mdLarge)
+    }
+
+    /// The Studio pill and its tour anchor, in ONE place.
+    ///
+    /// Both layout branches draw it, and
+    /// `FirstLaunchTourTests.everyDefaultStepAnchorHasExactlyOneProductionMountPerRoot`
+    /// requires exactly one mount of `.profileMonogram` in this file — two
+    /// branches each carrying the modifier would be two popovers for one step.
+    @ViewBuilder
+    private var anchoredStudioControl: some View {
+        if showsStudioControl {
+            studioControl
+                // First-launch tour anchor — Step 3 popover attaches to the
+                // same slot the monogram held; the control there is now
+                // labelled, and carries the count. The anchor travels with the
+                // control: on the house-first root the door is the bar's Studio
+                // tab and the anchor is mounted there instead.
+                .firstLaunchTourAnchor(.profileMonogram)
+        }
     }
 
     private var titleColumn: some View {

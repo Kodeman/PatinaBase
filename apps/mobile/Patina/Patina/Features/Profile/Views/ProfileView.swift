@@ -35,9 +35,16 @@ struct ProfileView: View {
                 // Header
                 VStack(spacing: 0) {
                     // Avatar
+                    //
+                    // C-L04-4 took the 44 pt `?` row that used to sit above
+                    // this, and it was the screen's only top spacing: pushed,
+                    // the avatar would start under the floating chevron
+                    // (top 8 + 36); as the Studio tab root, `patinaScreen`'s
+                    // title band now supplies most of it.
                     Circle()
                         .fill(PatinaGradients.earth)
                         .frame(width: 80, height: 80)
+                        .padding(.top, isTabRoot ? 12 : 44)
                         .overlay(
                             Text(viewModel.userInitial)
                                 .font(PatinaTypography.displaySmall)

@@ -201,7 +201,7 @@ struct CompanionActionMatrixTests {
     /// No menu offers the screen the reader is already standing on. The tail's
     /// PROFILE row is the one that can: R2 minted `.studio` over the same
     /// `ProfileView` composition and the tail's exclusion still named only
-    /// `.profile`, so the Studio tab offered "Your profile" — a second copy of
+    /// `.profile`, so the Studio tab offered "Your studio" — a second copy of
     /// its own root, pushed on top of itself with a back chevron. The row count
     /// stayed inside C8's six, which is why only this pin catches it.
     @Test
@@ -331,7 +331,7 @@ struct CompanionActionMatrixTests {
 
     @Test
     func heroFrameSignedInWithRoomsExemplar() {
-        // No "Your studio": signed-in is no longer enough for that door — this
+        // No "Your projects": signed-in is no longer enough for that door — this
         // context has no resolved tier, which reads as `.discovering` (U20).
         // No "Add another space" and no quiz row either: home is the fixed
         // priority list now, and scanning lives atop Your Spaces.
@@ -341,7 +341,7 @@ struct CompanionActionMatrixTests {
             "Your recommendations",
             "Saved",
             "Your spaces",
-            "Your profile"
+            "Your studio"
         ])
     }
 
@@ -359,11 +359,11 @@ struct CompanionActionMatrixTests {
         ).map(\.label)
         #expect(labels == [
             "Message your designer",
-            "Your studio",
+            "Your projects",
             "Your recommendations",
             "Saved",
             "Your spaces",
-            "Your profile"
+            "Your studio"
         ])
     }
 
@@ -378,7 +378,7 @@ struct CompanionActionMatrixTests {
             "See what's been billed",
             "All proposals",
             "Home",
-            "Your profile"
+            "Your studio"
         ])
     }
 
@@ -394,7 +394,7 @@ struct CompanionActionMatrixTests {
             "Get design help",
             "Rescan room",
             "Home",
-            "Your profile"
+            "Your studio"
         ])
     }
 
@@ -431,11 +431,11 @@ struct CompanionTierAndFreshnessTests {
         let ctx = Fixture.context(for: .heroFrame, roomCount: 2, active: false, tier: .engaged)
         let labels = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true).map(\.label)
         #expect(labels == [
-            "Your studio",
+            "Your projects",
             "Your recommendations",
             "Saved",
             "Your spaces",
-            "Your profile"
+            "Your studio"
         ])
     }
 
@@ -443,7 +443,7 @@ struct CompanionTierAndFreshnessTests {
     func homeStudioRowHiddenAtDiscovering() {
         // Signed in, but nothing behind the door yet — in BOTH home arms.
         for roomCount in [0, 2] {
-            #expect(!Self.homeLabels(roomCount: roomCount, tier: .discovering).contains("Your studio"))
+            #expect(!Self.homeLabels(roomCount: roomCount, tier: .discovering).contains("Your projects"))
         }
     }
 
@@ -452,7 +452,7 @@ struct CompanionTierAndFreshnessTests {
         for roomCount in [0, 2] {
             for tier in [EngagementTier.engaged, .activeProject] {
                 #expect(
-                    Self.homeLabels(roomCount: roomCount, tier: tier).contains("Your studio"),
+                    Self.homeLabels(roomCount: roomCount, tier: tier).contains("Your projects"),
                     "rooms=\(roomCount) tier=\(tier) should offer the Studio door"
                 )
             }
@@ -463,7 +463,7 @@ struct CompanionTierAndFreshnessTests {
     func homeStudioRowHiddenWhenTierUnknown() {
         // An unresolved tier must fail closed — never open the door on a guess.
         for roomCount in [0, 2] {
-            #expect(!Self.homeLabels(roomCount: roomCount, tier: nil).contains("Your studio"))
+            #expect(!Self.homeLabels(roomCount: roomCount, tier: nil).contains("Your projects"))
         }
     }
 
