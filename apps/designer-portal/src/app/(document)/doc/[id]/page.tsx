@@ -2842,6 +2842,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     needs={rankedOperationalNeeds}
                     highlightId={highlightLineId ?? requestedFfeItemId}
                     requestedLineId={requestedFfeItemId}
+                    onRequestedLineConsumed={() => setRequestedFfeItemId(null)}
                     onAddNote={setPendingNoteAnchor}
                     sectionKey="project"
                     clientUserId={row.client_profile_id}

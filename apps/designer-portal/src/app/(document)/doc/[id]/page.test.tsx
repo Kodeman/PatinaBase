@@ -2123,6 +2123,32 @@ describe('DocumentPage guide activation', () => {
       expect(props.needs?.map((need) => need.kind)).toEqual(['damage_claim']);
     });
 
+    it('drops the ?ffeItemId= request once the schedule reports it honoured', () => {
+      asProjectDocument();
+      window.history.replaceState({}, '', '/doc/project-1?ffeItemId=line-1');
+      type DeepLinkProps = {
+        requestedLineId?: string | null;
+        highlightId?: string | null;
+        onRequestedLineConsumed?: () => void;
+      };
+      try {
+        render(<DocumentPage params={fulfilledParams} />);
+
+        const asked = mockFFESection.mock.calls.at(-1)![0] as DeepLinkProps;
+        expect(asked.requestedLineId).toBe('line-1');
+        expect(asked.highlightId).toBe('line-1');
+
+        act(() => asked.onRequestedLineConsumed!());
+
+        // The request is spent, so the highlight decays back to hover-only.
+        const after = mockFFESection.mock.calls.at(-1)![0] as DeepLinkProps;
+        expect(after.requestedLineId).toBeNull();
+        expect(after.highlightId).toBeNull();
+      } finally {
+        window.history.replaceState({}, '', '/');
+      }
+    });
+
     it('does not call a discovery document complete while its own read is in flight', () => {
       const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
       mockDocumentQuery = {
