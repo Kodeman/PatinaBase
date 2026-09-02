@@ -114,8 +114,8 @@ struct RoomProjectView: View {
                             }
                         }
                         actsRow(for: room)
-                        Spacer().frame(height: 100)
                     }
+                    .companionBottomClearance()
                 }
                 .ignoresSafeArea(edges: .top)
             } else {
@@ -251,7 +251,7 @@ struct RoomProjectView: View {
             Text("A blank canvas")
                 .font(.custom("PlayfairDisplay-Regular", size: 18, relativeTo: .title3))
                 .foregroundStyle(PatinaColors.Text.primary)
-            cta(primary: "Browse pieces for the \(room.name)") {
+            cta(primary: "Browse pieces for this room") {
                 // U07: this used to root-reset to .heroFrame regardless of
                 // whether the room synced. Once a room has a remote id the
                 // room-scoped emergence carries real context; local-only
