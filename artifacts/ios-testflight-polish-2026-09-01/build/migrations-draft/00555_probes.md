@@ -51,8 +51,9 @@ names are **not** this file's section numbers — read the map, not the digits.
 | **9d** — the `vendors` column allowlist | **§9d** | the 24 public-face columns, and only those |
 | **9f** — the UPDATE `WITH CHECK` | **§9f** | `"Users can update own profile"` has a non-null `with_check` naming `role` |
 
-The three RPC/behaviour probes keep their own headings and are **not** part of the exit criteria:
-§9 (`search_shareable_designers`), §9a (`list_vendor_profiles`), §9c (a live role-elevation attempt).
+The two RPC probes keep their own headings and are **not** part of the exit criteria:
+§9 (`search_shareable_designers`) and §9a (`list_vendor_profiles`). §9f carries both halves of the
+role-elevation check — the policy's `WITH CHECK` and `handle_new_user`'s server-side default.
 
 ---
 
@@ -104,28 +105,43 @@ the probe does not have to run against prod.
 
 ```bash
 # (a) LOCAL — password grant against a seeded account. Fastest, repeatable.
-#     Any seeded local user works; the seeds live in supabase/seed/.
+#     The seeded client is client@patina.dev / password123 (supabase/seed/).
 export LOCAL_URL='http://127.0.0.1:54321'
-export LOCAL_ANON='<anon key from `supabase status`>'
+export LOCAL_ANON="$(supabase status -o env | grep -m1 '^ANON_KEY=' | cut -d= -f2- | tr -d '"')"
+echo "LOCAL_ANON: ${#LOCAL_ANON} chars"
 USER_JWT=$(curl -sS -X POST "$LOCAL_URL/auth/v1/token?grant_type=password" \
   -H "apikey: $LOCAL_ANON" -H 'Content-Type: application/json' \
-  -d '{"email":"<seeded email>","password":"<seeded password>"}' \
+  -d '{"email":"client@patina.dev","password":"password123"}' \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
 export USER_JWT
 ```
 
 ```bash
 # (b) PROD — there is no password to grant. mailer_autoconfirm is false and the app
-#     signs in with an emailed OTP (A3 §Auth), so this is a two-step with a mailbox:
+#     signs in with an emailed OTP (A3 §Auth), so this is a two-step with a mailbox.
+#     D7/D11 retire tester@patina.cloud; the demo identity is firstflight@patina.cloud
+#     (build/waves/w0/demo-account.md).
+export PROBE_EMAIL='firstflight@patina.cloud'
+
 curl -sS -X POST "$SB_URL/auth/v1/otp" \
   -H "apikey: $ANON_KEY" -H 'Content-Type: application/json' \
-  -d '{"email":"tester@patina.cloud","create_user":false}'
-# …read the 6-digit code from the mailbox, then:
+  -d "{\"email\":\"$PROBE_EMAIL\",\"create_user\":false}"
+
+# Read the 6-digit code out of the mailbox, then type it at this prompt rather than
+# editing it into a command. The leading space keeps the code out of shell history.
+ read -rs OTP_CODE && export OTP_CODE
+
 USER_JWT=$(curl -sS -X POST "$SB_URL/auth/v1/verify" \
   -H "apikey: $ANON_KEY" -H 'Content-Type: application/json' \
-  -d '{"type":"email","email":"tester@patina.cloud","token":"<code>"}' \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+  -d "$(python3 -c "
+import json, os
+print(json.dumps({'type': 'email',
+                  'email': os.environ['PROBE_EMAIL'],
+                  'token': os.environ['OTP_CODE']}))
+")" | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
 export USER_JWT
+unset OTP_CODE
+echo "USER_JWT: ${#USER_JWT} chars"
 ```
 
 > The `000000` test code does **not** work here. `test-account-login` mints a GoTrue
@@ -631,84 +647,30 @@ mcp__claude_ai_Supabase__get_advisors(project_id=bkvcixdmuyejfzcijpdg, type="sec
 
 ---
 
-## The apply step (Kody-run)
+## The apply step is not in this file
 
-**Re-check the gap first.** The premise recorded in `research/A3-prod.md` — that
-`00533–00540` are unapplied — was **re-verified on 2026-09-01 and is no longer true**:
-`supabase_migrations.schema_migrations` runs `00530…00554` unbroken, and every object A3
-listed as missing now exists (`client_designer_roster`, `profile_presence`,
-`get_direct_order_terms`, `notify_client_attention`, `purge_client_account`,
-`products.photo_verified_at` — all probed directly, not read off the ledger).
-
-That said, other programs mint numbers in this band, so run the census immediately before
-applying, and treat any gap it shows as a blocker:
+It used to be. It was removed on 2026-09-02, because it had become a **second, diverging copy** of the
+apply sequence — and the copy carried the exact mistake that produced this fix round:
 
 ```bash
-ls supabase/migrations/*.sql | sort | tail -5      # confirm this file is still the head+1
-supabase migration list                             # local vs Strata, side by side
+ls supabase/migrations/*.sql | sort | tail -5      # ← CANNOT SEE A PEER BRANCH
 ```
 
-```sql
--- and the authoritative read
-SELECT version FROM supabase_migrations.schema_migrations WHERE version >= '00528' ORDER BY version;
-```
+That census reported `00556` free while `00556_admin_studio_management.sql` was sitting on
+`admin-studios/build` and was already applied to the shared local stack. It also carried a
+`<the file body>` placeholder inside an `apply_migration` call, against the program's no-placeholder
+rule.
 
-**Apply this ONE file, not the branch.** `supabase db push` reconciles by version and pushes
-every local migration Strata does not have. Today that set is empty, but it will not stay
-empty while other lanes are drawing numbers, and a `db push` that silently drags someone
-else's unshipped migration is exactly the incident this band has already produced twice.
+**The apply sequence lives in exactly one place:**
 
-Targeted apply, either form:
+> `artifacts/ios-testflight-polish-2026-09-01/build/waves/w0/KODY-RUNBOOK.md`
 
-```bash
-# (1) psql, then the ledger row
-psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 \
-  -f supabase/migrations/00555_ios_round_one_security.sql
-psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
-  "INSERT INTO supabase_migrations.schema_migrations (version, name)
-   VALUES ('00555','ios_round_one_security') ON CONFLICT DO NOTHING;"
-```
+It opens with **Step 0a**, the deploy gate (**D8** — the designer portal must carry L0.2b's `getUser()`
+guard and the `list_vendor_profiles` swap, verified behaviourally with a `401`, before anything is
+applied), and **Step 0b**, the ruling gate (**N3b** — the `handle_new_user` role flip). It carries the
+band re-check that *can* see peer branches, both `psql -f` applies with their ledger rows, the
+regeneration steps, this file's probe checklist by heading, the advisor check, the portal walk, and the
+rollback.
 
-```
-# (2) Supabase MCP — writes the ledger row itself
-mcp__claude_ai_Supabase__apply_migration(
-  project_id = "bkvcixdmuyejfzcijpdg",
-  name       = "00555_ios_round_one_security",
-  query      = <the file body>)
-```
+This file is the **probe half** of that runbook's Step 5, and nothing else.
 
-⚠ The Bash prod-mutation hook does **not** cover Supabase MCP writes (recorded in
-`project_studio_invite_onboarding_fixes_2026_09_01`). Form (2) will not be stopped by the
-guard rail, so it needs the same explicit ship request that form (1) does.
-
-**Then, in order:**
-
-1. `python3 scripts/generate-legacy-grants.py` — this migration adds GRANT/REVOKE, so
-   `supabase/seed/00-legacy-grants.sql` must be regenerated or a fresh local stack diverges
-   from prod ACLs. Never hand-edit that file.
-2. `pnpm db:generate` && `git diff --exit-code packages/supabase/src/database.types.ts`
-   (a new view and two new functions land in the public schema).
-3. **`scripts/run-sql-tests.sh`** against **local**, not prod. That is the gate — it runs
-   every file under `supabase/tests/**` and scores them against
-   `supabase/tests/KNOWN_FAILURES.md`. Running only
-   `00555_ios_round_one_security.test.sql` proves the new policies work and proves nothing
-   about the ~40 existing suites that insert into `profiles`, `designer_clients` and
-   `organization_members` under a role. Several of those are the ones most likely to break.
-4. Probes 1–13 above against prod.
-5. The four REQUIRED CODE FOLLOW-UPS in the migration banner — `ScanSharingService.swift`
-   (RPC swap), both `api/catalog/vendors` routes (guard + named columns), and
-   `useVendorProfiles` — ship in the same PR. The first is a TestFlight blocker; the second
-   is a live leak today and should arguably land *before* the migration.
-
-**Rollback.** Everything here is reversible with a forward migration; there is no data
-change. The statements that restore the old behavior if the counterparty predicate turns out
-to be too tight are:
-
-```sql
-CREATE POLICY "Profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
-GRANT SELECT ON public.profiles TO anon;
-```
-
-Do not reach for that without saying so — it re-opens the exposure this file exists to close.
-If the problem is one missing relationship rather than the whole predicate, add a leg to
-`can_view_profile` instead; it is `CREATE OR REPLACE` and needs no policy churn.
