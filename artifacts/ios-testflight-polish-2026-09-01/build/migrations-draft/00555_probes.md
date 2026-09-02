@@ -549,6 +549,18 @@ client; `public.roles` carries a `client` row in the `consumer` domain. With `'h
 designer whose client row said `'client'` could not rename that client at all — the policy selected no
 row, the `PATCH` answered `200 []`, and the rename silently did nothing.
 
+**And the sibling now asks what the CALLER is, not only what the target row is** — finding **RF3-03**,
+new in fix round 3 pass 2. Both clauses open with the same two-signal predicate the `designer_clients`
+restrictive policies read: `current_profile_is_designer() IS TRUE OR EXISTS (user_roles ⨝ roles,
+domain IN ('designer','admin'))`. Never `profiles.role`. Until this pass the roster row was the entire
+admission test, and the restrictive policies below govern only **new** writes — this migration
+deliberately deletes no existing roster row — so every row minted **before** 00555 by a non-designer
+kept its holder a profile write and, through `can_view_profile`'s roster leg, a PII read. Measured with
+a roster row planted as `service_role` for a non-designer signup: `PATCH display_name` → 200, renamed;
+`GET select=id,email,phone` → 200. The predicate turns that into a lockout with no data change and
+nothing to backfill; **B7a** in the runbook is the audit that says whether production has such an
+owner, and it is now a hard stop. Local behaviour case: **7m**.
+
 **And the roster row itself can no longer be minted by a non-designer.** 00555 (a2)(i-c) adds two
 RESTRICTIVE policies on `public.designer_clients` — `designer_clients_writer_is_designer` (INSERT) and
 `designer_clients_updater_is_designer` (UPDATE) — because both permissive write policies on that table
@@ -592,7 +604,12 @@ SELECT polname,
          AS using_reads_old_row,
        pg_get_expr(polqual, polrelid) ILIKE '%''homeowner''%'
          AND pg_get_expr(polqual, polrelid) ILIKE '%''client''%'
-         AS using_client_vocab
+         AS using_client_vocab,
+       COALESCE(pg_get_expr(polqual, polrelid), '') ILIKE '%current_profile_is_designer%'
+         AND COALESCE(pg_get_expr(polqual, polrelid), '') ILIKE '%user_roles%'
+         AND COALESCE(pg_get_expr(polwithcheck, polrelid), '') ILIKE '%current_profile_is_designer%'
+         AND COALESCE(pg_get_expr(polwithcheck, polrelid), '') ILIKE '%user_roles%'
+         AS checks_caller_authority
 FROM pg_policy
 WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
 -- want TWO rows, each with a NON-NULL with_check and pins_is_designer = t:
@@ -607,6 +624,9 @@ WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
 --        using_reads_old_row = f   ← correct: this policy's USING is
 --                                    `auth.uid() = id` and its pin is the helper
 --        using_client_vocab  = f   ← correct: it has no vocabulary list
+--        checks_caller_authority = f ← correct: the caller IS the target row
+--                                    here, so `auth.uid() = id` is the whole
+--                                    authority question
 --   "Designers can update their client profiles"
 --     -> … AND (role = ANY (ARRAY['homeowner'::text, 'client'::text]))
 --         AND (is_designer IS NOT TRUE), in BOTH clauses
@@ -616,6 +636,10 @@ WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
 --        using_reads_old_row = t   ← an f is the demotion hole
 --        using_client_vocab  = t   ← an f is RF2-06: a 'client'-labelled client
 --                                    cannot be renamed by their own designer
+--        checks_caller_authority = t ← an f is RF3-03: a roster row minted
+--                                    BEFORE 00555 by a non-designer still buys
+--                                    its holder a profile write, because the
+--                                    restrictive policies only govern new writes
 -- A NULL with_check, or a with_check that does not pin is_designer, on EITHER
 -- row means self-elevation is open whatever the other row says. One row back
 -- means the sibling was dropped, not fixed.
@@ -639,14 +663,38 @@ WHERE polrelid = 'public.designer_clients'::regclass
 -- email/password signup 'designer', so that leg hands the mint to anyone who
 -- can complete a signup form.
 
--- 9f-ib. and anon holds nothing on the table at all (RF2-08). It carried the
--- full arwdDxtm set from the pre-flip creation default and has no reader: the
--- client's own roster read is public.client_designer_roster (00536), a
--- security_invoker = false view granted only to authenticated.
-SELECT count(*) AS anon_grants
+-- 9f-ib. and anon holds no WRITE on the table (RF2-08). It carried the full
+-- arwdDxtm set from the pre-flip creation default; the write half is the
+-- roster-mint primitive, reachable with the key in the iOS binary.
+--
+-- ⚠ CORRECTED 2026-09-02, fix round 3 pass 2 (RF3-01). This probe used to read
+-- `count(*)` and `-- want: 0`, which contradicted the migration it is checking:
+-- 00555 does `GRANT SELECT ON public.designer_clients TO anon` and then ASSERTs
+-- has_table_privilege('anon', …, 'SELECT'). Measured on a clean stack after
+-- `pnpm supabase:reset`: one grant, relacl `anon=r/postgres`. An operator
+-- following the old line would have "fixed" a passing apply back into a broken
+-- one.
+--
+-- WHY THE SELECT IS LOAD-BEARING, so nobody removes it again: storage.objects
+-- carries "Designers manage discovery folio objects" (00224:165) whose USING
+-- reads designer_clients, and Postgres checks the ACL of every table named in a
+-- relation's policy set at EXECUTOR INIT — before filtering those policies by
+-- role. That policy is TO authenticated; the check is not. Revoking SELECT
+-- therefore raises `42501 permission denied for table designer_clients` on every
+-- ANON read of storage.objects, and took
+-- supabase/tests/storage/project_documents_caller_binding_test.sql and
+-- supabase/tests/mood_boards/share_security_test.sql red on a fresh stack.
+-- The grant opens no read: RLS is on, and the only policy admitting anon is
+-- 00014's `auth.uid() = designer_id`, which is NULL for an anon caller.
+--
+-- Asked as the SET rather than the count, so a returned write grant still fails
+-- it. (The client's own roster read is public.client_designer_roster (00536), a
+-- security_invoker = false view granted only to authenticated — that is why no
+-- anon READER of this table exists even though the grant does.)
+SELECT string_agg(privilege_type, ',' ORDER BY privilege_type) AS anon_grants
 FROM information_schema.table_privileges
 WHERE table_schema = 'public' AND table_name = 'designer_clients' AND grantee = 'anon';
--- want: 0
+-- want: SELECT   (exactly that string — one grant, and it is SELECT)
 
 -- 9f-ii. handle_new_user is 00313 VERBATIM — the default does NOT move.
 -- Ruling B2 v3(a). Match the COALESCE, which is the exact line the two reverted
@@ -667,13 +715,23 @@ FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND p.proname = 'handle_new_user';
 -- want: true
 
--- 9f-iii. the two REVOKEs that have no probe of their own (RF2-09, RF2-10).
+-- 9f-iii. the REVOKEs that have no probe of their own (RF2-09, RF2-10, and the
+-- two fix round 3 pass 2 extends: RF3-07 on designer_clients, RF3-11 on
+-- authenticated's EXECUTE).
 SELECT has_table_privilege('authenticated', 'public.profiles', 'TRUNCATE')
          AS authenticated_can_truncate,      -- want f. RLS does NOT constrain TRUNCATE
        has_table_privilege('authenticated', 'public.profiles', 'REFERENCES')
          AS authenticated_can_reference,     -- want f
+       has_table_privilege('authenticated', 'public.designer_clients', 'TRUNCATE')
+         AS authenticated_can_truncate_dc,   -- want f (RF3-07). One statement empties
+                                             -- every designer↔client relationship
+       has_table_privilege('authenticated', 'public.designer_clients', 'REFERENCES')
+         AS authenticated_can_reference_dc,  -- want f (RF3-07)
        has_function_privilege('public', 'public.handle_new_user()', 'EXECUTE')
-         AS public_can_execute_trigger_fn;   -- want f. A trigger needs no EXECUTE to fire
+         AS public_can_execute_trigger_fn,   -- want f. A trigger needs no EXECUTE to fire
+       has_function_privilege('authenticated', 'public.handle_new_user()', 'EXECUTE')
+         AS authenticated_can_execute_trigger_fn;  -- want f (RF3-11). The first pass
+                                             -- revoked PUBLIC and anon and left this one
 ```
 
 The *write* half of this check (attempting the elevation as a real user) runs **locally only**, as

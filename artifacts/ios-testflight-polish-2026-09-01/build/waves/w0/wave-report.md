@@ -763,3 +763,176 @@ and §9f-iii new, §9f-ii inverted with its fourth correction dated; the exit-cr
 `waves/w1/l1-a-notes.md` — **new**, the W1 · L1-A contract for the self-downgrade: the exact call, five
 rules, the per-sign-in behaviour table, the accepted consequence for a designer signing into the client
 app, and a device-free verification recipe.
+
+---
+
+## Fix round 3 · pass 2 (2026-09-02)
+
+Twelve findings from the adversarial re-read of fix round 3: one blocker, three majors, eight minors.
+**All twelve are addressed.** One of them — RF3-02 — is addressed by *correcting the claim and filing
+the ruling* rather than by closing the hole, and that choice is called out below rather than buried.
+
+Two of the three majors are cases where round 3's own prose asserted something the reviewer then
+measured to be false. That is the pattern worth naming: the migration's comments had started to
+document the design as intended rather than as built.
+
+### The blocker
+
+**RF3-01 — the round-3 probe told the operator to want the opposite of what the migration asserts.**
+`KODY-RUNBOOK.md` B7 and `00555_probes.md` §9f-ib both said *"want 0"* for anon's grant count on
+`public.designer_clients`. The migration does `GRANT SELECT ON public.designer_clients TO anon` and then
+`ASSERT has_table_privilege('anon', …, 'SELECT')`. An operator following the probe would have "fixed" a
+correct apply into the broken one that took two unrelated suites red in round 3 — and the reason the
+SELECT is load-bearing (a `storage.objects` policy names the table, and Postgres checks that ACL at
+executor init before filtering policies by role) lived only in the migration.
+
+Both lines now ask for the **privilege set** rather than a count — `string_agg(privilege_type)` must
+equal exactly `SELECT` — so the expectation is `1`, a returned write grant still fails the check, and
+the `00224:165` reasoning is stated at both call sites so nobody removes it again. The migration gained
+a matching `ASSERT` on the same exact-set predicate.
+
+Measured after `pnpm supabase:reset`: `anon on designer_clients = SELECT`, `relacl … anon=r/postgres`.
+
+### The three majors
+
+| id | Verdict | What changed |
+|---|---|---|
+| **RF3-02** | **claim corrected; hole filed as a ruling, NOT closed** | §a4 justified `list_vendor_profiles`' `role = 'vendor'` predicate with *"the INSERT policies either omit role entirely or pin it to 'homeowner' — so 'vendor' reaches a row only through service_role. A caller cannot list themselves into this picker."* The first half of that sentence refutes the second: after RF2-07 the own-row INSERT omits `role`, so it does not stop `role='vendor'`. **Re-measured this pass:** with the caller's `profiles` row deleted, `POST /rest/v1/profiles {"id":self,"role":"vendor"}` → **201**, `{"role":"admin"}` → **201**, `{"is_designer":true}` → **403**. The false sentence is gone. In its place: the real bound (the INSERT needs the profiles row to be **absent**, and `handle_new_user` writes it for every account the platform creates — the same narrow window §a already calls "a door matching a window"), the real residual (an account in that window can wear the words `vendor` or `admin`, which is a **spoofing** surface in comms via `comms_resolve_role`, and grants nothing), and an explicit note that the fix — a vocabulary guard `role IN ('homeowner','designer','client')` on the own-row `WITH CHECK` — **was not taken because ruling B2 v3(a) says that leg pins `is_designer` only** and the verification block asserts exactly that. It is a two-line change (the `WITH CHECK` and one `ASSERT`) and it belongs to whoever holds the ruling. **This is the one open item this pass hands back.** |
+| **RF3-03** | **fixed in the policy** | `"Designers can update their client profiles"` asked nothing about the **caller** — a roster row plus `dc.designer_id = auth.uid()` was the entire admission test. RF2-01's restrictive policies close the *mint*, but this migration deliberately deletes no existing roster row, so every row minted **before** 00555 by a non-designer kept a live profile write. Both clauses now open with the same two-signal predicate the `designer_clients` restrictive policies read — `current_profile_is_designer() IS TRUE OR EXISTS (user_roles ⨝ roles, domain IN ('designer','admin'))`, never `profiles.role`. **B7a's last two audit categories are also promoted from "investigate" to a HARD STOP before B5**, because the same accounts now lose the edit as well as the mint, and one `user_roles` grant restores both. New test case **7m**; new `ASSERT`; B9 gains the matching narrow undo. |
+| **RF3-04** | **restated, scope corrected; W2 item narrowed** | §a2(i-b) and B10 described a designer's rewrite of an arbitrary rostered homeowner as touching *"non-authority columns"*, which reads as cosmetic. `supabase/functions/invoice-send/index.ts:204` resolves the recipient as `invoice.client?.email` **first**, falling back to `designer_clients.client_email` only when that is null — `invoice-reminders` and `stripe-webhook` resolve in the same order. So it is invoice-recipient **redirection**. Both places now say so with the citation. It stays a W2 item and not a blocker on a stated basis: pre-00555 *any* authenticated account could do this, and after it only real designer authority can — strictly narrower. The W2 fix is now scoped to **columns** (display/notes fields, never `email` / `phone` / `stripe_customer_id`) rather than left open. |
+
+### The eight minors
+
+| id | Verdict | What changed |
+|---|---|---|
+| **RF3-05** | **fixed** | The `is_designer` INSERT guard is a `NOT EXISTS` over the permissive INSERT set, so `DROP POLICY "Designers can create homeowner profiles"` satisfied it **vacuously** — the one tamper of 27 the reviewer's run got past the verification block. An existence `ASSERT` now sits beside the four `profiles_select_*` ones, with the failure message naming both consequences (the Add Client insert path is gone, *and* the guard above it now passes vacuously). |
+| **RF3-06** | **fixed** | `ASSERT (SELECT … NOT ILIKE '%role%' FROM pg_policy WHERE polname = 'Users can insert own profile')` returns NULL when the policy is absent, so a **missing** policy failed with *"still pins role"*. Restructured into `ASSERT EXISTS` (policy present) followed by `ASSERT NOT EXISTS (… AND … ILIKE '%role%')`, so the two repairs report distinctly. |
+| **RF3-07** | **fixed** | RF2-09's `REVOKE TRUNCATE, REFERENCES` had been applied to `profiles` and not to `designer_clients`, in the section that spends 130 lines calling that table the roster rail. Measured after the round-3 apply: `profiles → authenticated=arwtm`, `designer_clients → authenticated=arwdDxtm`. The migration's own words — *"a grantee with TRUNCATE empties the table in one statement, policies or no policies"* — apply verbatim; a TRUNCATE here takes `can_view_profile`'s roster leg, the sibling UPDATE policy and the Add Client rail with it. Revoke added, with matching `ASSERT`s in the migration and §10 of the test. |
+| **RF3-08** | **fixed** | B9's narrow undo for `"Users can update own profile"` recreated 00013's `USING`-only policy with no warning — re-opening `is_designer` self-elevation, the exact hole §a2(i-a) closes, on the column the design-request pool reads as authority. The undo now **keeps the `is_designer` pin and drops only the `role` ratchet leg**, which is also the likelier regression (L1-A's PATCH needs the role half alone). 00013's raw shape is still printed, below it, behind an explicit "prefer almost anything else, and say so in the apply report". |
+| **RF3-09** | **fixed** | B7b's preview projected one row per **invitation** while the `UPDATE … FROM` touches each profile once, so a homeowner invited by two designers gave preview `2` / `UPDATE 1` — and the runbook called that mismatch a fault. The preview is now grouped by profile (`max(accepted_at)` + an `invitations_accepted` count that makes the multi-invite case legible), and the expectation reads exactly. |
+| **RF3-10** | **fixed** | §(d) asserted *"every reader found in the repo goes through an admin-portal route on the service-role client, so revoking anon and authenticated costs nothing"*. Nine call sites read those four views on the **browser** client (`use-insights.ts:104,235,266,350,367,384`, `use-engagement.ts:65,98`, all from `createBrowserClient()` at `use-insights.ts:10`), each `if (error) throw error`. The break is **latent** — a grep over `apps/` finds no page importing any of the six hooks, only the package barrel re-exporting them, and the admin analytics page goes through `/api/admin/comms/analytics` on the service-role client. The REVOKE still ships; the nine sites moved into READERS **§4 as "hard breaks if ever mounted"**, with the remedy named (a service-role route or a definer RPC, never a re-grant). |
+| **RF3-11** | **fixed** | RF2-10 revoked `handle_new_user` EXECUTE from `PUBLIC, anon` and left `authenticated` holding it — measured `proacl {postgres=X, authenticated=X, service_role=X}` — against its own "exposed surface with no caller" rationale. Extended to `authenticated`, with the assert. Inert either way (a direct call raises `0A000`), and the trigger is unaffected because Postgres checks no EXECUTE when firing one. |
+| **RF3-12** | **fixed** | `client-invite`'s accept path read `if (user.email && user.email.toLowerCase() !== inv.email…)`, so a caller whose `auth.users` row carries no email — a phone/OTP-only account — skipped the guard entirely and could accept any unexpired token it held. Pre-existing, but round 3 put a `profiles` mutation on this path, so the guard now decides who gets **relabelled** as well as who gets rostered. Now `if (!user.email || …)` — fail closed. |
+
+### The HTTP attack matrix, re-run (fresh stack, password-grant JWTs)
+
+Actors: a **real** `POST /auth/v1/signup` account (`role=designer`, `is_designer=f`, **0** designer/admin
+grants — the shape RF2-01 was about), `client@patina.dev` (`homeowner`), `designer@patina.dev` (Leah —
+`designer`, `is_designer=t`), and a fresh unrostered homeowner target.
+
+```
+1. self-signup mints a roster row — MUST be refused
+   POST /rest/v1/designer_clients {designer_id: self, client_id: <Leah>}  403  42501 "…policy \"designer_clients_writer_is_designer\"…"
+   rows minted by sig                                                     0
+
+2. a real designer mints a roster row — MUST be allowed
+   POST /rest/v1/designer_clients {designer_id: Leah, client_id: <home>}  201  [{"id":"5c67855f-…","designer_id":"a0000000-…-004",…}]
+
+3. own-row role / is_designer UPGRADE — MUST be refused
+   PATCH /rest/v1/profiles?id=eq.<sig>    {"role":"admin"}                403  42501
+   PATCH /rest/v1/profiles?id=eq.<client> {"role":"designer"}             403  42501
+   PATCH /rest/v1/profiles?id=eq.<client> {"is_designer":true}            403  42501
+
+4. own-row DOWNGRADE — MUST be allowed (B2 v3(c), the A3-07 / L1-A fix)
+   PATCH /rest/v1/profiles?id=eq.<sig>    {"role":"homeowner"}            200  [{"id":"f62301ba-…","role":"homeowner"}]
+   sig role now                                                           homeowner
+   PATCH … the same call again (the app runs it every sign-in)            200  [{…"role":"homeowner"}]   idempotent
+
+5. CROSS-ACCOUNT demote / rename of a real designer — MUST be refused
+   POST  /rest/v1/designer_clients {designer_id: client, client_id: Leah} 403  42501
+   PATCH /rest/v1/profiles?id=eq.<Leah> {"role":"homeowner",
+                                         "is_designer":false}             200  []   ← no row selectable
+   PATCH /rest/v1/profiles?id=eq.<Leah> {"display_name":"PWNED"}          200  []
+   Leah after                                                             designer | true | Leah Hartwell
+
+6. a designer edits their ROSTERED client — MUST be allowed
+   PATCH /rest/v1/profiles?id=eq.<home> {"display_name":"Renamed By Leah"}
+                                                                          200  [{"id":"3b04f0e5-…","display_name":"Renamed By Leah"}]
+   PATCH /rest/v1/profiles?id=eq.<home> {"is_designer":true}              403  42501   still cannot promote
+
+7. RF3-03 — a LEGACY roster row (planted as service_role) held by a non-designer
+   planted rows sig->home                                                 1
+   PATCH /rest/v1/profiles?id=eq.<home> {"display_name":"PWNED VIA…"}     200  []   ← no row selectable
+   PATCH /rest/v1/profiles?id=eq.<home> {"email":"attacker@evil.invalid"} 200  []
+   home after                                                            Renamed By Leah | ff-r3p2-home-…@test.invalid
+   GET   /rest/v1/profiles?id=eq.<home>&select=id,email,phone             200  [{…}]  ← READ still open: DM-1, see below
+
+8. RF3-02 — the missing-profiles-row window on the own-row INSERT leg
+   POST /rest/v1/profiles {"id":self,"role":"vendor"}                     201  [{"id":"31752699-…","role":"vendor"}]
+   POST /rest/v1/profiles {"id":self,"role":"admin"}                      201  [{"id":"31752699-…","role":"admin"}]
+   POST /rest/v1/profiles {"id":self,"is_designer":true}                  403  42501   the authority pin holds
+
+9. anon
+   GET  /rest/v1/profiles?select=id                                       401  42501
+   GET  /rest/v1/designer_clients?select=id                               200  []   ← grant kept (RF3-01), RLS empty
+   POST /rest/v1/designer_clients                                         401  42501
+
+10. ACLs
+   anon on designer_clients                                               SELECT      (RF3-01)
+   authenticated designer_clients TRUNCATE / REFERENCES                   false/false (RF3-07)
+   authenticated handle_new_user EXECUTE                                  f           (RF3-11)
+```
+
+**Case 7's refusals answer `200 []`, and case 8's `201`s are the two lines to read carefully.**
+The `200 []` is the correct shape for a policy whose `USING` no longer selects the row — case 6's `200`
+carrying a row is the contrast that makes it mean something. Case 7's `GET` is deliberately still open:
+`can_view_profile`'s roster leg is a **relationship** term, which ruling B2 v3(b) explicitly keeps out
+of the authority rewrite, and whole-row counterparty visibility is **DM-1 as ruled**. Case 8 is RF3-02's
+residual, reported rather than hidden.
+
+**The RF3-03 predicate was proved load-bearing** by a tamper inside a rolled-back transaction: same
+fixture, same statement, only the policy differs.
+
+```
+shipped policy                  -> display_name = Untouched
+policy without the authority leg -> display_name = PWNED VIA LEGACY ROW
+```
+
+### Gates, re-run on `first-flight/integration`
+
+| Gate | Result |
+|---|---|
+| `pnpm supabase:reset` | **0** — 511 migrations, head `00557`. Run **twice**: the first reset showed the two new REVOKEs undone by `seed/00-legacy-grants.sql`, which replays *after* the migrations; the second, after regenerating the seed, holds them |
+| `bash scripts/run-sql-tests.sh` | **0** — `total: 147 · green: 126 · expected-fail: 21 · unexpected-fail: 0 · effective-green: 147 / 147`. All 21 expected-fail names are in `KNOWN_FAILURES.md`; none new. `PASS supabase/tests/rls/00555_ios_round_one_security.test.sql` |
+| `python3 scripts/generate-legacy-grants.py` | **0** — `baseline + 2098 replayed statements`; the seed **changed** (+7/-1: the new `designer_clients` TRUNCATE/REFERENCES revoke, and `handle_new_user`'s revoke gaining `authenticated`) and is committed. **Verified by a second `supabase:reset`**: `dc TRUNCATE=f`, `dc REFERENCES=f`, `authenticated handle_new_user EXECUTE=f` |
+| HTTP attack matrix (above) | **0** — the six specified behaviours plus the four new ones, all as specified |
+| RF3-03 tamper, rolled back | **0** — the predicate is what stops the legacy-row write |
+| `deno check --config supabase/functions/deno.json supabase/functions/client-invite/index.ts` | **0** — `Check … client-invite/index.ts`. No `deno.lock` written at the repo root |
+| deno test for `client-invite` | **n/a — the function still has no test file.** The constraint stays a comment at the write site; RF3-12's fail-closed guard carries its own |
+
+No iOS gate was run and no Swift file was touched.
+
+### The one thing this pass hands back rather than closes
+
+**RF3-02.** A vocabulary guard on the own-row `INSERT` `WITH CHECK` — `role IN ('homeowner','designer',
+'client')` — would close the measured `201`s in case 8. It is a **vocabulary** check rather than an
+authority check, so it does not read on B2 v3(a)'s prohibition, and it breaks nothing: the migration's
+own §a records that **no legitimate authenticated INSERT of a `profiles` row exists in the codebase at
+all**. It was not taken because ruling **B2 v3(a) as written** says that leg pins `is_designer` only,
+and the verification block asserts `NOT ILIKE '%role%'` on exactly that policy to police it. Reversing
+it is two lines — the `WITH CHECK` and that one `ASSERT`. **Fable's call, not this pass's.**
+
+### Documents amended in fix round 3 pass 2
+
+`00555_ios_round_one_security.sql` — the sibling `UPDATE` policy given the caller-authority predicate in
+both clauses (RF3-03) with its comment and policy `COMMENT` rewritten; `REVOKE TRUNCATE, REFERENCES …
+designer_clients` (RF3-07); `handle_new_user`'s revoke extended to `authenticated` (RF3-11); §a4's false
+sentence replaced with the measured window, the residual and the open ruling (RF3-02); §a2(i-b)'s
+"non-authority columns" replaced with the `invoice-send:204` citation and a column-scoped W2 (RF3-04);
+§(d)'s "every reader" claim replaced with the nine browser-client sites (RF3-10); six new/restructured
+`ASSERT`s (RF3-01, RF3-03, RF3-05, RF3-06, RF3-07, RF3-11); banner gains a pass-2 what-changed list.
+`00555_ios_round_one_security.test.sql` — new case **7m** (the legacy roster row, rename and
+invoice-email rewrite); §10 gains the exact-privilege-set assert, the `designer_clients`
+TRUNCATE/REFERENCES pair and `authenticated`'s `handle_new_user` EXECUTE; the header "Covers" list
+updated.
+`supabase/seed/00-legacy-grants.sql` — regenerated (+7/-1).
+`client-invite/index.ts` — the accept-path email guard fails closed (RF3-12).
+`KODY-RUNBOOK.md` — B7's anon-grant check rewritten to the privilege set with the `00224:165` reason
+(RF3-01) and the ACL block extended to four checks; §9f's measured shape and reproduce query gain
+`checks_caller_authority` (RF3-03); **B7a**'s last two categories promoted to a hard stop; **B7b**'s
+preview grouped by profile (RF3-09); **B9** given the safe own-row undo plus 00013's raw shape behind a
+warning (RF3-08) and the sibling-policy undo; **B10** gains a third item, the invoice-redirection
+restatement (RF3-04), and its heading count.
+`00555_probes.md` — §9f-ib rewritten to `want: SELECT` with the load-bearing reason (RF3-01); §9f-i
+gains `checks_caller_authority` and a new prose block for RF3-03; §9f-iii extended with the two new
+REVOKEs.

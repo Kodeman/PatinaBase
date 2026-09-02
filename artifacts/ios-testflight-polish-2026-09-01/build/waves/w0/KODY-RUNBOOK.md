@@ -599,10 +599,20 @@ after it — read `profile_role` on that row before deciding:
 | `designer` | `t` | either | fine — the ordinary designer |
 | `designer` | `f` | `t` | fine — grant present, `is_designer` not yet synced (00290) |
 | `admin` / `super_admin` | `f` | `t` | fine — the admin-domain leg |
-| **`designer`** | **`f`** | **`f`** | ⚠ **the self-signup shape.** Has the label, no authority. Loses the write. Decide per account: if it is a real designer, an admin grant restores them; if it is a stray signup, that is the vulnerability RF2-01 closed |
-| `homeowner` / `client` | `f` | `f` | ⚠ should not exist as a roster **owner** at all — investigate the rows before applying |
+| **`designer`** | **`f`** | **`f`** | 🛑 **HARD STOP — the self-signup shape.** Has the label, no authority. If it is a real designer, grant them a designer-domain `user_roles` row **before B5**; if it is a stray signup, delete its roster rows **before B5**. Do not apply with rows in this category still undecided |
+| `homeowner` / `client` | `f` | `f` | 🛑 **HARD STOP** — should not exist as a roster **owner** at all. Same two outcomes: grant, or delete the rows. Before B5 |
 
-If the last two categories are empty, RF2-01 costs production nothing and you can apply without a
+**The last two rows became a hard stop in fix round 3 pass 2 (RF3-03), and the reason is that the
+migration got stricter, not weaker.** `"Designers can update their client profiles"` now checks the
+**caller's** own authority — `is_designer`, or a designer/admin `user_roles` grant — in both its `USING`
+and its `WITH CHECK`. Before that change an owner in either category kept a live write on their
+"client's" profile (and a PII read through `can_view_profile`'s roster leg) purely because the roster
+row existed, and the restrictive policies could not reach it: they govern `INSERT` and `UPDATE` on
+`designer_clients`, and **this migration deliberately deletes no existing roster row.** After the
+change, such an owner is locked out instead — which is correct, and is exactly why you want to know
+who they are *before* the apply rather than from a support ticket after it.
+
+If both categories are empty, RF2-01 and RF3-03 cost production nothing and you can apply without a
 second thought. If they are not, the affected accounts are named by:
 
 ```bash
@@ -618,7 +628,9 @@ SELECT DISTINCT p.id, p.email, p.role, p.is_designer
 
 **Existing rows are not touched** — the restrictive policies are `INSERT` and `UPDATE` only, and
 `SELECT` is deliberately untouched — so a lost write does not hide anyone's existing roster. The cost
-is that the account can no longer add a client until it holds a grant.
+for a listed account is that it can no longer add a client, **and (RF3-03) can no longer edit the
+profiles of the clients it already has**, until it holds `is_designer` or a designer/admin grant. Both
+are restored by the same one-line grant; neither is restored by re-creating roster rows.
 
 **Audit 2 — orphan roster rows.** The predicate above joins `profiles`; a roster row whose
 `designer_id` has no `profiles` row would vanish from audit 1's counts entirely and would be invisible
@@ -654,7 +666,8 @@ migration**, and it is deliberately narrow.
 ```bash
 psql "$STRATA_DB_URL" -X -q -c "
 SELECT p.id, p.email, p.role, COALESCE(p.is_designer,false) AS is_designer,
-       ci.accepted_at
+       max(ci.accepted_at) AS latest_accept,
+       count(*)            AS invitations_accepted
   FROM client_invitations ci
   JOIN profiles p ON p.id = ci.accepted_by
  WHERE ci.accepted_at IS NOT NULL
@@ -662,8 +675,14 @@ SELECT p.id, p.email, p.role, COALESCE(p.is_designer,false) AS is_designer,
    AND COALESCE(p.is_designer, false) = false
    AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
                     WHERE ur.user_id = p.id AND r.domain IN ('designer','admin'))
- ORDER BY ci.accepted_at DESC;"
+ GROUP BY p.id, p.email, p.role, p.is_designer
+ ORDER BY latest_accept DESC;"
 ```
+
+⚠ **The preview is grouped by profile, and that is the fix for RF3-09.** It used to project one row per
+**invitation**, so a homeowner invited by two designers appeared twice — preview `2`, `UPDATE 1` — and
+the line below told you that mismatch meant something was wrong. `invitations_accepted > 1` is normal
+and is exactly that case.
 
 **Read the list before running the UPDATE.** Every row should be recognisably a client of Leah's or of
 another designer. The two guards after `p.role <> 'homeowner'` are what keep a real designer from being
@@ -687,8 +706,10 @@ UPDATE profiles p
                     WHERE ur.user_id = p.id AND r.domain IN ('designer','admin'));"
 ```
 
-`UPDATE n` must equal the preview's row count. Re-running it is a no-op (`UPDATE 0`) because
-`p.role <> 'homeowner'` no longer matches.
+`UPDATE n` must equal the preview's row count — the preview is one row per **profile**, and
+`UPDATE … FROM` touches each profile once, so they match exactly. (If you re-run the older ungrouped
+preview from somewhere, expect `UPDATE n ≤ that row count`, equal to its distinct `id` count.)
+Re-running the write is a no-op (`UPDATE 0`) because `p.role <> 'homeowner'` no longer matches.
 
 **Rollback:** there is none that is honest — the previous value was `designer` for every affected row,
 so restoring it is `SET role = 'designer'` for exactly the ids the preview printed. **Save the preview
@@ -730,10 +751,10 @@ round 3)**, so you know what "after" looks like before you run them against Stra
 
 ```
 -- 9f, profiles
-                 policyname                 |  cmd   | has_with_check | pins_is_designer | ratchet_floor | using_pins_old_row | using_client_vocab
---------------------------------------------+--------+----------------+------------------+---------------+--------------------+--------------------
- Designers can update their client profiles | UPDATE | t              | t                | f             | t                  | t
- Users can update own profile               | UPDATE | t              | t                | t             | f                  | f
+                 policyname                 |  cmd   | has_with_check | pins_is_designer | ratchet_floor | using_pins_old_row | using_client_vocab | checks_caller_authority
+--------------------------------------------+--------+----------------+------------------+---------------+--------------------+--------------------+-------------------------
+ Designers can update their client profiles | UPDATE | t              | t                | f             | t                  | t                  | t
+ Users can update own profile               | UPDATE | t              | t                | t             | f                  | f                  | f
 (2 rows)
 
 -- 9f-ia, designer_clients
@@ -750,7 +771,7 @@ round 3)**, so you know what "after" looks like before you run them against Stra
 24
 ```
 
-**Four of those columns say the opposite thing on the two rows, and every one of them is deliberate.**
+**Five of those columns say the opposite thing on the two rows, and every one of them is deliberate.**
 
 - **`using_pins_old_row` is `f` on the OWNER policy and `t` on the SIBLING.** The owner's `USING` is
   `auth.uid() = id` and its pin lives in the `WITH CHECK`, through the SECURITY DEFINER helper. On the
@@ -768,6 +789,14 @@ round 3)**, so you know what "after" looks like before you run them against Stra
   owner policy has no vocabulary list at all, so `f` is right there. The probe matches the **quoted**
   strings — the bare words `client` and `designer_clients` are all over the sibling's `EXISTS`
   subquery, so an unquoted match would pass on a policy that had dropped the literal.
+- **`checks_caller_authority` is `t` on the SIBLING and `f` on the OWNER.** New in fix round 3 pass 2,
+  finding **RF3-03**. The sibling edits **other people's** rows, so both its clauses now open with the
+  same two-signal predicate the `designer_clients` restrictive policies use —
+  `current_profile_is_designer() IS TRUE OR EXISTS (user_roles ⨝ roles, domain IN ('designer','admin'))`.
+  An `f` there means a roster row minted **before** 00555 by a non-designer still buys its holder a
+  write on that client's profile: the restrictive policies govern new writes only, and this migration
+  deletes no existing roster row. The owner policy is `f` because the caller *is* the target row there,
+  so `auth.uid() = id` already answers the authority question.
 - **`reads_profile_role` is `f` on BOTH `designer_clients` rows, and `reads_user_roles` is `t`.** That
   is finding **RF2-01**. Fix round 2 shipped these two with an
   `OR current_profile_role() IN ('designer','admin','super_admin')` leg — and `handle_new_user` gives
@@ -794,7 +823,11 @@ psql "$STRATA_DB_URL" -X -q -c \
           (with_check ILIKE '%is_designer = false%'
            AND with_check NOT ILIKE '%is_designer = true%')          AS ratchet_floor,
           (qual ILIKE '%is_designer IS NOT TRUE%')                   AS using_pins_old_row,
-          (qual ILIKE '%''homeowner''%' AND qual ILIKE '%''client''%') AS using_client_vocab
+          (qual ILIKE '%''homeowner''%' AND qual ILIKE '%''client''%') AS using_client_vocab,
+          (COALESCE(qual,'') ILIKE '%current_profile_is_designer%'
+           AND COALESCE(qual,'') ILIKE '%user_roles%'
+           AND COALESCE(with_check,'') ILIKE '%current_profile_is_designer%'
+           AND COALESCE(with_check,'') ILIKE '%user_roles%')         AS checks_caller_authority
      FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND cmd='UPDATE'
     ORDER BY policyname;"
 
@@ -823,22 +856,41 @@ psql "$STRATA_DB_URL" -X -q -tAc \
 open — go back to `00555_probes.md` §9d / §9f / §9f-ia / §9f-ii for the full column list and the policy
 predicates.
 
-**Three more one-line ACL checks, new in fix round 3** (RF2-08 / RF2-09 / RF2-10):
+**Four more one-line ACL checks, new in fix round 3** (RF2-08 / RF2-09 / RF2-10 / RF3-07):
 
 ```bash
 psql "$STRATA_DB_URL" -X -q -tAc \
-  "SELECT count(*) FROM information_schema.table_privileges
+  "SELECT string_agg(privilege_type, ',' ORDER BY privilege_type)
+     FROM information_schema.table_privileges
     WHERE table_schema='public' AND table_name='designer_clients' AND grantee='anon';"
-# want 0 — anon held the full arwdDxtm set and has no reader (RF2-08)
+# want exactly SELECT — one grant, and that grant is SELECT (RF2-08, corrected by RF3-01)
+```
 
+⚠ **`SELECT` here is the answer, not a leftover — do not "fix" it to zero.** An earlier draft of this
+line and of `00555_probes.md` §9f-ib both said *want 0*, which contradicts the migration, which
+`GRANT SELECT ON public.designer_clients TO anon` and then **ASSERTs** the privilege is present. The
+reason is not a caller of this table: `storage.objects` carries the policy *"Designers manage discovery
+folio objects"* (`00224:165`) whose `USING` reads `designer_clients`, and **Postgres checks the ACL of
+every table named in a relation's policy set at executor init, before filtering those policies by
+role.** The policy is `TO authenticated`; the check is not. Revoking `SELECT` therefore `42501`s every
+**anon** read of `storage.objects` and takes two unrelated suites red. RLS still returns `anon` zero
+rows from the table itself (`00014`'s policy is `auth.uid() = designer_id`, and `auth.uid()` is NULL
+for anon), so the grant satisfies a permission check without opening a read. The query above asks for
+the **set** rather than the count precisely so that a returned write grant still fails it.
+
+```bash
 psql "$STRATA_DB_URL" -X -q -tAc \
   "SELECT has_table_privilege('authenticated','public.profiles','TRUNCATE')
-       OR has_table_privilege('authenticated','public.profiles','REFERENCES');"
-# want f — RLS does not constrain TRUNCATE (RF2-09)
+       OR has_table_privilege('authenticated','public.profiles','REFERENCES')
+       OR has_table_privilege('authenticated','public.designer_clients','TRUNCATE')
+       OR has_table_privilege('authenticated','public.designer_clients','REFERENCES');"
+# want f — RLS does not constrain TRUNCATE (RF2-09 on profiles, RF3-07 on designer_clients)
 
 psql "$STRATA_DB_URL" -X -q -tAc \
-  "SELECT has_function_privilege('public','public.handle_new_user()','EXECUTE');"
-# want f — a trigger function needs no EXECUTE grant to fire (RF2-10)
+  "SELECT has_function_privilege('public','public.handle_new_user()','EXECUTE')
+       OR has_function_privilege('authenticated','public.handle_new_user()','EXECUTE');"
+# want f — a trigger function needs no EXECUTE grant to fire (RF2-10, extended to
+#          authenticated by RF3-11)
 ```
 
 **Advisors** (read-only; you or an agent):
@@ -914,11 +966,60 @@ undos, each independent of the others:
 ```bash
 psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
   "GRANT SELECT ON public.vendors TO anon;"
+```
 
+**The own-row `UPDATE` pin.** ⚠ **This one is not a plain revert to 00013, and the reason matters.**
+00013's original is `FOR UPDATE USING (auth.uid() = id)` with **no `WITH CHECK`** — which is the
+self-elevation hole §a2(i-a) exists to close. Recreating it verbatim hands every authenticated account
+`profiles.is_designer = true` on its own row, and that is the column the design-request pool (00286),
+`accept_design_request` (00330) and `search_shareable_designers` read as **authority**. So the undo
+below **keeps the `is_designer` pin and drops only the `role` ratchet leg** (RF3-08). That is also the
+likelier regression by far: the only thing this policy newly permits is L1-A's `PATCH role='homeowner'`,
+which needs the role half alone.
+
+```bash
+psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
+  "DROP POLICY IF EXISTS \"Users can update own profile\" ON public.profiles;
+   CREATE POLICY \"Users can update own profile\" ON public.profiles
+     FOR UPDATE TO authenticated
+     USING ((SELECT auth.uid()) = id)
+     WITH CHECK (
+       (SELECT auth.uid()) = id
+       AND (is_designer IS NOT DISTINCT FROM public.current_profile_is_designer()
+            OR is_designer = false)
+     );"
+```
+
+If you genuinely need 00013's shape back — and you should be able to name what broke that the statement
+above does not fix — it is the one below. **It re-opens `is_designer` self-elevation platform-wide, on
+the column the whole designer rail reads. Prefer almost anything else, and say so in the apply report if
+you run it.**
+
+```bash
 psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
   "DROP POLICY IF EXISTS \"Users can update own profile\" ON public.profiles;
    CREATE POLICY \"Users can update own profile\" ON public.profiles
      FOR UPDATE USING (auth.uid() = id);"
+```
+
+**The sibling `UPDATE` policy's caller-authority check (RF3-03)**, if a real designer turns out to be
+unable to edit a client they already have. Same warning as the roster-mint undo below — **prefer
+granting that account a designer-domain `user_roles` row**, which is one row and fixes both symptoms at
+once. B7a's audit names the affected accounts before the apply, which is why it is a hard stop.
+
+```bash
+psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
+  "DROP POLICY IF EXISTS \"Designers can update their client profiles\" ON public.profiles;
+   CREATE POLICY \"Designers can update their client profiles\" ON public.profiles
+     FOR UPDATE TO authenticated
+     USING (EXISTS (SELECT 1 FROM public.designer_clients dc
+                     WHERE dc.client_id = profiles.id
+                       AND dc.designer_id = (SELECT auth.uid()))
+            AND role IN ('homeowner','client') AND is_designer IS NOT TRUE)
+     WITH CHECK (EXISTS (SELECT 1 FROM public.designer_clients dc
+                          WHERE dc.client_id = profiles.id
+                            AND dc.designer_id = (SELECT auth.uid()))
+                 AND role IN ('homeowner','client') AND is_designer IS NOT TRUE);"
 ```
 
 **The roster mint (RF2-01), if a real designer turns out to be locked out of Add Client.** Dropping
@@ -962,12 +1063,14 @@ only one of the two leaves the other as an OR-branch around the pin you were try
 is the OR-branch mistake this migration spent two fix rounds on. Run the `DROP` and the `CREATE` in the
 same statement, as written above.
 
-**Not rolled back by any of this:** the `REVOKE`s. `designer_clients` from `anon` (RF2-08), `TRUNCATE`
-and `REFERENCES` on `profiles` from `authenticated` (RF2-09), and `EXECUTE` on `handle_new_user` from
-`PUBLIC` (RF2-10) have no callers by construction — if one of them is somehow the regression, the undo
-is the matching `GRANT`, and it is worth a hard look at what was using it.
+**Not rolled back by any of this:** the `REVOKE`s. The write half of `designer_clients` from `anon`
+(RF2-08 — the `SELECT` is **kept**, see B7), `TRUNCATE` and `REFERENCES` on `profiles` **and on
+`designer_clients`** from `authenticated` (RF2-09, RF3-07), and `EXECUTE` on `handle_new_user` from
+`PUBLIC`, `anon` **and `authenticated`** (RF2-10, RF3-11) have no callers by construction — if one of
+them is somehow the regression, the undo is the matching `GRANT`, and it is worth a hard look at what
+was using it.
 
-### B10 — two things you are being told, not asked
+### B10 — three things you are being told, not asked
 
 1. **`can_view_profile` is a relationship oracle.** It is `GRANT EXECUTE … TO authenticated` and lives
    in the PostgREST-exposed `public` schema, so any signed-in user can `POST
@@ -981,6 +1084,23 @@ is the matching `GRANT`, and it is worth a hard look at what was using it.
 2. **The counterparty read is the whole row.** Admitting a caller exposes `email`, `phone` and
    `stripe_customer_id` too, until the PII split. That is DM-1 as ruled, restated so it is not a surprise
    later.
+3. **A real designer can roster any homeowner and rewrite that homeowner's email — which redirects
+   their invoices.** `designer_clients` accepts any `client_id`, so a designer can add a stranger to
+   their roster with no prior relationship and then `PATCH` that profile. Measured on a clean stack:
+   the seeded designer `POST`ed `designer_clients{designer_id: self, client_id: <a homeowner>}` → 201,
+   then `PATCH`ed that profile's `email` and `phone` → 200. **This is not the cosmetic edit an earlier
+   draft of this block called it (RF3-04).** `supabase/functions/invoice-send/index.ts:204` resolves the
+   recipient as `invoice.client?.email` **first** and falls back to `designer_clients.client_email` only
+   when that is null; `invoice-reminders` and `stripe-webhook` resolve in the same order. So the reach is
+   invoice-recipient **redirection**.
+   **It is not a merge blocker**, and that is a judgement, not an oversight: before 00555 *any*
+   authenticated account could do this, and after it only an account holding real designer authority
+   can. Strictly narrower, on a platform whose designer population is vetted. The W2 fix is
+   **column-scoped** — a designer may edit display and notes fields on a rostered client, never
+   `email`, `phone` or `stripe_customer_id` — and that scope is the whole point of filing it rather than
+   widening this migration. The non-designer version of the same trick is closed here, prospectively by
+   the two RESTRICTIVE policies on `designer_clients` and retrospectively by the caller-authority check
+   on the sibling `UPDATE` policy (RF3-03).
 
 **Also owed, and not blocking:** 00555's READERS block enumerates **nine silent degradations** — reads
 that answer `200` with a `null` embed, so nothing logs and a name simply disappears. Open
