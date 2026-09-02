@@ -27,7 +27,7 @@
 **Last reconciled**: 2026-07-06
 
 **Source docs**:
-- `docs/code-review/patina-decision-delivery-plan.md`
+- `docs/_archive/code-review/patina-decision-delivery-plan.md`
 - `docs/design/the-document/the-document-decision-composer-package.md`
 - `docs/design/the-document/DECISIONS.md`
 - `docs/design/the-document/patina-decision-system-prototype.html`
@@ -167,7 +167,7 @@ Decisions are pure Supabase (RPC + RLS + realtime). The 3 retained NestJS servic
 
 ⚠ **Migration-number drift** — Delivery plan reserves `00174_decision_seed_linkage.sql (optional)` for dev seed backfill, but the shipped `00174` is `decision_resolved_email_and_overdue_cron.sql` (resolved-email trigger + overdue-cron re-point). The reserved number was repurposed; seed linkage folded into the spine/seed instead.
 
-⚠ **Missing source doc** — Delivery plan `patina-decision-delivery-plan.md` (line 5) cites source review `docs/decisions/patina-decision-system-completion.html` — that file does NOT exist in the repo (missing/never committed or removed).
+> Source review restored 2026-09-01 at `docs/decisions/patina-decision-system-completion.html` (cleanup merge a5d70327e).
 
 ⚠ **Stale gap plan** — Delivery plan cluster D lists iOS ("API client but no UI") and extension ("can't create a decision") as open gaps; both are now BUILT (iOS `Features/Decisions/*` full list→detail→consent; extension `DecisionSheet`+`DecisionTargetSelector`). The plan text is stale on the surfaces it planned.
 
@@ -203,5 +203,5 @@ Decisions are pure Supabase (RPC + RLS + realtime). The 3 retained NestJS servic
 
 ## 10. Superseded Sources
 
-- `docs/code-review/patina-decision-delivery-plan.md`
+- `docs/_archive/code-review/patina-decision-delivery-plan.md`
 - `docs/design/the-document/the-document-decision-composer-package.md`
