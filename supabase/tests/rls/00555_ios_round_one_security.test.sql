@@ -10,8 +10,9 @@
 -- which are the two closest precedents. Adding pgTAP for one file would be a
 -- new dependency for no gain.
 --
--- Destination once the migration is renumbered and merged:
---   supabase/tests/rls/00555_ios_round_one_security.test.sql
+-- Sibling: supabase/tests/rls/00557_increment_scan_upload_attempt.test.sql
+-- (that migration was minted as 00556 and renumbered — 00556 is taken by
+--  00556_admin_studio_management.sql on admin-studios/build).
 --
 -- Run (single file, for iteration):
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
@@ -26,19 +27,33 @@
 --      notification_preferences; anon reads only the public face of vendors;
 --      the four definer views are closed to anon; authenticated keeps its reads
 --      and loses DELETE on profiles; service_role is untouched.
---   2. profiles rows — owner, counterparty (roster), org co-member incl.
---      'invited', unrelated user, anon, admin, service_role.
+--   2. profiles rows, BEHAVIOURALLY, one reader at a time — owner (2a),
+--      counterparty via roster (2b-2e), org co-member incl. 'invited',
+--      unrelated user (2f), anon (2g-2h), owner's own preferences (2i),
+--      service_role (2j), an admin-domain role holder via
+--      profiles_select_admin (2k), and the NOLOGIN agent_reader via
+--      profiles_select_agent_reader (2l). 2k and 2l are what stop a policy
+--      whose NAME still exists but whose predicate stopped matching — both
+--      read through public.roles / public.user_roles, which carry their own
+--      RLS and belong to other people's migrations.
 --   3. The tightened legs actually bite: a 'new' lead and a revoked room-scan
 --      share do NOT admit a reader.
 --   4. anon WRITE attempts on notification_preferences all fail.
---   5. vendors row-level read as anon returns the public columns.
+--   5. vendors as anon — the public columns read (5a-5b), the trade file does
+--      not (5c-5d), and products JOIN vendors resolves (5e), which is the
+--      column-grant design's whole reason for existing.
 --   6. profiles INSERT — the anon leg is gone; a user may still insert own row.
 --   7. role self-elevation — the owner may edit their row but not their role.
 --      (profile_cards was CUT from 00555; 7a asserts it is absent.)
 --   8. search_shareable_designers — finds by name, never returns email,
---      enforces the 2-char floor and the LIMIT, closed to anon.
+--      enforces the 2-char floor including against a WILDCARD query (8h),
+--      and the LIMIT, closed to anon.
+--   8b. list_vendor_profiles — returns vendor-role rows and only those, in
+--      exactly the id/full_name/avatar_url shape L0.2b's hook destructures,
+--      closed to anon.
 --   9. No FOR ALL / TO PUBLIC / auth.uid() IS NULL policy survives in public.
---  10. Helper lockdown.
+--  10. Helper lockdown, and the policy set by NAME (which is a shape check, not
+--      a behaviour check — sections 2 and 8 are the behaviour).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -52,6 +67,8 @@ SET LOCAL statement_timeout = '60s';
 -- Ora   = in the same organization as Dana, status 'invited' (the org leg)
 -- Nyx   = a homeowner on a status='new' lead to Dana, and the consumer on a
 --         REVOKED scan share with Dana — she must remain invisible to Dana
+-- Adm   = holds a user_roles row against an admin-domain role (profiles_select_admin)
+-- Ven   = role='vendor', the one row list_vendor_profiles must return
 
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
@@ -59,7 +76,9 @@ VALUES
   ('c0000000-0000-4000-8000-000000000002', 'p555-cleo@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('a0000000-0000-4000-8000-000000000003', 'p555-mal@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('e0000000-0000-4000-8000-000000000004', 'p555-ora@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('f0000000-0000-4000-8000-000000000005', 'p555-nyx@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated')
+  ('f0000000-0000-4000-8000-000000000005', 'p555-nyx@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('ad000000-0000-4000-8000-000000000006', 'p555-adm@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('be000000-0000-4000-8000-000000000007', 'p555-ven@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.profiles (id, email, display_name, full_name, business_name, avatar_url, role, is_designer, phone, stripe_customer_id, created_at, updated_at)
@@ -68,7 +87,9 @@ VALUES
   ('c0000000-0000-4000-8000-000000000002', 'p555-cleo@test.invalid', 'Cleo', 'Cleo Client',   NULL,              'https://img.invalid/c.png', 'client',    FALSE, '555-0002', 'cus_test_cleo', NOW(), NOW()),
   ('a0000000-0000-4000-8000-000000000003', 'p555-mal@test.invalid',  'Mal',  'Mal Unrelated', NULL,              NULL,                        'homeowner', FALSE, '555-0003', NULL,            NOW(), NOW()),
   ('e0000000-0000-4000-8000-000000000004', 'p555-ora@test.invalid',  'Ora',  'Ora Invited',   'Ora Works',       NULL,                        'designer',  TRUE,  '555-0004', NULL,            NOW(), NOW()),
-  ('f0000000-0000-4000-8000-000000000005', 'p555-nyx@test.invalid',  'Nyx',  'Nyx Newlead',   NULL,              NULL,                        'homeowner', FALSE, '555-0005', NULL,            NOW(), NOW())
+  ('f0000000-0000-4000-8000-000000000005', 'p555-nyx@test.invalid',  'Nyx',  'Nyx Newlead',   NULL,              NULL,                        'homeowner', FALSE, '555-0005', NULL,            NOW(), NOW()),
+  ('ad000000-0000-4000-8000-000000000006', 'p555-adm@test.invalid',  'Adm',  'Adm Admin',     NULL,              NULL,                        'admin',     FALSE, '555-0006', NULL,            NOW(), NOW()),
+  ('be000000-0000-4000-8000-000000000007', 'p555-ven@test.invalid',  'Ven',  'Ven Vendor',    'Ven Supply Co',   'https://img.invalid/v.png', 'vendor',    FALSE, '555-0007', NULL,            NOW(), NOW())
 ON CONFLICT (id) DO UPDATE
   SET display_name  = EXCLUDED.display_name,
       full_name     = EXCLUDED.full_name,
@@ -136,6 +157,32 @@ VALUES ('bd555000-0000-4000-8000-000000000001'::uuid, 'Test Maker Co', 'USA',
         'internal: do not surface', 'net 30 trade only', 'https://maker.invalid')
 ON CONFLICT (id) DO NOTHING;
 
+-- A published catalogue product pointing at that vendor. Section 5e joins the
+-- two AS ANON: the iOS product read is a PostgREST EMBED
+-- (`*,vendors!products_vendor_id_fkey(name,made_in,brand_story)`,
+-- ProductAPIClient.swift:122) which resolves through this FK on the BASE table,
+-- and a broken embed reproduces A3-01 (withholdingUnresolvedMakers drops every
+-- product). Asserting the columns one at a time cannot catch that; the join can.
+INSERT INTO public.products (id, name, captured_at, status, layer, vendor_id)
+VALUES ('9d555000-0000-4000-8000-000000000001'::uuid, 'p555 test piece', NOW(),
+        'published', 'catalog', 'bd555000-0000-4000-8000-000000000001'::uuid)
+ON CONFLICT (id) DO NOTHING;
+
+-- The admin grant behind profiles_select_admin. Resolved by DOMAIN, never by a
+-- seeded uuid — the seed's role ids are not a contract.
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT 'ad000000-0000-4000-8000-000000000006'::uuid, r.id
+  FROM public.roles r WHERE r.domain = 'admin' ORDER BY r.name LIMIT 1
+ON CONFLICT DO NOTHING;
+
+DO $$
+BEGIN
+  ASSERT EXISTS (
+    SELECT 1 FROM public.user_roles ur JOIN public.roles r ON r.id = ur.role_id
+    WHERE ur.user_id = 'ad000000-0000-4000-8000-000000000006' AND r.domain = 'admin'
+  ), 'FIXTURE: no admin-domain role row for Adm — case 2k would be meaningless';
+END $$;
+
 -- ─── helpers (same shape as products_three_layer_test.sql) ─────────────────
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id UUID)
@@ -169,6 +216,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION pg_temp.assume_service_role() TO PUBLIC;
+
+-- agent_reader is a NOLOGIN privilege role (docs/agent-os/agent-roles-runbook.md)
+-- with no JWT of its own — Agent-OS reads assume it directly, so the helper does
+-- not set request.jwt.claims.
+CREATE OR REPLACE FUNCTION pg_temp.assume_agent_reader()
+RETURNS VOID AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claims', NULL, true);
+  EXECUTE 'SET LOCAL ROLE agent_reader';
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_agent_reader() TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.reset_role()
 RETURNS VOID AS $$
@@ -331,6 +390,35 @@ BEGIN
                 'a0000000-0000-4000-8000-000000000003');
   ASSERT n = 3, 'FAIL 2j: service_role must read every profile, got ' || n;
   PERFORM pg_temp.reset_role();
+
+  -- 2k: profiles_select_admin. Adm has no roster, project, thread or org tie to
+  --     Mal, so the ONLY thing that can admit this read is the admin policy.
+  --     The migration names this policy as what keeps use-audit-logs.ts:108,
+  --     use-onboarding.ts:208/:242 and use-insights.ts:97 alive on the BROWSER
+  --     client (anon key + user JWT), where service_role's bypass is not
+  --     available. Asserting the policy's NAME cannot catch a policy whose
+  --     predicate stops matching — public.roles and public.user_roles carry
+  --     their own RLS, and either could change under someone else's migration
+  --     and blank the admin portal with a green suite.
+  PERFORM pg_temp.assume_user('ad000000-0000-4000-8000-000000000006');
+  SELECT COUNT(*) INTO n FROM public.profiles
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  ASSERT n = 1, 'FAIL 2k: an admin-domain role holder must read an unrelated profile, got ' || n;
+  SELECT COUNT(*) INTO n FROM public.profiles
+   WHERE id IN ('d0000000-0000-4000-8000-000000000001',
+                'c0000000-0000-4000-8000-000000000002',
+                'f0000000-0000-4000-8000-000000000005');
+  ASSERT n = 3, 'FAIL 2k2: the admin read must not be scoped to one row, got ' || n;
+  PERFORM pg_temp.reset_role();
+
+  -- 2l: profiles_select_agent_reader. agent_reader read profiles ONLY through
+  --     the dropped PUBLIC policy, so without this leg the whole Agent-OS read
+  --     path loses profiles silently.
+  PERFORM pg_temp.assume_agent_reader();
+  SELECT COUNT(*) INTO n FROM public.profiles
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  ASSERT n = 1, 'FAIL 2l: agent_reader must read a profile, got ' || n;
+  PERFORM pg_temp.reset_role();
 END $$;
 
 -- ─── 3. the tightened legs bite ────────────────────────────────────────────
@@ -459,6 +547,27 @@ BEGIN
     NULL;
   END;
 
+  -- 5e: THE EMBED, as anon. This is the whole reason 00555 chose column grants
+  --     over a vendor_cards view: ProductAPIClient's
+  --     `*,vendors!products_vendor_id_fkey(name,made_in,brand_story)` resolves
+  --     through the FK on the BASE table, and a view has no FK to resolve
+  --     through. A broken embed reproduces A3-01 — withholdingUnresolvedMakers
+  --     drops EVERY product and the marketplace renders empty for a guest.
+  --     5a-5d assert the columns one at a time and cannot see that; only the
+  --     join can, and until now it existed solely as prod probe 4, which runs
+  --     AFTER the apply.
+  SELECT COUNT(*) INTO n
+    FROM public.products p
+    JOIN public.vendors  v ON v.id = p.vendor_id
+   WHERE p.id = '9d555000-0000-4000-8000-000000000001'::uuid;
+  ASSERT n = 1, 'FAIL 5e: anon cannot join products to vendors — the iOS product embed is broken, got ' || n;
+
+  SELECT v.name INTO v_name
+    FROM public.products p
+    JOIN public.vendors  v ON v.id = p.vendor_id
+   WHERE p.id = '9d555000-0000-4000-8000-000000000001'::uuid;
+  ASSERT v_name = 'Test Maker Co', 'FAIL 5e2: the embedded maker name did not resolve: ' || COALESCE(v_name, '<null>');
+
   PERFORM pg_temp.reset_role();
 END $$;
 
@@ -513,6 +622,7 @@ END $$;
 DO $$
 DECLARE
   ok        BOOLEAN;
+  name_now  TEXT;
   role_was  TEXT;
   role_now  TEXT;
 BEGIN
@@ -521,33 +631,108 @@ BEGIN
     WHERE relname = 'profile_cards' AND relnamespace = 'public'::regnamespace
   ), 'FAIL 7a: profile_cards was cut from 00555 but exists — a stale apply?';
 
-  SELECT role INTO role_was FROM public.profiles
-   WHERE id = 'd0000000-0000-4000-8000-000000000001';
-
+  -- 7b: the owner may still edit their own row.
+  --
+  -- This is not a formality. The first draft of the WITH CHECK pinned the role
+  -- with an inline `SELECT role FROM public.profiles WHERE id = auth.uid()`,
+  -- which is evaluated as the INVOKER and therefore re-enters profiles' own
+  -- policies: every owner update died with `42P17 infinite recursion detected
+  -- in policy for relation "profiles"`. The fix is the SECURITY DEFINER helper
+  -- public.current_profile_role(). This case is that regression guard, so it
+  -- asserts the row actually CHANGED rather than only that no error was raised.
   PERFORM pg_temp.assume_user('d0000000-0000-4000-8000-000000000001');
-
-  -- the owner may still edit their own row
   UPDATE public.profiles SET display_name = 'Dana H.'
    WHERE id = 'd0000000-0000-4000-8000-000000000001';
   GET DIAGNOSTICS ok = ROW_COUNT;
   ASSERT ok, 'FAIL 7b: the owner can no longer update their own profile';
+  PERFORM pg_temp.reset_role();
 
-  -- but may NOT change their own role. Either the WITH CHECK raises, or the
-  -- update matches nothing; both are acceptable, a changed role is not.
+  SELECT display_name INTO name_now FROM public.profiles
+   WHERE id = 'd0000000-0000-4000-8000-000000000001';
+  ASSERT name_now = 'Dana H.',
+    'FAIL 7b2: the owner''s own display_name write did not land, got ' || COALESCE(name_now, '<null>');
+
+  -- 7c: but may NOT raise their own role.
+  --
+  -- Mal, not Dana: Dana is already 'designer' in the fixture, so asking her to
+  -- set role='designer' is a no-op that any policy would allow and proves
+  -- nothing. Mal is a 'homeowner', so this is a real elevation attempt — the
+  -- exact vector A3-07's client-side remedy used to depend on.
+  SELECT role INTO role_was FROM public.profiles
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  ASSERT role_was = 'homeowner',
+    'FIXTURE 7c: Mal must start as a homeowner for the elevation to be real, got '
+      || COALESCE(role_was, '<null>');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  -- Either the WITH CHECK raises, or the update matches nothing; both are
+  -- acceptable, a changed role is not.
   BEGIN
     UPDATE public.profiles SET role = 'designer'
-     WHERE id = 'd0000000-0000-4000-8000-000000000001';
+     WHERE id = 'a0000000-0000-4000-8000-000000000003';
   EXCEPTION WHEN check_violation OR insufficient_privilege THEN
     NULL;
   END;
-
   PERFORM pg_temp.reset_role();
 
   SELECT role INTO role_now FROM public.profiles
-   WHERE id = 'd0000000-0000-4000-8000-000000000001';
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
   ASSERT role_now IS NOT DISTINCT FROM role_was,
     'FAIL 7c: an authenticated user raised their own profiles.role from '
       || COALESCE(role_was, '<null>') || ' to ' || COALESCE(role_now, '<null>');
+
+  -- 7e: and may not reach the same elevation through the SIBLING policy.
+  --
+  -- profiles carries a SECOND permissive UPDATE policy, "Designers can update
+  -- their client profiles" (00017:19). Postgres ORs the permissive WITH CHECKs
+  -- for an UPDATE, and a policy with a NULL WITH CHECK reuses its own USING as
+  -- the check — so as 00017 shipped it, a new row only had to satisfy ONE of
+  -- the two policies and 7c's role pin was simply skipped.
+  --
+  -- The roster row that satisfies the sibling is self-servable:
+  -- designer_clients' own policy is FOR ALL / TO PUBLIC / USING
+  -- (auth.uid() = designer_id) with no WITH CHECK (00014:110), and
+  -- authenticated holds INSERT. So the vector is two statements, not one, and
+  -- 7c alone reported the hole closed while it was open.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  INSERT INTO public.designer_clients (designer_id, client_id)
+  VALUES ('a0000000-0000-4000-8000-000000000003',
+          'a0000000-0000-4000-8000-000000000003');
+  BEGIN
+    UPDATE public.profiles SET role = 'designer'
+     WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT role INTO role_now FROM public.profiles
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  ASSERT role_now IS NOT DISTINCT FROM role_was,
+    'FAIL 7e: a self-inserted designer_clients row let an authenticated user '
+      || 'raise their own profiles.role from ' || COALESCE(role_was, '<null>')
+      || ' to ' || COALESCE(role_now, '<null>')
+      || ' — the sibling UPDATE policy has no WITH CHECK';
+
+  -- 7e2: the structural half. A future migration that re-creates the sibling
+  -- without a WITH CHECK re-opens 7e, and 7e's own fixture (a self-roster row)
+  -- is subtle enough to be lost in a rewrite. Assert the shape too.
+  ASSERT (
+    SELECT p.polwithcheck IS NOT NULL FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Designers can update their client profiles'
+  ), 'FAIL 7e2: "Designers can update their client profiles" has no WITH CHECK, '
+     'so it reuses its USING and bypasses the role pin on "Users can update own profile"';
+
+  -- 7d: and the helper the policy leans on is closed to the anon key.
+  ASSERT NOT has_function_privilege('anon'::name, 'public.current_profile_role()', 'EXECUTE'),
+    'FAIL 7d: anon can execute current_profile_role';
+  ASSERT has_function_privilege('authenticated'::name, 'public.current_profile_role()', 'EXECUTE'),
+    'FAIL 7d2: authenticated cannot execute current_profile_role — the UPDATE policy denies every write';
+  ASSERT (
+    SELECT p.prosecdef FROM pg_proc p JOIN pg_namespace nn ON nn.oid = p.pronamespace
+    WHERE nn.nspname = 'public' AND p.proname = 'current_profile_role'
+  ), 'FAIL 7d3: current_profile_role must be SECURITY DEFINER or the policy recurses again';
 END $$;
 
 -- ─── 8. search_shareable_designers ─────────────────────────────────────────
@@ -600,6 +785,77 @@ BEGIN
       AND specific_name LIKE 'search_shareable_designers%'
       AND parameter_name = 'email'
   ), 'FAIL 8g: search_shareable_designers exposes an email column';
+
+  -- 8h: a WILDCARD does not defeat the two-character floor. p_query is a
+  --     parameter, so this was never injection — but '%' and '_' are wildcards
+  --     INSIDE the pattern, and '%a' is two characters that match every name
+  --     containing an 'a', which is exactly what the floor exists to prevent.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  SELECT COUNT(*) INTO n FROM public.search_shareable_designers('%a');
+  ASSERT n = 0, 'FAIL 8h: a wildcard query enumerated the directory, got ' || n;
+  SELECT COUNT(*) INTO n FROM public.search_shareable_designers('_a');
+  ASSERT n = 0, 'FAIL 8h2: a single-char wildcard query enumerated the directory, got ' || n;
+
+  -- 8i: and the escaping did not break ordinary matching.
+  SELECT COUNT(*) INTO n FROM public.search_shareable_designers('Dana')
+   WHERE id = 'd0000000-0000-4000-8000-000000000001';
+  ASSERT n = 1, 'FAIL 8i: escaping broke a plain name match, got ' || n;
+  PERFORM pg_temp.reset_role();
+END $$;
+
+-- ─── 8b. list_vendor_profiles ──────────────────────────────────────────────
+--
+-- This is the RPC L0.2b's FF-01c swaps useVendorProfiles onto, and the reason
+-- D8 orders the designer-portal deploy AHEAD of the apply. Unfixed, that hook
+-- does not degrade to an empty list — it THROWS 42501 and every screen calling
+-- it renders an error state. A cross-lane contract with no behavioural test is
+-- the one that breaks quietly, so the shape is pinned here, not just the grant.
+
+DO $$
+DECLARE
+  n    INTEGER;
+  cols text;
+BEGIN
+  -- 8b-i: an authenticated caller gets the vendor-role rows.
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  SELECT COUNT(*) INTO n FROM public.list_vendor_profiles()
+   WHERE id = 'be000000-0000-4000-8000-000000000007';
+  ASSERT n = 1, 'FAIL 8b-i: list_vendor_profiles did not return the vendor row, got ' || n;
+
+  -- 8b-ii: and only vendor-role rows — not the designers or the client.
+  SELECT COUNT(*) INTO n FROM public.list_vendor_profiles()
+   WHERE id IN ('d0000000-0000-4000-8000-000000000001',
+                'c0000000-0000-4000-8000-000000000002',
+                'e0000000-0000-4000-8000-000000000004');
+  ASSERT n = 0, 'FAIL 8b-ii: list_vendor_profiles returned a non-vendor, got ' || n;
+  PERFORM pg_temp.reset_role();
+
+  -- 8b-iii: the return shape is exactly id / full_name / avatar_url. The hook
+  --         destructures these three names; a fourth column would also be a new
+  --         PII surface, since a profiles row carries email, phone and
+  --         stripe_customer_id.
+  --         Read off pg_proc, not information_schema.parameters: that view
+  --         reports a TABLE function's output columns with parameter_mode 'OUT'
+  --         (verified on this stack), and its specific_name carries the oid, so
+  --         a LIKE match there is both wrong and brittle.
+  SELECT string_agg(a.name, ',' ORDER BY a.ord) INTO cols
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace,
+    LATERAL unnest(p.proargnames, p.proargmodes) WITH ORDINALITY AS a(name, mode, ord)
+   WHERE n.nspname = 'public' AND p.proname = 'list_vendor_profiles'
+     AND a.mode = 't';
+  ASSERT cols = 'id,full_name,avatar_url',
+    'FAIL 8b-iii: list_vendor_profiles return shape changed: ' || COALESCE(cols, '<null>');
+
+  -- 8b-iv: closed to anon.
+  PERFORM pg_temp.assume_anon();
+  BEGIN
+    SELECT COUNT(*) INTO n FROM public.list_vendor_profiles();
+    ASSERT FALSE, 'FAIL 8b-iv: anon executed list_vendor_profiles';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
 END $$;
 
 -- ─── 9. no FOR ALL / TO PUBLIC / auth.uid() IS NULL policy survives ────────
@@ -680,16 +936,71 @@ BEGIN
       AND p.polname  = 'Users can update own profile'
   ), 'the WITH CHECK does not mention role — it does not pin it';
 
+  -- Read the fallback EXPRESSION, not the word. 00313's body already contains
+  -- the literal 'homeowner' twice, so LIKE '%homeowner%' passes on the UNFIXED
+  -- function. Section 11 below is the behavioural half of this guard.
   ASSERT (
-    SELECT pg_get_functiondef(p.oid) LIKE '%homeowner%'
+    SELECT pg_get_functiondef(p.oid) LIKE '%COALESCE(v_role, ''homeowner'')%'
     FROM pg_proc p JOIN pg_namespace nn ON nn.oid = p.pronamespace
     WHERE nn.nspname = 'public' AND p.proname = 'handle_new_user'
-  ), 'handle_new_user() does not default a metadata-less signup to homeowner';
+  ), 'handle_new_user() still falls back to designer for a metadata-less signup';
 
   ASSERT NOT has_table_privilege('authenticated'::name, 'public.profiles'::regclass, 'DELETE'),
     'authenticated still holds DELETE on profiles';
 
   RAISE NOTICE '00555 security assertions passed.';
+END $$;
+
+-- ─── 11. handle_new_user defaults a metadata-less signup to homeowner ──────
+--
+-- 00555 §a2(ii). 00313 shipped COALESCE(v_role, 'designer'), so an Apple
+-- sign-up — which carries no creation metadata at all, because
+-- supabase-swift's signInWithIdToken has no data: parameter — landed as a
+-- DESIGNER. A3-07's client-side remedy (the app writing its own role after
+-- sign-in) depended on the self-elevation hole case 7 closes, so the default
+-- has to move to the server or the app cannot stop writing its own role.
+--
+-- These are BEHAVIOUR cases on purpose. The catalog assertion in section 10 is
+-- a text match on the function definition; it can only prove the token is
+-- there. Only an actual auth.users INSERT proves the trigger writes the role.
+
+DO $$
+DECLARE
+  v_role text;
+BEGIN
+  -- 11a: no metadata at all — the Apple / Field path, and the one that broke.
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role)
+  VALUES ('b0000000-0000-4000-8000-00000000f001', 'p555-apple@test.invalid', '', NOW(), NOW(), NOW(),
+          '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  SELECT role INTO v_role FROM public.profiles WHERE id = 'b0000000-0000-4000-8000-00000000f001';
+  ASSERT v_role = 'homeowner',
+    'FAIL 11a: a metadata-less signup must land as homeowner, got ' || COALESCE(v_role, '<null>');
+
+  -- 11b: the explicit client hint the iOS app sends still works
+  --      (AuthService.swift:437 and :563 both send role: "homeowner").
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role, raw_user_meta_data)
+  VALUES ('b0000000-0000-4000-8000-00000000f002', 'p555-hinted@test.invalid', '', NOW(), NOW(), NOW(),
+          '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+          '{"role":"homeowner"}'::jsonb);
+  SELECT role INTO v_role FROM public.profiles WHERE id = 'b0000000-0000-4000-8000-00000000f002';
+  ASSERT v_role = 'homeowner',
+    'FAIL 11b: an explicit homeowner hint must be honored, got ' || COALESCE(v_role, '<null>');
+
+  -- 11c: 00313's security rule survives the change — raw_user_meta_data is
+  --      CLIENT-CONTROLLED, so a forged elevated hint must be ignored and fall
+  --      through to the default, NOT be written as given.
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role, raw_user_meta_data)
+  VALUES ('b0000000-0000-4000-8000-00000000f003', 'p555-forger@test.invalid', '', NOW(), NOW(), NOW(),
+          '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+          '{"role":"super_admin"}'::jsonb);
+  SELECT role INTO v_role FROM public.profiles WHERE id = 'b0000000-0000-4000-8000-00000000f003';
+  ASSERT v_role = 'homeowner',
+    'FAIL 11c: a forged role hint must be ignored, got ' || COALESCE(v_role, '<null>');
+
+  RAISE NOTICE '00555 handle_new_user behaviour assertions passed.';
 END $$;
 
 -- ROLLBACK so the test is idempotent.

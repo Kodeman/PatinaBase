@@ -29654,6 +29654,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      can_view_profile: { Args: { p_profile_id: string }; Returns: boolean }
       cancel_agent_task: {
         Args: { p_actor: string; p_id: string; p_reason?: string }
         Returns: {
@@ -30427,6 +30428,7 @@ export type Database = {
         Args: { p_project_id: string; p_title: string }
         Returns: Json
       }
+      current_profile_role: { Args: never; Returns: string }
       cut_schedule_revision: {
         Args: { p_project_id: string; p_reason?: string }
         Returns: number
@@ -31573,6 +31575,10 @@ export type Database = {
         Args: { p_count?: number; p_room_id: string }
         Returns: undefined
       }
+      increment_scan_upload_attempt: {
+        Args: { p_scan_id: string }
+        Returns: undefined
+      }
       increment_sequence_counter: {
         Args: { p_column: string; p_sequence_id: string }
         Returns: undefined
@@ -31797,6 +31803,14 @@ export type Database = {
         Returns: Json
       }
       list_trade_scopes: { Args: { p_project_id: string }; Returns: Json }
+      list_vendor_profiles: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          full_name: string
+          id: string
+        }[]
+      }
       lock_client_decision_option_parent: {
         Args: { p_decision_id: string; p_path: string }
         Returns: boolean
@@ -33126,6 +33140,15 @@ export type Database = {
           price_retail: number
           semantic_score: number
           text_score: number
+        }[]
+      }
+      search_shareable_designers: {
+        Args: { p_query: string }
+        Returns: {
+          avatar_url: string
+          business_name: string
+          display_name: string
+          id: string
         }[]
       }
       seed_house_from_validated_catalog: { Args: never; Returns: string }

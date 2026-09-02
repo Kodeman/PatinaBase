@@ -2,12 +2,18 @@
 -- 00555 — iOS First Flight round one: close the ANON reads on profiles,
 --         notification_preferences, vendors and four SECURITY DEFINER views
 --
--- NUMBER IS PROVISIONAL. Head on main at draft time is 00554
--- (00554_onboarding_review_fixes.sql). Concurrent sessions are minting numbers
--- in the same band, so re-check `ls supabase/migrations/*.sql | sort | tail`
--- and renumber THIS file (name + this banner) before it moves into
--- supabase/migrations/. It has never been applied anywhere, so editing it in
--- place is the correct remediation until it lands.
+-- Number re-checked against `ls supabase/migrations/*.sql | sort -V | tail -3`
+-- on 2026-09-02 immediately before this file moved into supabase/migrations/:
+-- head was 00554_onboarding_review_fixes.sql, so 00555 stands. Concurrent
+-- sessions mint in this band — re-check again before the prod apply and
+-- renumber THIS file (name + this banner) on collision. It has never been
+-- applied anywhere, so editing it in place is the correct remediation until it
+-- lands.
+--
+-- Function lineage (skill: patina-db-migrations step 2):
+--   handle_new_user  00013 → 00023 → 00028 → 00039 → 00040 → 00126 → 00313 → (this)
+--                    body grafted verbatim from 00313, one token changed; see (a2)(ii)
+--   can_view_profile / search_shareable_designers / list_vendor_profiles  new here
 --
 -- ── WHAT THIS FIXES, STATED PLAINLY ────────────────────────────────────────
 --
@@ -135,10 +141,28 @@
 --   1. apps/mobile/Patina/Patina/Services/Sharing/ScanSharingService.swift:373-380
 --      searchDesigners() must move to the RPC created below. Today it is an
 --      unscoped free-text search over every `is_designer = true` profile that
---      hands any signed-in client every designer's EMAIL. After this migration
---      it returns [] and the share picker goes empty.
---      Replace the `.from("profiles").select(...)` chain with
+--      hands any signed-in client every designer's EMAIL. THAT is the reason
+--      for the change. Replace the `.from("profiles").select(...)` chain with
 --      `.rpc("search_shareable_designers", params: ["p_query": query])`.
+--      (Done on first-flight/w0-l02, commit c93cff358.)
+--
+--      ⚠ SCOPE, corrected 2026-09-02. An earlier draft of this block said the
+--      share-with-a-designer picker "goes silently empty" after this migration.
+--      It does not, because there is no picker:
+--        grep -rn --include="*.swift" 'searchDesigners|getRecentDesigners' apps/mobile/
+--      returns only ScanSharingService.swift itself and its new contract test.
+--      No view in EITHER iOS app calls this API. So nothing user-visible was at
+--      risk and nothing user-visible changed — do not schedule a walker against
+--      a screen that does not exist. The swap is still correct and still
+--      required; the justification on the record is the email leak, not a
+--      broken screen.
+--
+--      Its sibling getRecentDesigners() (:416) is left as-is. It embeds
+--      `profiles!designer_id(id, email, …)` for a designer the caller has a
+--      LIVE room-scan share with, so after this migration it resolves through
+--      can_view_profile's scan-share leg rather than breaking — and the email
+--      it returns is counterparty column visibility, which DM-1 accepted for
+--      round one and W2's profile_private split closes.
 --
 --   2. apps/designer-portal/src/app/api/catalog/vendors/route.ts:5-13 and
 --      apps/designer-portal/src/app/api/catalog/vendors/[id]/route.ts:5-18.
@@ -275,11 +299,20 @@ AS $$
            AND public.is_studio_comember(dc.designer_id)
        )
 
-       -- the two named sides of a project, plus its lead designer and creator
+       -- the two named sides of a project, plus its lead designer and creator.
+       --
+       -- projects.client_profile_id is deliberately NOT in these lists. It is
+       -- FK'd to public.client_profiles(id) (`fk_projects_client_profile`), a
+       -- table whose id is its own gen_random_uuid() primary key with a
+       -- SEPARATE user_id column pointing at auth.users — so it is a disjoint
+       -- uuid space from profiles.id and the term could never match. An earlier
+       -- draft carried it, along with an index cut for it; both are removed.
+       -- projects.client_id is FK'd to profiles(id) and already carries the
+       -- client side.
        OR EXISTS (
          SELECT 1 FROM projects pr
-         WHERE (SELECT auth.uid()) IN (pr.designer_id, pr.client_id, pr.lead_designer_id, pr.created_by, pr.client_profile_id)
-           AND p_profile_id       IN (pr.designer_id, pr.client_id, pr.lead_designer_id, pr.created_by, pr.client_profile_id)
+         WHERE (SELECT auth.uid()) IN (pr.designer_id, pr.client_id, pr.lead_designer_id, pr.created_by)
+           AND p_profile_id       IN (pr.designer_id, pr.client_id, pr.lead_designer_id, pr.created_by)
        )
 
        -- a seat on the same project team
@@ -414,14 +447,21 @@ COMMENT ON FUNCTION public.can_view_profile(uuid) IS
   'profiles_select_counterparty policy, which cannot work without the EXECUTE '
   'grant (Postgres checks policy-function EXECUTE at executor-init — see 00510).';
 
--- Supporting indexes for the two counterparty legs that have no index on the
--- column they filter (verified absent on Strata via pg_indexes). The predicate
--- runs once per candidate row, so an unindexed leg is a sequential scan of
--- fulfillment_orders / projects per profile row returned.
+-- Supporting index for the one counterparty leg that has no index on the column
+-- it filters (verified absent on Strata via pg_indexes). The predicate runs
+-- once per candidate row, so an unindexed leg is a sequential scan of
+-- fulfillment_orders per profile row returned.
+-- fulfillment_orders.designer_profile_id IS FK'd to profiles, so this leg is
+-- live and the index earns its keep. An earlier draft also created
+-- idx_projects_client_profile; that column is FK'd to client_profiles, the leg
+-- that would have used it was dead, and both are gone.
+--
+-- NOTE FOR THE APPLY: this runs inside the migration's single transaction and
+-- is NOT CONCURRENTLY, so it takes an ACCESS EXCLUSIVE lock on
+-- fulfillment_orders for the duration. Harmless at production's row counts;
+-- named here so it is not discovered mid-apply (KODY-RUNBOOK.md Step 3).
 CREATE INDEX IF NOT EXISTS idx_fulfillment_orders_designer_profile
   ON public.fulfillment_orders (designer_profile_id);
-CREATE INDEX IF NOT EXISTS idx_projects_client_profile
-  ON public.projects (client_profile_id);
 
 DROP POLICY IF EXISTS "Profiles are viewable by everyone" ON public.profiles;
 
@@ -505,15 +545,48 @@ REVOKE DELETE ON public.profiles FROM authenticated;
 --   (i)  the client may update its own row but may NOT change its own role;
 --   (ii) the SERVER defaults an app sign-up to homeowner (below, in the
 --        handle_new_user block), so role is never the client's to set.
+-- The pin has to read the caller's CURRENT role, and a WITH CHECK sees only
+-- the NEW row — there is no OLD in a WITH CHECK. Reading public.profiles
+-- inline is therefore the obvious shape and it does not work: the subquery is
+-- evaluated as the INVOKER, so it re-enters profiles' own policies and
+-- Postgres raises `42P17 infinite recursion detected in policy for relation
+-- "profiles"` on the owner's very first display-name write. (Reproduced on a
+-- fresh local stack, 2026-09-02, before this helper existed.) The read has to
+-- bypass RLS, which means SECURITY DEFINER — the same reason can_view_profile
+-- above is one.
+--
+-- It returns the PRE-update value, which is what "pin" needs: the function is
+-- STABLE, so it runs on the calling statement's snapshot, and the UPDATE's own
+-- new tuple carries the current command id and is invisible to that snapshot.
+CREATE OR REPLACE FUNCTION public.current_profile_role()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT p.role FROM profiles p WHERE p.id = (SELECT auth.uid());
+$$;
+
+-- Postgres checks policy-function EXECUTE at executor-init (see 00510), so the
+-- grant is not optional — without it the policy below denies every update.
+REVOKE EXECUTE ON FUNCTION public.current_profile_role() FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.current_profile_role() TO authenticated;
+
+COMMENT ON FUNCTION public.current_profile_role() IS
+  'The calling user''s own profiles.role, read past RLS. Exists solely so the '
+  '"Users can update own profile" WITH CHECK can pin the role column without '
+  'the inline subquery that made the policy self-recursive (42P17). Returns '
+  'only the caller''s own row, so being PostgREST-exposed to authenticated '
+  'tells a caller nothing it could not already read. Added 00555.';
+
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles
   FOR UPDATE TO authenticated
   USING  ((SELECT auth.uid()) = id)
   WITH CHECK (
     (SELECT auth.uid()) = id
-    AND role IS NOT DISTINCT FROM (
-      SELECT p.role FROM public.profiles p WHERE p.id = (SELECT auth.uid())
-    )
+    AND role IS NOT DISTINCT FROM public.current_profile_role()
   );
 
 COMMENT ON POLICY "Users can update own profile" ON public.profiles IS
@@ -521,19 +594,169 @@ COMMENT ON POLICY "Users can update own profile" ON public.profiles IS
   'value: a role change is a service_role / admin operation, never a client '
   'write. Added 00555 (was USING-only since 00013).';
 
+-- (i-b) the SIBLING policy, without which (i) is decorative.
+--
+-- profiles carries a SECOND permissive UPDATE policy, "Designers can update
+-- their client profiles" (00017:19): FOR UPDATE, TO PUBLIC, USING the
+-- designer_clients EXISTS below, and NO WITH CHECK. Postgres ORs the permissive
+-- WITH CHECKs for an UPDATE, and a policy whose WITH CHECK is NULL reuses its
+-- own USING as the check — so the new row need satisfy only ONE of the two
+-- policies, and the role pin in (i) is skipped entirely.
+--
+-- The roster row that satisfies it is self-servable: designer_clients' own
+-- policy is FOR ALL / TO PUBLIC / USING (auth.uid() = designer_id) with no
+-- WITH CHECK (00014:110), and authenticated holds INSERT. Reproduced on a local
+-- stack with the rest of this migration applied, as a seeded homeowner:
+--   UPDATE profiles SET role='designer'      -> RLS denial
+--   INSERT designer_clients(self, self)      -> INSERT 0 1
+--   UPDATE profiles SET role='designer'      -> UPDATE 1, role = designer
+--
+-- The check below is not new policy: it is the check this policy's own INSERT
+-- sibling has carried since the same file — "Designers can create homeowner
+-- profiles" is WITH CHECK (auth.uid() IS NOT NULL AND role = 'homeowner').
+-- A designer may edit a roster client's row; they may not turn that client into
+-- a designer, a vendor or an admin, and they may not turn THEMSELVES into one
+-- by rostering themselves.
+--
+-- NOT a trigger: service_role bypasses RLS but not triggers, and neither do the
+-- SECURITY DEFINER functions on the invite/onboarding rail (00551-00554) that
+-- legitimately set profiles.role — auth.role() reads 'authenticated' inside
+-- them, so a JWT-based exemption cannot tell them from a client write.
+-- NOT a RESTRICTIVE policy comparing role to current_profile_role(): that
+-- compares the TARGET row's new role to the CALLER's role, and would deny every
+-- legitimate designer edit of a client profile.
+--
+-- What this does NOT close, stated rather than implied: designer_clients is
+-- still INSERTable with an arbitrary client_id, so a manufactured roster row
+-- still reaches a stranger's NON-role columns. That is a WITH CHECK on another
+-- table's policy and a live Add Client flow -- W2, tracked, not smuggled in here.
+DROP POLICY IF EXISTS "Designers can update their client profiles" ON public.profiles;
+CREATE POLICY "Designers can update their client profiles" ON public.profiles
+  FOR UPDATE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.designer_clients dc
+      WHERE dc.client_id = profiles.id
+        AND dc.designer_id = (SELECT auth.uid())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.designer_clients dc
+      WHERE dc.client_id = profiles.id
+        AND dc.designer_id = (SELECT auth.uid())
+    )
+    AND role = 'homeowner'
+  );
+
+COMMENT ON POLICY "Designers can update their client profiles" ON public.profiles IS
+  'A designer may edit a profile on their designer_clients roster. WITH CHECK '
+  'pins the edited row to role = ''homeowner'', matching the INSERT sibling '
+  '"Designers can create homeowner profiles" from the same migration (00017). '
+  'Without it this policy''s NULL WITH CHECK fell back to its USING and became '
+  'an OR-branch around the role pin on "Users can update own profile" — a '
+  'self-inserted designer_clients row was a full self-elevation. Re-scoped to '
+  'authenticated (was PUBLIC) in 00555.';
+
 -- (ii) the server-side default. handle_new_user() is SECURITY DEFINER and owned
--- by postgres, so it is not subject to the policy above. Today it COALESCEs
--- raw_user_meta_data->>'role' with a fallback that resolves to 'designer' on a
--- metadata-less signup — which is exactly what an Apple sign-up is, and exactly
--- how A3-07's tester became a designer. Re-declare the function with the SAME
--- body except for the fallback:
+-- by postgres, so it is not subject to the policy above.
 --
---     v_role := COALESCE(NULLIF(NEW.raw_user_meta_data->>'role', ''), 'homeowner');
+-- Lineage: 00013 → 00023 → 00028 → 00039 → 00040 → 00126 → 00313 → (this).
+-- The body below is grafted VERBATIM from
+-- 00313_handle_new_user_client_role_hint.sql, which is the
+--   grep -rln "CREATE OR REPLACE FUNCTION[^(]*handle_new_user" \
+--     supabase/migrations/*.sql | sort | tail -1
+-- winner. The ONLY delta is the last argument of the COALESCE at the INSERT:
+-- 'designer' → 'homeowner'. 00313's security rule is untouched — a
+-- client-supplied role hint is honored ONLY when it is the literal 'homeowner',
+-- so raw_user_meta_data can never self-assign an elevated role.
 --
--- The full body is NOT reproduced here: it must be copied from the live
--- definition at apply time (pg_get_functiondef) so no unrelated drift is lost.
--- Whoever applies this file does that edit as a named step in the runbook, and
--- the assertion below fails the transaction if it was skipped.
+-- An earlier draft of this migration left the body out and asked whoever
+-- applied the file to paste it in at apply time. That is not replayable: a
+-- local `supabase db reset` would produce a database where this function is
+-- unchanged, and the guard that was supposed to catch it
+-- (pg_get_functiondef LIKE '%homeowner%') is satisfied twice over by 00313's
+-- own body — it would report success over a skipped step. Both are fixed here.
+--
+-- WHY the default moves: an Apple sign-up carries no creation metadata at all
+-- (supabase-swift's signInWithIdToken has no data: parameter), so it fell
+-- through to 00313's 'designer' fallback — which is how A3-07's tester became a
+-- designer. A3-07's proposed client-side remedy (the app writing its own role
+-- after sign-in) works only through the self-elevation hole (i) above closes,
+-- so with that hole shut the default MUST move to the server.
+--
+-- CONSEQUENCE, stated rather than hidden: the designer portal's own self-signup
+-- page (apps/designer-portal/src/app/auth/signup/page.tsx:147-157) sends
+-- name/company/phone and NO role, so a designer signing up there now lands as
+-- profiles.role = 'homeowner' instead of 'designer'. The authoritative role
+-- table is public.user_roles — this function still writes 'app_user' there —
+-- and profiles.is_designer is synced from user_roles by 00290's trigger, so
+-- designer AUTHORITY is unaffected. What changes is the three places that
+-- branch on the profiles.role STRING: 00050's designer-onboarding automation,
+-- 00103/00104's comms participant-role derivation, and 00038's funnel views.
+-- Real designers arrive by studio invite (service_role, which sets the role
+-- explicitly). The self-signup path is put in front of Kody as integration note
+-- N3 rather than decided here.
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_default_role_id UUID;
+  v_role         TEXT;
+  v_display_name TEXT;
+BEGIN
+  -- Role hint from signup metadata. SECURITY: raw_user_meta_data is
+  -- CLIENT-CONTROLLED (set via signUp(data:) / signInWithOTP(data:)), so we
+  -- must NOT trust an arbitrary value — a caller could otherwise self-assign
+  -- 'admin'/'super_admin'. Only the single safe client value 'homeowner' is
+  -- honored; anything else is ignored and falls through to the default below.
+  -- (Elevated roles are granted exclusively server-side via user_roles / admin
+  -- action, never from signup metadata.)
+  v_role := CASE
+    WHEN NEW.raw_user_meta_data->>'role' = 'homeowner' THEN 'homeowner'
+    ELSE NULL
+  END;
+
+  -- Display name from metadata (email/password path sends display_name; other
+  -- providers may send full_name). Nullable — never blocks signup.
+  v_display_name := NULLIF(NEW.raw_user_meta_data->>'display_name', '');
+  IF v_display_name IS NULL THEN
+    v_display_name := NULLIF(NEW.raw_user_meta_data->>'full_name', '');
+  END IF;
+
+  INSERT INTO public.profiles (id, email, display_name, role)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    v_display_name,
+    COALESCE(v_role, 'homeowner')
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  -- Default new signups to 'app_user' (consumer) in the authoritative
+  -- user_roles table. Role can be elevated later by an admin or org flow.
+  SELECT id INTO v_default_role_id FROM public.roles WHERE name = 'app_user' LIMIT 1;
+  IF v_default_role_id IS NOT NULL THEN
+    INSERT INTO public.user_roles (user_id, role_id)
+    VALUES (NEW.id, v_default_role_id)
+    ON CONFLICT (user_id, role_id) DO NOTHING;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.handle_new_user() IS
+  'auth.users INSERT trigger. Creates the profiles row and the default '
+  'user_roles ''app_user'' grant. A client-supplied raw_user_meta_data role '
+  'hint is honored ONLY for the literal ''homeowner'' (00313); every other '
+  'value, and the metadata-less OAuth/Apple path, falls back to ''homeowner'' '
+  'as of 00555 — it fell back to ''designer'' from 00013 through 00313, which '
+  'is how a metadata-less Apple sign-up became a designer.';
 
 -- ─── public.profile_cards: CUT, deliberately ──────────────────────────────
 -- An earlier draft created a narrow `profile_cards` view here (security_invoker,
@@ -570,6 +793,13 @@ COMMENT ON POLICY "Users can update own profile" ON public.profiles IS
 -- Guards: a two-character minimum (an empty query must not enumerate the
 -- directory), LIMIT 20, and ILIKE only on name-shaped columns — never on email,
 -- so the function cannot be used to confirm whether an address has an account.
+--
+-- p_query's LIKE metacharacters are escaped before interpolation. p_query is a
+-- parameter, so this was never injection — but `%` and `_` are wildcards INSIDE
+-- the pattern, and `'%a'` is two characters that match every name containing an
+-- 'a', which is precisely what the two-character floor exists to prevent. With
+-- the escape, the floor means what it says. ESCAPE '\' is stated explicitly
+-- rather than relying on standard_conforming_strings.
 
 CREATE OR REPLACE FUNCTION public.search_shareable_designers(p_query text)
 RETURNS TABLE (
@@ -583,18 +813,25 @@ STABLE
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
+  WITH q AS (
+    SELECT '%' || replace(replace(replace(btrim(COALESCE(p_query, '')),
+                                          '\', '\\'),
+                                  '%', '\%'),
+                          '_', '\_') || '%' AS pattern,
+           length(btrim(COALESCE(p_query, ''))) AS raw_len
+  )
   SELECT p.id,
          COALESCE(NULLIF(btrim(p.display_name), ''), p.full_name) AS display_name,
          p.business_name,
          p.avatar_url
-  FROM profiles p
+  FROM profiles p, q
   WHERE (SELECT auth.uid()) IS NOT NULL
     AND p.is_designer IS TRUE
-    AND length(btrim(COALESCE(p_query, ''))) >= 2
+    AND q.raw_len >= 2
     AND (
-      p.display_name  ILIKE '%' || btrim(p_query) || '%'
-      OR p.full_name     ILIKE '%' || btrim(p_query) || '%'
-      OR p.business_name ILIKE '%' || btrim(p_query) || '%'
+      p.display_name  ILIKE q.pattern ESCAPE '\'
+      OR p.full_name     ILIKE q.pattern ESCAPE '\'
+      OR p.business_name ILIKE q.pattern ESCAPE '\'
     )
   ORDER BY COALESCE(NULLIF(btrim(p.display_name), ''), p.full_name, p.business_name)
   LIMIT 20;
@@ -777,6 +1014,19 @@ GRANT SELECT (
   created_at,
   updated_at
 ) ON public.vendors TO anon;
+
+-- `authenticated` keeps the whole trade file, and this migration now says so
+-- OUT LOUD instead of inheriting it. On Strata the grant is already there — the
+-- table predates Supabase's 2026-05-30 platform-default flip, so authenticated
+-- was granted at creation time — but on a post-flip stack (every fresh local
+-- `supabase db reset`) nothing grants it during the migration replay, because
+-- seed/00-legacy-grants.sql runs AFTER the migrations, not before. The
+-- verification block below asserts `has_table_privilege('authenticated',
+-- 'public.vendors', 'SELECT')`, so without this line the migration cannot apply
+-- locally at all — which is exactly the failure the skill's "post-flip
+-- migrations must GRANT what callers need EXPLICITLY, never rely on creation
+-- defaults" rule exists to prevent. Additive on prod, load-bearing locally.
+GRANT SELECT ON public.vendors TO authenticated;
 
 -- The "Allow anon read access to vendors" policy (qual: true, TO anon) is
 -- deliberately left alone: with the column grant above it now means "anon may
@@ -1002,11 +1252,31 @@ BEGIN
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Users can update own profile'
   ), '"Users can update own profile" still has no WITH CHECK — role self-elevation is open';
+  -- and the sibling, without which the line above is decorative: a permissive
+  -- UPDATE policy with a NULL WITH CHECK reuses its USING and ORs around the pin.
   ASSERT (
-    SELECT pg_get_functiondef(p.oid) LIKE '%homeowner%'
+    SELECT p.polwithcheck IS NOT NULL FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Designers can update their client profiles'
+  ), '"Designers can update their client profiles" still has no WITH CHECK — a self-inserted designer_clients row bypasses the role pin';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polcmd = 'w' AND p.polpermissive AND p.polwithcheck IS NULL
+  ), 'a permissive UPDATE policy on profiles has no WITH CHECK — it reuses its USING and re-opens role self-elevation';
+  ASSERT NOT has_function_privilege('anon', 'public.current_profile_role()', 'EXECUTE'),
+    'anon can execute current_profile_role';
+  ASSERT has_function_privilege('authenticated', 'public.current_profile_role()', 'EXECUTE'),
+    'authenticated cannot execute current_profile_role — the UPDATE policy denies every write';
+  -- Read the fallback EXPRESSION, not the word. 00313's body already contains
+  -- the literal 'homeowner' twice (the CASE arm and its SECURITY comment), so
+  -- a LIKE '%homeowner%' guard passes on the UNFIXED function and would report
+  -- success over a skipped edit.
+  ASSERT (
+    SELECT pg_get_functiondef(p.oid) LIKE '%COALESCE(v_role, ''homeowner'')%'
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public' AND p.proname = 'handle_new_user'
-  ), 'handle_new_user() does not default a metadata-less signup to homeowner';
+  ), 'handle_new_user() still falls back to designer for a metadata-less signup';
   ASSERT NOT has_function_privilege('anon', 'public.search_shareable_designers(text)', 'EXECUTE'),
     'anon can execute search_shareable_designers';
   ASSERT has_function_privilege('authenticated', 'public.search_shareable_designers(text)', 'EXECUTE'),
@@ -1156,8 +1426,10 @@ COMMIT;
 --   • python3 scripts/generate-legacy-grants.py  (this file adds GRANT/REVOKE,
 --     so supabase/seed/00-legacy-grants.sql must be regenerated or a fresh
 --     local stack will diverge from prod ACLs)
---   • pnpm db:generate                            (public schema changed: a new
---     view, two new functions)
+--   • pnpm db:generate                            (public schema changed: FOUR
+--     new functions — can_view_profile, current_profile_role,
+--     search_shareable_designers, list_vendor_profiles — and NO new view;
+--     profile_cards was cut from this migration)
 --   • scripts/run-sql-tests.sh                    (the whole suite vs
 --     KNOWN_FAILURES.md — that, not the single file, is the local gate)
 --   • the anon/authenticated probes in 00555_probes.md
