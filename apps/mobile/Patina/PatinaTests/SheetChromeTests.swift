@@ -113,7 +113,7 @@ struct SheetChromeTests {
         #expect(code.contains("Image(systemName:"))
         // The sheet claimed only its intrinsic height, so the detent's
         // remainder showed the grey presentation ground below it.
-        #expect(code.contains("frame(maxHeight: .infinity, alignment: .top)"),
+        #expect(code.contains("frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)"),
                 "the sheet still leaves a second ground below its content (B-60)")
     }
 
