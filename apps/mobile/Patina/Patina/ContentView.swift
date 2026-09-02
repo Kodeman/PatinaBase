@@ -57,7 +57,10 @@ struct ContentView: View {
                         AuthService.shared.clearError()
                         showingPasswordSignIn = true
                     },
-                    errorMessage: AuthService.shared.errorMessage
+                    // P-29: the root renders only what the root raised. A
+                    // failure typed into either sheet below stays there.
+                    errorMessage: AuthService.shared.rootErrorMessage,
+                    isLoading: AuthService.shared.isLoading
                 )
                 .transition(.opacity)
                 // Passwordless email code (unified sign-up + sign-in).
