@@ -49,7 +49,7 @@ names are **not** this file's section numbers — read the map, not the digits.
 | Probe 5 | **§11** | the designer portal's own HTTP route, a **different principal** — `app.patina.cloud/api/catalog/vendors` must not answer 200 with trade columns |
 | **9b** — the `FOR ALL` / `TO PUBLIC` / `auth.uid() IS NULL` policy sweep | **§9b** | 0 rows |
 | **9d** — the `vendors` column allowlist | **§9d** | the 24 public-face columns, and only those |
-| **9f** — the UPDATE `WITH CHECK` | **§9f** | `"Users can update own profile"` has a non-null `with_check` naming `role` |
+| **9f** — the UPDATE `WITH CHECK` | **§9f** | **both** of `profiles`' UPDATE policies have a non-null `with_check` naming `role` |
 
 The two RPC probes keep their own headings and are **not** part of the exit criteria:
 §9 (`search_shareable_designers`) and §9a (`list_vendor_profiles`). §9f carries both halves of the
@@ -503,16 +503,33 @@ an ACL-shape check while breaking every products embed (probe 4).
 
 00013 shipped `"Users can update own profile"` as `USING`-only with no column restriction, so any
 authenticated caller could set their own `profiles.role` to `'designer'`. 00555 section (a2) adds a
-`WITH CHECK` that pins the column, and gives `handle_new_user` a homeowner default. Read-only check:
+`WITH CHECK` that pins the column, and gives `handle_new_user` a homeowner default.
+
+**`profiles` carries TWO permissive `UPDATE` policies, and this probe wants BOTH.** The second is
+`"Designers can update their client profiles"` (00017:19). Postgres ORs the permissive `WITH CHECK`s
+for an `UPDATE`, and a policy whose `WITH CHECK` is NULL reuses its own `USING` — so as 00017 shipped
+it, a new row had to satisfy only one of the two and the role pin above was skipped entirely. The
+roster row that satisfies it is self-servable: `designer_clients`' own policy is `FOR ALL` / `TO PUBLIC`
+/ `USING (auth.uid() = designer_id)` with no `WITH CHECK` (00014:110) and `authenticated` holds
+`INSERT`, so the whole bypass was two statements — reproduced locally, a homeowner reached
+`role = 'designer'`. 00555 section (a2)(i-b) re-creates that policy `TO authenticated` with
+`WITH CHECK (… AND role = 'homeowner')`, matching its INSERT sibling from the same 00017 file.
+
+Read-only check:
 
 ```sql
--- 9f-i. the policy now carries a WITH CHECK, and it names role
+-- 9f-i. BOTH UPDATE policies carry a WITH CHECK, and both name role
 SELECT polname, pg_get_expr(polwithcheck, polrelid) AS with_check
 FROM pg_policy
 WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
--- want: "Users can update own profile", with_check NOT NULL and containing 'role'
---       (it reads `role IS NOT DISTINCT FROM current_profile_role()` — the
---        inline subquery form raises 42P17 and is NOT what shipped)
+-- want TWO rows, each with a NON-NULL with_check:
+--   "Users can update own profile"
+--     -> … AND role IS NOT DISTINCT FROM current_profile_role()
+--        (the inline subquery form raises 42P17 and is NOT what shipped)
+--   "Designers can update their client profiles"
+--     -> … AND role = 'homeowner'
+-- A NULL with_check on EITHER row means self-elevation is open, whatever the
+-- other row says. One row back means the sibling was dropped, not fixed.
 
 -- 9f-ii. the server default is in place.
 -- Match the fallback EXPRESSION, not the word: 00313's body already contains
