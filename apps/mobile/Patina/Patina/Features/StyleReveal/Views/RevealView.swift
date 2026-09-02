@@ -29,6 +29,18 @@ struct RevealView: View {
     ]
 
     var body: some View {
+        content
+            // GAP4-16: the Reveal paints its own permanently-charcoal ground,
+            // and every semantic token on it was resolving on its LIGHT side —
+            // so in light mode `StyleContinueButton`'s charcoal capsule sat on
+            // a charcoal ground and the screen's only CTA disappeared. Telling
+            // the subtree it is a dark surface resolves the whole token set on
+            // the side that matches the ground, which is what "paint the Reveal
+            // with the semantic inverse-surface tokens" means in one line.
+            .environment(\.colorScheme, .dark)
+    }
+
+    private var content: some View {
         ZStack {
             PatinaColors.charcoal.ignoresSafeArea()
 
@@ -82,8 +94,15 @@ struct RevealView: View {
         return HStack(spacing: 0) {
             ForEach(chars.indices, id: \.self) { i in
                 Text(String(chars[i]))
-                    .font(.custom("PlayfairDisplay-Light", size: 42))
-                    .foregroundStyle(PatinaColors.offWhite)
+                    // C3-15: this was an inline 42 pt Playfair Display Light.
+                    // That weight is not vendored and there is no UIAppFonts
+                    // entry for it, so the font resolver fell back to San
+                    // Francisco without a word and the screen's hero headline
+                    // was not in the brand's typeface at all. The token also
+                    // brings the Dynamic Type relationship the inline call
+                    // omitted.
+                    .font(PatinaTypography.display2)
+                    .foregroundStyle(PatinaColors.OnDark.primary)
                     .opacity(reduceMotion ? 1 : (i < revealedLetters ? 1 : 0))
             }
         }
@@ -124,8 +143,8 @@ struct RevealView: View {
         StylePillFlow(spacing: 8) {
             ForEach(Array(profile.tags.enumerated()), id: \.offset) { index, tag in
                 Text(tag)
-                    .font(.custom("Inter-Regular", size: 12))
-                    .foregroundStyle(PatinaColors.pearl)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.OnDark.secondary)
                     .padding(.vertical, 7)
                     .padding(.horizontal, 16)
                     .overlay(

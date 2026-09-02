@@ -34,6 +34,14 @@ public enum PatinaTypography {
 
     public static let h5 = Font.custom(displayFont + "-Medium", size: 18, relativeTo: .title3)
 
+    /// C3-15: the ramp had no serif body size, so four screens reached past it
+    /// for a raw 16 pt Playfair Regular.
+    public static let bodySerif = Font.custom(displayFont + "-Regular", size: 16, relativeTo: .body)
+
+    /// C3-15: a serif label size, for a toast headline and a card title that
+    /// were inline 15 pt Playfair Medium.
+    public static let h6 = Font.custom(displayFont + "-Medium", size: 15, relativeTo: .subheadline)
+
     // MARK: - Headlines
 
     public static let headlineSerif = Font.custom(displayFont + "-Medium", size: 24, relativeTo: .headline)
@@ -80,6 +88,10 @@ public enum PatinaTypography {
     /// Medium weight mono — 10px, section titles in settings
     public static let monoMedium = Font.custom(monoFont + "-Medium", size: 10, relativeTo: .caption2)
 
+    /// C3-15: mono at reading size, for the fallback room-entry measurements —
+    /// the one inline mono site the 10 pt floor would have shrunk, not raised.
+    public static let monoLarge = Font.custom(monoFont + "-Regular", size: 14, relativeTo: .subheadline)
+
     // MARK: - Special Styles
 
     /// Uppercase tracking for labels
@@ -90,6 +102,17 @@ public enum PatinaTypography {
 
     /// Large italic — scan coaching text
     public static let patinaVoiceLarge = Font.custom(displayFont + "-Italic", size: 22, relativeTo: .title3)
+
+    /// C3-15: the voice ramp stopped at 22 pt and started again at 18 pt, so
+    /// the screens that open in Patina's voice — the conversation header, the
+    /// scan walk — reached past the ramp for a raw 26 pt italic.
+    public static let voiceLead = Font.custom(displayFont + "-Italic", size: 26, relativeTo: .title2)
+
+    /// C3-15: the voice at body size, for the Companion's bubble.
+    public static let voiceSmall = Font.custom(displayFont + "-Italic", size: 15, relativeTo: .body)
+
+    /// C3-15: the voice as a caption, for a room's italic sub-line.
+    public static let voiceCaption = Font.custom(displayFont + "-Italic", size: 13, relativeTo: .footnote)
 
     /// Wordmark style — splash screen
     public static let wordmark = Font.custom(displayFont + "-Medium", size: 38, relativeTo: .largeTitle)
