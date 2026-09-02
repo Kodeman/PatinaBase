@@ -27,6 +27,12 @@ struct PushPrimerView: View {
 
     let onDecided: () -> Void
 
+    /// Set when the ask came back `.denied` — here or in a session before this
+    /// one. The screen then says so and offers Settings instead of dismissing
+    /// as though something had happened (`C2-09`).
+    @State private var isDenied = false
+    @Environment(\.openURL) private var openURL
+
     var body: some View {
         VStack(alignment: .leading, spacing: PatinaSpacing.lg) {
             Spacer(minLength: 0)
@@ -45,16 +51,39 @@ struct PushPrimerView: View {
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if isDenied {
+                Text(PushTokenService.deniedLine)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("PushPrimerView.DeniedLine")
+            }
+
             Spacer(minLength: 0)
 
             VStack(spacing: PatinaSpacing.sm) {
-                PatinaButton("Turn on notifications", style: .primary) {
-                    Task {
-                        await PushTokenService.shared.requestAuthorizationAndRegister()
+                if isDenied {
+                    PatinaButton("Open Settings", style: .primary) {
+                        if let url = PushTokenService.settingsURL { openURL(url) }
                         onDecided()
                     }
+                    .accessibilityIdentifier("PushPrimerView.OpenSettings")
+                } else {
+                    PatinaButton("Turn on notifications", style: .primary) {
+                        Task {
+                            let outcome = await PushTokenService.shared.requestAuthorizationAndRegister()
+                            // A silent no-op was the bug. When the system will
+                            // never show its alert again, the screen stays and
+                            // says why, with the only door that still works.
+                            if outcome == .denied {
+                                isDenied = true
+                                return
+                            }
+                            onDecided()
+                        }
+                    }
+                    .accessibilityIdentifier("PushPrimerView.Allow")
                 }
-                .accessibilityIdentifier("PushPrimerView.Allow")
 
                 Button("Not now") { onDecided() }
                     .font(PatinaTypography.bodySmall)

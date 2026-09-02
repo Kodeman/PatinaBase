@@ -63,18 +63,72 @@ final class PushTokenService {
     /// call sites are `PushPrimerView` (whose one screen of copy explains the
     /// ask before the system dialog) and `reregisterIfAuthorized()`
     /// (foreground, no-op prompt for a returning user who already decided).
-    func requestAuthorizationAndRegister() async {
+    @discardableResult
+    func requestAuthorizationAndRegister() async -> AuthorizationOutcome {
+        // C2-09: read the status BEFORE asking. iOS shows the system alert
+        // once per install, and `InvoiceReminderService.requestAlertAuthorization`
+        // can consume it first — after which `requestAuthorization` returns
+        // `false` instantly, the old `guard granted else { return }` swallowed
+        // it, and the primer's black capsule button did nothing at all and
+        // dismissed. That is the purest kind of dead end the round-one bar
+        // forbids.
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        switch Self.outcome(for: status) {
+        case .alreadyAuthorized:
+            UIApplication.shared.registerForRemoteNotifications()
+            return .alreadyAuthorized
+        case .denied:
+            return .denied
+        case .ask:
+            break
+        case .granted:
+            break
+        }
+
         do {
             let granted = try await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .sound, .badge])
-            guard granted else { return }
+            guard granted else { return .denied }
             UIApplication.shared.registerForRemoteNotifications()
+            return .granted
         } catch {
             #if DEBUG
             PatinaLog.ui.error("[Push] requestAuthorization failed: \(error.localizedDescription)")
             #endif
+            return .denied
         }
     }
+
+    /// What the ask can end in, and what the screen must say about each.
+    enum AuthorizationOutcome: Equatable {
+        /// Nothing has been decided yet — the system alert is the next step.
+        case ask
+        /// Already granted in a prior session; register, do not re-prompt.
+        case alreadyAuthorized
+        /// Granted just now.
+        case granted
+        /// Refused — here or in a prior session. The system will never show its
+        /// alert again, so the app has to say so and hand over Settings.
+        case denied
+    }
+
+    /// Pure, so the rule is testable without touching `UNUserNotificationCenter`
+    /// — which in a test run would surface a real system dialog and hang.
+    static func outcome(for status: UNAuthorizationStatus) -> AuthorizationOutcome {
+        switch status {
+        case .authorized, .provisional, .ephemeral: return .alreadyAuthorized
+        case .denied: return .denied
+        default: return .ask
+        }
+    }
+
+    /// Said when authorization is off, and nowhere else. Deliberately the same
+    /// sentence `InvoiceReminder.deniedLine` prints: one app, one way of saying
+    /// this, and it names no vendor, no API and no error.
+    static var deniedLine: String { InvoiceReminder.deniedLine }
+
+    /// The door that makes the sentence actionable.
+    static var settingsURL: URL? { URL(string: UIApplication.openSettingsURLString) }
 
     /// Cheap re-registration for a returning user who already granted
     /// authorization in a prior session — keeps the uploaded token fresh
