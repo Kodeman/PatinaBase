@@ -50,13 +50,13 @@ struct BrandVoiceLintTests {
     @Test("the onboarding carousel carries no brand-voice violation")
     func onboardingIsClean() throws {
         let path = "Patina/Features/Onboarding/Views/OnboardingFlowView.swift"
-        lint(try SourcePin.read(path), file: path)
+        Self.lint(try SourcePin.read(path), file: path)
     }
 
     @Test("the authentication screens carry no brand-voice violation")
     func authenticationIsClean() throws {
         let path = "Patina/Features/Authentication/Views/AuthenticationView.swift"
-        lint(try SourcePin.read(path), file: path)
+        Self.lint(try SourcePin.read(path), file: path)
     }
 
     @Test("every file this wave's copy deck touches carries no brand-voice violation")
@@ -72,7 +72,7 @@ struct BrandVoiceLintTests {
         ]
         for path in paths {
             let relative = path.hasPrefix("PatinaDesignKit/") ? "../\(path)" : path
-            lint(try SourcePin.read(relative), file: path)
+            Self.lint(try SourcePin.read(relative), file: path)
         }
     }
 }
