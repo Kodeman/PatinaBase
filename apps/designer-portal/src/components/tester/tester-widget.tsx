@@ -28,7 +28,10 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { FeedbackLedger } from '@/components/document/feedback/feedback-ledger';
 import { openFeedbackSheet } from '@/components/document/feedback/open-feedback';
-import { topActiveModalDialog } from '@/components/document/overlays/active-dialog';
+import {
+  topActiveModalDialog,
+  topDismissiblePopover,
+} from '@/components/document/overlays/active-dialog';
 import { FeedbackForm } from './feedback-form';
 
 const YELLOW = '#ffd60a';
@@ -51,12 +54,26 @@ export function TesterWidget() {
   // screenshot and any error all start clean, the way the old sheet's mount did.
   const [openSeq, setOpenSeq] = useState(0);
   const [initialBucket, setInitialBucket] = useState<FeedbackBucket | null>(null);
+  // `open` as a ref, read synchronously by openNew: a second doorway fired
+  // while the panel is already open must not remount the form.
+  const openRef = useRef(false);
 
+  // A doorway on an already-open panel only switches to the New tab. It does
+  // NOT bump openSeq (the remount key) and does NOT re-apply detail.bucket —
+  // a ⌘⇧F mid-sentence would otherwise wipe the note being written.
   const openNew = useCallback((bucket: FeedbackBucket | null) => {
-    setInitialBucket(bucket);
-    setOpenSeq((n) => n + 1);
+    if (!openRef.current) {
+      setInitialBucket(bucket);
+      setOpenSeq((n) => n + 1);
+    }
     setTab('new');
+    openRef.current = true;
     setOpen(true);
+  }, []);
+
+  const close = useCallback(() => {
+    openRef.current = false;
+    setOpen(false);
   }, []);
 
   useEffect(() => {
@@ -78,20 +95,30 @@ export function TesterWidget() {
         openFeedbackSheet();
         return;
       }
-      // Esc closes this panel only when it is open, and never out from under a
-      // modal dialog stacked on top of it — that one owns the key.
-      if (e.key === 'Escape' && open && !topActiveModalDialog()) setOpen(false);
+      // Esc closes this panel only when it is open, and never out from under
+      // anything stacked on top of it: a modal dialog, a dismissible popover
+      // (Calendar Folio), or the command bar — which wears role="dialog"
+      // without aria-modal, so topActiveModalDialog() cannot see it.
+      if (
+        e.key === 'Escape' &&
+        open &&
+        !topActiveModalDialog() &&
+        !topDismissiblePopover() &&
+        !document.querySelector('[aria-label="Command bar"]')
+      ) {
+        close();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [live, open]);
+  }, [live, open, close]);
 
   if (!live) return null;
 
   return (
     <TesterInstrument
       open={open}
-      onClose={() => setOpen(false)}
+      onClose={close}
       tab={tab}
       onTab={setTab}
       openSeq={openSeq}
@@ -123,9 +150,14 @@ function TesterInstrument({
   const pillRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const wasOpen = useRef(open);
+  // Only a pill-opened panel hands focus back to the pill. A panel opened from
+  // ⌘⇧F or ⌘K came from somewhere else entirely, and parking focus on the pill
+  // would leave a product-wide instrument holding the keyboard — registry
+  // shortcuts read "activeElement is body" as "nothing is typing".
+  const openedFromPill = useRef(false);
 
   // The keyboard follows the panel: in to the first bucket on open, back to
-  // the pill on close.
+  // the pill (or to nothing) on close.
   useEffect(() => {
     if (open && tab === 'new') {
       panelRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
@@ -133,7 +165,11 @@ function TesterInstrument({
   }, [open, tab, openSeq]);
 
   useEffect(() => {
-    if (wasOpen.current && !open) pillRef.current?.focus();
+    if (wasOpen.current && !open) {
+      if (openedFromPill.current) pillRef.current?.focus();
+      else (document.activeElement as HTMLElement | null)?.blur?.();
+      openedFromPill.current = false;
+    }
     wasOpen.current = open;
   }, [open]);
 
@@ -145,7 +181,10 @@ function TesterInstrument({
         <button
           ref={pillRef}
           type="button"
-          onClick={() => openFeedbackSheet()}
+          onClick={() => {
+            openedFromPill.current = true;
+            openFeedbackSheet();
+          }}
           className="fixed left-4 z-[68]"
           style={{
             bottom: BOTTOM,
@@ -186,7 +225,13 @@ function TesterInstrument({
         <div
           ref={panelRef}
           data-tester-panel
-          role="dialog"
+          // Deliberately NOT role="dialog": five product surfaces
+          // (registry-shortcuts, the plan and schedule confirm strips, the
+          // shelf panel, the document page) stand down from their own keys
+          // whenever any [role="dialog"] is in the DOM. This panel is an
+          // instrument alongside the product, not a modal over it, so it must
+          // not silence the product it is there to test.
+          role="region"
           aria-label="Tester notes"
           className="fixed left-4 z-[68]"
           style={{

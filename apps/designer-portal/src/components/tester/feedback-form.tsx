@@ -69,6 +69,7 @@ export function FeedbackForm({
 
   function chooseBucket(key: FeedbackBucket) {
     const next = bucket === key ? null : key;
+    setDone(null);
     setBucket(next);
     if (!bugTouched) setIsBug(next === 'not_working');
   }
@@ -99,6 +100,11 @@ export function FeedbackForm({
       setWeight(null);
       setIsBug(false);
       setBugTouched(false);
+      // The panel stays open after a send, so the next note starts from a
+      // clean form — including the screenshot, which belonged to the screen
+      // she reported, not to whatever she looks at next.
+      setShot(null);
+      setIncludeShot(true);
     } catch {
       // Never lose what she wrote: inline error, note preserved.
       setError('Couldn’t leave the note. It’s still here — try again.');
@@ -153,7 +159,12 @@ export function FeedbackForm({
 
       <textarea
         value={note}
-        onChange={(e) => setNote(e.target.value)}
+        onChange={(e) => {
+          // The confirmation belongs to the note she just sent; the moment she
+          // starts the next one it would be lying.
+          setDone(null);
+          setNote(e.target.value);
+        }}
         rows={4}
         aria-label="Note"
         placeholder={activeBucket?.placeholder ?? 'What happened?'}

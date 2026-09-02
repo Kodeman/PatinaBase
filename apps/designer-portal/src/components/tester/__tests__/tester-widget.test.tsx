@@ -50,6 +50,16 @@ function pill() {
 }
 
 /**
+ * The panel is a `region`, not a `dialog` — five product surfaces stand down
+ * from their own keys while any `[role="dialog"]` is in the DOM, and this
+ * instrument must not silence the product it measures. Probing by that role
+ * pins it.
+ */
+function panel() {
+  return screen.queryByRole('region', { name: 'Tester notes' });
+}
+
+/**
  * Every doorway runs the screenshot capture, which lands a beat after the open;
  * act() lets that settle so no test asserts against a half-opened panel.
  */
@@ -171,15 +181,79 @@ describe('TesterWidget', () => {
     expect(screen.getByRole('radiogroup', { name: 'Bucket' })).toBeInTheDocument();
   });
 
-  it('does nothing on ⌘⇧F when the flag is off', () => {
+  it('leaves ⌘⇧F to the product when the flag is off', () => {
     mockFlag = { value: false, isLoading: false };
     render(<TesterWidget />);
-    fireEvent.keyDown(window, { key: 'F', metaKey: true, shiftKey: true });
 
+    // The absent panel proves little — nothing renders with the flag off at
+    // all. What matters is that the key was not swallowed: an unflagged portal
+    // must be free to bind ⌘⇧F itself, and the widget's handler calls
+    // preventDefault() on every ⌘⇧F it claims.
+    const event = new KeyboardEvent('keydown', {
+      key: 'F',
+      metaKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(mockCapture).not.toHaveBeenCalled();
+    expect(panel()).not.toBeInTheDocument();
+  });
+
+  it('is inert on document:open-feedback when the flag is off', () => {
+    mockFlag = { value: false, isLoading: false };
+    render(<TesterWidget />);
+    fireEvent(
+      window,
+      new CustomEvent('document:open-feedback', { detail: { bucket: 'working' } }),
+    );
+
+    expect(panel()).not.toBeInTheDocument();
     expect(
       screen.queryByRole('radiogroup', { name: 'Bucket' }),
     ).not.toBeInTheDocument();
-    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('keeps a typed note when ⌘⇧F fires on the open panel', async () => {
+    render(<TesterWidget />);
+    await openPanel(() => fireEvent.click(pill()!));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Note' }), {
+      target: { value: 'Mid-sentence' },
+    });
+
+    // A second doorway on an open panel must not remount the form: she is
+    // typing into it.
+    await openPanel(() =>
+      fireEvent.keyDown(window, { key: 'F', metaKey: true, shiftKey: true }),
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Note' })).toHaveValue(
+      'Mid-sentence',
+    );
+  });
+
+  it('leaves Escape to a modal dialog stacked over the panel', async () => {
+    render(<TesterWidget />);
+    await openPanel(() => fireEvent.click(pill()!));
+    expect(panel()).toBeInTheDocument();
+
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    document.body.appendChild(dialog);
+    try {
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(panel()).toBeInTheDocument();
+    } finally {
+      dialog.remove();
+    }
+
+    // With the dialog gone the key is the panel's again.
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(panel()).not.toBeInTheDocument();
   });
 
   it('carries the captured screenshot when the pill is the doorway', async () => {
