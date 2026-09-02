@@ -19,11 +19,16 @@
 //  Two more rules live in the shape:
 //   • `refreshedAt` is when the APP wrote the file, never "now". Q8 permits the
 //     widget to sit one open behind; it must be able to SAY so.
-//   • There is no owner id. The payload is CLEARED on sign-out instead —
-//     `RecordSnapshotStore.remove()` takes this file with the record, and that
-//     is already the one choke point the auth boundary and the foreign-record
-//     discard both go through. A widget process cannot ask who is signed in,
-//     so nothing is left for it to judge.
+//   • `ownerId` names the account the payload was built for (B-16). It was
+//     omitted on the theory that the file is CLEARED on sign-out instead — but
+//     `RecordSnapshotStore.remove()`'s only caller is
+//     `LocalStoreReset.wipeUserScopedData()`, which runs when a DIFFERENT
+//     account signs IN. Sign-out itself calls neither, so a signed-out phone
+//     kept a named designer and "Leah Hartwell picked up your request." on its
+//     Home Screen. Two things close it: the sign-out seam writes a placeholder
+//     (`clearForSignedOut()`), and the payload says whose it is so a file that
+//     survives some path nobody has thought of can still be judged. A widget
+//     process cannot ask who is signed in — but the app can, and does.
 //
 //  The contract with W6's X1 lane is the JSON on disk, published in
 //  `waves/w6/x2-tasks.md` §0: the keys below are the property names verbatim,
@@ -97,21 +102,38 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// When the app last wrote this file. The widget says this when the
     /// snapshot is stale.
     let refreshedAt: Date
-    /// `house-widget`, as the app last resolved it. False — including a
-    /// missing mirror on a first-ever launch — means the widget draws its
-    /// no-data state, never a stale row.
+    /// `house-widget`, as the app last resolved it.
+    ///
+    /// **D5 (2026-09-02) changed what this gates.** It used to decide whether a
+    /// placed widget drew anything at all, which meant a round-one tester —
+    /// `house-widget` off, and staying off — read "Open Patina to see your
+    /// house." forever with two real rows sitting in this file (GAP7B-02). It
+    /// is still written, because W2 may gate in-app *promotion* with it, and it
+    /// no longer reaches the render path.
     let flagOn: Bool
+
+    /// The account this payload was built for. nil is the signed-out
+    /// placeholder, and the only payload the widget refuses to draw (B-16).
+    let ownerId: String?
 
     /// The projection. MOVED rows only, and nothing derived from `needsYou`
     /// reaches it — not its contents, not its count, not whether it is empty.
-    init(record: HouseRecord, houseLine: String?, refreshedAt: Date, flagOn: Bool) {
-        self.movedRows = record.moved.map {
-            WidgetRow(id: $0.id, title: $0.title, date: $0.date, route: $0.route.flatMap(WidgetRouteToken.init))
+    ///
+    /// A row with no route is dropped here rather than drawn with the plain
+    /// door underneath it: the widget carries an id, the app resolves it, and a
+    /// row whose id resolves to nothing sends every tap to Today with no
+    /// explanation. A story has no destination in this app, so it has no place
+    /// on a surface whose only affordance is a tap (GAP7B-05).
+    init(record: HouseRecord, houseLine: String?, refreshedAt: Date, flagOn: Bool, ownerId: String?) {
+        self.movedRows = record.moved.compactMap { row in
+            guard let route = row.route.flatMap(WidgetRouteToken.init) else { return nil }
+            return WidgetRow(id: row.id, title: row.title, date: row.date, route: route)
         }
         self.houseLine = houseLine
         self.sinceDate = record.window.start
         self.refreshedAt = refreshedAt
         self.flagOn = flagOn
+        self.ownerId = ownerId
     }
 
     init(
@@ -119,12 +141,14 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         houseLine: String?,
         sinceDate: Date?,
         refreshedAt: Date,
-        flagOn: Bool
+        flagOn: Bool,
+        ownerId: String?
     ) {
         self.movedRows = movedRows
         self.houseLine = houseLine
         self.sinceDate = sinceDate
         self.refreshedAt = refreshedAt
         self.flagOn = flagOn
+        self.ownerId = ownerId
     }
 }

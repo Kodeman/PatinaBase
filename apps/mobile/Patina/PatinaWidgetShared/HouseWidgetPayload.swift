@@ -71,9 +71,20 @@ struct HouseWidgetPayload: Codable, Equatable, Sendable {
     static let fileName = "widget-snapshot.json"
 
     /// `FeatureFlags.shared.isOn(.houseWidget)` when the app wrote the file.
-    /// Absent decodes as `false`: flags fail closed, and a widget that cannot
-    /// tell whether it is switched on draws its placeholder.
+    ///
+    /// **D5 (2026-09-02): this no longer decides whether a placed widget
+    /// draws.** It used to, and `house-widget` is off for round one, so a
+    /// tester who added the widget read "Open Patina to see your house."
+    /// forever with two real rows in the file (GAP7B-02). The flag gates in-app
+    /// promotion; a widget somebody has already placed draws what the app gave
+    /// it. Still decoded, because W2 may gate promotion with it.
     let flagOn: Bool
+
+    /// The account the app built this payload for. Absent — or explicitly
+    /// null, which is what sign-out writes — is the signed-out placeholder, and
+    /// the only thing the widget refuses to draw (B-16). The extension cannot
+    /// ask who is signed in; it does not have to, because the app says.
+    let ownerId: String?
 
     /// When the app last built this payload.
     let refreshedAt: Date
@@ -92,7 +103,7 @@ struct HouseWidgetPayload: Codable, Equatable, Sendable {
     let version: Int?
 
     private enum CodingKeys: String, CodingKey {
-        case flagOn, refreshedAt, movedRows, houseLine, sinceDate, version
+        case flagOn, ownerId, refreshedAt, movedRows, houseLine, sinceDate, version
     }
 
     init(
@@ -101,6 +112,7 @@ struct HouseWidgetPayload: Codable, Equatable, Sendable {
         movedRows: [HouseWidgetPayloadRow],
         houseLine: String? = nil,
         sinceDate: Date? = nil,
+        ownerId: String? = nil,
         version: Int? = 1
     ) {
         self.flagOn = flagOn
@@ -108,12 +120,14 @@ struct HouseWidgetPayload: Codable, Equatable, Sendable {
         self.movedRows = movedRows
         self.houseLine = houseLine
         self.sinceDate = sinceDate
+        self.ownerId = ownerId
         self.version = version
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         flagOn = try container.decodeIfPresent(Bool.self, forKey: .flagOn) ?? false
+        ownerId = try container.decodeIfPresent(String.self, forKey: .ownerId)
         refreshedAt = try container.decode(Date.self, forKey: .refreshedAt)
         movedRows = try container.decodeIfPresent([HouseWidgetPayloadRow].self, forKey: .movedRows) ?? []
         houseLine = try container.decodeIfPresent(String.self, forKey: .houseLine)
@@ -125,16 +139,20 @@ struct HouseWidgetPayload: Codable, Equatable, Sendable {
 
     /// The rows the widget draws. Capped here rather than at the view, so a
     /// longer file cannot widen the surface.
+    ///
+    /// D5: not gated on `flagOn`. A widget somebody placed draws what the app
+    /// gave it; the flag decides whether the app promotes the widget.
     var drawableRows: [HouseWidgetPayloadRow] {
-        flagOn ? Array(movedRows.prefix(Self.maximumRows)) : []
+        isPlaceholder ? [] : Array(movedRows.prefix(Self.maximumRows))
     }
 
-    /// True when there is nothing real to say — the flag is off, or the app has
-    /// not built a record yet. The widget then draws its placeholder.
-    var isPlaceholder: Bool { !flagOn }
+    /// True when nobody owns what is on disk — the signed-out placeholder, or a
+    /// file written before the app carried an owner. The widget then draws its
+    /// placeholder rather than a row it cannot attribute (B-16).
+    var isPlaceholder: Bool { ownerId == nil }
 
-    /// True when the flag is on and the window simply held nothing.
-    var isEmpty: Bool { flagOn && movedRows.isEmpty }
+    /// True when the payload is owned and the window simply held nothing.
+    var isEmpty: Bool { !isPlaceholder && movedRows.isEmpty }
 
     // MARK: - Copy
 

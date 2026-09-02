@@ -21,6 +21,9 @@ struct HouseWidget: Widget {
         }
         .configurationDisplayName("Patina")
         .description("What moved on your house.")
-        .supportedFamilies([.systemSmall, .accessoryRectangular, .accessoryCircular])
+        // D5 adds `.systemMedium`: the small family has one `widgetURL` and it
+        // wins every pixel, so a list of rows there can only ever have one
+        // door. Medium is where each row gets its own.
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular])
     }
 }

@@ -41,10 +41,20 @@ struct HouseWidgetEntryView: View {
             CircularAccessoryView()
                 .widgetURL(PatinaWidgetLinks.today)
                 .containerBackground(.clear, for: .widget)
-        default:
-            SmallHomeView(snapshot: snapshot, now: entry.date)
-                // M6d: "Tapping the widget opens M1 plain."
+        case .systemMedium:
+            // D5. The medium family is the only Home Screen size that can host
+            // per-row `Link`s at all, which is what makes a list of rows an
+            // honest list of doors rather than one target wearing two labels.
+            MediumHomeView(snapshot: snapshot, now: entry.date)
                 .widgetURL(PatinaWidgetLinks.today)
+                .containerBackground(PatinaColors.Background.secondary, for: .widget)
+        default:
+            // GAP7B-04: `systemSmall` has ONE `widgetURL` and it wins every
+            // pixel, so a card that drew two rows and pointed at neither taught
+            // the tester that the second row was broken. One row, and the card
+            // is that row's door.
+            SmallHomeView(snapshot: snapshot, now: entry.date)
+                .widgetURL(PatinaWidgetLinks.link(for: snapshot?.drawableRows.first))
                 .containerBackground(PatinaColors.Background.secondary, for: .widget)
         }
     }
@@ -59,39 +69,28 @@ private struct SmallHomeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PatinaSpacing.sm) {
-            header
+            HouseWidgetHeader(snapshot: snapshot)
             Spacer(minLength: 0)
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var header: some View {
-        HStack(spacing: PatinaSpacing.xs) {
-            StrataMarkView(color: PatinaColors.Strata.line2, scale: 0.5, accessibility: .decorative)
-            Text(snapshot?.eyebrow() ?? "Patina")
-                .font(PatinaTypography.monoLabel)
-                .tracking(1)
-                .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.Text.muted)
-            Spacer(minLength: 0)
-        }
+    /// The one row the card's own door points at.
+    private var firstRow: HouseWidgetPayloadRow? {
+        snapshot?.drawableRows.first
     }
 
     @ViewBuilder
     private var content: some View {
         if let snapshot {
-            if snapshot.drawableRows.isEmpty {
+            if let firstRow {
+                MovedRowView(row: firstRow)
+            } else {
                 Text(snapshot.emptyLine())
                     .font(PatinaTypography.uiAction)
                     .foregroundStyle(PatinaColors.Text.muted)
                     .lineLimit(3)
-            } else {
-                VStack(alignment: .leading, spacing: PatinaSpacing.sm) {
-                    ForEach(Array(snapshot.drawableRows.enumerated()), id: \.offset) { index, row in
-                        MovedRowView(row: row, lineLimit: index == 0 ? 2 : 1)
-                    }
-                }
             }
             footer(for: snapshot)
         } else {
@@ -115,17 +114,95 @@ private struct SmallHomeView: View {
     }
 }
 
+// MARK: - Home Screen, medium (D5)
+
+/// The same rows the small card holds one of, each inside its own `Link`.
+/// Nothing new is drawn: no count, no tally, no status colour — the medium
+/// family is room for the second row's door, not a second kind of content.
+private struct MediumHomeView: View {
+
+    let snapshot: HouseWidgetPayload?
+    let now: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PatinaSpacing.sm) {
+            HouseWidgetHeader(snapshot: snapshot)
+            content
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let snapshot {
+            if snapshot.drawableRows.isEmpty {
+                Text(snapshot.emptyLine())
+                    .font(PatinaTypography.uiAction)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .lineLimit(3)
+            } else {
+                VStack(alignment: .leading, spacing: PatinaSpacing.sm) {
+                    ForEach(snapshot.drawableRows, id: \.title) { row in
+                        Link(destination: PatinaWidgetLinks.link(for: row)) {
+                            MovedRowView(row: row)
+                        }
+                    }
+                }
+            }
+            footer(for: snapshot)
+        } else {
+            Text(HouseWidgetCopy.noData)
+                .font(PatinaTypography.uiAction)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .lineLimit(3)
+        }
+    }
+
+    @ViewBuilder
+    private func footer(for snapshot: HouseWidgetPayload) -> some View {
+        if let line = snapshot.refreshedLine(now: now) ?? snapshot.houseLine {
+            Text(line)
+                .font(PatinaTypography.monoSmall)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .lineLimit(1)
+        }
+    }
+}
+
+// MARK: - Shared parts
+
+private struct HouseWidgetHeader: View {
+
+    let snapshot: HouseWidgetPayload?
+
+    var body: some View {
+        HStack(spacing: PatinaSpacing.xs) {
+            StrataMarkView(color: PatinaColors.Strata.line2, scale: 0.5, accessibility: .decorative)
+            Text(snapshot?.eyebrow() ?? "Patina")
+                .font(PatinaTypography.monoLabel)
+                .tracking(1)
+                .textCase(.uppercase)
+                .foregroundStyle(PatinaColors.Text.muted)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 private struct MovedRowView: View {
 
     let row: HouseWidgetPayloadRow
-    let lineLimit: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: PatinaSpacing.xxxs) {
+            // GAP7B-03: "A new story fro…", "Meadow Linen…". A sentence cut
+            // mid-word is not a shorter sentence, it is a different one. Two
+            // lines, then a little shrink, then — and only then — an ellipsis.
             Text(row.title)
                 .font(PatinaTypography.uiAction)
                 .foregroundStyle(PatinaColors.Text.primary)
-                .lineLimit(lineLimit)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
             Text(HouseWidgetCopy.date(row.date))
                 .font(PatinaTypography.monoSmall)
                 .foregroundStyle(PatinaColors.Text.muted)

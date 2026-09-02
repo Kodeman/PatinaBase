@@ -55,6 +55,16 @@ final class RecordSnapshotStore: Sendable {
     /// mirror, not from `FeatureFlags` itself, which is `@MainActor` and holds
     /// nothing on disk.
     private let flagIsOn: @Sendable () -> Bool
+    /// Who the payload is for (B-16), read the way the widget's own container
+    /// is read — from the App Group stamp, which is `Sendable` and on disk,
+    /// rather than from `AuthService`, which is `@MainActor` and would put an
+    /// actor hop inside a write.
+    ///
+    /// `RecordRefresh` stamps the owner immediately AFTER it saves, so the
+    /// very first save of a first-ever run carries no owner and the widget
+    /// draws its no-data card for that one cycle. Every later save — every
+    /// Today open, every foreground — carries it.
+    private let ownerId: @Sendable () -> String?
 
     init(
         appGroupIdentifier: String = "group.cloud.patina.app",
@@ -63,11 +73,13 @@ final class RecordSnapshotStore: Sendable {
         reloadWidgets: @escaping @Sendable (String) -> Void = { kind in
             WidgetCenter.shared.reloadTimelines(ofKind: kind)
         },
-        flagIsOn: @escaping @Sendable () -> Bool = { FeatureFlagMirror.isOn(.houseWidget) }
+        flagIsOn: @escaping @Sendable () -> Bool = { FeatureFlagMirror.isOn(.houseWidget) },
+        ownerId: @escaping @Sendable () -> String? = { RecordOwnerStamp.shared.ownerId }
     ) {
         self.fileManager = fileManager
         self.reloadWidgets = reloadWidgets
         self.flagIsOn = flagIsOn
+        self.ownerId = ownerId
 
         let groupDirectory = fileManager
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
@@ -116,7 +128,40 @@ final class RecordSnapshotStore: Sendable {
                     record: record,
                     houseLine: line,
                     refreshedAt: now,
-                    flagOn: flagIsOn()
+                    flagOn: flagIsOn(),
+                    ownerId: ownerId()
+                )
+            )
+        }
+        reloadWidgets(WidgetSnapshot.widgetKind)
+    }
+
+    /// The session ended. Remove the record and REPLACE the widget's file with
+    /// a payload that names no account and carries no rows.
+    ///
+    /// Replace rather than only delete: a delete that fails leaves the previous
+    /// client's designer on a Home Screen nobody is signed into, and the widget
+    /// process has no way to know the file it just read is orphaned. An empty,
+    /// unowned payload written `.atomic` is a state the widget already knows how
+    /// to draw — its no-data card — and it cannot half-happen (B-16).
+    ///
+    /// Called from `AppCoordinator`'s `.main → .auth / .launching` transition,
+    /// which is the one seam a sign-out actually crosses:
+    /// `LocalStoreReset.wipeUserScopedData()` — `remove()`'s only caller — runs
+    /// when a DIFFERENT account signs IN, and `AuthService.signOut()` calls
+    /// neither.
+    func clearForSignedOut(now: Date = Date()) {
+        locked {
+            try? fileManager.removeItem(at: fileURL)
+            notedHouseLine = nil
+            writeWidgetSnapshot(
+                WidgetSnapshot(
+                    movedRows: [],
+                    houseLine: nil,
+                    sinceDate: nil,
+                    refreshedAt: now,
+                    flagOn: flagIsOn(),
+                    ownerId: nil
                 )
             )
         }
@@ -141,7 +186,8 @@ final class RecordSnapshotStore: Sendable {
                     houseLine: line,
                     sinceDate: current.sinceDate,
                     refreshedAt: current.refreshedAt,
-                    flagOn: flagIsOn()
+                    flagOn: flagIsOn(),
+                    ownerId: current.ownerId
                 )
             )
             return true

@@ -39,6 +39,7 @@ struct HouseWidgetPayloadTests {
         let snapshot = try decode("""
         {
           "flagOn": true,
+          "ownerId": "a0000000-0000-0000-0000-000000000005",
           "refreshedAt": "2026-08-27T00:00:00Z",
           "houseLine": "Aspen Loft",
           "movedRows": [
@@ -61,6 +62,7 @@ struct HouseWidgetPayloadTests {
         {
           "version": 1,
           "flagOn": true,
+          "ownerId": "a0000000-0000-0000-0000-000000000005",
           "refreshedAt": "2026-08-27T00:00:00Z",
           "sinceDate": "2026-08-27T04:00:00Z",
           "houseLine": "Aspen Loft",
@@ -84,6 +86,7 @@ struct HouseWidgetPayloadTests {
         let snapshot = try decode("""
         {
           "flagOn": true,
+          "ownerId": "a0000000-0000-0000-0000-000000000005",
           "refreshedAt": "2026-08-27T00:00:00Z",
           "needsYou": [
             { "title": "Your invoice is due.", "date": "2026-08-26T00:00:00Z" }
@@ -127,7 +130,8 @@ struct HouseWidgetPayloadTests {
             """
         }.joined(separator: ",")
         let snapshot = try decode("""
-        { "flagOn": true, "refreshedAt": "2026-08-27T00:00:00Z", "movedRows": [\(rows)] }
+        { "flagOn": true, "ownerId": "owner-1", "refreshedAt": "2026-08-27T00:00:00Z",
+          "movedRows": [\(rows)] }
         """)
 
         #expect(snapshot.movedRows.count == 6)
@@ -137,29 +141,38 @@ struct HouseWidgetPayloadTests {
 
     // MARK: - The flag
 
-    @Test("the flag off draws the placeholder, never rows")
-    func theFlagOffDrawsNothingReal() throws {
+    /// **Rewritten by D5 (2026-09-02).** This test used to assert that
+    /// `flagOn: false` drew nothing — which is exactly the behaviour
+    /// `GAP7B-02` filed: `house-widget` is off for round one, so a tester who
+    /// placed the widget read "Open Patina to see your house." forever with
+    /// real rows in the file. D5: the flag gates in-app promotion, not what a
+    /// placed widget draws. What it still gates is on the wire, and asserted.
+    @Test("the flag off no longer stops a placed widget from drawing")
+    func theFlagOffStillDraws() throws {
         let snapshot = try decode("""
         {
           "flagOn": false,
+          "ownerId": "a0000000-0000-0000-0000-000000000005",
           "refreshedAt": "2026-08-27T00:00:00Z",
           "movedRows": [{ "title": "Your sectional shipped.", "date": "2026-08-26T00:00:00Z" }]
         }
         """)
 
-        #expect(snapshot.isPlaceholder)
-        #expect(snapshot.drawableRows.isEmpty)
+        #expect(!snapshot.flagOn)
+        #expect(!snapshot.isPlaceholder)
+        #expect(snapshot.drawableRows.count == 1)
     }
 
-    /// Flags fail closed here as everywhere else: a payload that cannot say
-    /// whether the widget is switched on draws the placeholder.
-    @Test("an absent flag decodes as off")
-    func anAbsentFlagIsOff() throws {
+    /// The placeholder is now about the ACCOUNT: a payload nobody owns is the
+    /// signed-out one, and the only thing the widget refuses to draw (B-16).
+    @Test("a payload with no owner is the placeholder")
+    func anUnownedPayloadIsThePlaceholder() throws {
         let snapshot = try decode("""
-        { "refreshedAt": "2026-08-27T00:00:00Z", "movedRows": [] }
+        { "flagOn": true, "refreshedAt": "2026-08-27T00:00:00Z", "movedRows": [] }
         """)
-        #expect(!snapshot.flagOn)
+        #expect(snapshot.ownerId == nil)
         #expect(snapshot.isPlaceholder)
+        #expect(snapshot.drawableRows.isEmpty)
     }
 
     // MARK: - Staleness (C5: a stale snapshot says when it was refreshed)
@@ -186,7 +199,8 @@ struct HouseWidgetPayloadTests {
     @Test("the empty variant is M6b's line, with the day from the window")
     func theEmptyLineNamesTheDayTheWindowNames() {
         let snapshot = HouseWidgetPayload(
-            flagOn: true, refreshedAt: Self.refreshed, movedRows: [], sinceDate: Self.thursday
+            flagOn: true, refreshedAt: Self.refreshed, movedRows: [],
+            sinceDate: Self.thursday, ownerId: "owner-1"
         )
         #expect(snapshot.emptyLine(locale: Self.posix, timeZone: Self.utc) == "Nothing moved since Thursday.")
         #expect(snapshot.eyebrow(locale: Self.posix, timeZone: Self.utc) == "Since Thu")
@@ -239,7 +253,8 @@ struct HouseWidgetPayloadTests {
         try encoder.encode(
             HouseWidgetPayload(
                 flagOn: true, refreshedAt: Self.refreshed,
-                movedRows: [HouseWidgetPayloadRow(id: "order:direct:abc", title: "Shipped.", date: Self.refreshed)]
+                movedRows: [HouseWidgetPayloadRow(id: "order:direct:abc", title: "Shipped.", date: Self.refreshed)],
+                ownerId: "owner-1"
             )
         ).write(to: store.fileURL)
 
