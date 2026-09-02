@@ -1,0 +1,1025 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A second look at the left spine of The Document — four jobs only the edge can hold.">
+<title>The Spine, Reconsidered</title>
+<style>
+:root{
+  --canvas:#F3EEE7;
+  --off-white:#FAF7F2;
+  --paper:#FCFAF6;
+  --spine:#F6F3EE;
+  --pearl:#E5E2DD;
+  --clay:#C4A57B;
+  --oak:#8B7355;
+  --mocha:#5C4A3C;
+  --charcoal:#2C2926;
+  --quiet:#65594E;
+  --sage:#A8B5A0;
+  --dusty:#8B9CAD;
+  --terracotta:#D4A090;
+  --border-warm:#DDD4C8;
+  --hairline:rgba(44,41,38,0.18);
+  --hair-soft:rgba(44,41,38,0.10);
+  --serif:Georgia,"Times New Roman",Times,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;scroll-padding-top:78px;}
+body{
+  margin:0;
+  background:var(--canvas);
+  color:var(--charcoal);
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--mocha);text-decoration:none;}
+a:hover{color:var(--oak);}
+:focus-visible{outline:2px solid var(--mocha);outline-offset:3px;}
+h1,h2,h3,h4{font-family:var(--serif);font-weight:400;margin:0;}
+p{margin:0;}
+
+.skip-link{
+  position:absolute;left:-9999px;top:0;z-index:200;
+  padding:10px 14px;background:var(--charcoal);color:var(--off-white);
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+}
+.skip-link:focus{left:8px;top:8px;color:var(--off-white);}
+
+/* ---------- chrome ---------- */
+.deck-nav{
+  position:sticky;top:0;z-index:80;
+  background:rgba(243,238,231,0.94);
+  border-bottom:1px solid var(--hairline);
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 26px;
+  padding:14px 32px;
+}
+.deck-nav .brand{font-family:var(--serif);font-size:15px;margin-right:auto;}
+.deck-nav .brand span{
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--oak);margin-left:12px;
+}
+.deck-nav a{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);
+}
+.deck-nav a:hover{color:var(--charcoal);}
+
+.slide{padding:78px 0;border-top:1px solid var(--hair-soft);}
+.slide:first-of-type{border-top:0;}
+.inner{max-width:1040px;margin:0 auto;padding:0 32px;}
+
+.eyebrow{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--oak);margin-bottom:18px;
+}
+.lede{font-family:var(--serif);font-size:20px;line-height:1.45;color:var(--mocha);max-width:74ch;}
+.body{max-width:70ch;color:var(--quiet);font-size:14.5px;}
+.rule{height:1px;background:var(--hairline);border:0;margin:34px 0;}
+.rule-soft{height:1px;background:var(--hair-soft);border:0;margin:22px 0;}
+.double-rule{border:0;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);height:4px;margin:40px 0;}
+
+/* ---------- cover ---------- */
+#cover{padding-top:96px;padding-bottom:72px;}
+#cover h1{font-size:60px;line-height:1.02;letter-spacing:-.01em;max-width:16ch;}
+#cover .lede{margin-top:28px;font-size:22px;}
+.cover-rule{height:1px;background:var(--hairline);margin:36px 0 0;max-width:760px;}
+.cover-meta{
+  margin-top:26px;display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--oak);
+}
+
+/* ---------- observations ---------- */
+h2{font-size:34px;line-height:1.14;max-width:22ch;}
+h2 .cont{display:block;color:var(--mocha);}
+.obs-list{margin:36px 0 0;padding:0;list-style:none;}
+.obs{
+  display:grid;grid-template-columns:1.15fr 1fr;gap:30px;
+  padding:24px 0;border-top:1px solid var(--hairline);
+}
+.obs:last-child{border-bottom:1px solid var(--hairline);}
+.obs-claim{font-family:var(--serif);font-size:19px;line-height:1.38;}
+.obs-holds{color:var(--quiet);font-size:13.5px;}
+.obs-holds em{
+  font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--oak);display:block;margin-bottom:6px;
+}
+.verdict{
+  margin-top:34px;padding:22px 26px;background:var(--paper);
+  border-left:2px solid var(--clay);
+}
+.verdict p{font-family:var(--serif);font-size:19px;line-height:1.45;}
+.verdict .label{
+  font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--oak);display:block;margin-bottom:8px;
+}
+
+.test{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:30px;border-top:1px solid var(--hairline);}
+.test div{padding:20px 26px 6px 0;border-right:1px solid var(--hair-soft);}
+.test div:last-child{border-right:0;padding-left:26px;}
+.test h4{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);margin-bottom:8px;}
+.test p{font-size:14px;color:var(--mocha);}
+
+/* ---------- prior art ---------- */
+.prior{background:var(--off-white);border:1px solid var(--border-warm);padding:30px 32px;margin-top:34px;}
+.prior h3{font-size:22px;margin-bottom:6px;}
+.prior .src{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--oak);}
+.prior-list{margin:22px 0 0;padding:0;list-style:none;}
+.prior-list li{
+  display:grid;grid-template-columns:26px 200px 1fr;gap:18px;align-items:baseline;
+  padding:11px 0;border-top:1px solid var(--hair-soft);
+}
+.prior-list li span:first-child{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--clay);}
+.prior-list b{font-family:var(--serif);font-weight:400;font-size:16px;}
+.prior-list p{font-size:13.5px;color:var(--quiet);}
+.prior-rec{margin-top:22px;padding-top:18px;border-top:1px solid var(--hairline);font-size:14px;color:var(--mocha);}
+.prior-rec em{font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);display:block;margin-bottom:6px;}
+
+.eight{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:32px;border-top:1px solid var(--hairline);}
+.eight > div{padding:20px 26px 14px 0;border-right:1px solid var(--hair-soft);}
+.eight > div:last-child{border-right:0;padding-left:26px;}
+.eight h4{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);margin-bottom:10px;}
+.eight ol{margin:0;padding-left:18px;font-size:13.5px;color:var(--mocha);}
+.eight li{margin-bottom:4px;}
+.eight li b{font-family:var(--serif);font-weight:400;}
+
+/* ---------- direction index ---------- */
+.index-list{margin:36px 0 0;padding:0;list-style:none;}
+.index-row{
+  display:grid;grid-template-columns:54px 220px 1fr auto;gap:24px;align-items:baseline;
+  padding:24px 0;border-top:1px solid var(--hairline);
+}
+.index-row:last-child{border-bottom:1px solid var(--hairline);}
+.index-num{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--clay);}
+.index-name{font-family:var(--serif);font-size:24px;}
+.index-line{color:var(--mocha);font-size:14.5px;}
+.ink{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--charcoal);border-bottom:1px solid rgba(44,41,38,.3);padding-bottom:2px;
+}
+.ink:hover{color:var(--oak);border-bottom-color:var(--oak);}
+
+/* ---------- direction slides ---------- */
+.dir-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;}
+.dir-head h2{font-size:38px;max-width:none;}
+.dir-num{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--clay);}
+.dir-job{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);
+  border-left:1px solid var(--hairline);padding-left:20px;
+}
+.dir-thesis{font-family:var(--serif);font-style:italic;font-size:20px;line-height:1.45;color:var(--mocha);margin:18px 0 0;max-width:76ch;}
+
+.dir-grid{display:grid;grid-template-columns:1fr 300px;gap:44px;margin-top:34px;align-items:start;}
+.krc{margin:0;border-top:1px solid var(--hairline);}
+.krc > div{display:grid;grid-template-columns:96px 1fr;gap:20px;padding:13px 0;border-bottom:1px solid var(--hair-soft);}
+.krc dt{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);padding-top:3px;}
+.krc dd{margin:0;font-size:14px;color:var(--mocha);}
+.behaviors{margin:26px 0 0;padding:0;list-style:none;}
+.behaviors li{display:grid;grid-template-columns:34px 1fr;gap:16px;padding:12px 0;border-top:1px solid var(--hair-soft);}
+.behaviors li:first-child{border-top:1px solid var(--hairline);}
+.behaviors i{font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--clay);padding-top:4px;}
+.behaviors p{font-size:14px;color:var(--mocha);}
+.bp{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--oak);}
+.ask{
+  margin-top:30px;padding:18px 22px;background:var(--paper);border:1px solid var(--border-warm);
+}
+.ask span{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);display:block;margin-bottom:8px;}
+.ask p{font-family:var(--serif);font-size:17px;line-height:1.42;}
+
+/* ---------- rail mocks ---------- */
+.mock-note{
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--oak);
+  display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;
+}
+.mock-frame{border:1px solid var(--border-warm);background:var(--off-white);display:flex;overflow:hidden;}
+.rail{
+  width:200px;flex:0 0 200px;background:var(--spine);border-right:1px solid var(--pearl);
+  padding:14px 12px 18px;color:var(--charcoal);
+}
+.rail-compact{width:56px;flex:0 0 56px;padding:14px 6px 18px;text-align:center;}
+.stub{flex:1;background:var(--paper);padding:16px 14px;min-width:0;}
+.stub .st-eye{font-family:var(--mono);font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--oak);}
+.stub .st-name{font-family:var(--serif);font-size:17px;line-height:1.1;margin-top:5px;}
+.stub .st-line{height:1px;background:var(--hair-soft);margin:12px 0;}
+.stub .st-bar{height:6px;background:var(--pearl);margin-bottom:6px;}
+.stub .st-bar.w1{width:88%;}
+.stub .st-bar.w2{width:66%;}
+.stub .st-bar.w3{width:78%;}
+
+.put-down{
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--charcoal);
+  margin-bottom:16px;display:block;
+}
+.marks{margin:0;padding:0;list-style:none;}
+.mark-row{display:grid;grid-template-columns:34px 1fr;gap:9px;align-items:start;padding:5px 0;}
+.mark-row .nm{font-family:var(--serif);font-size:12px;line-height:1.15;display:block;}
+.mark-row .sb{
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--oak);
+  display:block;margin-top:3px;
+}
+.mark-row.active .nm{font-weight:700;}
+.mark-row.active .sb{color:var(--clay);}
+.mark-row.future .nm,.mark-row.future .sb{opacity:.45;}
+
+.sm{display:block;width:34px;padding-top:4px;}
+.sm i{display:block;height:2px;margin-bottom:2.5px;background:var(--pearl);position:relative;overflow:hidden;}
+.sm i:nth-child(1){width:34px;}
+.sm i:nth-child(2){width:27px;}
+.sm i:nth-child(3){width:20px;}
+.sm i b{position:absolute;left:0;top:0;bottom:0;display:block;}
+.sm i:nth-child(1) b{background:var(--mocha);}
+.sm i:nth-child(2) b{background:var(--clay);}
+.sm i:nth-child(3) b{background:var(--dusty);opacity:.55;}
+.sm-c{width:24px;margin:0 auto;}
+.sm-c i:nth-child(1){width:24px;}
+.sm-c i:nth-child(2){width:19px;}
+.sm-c i:nth-child(3){width:14px;}
+
+.rail-block{margin-top:16px;padding-top:12px;border-top:1px solid var(--pearl);}
+.rail-label{
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);
+  display:block;margin-bottom:9px;
+}
+.rail-line{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:4px 0;}
+.rail-line .k{font-family:var(--serif);font-size:12.5px;}
+.rail-line .v{font-family:var(--mono);font-size:7.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--oak);}
+.rail-sub{font-family:var(--mono);font-size:7.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--oak);display:block;margin-top:2px;}
+.rail-door{
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--charcoal);
+  border-bottom:1px solid rgba(44,41,38,.3);display:inline-block;margin-top:12px;padding-bottom:2px;
+}
+.timerbox{border:1px solid var(--pearl);background:var(--paper);padding:10px 11px;margin-top:14px;}
+.timerbox .st{font-family:var(--mono);font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--oak);}
+.timerbox .el{font-family:var(--mono);font-size:19px;letter-spacing:.02em;display:block;margin:4px 0 6px;}
+.timerbox .acts{display:flex;gap:12px;font-family:var(--mono);font-size:7.5px;letter-spacing:.11em;text-transform:uppercase;}
+.willlog{border-top:1px solid var(--pearl);margin-top:9px;padding-top:8px;}
+.blank{
+  margin-top:16px;height:150px;border:1px dashed rgba(44,41,38,.16);
+  display:flex;align-items:center;justify-content:center;text-align:center;
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.11em;text-transform:uppercase;color:rgba(44,41,38,.34);
+  padding:0 10px;
+}
+.room{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--hair-soft);}
+.room .k{font-family:var(--serif);font-size:12.5px;}
+.room .v{font-family:var(--mono);font-size:7px;letter-spacing:.09em;text-transform:uppercase;color:var(--oak);}
+.room.held{background:rgba(196,165,123,.14);margin:0 -6px;padding-left:6px;padding-right:6px;border-bottom-color:transparent;}
+.room.held .k{font-weight:700;}
+.room.held .v{color:var(--mocha);}
+.dated{padding:6px 0;border-bottom:1px solid var(--hair-soft);}
+.dated .d{font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--charcoal);display:block;}
+.dated .d.band{color:var(--oak);}
+.dated .w{font-family:var(--serif);font-size:12px;line-height:1.25;display:block;margin-top:2px;color:var(--mocha);}
+.tabs-c{margin-top:14px;padding-top:12px;border-top:1px solid var(--pearl);}
+.tab-c{
+  font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--oak);
+  padding:6px 0;border-bottom:1px solid var(--hair-soft);
+}
+.tab-c.held{color:var(--charcoal);background:rgba(196,165,123,.18);}
+.carbonleaf{width:22px;height:28px;border:1px solid var(--hairline);background:var(--paper);position:relative;margin:0 auto;}
+.carbonleaf::after{content:"";position:absolute;left:4px;top:4px;width:22px;height:28px;border:1px solid var(--hairline);background:rgba(139,156,173,.16);}
+
+/* ---------- compare ---------- */
+.cmp{width:100%;border-collapse:collapse;margin-top:34px;font-size:13.5px;}
+.cmp caption{text-align:left;font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);padding-bottom:12px;}
+.cmp th,.cmp td{text-align:left;vertical-align:top;padding:15px 16px 15px 0;border-top:1px solid var(--hairline);}
+.cmp thead th{
+  border-top:0;border-bottom:1px solid var(--charcoal);
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--oak);font-weight:400;
+}
+.cmp tbody th{font-family:var(--serif);font-weight:400;font-size:17px;width:180px;}
+.cmp tbody th span{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;color:var(--clay);margin-bottom:3px;}
+.cmp td{color:var(--mocha);}
+.dist{font-family:var(--mono);font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--oak);display:block;margin-bottom:4px;}
+
+/* ---------- recommendation ---------- */
+.rec{background:var(--paper);border:1px solid var(--border-warm);border-left:2px solid var(--clay);padding:32px 34px;margin-top:32px;}
+.rec h3{font-size:26px;margin-bottom:14px;}
+.rec p{font-size:16px;line-height:1.6;color:var(--mocha);max-width:74ch;}
+.rec p + p{margin-top:14px;}
+.survive{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:28px;border-top:1px solid var(--hairline);}
+.survive div{padding:18px 22px 4px 0;border-right:1px solid var(--hair-soft);}
+.survive div:last-child{border-right:0;}
+.survive h4{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--oak);margin-bottom:8px;}
+.survive b{font-family:var(--serif);font-weight:400;font-size:18px;display:block;margin-bottom:6px;}
+.survive p{font-size:13.5px;color:var(--quiet);}
+.dies{margin-top:26px;font-size:14px;color:var(--quiet);max-width:74ch;}
+.dies em{font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);display:block;margin-bottom:6px;}
+
+/* ---------- questions ---------- */
+.qs{margin:34px 0 0;padding:0;list-style:none;}
+.qs li{display:grid;grid-template-columns:54px 1fr;gap:24px;padding:22px 0;border-top:1px solid var(--hairline);}
+.qs li:last-child{border-bottom:1px solid var(--hairline);}
+.qs i{font-style:normal;font-family:var(--mono);font-size:10px;letter-spacing:.13em;color:var(--clay);padding-top:6px;}
+.qs p{font-family:var(--serif);font-size:20px;line-height:1.38;}
+.qs small{display:block;margin-top:8px;font-family:var(--sans);font-size:13.5px;color:var(--quiet);line-height:1.6;}
+
+/* ---------- colophon ---------- */
+.colophon{padding:44px 0 72px;border-top:1px solid var(--hairline);}
+.colophon p{
+  font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--oak);
+  line-height:2;max-width:90ch;
+}
+
+@media (max-width:900px){
+  #cover h1{font-size:42px;}
+  h2{font-size:28px;}
+  .obs,.dir-grid,.test,.eight,.survive{grid-template-columns:1fr;}
+  .test div,.eight > div,.survive div{border-right:0;padding-left:0;}
+  .index-row{grid-template-columns:40px 1fr;}
+  .prior-list li{grid-template-columns:24px 1fr;}
+  .cmp{display:block;overflow-x:auto;}
+}
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#cover">Skip to the deck</a>
+
+<nav class="deck-nav" aria-label="Deck sections">
+  <p class="brand">The Spine, Reconsidered<span>Patina &middot; The Document</span></p>
+  <a href="#reading">The reading</a>
+  <a href="#prior">Prior art</a>
+  <a href="#directions">Four directions</a>
+  <a href="#compare">Compare</a>
+  <a href="#recommend">Recommendation</a>
+  <a href="#team">For the team</a>
+</nav>
+
+<main>
+
+<!-- ======================= COVER ======================= -->
+<section class="slide" id="cover">
+  <div class="inner">
+    <p class="eyebrow">Design directions &middot; Internal review &middot; The Document</p>
+    <h1>The Spine, Reconsidered</h1>
+    <p class="lede">The left rail is not underused. It is unassigned &mdash; and the one job it does hold is the job the paper already does three times over. Four things that are only true at the edge.</p>
+    <div class="cover-rule"></div>
+    <p class="cover-meta">
+      <span>Second look &middot; Aug 14, 2026</span>
+      <span>Designer portal &middot; /doc</span>
+      <span>Four directions &mdash; not a feature list</span>
+      <span>Concept level &middot; no schema proposal</span>
+    </p>
+  </div>
+</section>
+
+<!-- ======================= THE READING ======================= -->
+<section class="slide" id="reading">
+  <div class="inner">
+    <p class="eyebrow">The reading</p>
+    <h2>The rail is full at the top<span class="cont">and redundant at the same time.</span></h2>
+    <p class="lede" style="margin-top:22px;">Kody&rsquo;s instinct is right, but the diagnosis is sharper than &ldquo;it&rsquo;s empty.&rdquo; The occupied third of the spine says things the paper says better, in context, further down the page. The empty two-thirds is only the visible half of that.</p>
+
+    <ul class="obs-list">
+      <li class="obs">
+        <div>
+          <p class="obs-claim">The top third holds four unrelated weights in four different tenses. <strong>Put down</strong> is leaving. Seven phase markers are the whole arc. The timer is this minute. The presence line is right now. Nothing about the order tells you they are unrelated, so the column reads as a list rather than an instrument.</p>
+        </div>
+        <div>
+          <p class="obs-holds"><em>What stays true</em>Each item is individually correct. The problem is that they were placed by availability, not by a rule about what belongs at the edge.</p>
+        </div>
+      </li>
+      <li class="obs">
+        <div>
+          <p class="obs-claim">Phase status is printed three times. <em>Previous work</em> renders one settled bar per settled phase with the same label, sub and stamp. The letterhead re-renders the same Strata Mark fill. The active section reprints its own sub-label beside its h2 and a stage line inside. The spine is the third copy &mdash; and the least contextual of the three.</p>
+        </div>
+        <div>
+          <p class="obs-holds"><em>What stays true</em>Redundancy at the top of a long scroll is not automatically waste. But a triplicate is not a hierarchy, and the copy furthest from the work is the weakest one.</p>
+        </div>
+      </li>
+      <li class="obs">
+        <div>
+          <p class="obs-claim">Roughly two-thirds of a 200&thinsp;px column of tinted paper carries nothing. A rail that <em>stops</em> reads as unfinished; a rail that never started &mdash; the 56&thinsp;px score already shipped at 1180&ndash;1439 &mdash; reads as an edge. We currently ship the first at the widest, most valuable viewport.</p>
+        </div>
+        <div>
+          <p class="obs-holds"><em>What stays true</em>The tint and the hairline are right. The paper needs a left boundary. Whether that boundary is 200&thinsp;px or 56&thinsp;px is a separate question from what lives inside it.</p>
+        </div>
+      </li>
+      <li class="obs">
+        <div>
+          <p class="obs-claim">Three defects are already on record. Future markers are inert with no feedback &mdash; a control that ignores you teaches you to stop asking. The active marker is a jump control that isn&rsquo;t drawn as one. And the presence line reads &ldquo;Just you &middot; visible to the studio&rdquo; nearly always &mdash; a line whose value never changes is decoration.</p>
+        </div>
+        <div>
+          <p class="obs-holds"><em>What stays true</em>Presence is worth keeping when it is real. It should shrink to a notch when it is not, and speak only when someone else is in the document.</p>
+        </div>
+      </li>
+    </ul>
+
+    <div class="verdict">
+      <span class="label">The test we propose</span>
+      <p>Something earns the left edge only if it is true <em>across the whole document at once</em>, or true <em>outside this document</em>. Anything true of one region belongs in that region, printed on the paper. Phase status fails this test: it is about the document, but the paper narrates it region by region anyway. All four directions that follow are chosen because they pass it.</p>
+    </div>
+
+    <div class="test">
+      <div>
+        <h4>The boundary we are working inside</h4>
+        <p>Left edge = orientation, memory, or nothing. Paper = the complete work, inline. Right margin = what may need attention. Red-letter needs sit at the top of the paper. No badges anywhere. No hover-only affordances.</p>
+      </div>
+      <div>
+        <h4>What that rules out before we start</h4>
+        <p>No needs, counts, alerts or chase actions on the left. No second copy of anything the paper prints. No control that only appears on hover. Anything that would make a designer hurry belongs in the margin, not at the edge.</p>
+      </div>
+    </div>
+
+    <p class="eyebrow" style="margin-top:44px;">The spine today &middot; resting state at &ge;1440</p>
+    <div class="mock-note"><span>Illustrative &middot; controls do not act</span><span>200&thinsp;px rail &middot; paper stub at right</span></div>
+    <div class="mock-frame">
+      <div class="rail">
+        <span class="put-down">&larr; Put down</span>
+        <ul class="marks">
+          <li class="mark-row"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:100%"></b></i><i><b style="width:40%"></b></i></span><span><span class="nm">Brief</span><span class="sb">Settled</span></span></li>
+          <li class="mark-row"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:100%"></b></i><i><b style="width:45%"></b></i></span><span><span class="nm">Discovery</span><span class="sb">Settled &middot; Aug 14</span></span></li>
+          <li class="mark-row"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:100%"></b></i><i><b style="width:50%"></b></i></span><span><span class="nm">Direction</span><span class="sb">Settled &middot; Aug 14</span></span></li>
+          <li class="mark-row"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:100%"></b></i><i><b style="width:55%"></b></i></span><span><span class="nm">Proposal</span><span class="sb">Signed &middot; Aug 14</span></span></li>
+          <li class="mark-row active"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Project</span><span class="sb">Active &middot; Week 1</span></span></li>
+          <li class="mark-row future"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Install</span><span class="sb">Aug 10</span></span></li>
+          <li class="mark-row future"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Care</span><span class="sb">&mdash;</span></span></li>
+        </ul>
+        <div class="timerbox">
+          <span class="st">&#9679; In hand</span>
+          <span class="el">0:14</span>
+          <span class="acts"><span>Pause</span><span>+ Log</span></span>
+        </div>
+        <div class="rail-block">
+          <span class="rail-label">In this document</span>
+          <p style="font-size:12px;line-height:1.4;">Just you &middot; visible to the studio</p>
+        </div>
+        <div class="blank">Unassigned &middot; roughly two-thirds of the column</div>
+      </div>
+      <div class="stub">
+        <p class="st-eye">The Document &middot; Project</p>
+        <p class="st-name">Vasquez Residence</p>
+        <div class="st-line"></div>
+        <p class="st-eye">Previous work &middot; 4 complete</p>
+        <div style="margin-top:8px;">
+          <div class="st-bar w1"></div><div class="st-bar w2"></div><div class="st-bar w3"></div>
+        </div>
+        <div class="st-line"></div>
+        <p class="st-eye">01 &middot; Client approvals</p>
+        <div style="margin-top:8px;"><div class="st-bar w2"></div><div class="st-bar w1"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= PRIOR ART ======================= -->
+<section class="slide" id="prior">
+  <div class="inner">
+    <p class="eyebrow">Prior art</p>
+    <h2>Four concepts already exist.<span class="cont">These four are the other half.</span></h2>
+    <p class="body" style="margin-top:20px;">A parallel pass tonight produced a strong set. It should be read alongside this one, not against it &mdash; we deliberately took the jobs it did not take, so the team can judge eight options in one sitting rather than four twice.</p>
+
+    <div class="prior">
+      <h3>The quiet edge</h3>
+      <p class="src">artifacts/document-spine-rail-directions-2026-08-14 &middot; Aug 14, 2026</p>
+      <ul class="prior-list">
+        <li><span>01</span><b>The Folded Gutter</b><p><em>Yield.</em> Fold the 200&thinsp;px rail to a 56&thinsp;px score; an explicit &ldquo;Sections&rdquo; act opens a 200&thinsp;px leaf on demand.</p></li>
+        <li><span>02</span><b>The Running Index</b><p><em>Map.</em> The lower rail becomes a local table of contents and scrollspy for the open Project chapter&rsquo;s five governed regions.</p></li>
+        <li><span>03</span><b>The Dog-Eared Set</b><p><em>Hold.</em> Pin up to three personal jump-back targets; private, reorderable, collapses to nothing when empty.</p></li>
+        <li><span>04</span><b>The Hand Ledger</b><p><em>Remember.</em> Quiet provenance &mdash; who shaped which sections, their latest mark, where the document began.</p></li>
+      </ul>
+      <p class="prior-rec"><em>Their recommendation</em>The Folded Gutter &times; the Running Index: rest at 56&thinsp;px, open the local outline only on an explicit act. Dog-Ears and the Hand Ledger are held back as separate product hypotheses.</p>
+    </div>
+
+    <div class="eight">
+      <div>
+        <h4>Their four jobs</h4>
+        <ol>
+          <li><b>Nothing</b> &mdash; give the width back</li>
+          <li><b>Position</b> &mdash; where am I in this chapter</li>
+          <li><b>My marks</b> &mdash; what I am carrying</li>
+          <li><b>Authorship</b> &mdash; whose hands made this</li>
+        </ol>
+      </div>
+      <div>
+        <h4>Ours &mdash; the four they left</h4>
+        <ol>
+          <li><b>Subject</b> &mdash; which room am I working in</li>
+          <li><b>My day</b> &mdash; time behind me, and what will log</li>
+          <li><b>Time ahead</b> &mdash; what is dated next, honestly</li>
+          <li><b>The other reader</b> &mdash; what the client can see</li>
+        </ol>
+      </div>
+    </div>
+
+    <p class="body" style="margin-top:26px;">Their set asks what the rail should do <em>with itself</em>. Ours asks what is <em>only</em> true at the edge. That difference is the real fork, and it is worth ruling on before any single concept is picked.</p>
+  </div>
+</section>
+
+<!-- ======================= INDEX ======================= -->
+<section class="slide" id="directions">
+  <div class="inner">
+    <p class="eyebrow">Four directions</p>
+    <h2>One edge. One honest job.</h2>
+    <p class="lede" style="margin-top:20px;">These are alternatives. Stacking them would rebuild exactly the mixed-weight column the reading just diagnosed, with more content in it.</p>
+    <ul class="index-list">
+      <li class="index-row">
+        <span class="index-num">I</span>
+        <span class="index-name">The Room in Hand</span>
+        <span class="index-line">The designer works in rooms; the document is filed by phase. Let the edge hold the room and let the paper answer for it.</span>
+        <a class="ink" href="#dir-1">See it</a>
+      </li>
+      <li class="index-row">
+        <span class="index-num">II</span>
+        <span class="index-name">The Day Book</span>
+        <span class="index-line">The timer counts one sitting. The day is many. Put the day at the edge and make the put-down an act you can see before you take it.</span>
+        <a class="ink" href="#dir-2">See it</a>
+      </li>
+      <li class="index-row">
+        <span class="index-num">III</span>
+        <span class="index-name">The Almanac</span>
+        <span class="index-line">The document carries dated commitments at four fidelities and nowhere shows them as one chronology. Dates as orientation &mdash; never as alarms.</span>
+        <a class="ink" href="#dir-3">See it</a>
+      </li>
+      <li class="index-row">
+        <span class="index-num">IV</span>
+        <span class="index-name">The Carbon</span>
+        <span class="index-line">Every document has a second reader we never show. The edge can hold the client&rsquo;s copy &mdash; what they can see, and what they have signed.</span>
+        <a class="ink" href="#dir-4">See it</a>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ======================= I · THE ROOM IN HAND ======================= -->
+<section class="slide" id="dir-1">
+  <div class="inner">
+    <div class="dir-head">
+      <span class="dir-num">Direction I</span>
+      <h2>The Room in Hand</h2>
+      <span class="dir-job">The job &middot; Hold the working subject across the whole document</span>
+    </div>
+    <p class="dir-thesis">The document is filed by phase because the business runs on phases. The designer does not: she works on the kitchen this afternoon and the primary bath tomorrow, and every region &mdash; approvals, schedule, FF&amp;E, boards &mdash; holds a piece of each. Let the left edge hold the room she is in, and let the paper answer for that room without hiding anything.</p>
+
+    <div class="dir-grid">
+      <div>
+        <dl class="krc">
+          <div><dt>Keeps</dt><dd>One paper, all regions inline, every line still present. The phase markers stay, compressed to their glyphs.</dd></div>
+          <div><dt>Refuses</dt><dd>A room <em>page</em>. Filtering that hides work. Per-room counts, needs or badges &mdash; those belong to the paper and the margin.</dd></div>
+          <div><dt>Costs</dt><dd>A room&rarr;region emphasis contract every region must honor, a truthful room state word we may not actually have, and an &ldquo;all rooms&rdquo; resting state that has to feel like the default rather than a filter switched off.</dd></div>
+        </dl>
+
+        <ul class="behaviors">
+          <li><i>01</i><p><span class="bp">&ge;1440</span> &mdash; Below the phase glyphs: the project&rsquo;s rooms, serif names with a quiet mono state. Selecting one <em>takes it in hand</em>; selecting it again puts it down. Nothing is hidden while a room is held.</p></li>
+          <li><i>02</i><p>Holding a room lifts that room&rsquo;s lines to the top of every region &mdash; approvals, schedule rows, FF&amp;E pieces, boards &mdash; and adds one line to the letterhead: <span class="bp">In hand &middot; Kitchen</span>. Region order, fold seams and action ledgers are untouched.</p></li>
+          <li><i>03</i><p><span class="bp">1180&ndash;1439</span> &mdash; The 56&thinsp;px rail stacks room initials as small filing tabs under the phase glyphs; the held room is inked. Same act, no labels.</p></li>
+          <li><i>04</i><p><span class="bp">&lt;1180</span> &mdash; Nothing new. The bottom sheet already carries Rooms jump rows (R25); this direction finally makes the desktop match the phone rather than inventing a second mobile pattern.</p></li>
+        </ul>
+
+        <div class="ask">
+          <span>Open question for the team</span>
+          <p>Is a room a lens on the whole document, or a place you go? If designers expect to <em>go there</em>, this becomes a route, the rail is the wrong home, and we should say so now.</p>
+        </div>
+      </div>
+
+      <div>
+        <div class="mock-note"><span>Resting state</span><span>&ge;1440</span></div>
+        <div class="mock-frame">
+          <div class="rail">
+            <span class="put-down">&larr; Put down</span>
+            <ul class="marks">
+              <li class="mark-row"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:100%"></b></i><i><b style="width:45%"></b></i></span><span><span class="nm">Proposal</span><span class="sb">Signed</span></span></li>
+              <li class="mark-row active"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Project</span><span class="sb">Active &middot; Week 1</span></span></li>
+              <li class="mark-row future"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Install</span><span class="sb">Aug 10</span></span></li>
+            </ul>
+            <div class="rail-block">
+              <span class="rail-label">Rooms</span>
+              <div class="room held"><span class="k">Kitchen</span><span class="v">In hand</span></div>
+              <div class="room"><span class="k">Living room</span><span class="v">Specifying</span></div>
+              <div class="room"><span class="k">Primary bath</span><span class="v">Ordered</span></div>
+              <div class="room"><span class="k">Dining</span><span class="v">Ordered</span></div>
+              <div class="room"><span class="k">Entry</span><span class="v">Not started</span></div>
+              <span class="rail-door">Put the room down</span>
+            </div>
+            <div class="timerbox">
+              <span class="st">&#9679; In hand</span>
+              <span class="el">0:14</span>
+              <span class="acts"><span>Pause</span><span>+ Log</span></span>
+            </div>
+          </div>
+          <div class="stub">
+            <p class="st-eye">In hand &middot; Kitchen</p>
+            <p class="st-name">Vasquez Residence</p>
+            <div class="st-line"></div>
+            <p class="st-eye">03 &middot; FF&amp;E</p>
+            <div style="margin-top:8px;">
+              <div class="st-bar w1" style="background:var(--clay);opacity:.5;"></div>
+              <div class="st-bar w2" style="background:var(--clay);opacity:.5;"></div>
+              <div class="st-bar w3"></div>
+              <div class="st-bar w2"></div>
+            </div>
+            <div class="st-line"></div>
+            <p class="st-eye">04 &middot; Schedule</p>
+            <div style="margin-top:8px;">
+              <div class="st-bar w2" style="background:var(--clay);opacity:.5;"></div>
+              <div class="st-bar w1"></div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-note" style="margin-top:16px;"><span>Compact</span><span>1180&ndash;1439</span></div>
+        <div class="mock-frame">
+          <div class="rail rail-compact">
+            <span class="put-down">&larr;</span>
+            <span class="sm sm-c" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span>
+            <div class="tabs-c">
+              <div class="tab-c held">KIT</div>
+              <div class="tab-c">LIV</div>
+              <div class="tab-c">BTH</div>
+              <div class="tab-c">DIN</div>
+              <div class="tab-c">ENT</div>
+            </div>
+          </div>
+          <div class="stub"><p class="st-eye">Paper</p><div class="st-line"></div><div class="st-bar w1"></div><div class="st-bar w2"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= II · THE DAY BOOK ======================= -->
+<section class="slide" id="dir-2">
+  <div class="inner">
+    <div class="dir-head">
+      <span class="dir-num">Direction II</span>
+      <h2>The Day Book</h2>
+      <span class="dir-job">The job &middot; Make time capture truthful before it is logged</span>
+    </div>
+    <p class="dir-thesis">The house already says it plainly: <em>pick up = clock in; put down = you decide what logs.</em> But the decision has no surface. The timer counts one document&rsquo;s sitting, the day&rsquo;s other sittings are invisible, and Put down is a leap of faith taken at the top of the very column that should have shown its consequence.</p>
+
+    <div class="dir-grid">
+      <div>
+        <dl class="krc">
+          <div><dt>Keeps</dt><dd>In hand, Pause and + Log exactly as they are &mdash; the same card, the same mono elapsed. Put down stays where it is, at the top.</dd></div>
+          <div><dt>Refuses</dt><dd>Timesheets, targets, utilization, streaks &mdash; anything that scores the designer. No money: rates and billing belong to the paper&rsquo;s design-authority region.</dd></div>
+          <div><dt>Costs</dt><dd>Cross-document session state, and a put-down preview that must be exactly right &mdash; a preview that lies once is worse than no preview. Real risk that a craft document starts to feel like a productivity tool.</dd></div>
+        </dl>
+
+        <ul class="behaviors">
+          <li><i>01</i><p><span class="bp">&ge;1440</span> &mdash; The timer card grows one line up: <span class="bp">Today &middot; 3h 20m &middot; four documents</span>. One fact from outside this document, stated once, never a chart.</p></li>
+          <li><i>02</i><p>And one line down &mdash; <span class="bp">Will log</span> &mdash; the exact entry Put down is about to write: duration, activity, project, with a <em>change</em> ink. The put-down stops being a leap and becomes a reading.</p></li>
+          <li><i>03</i><p>Beneath it, the day itself: this day&rsquo;s holds in order, mono times against serif project names, three at most. It is a daybook, not a log &mdash; it records, it does not total.</p></li>
+          <li><i>04</i><p><span class="bp">1180&ndash;1439</span> &mdash; the compact rail keeps its single time bead; the day and the preview live in the existing timer sheet. <span class="bp">&lt;1180</span> &mdash; the bottom sheet&rsquo;s time section gains the same <em>Will log</em> line and nothing else.</p></li>
+        </ul>
+
+        <div class="ask">
+          <span>Open question for the team</span>
+          <p>Does showing the day inside one document break D1&rsquo;s strict focus &mdash; or is the clock the one legitimate outside fact, since it is already running across documents whether we print it or not?</p>
+        </div>
+      </div>
+
+      <div>
+        <div class="mock-note"><span>Resting state</span><span>&ge;1440</span></div>
+        <div class="mock-frame">
+          <div class="rail">
+            <span class="put-down">&larr; Put down</span>
+            <ul class="marks">
+              <li class="mark-row"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:100%"></b></i><i><b style="width:45%"></b></i></span><span><span class="nm">Proposal</span><span class="sb">Signed</span></span></li>
+              <li class="mark-row active"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Project</span><span class="sb">Active &middot; Week 1</span></span></li>
+              <li class="mark-row future"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Install</span><span class="sb">Aug 10</span></span></li>
+            </ul>
+            <div class="timerbox">
+              <span class="st">Today &middot; 3h 20m &middot; 4 documents</span>
+              <div style="border-top:1px solid var(--pearl);margin:8px 0;"></div>
+              <span class="st">&#9679; In hand</span>
+              <span class="el">0:14</span>
+              <span class="acts"><span>Pause</span><span>+ Log</span></span>
+              <div class="willlog">
+                <span class="st">Will log</span>
+                <p style="font-family:var(--serif);font-size:12.5px;line-height:1.3;margin-top:4px;">14 min &middot; Selections<br>Vasquez Residence</p>
+                <span class="rail-door" style="margin-top:8px;">Change</span>
+              </div>
+            </div>
+            <div class="rail-block">
+              <span class="rail-label">The day</span>
+              <div class="rail-line"><span class="k">Vasquez</span><span class="v">1:40 pm</span></div>
+              <div class="rail-line"><span class="k">Ashwood</span><span class="v">11:05 am</span></div>
+              <div class="rail-line"><span class="k">Nakano loft</span><span class="v">9:20 am</span></div>
+            </div>
+          </div>
+          <div class="stub">
+            <p class="st-eye">The Document &middot; Project</p>
+            <p class="st-name">Vasquez Residence</p>
+            <div class="st-line"></div>
+            <p class="st-eye">02 &middot; Schedule</p>
+            <div style="margin-top:8px;"><div class="st-bar w1"></div><div class="st-bar w2"></div><div class="st-bar w3"></div></div>
+            <div class="st-line"></div>
+            <p class="st-eye">03 &middot; FF&amp;E</p>
+            <div style="margin-top:8px;"><div class="st-bar w2"></div><div class="st-bar w1"></div></div>
+          </div>
+        </div>
+        <div class="mock-note" style="margin-top:16px;"><span>Compact</span><span>1180&ndash;1439</span></div>
+        <div class="mock-frame">
+          <div class="rail rail-compact">
+            <span class="put-down">&larr;</span>
+            <span class="sm sm-c" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span>
+            <div class="tabs-c">
+              <div class="tab-c" style="border-bottom:0;">&#9679;</div>
+              <div class="tab-c" style="border-bottom:0;font-size:11px;color:var(--charcoal);">0:14</div>
+            </div>
+          </div>
+          <div class="stub"><p class="st-eye">Paper</p><div class="st-line"></div><div class="st-bar w1"></div><div class="st-bar w2"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= III · THE ALMANAC ======================= -->
+<section class="slide" id="dir-3">
+  <div class="inner">
+    <div class="dir-head">
+      <span class="dir-num">Direction III</span>
+      <h2>The Almanac</h2>
+      <span class="dir-job">The job &middot; Orientation in time, at the fidelity the date actually has</span>
+    </div>
+    <p class="dir-thesis">This document is full of dated commitments &mdash; respond-by, install window, pulse due, delivery bands &mdash; each sitting inside its own region at its own rung of the fidelity ladder, and nowhere gathered as a single chronology. An almanac is a book of what is coming. It is not a book of what is late.</p>
+
+    <div class="dir-grid">
+      <div>
+        <dl class="krc">
+          <div><dt>Keeps</dt><dd>The fidelity ladder verbatim &mdash; band <span class="bp">~Aug</span>, frame <span class="bp">~Aug 10</span>, committed <span class="bp">Aug 10</span>, record &mdash; and R113: a band prints as a band, because Band is a state, not an error.</dd></div>
+          <div><dt>Refuses</dt><dd>Due-ness in every form. No red, no overdue treatment, no counts, no chase verbs, no reminders. A date that is asking something of you is a need, and needs belong to the red-letter zone and the margin.</dd></div>
+          <div><dt>Costs</dt><dd>One honest ordering rule across heterogeneous dated things, and permanent discipline against the studio&rsquo;s inevitable request to colour it.</dd></div>
+        </dl>
+
+        <ul class="behaviors">
+          <li><i>01</i><p><span class="bp">&ge;1440</span> &mdash; <span class="bp">What is dated</span>: four or five entries, forward only. Mono date at the fidelity it holds, serif line beneath. Bands sort to their midpoint and still print as bands.</p></li>
+          <li><i>02</i><p>An entry that passes drops off the almanac rather than turning red &mdash; the margin already has it, and having it twice is how a chronology becomes an alarm.</p></li>
+          <li><i>03</i><p>Selecting an entry jumps to its line on the paper. It never opens an editor: dates are set in the drafting strip and committed through the Calendar Folio, and this direction does not move that.</p></li>
+          <li><i>04</i><p><span class="bp">1180&ndash;1439</span> &mdash; a single hairline tick under the glyphs carrying the next date only, mono, unlabelled. <span class="bp">&lt;1180</span> &mdash; a short section in the bottom sheet beneath the phase list.</p></li>
+        </ul>
+
+        <div class="ask">
+          <span>Open question for the team</span>
+          <p>Can a forward chronology stay orientation the first time a date slips? If the honest answer is that we will be asked to colour it within a week, this direction is a margin feature wearing the edge&rsquo;s clothes.</p>
+        </div>
+      </div>
+
+      <div>
+        <div class="mock-note"><span>Resting state</span><span>&ge;1440</span></div>
+        <div class="mock-frame">
+          <div class="rail">
+            <span class="put-down">&larr; Put down</span>
+            <ul class="marks">
+              <li class="mark-row"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:100%"></b></i><i><b style="width:45%"></b></i></span><span><span class="nm">Proposal</span><span class="sb">Signed</span></span></li>
+              <li class="mark-row active"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Project</span><span class="sb">Active &middot; Week 1</span></span></li>
+              <li class="mark-row future"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Install</span><span class="sb">Aug 10</span></span></li>
+            </ul>
+            <div class="rail-block">
+              <span class="rail-label">What is dated</span>
+              <div class="dated"><span class="d">Aug 16</span><span class="w">Client responds &middot; dining finish</span></div>
+              <div class="dated"><span class="d">~Aug 19</span><span class="w">Sofa delivery &middot; framed</span></div>
+              <div class="dated"><span class="d">Aug 22</span><span class="w">Pulse due &middot; week two</span></div>
+              <div class="dated"><span class="d band">~Sep</span><span class="w">Install window &middot; band</span></div>
+              <div class="dated" style="border-bottom:0;"><span class="d band">~Sep</span><span class="w">Millwork ship &middot; band</span></div>
+              <span class="rail-door">Open the Calendar Folio</span>
+            </div>
+            <div class="timerbox">
+              <span class="st">&#9679; In hand</span>
+              <span class="el">0:14</span>
+              <span class="acts"><span>Pause</span><span>+ Log</span></span>
+            </div>
+          </div>
+          <div class="stub">
+            <p class="st-eye">The Document &middot; Project</p>
+            <p class="st-name">Vasquez Residence</p>
+            <div class="st-line"></div>
+            <p class="st-eye">02 &middot; Schedule</p>
+            <div style="margin-top:8px;"><div class="st-bar w1"></div><div class="st-bar w3"></div><div class="st-bar w2"></div></div>
+            <div class="st-line"></div>
+            <p class="st-eye">05 &middot; Mood boards</p>
+            <div style="margin-top:8px;"><div class="st-bar w2"></div></div>
+          </div>
+        </div>
+        <div class="mock-note" style="margin-top:16px;"><span>Compact</span><span>1180&ndash;1439</span></div>
+        <div class="mock-frame">
+          <div class="rail rail-compact">
+            <span class="put-down">&larr;</span>
+            <span class="sm sm-c" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span>
+            <div class="tabs-c">
+              <div class="tab-c" style="border-bottom:0;color:var(--charcoal);font-size:9px;">AUG<br>16</div>
+            </div>
+          </div>
+          <div class="stub"><p class="st-eye">Paper</p><div class="st-line"></div><div class="st-bar w1"></div><div class="st-bar w2"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= IV · THE CARBON ======================= -->
+<section class="slide" id="dir-4">
+  <div class="inner">
+    <div class="dir-head">
+      <span class="dir-num">Direction IV</span>
+      <h2>The Carbon</h2>
+      <span class="dir-job">The job &middot; Show the other side of the paper</span>
+    </div>
+    <p class="dir-thesis">Under every sheet the studio writes there is a second sheet the client holds. Today nothing anywhere in the portal answers &ldquo;what does their copy look like right now?&rdquo; &mdash; so designers guess, or open the client mirror in another tab, or ask. The edge can hold the carbon: what is visible to them, what they have signed, and what is still ours alone.</p>
+
+    <div class="dir-grid">
+      <div>
+        <dl class="krc">
+          <div><dt>Keeps</dt><dd>One paper, one truth. The existing client mirror, opened read-only in a sheet. D6&rsquo;s shared visibility without exclusive holds.</dd></div>
+          <div><dt>Refuses</dt><dd>A preview <em>mode</em> that swaps the document out from under you. Read receipts, last-seen, engagement counts &mdash; watching the client is not a feature. And no share or revoke act at the edge: those stay on the paper beside the thing being shared.</dd></div>
+          <div><dt>Costs</dt><dd>A per-document read of share state across proposals, boards, schedules and invoices, which is scattered today. And an ethics line the studio has to hold: this shows what <em>we</em> published, never what <em>they</em> did.</dd></div>
+        </dl>
+
+        <ul class="behaviors">
+          <li><i>01</i><p><span class="bp">&ge;1440</span> &mdash; <span class="bp">Their copy</span>: what is currently visible to the client, each line a serif name with a mono state &mdash; <em>signed Aug 14</em>, <em>shared Aug 12</em>, <em>not shared</em> &mdash; and no verb anywhere.</p></li>
+          <li><i>02</i><p>Unshared things print in the same weight as shared ones. The absence is the information; dimming it would make it feel like an error, and not sharing is a legitimate state.</p></li>
+          <li><i>03</i><p>One text door at the foot: <em>Open their view</em> &mdash; the client mirror in a read-only sheet over the document, never a mode swap and never a route change.</p></li>
+          <li><i>04</i><p><span class="bp">1180&ndash;1439</span> &mdash; a single glyph: a second leaf behind the first, count-free, opening the same sheet. <span class="bp">&lt;1180</span> &mdash; the same list as a bottom-sheet section.</p></li>
+        </ul>
+
+        <div class="ask">
+          <span>Open question for the team</span>
+          <p>Is &ldquo;what the client can see&rdquo; orientation or attention? If a designer would ever act on this line in a hurry, it belongs to the margin and we should kill this direction rather than move the boundary for it.</p>
+        </div>
+      </div>
+
+      <div>
+        <div class="mock-note"><span>Resting state</span><span>&ge;1440</span></div>
+        <div class="mock-frame">
+          <div class="rail">
+            <span class="put-down">&larr; Put down</span>
+            <ul class="marks">
+              <li class="mark-row"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:100%"></b></i><i><b style="width:45%"></b></i></span><span><span class="nm">Proposal</span><span class="sb">Signed</span></span></li>
+              <li class="mark-row active"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Project</span><span class="sb">Active &middot; Week 1</span></span></li>
+              <li class="mark-row future"><span class="sm" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span><span><span class="nm">Install</span><span class="sb">Aug 10</span></span></li>
+            </ul>
+            <div class="rail-block">
+              <span class="rail-label">Their copy</span>
+              <div class="rail-line" style="display:block;"><span class="k">Proposal</span><span class="rail-sub">Signed &middot; Aug 14</span></div>
+              <div class="rail-line" style="display:block;"><span class="k">Living room board</span><span class="rail-sub">Shared &middot; Aug 12</span></div>
+              <div class="rail-line" style="display:block;"><span class="k">Schedule</span><span class="rail-sub">Not shared</span></div>
+              <div class="rail-line" style="display:block;"><span class="k">Invoice 0018</span><span class="rail-sub">Sent &middot; Aug 13</span></div>
+              <span class="rail-door">Open their view</span>
+            </div>
+            <div class="timerbox">
+              <span class="st">&#9679; In hand</span>
+              <span class="el">0:14</span>
+              <span class="acts"><span>Pause</span><span>+ Log</span></span>
+            </div>
+          </div>
+          <div class="stub">
+            <p class="st-eye">The Document &middot; Project</p>
+            <p class="st-name">Vasquez Residence</p>
+            <div class="st-line"></div>
+            <p class="st-eye">01 &middot; Client approvals</p>
+            <div style="margin-top:8px;"><div class="st-bar w1"></div><div class="st-bar w2"></div></div>
+            <div class="st-line"></div>
+            <p class="st-eye">04 &middot; Design authority</p>
+            <div style="margin-top:8px;"><div class="st-bar w3"></div><div class="st-bar w2"></div></div>
+          </div>
+        </div>
+        <div class="mock-note" style="margin-top:16px;"><span>Compact</span><span>1180&ndash;1439</span></div>
+        <div class="mock-frame">
+          <div class="rail rail-compact">
+            <span class="put-down">&larr;</span>
+            <span class="sm sm-c" aria-hidden="true"><i><b style="width:100%"></b></i><i><b style="width:88%"></b></i><i><b style="width:60%"></b></i></span>
+            <div class="tabs-c" style="padding-top:16px;">
+              <span class="carbonleaf" aria-hidden="true"></span>
+            </div>
+          </div>
+          <div class="stub"><p class="st-eye">Paper</p><div class="st-line"></div><div class="st-bar w1"></div><div class="st-bar w2"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= COMPARE ======================= -->
+<section class="slide" id="compare">
+  <div class="inner">
+    <p class="eyebrow">Compare</p>
+    <h2>Four jobs, weighed.</h2>
+    <table class="cmp">
+      <caption>Distance from today is measured in shipped behavior, not in pixels moved.</caption>
+      <thead>
+        <tr>
+          <th scope="col">Direction</th>
+          <th scope="col">The question it answers</th>
+          <th scope="col">Distance from today</th>
+          <th scope="col">Doctrine tension</th>
+          <th scope="col">Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row"><span>I</span>The Room in Hand</th>
+          <td>Which room am I working in, and what does the whole document hold for it?</td>
+          <td><span class="dist">Far</span>New cross-region contract; every region must answer for a room.</td>
+          <td><strong>Highest.</strong> A lens that changes emphasis on the paper is more than orientation. This one negotiates the boundary openly rather than pretending not to.</td>
+          <td>High &mdash; five regions to teach, plus a room state we may not truthfully have.</td>
+        </tr>
+        <tr>
+          <th scope="row"><span>II</span>The Day Book</th>
+          <td>What have I held today, and what will log when I put this down?</td>
+          <td><span class="dist">Near</span>Extends the existing timer card; the acts are unchanged.</td>
+          <td><strong>Low.</strong> It is memory, which the boundary already allows. The one negotiation is D1 focus: the day is a fact from outside this document.</td>
+          <td>Medium &mdash; cross-document session state and a preview that must never lie.</td>
+        </tr>
+        <tr>
+          <th scope="row"><span>III</span>The Almanac</th>
+          <td>What is dated next, and how firm is that date really?</td>
+          <td><span class="dist">Medium</span>All data exists; the ordering rule and the restraint are new.</td>
+          <td><strong>Medium.</strong> Dates want to become needs. Holds only if we never colour it &mdash; and the margin already owns anything that has slipped.</td>
+          <td>Medium &mdash; one honest sort across four kinds of dated thing, then permanent discipline.</td>
+        </tr>
+        <tr>
+          <th scope="row"><span>IV</span>The Carbon</th>
+          <td>What does the client&rsquo;s copy of this document look like right now?</td>
+          <td><span class="dist">Medium</span>The mirror exists; the per-document share read does not.</td>
+          <td><strong>Medium.</strong> Sits one step from attention. Survives only as a stated fact with no verb attached to it.</td>
+          <td>Medium &mdash; share state is scattered across four subsystems today.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ======================= RECOMMENDATION ======================= -->
+<section class="slide" id="recommend">
+  <div class="inner">
+    <p class="eyebrow">Recommendation</p>
+    <h2>Fold it. Then let one outside fact live there.</h2>
+
+    <div class="rec">
+      <h3>The Folded Gutter &times; The Day Book</h3>
+      <p>Of the eight concepts now on the table, three should survive. The prior deck is right about the resting state &mdash; the widest viewport should not be the only one shipping a rail that visibly stops, so fold to 56&thinsp;px and let the leaf open on an explicit act. What the leaf then holds should be <strong>the Day Book</strong>: it is the only one of the eight that repairs something already broken rather than adding a new thing to look at, it costs no new doctrine, and it makes Put down &mdash; the act the whole document is named around &mdash; something a designer can see before she takes it.</p>
+      <p>Build <strong>the Room in Hand</strong> as the one prototype, on the flag, because it is the only concept in either deck that could change how designers work rather than how they orient; if rooms are truly the working unit, it is worth the boundary argument, and if they are not, one prototype settles it. Everything else &mdash; the Running Index, the Dog-Eared Set, the Hand Ledger, the Almanac, the Carbon &mdash; is a genuine product hypothesis and should be argued on its own merits, on its own surface, never as rail filler.</p>
+
+      <div class="survive">
+        <div>
+          <h4>Ship</h4>
+          <b>The Folded Gutter</b>
+          <p>Prior deck 01. Rest at 56&thinsp;px at &ge;1440. Keep the bottom sheet below 1180. Fix the three recorded defects in the same pass &mdash; inert future markers, the undrawn active control, the always-&ldquo;just you&rdquo; presence line, which should shrink to a notch until someone else is here.</p>
+        </div>
+        <div>
+          <h4>Fill</h4>
+          <b>The Day Book</b>
+          <p>Direction II. <em>Will log</em> first &mdash; it is worth shipping on its own even if the rail folds and the day never appears.</p>
+        </div>
+        <div>
+          <h4>Prototype</h4>
+          <b>The Room in Hand</b>
+          <p>Direction I, flagged, one project, two designers. Watch whether they hold a room for a whole sitting or forget it inside a minute.</p>
+        </div>
+      </div>
+
+      <p class="dies"><em>What this costs us</em>The Almanac and the Carbon are the two we would build next, and both are good. We are declining them now because the edge can hold exactly one job honestly, and adding a second rebuilds the mixed-weight column the reading opened with.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= FOR THE TEAM ======================= -->
+<section class="slide" id="team">
+  <div class="inner">
+    <p class="eyebrow">For the design team</p>
+    <h2>Four questions, then a ruling.</h2>
+    <ul class="qs">
+      <li>
+        <i>01</i>
+        <p>Is the edge for facts about <em>this document</em>, or facts from <em>outside</em> it?
+          <small>This is the fork between the two decks, and every concept resolves once it is ruled. Their four are inward &mdash; position, pins, provenance, or nothing. Three of ours are outward &mdash; the day, the calendar, the client. Rule this first and six of the eight decide themselves.</small>
+        </p>
+      </li>
+      <li>
+        <i>02</i>
+        <p>Is a room a lens, or a place you go?
+          <small>If rooms are a lens, Direction I belongs at the edge. If designers expect a room to be somewhere they navigate to, this is a route we have not built and the rail is a decoy.</small>
+        </p>
+      </li>
+      <li>
+        <i>03</i>
+        <p>If <em>Will log</em> is right, does it need the rail at all &mdash; or does it belong inside the put-down act itself?
+          <small>A confirmation on the way out may be more honest than a standing preview, and it would cost the edge nothing. If the answer is &ldquo;inside the act,&rdquo; our own recommendation loses its filling and the Folded Gutter stands alone.</small>
+        </p>
+      </li>
+      <li>
+        <i>04</i>
+        <p>If nothing in either deck beats blank paper, are we willing to say so and just fold it?
+          <small>Eight concepts is enough to make the space feel obligated to be filled. The honest outcome may be 56&thinsp;px, three defects repaired, and the width given back to the paper &mdash; and that should be allowed to win.</small>
+        </p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<div class="inner colophon">
+  <p>
+    The Spine, Reconsidered &middot; Patina designer portal &middot; The Document &middot; Aug 14, 2026<br>
+    Sources: apps/designer-portal/src/components/document/doc-spine.tsx &middot; the /doc page shell and its 200/1040/232 grid &middot; DECISIONS I135 &mdash; the Project, composed &middot; DECISIONS R107&ndash;R114 &mdash; the fidelity ladder, the honesty rule, Band is a state &middot; prior deck: artifacts/document-spine-rail-directions-2026-08-14 &ldquo;The quiet edge&rdquo;<br>
+    Concept level. No schema proposal. No direction moves existing document content off the paper.
+  </p>
+</div>
+
+</main>
+</body>
+</html>

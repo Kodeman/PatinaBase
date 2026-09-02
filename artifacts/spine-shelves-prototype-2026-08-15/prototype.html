@@ -1,0 +1,1555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A clickable prototype of The Document reorganized — the spine holds the reference shelves, the paper holds the work.">
+<title>The Shelved Spine</title>
+<style>
+:root{
+  --canvas:#F3EEE7;
+  --off-white:#FAF7F2;
+  --paper:#FCFAF6;
+  --spine:#F6F3EE;
+  --pearl:#E5E2DD;
+  --clay:#C4A57B;
+  --clay-wash:rgba(196,165,123,0.15);
+  --clay-wash-strong:rgba(196,165,123,0.22);
+  --oak:#8B7355;
+  --mocha:#5C4A3C;
+  --charcoal:#2C2926;
+  --quiet:#65594E;
+  --dusty:#8B9CAD;
+  --terracotta:#D4A090;        /* ornament only — rules, ticks */
+  --terracotta-ink:#8F5039;    /* the same hue, darkened for text — 5.97:1 on paper, 5.36:1 on the clay wash */
+  --faint-ink:rgba(44,41,38,0.72); /* quietest ink that still clears 4.5:1 */
+  --border-warm:#DDD4C8;
+  --hairline:rgba(44,41,38,0.18);
+  --hair-soft:rgba(44,41,38,0.10);
+  --serif:Georgia,"Times New Roman",Times,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0;
+  background:var(--canvas);
+  color:var(--charcoal);
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:var(--serif);font-weight:400;margin:0;}
+p{margin:0;}
+ul,ol{margin:0;padding:0;list-style:none;}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;text-align:left;cursor:pointer;}
+:focus-visible{outline:2px solid var(--mocha);outline-offset:2px;}
+
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
+}
+
+/* ---------------- narrow screen ---------------- */
+.narrow{
+  display:none;
+  min-height:100vh;background:var(--canvas);color:var(--charcoal);
+  align-items:center;justify-content:center;text-align:center;padding:40px 28px;
+}
+.narrow .n-eye{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--mocha);display:block;margin-bottom:12px;
+}
+.narrow h1{font-size:26px;line-height:1.2;margin-bottom:10px;}
+.narrow p{font-family:var(--serif);font-size:16px;color:var(--mocha);max-width:34ch;margin:0 auto;}
+
+/* ---------------- shell ---------------- */
+.shell{display:flex;align-items:flex-start;min-height:100vh;background:var(--canvas);}
+
+/* ---------------- spine ---------------- */
+.spine{
+  flex:0 0 240px;width:240px;
+  position:sticky;top:0;height:100vh;overflow-y:auto;
+  background:var(--spine);border-right:1px solid var(--pearl);
+  padding:18px 16px 22px;
+  z-index:20;
+}
+.put-down{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--charcoal);display:block;padding:2px 0;
+}
+.put-down:hover{color:var(--mocha);}
+
+/* phase strip */
+.phase-strip{margin-top:14px;}
+.phase-row{display:flex;gap:6px;align-items:flex-end;}
+.mark{display:block;width:24px;flex:0 0 24px;}
+.mark i{display:block;height:2px;margin-bottom:2.5px;background:var(--pearl);position:relative;overflow:hidden;}
+.mark i:nth-child(1){width:24px;}
+.mark i:nth-child(2){width:19px;}
+.mark i:nth-child(3){width:14px;}
+.mark i b{position:absolute;left:0;top:0;bottom:0;right:0;display:block;}
+.mark i:nth-child(1) b{background:var(--mocha);}
+.mark i:nth-child(2) b{background:var(--clay);}
+.mark i:nth-child(3) b{background:var(--dusty);opacity:.55;}
+.mark.settled{opacity:.72;}
+.mark.future{opacity:.26;}
+.mark.active{animation:breathe 4.2s ease-in-out infinite;}
+@keyframes breathe{0%,100%{opacity:1;}50%{opacity:.62;}}
+.phase-line{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--mocha);display:block;margin-top:10px;
+}
+
+/* spine blocks */
+.block{margin-top:16px;padding-top:11px;border-top:1px solid var(--pearl);}
+.block-label{
+  font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--mocha);display:block;margin-bottom:9px;
+}
+
+/* rooms */
+.room-btn{
+  display:flex;width:100%;justify-content:space-between;gap:8px;align-items:baseline;
+  padding:6px 6px;margin:0 -6px;border-bottom:1px solid var(--hair-soft);
+}
+.room-btn .k{font-family:var(--serif);font-size:13px;}
+.room-btn .v{
+  font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--mocha);white-space:nowrap;
+}
+.room-btn .hand-tag{font-weight:400;color:var(--charcoal);}
+.room-btn .hand-tag[hidden]{display:none;}
+.room-btn:hover .v{color:var(--charcoal);}
+.room-btn[aria-pressed="true"]{background:var(--clay-wash);border-bottom-color:transparent;}
+.room-btn[aria-pressed="true"] .k{font-weight:700;}
+.room-btn[aria-pressed="true"] .v{color:var(--charcoal);}
+.room-note{
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint-ink);display:block;margin-top:9px;
+}
+
+/* running index */
+.index-wrap{position:relative;padding-left:11px;}
+.reading-line{
+  position:absolute;left:0;top:0;width:2px;height:0;background:var(--clay);
+  transition:top .22s ease,height .22s ease;
+}
+.index-btn{display:block;width:100%;padding:6px 0;}
+.index-btn .k{font-family:var(--serif);font-size:13px;display:block;line-height:1.2;}
+.index-btn .v{
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--mocha);display:block;margin-top:2px;
+}
+.index-btn:hover .k{color:var(--mocha);}
+.index-btn[aria-current="true"] .k{font-weight:700;}
+.index-btn[aria-current="true"] .v{color:var(--charcoal);}
+
+/* shelves */
+.shelf-btn{
+  display:flex;width:100%;justify-content:space-between;align-items:center;gap:8px;
+  padding:7px 6px;margin:0 -6px;border-bottom:1px solid var(--hair-soft);
+}
+.shelf-btn .k{font-family:var(--serif);font-size:13.5px;display:block;}
+.shelf-btn .v{
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--mocha);display:block;margin-top:2px;
+}
+.shelf-btn .arrow{font-family:var(--mono);font-size:10px;color:var(--mocha);}
+.shelf-btn:hover .k{color:var(--mocha);}
+.shelf-btn[aria-expanded="true"]{background:var(--clay-wash);border-bottom-color:transparent;}
+.shelf-btn[aria-expanded="true"] .k{font-weight:700;}
+.shelf-btn[aria-expanded="true"] .arrow{color:var(--charcoal);}
+
+/* spine foot */
+.spine-foot{margin-top:17px;padding-top:9px;border-top:1px solid var(--pearl);}
+.timer-line{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--charcoal);display:block;
+}
+.timer-line .dot{color:var(--clay);}
+.timer-line .pause{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--mocha);
+}
+.timer-line .pause:hover{color:var(--charcoal);}
+.presence-line{
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint-ink);display:block;margin-top:8px;line-height:1.5;
+}
+
+/* ---------------- leaf ---------------- */
+.leaf{
+  position:fixed;left:240px;top:0;width:320px;height:100vh;overflow-y:auto;
+  background:var(--paper);border-right:1px solid var(--border-warm);
+  box-shadow:14px 0 34px rgba(44,41,38,.13);
+  padding:18px 18px 30px;z-index:40;
+}
+.leaf[hidden]{display:none;}
+.leaf-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.leaf-eye{
+  font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--mocha);display:block;
+}
+.leaf-title{font-size:22px;line-height:1.1;margin-top:5px;}
+.leaf-close{
+  font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--charcoal);white-space:nowrap;padding:3px 0;
+}
+.leaf-close:hover{color:var(--mocha);}
+.leaf-lifted{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--charcoal);background:var(--clay-wash);
+  margin:14px -18px 0;padding:7px 18px;display:block;
+}
+.leaf-lifted[hidden]{display:none;}
+.leaf-sec{margin-top:20px;padding-top:12px;border-top:1px solid var(--pearl);}
+.leaf-sec-label{
+  font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--mocha);display:block;margin-bottom:8px;
+}
+.leaf-row{
+  display:flex;justify-content:space-between;gap:8px;align-items:baseline;
+  padding:6px;margin:0 -6px;border-bottom:1px solid var(--hair-soft);
+}
+.leaf-row .k{font-family:var(--serif);font-size:13px;line-height:1.25;}
+.leaf-row .k em{font-style:normal;display:block;font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--mocha);margin-top:3px;}
+.leaf-row .v{
+  font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--mocha);text-align:right;white-space:nowrap;
+}
+.leaf-group{padding:2px 0 6px;}
+.leaf-group-name{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--mocha);display:block;padding:6px 6px 3px;margin:0 -6px;
+}
+.leaf-note{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--quiet);line-height:1.7;margin-top:16px;padding-top:12px;
+  border-top:1px solid var(--pearl);
+}
+.leaf-row.is-lifted,.leaf-group.is-lifted{background:var(--clay-wash);border-bottom-color:transparent;}
+.leaf-group.is-lifted{margin:0 -6px;padding:2px 6px 6px;}
+.leaf-row.is-lifted .v,.leaf-group.is-lifted .leaf-group-name{color:var(--charcoal);}
+
+/* ---------------- paper ---------------- */
+.paper-wrap{
+  flex:1 1 auto;min-width:0;display:flex;justify-content:center;padding:0 32px 70px;
+  transition:margin-left 200ms ease;
+}
+/* below ~1900px an open leaf would cover the paper's text, so push instead of overlay */
+.shell.leaf-open .paper-wrap{margin-left:320px;}
+@media (min-width:1900px){
+  .shell.leaf-open .paper-wrap{margin-left:0;}
+}
+.paper{
+  width:100%;max-width:960px;background:var(--paper);color:var(--charcoal);
+  border-left:1px solid var(--pearl);border-right:1px solid var(--pearl);
+  padding:32px 48px 54px;min-height:100vh;
+}
+
+/* letterhead */
+.lh-eye{
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--mocha);display:block;
+}
+.lh-title{font-size:40px;line-height:1.06;margin-top:10px;}
+.lh-sub{font-family:var(--serif);font-size:16.5px;color:var(--mocha);margin-top:7px;}
+.lh-vitals{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--quiet);margin-top:16px;padding-top:12px;border-top:1px solid var(--hair-soft);display:block;
+}
+.lh-hand{
+  font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--charcoal);background:var(--clay-wash);display:block;
+  margin-top:10px;padding:6px 10px;border-left:2px solid var(--clay);
+}
+.lh-hand[hidden]{display:none;}
+
+/* fold seam */
+.seam{margin-top:21px;}
+.seam-btn{
+  display:flex;width:100%;justify-content:space-between;gap:14px;align-items:baseline;
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--quiet);padding:9px 0;
+  border-top:1px solid var(--hair-soft);border-bottom:1px solid var(--hair-soft);
+}
+.seam-btn:hover{color:var(--charcoal);}
+.seam-btn .unfold{color:var(--charcoal);white-space:nowrap;}
+.seam-body{padding:14px 0 4px;border-bottom:1px solid var(--hair-soft);}
+.seam-body[hidden]{display:none;}
+.seam-body li{
+  display:grid;grid-template-columns:14px 1fr;gap:10px;align-items:baseline;
+  padding:4px 0;font-family:var(--serif);font-size:14.5px;color:var(--mocha);
+}
+.seam-body li i{
+  font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--quiet);
+}
+.seam-body li b{font-weight:400;color:var(--charcoal);}
+
+/* red letter */
+.red-letter{margin-top:21px;border-left:2px solid var(--terracotta);padding-left:16px;}
+.red-eye{
+  font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--terracotta-ink);display:block;margin-bottom:8px;
+}
+.need{display:flex;justify-content:space-between;gap:18px;align-items:baseline;padding:4px 0;}
+.need .k{font-family:var(--serif);font-size:16px;line-height:1.35;}
+.need .k span{
+  display:block;font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--mocha);margin-top:4px;
+}
+
+/* verbs */
+.verb{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--quiet);white-space:nowrap;padding:2px 0;
+}
+.verb:hover{color:var(--charcoal);}
+.verb.inked{color:var(--charcoal);}
+.verb.inked > span{border-bottom:1px solid var(--hairline);padding-bottom:2px;}
+.verb.scored > span{border-bottom:1px solid var(--hairline);padding-bottom:2px;}
+
+/* regions */
+.region{margin-top:33px;scroll-margin-top:24px;}
+.double-rule{position:relative;height:2px;background:var(--charcoal);}
+.double-rule::after{
+  content:"";position:absolute;left:0;right:0;top:5px;height:1px;background:var(--hairline);
+}
+.region-head{
+  display:flex;justify-content:space-between;align-items:flex-end;gap:24px;
+  padding-top:14px;margin-bottom:13px;
+}
+.region-head h2{font-size:27px;line-height:1.05;}
+.rh-eye{
+  font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--mocha);display:block;margin-bottom:7px;
+}
+.region-head h2:focus,
+.region-head h2:focus-visible{outline:2px solid var(--mocha);outline-offset:4px;}
+.rh-status{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--mocha);margin-top:7px;
+}
+.ledger{display:flex;gap:18px;align-items:baseline;flex-shrink:0;}
+
+/* generic paper rows */
+.row{
+  display:grid;gap:14px;align-items:baseline;
+  padding:11px 8px;margin:0 -8px;border-bottom:1px solid var(--hair-soft);
+}
+.row.is-lifted{background:var(--clay-wash);border-bottom-color:transparent;}
+.row-room{
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint-ink);text-align:right;white-space:nowrap;
+}
+.row.is-lifted .row-room{color:var(--charcoal);}
+/* the clay wash lifts the ground ~4 stops, so the quiet inks darken on top of it */
+.row.is-lifted .who,
+.row.is-lifted .opt,
+.row.is-lifted .when,
+.row.is-lifted .cost,
+.row.is-lifted .meta,
+.row.is-lifted .verb,
+.leaf-row.is-lifted .v,
+.leaf-row.is-lifted .k em,
+.leaf-group.is-lifted .v,
+.shelf-btn[aria-expanded="true"] .v{color:var(--charcoal);}
+.row.is-lifted .when.awaiting{color:var(--terracotta-ink);}
+
+/* decisions */
+.dec-head,.dec-row{grid-template-columns:1.5fr 1fr 1.6fr .9fr 96px;}
+.dec-head{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--mocha);border-bottom:1px solid var(--hairline);padding-bottom:7px;
+}
+.dec-row .req{font-family:var(--serif);font-size:16px;line-height:1.25;}
+.dec-row .opt,.dec-row .who,.dec-row .when{
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--quiet);
+}
+.dec-row .when.awaiting{color:var(--terracotta-ink);}
+
+/* communications */
+.msg{grid-template-columns:1fr 96px;}
+.msg .body{font-family:var(--serif);font-size:16px;line-height:1.45;color:var(--charcoal);}
+.msg .meta{
+  display:block;margin-top:6px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:var(--mocha);
+}
+
+/* action items */
+.act{grid-template-columns:1fr 176px 96px 62px;}
+.act .task{font-family:var(--serif);font-size:16px;line-height:1.3;}
+.act .who,.ffe .who{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:var(--quiet);
+}
+
+/* project · ff&e — the working ledger */
+.ffe-head,.ffe{grid-template-columns:1fr 168px 92px 96px;}
+.ffe-head{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--mocha);border-bottom:1px solid var(--hairline);padding-bottom:7px;
+}
+.ffe .piece{font-family:var(--serif);font-size:16px;line-height:1.25;}
+.ffe .cost,.ffe-head .cost{
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--quiet);text-align:right;
+}
+
+/* design authority — four rungs */
+.rung{
+  display:grid;grid-template-columns:132px 148px 1fr;gap:14px;align-items:baseline;
+  padding:11px 8px;margin:0 -8px;border-bottom:1px solid var(--hair-soft);
+}
+.rung-k{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--mocha);
+}
+.rung-v{font-family:var(--serif);font-size:17px;}
+.rung-n{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--quiet);
+}
+.ink-urgent{color:var(--terracotta-ink);}
+
+/* settled bars inside the quiet seams */
+.seam-quiet{margin-top:24px;}
+.settled-bar{
+  display:flex;justify-content:space-between;gap:16px;align-items:baseline;
+  padding:9px 8px;margin:0 -8px;border-bottom:1px solid var(--hair-soft);
+}
+.settled-bar .k{font-family:var(--serif);font-size:15px;}
+.settled-bar .v{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--quiet);
+}
+
+/* schedule */
+.sched-scale{
+  position:relative;height:16px;margin:6px 0 4px 168px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mocha);
+}
+.sched-scale span{position:absolute;top:0;}
+.lane{display:grid;grid-template-columns:168px 1fr;gap:0;align-items:center;padding:9px 0;}
+.lane-name{font-family:var(--serif);font-size:15px;padding-right:16px;}
+.lane-name em{
+  font-style:normal;display:block;
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mocha);margin-top:3px;
+}
+.lane-track{position:relative;height:20px;border-top:1px solid var(--hair-soft);}
+.gridline{position:absolute;top:-6px;bottom:-9px;width:1px;background:var(--hair-soft);}
+.bar{position:absolute;top:6px;height:8px;background:var(--clay);}
+.bar.done{background:var(--oak);opacity:.42;}
+.bar.band{
+  background:transparent;border:1px solid var(--clay);
+  background-image:repeating-linear-gradient(135deg,var(--clay-wash-strong) 0 4px,transparent 4px 8px);
+}
+.today{position:absolute;top:-6px;bottom:-9px;width:1px;background:var(--terracotta);}
+.today-label{
+  position:absolute;font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--terracotta-ink);top:0;
+}
+.sched-note{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--mocha);margin-top:14px;padding-top:8px;border-top:1px solid var(--hair-soft);
+}
+
+/* schedule — fold seam + glance */
+.sched-fold{padding-top:2px;}
+.sched-glance{padding:10px 0 2px;}
+.glance-track{position:relative;height:10px;background:var(--pearl);}
+.glance-seg{position:absolute;top:0;bottom:0;}
+.glance-seg.done{background:var(--oak);opacity:.55;}
+.glance-seg.active{background:var(--clay);}
+.glance-seg.future{background:rgba(196,165,123,.28);}
+.glance-today{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--terracotta);}
+.glance-months{position:relative;height:12px;margin-top:4px;}
+.glance-months span{
+  position:absolute;top:0;
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mocha);
+}
+.sched-eyebrow{
+  font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--mocha);display:block;margin-bottom:9px;
+}
+
+/* colophon */
+.colophon{
+  margin-top:38px;padding-top:16px;border-top:1px solid var(--hairline);
+  font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint-ink);line-height:1.9;
+}
+
+/* ---------------- stub notice ---------------- */
+.stub-note{
+  position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:60;
+  background:var(--charcoal);color:var(--off-white);
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  padding:10px 18px;max-width:min(660px,86vw);text-align:center;
+  box-shadow:0 6px 22px rgba(44,41,38,.22);
+  opacity:0;visibility:hidden;transition:opacity 180ms ease,visibility 0s linear 180ms;
+}
+.stub-note.on{opacity:1;visibility:visible;transition:opacity 180ms ease;}
+
+/* ---------------- margin column ---------------- */
+.margin-col{
+  flex:0 0 56px;width:56px;position:sticky;top:0;height:100vh;
+  border-left:1px solid var(--pearl);background:var(--canvas);
+  display:flex;align-items:flex-start;justify-content:center;padding-top:46px;
+}
+.margin-col span{
+  font-family:var(--mono);font-size:9px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--faint-ink);writing-mode:vertical-rl;
+}
+
+@media (max-width:1099px){
+  .shell{display:none;}
+  .narrow{display:flex;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  .mark.active{animation:none;}
+  .reading-line{transition:none;}
+  .paper-wrap{transition:none;}
+  .stub-note{transition:none;}
+  .stub-note.on{transition:none;}
+}
+</style>
+</head>
+<body>
+
+<div class="narrow">
+  <div>
+    <span class="n-eye">The Document · Prototype</span>
+    <h1>The Shelved Spine</h1>
+    <p>This is a desktop study of the spine, the shelves, and the paper. Open it on a wider screen — 1100px or more.</p>
+  </div>
+</div>
+
+<div class="shell">
+
+  <!-- ================= SPINE ================= -->
+  <aside class="spine" aria-label="Document spine">
+    <button type="button" class="put-down" data-stub="Put down">&larr; Put down</button>
+
+    <div class="phase-strip">
+      <div class="phase-row" role="img" aria-label="Seven phases. Brief, Discovery, Direction and Proposal settled. Project active. Install and Care ahead.">
+        <span class="mark settled"><i><b></b></i><i><b></b></i><i><b></b></i></span>
+        <span class="mark settled"><i><b></b></i><i><b></b></i><i><b></b></i></span>
+        <span class="mark settled"><i><b></b></i><i><b></b></i><i><b></b></i></span>
+        <span class="mark settled"><i><b></b></i><i><b></b></i><i><b></b></i></span>
+        <span class="mark active"><i><b></b></i><i><b></b></i><i><b></b></i></span>
+        <span class="mark future"><i><b></b></i><i><b></b></i><i><b></b></i></span>
+        <span class="mark future"><i><b></b></i><i><b></b></i><i><b></b></i></span>
+      </div>
+      <span class="phase-line">Project &middot; Active &middot; Week 1</span>
+    </div>
+
+    <!-- RUNNING INDEX -->
+    <div class="block">
+      <span class="block-label" id="index-label">In this document</span>
+      <div class="index-wrap" role="group" aria-labelledby="index-label">
+        <span class="reading-line" id="reading-line" aria-hidden="true"></span>
+        <button type="button" class="index-btn" data-jump="schedule" aria-current="true">
+          <span class="k">Schedule</span><span class="v">Week 1 of 14</span>
+        </button>
+        <button type="button" class="index-btn" data-jump="approvals" aria-current="false">
+          <span class="k">Client approvals</span><span class="v">1 awaiting</span>
+        </button>
+        <button type="button" class="index-btn" data-jump="communications" aria-current="false">
+          <span class="k">Communications</span><span class="v">Last note Aug 14</span>
+        </button>
+        <button type="button" class="index-btn" data-jump="actions" aria-current="false">
+          <span class="k">Action items</span><span class="v">2 open</span>
+        </button>
+        <button type="button" class="index-btn" data-jump="ffe" aria-current="false">
+          <span class="k">Project &middot; FF&amp;E</span><span class="v">10 pieces &middot; 5 rooms</span>
+        </button>
+        <button type="button" class="index-btn" data-jump="authority" aria-current="false">
+          <span class="k">Design authority</span><span class="v">$0 moved</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ROOMS -->
+    <div class="block">
+      <span class="block-label" id="rooms-label">Rooms</span>
+      <div role="group" aria-labelledby="rooms-label">
+        <button type="button" class="room-btn" data-room-btn="kitchen" aria-pressed="false">
+          <span class="k">Kitchen</span>
+          <span class="v"><span class="hand-tag" hidden>In hand &middot; </span><span class="state">Ordering</span></span>
+        </button>
+        <button type="button" class="room-btn" data-room-btn="living" aria-pressed="false">
+          <span class="k">Living room</span>
+          <span class="v"><span class="hand-tag" hidden>In hand &middot; </span><span class="state">Specifying</span></span>
+        </button>
+        <button type="button" class="room-btn" data-room-btn="bath" aria-pressed="false">
+          <span class="k">Primary bath</span>
+          <span class="v"><span class="hand-tag" hidden>In hand &middot; </span><span class="state">Specifying</span></span>
+        </button>
+        <button type="button" class="room-btn" data-room-btn="dining" aria-pressed="false">
+          <span class="k">Dining</span>
+          <span class="v"><span class="hand-tag" hidden>In hand &middot; </span><span class="state">Deciding</span></span>
+        </button>
+        <button type="button" class="room-btn" data-room-btn="entry" aria-pressed="false">
+          <span class="k">Entry</span>
+          <span class="v"><span class="hand-tag" hidden>In hand &middot; </span><span class="state">Not started</span></span>
+        </button>
+      </div>
+      <span class="room-note">Take a room in hand &middot; nothing hides</span>
+    </div>
+
+    <!-- THE SHELVES -->
+    <div class="block">
+      <span class="block-label" id="shelves-label">The shelves</span>
+      <div role="group" aria-labelledby="shelves-label">
+        <button type="button" class="shelf-btn" data-shelf="planroom" aria-expanded="false" aria-controls="leaf">
+          <span><span class="k">Plan room</span><span class="v">Drawing set &middot; Model</span></span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        </button>
+        <button type="button" class="shelf-btn" data-shelf="specbook" aria-expanded="false" aria-controls="leaf">
+          <span><span class="k">Spec book</span><span class="v">Specified &middot; By room</span></span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        </button>
+        <button type="button" class="shelf-btn" data-shelf="moodboards" aria-expanded="false" aria-controls="leaf">
+          <span><span class="k">Mood boards</span><span class="v">Shared &amp; draft</span></span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        </button>
+        <button type="button" class="shelf-btn" data-shelf="callsheet" aria-expanded="false" aria-controls="leaf">
+          <span><span class="k">Call sheet</span><span class="v">The roster</span></span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        </button>
+        <button type="button" class="shelf-btn" data-shelf="knowledge" aria-expanded="false" aria-controls="leaf">
+          <span><span class="k">Knowledge</span><span class="v">Studio library</span></span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="spine-foot">
+      <span class="timer-line"><span class="dot" aria-hidden="true">&#9679;</span> In hand &middot; 1h 07m &middot; <button type="button" class="pause" data-stub="Pause">Pause</button></span>
+      <span class="presence-line">Just you &middot; visible to the studio</span>
+    </div>
+  </aside>
+
+  <!-- ================= PAPER ================= -->
+  <div class="paper-wrap">
+  <main class="paper">
+
+    <!-- letterhead -->
+    <header>
+      <span class="lh-eye">The Document &middot; Project</span>
+      <h1 class="lh-title">Vasquez Residence</h1>
+      <p class="lh-sub">Sarah &amp; Miguel Vasquez &middot; Queen Anne</p>
+      <span class="lh-vitals">Fee $24,000 &middot; Committed $20,310 &middot; Week 1 of 14</span>
+      <span class="lh-hand" id="lh-hand" hidden>In hand &middot; <span id="lh-hand-room">Kitchen</span></span>
+    </header>
+
+    <!-- fold seam -->
+    <div class="seam">
+      <button type="button" class="seam-btn" data-seam aria-expanded="false" aria-controls="seam-org">
+        <span>The organization &middot; Paper = the work &middot; Shelves = the artifacts</span>
+        <span class="unfold">Unfold &darr;</span>
+      </button>
+      <div class="seam-body" id="seam-org" hidden>
+        <ol>
+          <li><i>01</i><span><b>The work</b> &rarr; this paper: approvals, communications, actions, schedule, FF&amp;E, money.</span></li>
+          <li><i>02</i><span><b>Plan room</b> &mdash; the drawing set and the model &rarr; the shelves.</span></li>
+          <li><i>03</i><span><b>Spec book</b> &mdash; the compiled reference, by room &rarr; the shelves.</span></li>
+          <li><i>04</i><span><b>Mood boards</b> and the <b>call sheet</b> &mdash; what you show, who you call &rarr; the shelves.</span></li>
+          <li><i>05</i><span><b>Knowledge</b> &mdash; standards and lessons that outlive the project &rarr; the shelves.</span></li>
+          <li><i>06</i><span><b>The room lens</b> crosses both. Take a room in hand and it lifts on the paper and on the shelf at once.</span></li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- red letter -->
+    <section class="red-letter" aria-label="Needs your hand">
+      <span class="red-eye">Needs your hand</span>
+      <div class="need">
+        <span class="k">Dining finish decision waits on the client<span>Respond by Aug 16</span></span>
+        <button type="button" class="verb inked" data-stub="Nudge"><span>Nudge</span></button>
+      </div>
+      <div class="need">
+        <span class="k">Invoice 0018 unsent<span>Drafted Aug 13</span></span>
+        <button type="button" class="verb inked" data-stub="Send"><span>Send</span></button>
+      </div>
+    </section>
+
+    <!-- SCHEDULE (collapsible) -->
+    <section class="region" id="schedule" aria-labelledby="schedule-h">
+      <div class="double-rule" aria-hidden="true"></div>
+
+      <div class="sched-fold" id="sched-fold">
+        <button type="button" class="seam-btn" data-sched-toggle aria-expanded="false" aria-controls="schedule-body">
+          <span>Schedule &middot; Week 1 of 14 &middot; Install ~Sep</span>
+          <span class="unfold">Unfold &darr;</span>
+        </button>
+        <div class="sched-glance" aria-hidden="true">
+          <div class="glance-track">
+            <i class="glance-seg future" style="left:65.57%;width:17.21%;"></i>
+            <i class="glance-seg future" style="left:36.89%;width:20.49%;"></i>
+            <i class="glance-seg future" style="left:13.93%;width:28.69%;"></i>
+            <i class="glance-seg active" style="left:4.10%;width:25.41%;"></i>
+            <i class="glance-seg done" style="left:0;width:9.02%;"></i>
+            <i class="glance-today" style="left:11.48%;"></i>
+          </div>
+          <div class="glance-months">
+            <span style="left:0;">A</span>
+            <span style="left:25.41%;">S</span>
+            <span style="left:50%;">O</span>
+            <span style="left:75.41%;">N</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="schedule-body" hidden>
+        <header class="region-head">
+          <div>
+            <h2 id="schedule-h" tabindex="-1">Schedule</h2>
+            <p class="rh-status">Five lanes &middot; Aug through Nov &middot; install window not fixed</p>
+          </div>
+          <div class="ledger">
+            <button type="button" class="verb inked" data-stub="Adjust dates"><span>Adjust dates</span></button>
+            <button type="button" class="verb" data-stub="Open the schedule">Open the schedule</button>
+            <button type="button" class="verb" data-sched-toggle aria-expanded="true" aria-controls="schedule-body">Fold &uarr;</button>
+          </div>
+        </header>
+
+        <span class="sched-eyebrow">Frame &middot; Phase dates</span>
+
+        <div class="sched-scale" aria-hidden="true">
+          <span style="left:0;">Aug</span>
+          <span style="left:25.41%;">Sep</span>
+          <span style="left:50%;">Oct</span>
+          <span style="left:75.41%;">Nov</span>
+          <span class="today-label" style="left:11.48%;">Today</span>
+        </div>
+
+        <div class="lane">
+          <span class="lane-name">Consultation<em>Done &middot; Aug 12</em></span>
+          <span class="lane-track">
+            <i class="gridline" style="left:25.41%;"></i><i class="gridline" style="left:50%;"></i><i class="gridline" style="left:75.41%;"></i>
+            <i class="today" style="left:11.48%;"></i>
+            <i class="bar done" style="left:0;width:9.02%;"></i>
+          </span>
+        </div>
+        <div class="lane">
+          <span class="lane-name">Schematic design<em>Active</em></span>
+          <span class="lane-track">
+            <i class="gridline" style="left:25.41%;"></i><i class="gridline" style="left:50%;"></i><i class="gridline" style="left:75.41%;"></i>
+            <i class="today" style="left:11.48%;"></i>
+            <i class="bar" style="left:4.10%;width:25.41%;"></i>
+          </span>
+        </div>
+        <div class="lane">
+          <span class="lane-name">Procurement<em>Opens Aug 18</em></span>
+          <span class="lane-track">
+            <i class="gridline" style="left:25.41%;"></i><i class="gridline" style="left:50%;"></i><i class="gridline" style="left:75.41%;"></i>
+            <i class="today" style="left:11.48%;"></i>
+            <i class="bar" style="left:13.93%;width:28.69%;"></i>
+          </span>
+        </div>
+        <div class="lane">
+          <span class="lane-name">Install<em>Window &middot; not fixed</em></span>
+          <span class="lane-track">
+            <i class="gridline" style="left:25.41%;"></i><i class="gridline" style="left:50%;"></i><i class="gridline" style="left:75.41%;"></i>
+            <i class="today" style="left:11.48%;"></i>
+            <i class="bar band" style="left:36.89%;width:20.49%;"></i>
+          </span>
+        </div>
+        <div class="lane">
+          <span class="lane-name">Closeout<em>Proposed</em></span>
+          <span class="lane-track">
+            <i class="gridline" style="left:25.41%;"></i><i class="gridline" style="left:50%;"></i><i class="gridline" style="left:75.41%;"></i>
+            <i class="today" style="left:11.48%;"></i>
+            <i class="bar" style="left:65.57%;width:17.21%;"></i>
+          </span>
+        </div>
+
+        <p class="sched-note">Schedule holds the whole project &mdash; it does not lift by room.</p>
+      </div>
+    </section>
+
+    <!-- PREVIOUS WORK -->
+    <div class="seam seam-quiet">
+      <button type="button" class="seam-btn" data-seam aria-expanded="false" aria-controls="seam-previous">
+        <span>Previous work &middot; 4 complete</span>
+        <span class="unfold">Unfold &darr;</span>
+      </button>
+      <div class="seam-body" id="seam-previous" hidden>
+        <div class="settled-bar"><span class="k">Brief</span><span class="v">Settled</span></div>
+        <div class="settled-bar"><span class="k">Discovery</span><span class="v">Settled &middot; Aug 14</span></div>
+        <div class="settled-bar"><span class="k">Direction</span><span class="v">Settled &middot; Aug 14</span></div>
+        <div class="settled-bar"><span class="k">Proposal</span><span class="v">Signed &middot; Aug 14</span></div>
+      </div>
+    </div>
+
+    <!-- CLIENT APPROVALS -->
+    <section class="region" id="approvals" aria-labelledby="approvals-h">
+      <div class="double-rule" aria-hidden="true"></div>
+      <header class="region-head">
+        <div>
+          <span class="rh-eye">Exact artifact &middot; named authority</span>
+          <h2 id="approvals-h" tabindex="-1">Client approvals</h2>
+          <p class="rh-status">3 in the log &middot; 1 awaiting the client</p>
+        </div>
+        <div class="ledger">
+          <button type="button" class="verb inked" data-stub="Send for approval"><span>Send for approval</span></button>
+          <button type="button" class="verb" data-stub="Open the log">Open the log</button>
+        </div>
+      </header>
+      <div class="row dec-head" aria-hidden="true">
+        <span>Request</span><span>Authority</span><span>State</span><span>Date</span><span class="row-room">Room</span>
+      </div>
+      <div data-lift-list>
+        <div class="row dec-row" data-room="dining">
+          <span class="req"><span class="sr-only">Request: </span>Dining table finish</span>
+          <span class="who"><span class="sr-only">Authority: </span>Sarah</span>
+          <span class="opt"><span class="sr-only">State: </span>Awaiting &middot; 2 options</span>
+          <span class="when awaiting"><span class="sr-only">Date: </span>Aug 16</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Dining</span>
+        </div>
+        <div class="row dec-row" data-room="kitchen">
+          <span class="req"><span class="sr-only">Request: </span>Kitchen counter stone</span>
+          <span class="who"><span class="sr-only">Authority: </span>Sarah</span>
+          <span class="opt"><span class="sr-only">State: </span>Approved &middot; honed Calacatta</span>
+          <span class="when"><span class="sr-only">Date: </span>Aug 11</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Kitchen</span>
+        </div>
+        <div class="row dec-row" data-room="none">
+          <span class="req"><span class="sr-only">Request: </span>Proposal</span>
+          <span class="who"><span class="sr-only">Authority: </span>Sarah &amp; Miguel</span>
+          <span class="opt"><span class="sr-only">State: </span>Signed</span>
+          <span class="when"><span class="sr-only">Date: </span>Aug 14</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Whole project</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMMUNICATIONS -->
+    <section class="region" id="communications" aria-labelledby="communications-h">
+      <div class="double-rule" aria-hidden="true"></div>
+      <header class="region-head">
+        <div>
+          <h2 id="communications-h" tabindex="-1">Communications</h2>
+          <p class="rh-status">Client thread &middot; trades &middot; last note Aug 14</p>
+        </div>
+        <div class="ledger">
+          <button type="button" class="verb inked" data-stub="Write"><span>Write</span></button>
+          <button type="button" class="verb" data-stub="Open the thread">Open the thread</button>
+        </div>
+      </header>
+      <div data-lift-list>
+        <div class="row msg" data-room="dining">
+          <span class="body">&ldquo;We keep going back and forth on the dining finish. Could you show us the walnut in the room light before we settle?&rdquo;
+            <span class="meta">Sarah Vasquez &middot; Aug 14 &middot; Client thread</span></span>
+          <span class="row-room"><span class="sr-only">Room: </span>Dining</span>
+        </div>
+        <div class="row msg" data-room="kitchen">
+          <span class="body">Sent Hartley &amp; Co the millwork template dates &mdash; they need the stone template booked before the counter run is cut.
+            <span class="meta">Kody &middot; Aug 13 &middot; Email to Hartley &amp; Co</span></span>
+          <span class="row-room"><span class="sr-only">Room: </span>Kitchen</span>
+        </div>
+        <div class="row msg" data-room="none">
+          <span class="body">&ldquo;Proposal signed &mdash; thank you both. Excited to see it come together.&rdquo;
+            <span class="meta">Miguel Vasquez &middot; Aug 14 &middot; Client thread</span></span>
+          <span class="row-room"><span class="sr-only">Room: </span>Whole project</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACTION ITEMS -->
+    <section class="region" id="actions" aria-labelledby="actions-h">
+      <div class="double-rule" aria-hidden="true"></div>
+      <header class="region-head">
+        <div>
+          <h2 id="actions-h" tabindex="-1">Action items</h2>
+          <p class="rh-status">3 on the list &middot; 2 open this week</p>
+        </div>
+        <div class="ledger">
+          <button type="button" class="verb inked" data-stub="Add an item"><span>Add an item</span></button>
+          <button type="button" class="verb" data-stub="Open the list">Open the list</button>
+        </div>
+      </header>
+      <div data-lift-list>
+        <div class="row act" data-room="kitchen">
+          <span class="task">Confirm stone template appointment</span>
+          <span class="who">Kody &middot; this week</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Kitchen</span>
+          <button type="button" class="verb scored" data-stub="Done"><span>Done</span></button>
+        </div>
+        <div class="row act" data-room="living">
+          <span class="task">Send drapery COM to Form Studio</span>
+          <span class="who">Leah &middot; waiting on fabric</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Living room</span>
+          <button type="button" class="verb scored" data-stub="Done"><span>Done</span></button>
+        </div>
+        <div class="row act" data-room="bath">
+          <span class="task">Book electrician for sconce circuits</span>
+          <span class="who">Kody &middot; not started</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Primary bath</span>
+          <button type="button" class="verb scored" data-stub="Done"><span>Done</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROJECT · FF&E -->
+    <section class="region" id="ffe" aria-labelledby="ffe-h">
+      <div class="double-rule" aria-hidden="true"></div>
+      <header class="region-head">
+        <div>
+          <h2 id="ffe-h" tabindex="-1">Project &middot; FF&amp;E</h2>
+          <p class="rh-status">10 pieces &middot; 5 rooms &middot; the working ledger</p>
+        </div>
+        <div class="ledger">
+          <button type="button" class="verb inked" data-stub="Add a piece"><span>Add a piece</span></button>
+          <button type="button" class="verb" data-stub="Add a room">Add a room</button>
+        </div>
+      </header>
+      <div class="row ffe-head" aria-hidden="true">
+        <span>Piece</span><span>State</span><span class="cost">Cost</span><span class="row-room">Room</span>
+      </div>
+      <div data-lift-list>
+        <div class="row ffe" data-room="kitchen">
+          <span class="piece"><span class="sr-only">Piece: </span>Range &mdash; 48&quot;</span>
+          <span class="who"><span class="sr-only">State: </span>Ordered</span>
+          <span class="cost"><span class="sr-only">Cost: </span>$12,400</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Kitchen</span>
+        </div>
+        <div class="row ffe" data-room="kitchen">
+          <span class="piece"><span class="sr-only">Piece: </span>Counter stools &times;3</span>
+          <span class="who"><span class="sr-only">State: </span>Specifying</span>
+          <span class="cost"><span class="sr-only">Cost: </span>&mdash;</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Kitchen</span>
+        </div>
+        <div class="row ffe" data-room="kitchen">
+          <span class="piece"><span class="sr-only">Piece: </span>Island pendant</span>
+          <span class="who"><span class="sr-only">State: </span>Ordered</span>
+          <span class="cost"><span class="sr-only">Cost: </span>$1,850</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Kitchen</span>
+        </div>
+        <div class="row ffe" data-room="living">
+          <span class="piece"><span class="sr-only">Piece: </span>Sofa &mdash; 96&quot;</span>
+          <span class="who"><span class="sr-only">State: </span>Framed ~Aug 19</span>
+          <span class="cost"><span class="sr-only">Cost: </span>$8,200</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Living room</span>
+        </div>
+        <div class="row ffe" data-room="living">
+          <span class="piece"><span class="sr-only">Piece: </span>Reading lamp</span>
+          <span class="who"><span class="sr-only">State: </span>Ordered</span>
+          <span class="cost"><span class="sr-only">Cost: </span>$640</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Living room</span>
+        </div>
+        <div class="row ffe" data-room="living">
+          <span class="piece"><span class="sr-only">Piece: </span>Rug &mdash; 9 &times; 12</span>
+          <span class="who"><span class="sr-only">State: </span>Ordered</span>
+          <span class="cost"><span class="sr-only">Cost: </span>$4,100</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Living room</span>
+        </div>
+        <div class="row ffe" data-room="bath">
+          <span class="piece"><span class="sr-only">Piece: </span>Tub filler</span>
+          <span class="who"><span class="sr-only">State: </span>Ordered</span>
+          <span class="cost"><span class="sr-only">Cost: </span>$1,320</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Primary bath</span>
+        </div>
+        <div class="row ffe" data-room="bath">
+          <span class="piece"><span class="sr-only">Piece: </span>Sconces &times;2</span>
+          <span class="who"><span class="sr-only">State: </span>Specifying</span>
+          <span class="cost"><span class="sr-only">Cost: </span>&mdash;</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Primary bath</span>
+        </div>
+        <div class="row ffe" data-room="dining">
+          <span class="piece"><span class="sr-only">Piece: </span>Dining table</span>
+          <span class="who"><span class="sr-only">State: </span>Awaiting finish</span>
+          <span class="cost"><span class="sr-only">Cost: </span>$6,900</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Dining</span>
+        </div>
+        <div class="row ffe" data-room="entry">
+          <span class="piece"><span class="sr-only">Piece: </span>Console</span>
+          <span class="who"><span class="sr-only">State: </span>Not started</span>
+          <span class="cost"><span class="sr-only">Cost: </span>&mdash;</span>
+          <span class="row-room"><span class="sr-only">Room: </span>Entry</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- DESIGN AUTHORITY -->
+    <section class="region" id="authority" aria-labelledby="authority-h">
+      <div class="double-rule" aria-hidden="true"></div>
+      <header class="region-head">
+        <div>
+          <span class="rh-eye">Money &middot; one region</span>
+          <h2 id="authority-h" tabindex="-1">Design authority</h2>
+          <p class="rh-status">Four rungs &middot; fee signed &middot; nothing moved yet</p>
+        </div>
+        <div class="ledger">
+          <button type="button" class="verb inked" data-stub="Send invoice 0018"><span>Send invoice 0018</span></button>
+        </div>
+      </header>
+      <div class="rung"><span class="rung-k">Authority</span><span class="rung-v">$24,000 fee</span><span class="rung-n">Signed Aug 14</span></div>
+      <div class="rung"><span class="rung-k">Plan</span><span class="rung-v">$35,410</span><span class="rung-n">Specified across five rooms</span></div>
+      <div class="rung"><span class="rung-k">Committed</span><span class="rung-v">$20,310</span><span class="rung-n">Ordered</span></div>
+      <div class="rung"><span class="rung-k">Moved</span><span class="rung-v">$0</span><span class="rung-n">Invoice 0018 drafted, <span class="ink-urgent">unsent</span></span></div>
+      <p class="sched-note">Money holds one region &mdash; it does not lift by room.</p>
+    </section>
+
+    <!-- CLOSING THE BOOK -->
+    <div class="seam seam-quiet">
+      <button type="button" class="seam-btn" data-seam aria-expanded="false" aria-controls="seam-closing">
+        <span>Closing the book &middot; Care begins at install</span>
+        <span class="unfold">Unfold &darr;</span>
+      </button>
+      <div class="seam-body" id="seam-closing" hidden>
+        <div class="settled-bar"><span class="k">Care window</span><span class="v">Opens at install &middot; ~Sep</span></div>
+        <div class="settled-bar"><span class="k">Handover note</span><span class="v">Not drafted</span></div>
+      </div>
+    </div>
+
+    <p class="colophon">
+      The paper holds the work as the studio composes it. The shelves hold the artifacts that do not fit inline.<br>
+      One room in hand lifts both. &middot; Prototype &middot; Aug 15, 2026
+    </p>
+  </main>
+  </div>
+
+  <!-- ================= LEAF ================= -->
+  <aside class="leaf" id="leaf" role="region" aria-label="Shelf" hidden>
+    <div class="leaf-head">
+      <div>
+        <span class="leaf-eye" id="leaf-eye"></span>
+        <h2 class="leaf-title" id="leaf-title"></h2>
+      </div>
+      <button type="button" class="leaf-close" id="leaf-close">&#10005; Close</button>
+    </div>
+    <span class="leaf-lifted" id="leaf-lifted" hidden></span>
+
+    <!-- PLAN ROOM -->
+    <div data-shelf-panel="planroom">
+      <div class="leaf-sec">
+        <span class="leaf-sec-label">Current set</span>
+        <div data-lift-list>
+          <div class="leaf-row" data-room="none">
+            <span class="k">A-101 Floor plan<em>Whole house</em></span>
+            <span class="v">Rev C<br>Issued Aug 12</span>
+          </div>
+          <div class="leaf-row" data-room="kitchen">
+            <span class="k">A-301 Kitchen elevations<em>Kitchen</em></span>
+            <span class="v">Rev B<br>Issued Aug 12</span>
+          </div>
+          <div class="leaf-row" data-room="kitchen">
+            <span class="k">A-501 Millwork details<em>Kitchen</em></span>
+            <span class="v">Rev A<br>In review</span>
+          </div>
+          <div class="leaf-row" data-room="none">
+            <span class="k">ID-201 Finish plan<em>Whole house</em></span>
+            <span class="v">Rev B<br>Issued Aug 10</span>
+          </div>
+        </div>
+      </div>
+      <div class="leaf-sec">
+        <span class="leaf-sec-label">Model</span>
+        <div class="leaf-row">
+          <span class="k">Geometry current as of Aug 13</span>
+          <span class="v">Current</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPEC BOOK -->
+    <div data-shelf-panel="specbook" hidden>
+      <div class="leaf-sec">
+        <span class="leaf-sec-label">Specified &middot; by room</span>
+        <div data-lift-list>
+          <div class="leaf-group" data-room="kitchen">
+            <span class="leaf-group-name">Kitchen</span>
+            <div class="leaf-row"><span class="k">Range &mdash; 48&quot;</span><span class="v">Ordered<br>$12,400</span></div>
+            <div class="leaf-row"><span class="k">Counter stools &times;3</span><span class="v">Specifying</span></div>
+            <div class="leaf-row"><span class="k">Island pendant</span><span class="v">Ordered<br>$1,850</span></div>
+          </div>
+          <div class="leaf-group" data-room="living">
+            <span class="leaf-group-name">Living room</span>
+            <div class="leaf-row"><span class="k">Sofa &mdash; 96&quot;</span><span class="v">Framed ~Aug 19<br>$8,200</span></div>
+            <div class="leaf-row"><span class="k">Reading lamp</span><span class="v">Ordered<br>$640</span></div>
+            <div class="leaf-row"><span class="k">Rug &mdash; 9 &times; 12</span><span class="v">Ordered<br>$4,100</span></div>
+          </div>
+          <div class="leaf-group" data-room="bath">
+            <span class="leaf-group-name">Primary bath</span>
+            <div class="leaf-row"><span class="k">Tub filler</span><span class="v">Ordered<br>$1,320</span></div>
+            <div class="leaf-row"><span class="k">Sconces &times;2</span><span class="v">Specifying</span></div>
+          </div>
+          <div class="leaf-group" data-room="dining">
+            <span class="leaf-group-name">Dining</span>
+            <div class="leaf-row"><span class="k">Dining table</span><span class="v">Awaiting finish<br>$6,900</span></div>
+          </div>
+          <div class="leaf-group" data-room="entry">
+            <span class="leaf-group-name">Entry</span>
+            <div class="leaf-row"><span class="k">Console</span><span class="v">Not started</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="leaf-note">The compiled reference. Working state lives on the paper, in FF&amp;E.</p>
+    </div>
+
+    <!-- MOOD BOARDS -->
+    <div data-shelf-panel="moodboards" hidden>
+      <div class="leaf-sec">
+        <span class="leaf-sec-label">Boards</span>
+        <div data-lift-list>
+          <div class="leaf-row" data-room="living">
+            <span class="k">Living room board<em>Living room</em></span>
+            <span class="v">Shared<br>Aug 12</span>
+          </div>
+          <div class="leaf-row" data-room="kitchen">
+            <span class="k">Kitchen board<em>Kitchen</em></span>
+            <span class="v">Draft</span>
+          </div>
+          <div class="leaf-row" data-room="none">
+            <span class="k">Whole-home palette<em>Whole house</em></span>
+            <span class="v">Draft</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CALL SHEET -->
+    <div data-shelf-panel="callsheet" hidden>
+      <div class="leaf-sec">
+        <span class="leaf-sec-label">The roster</span>
+        <div class="leaf-row">
+          <span class="k">Hartley &amp; Co<em>Millwork</em></span>
+          <span class="v">Lead 6w</span>
+        </div>
+        <div class="leaf-row">
+          <span class="k">Form Studio<em>Upholstery</em></span>
+          <span class="v">Lead 8w</span>
+        </div>
+        <div class="leaf-row">
+          <span class="k">Meridian Electric<em>Electrical</em></span>
+          <span class="v">Pending<br>First visit</span>
+        </div>
+      </div>
+      <p class="leaf-note">The roster answers who to call &mdash; not which room. It does not lift.</p>
+    </div>
+
+    <!-- KNOWLEDGE -->
+    <div data-shelf-panel="knowledge" hidden>
+      <div class="leaf-sec">
+        <span class="leaf-sec-label">Standards</span>
+        <div class="leaf-row"><span class="k">Hardware finishes<em>Studio standard</em></span><span class="v">Current</span></div>
+        <div class="leaf-row"><span class="k">Drapery details<em>Studio standard</em></span><span class="v">v4</span></div>
+      </div>
+      <div class="leaf-sec">
+        <span class="leaf-sec-label">Lessons</span>
+        <div class="leaf-row"><span class="k">Stone yard requires a template appointment</span><span class="v">Noted<br>Aug 2026</span></div>
+        <div class="leaf-row"><span class="k">Confirm COM yardage before the frame is cut</span><span class="v">Noted<br>Jun 2026</span></div>
+      </div>
+      <p class="leaf-note">Cross-project. Nothing here belongs to one room.</p>
+    </div>
+
+  </aside>
+
+  <div class="margin-col" aria-hidden="true"><span>Margin</span></div>
+  <div class="stub-note" id="stub-note" role="status" aria-live="polite"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  var ROOM_NAMES = {
+    kitchen:"Kitchen",
+    living:"Living room",
+    bath:"Primary bath",
+    dining:"Dining",
+    entry:"Entry"
+  };
+
+  var SHELVES = {
+    planroom:{ title:"Plan room", eye:"Plan room · Drawing set · Model" },
+    specbook:{ title:"Spec book", eye:"Spec book · By room" },
+    moodboards:{ title:"Mood boards", eye:"Mood boards · Shared & draft" },
+    callsheet:{ title:"Call sheet", eye:"Call sheet · The roster" },
+    knowledge:{ title:"Knowledge", eye:"Studio library · Cross-project" }
+  };
+
+  var state = { heldRoom:null, openShelf:null, activeRegion:"schedule" };
+
+  var leaf = document.getElementById("leaf");
+  var leafTitle = document.getElementById("leaf-title");
+  var leafEye = document.getElementById("leaf-eye");
+  var leafClose = document.getElementById("leaf-close");
+  var leafLifted = document.getElementById("leaf-lifted");
+  var lhHand = document.getElementById("lh-hand");
+  var lhHandRoom = document.getElementById("lh-hand-room");
+  var readingLine = document.getElementById("reading-line");
+
+  var roomBtns = Array.prototype.slice.call(document.querySelectorAll("[data-room-btn]"));
+  var shelfBtns = Array.prototype.slice.call(document.querySelectorAll("[data-shelf]"));
+  var indexBtns = Array.prototype.slice.call(document.querySelectorAll("[data-jump]"));
+  var liftLists = Array.prototype.slice.call(document.querySelectorAll("[data-lift-list]"));
+
+  var lastShelfTrigger = null;
+
+  /* ---------- record original order once ---------- */
+  liftLists.forEach(function(list){
+    Array.prototype.slice.call(list.children).forEach(function(child, i){
+      child.setAttribute("data-order", String(i));
+    });
+  });
+
+  /* ---------- lift (FLIP reorder, never hide) ---------- */
+  var flipTimers = [];
+
+  function clearFlipTimers(){
+    flipTimers.forEach(function(t){ window.clearTimeout(t); });
+    flipTimers = [];
+  }
+
+  function applyLift(){
+    var held = state.heldRoom;
+    var animate = !reduced.matches;
+    var runs = [];
+
+    // a run already in flight must not have its cleanup fire into this one
+    clearFlipTimers();
+
+    // FIRST — measured with any in-flight transform still applied, so a second
+    // click mid-animation continues from where the rows actually are on screen
+    if (animate) {
+      liftLists.forEach(function(list){
+        if (list.offsetParent === null) { return; }
+        var items = Array.prototype.slice.call(list.children);
+        runs.push({
+          items: items,
+          first: items.map(function(el){ return el.getBoundingClientRect().top; })
+        });
+      });
+    }
+
+    // MUTATE — every layout change belongs here, between the two measurements.
+    // The letterhead "in hand" line shifts everything below it, so it has to be
+    // toggled inside this step or every row's start offset is wrong by its height.
+    runs.forEach(function(run){
+      run.items.forEach(function(el){
+        el.style.transition = "";
+        el.style.transform = "";
+      });
+    });
+
+    liftLists.forEach(function(list){
+      var items = Array.prototype.slice.call(list.children);
+      items.slice().sort(function(a, b){
+        var aHeld = held && a.getAttribute("data-room") === held ? 0 : 1;
+        var bHeld = held && b.getAttribute("data-room") === held ? 0 : 1;
+        if (aHeld !== bHeld) { return aHeld - bHeld; }
+        return Number(a.getAttribute("data-order")) - Number(b.getAttribute("data-order"));
+      }).forEach(function(el){
+        if (held && el.getAttribute("data-room") === held) {
+          el.classList.add("is-lifted");
+        } else {
+          el.classList.remove("is-lifted");
+        }
+        list.appendChild(el);
+      });
+    });
+
+    if (held) {
+      lhHandRoom.textContent = ROOM_NAMES[held];
+      lhHand.hidden = false;
+    } else {
+      lhHand.hidden = true;
+    }
+
+    // A shelf with no room dimension at all (call sheet, knowledge) makes no
+    // claim either way. Only a shelf that *can* lift reports what it found.
+    var panel = state.openShelf
+      ? leaf.querySelector('[data-shelf-panel="' + state.openShelf + '"]')
+      : null;
+    if (held && panel && panel.querySelector("[data-lift-list]")) {
+      var liftedHere = panel.querySelectorAll(".is-lifted").length;
+      leafLifted.textContent = liftedHere
+        ? "Lifted · " + ROOM_NAMES[held]
+        : "In hand · " + ROOM_NAMES[held] + " — nothing filed here yet";
+      leafLifted.hidden = false;
+    } else {
+      leafLifted.hidden = true;
+    }
+
+    // the room keeps its state word while held — the tag is added, not swapped
+    roomBtns.forEach(function(btn){
+      var isHeld = btn.getAttribute("data-room-btn") === held;
+      btn.setAttribute("aria-pressed", String(isHeld));
+      btn.querySelector(".hand-tag").hidden = !isHeld;
+    });
+
+    // LAST — invert and play
+    runs.forEach(function(run){
+      run.items.forEach(function(el, i){
+        var dy = run.first[i] - el.getBoundingClientRect().top;
+        if (!dy) { return; }
+        el.style.transition = "none";
+        el.style.transform = "translateY(" + dy + "px)";
+        el.getBoundingClientRect();
+        el.style.transition = "transform 200ms ease";
+        el.style.transform = "";
+        flipTimers.push(window.setTimeout(function(){
+          el.style.transition = "";
+          el.style.transform = "";
+        }, 240));
+      });
+    });
+
+    // the index now sits above Rooms, so a wrapped "In hand ·" tag can no
+    // longer shift it — kept as a defensive re-measure against any future
+    // layout coupling between the two blocks
+    moveReadingLine();
+  }
+
+  roomBtns.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var room = btn.getAttribute("data-room-btn");
+      state.heldRoom = (state.heldRoom === room) ? null : room;
+      applyLift();
+    });
+  });
+
+  /* ---------- the shelves / the leaf ---------- */
+  var shell = document.querySelector(".shell");
+
+  function openShelf(name, trigger){
+    state.openShelf = name;
+    lastShelfTrigger = trigger || null;
+
+    leafTitle.textContent = SHELVES[name].title;
+    leafEye.textContent = SHELVES[name].eye;
+    leaf.setAttribute("aria-label", SHELVES[name].title + " shelf");
+
+    Array.prototype.slice.call(leaf.querySelectorAll("[data-shelf-panel]")).forEach(function(panel){
+      panel.hidden = panel.getAttribute("data-shelf-panel") !== name;
+    });
+
+    leaf.hidden = false;
+    shell.classList.add("leaf-open");
+    shelfBtns.forEach(function(b){
+      b.setAttribute("aria-expanded", String(b.getAttribute("data-shelf") === name));
+    });
+
+    leaf.scrollTop = 0;
+    applyLift();
+    leafClose.focus();
+  }
+
+  function closeShelf(){
+    if (!state.openShelf) { return; }
+    state.openShelf = null;
+    leaf.hidden = true;
+    leafLifted.hidden = true;
+    shell.classList.remove("leaf-open");
+    shelfBtns.forEach(function(b){ b.setAttribute("aria-expanded", "false"); });
+    if (lastShelfTrigger) { lastShelfTrigger.focus(); }
+    lastShelfTrigger = null;
+  }
+
+  shelfBtns.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var name = btn.getAttribute("data-shelf");
+      if (state.openShelf === name) { closeShelf(); } else { openShelf(name, btn); }
+    });
+  });
+
+  leafClose.addEventListener("click", closeShelf);
+
+  document.addEventListener("keydown", function(e){
+    if (e.key === "Escape" && state.openShelf) {
+      e.preventDefault();
+      closeShelf();
+    }
+  });
+
+  /* ---------- marked stubs ---------- */
+  var stubNote = document.getElementById("stub-note");
+  var stubTimer = null;
+
+  document.addEventListener("click", function(e){
+    if (!(e.target instanceof Element)) { return; }
+    var el = e.target.closest("[data-stub]");
+    if (!el) { return; }
+    var name = el.getAttribute("data-stub");
+    stubNote.textContent = "Not wired in this prototype · " + name + " acts in the product";
+    stubNote.classList.add("on");
+    if (stubTimer) { window.clearTimeout(stubTimer); }
+    stubTimer = window.setTimeout(function(){
+      stubNote.classList.remove("on");
+      stubTimer = null;
+    }, 2000);
+  });
+
+  /* ---------- the fold seams ---------- */
+  Array.prototype.slice.call(document.querySelectorAll("[data-seam]")).forEach(function(btn){
+    var body = document.getElementById(btn.getAttribute("aria-controls"));
+    var verb = btn.querySelector(".unfold");
+    btn.addEventListener("click", function(){
+      var open = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", String(!open));
+      body.hidden = open;
+      verb.textContent = open ? "Unfold ↓" : "Fold ↑";
+      resolveActive(); // a seam changes the paper's height under the reading line
+    });
+  });
+
+  /* ---------- the schedule fold ---------- */
+  var schedFoldWrap = document.getElementById("sched-fold");
+  var schedBody = document.getElementById("schedule-body");
+  var schedHeading = document.getElementById("schedule-h");
+  var schedToggles = Array.prototype.slice.call(document.querySelectorAll("[data-sched-toggle]"));
+  var schedSeamBtn = document.querySelector(".seam-btn[data-sched-toggle]");
+  var schedLedgerBtn = document.querySelector("#schedule-body [data-sched-toggle]");
+  var schedUnfoldVerb = schedSeamBtn.querySelector(".unfold");
+
+  function setScheduleFolded(folded, opts){
+    opts = opts || {};
+    schedFoldWrap.hidden = !folded;
+    schedBody.hidden = folded;
+    schedSeamBtn.setAttribute("aria-expanded", String(!folded));
+    schedLedgerBtn.setAttribute("aria-expanded", String(!folded));
+    schedUnfoldVerb.textContent = folded ? "Unfold ↓" : "Fold ↑";
+    // hiding either container (the fold row, or the body around the ledger's
+    // own Fold button) drops keyboard focus to <body> — send it somewhere
+    // meaningful instead, unless the caller is already handling focus itself
+    if (!opts.silent) {
+      if (folded) { schedSeamBtn.focus(); } else { schedHeading.focus({ preventScroll: true }); }
+    }
+    resolveActive(); // folding changes the paper's height under the reading line
+  }
+
+  schedToggles.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      setScheduleFolded(!schedBody.hidden);
+    });
+  });
+
+  /* ---------- the running index ---------- */
+  var regions = ["schedule", "approvals", "communications", "actions", "ffe", "authority"];
+
+  function moveReadingLine(){
+    var btn = indexBtns.filter(function(b){ return b.getAttribute("data-jump") === state.activeRegion; })[0];
+    if (!btn) { return; }
+    readingLine.style.top = btn.offsetTop + "px";
+    readingLine.style.height = btn.offsetHeight + "px";
+  }
+
+  function setActive(id){
+    if (state.activeRegion === id) { return; }
+    state.activeRegion = id;
+    indexBtns.forEach(function(b){
+      b.setAttribute("aria-current", String(b.getAttribute("data-jump") === id));
+    });
+    moveReadingLine();
+  }
+
+  // while a jump is in flight the line commits to the target instead of
+  // walking every region the scroll passes through
+  var spyLock = null;
+  var spyLockTimer = null;
+  var spyScrollEnd = null;
+
+  function releaseSpy(){
+    if (spyLockTimer) { window.clearTimeout(spyLockTimer); spyLockTimer = null; }
+    // drop the listener too — a survivor from a timed-out lock would otherwise
+    // fire on the next jump and release that newer lock mid-flight
+    if (spyScrollEnd) {
+      window.removeEventListener("scrollend", spyScrollEnd);
+      spyScrollEnd = null;
+    }
+    spyLock = null;
+    resolveActive();
+  }
+
+  function lockSpy(id){
+    spyLock = id;
+    if (spyLockTimer) { window.clearTimeout(spyLockTimer); }
+    if (spyScrollEnd) { window.removeEventListener("scrollend", spyScrollEnd); }
+    if ("onscrollend" in window) {
+      spyScrollEnd = function(){ releaseSpy(); };
+      window.addEventListener("scrollend", spyScrollEnd);
+    }
+    spyLockTimer = window.setTimeout(releaseSpy, 700);
+  }
+
+  indexBtns.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var id = btn.getAttribute("data-jump");
+      var section = document.getElementById(id);
+      if (!section) { return; }
+      // the running index always jumps to an open, readable region — a settled
+      // fold unfolds first so the scroll lands on real content, not a seam row
+      if (id === "schedule" && schedBody.hidden) {
+        setScheduleFolded(false, { silent: true }); // this handler moves focus itself, below
+      }
+      setActive(id);
+      lockSpy(id);
+      section.scrollIntoView({ behavior: reduced.matches ? "auto" : "smooth", block: "start" });
+      var heading = document.getElementById(id + "-h");
+      if (heading) {
+        window.setTimeout(function(){ heading.focus({ preventScroll: true }); }, reduced.matches ? 0 : 420);
+      }
+    });
+  });
+
+  var seen = {};
+
+  // the topmost region crossing the reading band owns the line; above the first
+  // region (or below the last) fall back to geometry so the line is never stale
+  function resolveActive(){
+    if (spyLock) { setActive(spyLock); return; }
+    // the foot of the paper belongs to the last region — Design authority can
+    // never reach the band, so without this a jump to it settles back onto FF&E
+    var atFoot = (window.innerHeight + window.scrollY) >=
+      (document.documentElement.scrollHeight - 4);
+    if (atFoot) { setActive(regions[regions.length - 1]); return; }
+    for (var i = 0; i < regions.length; i++) {
+      if (seen[regions[i]]) { setActive(regions[i]); return; }
+    }
+    var anchor = window.innerHeight * 0.25;
+    var best = regions[0];
+    for (var j = 0; j < regions.length; j++) {
+      var el = document.getElementById(regions[j]);
+      if (el && el.getBoundingClientRect().top <= anchor) { best = regions[j]; }
+    }
+    setActive(best);
+  }
+
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      seen[entry.target.id] = entry.isIntersecting;
+    });
+    resolveActive();
+  }, { rootMargin: "-20% 0px -62% 0px", threshold: 0 });
+
+  regions.forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) { io.observe(el); }
+  });
+
+  var ticking = false;
+  window.addEventListener("scroll", function(){
+    if (ticking) { return; }
+    ticking = true;
+    window.requestAnimationFrame(function(){
+      ticking = false;
+      resolveActive();
+    });
+  }, { passive: true });
+
+  window.addEventListener("resize", moveReadingLine);
+  moveReadingLine();
+})();
+</script>
+</body>
+</html>
