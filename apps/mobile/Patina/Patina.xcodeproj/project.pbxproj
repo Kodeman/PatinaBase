@@ -70,6 +70,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		FF01C0F1600000000000A101 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Version.xcconfig; path = Config/Version.xcconfig; sourceTree = "<group>"; };
 		96F46438BB46451D838BDE43 /* PatinaWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PatinaWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		CBB2D0162F1D20F7007686CD /* Patina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Patina.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CBB2D0232F1D20F8007686CD /* PatinaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PatinaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -178,6 +179,7 @@
 		CBB2D00D2F1D20F7007686CD = {
 			isa = PBXGroup;
 			children = (
+				FF01C0F1600000000000A101 /* Version.xcconfig */,
 				CBB2D0182F1D20F7007686CD /* Patina */,
 				CBB2D0262F1D20F8007686CD /* PatinaTests */,
 				CBB2D0302F1D20F8007686CD /* PatinaUITests */,
@@ -482,11 +484,11 @@
 /* Begin XCBuildConfiguration section */
 		23B5EE79D4DB380D26F472B6 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = FF01C0F1600000000000A101 /* Version.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = PatinaWidget/PatinaWidget.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VP22LXHT7L;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PatinaWidget/Info.plist;
@@ -497,7 +499,6 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = cloud.patina.app.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -514,11 +515,11 @@
 		};
 		5A4A6B96D96DFA11D3DA194E /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = FF01C0F1600000000000A101 /* Version.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = PatinaWidget/PatinaWidget.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VP22LXHT7L;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PatinaWidget/Info.plist;
@@ -529,7 +530,6 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = cloud.patina.app.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -667,6 +667,7 @@
 		};
 		CBB2D0382F1D20F8007686CD /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = FF01C0F1600000000000A101 /* Version.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -674,7 +675,6 @@
 				CODE_SIGN_ENTITLEMENTS = Patina/Patina.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VP22LXHT7L;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -695,7 +695,6 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = cloud.patina.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -715,6 +714,7 @@
 		};
 		CBB2D0392F1D20F8007686CD /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = FF01C0F1600000000000A101 /* Version.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -722,7 +722,6 @@
 				CODE_SIGN_ENTITLEMENTS = Patina/Patina.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VP22LXHT7L;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -743,7 +742,6 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = cloud.patina.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -763,14 +761,13 @@
 		};
 		CBB2D03B2F1D20F8007686CD /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = FF01C0F1600000000000A101 /* Version.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VP22LXHT7L;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.middlewesetstudio.PatinaTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -785,14 +782,13 @@
 		};
 		CBB2D03C2F1D20F8007686CD /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = FF01C0F1600000000000A101 /* Version.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VP22LXHT7L;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.middlewesetstudio.PatinaTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -807,12 +803,11 @@
 		};
 		CBB2D03E2F1D20F8007686CD /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = FF01C0F1600000000000A101 /* Version.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VP22LXHT7L;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.middlewesetstudio.PatinaUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -827,12 +822,11 @@
 		};
 		CBB2D03F2F1D20F8007686CD /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = FF01C0F1600000000000A101 /* Version.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VP22LXHT7L;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.middlewesetstudio.PatinaUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
