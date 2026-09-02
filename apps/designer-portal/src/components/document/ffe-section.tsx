@@ -777,6 +777,9 @@ interface FFESectionProps {
   highlightId?: string | null;
   /** A document deep link may ask for one Piece to arrive unfolded. */
   requestedLineId?: string | null;
+  /** Fired once the requested Piece has been unfolded, so the page can drop
+   *  the request rather than let it re-assert on every refetch. */
+  onRequestedLineConsumed?: () => void;
   /** Slice 4 (R14): open the margin note composer pre-anchored to a line. */
   onAddNote?: (lineId: string) => void;
   /** R23/R24: which document section this table embodies — mounts The Work
@@ -825,6 +828,7 @@ function FFESectionBody({
   mode,
   highlightId = null,
   requestedLineId = null,
+  onRequestedLineConsumed = () => {},
   onAddNote = () => {},
   sectionKey = null,
   clientUserId = null,
@@ -1112,15 +1116,21 @@ function FFESectionBody({
     positionDensity: ffePositionDensity,
   });
   const ffeSetFolded = ffeFold.setFolded;
+  // A link's request is honoured once. `items` changes on every refetch, so an
+  // unguarded effect would re-open the line under a reader who had folded it.
+  const honouredRequestRef = useRef<string | null>(null);
   useEffect(() => {
     if (mode !== 'project' || !requestedLineId) return;
+    if (honouredRequestRef.current === requestedLineId) return;
     const requestedLineExists = (items ?? []).some(
       (item) => String(item.id) === requestedLineId,
     );
     if (!requestedLineExists) return;
+    honouredRequestRef.current = requestedLineId;
     setOpenLineId(requestedLineId);
     ffeSetFolded(false);
-  }, [ffeSetFolded, items, mode, requestedLineId]);
+    onRequestedLineConsumed();
+  }, [ffeSetFolded, items, mode, onRequestedLineConsumed, requestedLineId]);
   const openFfeRegion = useCallback(() => {
     if (mode !== 'project') return;
     ffeSetFolded(false);

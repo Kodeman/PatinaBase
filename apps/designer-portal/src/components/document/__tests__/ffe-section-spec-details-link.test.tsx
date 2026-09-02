@@ -173,6 +173,56 @@ describe('SP-19/F57 — the unfolded FF&E line links to its spec-book entry', ()
     );
   });
 
+  it('leaves a folded Piece folded when a later read hands back fresh items', async () => {
+    const props = {
+      projectId: 'project-1',
+      projectName: 'Ellsworth',
+      mode: 'project' as const,
+      requestedLineId: 'line-1',
+    };
+    const { rerender } = render(<FFESection {...props} />);
+
+    await screen.findByRole('link', { name: /Edit spec details/ });
+
+    fireEvent.click(screen.getByRole('button', { name: /Walnut bed, king/ }));
+    expect(
+      screen.queryByRole('link', { name: /Edit spec details/ }),
+    ).not.toBeInTheDocument();
+
+    // A refetch hands the section a new items array; the request was already
+    // honoured, so it must not re-open the line under the reader.
+    mockItems = [{ ...furnishing }];
+    rerender(<FFESection {...props} />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Walnut bed, king/ }),
+      ).toHaveAttribute('aria-expanded', 'false'),
+    );
+    expect(
+      screen.queryByRole('link', { name: /Edit spec details/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('reports the direct-link request consumed exactly once', async () => {
+    const onRequestedLineConsumed = jest.fn();
+    const props = {
+      projectId: 'project-1',
+      projectName: 'Ellsworth',
+      mode: 'project' as const,
+      requestedLineId: 'line-1',
+      onRequestedLineConsumed,
+    };
+    const { rerender } = render(<FFESection {...props} />);
+
+    await waitFor(() => expect(onRequestedLineConsumed).toHaveBeenCalledTimes(1));
+
+    mockItems = [{ ...furnishing }];
+    rerender(<FFESection {...props} />);
+
+    expect(onRequestedLineConsumed).toHaveBeenCalledTimes(1);
+  });
+
   it('enables the artifact plate only for the Project/Pieces spread', () => {
     const project = renderSection('project');
     fireEvent.click(screen.getByRole('button', { name: /Walnut bed, king/ }));
