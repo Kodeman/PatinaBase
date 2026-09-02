@@ -12484,6 +12484,18 @@ END $g$;
 
 -- 00555_ios_round_one_security.sql
 DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.current_profile_is_designer() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.current_profile_is_designer() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.search_shareable_designers(text) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
