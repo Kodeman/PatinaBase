@@ -85,11 +85,21 @@ final class ProposalDetailViewModel {
         !isSigned && (proposal?.isSignable == true)
     }
 
-    func load(proposalId: String) async {
+    /// R-05: how long the detail may sit blank before it admits failure.
+    ///
+    /// The walk measured 65–185 seconds of "One moment…" on a screen that is
+    /// also the landing target for a proposal push. The SDK read now carries
+    /// a 30 s request budget (C4-16), which is still three times too long for
+    /// a screen with nothing on it.
+    static let fetchDeadline: TimeInterval = 10
+
+    func load(proposalId: String, deadline: TimeInterval = ProposalDetailViewModel.fetchDeadline) async {
         isLoading = true
         error = nil
         do {
-            let bundle = try await ProposalsAPIClient.shared.fetchProposalBundle(id: proposalId)
+            let bundle = try await Self.withDeadline(deadline) {
+                try await ProposalsAPIClient.shared.fetchProposalBundle(id: proposalId)
+            }
             self.proposal = bundle.proposal
             self.items = bundle.proposal.items ?? []
             self.sections = bundle.sections
@@ -114,6 +124,28 @@ final class ProposalDetailViewModel {
         }
         self.isLoading = false
     }
+
+    /// Run `work`, or give up at `deadline` — whichever comes first.
+    ///
+    /// A cancelled `URLSession` task throws, which lands in `load`'s existing
+    /// catch, so the timeout needs no branch of its own.
+    static func withDeadline<T: Sendable>(
+        _ deadline: TimeInterval,
+        _ work: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await work() }
+            group.addTask {
+                try await Task.sleep(for: .seconds(deadline))
+                throw ProposalLoadTimeout()
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else { throw ProposalLoadTimeout() }
+            return first
+        }
+    }
+
+    struct ProposalLoadTimeout: Error {}
 
     func beginSigning() {
         guard canSign, !isSigning else { return }

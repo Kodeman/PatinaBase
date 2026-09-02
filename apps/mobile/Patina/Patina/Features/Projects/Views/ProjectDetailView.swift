@@ -55,6 +55,10 @@ struct ProjectDetailView: View {
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
         .task { await viewModel.load(projectId: projectId) }
+        // C4-12: the same work the `.task` above does. Without it the
+        // only way to recover a failed load is to leave the screen and
+        // come back.
+        .refreshable { await viewModel.load(projectId: projectId) }
     }
 
     // MARK: - Header

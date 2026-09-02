@@ -29,8 +29,7 @@ struct ProposalDetailView: View {
                 } else if let error = viewModel.error {
                     errorView(error)
                 } else {
-                    PatinaLoadingState()
-                        .padding(.top, 80)
+                    loadingSkeleton
                 }
             }
             .padding(.bottom, MoneyScreenMetrics.bottomClearance(houseFirst: coordinator.isHouseFirstRoot))
@@ -40,6 +39,10 @@ struct ProposalDetailView: View {
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
         .task { await viewModel.load(proposalId: proposalId) }
+        // C4-12: the same work the `.task` above does — and with R-05's
+        // ten-second cap, the retry a reader now reaches in ten seconds
+        // instead of three minutes.
+        .refreshable { await viewModel.load(proposalId: proposalId) }
         .sheet(isPresented: $viewModel.showSignSheet) {
             ProposalSignSheet(
                 proposalTitle: viewModel.proposal?.title ?? "this proposal",
@@ -56,6 +59,46 @@ struct ProposalDetailView: View {
             )
             .presentationDetents([.medium, .large])
         }
+    }
+
+    // MARK: - Loading
+
+    /// R-05: an entirely blank cream page with a spinner and the words "One
+    /// moment…", held for 65–185 seconds, on the screen a proposal push lands
+    /// on. The wait is capped at ten seconds now
+    /// (`ProposalDetailViewModel.fetchDeadline`); this is what it looks like
+    /// while it runs — the screen's own chrome, so the reader can see they
+    /// are on the right page and that something is coming.
+    private var loadingSkeleton: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            MonoLabel(text: "PROPOSAL")
+                .tracking(2)
+
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(PatinaColors.Background.secondary)
+                .frame(height: 30)
+                .frame(maxWidth: 260)
+
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(PatinaColors.Background.secondary)
+                .frame(height: 14)
+                .frame(maxWidth: 160)
+
+            HStack(spacing: 10) {
+                ProgressView()
+                    .tint(PatinaColors.Text.interactive)
+                Text("Opening your proposal…")
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+            }
+            .padding(.top, 12)
+        }
+        .padding(.top, 56)
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Opening your proposal")
+        .accessibilityIdentifier("ProposalDetailView.LoadingSkeleton")
     }
 
     // MARK: - Header

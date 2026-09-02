@@ -129,6 +129,20 @@ public final class RoomSyncCoordinator {
     private(set) var lastRunAt: Date?
     private var inFlight = false
 
+    /// C4-03: `listRooms` failing used to be a bare `return` with a DEBUG
+    /// log, and Spaces has no error branch — so a client whose rooms did not
+    /// load was told "No rooms yet" about rooms she has. This is the fact
+    /// that branch needs.
+    public private(set) var lastLoadFailed = false
+
+    /// When the rooms last came back. `nil` means this session has never had
+    /// a successful answer, which is a different thing from "you have none".
+    public private(set) var lastSuccessAt: Date?
+
+    /// True while a reconcile is in flight — the third state, so a screen can
+    /// draw waiting rather than choosing between empty and failed.
+    public var isLoading: Bool { inFlight }
+
     public init() {}
 
     /// Seeded, for the tests that need a coordinator with a history.
@@ -143,6 +157,8 @@ public final class RoomSyncCoordinator {
     public func forget() {
         lastOwner = nil
         lastRunAt = nil
+        lastLoadFailed = false
+        lastSuccessAt = nil
     }
 
     /// Pure, so the debounce is a fact rather than a hope. A change of owner
@@ -193,9 +209,15 @@ public final class RoomSyncCoordinator {
             #if DEBUG
             PatinaLog.sync.error("[RoomSync] listRooms failed: \(error.localizedDescription)")
             #endif
+            // C4-03: say so. `lastRunAt` is deliberately NOT stamped — a
+            // failed read must not start the thirty-second debounce, or the
+            // screen that draws the error cannot retry for half a minute.
+            lastLoadFailed = true
             return
         }
 
+        lastLoadFailed = false
+        lastSuccessAt = now
         apply(rows, in: store, owner: owner)
         lastOwner = owner
         lastRunAt = now

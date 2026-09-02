@@ -145,7 +145,22 @@ struct CollectionsView: View {
 
     private var allItemsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if scopedSavedItems.isEmpty {
+            // C4-03: three states, not two. An empty list used to mean both
+            // "you have saved nothing" and "we could not read your saves",
+            // and the copy asserted the first.
+            if scopedSavedItems.isEmpty && viewModel.loadState == .loading {
+                PatinaLoadingState()
+                    .padding(.top, 40)
+                    .accessibilityIdentifier("CollectionsView.Loading")
+            } else if scopedSavedItems.isEmpty && viewModel.loadState == .failed {
+                PatinaErrorState(
+                    message: "We couldn’t reach your saved pieces. "
+                        + "Check your connection and try again.",
+                    action: { viewModel.loadData(context: modelContext) }
+                )
+                .padding(.top, 40)
+                .accessibilityIdentifier("CollectionsView.ErrorState")
+            } else if scopedSavedItems.isEmpty {
                 VStack(spacing: 12) {
                     Spacer().frame(height: 40)
                     Text("No saved items yet")
