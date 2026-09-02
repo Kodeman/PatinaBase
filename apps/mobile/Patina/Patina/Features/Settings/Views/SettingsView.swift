@@ -44,18 +44,42 @@ struct SettingsView: View {
         NavigationStack {
             settingsContent
         }
+        // A-99: `PatinaApp` applies this at the window, but a sheet is its own
+        // presentation and did not follow it back — choosing Dark and then
+        // Light left a black sheet over a light window (shots/A/60, 63, 64).
+        .preferredColorScheme(appearance.colorScheme)
+        // C-23: one sheet chrome. Help had a grabber and an ✕; this had
+        // neither.
+        .presentationDragIndicator(.visible)
+    }
+
+    private var appearance: AppearanceSetting {
+        AppearanceSetting(rawValue: appearanceRaw) ?? .system
     }
 
     private var settingsContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                // Header
-                Text("Settings")
-                    .font(PatinaTypography.h3)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                    .padding(.top, 56)
-                    .padding(.horizontal, PatinaSpacing.lg)
-                    .padding(.bottom, PatinaSpacing.lg)
+                // Header. A-100 / C-23: the sheet had no dismiss control at
+                // all — the only exit was a drag from its very top edge, and a
+                // swipe started 48 pt lower scrolled the list instead. Done
+                // sits in the header the screen already draws rather than in a
+                // navigation bar it otherwise hides.
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Settings")
+                        .font(PatinaTypography.h3)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                    Spacer()
+                    Button("Done") { dismiss() }
+                        .font(PatinaTypography.uiAction)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                        .accessibilityIdentifier("SettingsView.DoneButton")
+                }
+                .padding(.top, 56)
+                .padding(.horizontal, PatinaSpacing.lg)
+                .padding(.bottom, PatinaSpacing.lg)
 
                 // Account group
                 settingsGroup(title: "Account") {
@@ -150,9 +174,6 @@ struct SettingsView: View {
 
                 // Support group
                 settingsGroup(title: "Support") {
-                    settingsButtonRow(icon: "questionmark.circle", iconColor: PatinaColors.sage, label: "Help Center") {
-                        openLink("https://patina.cloud/help")
-                    }
                     settingsButtonRow(icon: "envelope", iconColor: PatinaColors.clay, label: "Contact Us") {
                         openLink("mailto:hello@patina.cloud")
                     }
@@ -160,9 +181,8 @@ struct SettingsView: View {
                         openLink("https://patina.cloud/terms")
                     }
                 }
-
-                Spacer().frame(height: 120)
             }
+            .companionBottomClearance()
         }
         .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
