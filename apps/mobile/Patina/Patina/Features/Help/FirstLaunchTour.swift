@@ -843,34 +843,58 @@ private struct FirstLaunchTourPopoverCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Step \(stepNumber) of \(totalSteps)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(PatinaTypography.monoLabel)
+                .tracking(0.5)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .accessibilityIdentifier("FirstLaunchTour.StepIndicator")
 
             Text(resolvedHeading)
-                .font(.headline)
+                .font(PatinaTypography.h5)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("FirstLaunchTour.Heading")
 
             Text(resolvedBody)
-                .font(.body)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("FirstLaunchTour.Body")
 
-            HStack {
+            HStack(spacing: 12) {
                 Spacer()
-                Button("Skip", role: .cancel, action: onSkip)
-                    .accessibilityIdentifier("FirstLaunchTour.SkipButton")
+                Button(action: onSkip) {
+                    Text("Skip")
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("FirstLaunchTour.SkipButton")
 
                 Button(action: onNext) {
                     Text(isFinalStep ? "Done" : (resolvedCtaLabel ?? "Next"))
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.offWhite)
+                        .padding(.horizontal, 20)
+                        .frame(minHeight: 44)
+                        .background(PatinaColors.clay)
+                        .clipShape(Capsule())
+                        .contentShape(Capsule())
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
                 .accessibilityIdentifier(isFinalStep ? "FirstLaunchTour.DoneButton" : "FirstLaunchTour.NextButton")
             }
         }
         .padding(16)
         .frame(maxWidth: 320)
+        // B-09: the card is the only stock-iOS surface a tester meets — Skip
+        // was system-blue text and Next a system-blue capsule in an otherwise
+        // cream, brown and black app. The styles above are explicit, and this
+        // covers anything inside the popover they do not reach (the caret in a
+        // field, a selection handle) without depending on the global accent.
+        .tint(PatinaColors.clay)
         .accessibilityElement(children: .combine)
         .task(id: step.surfaceKey) {
             await loadContent()
