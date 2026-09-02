@@ -91,10 +91,33 @@ public final class AppCoordinator: Coordinator {
     /// observation loop in `observePhaseInputs()` reads it.
     public var guestModeOptIn: Bool = GuestSessionStore.shared.isOptedIn
 
-    /// URL queued during `.launching` (e.g., a magic-link cold launch
-    /// arriving before the auth state stream settles). Drained on entry
-    /// to `.main` by `recomputePhase()`.
-    public var pendingDeepLink: URL?
+    /// The one line the auth screen prints when a link is being held for the
+    /// person — `C2-21` / `GAP7B-09`'s "acknowledge it on the auth screen in one
+    /// line". nil whenever nothing is waiting; retired the moment the queue
+    /// drains, so it can never outlive the thing it is about.
+    public private(set) var pendingLinkNotice: String?
+
+    /// That line, ruled here rather than in the view, so a test can hold it to
+    /// its word: it names no vendor, no URL and no error — it is a promise the
+    /// app keeps two taps later.
+    public static let pendingLinkNoticeLine = "We'll open what you tapped once you're in."
+
+    /// Called by `DeepLinkHandler` when an arrival had to be kept rather than
+    /// opened.
+    public func noteLinkHeld() {
+        pendingLinkNotice = Self.pendingLinkNoticeLine
+    }
+
+    /// The replay `DeepLinkHandler` registers from `configure(coordinator:)`.
+    /// A closure rather than a call to `DeepLinkHandler.shared`, so the
+    /// coordinator does not reach for a process-lifetime singleton whose queue
+    /// a test cannot substitute — and so the two objects have exactly one
+    /// direction of coupling.
+    private var deepLinkDrain: (() -> Void)?
+
+    public func attachDeepLinkDrain(_ drain: @escaping () -> Void) {
+        deepLinkDrain = drain
+    }
 
     /// Route preserved across a forced sign-out (token refresh failure
     /// mid-session). When re-auth succeeds, the phase observer can
@@ -204,26 +227,7 @@ public final class AppCoordinator: Coordinator {
 
         let oldPhase = phase
         if newPhase != phase {
-            // Detect a *forced* sign-out: phase goes directly
-            // `.main → .auth` without passing through `.launching`. A
-            // voluntary sign-out routes through `beginSplashTransition`
-            // which puts us in `.launching` first, so this branch only
-            // fires for token-refresh failures and similar interruptions.
-            // Save the current screen so re-auth can drop the user back
-            // where they were.
-            if oldPhase == .main, newPhase == .auth, pendingReturnRoute == nil {
-                pendingReturnRoute = currentScreen
-            }
-
-            // PT-3-9: tear down any open modal sheet when we leave `.main`
-            // for `.auth` / `.launching`. Otherwise an open sheet (e.g. the
-            // QR scanner) re-presents itself over the auth / splash screen
-            // on the next render, since `.sheet(item:)` keys off a property
-            // that survived the phase flip.
-            if newPhase == .auth || newPhase == .launching {
-                presentedSheet = nil
-            }
-
+            applyLeavingPhase(from: oldPhase, to: newPhase)
             withAnimation(.easeInOut(duration: 0.4)) {
                 phase = newPhase
             }
@@ -236,24 +240,98 @@ public final class AppCoordinator: Coordinator {
             guestModeOptIn = false
         }
 
-        // Drain any deep link queued during `.launching` once we've
-        // arrived at `.main`. Magic-link cold launch is the canonical
-        // case — the URL arrives before the auth stream emits, so we
-        // can't act on it until the session is established.
-        if newPhase == .main, let url = pendingDeepLink {
-            pendingDeepLink = nil
-            DeepLinkHandler.shared.handle(url)
+        applyArrivingPhase(newPhase)
+    }
+
+    /// The side effects of leaving a phase, in one place so the sign-out seam
+    /// cannot be half-applied.
+    private func applyLeavingPhase(from oldPhase: AppPhase, to newPhase: AppPhase) {
+        // Detect a *forced* sign-out: phase goes directly
+        // `.main → .auth` without passing through `.launching`. A
+        // voluntary sign-out routes through `beginSplashTransition`
+        // which puts us in `.launching` first, so this branch only
+        // fires for token-refresh failures and similar interruptions.
+        // Save the current screen so re-auth can drop the user back
+        // where they were.
+        if oldPhase == .main, newPhase == .auth, pendingReturnRoute == nil {
+            pendingReturnRoute = currentScreen
         }
+
+        // PT-3-9: tear down any open modal sheet when we leave `.main`
+        // for `.auth` / `.launching`. Otherwise an open sheet (e.g. the
+        // QR scanner) re-presents itself over the auth / splash screen
+        // on the next render, since `.sheet(item:)` keys off a property
+        // that survived the phase flip.
+        if newPhase == .auth || newPhase == .launching {
+            presentedSheet = nil
+        }
+
+        // A session ended. `ContentView` swaps the root on `phase`, so the
+        // `.main` branch is torn down while this coordinator survives with
+        // every stack it had — which is how the next sign-in landed on the
+        // PREVIOUS account's invoice (C2-06). Nothing on the sign-out path
+        // cleared them: `resetToThreshold()` spells the reset out but is only
+        // reached from "start over".
+        if oldPhase == .main, newPhase == .auth || newPhase == .launching {
+            clearNavigationForEndedSession()
+        }
+    }
+
+    /// The side effects of arriving at a phase.
+    private func applyArrivingPhase(_ newPhase: AppPhase) {
+        guard newPhase == .main else { return }
+
+        // Replay every link kept while the app could not show it — a link that
+        // arrived before `configure(coordinator:)`, one tapped at the auth
+        // wall, one tapped during the splash (C2-02, C2-21, GAP7B-09). Oldest
+        // first, so the newest tap is the screen the person ends on.
+        pendingLinkNotice = nil
+        deepLinkDrain?()
 
         // Restore the user's pre-sign-out screen after a forced sign-out
         // is resolved by re-auth. Drained on entry to `.main`.
-        if newPhase == .main, let route = pendingReturnRoute {
+        if let route = pendingReturnRoute {
             pendingReturnRoute = nil
             // A restore is an outside entry: the person did not walk here, so
             // it lands on the route's own tab (no-op on the flag-off root).
             openExternal(route)
         }
     }
+
+    /// Both roots' stacks, the screen mirror and the companion context, back to
+    /// the threshold — the reset `resetToThreshold()` already spells out, on
+    /// the seam a sign-out actually crosses (C2-06).
+    ///
+    /// The widget's App-Group file goes with them: it is device-global, it
+    /// outlives the session, and `LocalStoreReset` — the only thing that
+    /// removes it — runs when a DIFFERENT account signs IN, never on sign-out.
+    /// Left alone it keeps naming the previous client's designer on a Home
+    /// Screen nobody is signed into (B-16).
+    private func clearNavigationForEndedSession() {
+        screenStack = []
+        navigationPath = NavigationPath()
+        rootScreen = .heroFrame
+        for tab in PatinaTab.allCases { tabs.popToRoot(tab) }
+        tabs.selected = .today
+        currentScreen = .heroFrame
+        updateContext(for: .heroFrame)
+        RecordSnapshotStore.shared.clearForSignedOut()
+    }
+
+    #if DEBUG
+    /// Test seam. `phase` is derived from `AuthService`'s auth-state stream,
+    /// which a unit test cannot stand up, so a suite that needs to prove what
+    /// happens ACROSS a transition drives it here — through the same two
+    /// side-effect methods `recomputePhase()` uses, never around them.
+    func forcePhaseForTesting(_ newPhase: AppPhase) {
+        let oldPhase = phase
+        if newPhase != oldPhase {
+            applyLeavingPhase(from: oldPhase, to: newPhase)
+            phase = newPhase
+        }
+        applyArrivingPhase(newPhase)
+    }
+    #endif
 
     private func derivePhase() -> AppPhase {
         let splashStillPlaying = Date() < splashMinimumDeadline

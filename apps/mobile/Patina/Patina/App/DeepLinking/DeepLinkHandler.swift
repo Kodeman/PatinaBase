@@ -18,15 +18,29 @@ public final class DeepLinkHandler {
     private var coordinator: AppCoordinator?
     private let qrAuthService = QRAuthService.shared
 
-    /// Route deferred until the coordinator is configured. The APNs
-    /// delegate fires on cold launch before SwiftUI has stood up the
-    /// coordinator — we stash the route here and replay it during
-    /// `configure(coordinator:)`.
-    private var pendingRoute: AppRoute?
+    /// Links kept because the app could not open them yet — a FIFO that
+    /// survives the process. See `PendingLinkQueue` for why all three of those
+    /// properties are load-bearing (`C2-02`, `C2-21`, `GAP7B-09`).
+    let queue: PendingLinkQueue
+
+    /// Routes deferred the same way, for the one arrival that has no URL to
+    /// persist: an APNs tap, which `PatinaAppDelegate` resolves to an
+    /// `AppRoute` before this handler ever sees it. In memory only — a push
+    /// tap that does not survive the process is a push that will still be in
+    /// Notification Centre.
+    private var pendingRoutes: [AppRoute] = []
 
     // MARK: - Initialization
 
-    private init() {}
+    private init() {
+        self.queue = PendingLinkQueue()
+    }
+
+    /// Test seam: the singleton reads the App Group defaults, which a unit test
+    /// must not share with the simulator it is running on.
+    init(queue: PendingLinkQueue) {
+        self.queue = queue
+    }
 
     // MARK: - Configuration
 
@@ -34,21 +48,59 @@ public final class DeepLinkHandler {
     /// - Parameter coordinator: The app coordinator for navigation
     public func configure(coordinator: AppCoordinator) {
         self.coordinator = coordinator
-        if let pending = pendingRoute {
-            pendingRoute = nil
-            coordinator.openExternal(pending)
-        }
+        // The coordinator is the only object that knows when the app can show
+        // a route, so it owns the trigger; this owns what is replayed.
+        coordinator.attachDeepLinkDrain { [weak self] in self?.drainIfPossible() }
+        drainIfPossible()
     }
 
-    /// Push an `AppRoute` through the coordinator, or stash it until
-    /// `configure(coordinator:)` is called if the app is mid-launch.
-    /// Used by `PatinaAppDelegate` to deliver APNs taps.
+    /// Push an `AppRoute` through the coordinator, or hold it until the app can
+    /// actually show it. Used by `PatinaAppDelegate` to deliver APNs taps.
     public func navigate(to route: AppRoute) {
-        if let coordinator {
-            coordinator.openExternal(route)
-        } else {
-            pendingRoute = route
+        guard canOpen else {
+            if pendingRoutes.count >= PendingLinkQueue.maximumDepth { pendingRoutes.removeFirst() }
+            pendingRoutes.append(route)
+            coordinator?.noteLinkHeld()
+            return
         }
+        coordinator?.openExternal(route)
+    }
+
+    // MARK: - The queue
+
+    /// What is being held right now, oldest first. Read by tests and by the
+    /// coordinator's drain; never by a view.
+    var queuedURLs: [URL] { queue.urls() }
+
+    /// True when a route pushed now lands on a mounted stack. Anything else —
+    /// no coordinator yet, or a phase whose root is not the app — is kept.
+    private var canOpen: Bool {
+        guard let coordinator else { return false }
+        return coordinator.phase == .main
+    }
+
+    /// Open the route if the app can show it; otherwise keep the URL so it can
+    /// be replayed. The one seam every non-auth arm goes through, so no arm can
+    /// quietly reacquire the drop-and-report-handled behaviour.
+    @discardableResult
+    private func deliver(_ route: AppRoute, from url: URL) -> Bool {
+        guard canOpen else {
+            queue.enqueue(url)
+            coordinator?.noteLinkHeld()
+            return true
+        }
+        coordinator?.openExternal(route)
+        return true
+    }
+
+    /// Replay everything held, oldest first, once the app can show it.
+    /// Idempotent: the queue empties as it drains.
+    func drainIfPossible() {
+        guard canOpen else { return }
+        let routes = pendingRoutes
+        pendingRoutes = []
+        for route in routes { coordinator?.openExternal(route) }
+        for url in queue.drain() { handle(url) }
     }
 
     // MARK: - URL Handling
@@ -62,12 +114,7 @@ public final class DeepLinkHandler {
         // with scheme `https`, so the custom-scheme guard below dropped every
         // one of them before the path switch was ever reached.
         if let route = Self.route(forUniversalLink: url) {
-            if let coordinator, coordinator.phase == .launching {
-                coordinator.pendingDeepLink = url
-            } else {
-                coordinator?.openExternal(route)
-            }
-            return true
+            return deliver(route, from: url)
         }
 
         // Check scheme
@@ -75,21 +122,14 @@ public final class DeepLinkHandler {
             return false
         }
 
-        // Queue URLs that arrive during `.launching` (e.g. a magic-link
-        // cold launch tap) — auth state hasn't settled yet, so routing
-        // them now would either no-op or land the user in the wrong
-        // phase. `AppCoordinator.recomputePhase()` drains
-        // `pendingDeepLink` once we reach `.main`.
-        if let coordinator, coordinator.phase == .launching {
-            coordinator.pendingDeepLink = url
-            return true
-        }
-
         // Route based on host/path
         let host = url.host ?? ""
 
         switch host {
         case "auth":
+            // NEVER queued, in any phase. `.main` is unreachable until the
+            // magic-link callback is handled, so a queued auth URL would hold
+            // the app at the auth wall for as long as the person kept trying.
             return handleAuthURL(url)
 
         case "room":
@@ -190,8 +230,7 @@ public final class DeepLinkHandler {
             return false
         }
 
-        coordinator?.openExternal(.roomProject(roomId: roomId))
-        return true
+        return deliver(.roomProject(roomId: roomId), from: url)
     }
 
     // MARK: - Piece URLs
@@ -202,8 +241,7 @@ public final class DeepLinkHandler {
             return false
         }
 
-        coordinator?.openExternal(.pieceDetail(pieceId: pieceId))
-        return true
+        return deliver(.pieceDetail(pieceId: pieceId), from: url)
     }
 
     // MARK: - Universal Links
@@ -279,16 +317,11 @@ public final class DeepLinkHandler {
         guard let route = Self.route(forWidgetLink: url, in: RecordSnapshotStore.shared.load()) else {
             return false
         }
-        // Stash-or-open, the same pair `navigate(to:)` does: a tap that arrives
-        // before SwiftUI has stood the coordinator up is held in `pendingRoute`
-        // and replayed by `configure(coordinator:)` — the coldest of the four
-        // doors, and the easiest to drop on the floor.
-        if let coordinator {
-            coordinator.openExternal(route)
-        } else {
-            pendingRoute = route
-        }
-        return true
+        // Open-or-keep, the same seam every other arm takes: a tap that arrives
+        // before SwiftUI has stood the coordinator up, or while the app is at
+        // the auth wall, is held in the queue and replayed on arrival at
+        // `.main` — the coldest of the four doors, and the easiest to drop.
+        return deliver(route, from: url)
     }
 
     // MARK: - Path-Based URLs

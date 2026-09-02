@@ -208,6 +208,11 @@ struct WidgetLinkRoutingTests {
 
     // MARK: - The cold doors (w3/steward.md §4)
 
+    /// Amended by C2-21: the single `pendingDeepLink` slot on the coordinator
+    /// is now `PendingLinkQueue`, a bounded persisted FIFO on the handler, and
+    /// the queue takes every non-`.main` phase rather than `.launching` alone.
+    /// `DeepLinkQueueTests` holds the whole mechanism; this keeps the widget's
+    /// own door in the round-trip suite it belongs to.
     @Test("a widget tap during launch is queued, not dropped")
     func aTapDuringLaunchIsQueued() throws {
         let coordinator = AppCoordinator(houseFirstRoot: true)
@@ -215,19 +220,24 @@ struct WidgetLinkRoutingTests {
         // elapses and `AuthService` reports — exactly the cold-launch window a
         // widget tap arrives in.
         #expect(coordinator.phase == .launching)
-        DeepLinkHandler.shared.configure(coordinator: coordinator)
+        let handler = DeepLinkHandler(
+            queue: PendingLinkQueue(
+                defaults: UserDefaults(suiteName: "patina.tests.widgetlink.\(UUID().uuidString)") ?? .standard
+            )
+        )
+        handler.configure(coordinator: coordinator)
 
         let url = try #require(URL(string: "patina://today"))
-        #expect(DeepLinkHandler.shared.handle(url))
-        #expect(coordinator.pendingDeepLink == url)
+        #expect(handler.handle(url))
+        #expect(handler.queuedURLs == [url])
     }
 
-    /// The other cold door: a route that arrives before the coordinator exists
-    /// at all is stashed and replayed by `configure(coordinator:)`. The widget
-    /// arm reaches it by going through `navigate(to:)` rather than touching the
-    /// coordinator directly — pinned in source, because the stash is private
-    /// state on a process-lifetime singleton.
-    @Test("the widget arm takes the stash-or-open path, and configure replays it")
+    /// The other cold door: a link that arrives before the coordinator exists
+    /// at all is kept and replayed by `configure(coordinator:)`. The widget arm
+    /// reaches that through the same `deliver(_:from:)` seam every other arm
+    /// takes — pinned in source, because the queue is private state on a
+    /// process-lifetime singleton.
+    @Test("the widget arm takes the open-or-keep seam, and configure replays it")
     func theWidgetArmIsReplayedOnConfigure() throws {
         let source = try SourcePin.read("Patina/App/DeepLinking/DeepLinkHandler.swift")
         let code = SourceScan.code(in: source)
@@ -235,13 +245,13 @@ struct WidgetLinkRoutingTests {
         #expect(code.contains("private func handleWidgetURL(_ url: URL) -> Bool {"))
         let arm = try #require(code.range(of: "private func handleWidgetURL"))
         let body = code[arm.lowerBound...].prefix(500)
-        #expect(body.contains("if let coordinator {"))
-        #expect(body.contains("coordinator.openExternal(route)"))
-        #expect(body.contains("pendingRoute = route"))
+        #expect(body.contains("return deliver(route, from: url)"))
 
-        // `configure` replays whatever the stash held.
-        #expect(code.contains("if let pending = pendingRoute {"))
-        #expect(code.contains("coordinator.openExternal(pending)"))
+        // One seam, and it cannot open onto a root that is not mounted.
+        #expect(code.contains("guard canOpen else {"))
+        #expect(code.contains("queue.enqueue(url)"))
+        // `configure` replays whatever was kept.
+        #expect(code.contains("drainIfPossible()"))
     }
 
     /// `handle` checks universal links BEFORE the custom-scheme guard and drops
