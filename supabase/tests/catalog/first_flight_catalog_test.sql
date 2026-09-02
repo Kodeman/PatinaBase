@@ -12,7 +12,8 @@
 --   6. every publishable first-flight row has a non-null spectrum
 --   7. published_at present; designer_selection is not most of the shelf;
 --      every row carries a quality_score (7c — the mirror of the generator's
---      release floor, because an unscored row is a 0 to get_recommendations)
+--      release floor, because an unscored row is a hard 0 in
+--      get_recommendations' designer_selection TIER TEST)
 --   8. no image points outside the product-images bucket
 --   9. no tag outside the four-word provenance allow-list
 --  10. every image URL is backed by a real storage.objects row
@@ -223,19 +224,23 @@ BEGIN
 
   -- Case 7c: every first-flight row carries a quality_score. The mirror of the
   -- generator's release floor (build-catalog.py MIN_SCORED_SHARE = 1.0), and it
-  -- is not a tidiness rule: get_recommendations orders on
-  -- COALESCE(quality_score, 0), so an unscored piece is a ZERO rather than an
-  -- unknown. It sorts below every scored row and can never reach
-  -- designer_selection tier — a half-scored manifest is a silently two-class
-  -- shelf that every other count on this page reads as clean. 7b caps the top
-  -- of the range, this caps the bottom.
+  -- is not a tidiness rule — though the reason is narrower than an earlier
+  -- draft of this comment claimed. quality_score does NOT affect ORDERING:
+  -- get_recommendations' only ORDER BY is `m.rank` from get_aesthete_matches
+  -- (00244), and quality_score appears nowhere in that function's matching
+  -- logic. What it decides is the TIER LABEL — 00533:171 reads
+  -- `WHEN COALESCE(p.quality_score, 0) >= 80 THEN 'designer_selection'` — so a
+  -- blank is a hard zero for that test and the piece can never carry the
+  -- studio's own claim, whatever it deserves. A half-scored manifest is a
+  -- silently two-class shelf that every other count on this page reads as
+  -- clean. 7b caps the top of the range, this caps the bottom.
   SELECT count(*) INTO v_unscored
     FROM public.products p JOIN _ff_scope s ON s.id = p.id
    WHERE p.quality_score IS NULL;
   ASSERT v_unscored = 0,
     format('FAIL 7c: %s of %s first-flight row(s) have a NULL quality_score, '
-           'which get_recommendations reads as 0 — they sort below every scored '
-           'piece and can never surface', v_unscored, v_publishable);
+           'which get_recommendations reads as 0 in its designer_selection tier '
+           'test — they can never carry the label', v_unscored, v_publishable);
 
   -- Case 8: no image points at a third-party CDN. A3-25 records 14 dev-capture
   -- rows hot-linking images.hermanmiller.group and www.masayaco.com; nothing

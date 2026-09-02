@@ -101,14 +101,20 @@ MAX_HIGH_QUALITY_SHARE = 1.0 / 3.0
 HIGH_QUALITY_MIN_SAMPLE = 9
 DESIGNER_SELECTION_THRESHOLD = 80
 
-# quality_score is an OPTIONAL column, and left blank it is not merely missing —
-# get_recommendations reads COALESCE(quality_score, 0), so an unscored piece
-# sorts below every scored one and can never reach designer_selection tier. A
-# release manifest where some rows are scored and some are not therefore ships a
-# silently two-class shelf. The floor is 1.0: on the RELEASE profile every row
-# carries a score. It is deliberately not applied to the fixture profile, which
-# exists to exercise mechanics on a handful of rows, nor to a partial file Leah
-# is still filling in — those run --profile fixture.
+# quality_score is an OPTIONAL column, and left blank it is not merely missing.
+# It does NOT affect ordering — get_recommendations' only ORDER BY is `m.rank`
+# from get_aesthete_matches, and quality_score appears nowhere in that function's
+# matching logic (read off 00244 and 00533, 2026-09-02). What it does decide is
+# the TIER LABEL: get_recommendations reads
+#   WHEN COALESCE(p.quality_score, 0) >= 80 THEN 'designer_selection'
+# so a blank cell is a hard zero for that test and the piece can never carry the
+# label, whatever it deserves. A release manifest where some rows are scored and
+# some are not therefore ships a silently two-class shelf — one class eligible
+# for the studio's own claim, one class permanently ineligible, with nothing on
+# the row saying so. The floor is 1.0: on the RELEASE profile every row carries a
+# score. It is deliberately not applied to the fixture profile, which exists to
+# exercise mechanics on a handful of rows, nor to a partial file Leah is still
+# filling in — those run --profile fixture.
 MIN_SCORED_SHARE = 1.0
 
 REQUIRED_COLUMNS = (
@@ -616,16 +622,17 @@ def _check_manifest(rows, errors, profile, path):
         )
 
     # Every release row carries a quality_score. See MIN_SCORED_SHARE: a blank
-    # cell is not neutral, it is a zero in get_recommendations' ordering, so a
-    # half-scored manifest ships a shelf whose unscored half can never surface.
-    # The cap above (MAX_HIGH_QUALITY_SHARE) still applies, so "score them all"
-    # cannot be satisfied by scoring them all 80+.
+    # cell is not neutral, it is a hard zero in the tier test
+    # `COALESCE(quality_score, 0) >= 80`, so a half-scored manifest ships a shelf
+    # whose unscored half can never carry the designer-selection label. The cap
+    # above (MAX_HIGH_QUALITY_SHARE) still applies, so "score them all" cannot be
+    # satisfied by scoring them all 80+.
     if rows and len(scored) < MIN_SCORED_SHARE * len(rows):
         unscored = [r.slug or "line %d" % r.line for r in rows if r.quality_score is None]
         errors.append(
             "%s: %d of %d rows carry quality_score (floor is %d%% on the release "
-            "profile) — an unscored piece reads as 0 in get_recommendations and "
-            "sorts below every scored one. Unscored: %s"
+            "profile) — an unscored piece reads as 0 in get_recommendations' tier "
+            "test and can never be a designer selection. Unscored: %s"
             % (
                 path,
                 len(scored),

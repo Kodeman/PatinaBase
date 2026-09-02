@@ -51,7 +51,7 @@ Nothing you put in this file reaches production without Kody running the step hi
 | `lead_time_weeks` | whole weeks, 1–104. Blank means we do not have a lead time, and the app omits the line. | `10` |
 | `finish` | the finish, as the maker names it. | `Hand-rubbed tung oil` |
 | `source_url` | where the piece lives on the maker's own site. Never a retailer aggregator. | |
-| `quality_score` | 0–100. **Score every piece** — a blank is not "no opinion", the app reads it as **zero** and the piece sorts below everything you did score, so the file is rejected if any row is blank. **80 or above makes the app call the piece a designer selection**, so use that end sparingly: the file is also rejected if more than a third of rows are 80+. Most pieces sit in the 50s–70s. | `84` |
+| `quality_score` | 0–100. **Score every piece** — a blank is not "no opinion", the app reads it as **zero**, so the piece can never be called a designer selection no matter how good it is. The file is rejected if any row is blank. **80 or above makes the app call the piece a designer selection**, so use that end sparingly: the file is also rejected if more than a third of rows are 80+. Most pieces sit in the 50s–70s. | `84` |
 | `published_at` | `YYYY-MM-DD`, only if the piece should carry a specific catalogue date. Leave blank and one is assigned, staggered across the last eight weeks. **Leave at least three blank** (or dated inside the last seven days): the app's NEW THIS WEEK rail needs three recent pieces or it does not appear at all, and the file is rejected if it cannot find them. The easiest thing is to leave this column empty on every row. | `2026-08-28` |
 | `photo_verified` | `yes` only when a human has confirmed the photograph is this exact piece. Blank otherwise — the app then says nothing rather than implying verification. | `yes` |
 | `shipping_flat_usd` | flat freight in dollars, when there is a real number. Blank means shipping is not known, and no screen invents one. | `275.00` |
@@ -117,11 +117,13 @@ The five whole-file rules for round one:
 
 That last one is the newest and the least obvious, so here is the reasoning in full. `quality_score` is
 an *optional* column in the sense that a row without it still parses — but the app does not treat a
-blank as "unrated". `get_recommendations` orders on `COALESCE(quality_score, 0)`, so a blank is a **zero**:
-the piece sorts below every scored piece on the shelf and can never reach designer-selection tier. A
-file where half the pieces are scored and half are blank therefore ships a two-class catalogue where
-the unscored half is effectively invisible, and every other count in the checker still reads clean.
-Scoring all of them is the only state where the ordering means what it looks like it means.
+blank as "unrated". The score does **not** change where a piece lands in the shelf's order: the app
+orders recommendations by how well the piece matches that homeowner's taste, and the score is not part
+of that. What it decides is whether the app is allowed to call the piece a **designer selection** — the
+test is `quality_score >= 80`, and a blank counts as **zero**. So a file where half the pieces are
+scored and half are blank ships a two-class catalogue: the unscored half is permanently ineligible for
+the studio's own claim, nothing on the row says so, and every other count in the checker still reads
+clean. Scoring all of them is the only state where that label means what it looks like it means.
 
 The floor applies to the **release** profile only. `--profile fixture` (a handful of rows, a mechanics
 check, or a partial file you are still filling in) does not enforce it, so you can run `--check` as you
