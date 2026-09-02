@@ -21,8 +21,13 @@ struct ScanFallbackEntryView: View {
     let onContinue: (RoomScanSession) -> Void
 
     @State private var selectedType: String = "living"
-    @State private var length: String = "18"
-    @State private var width: String = "14"
+    /// GAP4-03: these were seeded `"18"` and `"14"` — developer defaults that
+    /// rendered as if typed, with the clay "valid" stroke, and left
+    /// "Continue to Style Discovery" enabled on arrival. The fastest path
+    /// through the screen wrote a room measuring 18 × 14 ft that the person
+    /// never entered, and the room carried it as measured fact.
+    @State private var length: String = ""
+    @State private var width: String = ""
     @State private var windowCount: Int = 2
     @State private var doorCount: Int = 1
     @State private var unit: Unit = .feet
@@ -169,8 +174,10 @@ struct ScanFallbackEntryView: View {
 
     private func dimensionField(title: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            TextField("", text: text)
+            TextField(title, text: text)
                 .keyboardType(.decimalPad)
+                .accessibilityLabel("\(title) in \(unit.label.lowercased())")
+                .accessibilityIdentifier("ScanFallbackEntry.\(title)")
                 .font(.custom("Inter-Regular", size: 15, relativeTo: .subheadline))
                 .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.horizontal, 16)
@@ -263,6 +270,13 @@ struct ScanFallbackEntryView: View {
     // MARK: - Validation + submit
 
     private var isValid: Bool {
+        Self.dimensionsAreValid(length: length, width: width)
+    }
+
+    /// The CTA's gate, pulled out so `ScanFallbackEntryTests` can call it.
+    /// With the fields no longer pre-seeded (GAP4-03) this is what stands
+    /// between an empty form and a room with invented measurements.
+    static func dimensionsAreValid(length: String, width: String) -> Bool {
         guard let l = Float(length), let w = Float(width), l > 0, w > 0 else { return false }
         return true
     }

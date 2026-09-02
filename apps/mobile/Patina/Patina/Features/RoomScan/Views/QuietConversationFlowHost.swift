@@ -80,9 +80,37 @@ struct QuietConversationFlowHost: View {
         case floorPlan
     }
 
+    /// GAP4-02: the steps that hold a person with no way back.
+    ///
+    /// `ContentView` mounts this host with `.toolbar(.hidden, for:
+    /// .navigationBar)`, so there is no system chevron by construction and
+    /// the interactive pop is dead with it. On `.fallback` that left a screen
+    /// whose whole accessibility tree carried no dismiss control at all, and
+    /// on `.initial` a bare background. This is the way out of both.
+    private var showsLeaveControl: Bool {
+        step == .fallback || step == .initial
+    }
+
     var body: some View {
         ZStack {
             content
+
+            if showsLeaveControl {
+                VStack {
+                    HStack {
+                        Button("Not now") { leaveFlow(landingOn: .heroFrame) }
+                            .font(PatinaTypography.bodySmallMedium)
+                            .foregroundStyle(PatinaColors.Text.interactive)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                            .accessibilityHint("Leaves setting up this room and goes back home.")
+                            .accessibilityIdentifier("QuietConversationFlowHost.LeaveButton")
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    Spacer()
+                }
+            }
         }
         .onAppear {
             #if DEBUG
@@ -171,7 +199,25 @@ struct QuietConversationFlowHost: View {
     private var content: some View {
         switch step {
         case .initial:
-            PatinaColors.Background.primary.ignoresSafeArea()
+            // GAP4-25: this was a bare background colour, and `resetForRescan`
+            // put the flow back into it without re-running `bootstrap()` —
+            // which only ever ran from `onAppear`, and `onAppear` does not
+            // fire again. Tapping Rescan on the floor plan left an entirely
+            // empty cream screen whose accessibility tree was one node, with
+            // no way out but force-quitting. `resetForRescan` bootstraps now;
+            // this is what the moment before it looks like.
+            ZStack {
+                PatinaColors.Background.primary.ignoresSafeArea()
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .tint(PatinaColors.Text.interactive)
+                    Text("Getting ready…")
+                        .font(PatinaTypography.bodySmall)
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("QuietConversationFlowHost.Initial")
+            }
 
         case .threshold:
             if let vm = scanViewModel {
@@ -343,6 +389,10 @@ struct QuietConversationFlowHost: View {
         savedScanId = nil
         refineRequested = false
         step = .initial
+        // GAP4-25: `.initial` is a waiting room, not a destination. Nothing
+        // else drives the flow out of it — `bootstrap()` runs from `onAppear`,
+        // which does not fire again on an internal step change.
+        bootstrap()
     }
 
     /// Seal a review-finalized scan bundle on the phone — strictly local, no
