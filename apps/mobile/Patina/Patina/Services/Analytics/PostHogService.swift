@@ -7,7 +7,10 @@
 //
 
 import Foundation
-import PostHog
+// @_spi(Experimental) reaches `PostHogConfig.errorTrackingConfig`, which is the
+// only way to turn crash autocapture on in posthog-ios 3.48.0. It also imports
+// the whole public surface, so this replaces the plain `import PostHog`.
+@_spi(Experimental) import PostHog
 import AppTrackingTransparency
 
 /// Service for PostHog analytics integration
@@ -49,6 +52,16 @@ public final class PostHogService {
     /// Call this in AppDelegate or App init
     public func initialize() {
         guard !isInitialized else { return }
+        // The kill switch, and it has to be here rather than only at the call
+        // site: this is a singleton anything can reach. Off in Debug, so a
+        // developer's launch no longer reports into the production project the
+        // first tester round is meant to measure — and no longer resolves flags
+        // against a locally seeded identity.
+        guard AppConfiguration.analyticsEnabled else {
+            PatinaLog.ui.debug("[PostHog] analyticsEnabled is false, analytics disabled")
+            isEnabled = false
+            return
+        }
         guard !apiKey.isEmpty else {
             PatinaLog.ui.debug("[PostHog] No API key configured, analytics disabled")
             isEnabled = false
@@ -60,6 +73,11 @@ public final class PostHogService {
         config.captureApplicationLifecycleEvents = true
         config.sendFeatureFlagEvent = false
         config.debug = AppConfiguration.isDebug
+        // Build 1 is the crash-discovery round. Without this a tester's crash
+        // reaches nobody: crashes are persisted to disk and sent as `$exception`
+        // on the NEXT launch. Automatically disabled while a debugger is
+        // attached, so it costs a local run nothing.
+        config.errorTrackingConfig.autoCapture = true
 
         PostHogSDK.shared.setup(config)
         PostHogSDK.shared.register(["surface": "patina-ios"])
