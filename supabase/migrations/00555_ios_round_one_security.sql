@@ -299,11 +299,20 @@ AS $$
            AND public.is_studio_comember(dc.designer_id)
        )
 
-       -- the two named sides of a project, plus its lead designer and creator
+       -- the two named sides of a project, plus its lead designer and creator.
+       --
+       -- projects.client_profile_id is deliberately NOT in these lists. It is
+       -- FK'd to public.client_profiles(id) (`fk_projects_client_profile`), a
+       -- table whose id is its own gen_random_uuid() primary key with a
+       -- SEPARATE user_id column pointing at auth.users — so it is a disjoint
+       -- uuid space from profiles.id and the term could never match. An earlier
+       -- draft carried it, along with an index cut for it; both are removed.
+       -- projects.client_id is FK'd to profiles(id) and already carries the
+       -- client side.
        OR EXISTS (
          SELECT 1 FROM projects pr
-         WHERE (SELECT auth.uid()) IN (pr.designer_id, pr.client_id, pr.lead_designer_id, pr.created_by, pr.client_profile_id)
-           AND p_profile_id       IN (pr.designer_id, pr.client_id, pr.lead_designer_id, pr.created_by, pr.client_profile_id)
+         WHERE (SELECT auth.uid()) IN (pr.designer_id, pr.client_id, pr.lead_designer_id, pr.created_by)
+           AND p_profile_id       IN (pr.designer_id, pr.client_id, pr.lead_designer_id, pr.created_by)
        )
 
        -- a seat on the same project team
@@ -438,14 +447,21 @@ COMMENT ON FUNCTION public.can_view_profile(uuid) IS
   'profiles_select_counterparty policy, which cannot work without the EXECUTE '
   'grant (Postgres checks policy-function EXECUTE at executor-init — see 00510).';
 
--- Supporting indexes for the two counterparty legs that have no index on the
--- column they filter (verified absent on Strata via pg_indexes). The predicate
--- runs once per candidate row, so an unindexed leg is a sequential scan of
--- fulfillment_orders / projects per profile row returned.
+-- Supporting index for the one counterparty leg that has no index on the column
+-- it filters (verified absent on Strata via pg_indexes). The predicate runs
+-- once per candidate row, so an unindexed leg is a sequential scan of
+-- fulfillment_orders per profile row returned.
+-- fulfillment_orders.designer_profile_id IS FK'd to profiles, so this leg is
+-- live and the index earns its keep. An earlier draft also created
+-- idx_projects_client_profile; that column is FK'd to client_profiles, the leg
+-- that would have used it was dead, and both are gone.
+--
+-- NOTE FOR THE APPLY: this runs inside the migration's single transaction and
+-- is NOT CONCURRENTLY, so it takes an ACCESS EXCLUSIVE lock on
+-- fulfillment_orders for the duration. Harmless at production's row counts;
+-- named here so it is not discovered mid-apply (KODY-RUNBOOK.md Step 3).
 CREATE INDEX IF NOT EXISTS idx_fulfillment_orders_designer_profile
   ON public.fulfillment_orders (designer_profile_id);
-CREATE INDEX IF NOT EXISTS idx_projects_client_profile
-  ON public.projects (client_profile_id);
 
 DROP POLICY IF EXISTS "Profiles are viewable by everyone" ON public.profiles;
 
@@ -1410,8 +1426,10 @@ COMMIT;
 --   • python3 scripts/generate-legacy-grants.py  (this file adds GRANT/REVOKE,
 --     so supabase/seed/00-legacy-grants.sql must be regenerated or a fresh
 --     local stack will diverge from prod ACLs)
---   • pnpm db:generate                            (public schema changed: a new
---     view, two new functions)
+--   • pnpm db:generate                            (public schema changed: FOUR
+--     new functions — can_view_profile, current_profile_role,
+--     search_shareable_designers, list_vendor_profiles — and NO new view;
+--     profile_cards was cut from this migration)
 --   • scripts/run-sql-tests.sh                    (the whole suite vs
 --     KNOWN_FAILURES.md — that, not the single file, is the local gate)
 --   • the anon/authenticated probes in 00555_probes.md
