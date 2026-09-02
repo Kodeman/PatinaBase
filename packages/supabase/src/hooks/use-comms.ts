@@ -1049,20 +1049,25 @@ export function useUpdateThreadNotificationPref() {
 }
 
 /**
- * Lists vendor profiles available for the brief picker. Returns rows from
- * `profiles` with role='vendor'. The vendor must already have a profile —
- * the pending-placeholder creation flow is a separate sub-feature.
+ * Lists vendor profiles available for the brief picker. Reads the
+ * `list_vendor_profiles()` SECURITY DEFINER RPC (migration 00555), which
+ * returns id / full_name / avatar_url for role='vendor', already ordered by
+ * name, and never email, phone or stripe_customer_id. Going through the RPC
+ * rather than `profiles` directly is what keeps this picker alive after 00555
+ * removes the "Profiles are viewable by everyone" policy — the direct read
+ * would throw 42501, not return an empty list. The vendor must already have a
+ * profile — the pending-placeholder creation flow is a separate sub-feature.
  */
 export function useVendorProfiles() {
   return useQuery({
     queryKey: ['comms', 'vendor-profiles'] as const,
     queryFn: async () => {
-      const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url')
-        .eq('role', 'vendor')
-        .order('full_name', { ascending: true });
+      // `as any` until database.types.ts is regenerated against 00555 — the
+      // function does not exist on any database yet, so its name is not in the
+      // generated Functions union.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('list_vendor_profiles');
       if (error) throw error;
       return (data ?? []) as Array<{
         id: string;

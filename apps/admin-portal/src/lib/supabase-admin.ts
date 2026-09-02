@@ -43,6 +43,9 @@ export async function createAuditLog(
     action: string;
     resourceType: string;
     resourceId?: string;
+    /** Sets audit_logs.organization_id — studio-scoped actions so the
+     *  studio Activity tab can filter by organization_id directly. */
+    organizationId?: string;
     oldValues?: Record<string, unknown>;
     newValues?: Record<string, unknown>;
     metadata?: Record<string, unknown>;
@@ -56,6 +59,7 @@ export async function createAuditLog(
     action: entry.action,
     resource_type: entry.resourceType,
     resource_id: entry.resourceId,
+    organization_id: entry.organizationId as any,
     old_values: entry.oldValues as any,
     new_values: entry.newValues as any,
     metadata: entry.metadata as any,

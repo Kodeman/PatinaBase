@@ -12632,6 +12632,132 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_studio_comember(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_studio_comember(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_active_org_member(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_active_org_member(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.guard_organization_admin_columns() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.admin_studio_overview FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.admin_studio_overview TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._assert_admin_actor(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._lock_studio(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.admin_create_studio_for_user(uuid, uuid, text, subscription_tier, boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.admin_create_studio_for_user(uuid, uuid, text, subscription_tier, boolean) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.admin_add_studio_member(uuid, uuid, uuid, member_role, text, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.admin_add_studio_member(uuid, uuid, uuid, member_role, text, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.admin_set_studio_member_role(uuid, uuid, uuid, member_role) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.admin_set_studio_member_role(uuid, uuid, uuid, member_role) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.admin_remove_studio_member(uuid, uuid, uuid, boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.admin_remove_studio_member(uuid, uuid, uuid, boolean) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.admin_transfer_studio_ownership(uuid, uuid, uuid, member_role) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.admin_transfer_studio_ownership(uuid, uuid, uuid, member_role) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.admin_set_studio_status(uuid, uuid, organization_status) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_admin_studio_management.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.admin_set_studio_status(uuid, uuid, organization_status) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00557_increment_scan_upload_attempt.sql
 DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.increment_scan_upload_attempt(UUID) FROM PUBLIC;

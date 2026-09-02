@@ -489,6 +489,13 @@ export type Database = {
             foreignKeyName: "api_keys_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -715,6 +722,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "audit_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "audit_logs_organization_id_fkey"
             columns: ["organization_id"]
@@ -985,6 +999,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "board_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "board_templates_studio_id_fkey"
             columns: ["studio_id"]
@@ -6077,6 +6098,13 @@ export type Database = {
             foreignKeyName: "field_captures_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -7882,6 +7910,13 @@ export type Database = {
             foreignKeyName: "invoices_studio_id_fkey"
             columns: ["studio_id"]
             isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -9509,6 +9544,13 @@ export type Database = {
             columns: ["invited_by"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
             referencedColumns: ["id"]
           },
           {
@@ -11317,6 +11359,13 @@ export type Database = {
             foreignKeyName: "product_configurations_studio_id_fkey"
             columns: ["studio_id"]
             isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_configurations_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -12877,6 +12926,13 @@ export type Database = {
             foreignKeyName: "products_studio_id_fkey"
             columns: ["studio_id"]
             isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -13727,6 +13783,13 @@ export type Database = {
             columns: ["designer_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_change_order_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
             referencedColumns: ["id"]
           },
           {
@@ -16955,6 +17018,13 @@ export type Database = {
             columns: ["proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
             referencedColumns: ["id"]
           },
           {
@@ -22861,6 +22931,13 @@ export type Database = {
             foreignKeyName: "spec_book_templates_studio_id_fkey"
             columns: ["studio_id"]
             isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_book_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -23170,6 +23247,13 @@ export type Database = {
             foreignKeyName: "studio_billing_settings_studio_id_fkey"
             columns: ["studio_id"]
             isOneToOne: true
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_billing_settings_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -23269,6 +23353,13 @@ export type Database = {
             foreignKeyName: "studio_contacts_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_contacts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -23316,6 +23407,13 @@ export type Database = {
           studio_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "studio_invoice_counters_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "studio_invoice_counters_studio_id_fkey"
             columns: ["studio_id"]
@@ -25215,6 +25313,13 @@ export type Database = {
             foreignKeyName: "vendor_nominations_studio_id_fkey"
             columns: ["studio_id"]
             isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_nominations_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -26098,6 +26203,52 @@ export type Database = {
       }
     }
     Views: {
+      admin_studio_overview: {
+        Row: {
+          active_member_count: number | null
+          address: Json | null
+          business_verified: boolean | null
+          business_verified_at: string | null
+          created_at: string | null
+          description: string | null
+          email: string | null
+          id: string | null
+          invited_count: number | null
+          logo_url: string | null
+          name: string | null
+          owner_user_id: string | null
+          phone: string | null
+          project_count: number | null
+          rolodex_seed_skipped_at: string | null
+          settings: Json | null
+          slug: string | null
+          status: Database["public"]["Enums"]["organization_status"] | null
+          subscription_expires_at: string | null
+          subscription_tier:
+            | Database["public"]["Enums"]["subscription_tier"]
+            | null
+          tax_id: string | null
+          type: Database["public"]["Enums"]["organization_type"] | null
+          updated_at: string | null
+          website: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_designer_roster: {
         Row: {
           client_id: string | null
@@ -27423,6 +27574,13 @@ export type Database = {
             foreignKeyName: "products_studio_id_fkey"
             columns: ["studio_id"]
             isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -27570,6 +27728,13 @@ export type Database = {
           vendor_id: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "products_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_studio_id_fkey"
             columns: ["studio_id"]
@@ -27815,6 +27980,7 @@ export type Database = {
         }
         Returns: Json
       }
+      _assert_admin_actor: { Args: { p_actor: string }; Returns: undefined }
       _assert_paper_provenance: {
         Args: {
           p_paper_signed_on: string
@@ -28464,6 +28630,37 @@ export type Database = {
           proposal_id: string
           status: string
         }[]
+      }
+      _lock_studio: {
+        Args: { p_org_id: string }
+        Returns: {
+          address: Json | null
+          business_verified: boolean
+          business_verified_at: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          phone: string | null
+          rolodex_seed_skipped_at: string | null
+          settings: Json
+          slug: string
+          status: Database["public"]["Enums"]["organization_status"]
+          subscription_expires_at: string | null
+          subscription_tier: Database["public"]["Enums"]["subscription_tier"]
+          tax_id: string | null
+          type: Database["public"]["Enums"]["organization_type"]
+          updated_at: string
+          website: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       _mark_project_review_delivery_sent_00442_impl: {
         Args: {
@@ -29118,6 +29315,159 @@ export type Database = {
       activate_proposal_as_project: {
         Args: { p_proposal_id: string; p_start_date?: string }
         Returns: string
+      }
+      admin_add_studio_member: {
+        Args: {
+          p_actor: string
+          p_job_title?: string
+          p_org_id: string
+          p_role?: Database["public"]["Enums"]["member_role"]
+          p_staff_role?: string
+          p_teammate_type?: string
+          p_user_id: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          invitation_expires_at: string | null
+          invitation_token: string | null
+          invited_by: string | null
+          job_title: string | null
+          joined_at: string | null
+          organization_id: string
+          permissions_override: Json | null
+          role: Database["public"]["Enums"]["member_role"]
+          staff_role: string | null
+          status: Database["public"]["Enums"]["member_status"]
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_create_studio_for_user: {
+        Args: {
+          p_actor: string
+          p_grant_designer_role?: boolean
+          p_name: string
+          p_owner_user_id: string
+          p_subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
+        }
+        Returns: {
+          address: Json | null
+          business_verified: boolean
+          business_verified_at: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          phone: string | null
+          rolodex_seed_skipped_at: string | null
+          settings: Json
+          slug: string
+          status: Database["public"]["Enums"]["organization_status"]
+          subscription_expires_at: string | null
+          subscription_tier: Database["public"]["Enums"]["subscription_tier"]
+          tax_id: string | null
+          type: Database["public"]["Enums"]["organization_type"]
+          updated_at: string
+          website: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_remove_studio_member: {
+        Args: {
+          p_actor: string
+          p_hard_delete?: boolean
+          p_org_id: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      admin_set_studio_member_role: {
+        Args: {
+          p_actor: string
+          p_org_id: string
+          p_role: Database["public"]["Enums"]["member_role"]
+          p_user_id: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          invitation_expires_at: string | null
+          invitation_token: string | null
+          invited_by: string | null
+          job_title: string | null
+          joined_at: string | null
+          organization_id: string
+          permissions_override: Json | null
+          role: Database["public"]["Enums"]["member_role"]
+          staff_role: string | null
+          status: Database["public"]["Enums"]["member_status"]
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_set_studio_status: {
+        Args: {
+          p_actor: string
+          p_org_id: string
+          p_status: Database["public"]["Enums"]["organization_status"]
+        }
+        Returns: {
+          address: Json | null
+          business_verified: boolean
+          business_verified_at: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          phone: string | null
+          rolodex_seed_skipped_at: string | null
+          settings: Json
+          slug: string
+          status: Database["public"]["Enums"]["organization_status"]
+          subscription_expires_at: string | null
+          subscription_tier: Database["public"]["Enums"]["subscription_tier"]
+          tax_id: string | null
+          type: Database["public"]["Enums"]["organization_type"]
+          updated_at: string
+          website: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_transfer_studio_ownership: {
+        Args: {
+          p_actor: string
+          p_demoted_role?: Database["public"]["Enums"]["member_role"]
+          p_new_owner: string
+          p_org_id: string
+        }
+        Returns: undefined
       }
       advance_concierge_order: {
         Args: {

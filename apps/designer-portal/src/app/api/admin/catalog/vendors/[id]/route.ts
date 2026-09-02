@@ -1,24 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
+import { getAuthenticatedDesignerAdmin } from '@/lib/supabase-admin';
+import { VENDOR_DETAIL_COLUMNS } from '@/lib/vendor-columns';
+
+// RF-04 — see the sibling list route for the full reasoning. All three handlers
+// here were `getUser()`-only, and this is the one that serves a single vendor's
+// whole row: the 13 trade columns 00555 revokes from `anon` (trade_terms,
+// notes, contact_info, orders_email and the rest) were one `.patina.cloud`
+// cookie away for any signed-in account, homeowner included.
+//
+// GET is designer-or-admin. PATCH and DELETE are ADMIN-ONLY — editing or
+// removing a maker from the catalogue is staff work, and `Authenticated users
+// can insert vendors` shows how little the table's own RLS asks.
 
 // GET /api/admin/catalog/vendors/[id]
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+
+    const auth = await getAuthenticatedDesignerAdmin(request);
+    if ('error' in auth) return auth.error;
+
+    // The data read stays on the SESSION client, not the helper's service-role
+    // adminClient: vendors RLS should still apply to it.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase: any = await createServerClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
 
     const { data, error } = await supabase
       .from('vendors')
-      .select('*')
+      .select(VENDOR_DETAIL_COLUMNS)
       .eq('id', id)
       .single();
 
@@ -43,13 +56,12 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+
+    const auth = await getAuthenticatedDesignerAdmin(request, { domains: ['admin'] });
+    if ('error' in auth) return auth.error;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase: any = await createServerClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
 
     const body = await request.json();
     const updateData: Record<string, unknown> = {};
@@ -66,7 +78,7 @@ export async function PATCH(
       .from('vendors')
       .update(updateData)
       .eq('id', id)
-      .select()
+      .select(VENDOR_DETAIL_COLUMNS)
       .single();
 
     if (error) {
@@ -85,18 +97,17 @@ export async function PATCH(
 
 // DELETE /api/admin/catalog/vendors/[id]
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+
+    const auth = await getAuthenticatedDesignerAdmin(request, { domains: ['admin'] });
+    if ('error' in auth) return auth.error;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase: any = await createServerClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
 
     const { error } = await supabase
       .from('vendors')
