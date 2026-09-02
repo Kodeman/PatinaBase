@@ -262,9 +262,9 @@ struct AuthScreenView: View {
                 .foregroundStyle(PatinaColors.Text.interactive))
                 .font(PatinaTypography.caption)
                 .multilineTextAlignment(.center)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
         }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
         .padding(.top, 16)
         .padding(.horizontal, 28)
         .accessibilityIdentifier("auth.welcome.passwordButton")
