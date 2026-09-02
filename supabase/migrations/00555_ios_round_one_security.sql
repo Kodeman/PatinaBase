@@ -511,15 +511,48 @@ REVOKE DELETE ON public.profiles FROM authenticated;
 --   (i)  the client may update its own row but may NOT change its own role;
 --   (ii) the SERVER defaults an app sign-up to homeowner (below, in the
 --        handle_new_user block), so role is never the client's to set.
+-- The pin has to read the caller's CURRENT role, and a WITH CHECK sees only
+-- the NEW row — there is no OLD in a WITH CHECK. Reading public.profiles
+-- inline is therefore the obvious shape and it does not work: the subquery is
+-- evaluated as the INVOKER, so it re-enters profiles' own policies and
+-- Postgres raises `42P17 infinite recursion detected in policy for relation
+-- "profiles"` on the owner's very first display-name write. (Reproduced on a
+-- fresh local stack, 2026-09-02, before this helper existed.) The read has to
+-- bypass RLS, which means SECURITY DEFINER — the same reason can_view_profile
+-- above is one.
+--
+-- It returns the PRE-update value, which is what "pin" needs: the function is
+-- STABLE, so it runs on the calling statement's snapshot, and the UPDATE's own
+-- new tuple carries the current command id and is invisible to that snapshot.
+CREATE OR REPLACE FUNCTION public.current_profile_role()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT p.role FROM profiles p WHERE p.id = (SELECT auth.uid());
+$$;
+
+-- Postgres checks policy-function EXECUTE at executor-init (see 00510), so the
+-- grant is not optional — without it the policy below denies every update.
+REVOKE EXECUTE ON FUNCTION public.current_profile_role() FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.current_profile_role() TO authenticated;
+
+COMMENT ON FUNCTION public.current_profile_role() IS
+  'The calling user''s own profiles.role, read past RLS. Exists solely so the '
+  '"Users can update own profile" WITH CHECK can pin the role column without '
+  'the inline subquery that made the policy self-recursive (42P17). Returns '
+  'only the caller''s own row, so being PostgREST-exposed to authenticated '
+  'tells a caller nothing it could not already read. Added 00555.';
+
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles
   FOR UPDATE TO authenticated
   USING  ((SELECT auth.uid()) = id)
   WITH CHECK (
     (SELECT auth.uid()) = id
-    AND role IS NOT DISTINCT FROM (
-      SELECT p.role FROM public.profiles p WHERE p.id = (SELECT auth.uid())
-    )
+    AND role IS NOT DISTINCT FROM public.current_profile_role()
   );
 
 COMMENT ON POLICY "Users can update own profile" ON public.profiles IS
@@ -870,6 +903,19 @@ GRANT SELECT (
   updated_at
 ) ON public.vendors TO anon;
 
+-- `authenticated` keeps the whole trade file, and this migration now says so
+-- OUT LOUD instead of inheriting it. On Strata the grant is already there — the
+-- table predates Supabase's 2026-05-30 platform-default flip, so authenticated
+-- was granted at creation time — but on a post-flip stack (every fresh local
+-- `supabase db reset`) nothing grants it during the migration replay, because
+-- seed/00-legacy-grants.sql runs AFTER the migrations, not before. The
+-- verification block below asserts `has_table_privilege('authenticated',
+-- 'public.vendors', 'SELECT')`, so without this line the migration cannot apply
+-- locally at all — which is exactly the failure the skill's "post-flip
+-- migrations must GRANT what callers need EXPLICITLY, never rely on creation
+-- defaults" rule exists to prevent. Additive on prod, load-bearing locally.
+GRANT SELECT ON public.vendors TO authenticated;
+
 -- The "Allow anon read access to vendors" policy (qual: true, TO anon) is
 -- deliberately left alone: with the column grant above it now means "anon may
 -- read a maker's public face", which is what the marketplace needs.
@@ -1094,6 +1140,10 @@ BEGIN
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Users can update own profile'
   ), '"Users can update own profile" still has no WITH CHECK — role self-elevation is open';
+  ASSERT NOT has_function_privilege('anon', 'public.current_profile_role()', 'EXECUTE'),
+    'anon can execute current_profile_role';
+  ASSERT has_function_privilege('authenticated', 'public.current_profile_role()', 'EXECUTE'),
+    'authenticated cannot execute current_profile_role — the UPDATE policy denies every write';
   -- Read the fallback EXPRESSION, not the word. 00313's body already contains
   -- the literal 'homeowner' twice (the CASE arm and its SECURITY comment), so
   -- a LIKE '%homeowner%' guard passes on the UNFIXED function and would report

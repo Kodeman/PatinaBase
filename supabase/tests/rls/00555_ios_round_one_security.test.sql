@@ -513,6 +513,7 @@ END $$;
 DO $$
 DECLARE
   ok        BOOLEAN;
+  name_now  TEXT;
   role_was  TEXT;
   role_now  TEXT;
 BEGIN
@@ -521,33 +522,65 @@ BEGIN
     WHERE relname = 'profile_cards' AND relnamespace = 'public'::regnamespace
   ), 'FAIL 7a: profile_cards was cut from 00555 but exists — a stale apply?';
 
-  SELECT role INTO role_was FROM public.profiles
-   WHERE id = 'd0000000-0000-4000-8000-000000000001';
-
+  -- 7b: the owner may still edit their own row.
+  --
+  -- This is not a formality. The first draft of the WITH CHECK pinned the role
+  -- with an inline `SELECT role FROM public.profiles WHERE id = auth.uid()`,
+  -- which is evaluated as the INVOKER and therefore re-enters profiles' own
+  -- policies: every owner update died with `42P17 infinite recursion detected
+  -- in policy for relation "profiles"`. The fix is the SECURITY DEFINER helper
+  -- public.current_profile_role(). This case is that regression guard, so it
+  -- asserts the row actually CHANGED rather than only that no error was raised.
   PERFORM pg_temp.assume_user('d0000000-0000-4000-8000-000000000001');
-
-  -- the owner may still edit their own row
   UPDATE public.profiles SET display_name = 'Dana H.'
    WHERE id = 'd0000000-0000-4000-8000-000000000001';
   GET DIAGNOSTICS ok = ROW_COUNT;
   ASSERT ok, 'FAIL 7b: the owner can no longer update their own profile';
+  PERFORM pg_temp.reset_role();
 
-  -- but may NOT change their own role. Either the WITH CHECK raises, or the
-  -- update matches nothing; both are acceptable, a changed role is not.
+  SELECT display_name INTO name_now FROM public.profiles
+   WHERE id = 'd0000000-0000-4000-8000-000000000001';
+  ASSERT name_now = 'Dana H.',
+    'FAIL 7b2: the owner''s own display_name write did not land, got ' || COALESCE(name_now, '<null>');
+
+  -- 7c: but may NOT raise their own role.
+  --
+  -- Mal, not Dana: Dana is already 'designer' in the fixture, so asking her to
+  -- set role='designer' is a no-op that any policy would allow and proves
+  -- nothing. Mal is a 'homeowner', so this is a real elevation attempt — the
+  -- exact vector A3-07's client-side remedy used to depend on.
+  SELECT role INTO role_was FROM public.profiles
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  ASSERT role_was = 'homeowner',
+    'FIXTURE 7c: Mal must start as a homeowner for the elevation to be real, got '
+      || COALESCE(role_was, '<null>');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
+  -- Either the WITH CHECK raises, or the update matches nothing; both are
+  -- acceptable, a changed role is not.
   BEGIN
     UPDATE public.profiles SET role = 'designer'
-     WHERE id = 'd0000000-0000-4000-8000-000000000001';
+     WHERE id = 'a0000000-0000-4000-8000-000000000003';
   EXCEPTION WHEN check_violation OR insufficient_privilege THEN
     NULL;
   END;
-
   PERFORM pg_temp.reset_role();
 
   SELECT role INTO role_now FROM public.profiles
-   WHERE id = 'd0000000-0000-4000-8000-000000000001';
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
   ASSERT role_now IS NOT DISTINCT FROM role_was,
     'FAIL 7c: an authenticated user raised their own profiles.role from '
       || COALESCE(role_was, '<null>') || ' to ' || COALESCE(role_now, '<null>');
+
+  -- 7d: and the helper the policy leans on is closed to the anon key.
+  ASSERT NOT has_function_privilege('anon'::name, 'public.current_profile_role()', 'EXECUTE'),
+    'FAIL 7d: anon can execute current_profile_role';
+  ASSERT has_function_privilege('authenticated'::name, 'public.current_profile_role()', 'EXECUTE'),
+    'FAIL 7d2: authenticated cannot execute current_profile_role — the UPDATE policy denies every write';
+  ASSERT (
+    SELECT p.prosecdef FROM pg_proc p JOIN pg_namespace nn ON nn.oid = p.pronamespace
+    WHERE nn.nspname = 'public' AND p.proname = 'current_profile_role'
+  ), 'FAIL 7d3: current_profile_role must be SECURITY DEFINER or the policy recurses again';
 END $$;
 
 -- ─── 8. search_shareable_designers ─────────────────────────────────────────
