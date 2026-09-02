@@ -212,4 +212,41 @@ struct ProductDecodingTests {
         #expect(shown.count == 1)
         #expect(shown.first?.resolvedMakerName == "Studio Piet")
     }
+
+    // MARK: - C7-17: the direct table reads decode element-wise too
+
+    /// U39 fixed the RPC path and left the two direct reads all-or-nothing.
+    /// The saved-pieces read is the one that matters: one malformed
+    /// `products` row threw and took the entire saved list with it, which the
+    /// client reads as their saved pieces being gone.
+    @Test
+    func theDirectReadsDecodeRowByRow() throws {
+        let source = try SourcePin.read("Patina/Core/Network/ProductAPIClient.swift")
+
+        let single = try #require(
+            source.components(separatedBy: "func fetchProduct(id:").last?
+                .components(separatedBy: "func fetchProducts(ids:").first
+        )
+        #expect(single.contains("[FailableDecodable<RawProductWithVendor>].self"))
+        #expect(single.contains("decode([RawProductWithVendor].self") == false)
+
+        let saved = try #require(source.components(separatedBy: "func fetchProducts(ids:").last)
+        #expect(saved.contains("[FailableDecodable<RawProductWithVendor>].self"))
+        #expect(saved.contains("decode([RawProductWithVendor].self") == false)
+    }
+
+    /// The element wrapper itself, on the shape the direct reads receive:
+    /// a row missing the non-optional `name` drops, the rest survive.
+    @Test
+    func aMalformedRowDropsInsteadOfThrowing() throws {
+        struct RawRow: Decodable { let id: String; let name: String }
+        let json = """
+        [{"id":"p1","name":"Oak Table"},
+         {"id":"p2"},
+         {"id":"p3","name":"Linen Sofa"}]
+        """
+        let wrapped = try JSONDecoder().decode([FailableDecodable<RawRow>].self, from: Data(json.utf8))
+        #expect(wrapped.count == 3)
+        #expect(wrapped.compactMap(\.value).map(\.id) == ["p1", "p3"])
+    }
 }

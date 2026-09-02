@@ -146,6 +146,28 @@ public enum APIConfiguration {
     /// Default request timeout
     public static let requestTimeout: TimeInterval = 30.0
 
+    /// Ceiling on a whole transfer, retries and redirects included.
+    ///
+    /// `URLSession.shared`'s default is seven days, which is not a budget —
+    /// it is the absence of one, and it is what every supabase-swift call
+    /// inherited until `SupabaseClientManager.sessionConfiguration` (C4-16).
+    ///
+    /// C4-16 proposes 120 s. This is 300 because the same client also carries
+    /// scan-bundle artifact uploads (`RoomScanSyncService` → `supabase
+    /// .storage`), where a 20 MB USDZ on a poor connection legitimately
+    /// exceeds two minutes. `requestTimeout` above is what actually closes the
+    /// finding: a backend that answers nothing produces no bytes and fails at
+    /// 30 s. This one only bounds a pathological trickle.
+    public static let resourceTimeout: TimeInterval = 300.0
+
+    /// The style quiz's own budget.
+    ///
+    /// C1-04: the quiz RPC ran on `requestTimeout`, so a tester who answered
+    /// the fifth question sat on Q5 for up to thirty seconds. The local
+    /// profile is already the fallback when this RPC does not answer, so the
+    /// app has no reason to wait a third of a minute to use it.
+    public static let quizTimeout: TimeInterval = 8.0
+
     /// File upload timeout
     public static let uploadTimeout: TimeInterval = 120.0
 
