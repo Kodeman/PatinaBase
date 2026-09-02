@@ -44,6 +44,9 @@ export function useNavCounts(zone: ZoneKey | null): NavCounts {
         waitlist?.total ?? waitlist?.count ?? waitlist?.pending;
       if (typeof waitlistCount === 'number') counts['Waitlist'] = waitlistCount;
 
+      // No Studios badge: nothing ever writes organizations.status =
+      // 'pending_approval', so the count was permanently 0.
+
       return counts;
     },
     enabled: zone === 'people',

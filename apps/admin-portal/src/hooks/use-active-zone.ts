@@ -88,6 +88,7 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
     overview: [],
     people: [
       /^\/users\/[^/]+/,
+      /^\/studios\/[^/]+/,
       /^\/applications\/[^/]+/,
       /^\/verification\/[^/]+/,
     ],

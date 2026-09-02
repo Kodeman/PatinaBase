@@ -723,6 +723,16 @@ export const SurfaceKeys = {
         Banned:    'admin-portal/users/status/banned',
       },
     },
+    Studios: {
+      Root:      'admin-portal/studios',
+      ListIntro: 'admin-portal/studios/list-intro',
+      Empty: {
+        // Operator's workspace has zero studios at all (fresh install).
+        NoStudios:       'admin-portal/studios/empty/no-studios',
+        // Filter / search returned no matches.
+        NoFilterResults: 'admin-portal/studios/empty/no-filter-results',
+      },
+    },
     Applications: {
       Root:      'admin-portal/applications',
       ListIntro: 'admin-portal/applications/list-intro',

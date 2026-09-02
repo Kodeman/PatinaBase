@@ -52,6 +52,7 @@ export const ZONES: ZoneConfig[] = [
     href: '/users',
     paths: [
       '/users',
+      '/studios',
       '/roles',
       '/applications',
       '/verification',
@@ -119,6 +120,7 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
   ],
   people: [
     { label: 'Users', href: '/users' },
+    { label: 'Studios', href: '/studios' },
     { label: 'Roles', href: '/roles' },
     { label: 'Applications', href: '/applications' },
     { label: 'Verification', href: '/verification' },
