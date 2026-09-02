@@ -183,7 +183,8 @@ struct YourSpacesView: View {
                 HelpInfoIcon(
                     surfaceKey: SurfaceKeys.IOSApp.Rooms.emptyNoRooms,
                     fallback: "Patina builds room-aware recommendations from a scan — the LiDAR camera captures shape, light, and existing items so every suggestion fits the actual space.",
-                    size: 13
+                    size: 13,
+                    accessibilityLabel: "About scanning a room"
                 )
             }
             Text("Scan a room and Patina fills it with furniture that knows your space — your light, your walls, your style.")
