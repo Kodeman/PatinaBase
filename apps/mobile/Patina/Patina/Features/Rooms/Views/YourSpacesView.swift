@@ -71,7 +71,8 @@ struct YourSpacesView: View {
                             HelpInfoIcon(
                                 surfaceKey: SurfaceKeys.IOSApp.Rooms.wholeHome,
                                 fallback: "Whole Home rolls every room into one figure — total items, total investment, and a jump-off into the cross-room view for decisions that span more than one room.",
-                                size: 12
+                                size: 12,
+                                accessibilityLabel: "About Whole Home"
                             )
                         }
                         .padding(.horizontal, 20)
@@ -93,9 +94,8 @@ struct YourSpacesView: View {
                             }
                             .padding(.horizontal, 20)
                         }
-
-                        Spacer().frame(height: 120)
                     }
+                    .companionBottomClearance()
                 }
             }
         }
@@ -104,6 +104,10 @@ struct YourSpacesView: View {
         // rest. Debounced and owner-keyed; a guest's rooms are never merged
         // into an account (SP-06).
         .task {
+            await RoomSyncCoordinator.shared.reconcile(store: RoomStore(context: modelContext))
+        }
+        // C4-12 / R-03 (L1-B's note).
+        .refreshable {
             await RoomSyncCoordinator.shared.reconcile(store: RoomStore(context: modelContext))
         }
         // U18: standard pushed-screen chrome — this screen's own "Your
@@ -131,35 +135,14 @@ struct YourSpacesView: View {
                 HelpInfoIcon(
                     surfaceKey: SurfaceKeys.IOSApp.Rooms.yourSpaces,
                     fallback: "Your Spaces shows every room you've captured. Each card summarizes the room's items and budget. Scroll past the Whole Home bar to see them.",
-                    size: 14
+                    size: 14,
+                    accessibilityLabel: "About Your Spaces"
                 )
             }
             Spacer()
-            // Help-panel trigger — surfaces every help article for the
-            // rooms gallery in a sheet.
-            Button {
-                isHelpPanelPresented = true
-            } label: {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(PatinaColors.Text.secondary)
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Help")
-            .accessibilityHint("Opens the help panel for Your Spaces.")
-            .accessibilityIdentifier("YourSpacesView.HelpButton")
-
-            // "Add a room" button — sibling HelpInfoIcon (rather than
-            // wrapping the button in HelpTooltip, which intercepts taps)
-            // so first-time users can learn what `+` does without
-            // breaking the navigation path.
-            HelpInfoIcon(
-                surfaceKey: SurfaceKeys.IOSApp.Rooms.newRoom,
-                fallback: "Add a new room — scan it with the camera for the best recommendations, or enter dimensions manually if you don't have the room in front of you.",
-                size: 12
-            )
+            // C-05: the `+` control's own help icon was the fourth `?` on
+            // this header and the third labelled "More information". The
+            // sheet it opens names both paths in full; the icon is gone.
             Button {
                 coordinator.presentedSheet = .newRoom
             } label: {

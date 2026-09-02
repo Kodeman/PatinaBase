@@ -351,37 +351,44 @@ public struct CompanionOverlay: View {
                     .padding(.bottom, 12)
             }
 
+            // A-50 / B-10: this card used to be drawn as an
+            // `.overlay(alignment: .topLeading)` ON `CompanionHearthView` with
+            // `.offset(y: -16)`, so "These are your next steps" covered the
+            // panel title, the first action row and part of the close control
+            // — the reader was told to look at rows the card was sitting on.
+            // It takes the intro bubble's slot instead: a sibling ABOVE the
+            // panel, which is where the panel's own content is not.
+            if state.isExpanded, showCoachmark {
+                coachmarkBubbleView
+                    .padding(.bottom, 12)
+            }
+
             CompanionHearthView(
                 presentation: canonicalPresentation,
                 attention: coaching.markAttention,
                 wakePhase: wakePhase,
                 onPrimaryAction: hearthPrimaryAction,
                 onHintAction: hearthHintAction,
-                onHelp: {
-                    collapseToButton()
-                    Task {
-                        try? await Task.sleep(for: .seconds(0.3))
-                        presented = .help
-                    }
-                },
+                // Round one: no ios-app/companion help articles exist, so the
+                // `?` would open on an empty panel (C5-02). W2 restores it.
+                onHelp: nil,
                 onDismiss: { collapseToButton() },
                 expandedContent: {
                     expandedView
                 }
             )
-            .overlay(alignment: .topLeading) {
-                if state.isExpanded, showCoachmark {
-                    companionCoachmark
-                        .offset(y: -16)
-                        .padding(.trailing, 88)
-                        .transition(
-                            reduceMotion
-                                ? .opacity
-                                : .move(edge: .top).combined(with: .opacity)
-                        )
-                }
-            }
         }
+    }
+
+    /// The coach mark in its own row above the panel.
+    private var coachmarkBubbleView: some View {
+        companionCoachmark
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(
+                reduceMotion
+                    ? .opacity
+                    : .move(edge: .top).combined(with: .opacity)
+            )
     }
 
     private func trackCanonicalExposure() {
