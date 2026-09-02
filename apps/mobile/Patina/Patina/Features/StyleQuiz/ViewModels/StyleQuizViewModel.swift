@@ -32,22 +32,36 @@ final class StyleQuizViewModel {
         questions[currentQuestion]
     }
 
+    /// A-21 — answers recorded, not the index of the question being shown.
+    ///
+    /// The bar counted the current question as done throughout: Q1 read 20 %
+    /// before anything was chosen, and Q5 read "STEP 5 OF 5 · 100%" with a
+    /// full bar while nothing was selected and Continue was disabled.
     var progress: Float {
-        Float(currentQuestion + 1) / Float(questions.count)
+        guard !questions.isEmpty else { return 0 }
+        return Float(answeredCount) / Float(questions.count)
+    }
+
+    /// Questions with at least one option chosen.
+    var answeredCount: Int {
+        selections.values.filter { !$0.isEmpty }.count
     }
 
     var canAdvance: Bool {
         selections[currentQuestion] != nil && !(selections[currentQuestion]?.isEmpty ?? true)
     }
 
-    /// Companion nudge label for the current state
+    /// A-13 — the nudge is gone on any step that already has a real button.
+    ///
+    /// "Next question →" was a StaticText with no button role and no action,
+    /// 26 pt above `companion.quiz.continue` — same arrow, same meaning, and
+    /// tapping it did nothing. Only the last step, where the multi-select
+    /// Continue reads "Continue" rather than naming the destination, keeps a
+    /// line — and only when there is no Continue button to contradict.
     var companionNudgeLabel: String? {
-        if currentQuestion < questions.count - 1, canAdvance {
-            return "Next question →"
-        } else if currentQuestion == questions.count - 1, canAdvance {
-            return "See your style →"
-        }
-        return nil
+        guard currentQuestion == questions.count - 1, canAdvance,
+              currentQuestionData.type.isSingleSelect else { return nil }
+        return "See your style"
     }
 
     // MARK: - Init
@@ -76,7 +90,13 @@ final class StyleQuizViewModel {
         let selections: [Int: Set<Int>]
     }
 
-    /// Persist the in-flight answers + position ("Save progress & exit").
+    /// Persist the in-flight answers + position.
+    ///
+    /// C1-28: this used to have exactly one caller — the "Save progress &
+    /// exit" button inside a confirmation dialog that only existed on the
+    /// non-onboarding mount — so a call, a home swipe or a kill mid-quiz lost
+    /// every answer, and the onboarding reader could not reach the save at
+    /// all. It is now also called on disappear and on backgrounding.
     func saveProgress() {
         let snapshot = SavedProgress(currentQuestion: currentQuestion, selections: selections)
         if let data = try? JSONEncoder().encode(snapshot) {

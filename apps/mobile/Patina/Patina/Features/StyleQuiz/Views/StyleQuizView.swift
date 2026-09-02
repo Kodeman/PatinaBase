@@ -24,6 +24,14 @@ struct StyleQuizView: View {
 
     /// Optional callback when quiz completes (for onboarding flow)
     var onComplete: ((StyleProfileResult) -> Void)?
+    /// B-21 — "I'll do this later". Set by `OnboardingFlowHost`, which is the
+    /// mount that had no exit at all: the AX tree carried no Back, Skip or
+    /// close control on any step.
+    var onDefer: (() -> Void)?
+    /// P-18 — the sign-in door, on every quiz step.
+    var onSignIn: (() -> Void)?
+    /// C1-28 — a save on backgrounding, not only on an explicit exit.
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Step labels for the journey pill
     private let stepLabels = [
@@ -39,11 +47,13 @@ struct StyleQuizView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
+                quizNavigationRow
+
                 // Question text
                 Text(viewModel.currentQuestionData.title)
                     .font(PatinaTypography.h3)
                     .foregroundStyle(PatinaColors.Text.primary)
-                    .padding(.top, 72)
+                    .padding(.top, 12)
                     .padding(.horizontal, 24)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -51,11 +61,25 @@ struct StyleQuizView: View {
                 questionContent(viewModel.currentQuestionData)
 
                 Spacer()
+
+                if let onSignIn {
+                    // P-18: reachable from every step, not only from Welcome.
+                    Button("I already have an account — Sign in", action: onSignIn)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                        .accessibilityIdentifier("StyleQuiz.SignInButton")
+                }
             }
 
             // Companion-style journey progress pill at bottom
             quizProgressPill
                 .padding(.bottom, 28)
+
+            if viewModel.isSubmitting {
+                submittingOverlay
+            }
         }
         .background(PatinaColors.Background.primary)
         .toolbar(.hidden, for: .navigationBar)
@@ -92,6 +116,13 @@ struct StyleQuizView: View {
         }
         .onAppear {
             presentQuizCompanionIfNeeded()
+        }
+        // C1-28: the answers survive a call, a home swipe or a kill.
+        .onDisappear {
+            viewModel.saveProgress()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { viewModel.saveProgress() }
         }
         .onChange(of: viewModel.currentQuestion) { _, _ in
             updateQuizCompanion()
@@ -146,6 +177,65 @@ struct StyleQuizView: View {
     /// the coordinator — pop back to wherever the user came from.
     private func exitQuiz() {
         coordinator.goBack()
+    }
+
+    // MARK: - Navigation row (B-21, P-18)
+
+    /// Back on every step past the first, and an "I'll do this later" that
+    /// leaves. The quiz had neither: `onComplete == nil` was the only route to
+    /// the ✕, and during onboarding that route did not exist.
+    private var quizNavigationRow: some View {
+        HStack {
+            if viewModel.currentQuestion > 0 {
+                Button {
+                    HapticManager.shared.impact(.light)
+                    viewModel.goBack()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(PatinaColors.Text.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Previous question")
+                .accessibilityIdentifier("StyleQuiz.BackButton")
+            }
+
+            Spacer()
+
+            if let onDefer {
+                Button("I'll do this later") {
+                    viewModel.saveProgress()
+                    onDefer()
+                }
+                .font(PatinaTypography.uiSmall)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityIdentifier("StyleQuiz.DeferButton")
+            }
+        }
+        .padding(.top, 52)
+        .padding(.horizontal, 18)
+    }
+
+    // MARK: - Submitting (C1-04)
+
+    /// `isSubmitting` had no reader anywhere in the app, so the fifth answer
+    /// left the reader on a highlighted Q5 for up to the RPC timeout with
+    /// nothing to look at.
+    private var submittingOverlay: some View {
+        VStack(spacing: PatinaSpacing.md) {
+            ProgressView()
+                .tint(PatinaColors.Text.secondary)
+            Text("Reading your answers…")
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(PatinaColors.Background.primary.opacity(0.96))
+        .accessibilityIdentifier("StyleQuiz.SubmittingState")
     }
 
     // MARK: - Journey Progress Pill
@@ -357,7 +447,8 @@ private extension StyleQuizView {
     var currentQuizCompanionPresentation: CompanionPresentationState {
         let step = viewModel.currentQuestion + 1
         let total = viewModel.questions.count
-        let fraction = total > 0 ? Double(step) / Double(total) : 0
+        // A-21: answers recorded, not the index of the question on screen.
+        let fraction = Double(viewModel.progress)
         let label = stepLabels[min(viewModel.currentQuestion, stepLabels.count - 1)]
         let progress = CompanionProgressPresentation(
             fraction: fraction,
