@@ -4,9 +4,55 @@ Read-only verification for `00555_ios_round_one_security.sql`. Nothing here muta
 Every probe states the **before** (what Strata answers today, measured 2026-09-01) and the
 **after** (what it must answer once the migration is applied).
 
-Companion test script: `00555_ios_round_one_security.test.sql` (destination
-`supabase/tests/rls/`). The repo's tests are plain psql scripts with `DO`/`ASSERT`, not pgTAP,
-and the local gate is the **whole suite** via `scripts/run-sql-tests.sh`, not the one file.
+> ## ⚠ The migration and its test no longer live in this folder
+>
+> This folder held **drafts**. They were superseded on 2026-09-02 and deleted, because they had
+> diverged from the real files by 207 and 131 diff lines respectively and still carried three
+> hazards the tree copies fixed: no `handle_new_user` body (the draft told the applier to "copy it
+> from the live definition at apply time"), an inline recursive `WITH CHECK` that raises
+> `42P17 infinite recursion detected in policy for relation "profiles"` on the owner's first
+> display-name write, and a vacuous `LIKE '%homeowner%'` assertion that passes against the
+> *unfixed* function.
+>
+> **The only copies are:**
+>
+> | | |
+> |---|---|
+> | migration | `supabase/migrations/00555_ios_round_one_security.sql` |
+> | test | `supabase/tests/rls/00555_ios_round_one_security.test.sql` |
+> | sibling migration | `supabase/migrations/00557_increment_scan_upload_attempt.sql` (renumbered from 00556 — see below) |
+> | sibling test | `supabase/tests/rls/00557_increment_scan_upload_attempt.test.sql` |
+>
+> `PROGRAM.md` §3 L0.2 still points readers at `build/migrations-draft/`. It means these files.
+>
+> **The apply sequence is not here either.** It is
+> `artifacts/ios-testflight-polish-2026-09-01/build/waves/w0/KODY-RUNBOOK.md`, which opens with the
+> Step 0 deploy gate (**D8**) and the Step 0b ruling gate, and ends with the rollback. This file is
+> only the probe half of that runbook's Step 5.
+
+The repo's tests are plain psql scripts with `DO`/`ASSERT`, not pgTAP, and the local gate is the
+**whole suite** via `scripts/run-sql-tests.sh`, not the one file.
+
+---
+
+## Exit-criteria cross-reference
+
+`PROGRAM.md` §3 L0.2's exit criteria say *"Probes 1-5 and 9b/9d/9f return the after values"*. Those
+names are **not** this file's section numbers — read the map, not the digits.
+
+| PROGRAM.md exit criterion | Section in this file | What it asserts |
+|---|---|---|
+| Probe 1 | **§1** | anon can no longer read `profiles` |
+| Probe 2 | **§2** | anon can no longer read *or write* `notification_preferences` |
+| Probe 3 (3a/3b/3c) | **§3** | `vendors` — public face kept, trade file and `*` gone |
+| Probe 4 | **§5** | the iOS product read (the `vendors!products_vendor_id_fkey` embed) still works as a guest |
+| Probe 5 | **§11** | the designer portal's own HTTP route, a **different principal** — `app.patina.cloud/api/catalog/vendors` must not answer 200 with trade columns |
+| **9b** — the `FOR ALL` / `TO PUBLIC` / `auth.uid() IS NULL` policy sweep | **§9b** | 0 rows |
+| **9d** — the `vendors` column allowlist | **§9d** | the 24 public-face columns, and only those |
+| **9f** — the UPDATE `WITH CHECK` | **§9f** | `"Users can update own profile"` has a non-null `with_check` naming `role` |
+
+The three RPC/behaviour probes keep their own headings and are **not** part of the exit criteria:
+§9 (`search_shareable_designers`), §9a (`list_vendor_profiles`), §9c (a live role-elevation attempt).
 
 ---
 
@@ -17,10 +63,19 @@ export PROJECT_REF=bkvcixdmuyejfzcijpdg
 export SB_URL="https://${PROJECT_REF}.supabase.co"
 
 # The Strata anon key — the same one compiled into the iOS binary. It is a
-# committed literal, not a secret: apps/client-portal/wrangler.jsonc:23
-# ("NEXT_PUBLIC_SUPABASE_ANON_KEY").
-export ANON_KEY='<value from apps/client-portal/wrangler.jsonc:23>'
+# committed literal, not a secret: apps/client-portal/wrangler.jsonc
+# ("NEXT_PUBLIC_SUPABASE_ANON_KEY"). Read it, do not retype it.
+export ANON_KEY="$(python3 -c "
+import json,re,pathlib
+raw = pathlib.Path('apps/client-portal/wrangler.jsonc').read_text()
+raw = re.sub(r'^\s*//.*$', '', raw, flags=re.M)
+print(json.loads(raw)['vars']['NEXT_PUBLIC_SUPABASE_ANON_KEY'])
+")"
+echo "ANON_KEY length: ${#ANON_KEY}"        # non-zero, and starts eyJ
 ```
+
+Run that from the repo root. If the length prints `0`, you are in the wrong directory — fix that
+rather than pasting a key in by hand.
 
 ### `STRATA_DB_URL` (needed only for the apply step and the SQL probes)
 
@@ -330,23 +385,33 @@ readers are listed in the migration's READERS block §3; anything *else* returni
 ## 9 · search_shareable_designers (the replacement for the iOS designer search)
 
 ```bash
-# 9a — a signed-in user finds a designer they have no relationship with
-curl -sS -o /tmp/p9.json -w '%{http_code}\n' \
+# 9-i — a signed-in user finds a designer they have no relationship with
+curl -sS -o /tmp/p9_i.json -w '%{http_code}\n' \
   -X POST "$SB_URL/rest/v1/rpc/search_shareable_designers" \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
   -H 'Content-Type: application/json' -d '{"p_query":"kody"}'
-cat /tmp/p9.json
+cat /tmp/p9_i.json
 # after: 200, rows of {id, display_name, business_name, avatar_url} — and NO email key
-python3 -c "import json;d=json.load(open('/tmp/p9.json'));print('email leaked' if any('email' in r for r in d) else 'no email', len(d))"
+python3 -c "import json;d=json.load(open('/tmp/p9_i.json'));print('email leaked' if any('email' in r for r in d) else 'no email', len(d))"
 
-# 9b — the two-character floor stops directory enumeration
-curl -sS -o /tmp/p9b.json -w '%{http_code}\n' \
+# 9-ii — the two-character floor stops directory enumeration
+curl -sS -o /tmp/p9_ii.json -w '%{http_code}\n' \
   -X POST "$SB_URL/rest/v1/rpc/search_shareable_designers" \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
   -H 'Content-Type: application/json' -d '{"p_query":""}'
 # after: 200 []
 
-# 9c — closed to the anon key
+# 9-iii — and a WILDCARD does not defeat the floor. '%a' is two characters, and
+#         before the 2026-09-02 escaping fix it matched every name containing
+#         'a' — exactly what the floor exists to prevent.
+curl -sS -o /tmp/p9_iii.json -w '%{http_code}\n' \
+  -X POST "$SB_URL/rest/v1/rpc/search_shareable_designers" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
+  -H 'Content-Type: application/json' -d '{"p_query":"%a"}'
+python3 -c "import json;print(len(json.load(open('/tmp/p9_iii.json'))))"
+# after: 200, 0 rows
+
+# 9-iv — closed to the anon key
 curl -sS -o /dev/null -w '%{http_code}\n' \
   -X POST "$SB_URL/rest/v1/rpc/search_shareable_designers" \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
@@ -354,18 +419,18 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 # after: 401 / 42501
 ```
 
-## 9b · list_vendor_profiles (the replacement for the designer-portal vendor picker)
+## 9a · list_vendor_profiles (the replacement for the designer-portal vendor picker)
 
 ```bash
-# 9b-i — a signed-in caller gets the vendor directory, no PII
-curl -sS -o /tmp/p9d.json -w '%{http_code}\n' \
+# 9a-i — a signed-in caller gets the vendor directory, no PII
+curl -sS -o /tmp/p9a_i.json -w '%{http_code}\n' \
   -X POST "$SB_URL/rest/v1/rpc/list_vendor_profiles" \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $USER_JWT" \
   -H 'Content-Type: application/json' -d '{}'
-python3 -c "import json;d=json.load(open('/tmp/p9d.json'));print(len(d), sorted(d[0].keys()) if d else 'EMPTY')"
+python3 -c "import json;d=json.load(open('/tmp/p9a_i.json'));print(len(d), sorted(d[0].keys()) if d else 'EMPTY')"
 # after: 200, keys exactly ['avatar_url', 'full_name', 'id'] — no email, no phone
 
-# 9b-ii — closed to the anon key
+# 9a-ii — closed to the anon key
 curl -sS -o /dev/null -w '%{http_code}\n' \
   -X POST "$SB_URL/rest/v1/rpc/list_vendor_profiles" \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
@@ -373,20 +438,67 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 # after: 401 / 42501
 ```
 
-## 9c · Role self-elevation is closed
+## 9b · EXIT CRITERION — nothing `FOR ALL` + `TO PUBLIC` + `auth.uid() IS NULL` survives
+
+This is the sweep `PROGRAM.md` §3 L0.2 calls **probe 9b**. Read-only, `$STRATA_DB_URL`.
+
+```sql
+SELECT n.nspname, c.relname, p.polname
+FROM pg_policy p
+JOIN pg_class c     ON c.oid = p.polrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE p.polcmd = '*' AND p.polroles = '{0}'
+  AND pg_get_expr(p.polqual, p.polrelid) = '(auth.uid() IS NULL)';
+```
+
+| | expected |
+|---|---|
+| before | 8 rows (the seven marketing-rail policies plus `notification_preferences`) |
+| **after** | **0 rows** |
+
+That shape grants the table to the unauthenticated key and nothing to `service_role`, which is
+`BYPASSRLS` and never needed it. A surviving row means a `DROP POLICY IF EXISTS` in §d did not
+match the policy's real name — read the name off `pg_policy`, do not guess it.
+
+## 9d · EXIT CRITERION — the `vendors` column allowlist
+
+This is **probe 9d**. Read-only, `$STRATA_DB_URL`.
+
+```sql
+SELECT column_name
+FROM information_schema.column_privileges
+WHERE table_schema = 'public' AND table_name = 'vendors'
+  AND grantee = 'anon' AND privilege_type = 'SELECT'
+ORDER BY column_name;
+```
+
+| | expected |
+|---|---|
+| before | all 37 columns |
+| **after** | the **24** public-face columns only |
+
+None of these may appear: `notes`, `trade_terms`, `contact_info`, `preferred_contact`,
+`orders_email`, `trade_account_email`, `trade_portal_url`, `trade_account_established_at`,
+`default_payment_terms`, `nomination_status`, `nominated_by`, `nominated_at`,
+`contact_profile_id`. `id` **must** appear — a column allowlist that forgot `id` would still pass
+an ACL-shape check while breaking every products embed (probe 4).
+
+## 9f · EXIT CRITERION — role self-elevation is closed (the UPDATE `WITH CHECK`)
 
 00013 shipped `"Users can update own profile"` as `USING`-only with no column restriction, so any
 authenticated caller could set their own `profiles.role` to `'designer'`. 00555 section (a2) adds a
 `WITH CHECK` that pins the column, and gives `handle_new_user` a homeowner default. Read-only check:
 
 ```sql
--- 9c-i. the policy now carries a WITH CHECK, and it names role
+-- 9f-i. the policy now carries a WITH CHECK, and it names role
 SELECT polname, pg_get_expr(polwithcheck, polrelid) AS with_check
 FROM pg_policy
 WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
 -- want: "Users can update own profile", with_check NOT NULL and containing 'role'
+--       (it reads `role IS NOT DISTINCT FROM current_profile_role()` — the
+--        inline subquery form raises 42P17 and is NOT what shipped)
 
--- 9c-ii. the server default is in place.
+-- 9f-ii. the server default is in place.
 -- Match the fallback EXPRESSION, not the word: 00313's body already contains
 -- the literal 'homeowner' twice (the CASE arm that honours an explicit client
 -- hint, and its SECURITY comment), so `LIKE '%homeowner%'` returns true on the
@@ -463,12 +575,8 @@ FROM pg_policy WHERE polrelid = 'public.profiles'::regclass ORDER BY polname;
 --        profiles_select_agent_reader  (r, agent_reader, true)
 --        "Users can insert own profile" WITH CHECK no longer mentions auth.uid() IS NULL
 
--- 12b. nothing PUBLIC + auth.uid() IS NULL + FOR ALL survives
-SELECT n.nspname, c.relname, p.polname
-FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid JOIN pg_namespace n ON n.oid=c.relnamespace
-WHERE p.polcmd='*' AND p.polroles='{0}'
-  AND pg_get_expr(p.polqual,p.polrelid) = '(auth.uid() IS NULL)';
--- after: 0 rows
+-- 12b. MOVED. The PUBLIC + FOR ALL + auth.uid() IS NULL sweep is an exit
+--      criterion, so it has its own heading: see § 9b above. Run it there.
 
 -- 12c. helper lockdown
 SELECT p.proname,
@@ -479,16 +587,8 @@ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
 WHERE n.nspname='public' AND p.proname IN ('can_view_profile','search_shareable_designers');
 -- after: both  f, t, t, {search_path=public}
 
--- 12d. vendors column allowlist
-SELECT column_name
-FROM information_schema.column_privileges
-WHERE table_schema='public' AND table_name='vendors'
-  AND grantee='anon' AND privilege_type='SELECT'
-ORDER BY column_name;
--- after: the 24 public-face columns only — no notes, trade_terms, contact_info,
---        preferred_contact, orders_email, trade_account_email, trade_portal_url,
---        trade_account_established_at, default_payment_terms, nomination_status,
---        nominated_by, nominated_at, contact_profile_id
+-- 12d. MOVED. The vendors column allowlist is an exit criterion, so it has its
+--      own heading: see § 9d above. Run it there.
 
 -- 12e. the definer views
 SELECT c.relname, array_to_string(c.relacl,' ') AS acl
