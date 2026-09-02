@@ -89,7 +89,7 @@ Verify, don't merge:
 ```bash
 cd "$REPO"
 git fetch origin
-git merge-base --is-ancestor d8550a1da origin/main \
+git merge-base --is-ancestor "$L02B_MERGE" origin/main \
   && echo "L0.2b IS on main"  || echo "L0.2b is NOT on main — STOP"
 ```
 
