@@ -440,6 +440,11 @@ public enum AuthFormStatus: Equatable, Sendable {
 public enum AuthMode: String, CaseIterable {
     case signIn = "Sign In"
     case signUp = "Sign Up"
-    case magicLink = "Magic Link"
+    // P-30: the raw value is rendered as a header by `AuthenticationView`
+    // (`viewModel.mode.rawValue`), so "Magic Link" was a fifth name for the
+    // one mechanism sitting a special case away from a reader's eyes. The
+    // header special-cases this mode to "Continue with email"; the raw value
+    // now says the same thing the rest of the sheet says if it ever renders.
+    case magicLink = "Sign-in code"
     case resetPassword = "Reset Password"
 }

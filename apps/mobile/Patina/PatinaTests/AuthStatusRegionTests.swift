@@ -55,8 +55,12 @@ struct AuthStatusRegionTests {
         #expect(!source.contains("Color.green.opacity"))
         #expect(!source.contains("Color.red.opacity"))
         #expect(!source.contains(".foregroundStyle(.green)"))
-        // And the region is drawn once, above the form.
-        #expect(source.components(separatedBy: "statusRegion").count - 1 == 2)
+        // And the region is declared once and drawn once, above the form.
+        let code = source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        #expect(code.components(separatedBy: "statusRegion").count - 1 == 2)
     }
 
     @Test("a verify clears the send's success line before it starts")

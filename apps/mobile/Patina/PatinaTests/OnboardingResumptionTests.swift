@@ -150,14 +150,20 @@ struct OnboardingResumptionTests {
         defer { AppSettings.shared.hasCompletedOnboarding = previous }
         AppSettings.shared.hasCompletedOnboarding = false
 
+        // The shipped budget, and then the mechanism at a budget that does not
+        // hold a parallel test run for two seconds to prove one branch.
         #expect(OnboardingCompletion.serverReadBudget <= .seconds(3))
 
-        let started = Date()
-        await completion.resolve(userId: "slow", hasServerStyleProfile: { _ in
-            try? await Task.sleep(for: .seconds(30))
-            return true
-        })
-        #expect(Date().timeIntervalSince(started) < 10)
+        let started = ContinuousClock.now
+        await completion.resolve(
+            userId: "slow",
+            budget: .milliseconds(50),
+            hasServerStyleProfile: { _ in
+                try? await Task.sleep(for: .seconds(30))
+                return true
+            }
+        )
+        #expect(ContinuousClock.now - started < .seconds(5))
         #expect(!AppSettings.shared.hasCompletedOnboarding)
     }
 

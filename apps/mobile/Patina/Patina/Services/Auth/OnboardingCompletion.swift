@@ -91,6 +91,7 @@ struct OnboardingCompletion: Sendable {
     @MainActor
     func resolve(
         userId: String,
+        budget: Duration = OnboardingCompletion.serverReadBudget,
         hasServerStyleProfile: @escaping @Sendable (String) async -> Bool = OnboardingCompletion.serverStyleProfileExists
     ) async {
         if AppSettings.shared.hasCompletedOnboarding {
@@ -100,7 +101,7 @@ struct OnboardingCompletion: Sendable {
         let onThisDevice = hasCompleted(userId: userId)
         let server = onThisDevice
             ? true
-            : await Self.withBudget(hasServerStyleProfile, userId)
+            : await Self.withBudget(hasServerStyleProfile, userId, budget)
 
         guard Self.shouldSkipOnboarding(
             deviceFlag: false,
@@ -115,12 +116,13 @@ struct OnboardingCompletion: Sendable {
 
     private static func withBudget(
         _ read: @escaping @Sendable (String) async -> Bool,
-        _ userId: String
+        _ userId: String,
+        _ budget: Duration
     ) async -> Bool {
         await withTaskGroup(of: Bool.self) { group in
             group.addTask { await read(userId) }
             group.addTask {
-                try? await Task.sleep(for: serverReadBudget)
+                try? await Task.sleep(for: budget)
                 return false
             }
             let first = await group.next() ?? false

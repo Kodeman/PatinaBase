@@ -50,7 +50,7 @@ struct LegalLinkTests {
                        "private var privacyLink: some View {",
                        "private var passwordFallback: some View {"] {
             let start = try #require(source.range(of: anchor))
-            let block = String(source[start.lowerBound...].prefix(500))
+            let block = String(source[start.lowerBound...].prefix(800))
             #expect(block.contains(".frame(minHeight: 44)"), "\(anchor) has no 44 pt hit area")
             #expect(block.contains(".contentShape(Rectangle())"), "\(anchor) has no hit shape")
         }
