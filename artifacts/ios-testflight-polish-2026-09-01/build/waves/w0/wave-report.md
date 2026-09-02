@@ -936,3 +936,259 @@ restatement (RF3-04), and its heading count.
 `00555_probes.md` — §9f-ib rewritten to `want: SELECT` with the load-bearing reason (RF3-01); §9f-i
 gains `checks_caller_authority` and a new prose block for RF3-03; §9f-iii extended with the two new
 REVOKEs.
+
+---
+
+## Fix round 3 · pass 3 (2026-09-02)
+
+Nine open findings from the adversarial re-read of pass 2 — no blockers, two majors, the rest minors —
+plus **five Fable rulings** that decide the ones pass 2 had handed back. All nine are closed, and
+**nothing is handed back this time.**
+
+The shape of this pass is different from the last two. Passes 1 and 2 were mostly *the migration said
+something that measurement contradicted*. This pass is mostly *the migration was right and incomplete*:
+three predicates that each closed one half of a hole whose other half was still open, and two grant
+sets nobody had looked at.
+
+### The rulings, taken
+
+| Ruling | What it decides |
+|---|---|
+| **R1 · RF3-02** | Take the vocabulary guard. `"Users can insert own profile"` gains `role IN ('homeowner','client','designer')`. **No pin to the current value** (there is no OLD row on an INSERT — that pin is the guess RF2-07 removed) and `is_designer IS NOT TRUE` is unchanged. The `ASSERT` that policed `NOT ILIKE '%role%'` becomes a vocabulary assert. Recorded in the migration banner and here |
+| **R2 · RF3-13** | `"Designers can create homeowner profiles"` is restricted to callers holding designer authority — the same `current_profile_is_designer() IS TRUE OR user_roles ⨝ roles domain IN ('designer','admin')` predicate — and the created row must be `role IN ('homeowner','client') AND is_designer IS NOT TRUE` |
+| **R3 · RF3-14** | `can_view_profile`'s roster legs require the roster row's `designer_id` to hold designer authority, so a legacy self-minted row grants **no read**. Every place that claimed the legacy row was "closed" now says exactly what is closed and what remains |
+| **R4 · RF3-16** | Merge `main` into `first-flight/integration` with `--no-ff` (never rebase a shared branch), resolve on the side of the charter, re-run every gate |
+| **R5 · RF3-19** | Revoke the write verbs on `public.user_roles` and `public.roles` from `anon` and `authenticated`, keep `SELECT`, and **list any session-side write rather than revoking its verb** |
+
+### The merge from `main` (RF3-16)
+
+`git merge --no-ff main` → **`503d8e054`**, subject
+`chore(first-flight): merge main (00556 admin studios, L0.2b) into integration` (husky rejects
+`merge:` subjects). `main` was at `06b3dc972`.
+
+**One conflict, in one generated file:** `supabase/seed/00-legacy-grants.sql`. Both sides had
+regenerated it — `main` for 00556's grants, integration for 00555's. Resolved **on the side of the
+charter** the only correct way for a generated artefact: `python3 scripts/generate-legacy-grants.py`
+against the merged migration tree, which is also the gate the charter runs. Everything else
+auto-merged, including `packages/supabase/src/database.types.ts`.
+
+What the merge brings in: **00556** `admin_studio_management` (so the local ledger is now
+`00554 → 00555 → 00556 → 00557`, head **00557**, 512 rows, no gap) and **L0.2b** — the four guarded
+vendors routes and `useVendorProfiles` on `list_vendor_profiles`, which had been on `main` since
+`d8550a1da` and was **not** on this branch. That last one matters beyond the merge: it is why RF3-15
+exists.
+
+### The two majors
+
+| id | Verdict | What changed |
+|---|---|---|
+| **RF3-13** | **fixed in the policy** | 00017's `"Designers can create homeowner profiles"` shipped `TO PUBLIC WITH CHECK ((auth.uid() IS NOT NULL) AND (role = 'homeowner'))`. Its **name** said designers; its **predicate** said anyone signed in — and it accepts an **arbitrary id**, so it was the last `INSERT` route by which a self-signup could plant a `profiles` row for somebody else, and (paired with the sibling `UPDATE` policy) keep editing it. It now opens with the caller's own authority and holds the created row to `role IN ('homeowner','client') AND is_designer IS NOT TRUE`. **The policy MOVED** from §(a) to a new §(a2)(i-b2): a policy's functions resolve at `CREATE POLICY` time and `current_profile_is_designer()` is defined in (i-a). Section (a) carries a pointer. New test cases **6g1-6g4**; two new `ASSERT`s; new probe §9f-v |
+| **RF3-14** | **fixed in the function** | Pass 2 wrote *"this makes the legacy-row exposure a lockout rather than a capability"* and its own attack matrix contradicted it three lines later: the WRITE answered `200 []`, the **READ** answered `200 [{id, email, phone}]`. `can_view_profile`'s roster legs asked only whether a `designer_clients` row existed, never whether the account it named as the designer *was* one. **BOTH** legs now require `profiles.is_designer` or a designer/admin `user_roles` grant. The teammate leg is the one that made it non-optional and is not obvious: `is_studio_comember`'s first branch is `p_owner = auth.uid()` (00315), so a row a caller minted **for themselves** satisfies it — narrowing only the direct leg would have left the same read open through the other door. Reading `profiles` from inside the function does not recurse: it is SECURITY DEFINER owned by `postgres`, which owns `profiles`. New test cases **7m3/7m3b/7m4**; new `ASSERT`; new probe |
+
+**Every place that claimed the legacy row was closed now says which half.** The migration's (i-b) block,
+the policy `COMMENT`, `can_view_profile`'s `COMMENT`, the file's "WHAT IT DOES NOT FIX" CAVEAT 1,
+KODY-RUNBOOK **B7a** and **B10** all now state it as a four-row table:
+
+| | closed by |
+|---|---|
+| **MINT** | `designer_clients_writer_is_designer` (RF2-01) |
+| **WRITE** | `"Designers can update their client profiles"` caller predicate (RF3-03) |
+| **READ** | `can_view_profile`'s two roster legs (RF3-14) |
+| **THE ROW ITSELF** | **nothing here** — it survives, still joins in `client_designer_roster` / `people_directory` / the `00224` storage policy, and counts again the day its owner is granted authority. Cleaning it is a **data** job: B7a's audit, B7b's backfill |
+
+`designer_clients` is consequently no longer one of the self-assertable tables in CAVEAT 1. `projects`,
+`comms_thread_participants`, `project_team_members` and `room_scan_associations` still are, and the
+migration now says so by name instead of listing five and closing one.
+
+### The seven minors
+
+| id | Verdict | What changed |
+|---|---|---|
+| **RF3-02** | **RULING TAKEN — the hole pass 2 filed is now closed** | `"Users can insert own profile"` gains `role IN ('homeowner','client','designer')`. This is a **vocabulary** guard, not a pin: `is_designer IS NOT TRUE` remains the only authority pin, and B2 v3(a) stands in substance — `profiles.role` still grants nothing. What it ends is **spoofing**: pass 2 measured `POST /rest/v1/profiles {"role":"vendor"}` → **201** (which lists the caller in the designer portal's comms vendor picker via `list_vendor_profiles`) and `{"role":"admin"}` → **201** (which makes `comms_resolve_role` print *admin* beside their name in every thread). Both now **403**. The `'designer'` string is in the list because it is `handle_new_user`'s own column default and test case 6f requires it to keep landing. §a4's "one open question in this file" block is replaced with the ruling; the `NOT ILIKE '%role%'` `ASSERT` becomes the vocabulary assert; new test cases **6f3-6f5** |
+| **RF3-15** | **fixed** | Runbook **A2** told Kody to `git merge --no-ff first-flight/w0-l02b` into `main`. That lane merged to `main` on 2026-09-02 as **`d8550a1da`** and the branch no longer exists locally, so the command fails with `fatal: Not a valid object name`. A2 is now *"already on main; verify"* — `git merge-base --is-ancestor d8550a1da origin/main` with an explicit STOP on failure — and keeps only the deploy steps. Block A's heading, its row in the ordering table and `A0`'s `LANE_BRANCH` variable (now `L02B_MERGE`) follow |
+| **RF3-16** | **fixed** | The merge above, and every gate re-run on the merged tree |
+| **RF3-17** | **fixed** | §(d) revokes the four definer views `FROM PUBLIC, anon, authenticated` and the verification block asserted **only anon**. An edit that dropped `authenticated` from those four lines would have passed the entire block while leaving every signed-in user reading `user_engagement_scores` — `id, email, role` over `profiles`, `security_invoker = false`, so it bypasses §(a) by construction. Four `ASSERT`s in the migration, four in §10 of the test, one probe, one runbook check |
+| **RF3-18** | **fixed** | The RF3-01 exact-privilege-set `ASSERT` claimed to *"fail on a verb nobody thought to list"*. It could not: it read `information_schema.table_privileges`, which is defined by the SQL standard and enumerates only the standard verbs — **PG 17's `MAINTAIN` is invisible to it**, and `MAINTAIN` is precisely the verb the migration's own grant-hygiene comment says an enumerated `REVOKE` leaves behind. A returned `MAINTAIN` grant read as exactly `SELECT` and passed. Now `pg_class.relacl` through `aclexplode()`, in the migration, the test, `00555_probes.md` §9f-ib and KODY-RUNBOOK B7 |
+| **RF3-19** | **fixed, with one measured carve-out** | New migration section **(f)**. See below — this is the one that changed shape under measurement |
+| **RF3-20** | **fixed** | Everything in the verification block read `pg_policy` / `pg_proc` / ACLs: it proved the objects had the right *shape* and could not prove any of them *ran*, while four policies now depend on three of the helpers. A second `DO` block **calls each of the five helpers** under a fabricated `auth.uid()` set with `set_config(…, is_local => true)` (dies at the `COMMIT`; reset explicitly anyway): `current_profile_role()` and `current_profile_is_designer()` return **NULL** for a caller with no `profiles` row — the missing-row case the `IS NOT DISTINCT FROM` spelling exists for; `can_view_profile(self)` is **TRUE** and `can_view_profile(stranger)` is **FALSE**, not NULL; `search_shareable_designers('%')` returns **0** rows (the LIKE escape *and* the two-character floor); and with no `auth.uid()` at all, `list_vendor_profiles()`, `search_shareable_designers('leah')` and `can_view_profile()` all refuse. Eight assertions, every one **data-independent** — a migration's verification block must not depend on rows it did not create. Fixture-dependent behaviour stays in the test suite, and the block says so |
+
+### RF3-19 changed shape under measurement, and that is the finding worth reading
+
+The instruction was *revoke `INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES` on `user_roles` and `roles` from
+`anon` and `authenticated`, keep `SELECT`; if any session-side write exists, list it and do not revoke
+that verb.*
+
+**The write survey found one, and it is already dead.** `packages/supabase/src/hooks/use-onboarding.ts:308`
+(`useApproveDesignerApplication`) upserts into `user_roles` on the **browser** client. `user_roles`
+carries no `INSERT` or `UPDATE` policy, so RLS refuses it today; the REVOKE only moves the error's
+origin from a policy denial to a grant denial, and a grep over `apps/` finds the hook **unmounted** —
+only the package barrel re-exports it. Every other writer is `adminClient` / service_role or a SECURITY
+DEFINER function (00556's `admin_create_studio_for_user` and `admin_add_studio_member`,
+`handle_new_user`, 00126's backfill). Every session-side **reader** — the shared hooks, both iOS apps'
+`user_roles → roles.domain` join — needs `SELECT` and nothing more; all three portal middlewares build
+a **service-role** client, so they are not session-side at all.
+
+**The verb that could not be revoked was found by a test, not by the survey.** The first cut revoked all
+five from both roles and took `supabase/tests/edge_api/public_sd_hardening_contract_test.sql` red:
+
+```
+ERROR:  permission denied for table roles
+HINT:   Grant the required privileges to the current role with: GRANT UPDATE ON public.roles TO authenticated;
+CONTEXT: SQL statement "SELECT role.id FROM public.roles AS role WHERE role.domain = 'designer' ORDER BY role.id FOR SHARE"
+         PL/pgSQL function set_project_studio_id() line 151
+         SQL statement "INSERT INTO public.projects (…)"
+```
+
+`SELECT … FOR SHARE` is charged to the **UPDATE** privilege, and 00511's `set_project_studio_id()` is a
+SECURITY **INVOKER** trigger on `public.projects` whose authority-lock ladder row-share-locks
+`public.roles` and then `public.user_roles` on **every authenticated project write**. So `authenticated`
+keeps `UPDATE` on both, granted back explicitly with that paragraph as the reason. It costs nothing: RLS
+is on and neither table has an `UPDATE` **policy**, so a real `UPDATE` statement is still refused — the
+grant satisfies a lock's permission check, not a write. Fixing the trigger to lock as DEFINER is the
+right end state and is not this migration's job.
+
+`anon` does **not** keep it, and the asymmetry is safe on this migration's own evidence: the same
+trigger `FOR SHARE`s `public.designer_clients`, where §(i-c) already leaves `anon` holding `SELECT` and
+nothing else. If an anon caller could fire this trigger, that revoke would already have broken it.
+
+Final ACLs, measured after `pnpm supabase:reset`:
+
+```
+roles        anon=rtm/postgres | authenticated=rwtm/postgres
+user_roles   anon=rtm/postgres | authenticated=rwtm/postgres
+```
+
+### The HTTP attack matrix, re-run (fresh stack, password-grant JWTs)
+
+Actors: a real `POST /auth/v1/signup` account (`sig` — `role=designer`, `is_designer=f`, **0**
+designer/admin grants), a second signup that self-downgraded its own label the way W1 · L1-A specifies
+(`home` — `homeowner`), `client@patina.dev` (`homeowner`), `designer@patina.dev` (Leah — `designer`,
+`is_designer=t`), and a third signup used as an arbitrary plant target.
+
+```
+1. self-signup mints a roster row — MUST be refused
+   POST /designer_clients {designer_id: sig, client_id: leah}   403  42501 "…policy \"designer_clients_writer_is_designer\"…"
+   rows minted by sig                                           0
+
+2. self-signup PLANTS a profiles row at another id (RF3-13) — MUST be refused
+   POST /profiles {id: plant, role: homeowner}  as sig          403  42501
+   plant row exists                                             0
+   POST /profiles {id: plant, role: homeowner}  as LEAH         201        ← a real designer still can
+   plant row exists                                             1
+   POST /profiles {id: plant, role: vendor}     as LEAH         403  42501 ← client vocabulary holds
+   plant row exists                                             0
+
+3. a real designer mints a roster row — MUST be allowed
+   POST /designer_clients {designer_id: leah, client_id: home}  201  [{"id":"d7eccb8e-…"}]
+
+4. own-row role / is_designer UPGRADE — MUST be refused
+   PATCH /profiles?id=eq.sig    {"role":"admin"}                403  42501
+   PATCH /profiles?id=eq.client {"role":"designer"}             403  42501
+   PATCH /profiles?id=eq.client {"is_designer":true}            403  42501
+
+5. own-row DOWNGRADE — MUST be allowed (B2 v3(c), the A3-07 / L1-A fix)
+   PATCH /profiles?id=eq.sig    {"role":"homeowner"}            200  [{…"role":"homeowner"}]
+   sig role now                                                 homeowner
+   the same call again (the app runs it every sign-in)          200  idempotent
+
+6. RF3-02 — the missing-profiles-row window on the own-row INSERT leg
+   POST /profiles {id: self, role: vendor}                      403  42501   ← was 201 in pass 2
+   POST /profiles {id: self, role: admin}                       403  42501   ← was 201 in pass 2
+   POST /profiles {id: self, role: homeowner, is_designer:true} 403  42501
+   POST /profiles {id: self, role: homeowner}                   201  the vocabulary is a guard, not a freeze
+   plant role now                                               homeowner
+
+7. CROSS-ACCOUNT demote / rename of a real designer — MUST be refused
+   POST  /designer_clients {designer_id: client, client_id: leah}  403  42501
+   PATCH /profiles?id=eq.leah {"role":"homeowner","is_designer":false}  200 []   ← no row selectable
+   PATCH /profiles?id=eq.leah {"display_name":"PWNED"}                  200 []
+   leah after                                                   designer | true | Leah Hartwell
+
+8. a designer edits their ROSTERED client — MUST be allowed
+   PATCH /profiles?id=eq.home {"display_name":"Renamed By Leah"} 200  [{…}]
+   home display_name now                                        Renamed By Leah
+   PATCH /profiles?id=eq.home {"is_designer":true}              403  42501   still cannot promote
+
+9. RF3-03 + RF3-14 — a LEGACY roster row (planted as service_role) held by a non-designer
+   planted rows sig->home                                       1
+   PATCH /profiles?id=eq.home {"display_name":"PWNED VIA LEGACY ROW"}  200 []
+   PATCH /profiles?id=eq.home {"email":"attacker@evil.invalid"}        200 []
+   home after                                                   Renamed By Leah | ff-r3p3-home-…@test.invalid
+   GET  /profiles?id=eq.home&select=id,email,phone   as sig     200  []      ← THE READ IS NOW EMPTY (RF3-14)
+   rpc  can_view_profile(home)                      as sig      200  false
+   GET  /profiles?id=eq.home&select=id,email,phone   as LEAH    200  [{…}]   ← the real designer keeps it
+   rpc  can_view_profile(home)                      as LEAH     200  true
+
+10. anon
+   GET  /profiles?select=id                                     401  42501
+   GET  /designer_clients?select=id                             200  []   grant kept (RF3-01), RLS empty
+   GET  /roles?select=id                                        200  []   grant kept (RF3-19), RLS empty
+   GET  /user_roles?select=user_id                              200  []   grant kept (RF3-19), RLS empty
+
+11. ACLs
+   authenticated user_engagement_scores SELECT                  f            (RF3-17)
+   authenticated roles UPDATE — the FOR SHARE lock              t            (RF3-19)
+   authenticated roles INSERT / DELETE                          f / f        (RF3-19)
+   anon roles UPDATE                                            f            (RF3-19)
+   anon designer_clients, from relacl via aclexplode            SELECT       (RF3-01 / RF3-18)
+```
+
+**Case 9's two `GET`s are the line to read.** Pass 2's matrix had the same row answering
+`200 [{id, email, phone}]` and called it *"deliberately still open"*. It is not open any more, and the
+Leah row beside it is what proves the leg was narrowed rather than deleted.
+
+**One thing case 2 surfaced that is not a finding, recorded so nobody re-derives it.** A designer's
+plant lands, but only with `Prefer: return=minimal`. With `return=representation` PostgREST issues
+`INSERT … RETURNING`, and Postgres requires the **new row to pass the SELECT policies** for a
+`RETURNING` clause — which a designer creating a brand-new client's row does not, because no
+relationship exists yet. It raises the same *"new row violates row-level security policy"* text as a
+`WITH CHECK` failure. Reproduced in plain SQL; it is **pre-existing** and predates every predicate this
+pass added, and it costs nothing in the product because every real profile write outside
+`handle_new_user` is `adminClient` / service_role.
+
+### Gates, re-run on `first-flight/integration` (AFTER the merge from `main`)
+
+| Gate | Result |
+|---|---|
+| `pnpm supabase:reset` | **0** — `head=00557 \| 00556 present=true \| count=512`. Run **four** times across the pass: the seed replays after the migrations, so each new `REVOKE` needs `generate-legacy-grants.py` and another reset before the ACLs hold |
+| `bash scripts/run-sql-tests.sh` | **0** — `total: 148 · green: 127 · expected-fail: 21 · unexpected-fail: 0 · effective-green: 148 / 148`. All 21 expected-fail names are in `KNOWN_FAILURES.md`; none new. `PASS supabase/tests/rls/00555_ios_round_one_security.test.sql`. Total is **148** and not 147 because the merge brought `supabase/tests/rls/admin_studio_management_test.sql` in with 00556 |
+| `python3 scripts/generate-legacy-grants.py` | **0** — `baseline + 2127 replayed statements` (was 2098 pre-merge). The seed **changed** and is committed: the merge conflict resolution plus RF3-19's four new statements. Re-running it on the committed tree reports no drift |
+| HTTP attack matrix (above) | **0** — all seven specified behaviours plus the four extra rows, every one as specified |
+| `deno check --config supabase/functions/deno.json supabase/functions/client-invite/index.ts` | **0** — exit `0`, no `deno.lock` written at the repo root |
+| iOS gate | **not run — no Swift file was touched.** `IOS_GATE_UDID` was not needed |
+
+One gate failure was real and is the RF3-19 carve-out above: the first cut took
+`public_sd_hardening_contract_test.sql` red on `set_project_studio_id()`'s `FOR SHARE`. It is green on
+the shipped cut.
+
+### Documents amended in fix round 3 pass 3
+
+`00555_ios_round_one_security.sql` — `can_view_profile`'s two roster legs gain the designer-authority
+clause and the function `COMMENT` is rewritten (RF3-14); CAVEAT 1 drops `designer_clients` from the
+self-assertable list; `"Users can insert own profile"` gains the vocabulary guard and a policy
+`COMMENT` (RF3-02); `"Designers can create homeowner profiles"` gains the caller-authority predicate and
+the client vocabulary, and **moves** to a new §(a2)(i-b2) with a pointer left at its old site (RF3-13);
+(i-b)'s "lockout rather than a capability" paragraph becomes the four-row CLOSED/STILL-THERE table;
+§a4's open-question block becomes the taken ruling; §(e)'s note on 00017 restated; new section **(f)**
+for `user_roles` / `roles` (RF3-19); the verification block gains the vocabulary assert, two RF3-13
+asserts, the RF3-14 body assert, four RF3-17 asserts and the RF3-19 set, and the RF3-01 exact-set assert
+moves to `aclexplode` (RF3-18); a second `DO` block of eight behavioural assertions (RF3-20); banner
+gains a pass-3 what-changed list.
+`00555_ios_round_one_security.test.sql` — new cases **6f3/6f4/6f5** (the vocabulary guard, both
+refusals and the `'client'` acceptance), **6g1-6g4** (RF3-13, self-signup refused / real designer
+allowed / no promotion / no out-of-vocabulary label), **7m3/7m3b/7m4** (RF3-14, the legacy row's read
+closed for its holder and kept for a real designer); §10 gains the RF3-17, RF3-19, RF3-02, RF3-13 and
+RF3-14 asserts and moves the exact-set check to `aclexplode`; 6d's comment corrected to say why it now
+passes; the header "Covers" list updated.
+`supabase/seed/00-legacy-grants.sql` — merge conflict resolved by regeneration, then regenerated again
+for section (f). 2127 replayed statements.
+`KODY-RUNBOOK.md` — **A2** rewritten to "already on `main`, verify with `git merge-base
+--is-ancestor`" (RF3-15) with Block A's heading, ordering-table row and `A0` variables following;
+**B7** gains probe **9g** (the two INSERT policy shapes and `can_view_profile`'s roster authority) and
+three new ACL checks (RF3-17, RF3-19) with the `FOR SHARE` warning, and its anon-grant check moves to
+`aclexplode` with the RF3-18 reason; **B7a** gains the CLOSED/STILL-THERE table; **B9** gains the
+`can_view_profile` non-undo, rewrites both INSERT-policy undos to keep the authority predicates, and
+extends the "not rolled back" list; **B10** item 3 names the read half.
+`00555_probes.md` — §9f-ib moved to `aclexplode` with the RF3-18 correction; new **§9f-iv** (the four
+definer views for both roles, and the two authority tables with the `FOR SHARE` warning) and **§9f-v**
+(the two INSERT policies and `can_view_profile`'s roster legs); the §9f intro lists them.

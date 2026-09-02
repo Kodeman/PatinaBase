@@ -54,8 +54,9 @@ names are **not** this file's section numbers — read the map, not the digits.
 The two RPC probes keep their own headings and are **not** part of the exit criteria:
 §9 (`search_shareable_designers`) and §9a (`list_vendor_profiles`). §9f carries every half of the
 identity-column check — the two policies' clauses (§9f-i), the roster mint (§9f-ia), `anon`'s grants on
-`designer_clients` (§9f-ib), `handle_new_user`'s body (§9f-ii), and the three REVOKEs with no probe of
-their own (§9f-iii).
+`designer_clients` (§9f-ib), `handle_new_user`'s body (§9f-ii), the three REVOKEs with no probe of
+their own (§9f-iii), the definer views and the two authority tables (§9f-iv), and the two `INSERT`
+policies plus `can_view_profile`'s roster-leg authority (§9f-v).
 
 ---
 
@@ -691,9 +692,21 @@ WHERE polrelid = 'public.designer_clients'::regclass
 -- it. (The client's own roster read is public.client_designer_roster (00536), a
 -- security_invoker = false view granted only to authenticated — that is why no
 -- anon READER of this table exists even though the grant does.)
-SELECT string_agg(privilege_type, ',' ORDER BY privilege_type) AS anon_grants
-FROM information_schema.table_privileges
-WHERE table_schema = 'public' AND table_name = 'designer_clients' AND grantee = 'anon';
+--
+-- ⚠ CORRECTED AGAIN 2026-09-02, fix round 3 pass 3 (RF3-18). Pass 2 wrote this
+-- against information_schema.table_privileges and called it a check that "fails
+-- on a verb nobody thought to list". It was not: information_schema is defined
+-- by the SQL standard and enumerates only the standard verbs, so PG 17's
+-- MAINTAIN is invisible to it — and MAINTAIN is exactly the verb 00555 revokes
+-- by name on three tables, because an enumerated REVOKE silently leaves it
+-- behind. A returned MAINTAIN grant read as exactly 'SELECT' and passed.
+-- pg_class.relacl through aclexplode() is Postgres' own representation and
+-- carries every privilege type the server knows.
+SELECT COALESCE(string_agg(DISTINCT a.privilege_type, ',' ORDER BY a.privilege_type), '<none>')
+         AS anon_grants
+FROM pg_class c, aclexplode(c.relacl) a
+WHERE c.oid = 'public.designer_clients'::regclass
+  AND a.grantee = 'anon'::regrole::oid;
 -- want: SELECT   (exactly that string — one grant, and it is SELECT)
 
 -- 9f-ii. handle_new_user is 00313 VERBATIM — the default does NOT move.
@@ -732,6 +745,100 @@ SELECT has_table_privilege('authenticated', 'public.profiles', 'TRUNCATE')
        has_function_privilege('authenticated', 'public.handle_new_user()', 'EXECUTE')
          AS authenticated_can_execute_trigger_fn;  -- want f (RF3-11). The first pass
                                              -- revoked PUBLIC and anon and left this one
+
+-- 9f-iv. fix round 3 pass 3 — the four definer views closed to the SIGNED-IN key
+-- as well as to anon (RF3-17), and the two AUTHORITY tables (RF3-19).
+--
+-- §(d) revokes user_engagement_scores / consumer_funnel / designer_funnel /
+-- conversion_funnel FROM PUBLIC, anon AND authenticated, and pass 2 asserted
+-- only anon. user_engagement_scores is a security_invoker = false view
+-- projecting id, email and role over profiles, so it bypasses every policy in
+-- §(a) by construction: a signed-in reader there makes the whole profiles fix
+-- decorative.
+SELECT bool_or(has_table_privilege(g, v::regclass, 'SELECT')) AS any_view_readable
+FROM unnest(ARRAY['anon','authenticated']) g,
+     unnest(ARRAY['public.user_engagement_scores','public.consumer_funnel',
+                  'public.designer_funnel','public.conversion_funnel']) v;
+-- want: false
+
+SELECT bool_or(has_table_privilege('anon', t::regclass, v)) AS anon_can_write_authority
+FROM unnest(ARRAY['public.user_roles','public.roles']) t,
+     unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES']) v;
+-- want: false. Neither table has EVER carried a write POLICY — 00021 creates
+-- exactly two policies on them and both are SELECT — so every write grant was a
+-- grant with no caller, on the two tables ruling B2 v3(b) makes the source of
+-- all authority in this migration.
+
+SELECT t AS relation,
+       has_table_privilege('authenticated', t::regclass, 'SELECT') AS sel,
+       has_table_privilege('authenticated', t::regclass, 'UPDATE') AS upd_for_share,
+       has_table_privilege('authenticated', t::regclass, 'INSERT') AS ins,
+       has_table_privilege('authenticated', t::regclass, 'DELETE') AS del
+FROM unnest(ARRAY['public.user_roles','public.roles']) t;
+-- want: sel = t, upd_for_share = t, ins = f, del = f on BOTH rows.
+--
+-- ⚠ upd_for_share = t IS THE ANSWER — do not "fix" it to f. `SELECT … FOR SHARE`
+-- is charged to the UPDATE privilege, and 00511's set_project_studio_id() is a
+-- SECURITY INVOKER trigger on public.projects that row-share-locks both tables
+-- on every authenticated project write. Revoking UPDATE takes every project
+-- insert with it — measured: the first cut of RF3-19 took
+-- supabase/tests/edge_api/public_sd_hardening_contract_test.sql red with
+-- `permission denied for table roles` from set_project_studio_id() line 151.
+-- It opens nothing: RLS is enabled on both and neither carries an UPDATE
+-- POLICY, so a real UPDATE statement is still refused. anon does not keep it
+-- and does not need it — the same trigger FOR SHAREs public.designer_clients,
+-- where 00555 leaves anon holding SELECT and nothing else.
+
+-- 9f-v. fix round 3 pass 3 — the two INSERT policies and the roster-leg
+-- authority inside can_view_profile (RF3-02, RF3-13, RF3-14).
+SELECT polname,
+       (pg_get_expr(polwithcheck, polrelid) ILIKE '%''homeowner''%'
+        AND pg_get_expr(polwithcheck, polrelid) ILIKE '%''client''%')     AS client_vocab,
+       (pg_get_expr(polwithcheck, polrelid) ILIKE '%''vendor''::text%'
+         OR pg_get_expr(polwithcheck, polrelid) ILIKE '%''admin''::text%') AS spoof_labels,
+       (pg_get_expr(polwithcheck, polrelid) ILIKE '%is_designer IS NOT TRUE%')
+                                                                          AS pins_is_designer,
+       (pg_get_expr(polwithcheck, polrelid) ILIKE '%current_profile_is_designer%'
+        AND pg_get_expr(polwithcheck, polrelid) ILIKE '%user_roles%')     AS checks_caller_authority
+FROM pg_policy
+WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'a'
+ORDER BY polname;
+-- want TWO rows:
+--   Designers can create homeowner profiles | t | f | t | t
+--   Users can insert own profile            | t | f | t | f
+--
+-- spoof_labels = f on BOTH, and the `::text` in that pattern is load-bearing:
+-- the sibling's caller-authority EXISTS deparses as
+-- `r.domain = ANY (ARRAY['designer'::role_domain, 'admin'::role_domain])`, so a
+-- bare '%''admin''%' reports t on a perfectly correct policy. profiles.role is
+-- text, so its vocabulary literals always render 'x'::text.
+--
+-- checks_caller_authority = t on the SIBLING is RF3-13: 00017 shipped that
+-- policy TO PUBLIC with `auth.uid() IS NOT NULL AND role = 'homeowner'` — a
+-- name that said designers over a predicate that said anyone signed in — and it
+-- accepts an ARBITRARY id, so it was the last INSERT route by which a
+-- self-signup could plant a profiles row for somebody else. f on the OWNER row
+-- is right: there the caller IS the target, and `auth.uid() = id` answers it.
+
+SELECT (length(prosrc) - length(replace(prosrc,'dp.is_designer IS TRUE',''))) / length('dp.is_designer IS TRUE') = 2
+   AND (length(prosrc) - length(replace(prosrc,'ur.user_id = dc.designer_id',''))) / length('ur.user_id = dc.designer_id') = 2
+         AS roster_legs_check_authority
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname = 'can_view_profile';
+-- want: true (RF3-14).
+--
+-- BOTH roster legs must require the roster row's designer_id to hold designer
+-- authority — profiles.is_designer, or a designer/admin user_roles grant.
+-- TWO occurrences of each marker, because one leg is not both legs, and the
+-- TEAMMATE leg is the one that matters most: is_studio_comember's first branch
+-- is `p_owner = auth.uid()` (00315), so a roster row a caller minted for
+-- THEMSELVES satisfies it, and narrowing only the direct leg would have left
+-- the same read open through the other door.
+--
+-- This is the READ half of the legacy roster row. Pass 2 closed its WRITE
+-- (RF3-03) and reported the read still answering 200 with email and phone; this
+-- is what closes it. THE ROW ITSELF is untouched by either — that is a data
+-- job, KODY-RUNBOOK B7a/B7b.
 ```
 
 The *write* half of this check (attempting the elevation as a real user) runs **locally only**, as

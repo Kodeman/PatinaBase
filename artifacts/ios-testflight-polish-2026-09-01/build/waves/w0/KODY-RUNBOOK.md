@@ -20,7 +20,7 @@ with the placeholder in it.)
 
 | Block | What it does | Gated by | Reversible? |
 |---|---|---|---|
-| **A** | Merge L0.2b to `main`, redeploy the designer portal, deploy `client-invite` (A10) | nothing | yes — `wrangler rollback`; the function redeploys from `git` |
+| **A** | Redeploy the designer portal from `main` (L0.2b is **already merged**, `d8550a1da`), deploy `client-invite` (A10) | nothing | yes — `wrangler rollback`; the function redeploys from `git` |
 | **B** | Apply **00555** (the security migration), regenerate, probe, walk The Document | **A** (B2's ruling is now made — see B2) | partly — see B9 |
 | **C** | Apply **00557** (`increment_scan_upload_attempt`) and probe | B (same session) | no rollback needed |
 | **D** | Mint `firstflight@patina.cloud` and append the Vault allow-list | nothing (B may run before or after) | mostly — one row is permanent |
@@ -40,7 +40,7 @@ Document (surface #1) above the iOS app (surface #2): *The Document never breaks
 
 ---
 
-## Block A — merge L0.2b and redeploy the designer portal
+## Block A — redeploy the designer portal (L0.2b is already on `main`)
 
 **What it proves.** That the designer portal's **four** vendors routes —
 `/api/catalog/vendors`, `/api/catalog/vendors/[id]`, `/api/admin/catalog/vendors` and
@@ -54,7 +54,7 @@ it is the gate on Block B.
 ```bash
 export REPO=/Users/kody/Code/patina-merged
 export PORTAL=patina-designer-portal
-export LANE_BRANCH=first-flight/w0-l02b
+export L02B_MERGE=d8550a1da   # L0.2b's merge commit on main — A2 verifies, it no longer merges
 ```
 
 ### A1 — record what is live BEFORE anything changes
@@ -75,24 +75,28 @@ Paste the bottom row into the apply report. You do not need to hand a version id
 it targets the previous deployment on its own and prints which one before asking — but having the list
 on disk means you can name a specific one if the obvious target is not the right one.
 
-### A2 — merge the lane to `main`
+### A2 — ✅ ALREADY ON `main`. Nothing to merge; verify and move to the deploy.
 
-L0.2b merges to `main` **on its own**, ahead of `first-flight/integration`: it is a designer-portal fix,
-not an iOS one, and it gates 00555.
+**Corrected in fix round 3 pass 3 (RF3-15).** This step used to hand you a
+`git merge --no-ff first-flight/w0-l02b` against `main`. **Do not run it.** L0.2b landed on `main` on
+2026-09-02 as merge commit **`d8550a1da`** — *"fix(designer-portal): merge First Flight W0 L0.2b —
+vendors routes authenticated and authorized, vendor picker via list_vendor_profiles"* — and the lane
+branch no longer exists locally, so the old command fails with `fatal: Not a valid object name`. It is
+also on `first-flight/integration`, which merged `main` in the same pass.
+
+Verify, don't merge:
 
 ```bash
 cd "$REPO"
 git fetch origin
-git checkout main
-git merge --no-ff "$LANE_BRANCH" \
-  -m 'chore(first-flight): integrate L0.2b — guard the vendors catalogue routes and move the comms vendor picker onto list_vendor_profiles'
-git push origin main
+git merge-base --is-ancestor d8550a1da origin/main \
+  && echo "L0.2b IS on main"  || echo "L0.2b is NOT on main — STOP"
 ```
 
-Husky rejects `merge:` commit subjects — the `chore(first-flight):` subject above is deliberate.
-The three commits you are merging are `ffdee7273`, `57f9e1ce8`, `fc82db841`.
+If that prints **`L0.2b is NOT on main`**, stop and hand it back — the rest of Block A deploys a build
+without the guard, and Block B's gate (`B1`) is then meaningless.
 
-Confirm the guard is really on `main` before spending a deploy:
+Then confirm the guard is really in the working tree you are about to deploy from:
 
 ```bash
 cd "$REPO"
@@ -606,11 +610,29 @@ after it — read `profile_role` on that row before deciding:
 migration got stricter, not weaker.** `"Designers can update their client profiles"` now checks the
 **caller's** own authority — `is_designer`, or a designer/admin `user_roles` grant — in both its `USING`
 and its `WITH CHECK`. Before that change an owner in either category kept a live write on their
-"client's" profile (and a PII read through `can_view_profile`'s roster leg) purely because the roster
-row existed, and the restrictive policies could not reach it: they govern `INSERT` and `UPDATE` on
-`designer_clients`, and **this migration deliberately deletes no existing roster row.** After the
-change, such an owner is locked out instead — which is correct, and is exactly why you want to know
-who they are *before* the apply rather than from a support ticket after it.
+"client's" profile purely because the roster row existed, and the restrictive policies could not reach
+it: they govern `INSERT` and `UPDATE` on `designer_clients`, and **this migration deliberately deletes
+no existing roster row.** After the change, such an owner is locked out instead — which is correct, and
+is exactly why you want to know who they are *before* the apply rather than from a support ticket after
+it.
+
+**Fix round 3 pass 3 (RF3-14) closed the other half, and it is the half that made this audit a
+privacy question as well as a support one.** Pass 2 said the legacy row was "a lockout rather than a
+capability"; its own attack matrix contradicted that three lines later, because the WRITE answered
+`200 []` and the **READ** answered `200 [{id, email, phone}]`. `can_view_profile`'s two roster legs now
+require the roster row's `designer_id` to hold the same two authority signals, so a listed account
+loses the read as well. State it exactly:
+
+| | closed by | what it means for a listed account |
+|---|---|---|
+| **WRITE** | `"Designers can update their client profiles"` (RF3-03) | can no longer rename its "clients", or rewrite their `email` — which is the first-choice invoice recipient |
+| **READ** | `can_view_profile`'s roster legs (RF3-14) | can no longer read those profiles at all: `GET …/profiles?id=eq.<client>` answers `200 []` |
+| **MINT** | `designer_clients_writer_is_designer` (RF2-01) | can no longer add a client |
+| **THE ROW ITSELF** | **nothing here** | it survives, unchanged. It still joins in `public.client_designer_roster`, `people_directory`'s client branch and the `00224` storage policy, and it still counts the day its owner is granted real authority |
+
+All three losses are restored by **one** designer- or admin-domain `user_roles` grant. None of them is
+restored by re-creating roster rows, and none of them touches data — removing a stray row is the only
+part of this that is a **write**, and it is B7b's territory, not the migration's.
 
 If both categories are empty, RF2-01 and RF3-03 cost production nothing and you can apply without a
 second thought. If they are not, the affected accounts are named by:
@@ -627,10 +649,9 @@ SELECT DISTINCT p.id, p.email, p.role, p.is_designer
 ```
 
 **Existing rows are not touched** — the restrictive policies are `INSERT` and `UPDATE` only, and
-`SELECT` is deliberately untouched — so a lost write does not hide anyone's existing roster. The cost
-for a listed account is that it can no longer add a client, **and (RF3-03) can no longer edit the
-profiles of the clients it already has**, until it holds `is_designer` or a designer/admin grant. Both
-are restored by the same one-line grant; neither is restored by re-creating roster rows.
+`SELECT` on `designer_clients` is deliberately untouched — so nothing here hides anyone's existing
+roster from the designer-portal list views that read the table directly. What a listed account loses is
+the three-row table above: the mint, the profile write, and the profile read.
 
 **Audit 2 — orphan roster rows.** The predicate above joins `profiles`; a roster row whose
 `designer_id` has no `profiles` row would vanish from audit 1's counts entirely and would be invisible
@@ -856,15 +877,82 @@ psql "$STRATA_DB_URL" -X -q -tAc \
 open — go back to `00555_probes.md` §9d / §9f / §9f-ia / §9f-ii for the full column list and the policy
 predicates.
 
+**9g — the three shapes fix round 3 pass 3 added** (RF3-02 / RF3-13 / RF3-14). Two `INSERT` policies
+and one function body; all three are new predicates, so a Strata that has 00555 applied and answers
+anything but the shape below has been edited since.
+
+```bash
+psql "$STRATA_DB_URL" -X -q -c \
+  "SELECT policyname,
+          (with_check ILIKE '%''homeowner''%'
+           AND with_check ILIKE '%''client''%')                       AS client_vocab,
+          (with_check ILIKE '%''vendor''::text%'
+            OR with_check ILIKE '%''admin''::text%')                  AS spoof_labels,
+          (with_check ILIKE '%is_designer IS NOT TRUE%')              AS pins_is_designer,
+          (with_check ILIKE '%current_profile_is_designer%'
+           AND with_check ILIKE '%user_roles%')                       AS checks_caller_authority
+     FROM pg_policies
+    WHERE schemaname='public' AND tablename='profiles' AND cmd='INSERT'
+    ORDER BY policyname;"
+```
+
+```
+                 policyname                 | client_vocab | spoof_labels | pins_is_designer | checks_caller_authority
+--------------------------------------------+--------------+--------------+------------------+-------------------------
+ Designers can create homeowner profiles    | t            | f            | t                | t
+ Users can insert own profile               | t            | f            | t                | f
+(2 rows)
+```
+
+- **`spoof_labels` must be `f` on both rows**, and the `::text` in the pattern is load-bearing: the
+  sibling's caller-authority `EXISTS` carries `r.domain = ANY (ARRAY['designer'::role_domain,
+  'admin'::role_domain])`, so a bare `'%''admin''%'` matches it and reports `t` on a correct policy.
+  `profiles.role` is `text`, so the vocabulary literals always deparse as `'x'::text`. That is
+  **RF3-02**, the ruling taken this pass: the
+  own-row `WITH CHECK` holds `role` to `('homeowner','client','designer')` — a **vocabulary** guard,
+  not a pin to the caller's current value. Before it, an account in the missing-profiles-row window
+  could `POST /rest/v1/profiles {"role":"vendor"}` (**201**, measured) and land itself in the comms
+  vendor picker, or `"admin"` (**201**) and have `comms_resolve_role` print *admin* beside its name.
+  Neither grants a privilege — `profiles.role` is a label — so this closes **spoofing**, not
+  escalation. `client_vocab = t` on the owner row is the same guard's other half; the third string,
+  `'designer'`, is `handle_new_user`'s own column default and must stay reachable.
+- **`checks_caller_authority` is `t` on the SIBLING and `f` on the OWNER.** **RF3-13**. 00017 shipped
+  *"Designers can create homeowner profiles"* `TO PUBLIC` with `auth.uid() IS NOT NULL AND role =
+  'homeowner'` — a policy whose **name** said designers and whose **predicate** said anyone signed in,
+  and it accepts an **arbitrary id**. It was the last `INSERT` route by which a self-signup could plant
+  a profiles row for somebody else. An `f` there means that is open again.
+
+```bash
+psql "$STRATA_DB_URL" -X -q -tAc \
+  "SELECT (length(p.prosrc) - length(replace(p.prosrc,'dp.is_designer IS TRUE',''))) / length('dp.is_designer IS TRUE') = 2
+      AND (length(p.prosrc) - length(replace(p.prosrc,'ur.user_id = dc.designer_id',''))) / length('ur.user_id = dc.designer_id') = 2
+     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname='public' AND p.proname='can_view_profile';"
+# want t — RF3-14. BOTH of can_view_profile's roster legs must require the roster row's
+#          designer_id to hold designer authority. TWO occurrences of each marker: one leg
+#          is not both legs, and the teammate leg is the one that matters most, because
+#          is_studio_comember's first branch is `p_owner = auth.uid()` so a row a caller
+#          minted for THEMSELVES satisfies it.
+```
+
 **Four more one-line ACL checks, new in fix round 3** (RF2-08 / RF2-09 / RF2-10 / RF3-07):
 
 ```bash
 psql "$STRATA_DB_URL" -X -q -tAc \
-  "SELECT string_agg(privilege_type, ',' ORDER BY privilege_type)
-     FROM information_schema.table_privileges
-    WHERE table_schema='public' AND table_name='designer_clients' AND grantee='anon';"
+  "SELECT COALESCE(string_agg(DISTINCT a.privilege_type, ',' ORDER BY a.privilege_type), '<none>')
+     FROM pg_class c, aclexplode(c.relacl) a
+    WHERE c.oid = 'public.designer_clients'::regclass
+      AND a.grantee = 'anon'::regrole::oid;"
 # want exactly SELECT — one grant, and that grant is SELECT (RF2-08, corrected by RF3-01)
 ```
+
+⚠ **Read this from `pg_class.relacl`, not from `information_schema.table_privileges` — RF3-18.** Fix
+round 3 pass 2 wrote the same check against `information_schema` and described it as failing "on a verb
+nobody thought to list". It did not: `information_schema` is defined by the SQL standard and enumerates
+only the standard verbs, so **PG 17's `MAINTAIN` is invisible to it** — and `MAINTAIN` is precisely the
+verb 00555 revokes by name on three tables because an enumerated `REVOKE` leaves it behind. A returned
+`MAINTAIN` grant read as exactly `SELECT` and passed. `aclexplode(relacl)` is Postgres' own
+representation and carries every privilege type the server knows.
 
 ⚠ **`SELECT` here is the answer, not a leftover — do not "fix" it to zero.** An earlier draft of this
 line and of `00555_probes.md` §9f-ib both said *want 0*, which contradicts the migration, which
@@ -892,6 +980,46 @@ psql "$STRATA_DB_URL" -X -q -tAc \
 # want f — a trigger function needs no EXECUTE grant to fire (RF2-10, extended to
 #          authenticated by RF3-11)
 ```
+
+**Three more, new in fix round 3 pass 3** (RF3-17 / RF3-19):
+
+```bash
+psql "$STRATA_DB_URL" -X -q -tAc \
+  "SELECT bool_or(has_table_privilege(g, v::regclass, 'SELECT'))
+     FROM unnest(ARRAY['anon','authenticated']) g,
+          unnest(ARRAY['public.user_engagement_scores','public.consumer_funnel',
+                       'public.designer_funnel','public.conversion_funnel']) v;"
+# want f — RF3-17. §(d) revokes these four from PUBLIC, anon AND authenticated, and pass 2
+#          asserted only anon. user_engagement_scores projects id/email/role over profiles
+#          with security_invoker = false, so a signed-in reader there makes §(a) decorative.
+
+psql "$STRATA_DB_URL" -X -q -tAc \
+  "SELECT bool_or(has_table_privilege('anon', t::regclass, v))
+     FROM unnest(ARRAY['public.user_roles','public.roles']) t,
+          unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES']) v;"
+# want f — RF3-19. Neither table has ever had a write POLICY, so every write grant was a
+#          grant with no caller, on the two tables that decide who is a designer.
+
+psql "$STRATA_DB_URL" -X -q -c \
+  "SELECT t AS relation,
+          has_table_privilege('authenticated', t::regclass, 'SELECT') AS sel,
+          has_table_privilege('authenticated', t::regclass, 'UPDATE') AS upd_for_share,
+          has_table_privilege('authenticated', t::regclass, 'INSERT') AS ins,
+          has_table_privilege('authenticated', t::regclass, 'DELETE') AS del
+     FROM unnest(ARRAY['public.user_roles','public.roles']) t;"
+# want sel = t, upd_for_share = t, ins = f, del = f  on BOTH rows.
+```
+
+⚠ **`upd_for_share` is `t` on purpose — do not "fix" it to `f`.** `SELECT … FOR SHARE` is charged to
+the **UPDATE** privilege, and `00511`'s `set_project_studio_id()` is a SECURITY **INVOKER** trigger on
+`public.projects` that row-share-locks `public.roles` and `public.user_roles` on every authenticated
+project write. Revoking `UPDATE` takes every project insert with it — measured: the first cut of
+RF3-19 took `supabase/tests/edge_api/public_sd_hardening_contract_test.sql` red with
+*`permission denied for table roles` … `set_project_studio_id() line 151`*. It costs nothing: RLS is
+enabled on both tables and **neither carries an UPDATE policy**, so a real `UPDATE` statement is still
+refused — the grant satisfies a lock's permission check, not a write. `anon` does not keep it, and does
+not need it: the same trigger `FOR SHARE`s `public.designer_clients`, where 00555 leaves anon holding
+`SELECT` and nothing else.
 
 **Advisors** (read-only; you or an agent):
 
@@ -1036,39 +1164,70 @@ psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
 
 **The `profiles` INSERT leg**, if some path that legitimately inserts its own profiles row starts
 failing. 00013's original had `WITH CHECK ((auth.uid() = id) OR (auth.uid() IS NULL))`; the second leg
-is the anon write hole and must **not** come back, so the undo restores only the first half — which is
-00555's own policy minus the `is_designer` pin.
+is the anon write hole and must **not** come back. The undo below drops only the **vocabulary guard**
+(RF3-02) and keeps the `is_designer` **authority** pin, for the same reason the `UPDATE` undo above
+does: the vocabulary guard is the likelier regression (it is the newest predicate and the only one that
+can refuse a legitimate label), and the authority pin is the one whose loss hands every account
+`is_designer = true` on its own row.
 
 ```bash
 psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
   "DROP POLICY IF EXISTS \"Users can insert own profile\" ON public.profiles;
    CREATE POLICY \"Users can insert own profile\" ON public.profiles
      FOR INSERT TO authenticated
-     WITH CHECK ((SELECT auth.uid()) = id);"
+     WITH CHECK ((SELECT auth.uid()) = id AND is_designer IS NOT TRUE);"
 ```
 
-And the 00017 INSERT sibling, whose only 00555 change is the `is_designer` pin and the re-scope from
-`PUBLIC` to `authenticated`:
+⚠ Running that re-opens the RF3-02 **spoofing** surface: an account whose `profiles` row is missing can
+then `POST` itself `role = 'vendor'` (into the comms vendor picker) or `role = 'admin'` (into
+`comms_resolve_role`'s label). It grants nothing — `profiles.role` is a label — but say so in the apply
+report, and prefer widening the vocabulary list to the label that was refused over dropping the guard.
+
+And the 00017 INSERT sibling. Its 00555 changes are the `is_designer` pin, the re-scope from `PUBLIC`
+to `authenticated`, the client vocabulary, and — new in fix round 3 pass 3 — the **caller-authority**
+predicate (RF3-13). The undo below drops the vocabulary widening only, and **keeps** the caller check:
 
 ```bash
 psql "$STRATA_DB_URL" -X -q -v ON_ERROR_STOP=1 -c \
   "DROP POLICY IF EXISTS \"Designers can create homeowner profiles\" ON public.profiles;
    CREATE POLICY \"Designers can create homeowner profiles\" ON public.profiles
      FOR INSERT TO authenticated
-     WITH CHECK ((SELECT auth.uid()) IS NOT NULL AND role = 'homeowner');"
+     WITH CHECK (
+       (SELECT auth.uid()) IS NOT NULL
+       AND (public.current_profile_is_designer() IS TRUE
+            OR EXISTS (SELECT 1 FROM public.user_roles ur
+                         JOIN public.roles r ON r.id = ur.role_id
+                        WHERE ur.user_id = (SELECT auth.uid())
+                          AND r.domain IN ('designer','admin')))
+       AND role = 'homeowner'
+       AND is_designer IS NOT TRUE);"
 ```
+
+⚠ **Do not restore 00017's raw shape** (`auth.uid() IS NOT NULL AND role = 'homeowner'`, `TO PUBLIC`).
+This policy accepts an **arbitrary id**, so without the caller check it is the route by which any
+signed-in account can plant a `profiles` row for somebody else. If a real designer is being refused,
+the cause is their authority signals, and the fix is the same one-row `user_roles` grant B7a names.
 
 ⚠ **Dropping either INSERT policy without re-creating it locks out the path it serves**, and dropping
 only one of the two leaves the other as an OR-branch around the pin you were trying to remove — which
 is the OR-branch mistake this migration spent two fix rounds on. Run the `DROP` and the `CREATE` in the
 same statement, as written above.
 
+**`can_view_profile`'s roster-leg authority check (RF3-14)**, if a legitimate counterparty read goes
+empty. Same preference as everywhere else in this block: **grant the roster row's owner a
+designer-domain `user_roles` row**. There is no narrow undo for this one — it lives inside the function
+body, so reverting it means re-creating the whole function from the previous cut of the migration, and
+doing that re-opens the legacy-row PII read for every roster row on the platform at once. If you are
+here, capture which read went empty and hand it back rather than reverting.
+
 **Not rolled back by any of this:** the `REVOKE`s. The write half of `designer_clients` from `anon`
 (RF2-08 — the `SELECT` is **kept**, see B7), `TRUNCATE` and `REFERENCES` on `profiles` **and on
-`designer_clients`** from `authenticated` (RF2-09, RF3-07), and `EXECUTE` on `handle_new_user` from
-`PUBLIC`, `anon` **and `authenticated`** (RF2-10, RF3-11) have no callers by construction — if one of
-them is somehow the regression, the undo is the matching `GRANT`, and it is worth a hard look at what
-was using it.
+`designer_clients`** from `authenticated` (RF2-09, RF3-07), `EXECUTE` on `handle_new_user` from
+`PUBLIC`, `anon` **and `authenticated`** (RF2-10, RF3-11), the four definer views from `authenticated`
+as well as `anon` (RF3-17), and the write verbs on `public.roles` / `public.user_roles` (RF3-19 —
+`SELECT` is kept for both roles and `UPDATE` is kept for `authenticated`, see B7) have no callers by
+construction. If one of them is somehow the regression, the undo is the matching `GRANT`, and it is
+worth a hard look at what was using it.
 
 ### B10 — three things you are being told, not asked
 
@@ -1100,7 +1259,9 @@ was using it.
    `email`, `phone` or `stripe_customer_id` — and that scope is the whole point of filing it rather than
    widening this migration. The non-designer version of the same trick is closed here, prospectively by
    the two RESTRICTIVE policies on `designer_clients` and retrospectively by the caller-authority check
-   on the sibling `UPDATE` policy (RF3-03).
+   on the sibling `UPDATE` policy (RF3-03) — and, since fix round 3 pass 3, the matching authority check
+   on `can_view_profile`'s two roster legs (RF3-14), which is what closes the **read** the same legacy
+   row used to buy. What no policy closes is the row itself; that is B7a/B7b.
 
 **Also owed, and not blocking:** 00555's READERS block enumerates **nine silent degradations** — reads
 that answer `200` with a `null` embed, so nothing logs and a name simply disappears. Open
