@@ -159,6 +159,24 @@ Launch the build with **no** `-PatinaFlags` argument, twice (the second launch i
 cached payload), and read the line. `defaults` on launch 2 means PostHog is not answering at all;
 `posthog-cache` with `house-first` absent from `on=[…]` is the contradiction above, live.
 
+**Fix round, 2026-09-02 — `RL01-02`. That probe could not be run on the build it is about.**
+`logResolution`'s body was inside `#if DEBUG`, so the line did not exist in a Release binary at all; and
+in a Debug build `AppConfiguration.analyticsEnabled` is false, so the provider always answers nil and
+the source could only ever print `defaults`. Between the two, the line could never once have printed
+`posthog-cache` — the exact word the probe exists to look for.
+
+It is now emitted **unconditionally at `PatinaLog.ui.notice`**. `notice` is os_log's default level and
+the lowest one that survives into a Release log archive, so Console (or
+`log stream --predicate 'subsystem == "com.patina.app" AND category == "ui"'`) reads it straight off a
+TestFlight device. The `notice` level is new on `PatinaLogger`, added for this; `debug` and `info` are
+unchanged and still the right home for everything else.
+
+**It carries no PII, which is what makes shipping it at a persisted level safe.** The message is a
+branch name (`launch-arguments` / `posthog-cache` / `defaults`) and the flag **keys** that resolved on —
+`house-first`, `direct-orders`, `house-widget`. No user id, no PostHog distinct id, no payload, no
+account state. Every other debug-only detail in the file stays gated: `overrideFlags`' `-PatinaFlags`
+parsing is still `#if DEBUG`, and the App Group unavailability line is still `.debug`.
+
 **Confidence.** The code side is verified in this worktree; the PostHog side is reasoned from how
 PostHog evaluates flags, **not** observed — L0.1 does not touch the PostHog project, read-only or
 otherwise. Treat the recommendation as a decision for Kody, and the two-launch probe as the evidence.
@@ -175,6 +193,14 @@ Two smaller items for the same lane:
   at all. L0.6 step 5 ("a Debug launch must produce zero events in the live feed") should now pass —
   and note that this also means **flags never resolve from PostHog in Debug**, so a local walk that
   wants the old root must pass `-PatinaFlags ""` or name flags explicitly.
+  **`RL01-01` — ACCEPTED as shipped, fix round 2026-09-02.** The consequence the reviewer flagged (a
+  Debug build reads `onboarding_walk_first` and `ios_screen_name_v2` as false because
+  `PostHogService.isFeatureEnabled` returns false with no client, so every Debug walk sees quiz-first
+  onboarding while a Release tester may resolve walk-first from the live payload) is correct and is
+  the right trade: keeping PostHog off in Debug is the whole point of A2-15, and the alternative — a
+  Debug build reporting into the production project — is the defect. It is carried as a **fact in the
+  walker's brief**, not as a code change: runbook **H3** already tells walkers that a Debug walk reads
+  `onboarding_walk_first` as false and that this is expected.
 
 ---
 

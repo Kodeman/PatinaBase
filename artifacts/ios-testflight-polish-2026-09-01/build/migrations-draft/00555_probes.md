@@ -49,7 +49,7 @@ names are **not** this file's section numbers — read the map, not the digits.
 | Probe 5 | **§11** | the designer portal's own HTTP route, a **different principal** — `app.patina.cloud/api/catalog/vendors` must not answer 200 with trade columns |
 | **9b** — the `FOR ALL` / `TO PUBLIC` / `auth.uid() IS NULL` policy sweep | **§9b** | 0 rows |
 | **9d** — the `vendors` column allowlist | **§9d** | the 24 public-face columns, and only those |
-| **9f** — the UPDATE `WITH CHECK` | **§9f** | **both** of `profiles`' UPDATE policies have a non-null `with_check` naming `role` |
+| **9f** — the UPDATE `WITH CHECK` | **§9f** | **both** of `profiles`' UPDATE policies have a non-null `with_check` naming `role` **and `is_designer`** |
 
 The two RPC probes keep their own headings and are **not** part of the exit criteria:
 §9 (`search_shareable_designers`) and §9a (`list_vendor_profiles`). §9f carries both halves of the
@@ -499,45 +499,62 @@ None of these may appear: `notes`, `trade_terms`, `contact_info`, `preferred_con
 `contact_profile_id`. `id` **must** appear — a column allowlist that forgot `id` would still pass
 an ACL-shape check while breaking every products embed (probe 4).
 
-## 9f · EXIT CRITERION — role self-elevation is closed (the UPDATE `WITH CHECK`)
+## 9f · EXIT CRITERION — self-elevation is closed (the UPDATE `WITH CHECK`)
 
 00013 shipped `"Users can update own profile"` as `USING`-only with no column restriction, so any
-authenticated caller could set their own `profiles.role` to `'designer'`. 00555 section (a2) adds a
-`WITH CHECK` that pins the column, and gives `handle_new_user` a homeowner default.
+authenticated caller could set their own `profiles.role` to `'designer'` — and their own
+`profiles.is_designer` to `true`. 00555 section (a2) adds a `WITH CHECK` pinning **both** columns, and
+gives `handle_new_user` a provider-derived default (ruling B2).
+
+**`role` is a label; `is_designer` is the authority.** The designer-side RPCs read `is_designer`, not
+`role`: `claim_design_request` and the `open_design_requests` view (00286), `accept_design_request`
+(00330), `design_request_submit` (00285), `_can_manage_configurable_product`, and 00555's own
+`search_shareable_designers`. A `WITH CHECK` that pins `role` alone closes the label and leaves the
+door — a homeowner PATCHes `is_designer = true` and walks into the design-request pool.
 
 **`profiles` carries TWO permissive `UPDATE` policies, and this probe wants BOTH.** The second is
 `"Designers can update their client profiles"` (00017:19). Postgres ORs the permissive `WITH CHECK`s
 for an `UPDATE`, and a policy whose `WITH CHECK` is NULL reuses its own `USING` — so as 00017 shipped
-it, a new row had to satisfy only one of the two and the role pin above was skipped entirely. The
-roster row that satisfies it is self-servable: `designer_clients`' own policy is `FOR ALL` / `TO PUBLIC`
-/ `USING (auth.uid() = designer_id)` with no `WITH CHECK` (00014:110) and `authenticated` holds
-`INSERT`, so the whole bypass was two statements — reproduced locally, a homeowner reached
-`role = 'designer'`. 00555 section (a2)(i-b) re-creates that policy `TO authenticated` with
-`WITH CHECK (… AND role = 'homeowner')`, matching its INSERT sibling from the same 00017 file.
+it, a new row had to satisfy only one of the two and the pin above was skipped entirely. The roster row
+that satisfies it is self-servable: `designer_clients`' own policy is `FOR ALL` / `TO PUBLIC` /
+`USING (auth.uid() = designer_id)` with no `WITH CHECK` (00014:110) and `authenticated` holds `INSERT`,
+so the whole bypass was two statements — reproduced locally, a homeowner reached `role = 'designer'`.
+00555 section (a2)(i-b) re-creates that policy `TO authenticated` with
+`WITH CHECK (… AND role = 'homeowner' AND is_designer IS NOT TRUE)`: the role half matches its INSERT
+sibling from the same 00017 file, the `is_designer` half is what stops the same trick reaching the pool.
 
 Read-only check:
 
 ```sql
--- 9f-i. BOTH UPDATE policies carry a WITH CHECK, and both name role
-SELECT polname, pg_get_expr(polwithcheck, polrelid) AS with_check
+-- 9f-i. BOTH UPDATE policies carry a WITH CHECK, and both name role AND is_designer
+SELECT polname,
+       pg_get_expr(polwithcheck, polrelid) AS with_check,
+       pg_get_expr(polwithcheck, polrelid) ILIKE '%is_designer%' AS pins_is_designer
 FROM pg_policy
 WHERE polrelid = 'public.profiles'::regclass AND polcmd = 'w';
--- want TWO rows, each with a NON-NULL with_check:
+-- want TWO rows, each with a NON-NULL with_check and pins_is_designer = t:
 --   "Users can update own profile"
 --     -> … AND role IS NOT DISTINCT FROM current_profile_role()
---        (the inline subquery form raises 42P17 and is NOT what shipped)
+--        AND is_designer IS NOT DISTINCT FROM current_profile_is_designer()
+--        (the inline subquery form raises 42P17 and is NOT what shipped —
+--         both pins go through their own SECURITY DEFINER helper)
 --   "Designers can update their client profiles"
---     -> … AND role = 'homeowner'
--- A NULL with_check on EITHER row means self-elevation is open, whatever the
--- other row says. One row back means the sibling was dropped, not fixed.
+--     -> … AND role = 'homeowner' AND is_designer IS NOT TRUE
+-- A NULL with_check, or a with_check that does not name is_designer, on EITHER
+-- row means self-elevation is open whatever the other row says. One row back
+-- means the sibling was dropped, not fixed.
 
--- 9f-ii. the server default is in place.
--- Match the fallback EXPRESSION, not the word: 00313's body already contains
--- the literal 'homeowner' twice (the CASE arm that honours an explicit client
--- hint, and its SECURITY comment), so `LIKE '%homeowner%'` returns true on the
--- UNFIXED function. Corrected 2026-09-02 by W0 · L0.2 — the draft's version of
--- this probe could not fail.
-SELECT pg_get_functiondef(p.oid) LIKE '%COALESCE(v_role, ''homeowner'')%' AS defaults_homeowner
+-- 9f-ii. the server default follows the identity provider (ruling B2).
+-- Match the BRANCH, not the word: 00313's body already contains the literal
+-- 'homeowner' twice (the CASE arm that honours an explicit client hint, and its
+-- SECURITY comment), so `LIKE '%homeowner%'` returns true on the UNFIXED
+-- function. `raw_app_meta_data` appears nowhere in 00313, so it is the clean
+-- discriminator. Corrected 2026-09-02 (twice: once by W0 · L0.2 because the
+-- draft's probe could not fail, and again in the fix round when B2 replaced the
+-- flat 'homeowner' fallback with the provider CASE).
+SELECT pg_get_functiondef(p.oid) LIKE '%raw_app_meta_data%'
+   AND pg_get_functiondef(p.oid) LIKE '%''apple''%'
+   AND pg_get_functiondef(p.oid) LIKE '%ELSE ''designer''%' AS provider_default
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND p.proname = 'handle_new_user';
 -- want: true

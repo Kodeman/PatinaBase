@@ -21,7 +21,7 @@ with the placeholder in it.)
 | Block | What it does | Gated by | Reversible? |
 |---|---|---|---|
 | **A** | Merge L0.2b to `main` and redeploy the designer portal | nothing | yes — `wrangler rollback` |
-| **B** | Apply **00555** (the security migration), regenerate, probe, walk The Document | **A**, and a ruling in B2 | partly — see B9 |
+| **B** | Apply **00555** (the security migration), regenerate, probe, walk The Document | **A** (B2's ruling is now made — see B2) | partly — see B9 |
 | **C** | Apply **00557** (`increment_scan_upload_attempt`) and probe | B (same session) | no rollback needed |
 | **D** | Mint `firstflight@patina.cloud` and append the Vault allow-list | nothing (B may run before or after) | mostly — one row is permanent |
 | **E** | Confirm the Stripe key (**D10**) and the APNs env (**D9**) — **read-only** | nothing | n/a |
@@ -265,32 +265,65 @@ and the `curl` prints **`401`**. A `200` means the guard is not live and applyin
 leak into a live outage. A `500` means the migration already went on ahead of the deploy — go straight
 to B9.
 
-### B2 — ⚠ THE RULING GATE. If this line is blank, STOP.
+### B2 — ✅ RULED. Nothing to decide here; read it and carry on.
 
-00555 §a2(ii) changes `handle_new_user`'s fallback from `COALESCE(v_role, 'designer')` (00313:64) to
-`COALESCE(v_role, 'homeowner')` (00555:656). That is correct for the iOS app — it is what stops an Apple
-sign-up silently becoming a designer. But the **same** fallback is taken by **designer-portal
-self-signups**, and they are not the same people. Verified on the local stack, 2026-09-02:
+> **Ruling B2 (Fable, 2026-09-02): `handle_new_user`'s default role is decided by the identity
+> provider.** Apple → `homeowner`. Everything else → `designer`, the pre-00555 default. An explicit
+> `role` hint in `raw_user_meta_data` still wins, exactly as today. **It is already in the migration:
+> there is no blank to fill and no step to add.**
+
+**What the earlier draft would have done, and why it was wrong.** It changed the fallback from
+`COALESCE(v_role, 'designer')` (00313:64) to `COALESCE(v_role, 'homeowner')`. That is right for the iOS
+app — it is what stops an Apple sign-up silently becoming a designer — but the **same** fallback is
+taken by **designer-portal self-signups**, and they are not the same people. Verified on the local
+stack, 2026-09-02:
 
 - `apps/designer-portal/src/app/auth/signup/page.tsx:147-157` calls `supabase.auth.signUp` with
   `options.data = { name, company, phone }` — **no `role`**.
 - `handle_new_user` honours exactly one client-supplied role string, `'homeowner'`; anything else falls
-  through to the default (00555:639-642).
-- So after 00555 a portal self-signup designer is written `role = 'homeowner'`, and
-  `public.comms_resolve_role` (00103:37-42) then labels that person **`client`** in every comms thread.
+  through to the default.
+- A flat `'homeowner'` default would therefore have written every portal self-signup designer as
+  `role = 'homeowner'`, and `public.comms_resolve_role` (00103:37-42) would then have labelled that
+  person **`client`** in every comms thread.
 
-| Option | What it means |
-|---|---|
-| **A — accept** | Portal self-signups become `homeowner`/`client` until a follow-up migration. Cheapest; wrong-looking labels on new designer threads until then. |
-| **B — fix the caller** | Add `role: 'designer'` to that `options.data`. **Does not work as written** — `handle_new_user` deliberately ignores every value but `'homeowner'` — and it puts a client-controlled role string back on the wire. |
-| **C — a server-side signup flag** | The portal sends a non-role marker (e.g. `signup_surface: 'designer_portal'`) and `handle_new_user` maps it to `'designer'` server-side. Keeps the client out of the role business. One extra migration. |
+**What the migration does instead** (00555 §a2(ii)):
 
-> **Ruling (fill in before applying):** ______________  · date ______
+```sql
+v_role := CASE
+  WHEN NEW.raw_user_meta_data->>'role' = 'homeowner'             THEN 'homeowner'
+  WHEN NEW.raw_app_meta_data->>'provider' = 'apple'              THEN 'homeowner'
+  WHEN jsonb_exists(NEW.raw_app_meta_data->'providers', 'apple') THEN 'homeowner'
+  ELSE 'designer'
+END;
+```
 
-**Until this line is filled in, do not run B5.** The apply cannot be undone for this behaviour: every
-account created between the apply and the fix carries the wrong role. Whichever you pick, the answer
-goes into the apply report, and any code half is a separate lane's task — not a hand-edit during an
-apply.
+Three things worth knowing about that shape:
+
+1. **`raw_app_meta_data` is written by GoTrue, never by the client.** `signupNewUser` sets
+   `{"provider": "<name>", "providers": ["<name>"]}` on the user model *before* the row is inserted, so
+   it is populated at the moment this trigger fires — the same pair every seeded row in
+   `supabase/seed/dev-accounts.sql` carries. A caller can forge `raw_user_meta_data`; it cannot forge
+   this.
+2. **Both legs are checked** because `provider` is the deprecated half of the pair (GoTrue's own source
+   marks it so) and an account that later links a second identity accumulates names in `providers`
+   while `provider` keeps the first. `jsonb_exists()` is the function spelling of the `?` operator,
+   used so no driver that rewrites `?` as a bind placeholder can mangle the line.
+3. **Apple is the iOS app and only the iOS app.** Patina has no other Apple sign-in surface, so
+   "provider = apple" is a precise proxy for "this signup came through `cloud.patina.app`".
+
+`user_roles` is untouched by this ruling — every signup still gets the `app_user` grant, and
+`profiles.is_designer` is still synced from `user_roles` by 00290's trigger. B2 decides the
+`profiles.role` **string** only: what 00050's onboarding automation, 00103/00104's comms
+participant-role derivation and 00038's funnel views read.
+
+**Regression cover, so it cannot drift back quietly:**
+`supabase/tests/rls/00555_ios_round_one_security.test.sql` §11 inserts five real `auth.users` rows —
+11a Apple → `homeowner`; 11b email, no hint → `designer`; 11c explicit hint → `homeowner`; 11d forged
+`super_admin` hint on Apple → `homeowner` (ignored); 11e `providers`-array-only Apple → `homeowner`.
+§10 asserts the function definition actually branches on `raw_app_meta_data`, which appears nowhere in
+00313 — so the guard cannot pass over a skipped graft.
+
+**One line in the apply report: "B2 ruled provider-shaped; already in the file."**
 
 ### B3 — re-check the migration band with a command that can see peer branches
 
@@ -337,7 +370,7 @@ matching `KNOWN_FAILURES.md` exactly — no new name, no listed file silently go
 
 ### B5 — apply 00555
 
-Only after B1 is green and B2 is filled in.
+Only after B1 is green. (B2 is ruled and already in the file — it is a read, not a gate.)
 
 ```bash
 cd "$REPO"
@@ -400,7 +433,7 @@ PROGRAM.md's exit criteria name probes that are not the file's section numbers. 
 | Probe 5 | **§11** | `app.patina.cloud/api/catalog/vendors` unauthenticated: **`401`** — not a 200 carrying trade columns, and not a 500 |
 | **9b** | **§9b** | the `FOR ALL` / `TO PUBLIC` / `auth.uid() IS NULL` sweep returns **0 rows** |
 | **9d** | **§9d** | `vendors` anon column allowlist = the **24** public-face columns, `id` among them |
-| **9f** | **§9f** | **BOTH** `UPDATE` policies on `profiles` have a non-null `with_check` |
+| **9f** | **§9f** | **BOTH** `UPDATE` policies on `profiles` have a non-null `with_check`, and **both name `is_designer`** as well as `role` |
 
 **9f is the blocker probe and it wants TWO rows.** `profiles` carries two permissive `UPDATE` policies;
 Postgres ORs the permissive `WITH CHECK`s, and a permissive policy whose `WITH CHECK` is NULL reuses its
@@ -415,21 +448,31 @@ know what "after" looks like before you run them against Strata:
 
 ```
 -- 9f
-                 policyname                 |  cmd   | has_with_check
---------------------------------------------+--------+----------------
- Designers can update their client profiles | UPDATE | t
- Users can update own profile               | UPDATE | t
+                 policyname                 |  cmd   | has_with_check | pins_role | pins_is_designer
+--------------------------------------------+--------+----------------+-----------+------------------
+ Designers can update their client profiles | UPDATE | t              | t         | t
+ Users can update own profile               | UPDATE | t              | t         | t
 (2 rows)
 
 -- 9d
 24
 ```
 
+**`pins_is_designer` is not decoration.** `profiles.role` is a label; `profiles.is_designer` is the
+column the designer-side RPCs actually read as authority — `claim_design_request` and the
+`open_design_requests` view (00286), `accept_design_request` (00330), `design_request_submit` (00285),
+`_can_manage_configurable_product`, and 00555's own `search_shareable_designers`. A `with_check` that
+pins `role` and not `is_designer` closes the label and leaves the door: a homeowner PATCHes
+`is_designer = true` and walks into the design-request pool with `role` still reading `homeowner`. Four
+`t`s or the hole is open.
+
 Reproduce them directly with, respectively:
 
 ```bash
 psql "$STRATA_DB_URL" -X -q -c \
-  "SELECT policyname, cmd, (with_check IS NOT NULL) AS has_with_check
+  "SELECT policyname, cmd, (with_check IS NOT NULL) AS has_with_check,
+          (with_check ILIKE '%role%')        AS pins_role,
+          (with_check ILIKE '%is_designer%') AS pins_is_designer
      FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND cmd='UPDATE'
     ORDER BY policyname;"
 
@@ -634,23 +677,36 @@ test -n "$STRATA_DB_URL"    && echo "db url: loaded"
 test -f "$DEMO_SQL"         && echo "seed file: found"
 ```
 
-### D2 — ⚠ ONE ONE-WAY DECISION, BEFORE THE SEED RUNS
+### D2 — ✅ RULED. The seed already carries it; nothing to edit before D6.
 
-`demo-account.sql:187` inserts the demo proposal with **`client_visibility_tier = 'milestone'`**, and
-`get_client_proposal_bundle` nulls both `unit_sell_price` and `line_total_cents` on that tier. The
-tester will open an $18,500 proposal and see **five line names, two of them reading "Qty 2", and no
-money against any of them** — which reads as a rendering bug (finding `L07-07`).
+> **Ruling D2-demo (Fable, 2026-09-02): the demo proposal ships at
+> `client_visibility_tier = 'full'`.** The demo account exists to show a tester a real house, and the
+> proposal is where the money lives. **`demo-account.sql` has been changed** — the line now reads
+> `'legacy', 'full', TRUE, FALSE, 0,`. Do not edit it.
 
-This cannot be fixed afterwards: `guard_proposal_copy_immutability` (00390:1178-1250) lists
-`client_visibility_tier` among the columns a **non-draft** proposal may never change, and this row is
-inserted as `sent`.
+**The vocabulary, so the choice is legible.** The column takes exactly three values
+(`00084_project_management_mvp.sql:35` for `projects`, `00141_proposal_client_visibility_tier.sql:28`
+for `proposals` — `CHECK (client_visibility_tier IN ('full','milestone','curated'))`), and
+`get_client_proposal_bundle` (`00390_proposal_copy_immutability.sql:1622-1700`) reads them as:
 
-| Option | What to do |
+| tier | what the client's proposal read returns |
 |---|---|
-| **Show the prices** (L0.7's note N5, not applied by L0.2) | Before D5, change the single word on `demo-account.sql:187` from `'milestone'` to `'full'` — it is the second value on the line `'legacy', 'milestone', TRUE, FALSE, 0,`. Nothing else changes. |
-| **Keep `milestone`** | Then W1 · L1-E's `L07-07` line ("Your designer is sharing the scope, not the line prices.") becomes **required, not optional**, or the first thing a round-one tester reports is a bug that is not one. |
+| `curated` | `items` collapses to `[]` — **no line items at all** |
+| `milestone` | items render, but `unit_sell_price`, `line_total_cents`, `vendor_name`, `budget_min_cents`, `budget_max_cents`, `brand`, `source_url` and `price_retail` are **all forced to NULL**, and `record_completeness_hidden` is set |
+| `full` | the line items carry their money |
 
-Decide, write the answer into the apply report, then continue.
+`total_amount` is on the proposal header and is returned on every tier, which is exactly why
+`milestone` reads as a bug: an $18,500 header over five line names with blank prices (`L07-07`).
+**`full` is the only tier that shows line items with prices**, so `full` it is.
+
+**One-way, and that is why it was a gate.** `guard_proposal_copy_immutability` (00390:1243) lists
+`client_visibility_tier` among the columns a **non-draft** proposal may never change, and this row is
+inserted as `sent`. It had to be right before D6, not after.
+
+**What did not change.** The `projects` row (~line 125) keeps `'milestone'` — that column governs the
+project surface, not this proposal read — and nothing else in `demo-account.sql` moved. W1 · L1-E's
+`L07-07` copy line ("Your designer is sharing the scope, not the line prices.") stays **optional**: it
+is the string for a designer who deliberately withholds prices, and the demo account is no longer one.
 
 ### D3 — create the auth user (GoTrue admin API)
 
@@ -1349,12 +1405,26 @@ read the resolution line from the app log:
 **Launch 2 is the one that reads a cached payload**, and `posthog-cache` with `house-first` *absent* from
 `on=[…]` is the D1/D1a contradiction, live.
 
-⚠ **This probe has a known hole.** `logResolution`'s body is inside `#if DEBUG`, so the line does not
-exist in a Release build; and in a Debug build H3's own guard means the provider always answers nil, so
-the line can only ever print `defaults`. Until that is fixed (a W1/W2 one-liner: emit the line at
-`PatinaLog.ui.notice` unconditionally — it names three flag keys and no PII), the substitute evidence is
-the **App Group mirror**: `FeatureFlagMirror` writes to `group.cloud.patina.app` in Release too, and can
-be read off a device. Say which of the two you used.
+**The line is now emitted in Release.** `FeatureFlags.logResolution` was inside `#if DEBUG`, which meant
+the probe could not be run at all on the build it is about: the line did not exist in a Release binary,
+and in a Debug build H3's own analytics guard makes the provider answer nil so the source could only
+ever read `defaults`. It is now emitted **unconditionally at `PatinaLog.ui.notice`** — `notice` is the
+lowest os_log level that survives into a Release log archive, so it is readable over Console from a
+TestFlight device. It carries flag **keys** and a branch name and nothing else: no user id, no distinct
+id, no payload.
+
+**How to read it off a TestFlight build.** With the device attached, open **Console.app**, select the
+device in the sidebar, and filter on subsystem `com.patina.app` (category `ui`) — or from the terminal:
+
+```bash
+log stream --predicate 'subsystem == "com.patina.app" AND category == "ui"' --level info
+```
+
+`log stream` shows notice-level messages without `--level debug`; the `--level info` above only widens
+it. Launch the app, read the line, background it, launch again, read the second one.
+
+The **App Group mirror** remains as a cross-check rather than a substitute: `FeatureFlagMirror` writes
+the resolved set to `group.cloud.patina.app` in Release too. Say which you used if you use both.
 
 ---
 

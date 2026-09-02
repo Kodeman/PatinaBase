@@ -170,6 +170,26 @@ ON CONFLICT (id) DO NOTHING;
 -- ('sent','viewed','accepted','declined','expired')`. The app then counts it
 -- with isAwaitingSignature(), which needs status 'sent' or 'viewed' AND a
 -- valid_until that has not passed — so valid_until is a future date, not NULL.
+--
+-- RULING D2-demo (Fable, 2026-09-02): client_visibility_tier = 'full'.
+-- The vocabulary is three values (00084:35, 00141:28 —
+-- CHECK (client_visibility_tier IN ('full','milestone','curated'))) and
+-- get_client_proposal_bundle (00390:1622-1700) reads them as:
+--   'curated'    items collapse to '[]' — the client sees no line items at all
+--   'milestone'  items render, but unit_sell_price, line_total_cents,
+--                vendor_name, budget_min/max_cents, brand, source_url and
+--                price_retail are ALL forced to NULL, and
+--                record_completeness_hidden is set
+--   'full'       the line items carry their money
+-- The demo account exists to show a tester a real house, and a proposal is
+-- where the money lives; 'milestone' hands them line names with blank prices,
+-- which reads as a rendering bug (L07-07), not as a designer's choice.
+-- This is ONE-WAY: guard_proposal_copy_immutability (00390:1243) lists
+-- client_visibility_tier among the columns a non-draft proposal may never
+-- change, and this row is inserted as 'sent'.
+-- The projects row at line ~125 keeps 'milestone' deliberately — that column
+-- governs the project surface, not this proposal read, and nothing else in
+-- this file changes.
 INSERT INTO public.proposals
   (id, designer_id, client_id, project_id, designer_client_id, title, description,
    subtotal, total_amount, status, valid_until, sent_at, version,
@@ -184,7 +204,7 @@ VALUES
    'Seating, the dining table and the entry rug. Lead times are in the schedule.',
    1840000, 1840000, 'sent',
    NOW() + INTERVAL '21 days', NOW() - INTERVAL '4 days', 1,
-   'legacy', 'milestone', TRUE, FALSE, 0,
+   'legacy', 'full', TRUE, FALSE, 0,
    NOW() - INTERVAL '5 days', NOW() - INTERVAL '4 days')
 ON CONFLICT (id) DO NOTHING;
 
