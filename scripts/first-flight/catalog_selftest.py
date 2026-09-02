@@ -320,6 +320,56 @@ def main():
         check("16c apostrophe doubled", "O''Hara''s" in sql, "not escaped")
         check("16d layer catalog", "'catalog'" in sql, "missing")
         check("16e status published", "'published'" in sql, "missing")
+        check(
+            "16f no BEGIN/COMMIT (no other seed opens a transaction)",
+            "\nBEGIN;" not in sql and "\nCOMMIT;" not in sql,
+            "transaction wrapper present",
+        )
+
+        print("17. publish timestamps: staggered rows relative, given rows absolute")
+        path = write_manifest(
+            tmp,
+            [row(slug="staggered"), row(slug="given", published_at="2026-07-04")],
+        )
+        rows = bc.load_manifest(path, profile="fixture")
+        sql = bc.render_sql(
+            rows,
+            storage_base_url="http://x/y",
+            uploader_uid=bc.LOCAL_UPLOADER_UID,
+            assigned_by=bc.LOCAL_UPLOADER_UID,
+            profile="fixture",
+        )
+        check(
+            "17a staggered row emits now() - interval",
+            "now() - interval '" in sql,
+            "missing",
+        )
+        check(
+            "17b manifest-supplied date emits the literal",
+            "'2026-07-04 00:00:00+00'::timestamptz" in sql,
+            "missing",
+        )
+
+        print("18. the generated SQL is a deterministic function of the manifest")
+        path = write_manifest(tmp, [row(slug="p%d" % i) for i in range(6)])
+        rows_a = bc.load_manifest(path, profile="fixture")
+        rows_b = bc.load_manifest(path, profile="fixture")
+        args = dict(
+            storage_base_url="http://x/y",
+            uploader_uid=bc.LOCAL_UPLOADER_UID,
+            assigned_by=bc.LOCAL_UPLOADER_UID,
+            profile="fixture",
+        )
+        check(
+            "18a two renders are byte-identical",
+            bc.render_sql(rows_a, **args) == bc.render_sql(rows_b, **args),
+            "renders differ",
+        )
+        check(
+            "18b no wall-clock stamp in the header",
+            "generated :" not in bc.render_sql(rows_a, **args),
+            "header carries a timestamp",
+        )
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

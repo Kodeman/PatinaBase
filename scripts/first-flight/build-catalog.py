@@ -161,6 +161,7 @@ class Row(object):
         self.source_url = None
         self.quality_score = None
         self.published_at = None
+        self.published_offset_minutes = None
         self.photo_verified = False
         self.shipping_flat_cents = None
         self.tags = []
@@ -283,15 +284,18 @@ def _image(path, manifest_dir, errors, where, field):
 # ─── the staggered publish dates ───────────────────────────────────────────
 
 
-def _stagger(count, now):
-    """Deterministic publish timestamps across the last STAGGER_WEEKS.
+def _stagger(count):
+    """Deterministic publish offsets, in hours before now, across STAGGER_WEEKS.
 
     The newest rows land inside RECENT_DAYS so NEW THIS WEEK has something to
     draw (it needs at least MIN_RECENT rows). These are not invented facts
     about the piece: `published_at` means the moment the piece entered the
-    Patina catalogue, and this seed is that moment.
+    Patina catalogue, and the seed is that moment.
+
+    Offsets rather than timestamps, so the generated SQL can say
+    `now() - interval 'N hours'` and stay true on a stack reset months later.
     """
-    stamps = []
+    offsets = []
     span_days = STAGGER_WEEKS * 7 - 1
     recent = min(count, max(MIN_RECENT, count // 4))
     for index in range(count):
@@ -305,8 +309,9 @@ def _stagger(count, now):
                 (span_days - RECENT_DAYS) * older / float(older_total)
             )
             offset_hours = int(round(offset_days * 24))
-        stamps.append(now - datetime.timedelta(hours=offset_hours, minutes=index))
-    return stamps
+        # a distinct minute per row keeps the ordering stable and total
+        offsets.append(offset_hours * 60 + index)
+    return offsets
 
 
 def count_recent(rows, days=RECENT_DAYS):
@@ -501,12 +506,17 @@ def _check_manifest(rows, errors, profile, path):
 
 
 def _assign_dates(rows, now):
-    """Fill published_at where the manifest left it blank."""
+    """Fill published_at where the manifest left it blank.
+
+    `published_offset_minutes` is what the SQL emits; `published_at` is the
+    resolved datetime the validator counts with.
+    """
     blanks = [r for r in rows if r.published_at is None]
     if not blanks:
         return
-    for row, stamp in zip(blanks, _stagger(len(blanks), now)):
-        row.published_at = stamp
+    for row, minutes in zip(blanks, _stagger(len(blanks))):
+        row.published_offset_minutes = minutes
+        row.published_at = now - datetime.timedelta(minutes=minutes)
 
 
 # ─── SQL rendering ─────────────────────────────────────────────────────────
@@ -535,14 +545,22 @@ def q_int(value):
     return "NULL" if value is None else str(int(value))
 
 
-def q_ts(value):
-    return "NULL" if value is None else q(value.strftime("%Y-%m-%d %H:%M:%S+00")) + "::timestamptz"
+def q_published(row):
+    """The publish timestamp expression for one row.
+
+    A manifest-supplied date is an absolute literal — it is a fact about the
+    piece. A generator-staggered date is emitted RELATIVE to now(), so the
+    committed seed stays byte-identical between regenerations and a stack reset
+    six weeks from today still has three rows inside the last seven days.
+    """
+    if row.published_offset_minutes is None:
+        return q(row.published_at.strftime("%Y-%m-%d %H:%M:%S+00")) + "::timestamptz"
+    return "now() - interval '%d minutes'" % row.published_offset_minutes
 
 
 def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="release",
                manifest_name="<manifest>"):
     out = io.StringIO()
-    generated = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
 
     out.write(
         "-- ═══════════════════════════════════════════════════════════════════════════\n"
@@ -552,7 +570,11 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
         "--   manifest  : %s\n"
         "--   profile   : %s\n"
         "--   rows      : %d\n"
-        "--   generated : %s\n"
+        "--\n"
+        "-- No generation timestamp and no absolute seeded dates: the file is a\n"
+        "-- deterministic function of the manifest, so regenerating it produces no\n"
+        "-- diff, and a stack reset months from now still has rows inside the last\n"
+        "-- seven days for NEW THIS WEEK to draw.\n"
         "--\n"
         "-- Re-generate rather than patch: product ids and image object names are\n"
         "-- uuid5 derivations of the manifest, so the same manifest always produces\n"
@@ -571,10 +593,15 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
         "-- products_normalize_layer_defaults BEFORE INSERT trigger sets it true for\n"
         "-- every catalog row.\n"
         "-- ═══════════════════════════════════════════════════════════════════════════\n\n"
-        % (manifest_name, profile, len(rows), generated)
+        % (manifest_name, profile, len(rows))
     )
 
-    out.write("BEGIN;\n\n")
+    out.write(
+        "-- Applied by `pnpm supabase:reset` (wired into config.toml [db.seed]) and,\n"
+        "-- on production, by a Kody-run `psql -1 -f`. No BEGIN/COMMIT here: no other\n"
+        "-- seed file in this tree opens a transaction, and psql's -1 is what makes the\n"
+        "-- production apply all-or-nothing.\n\n"
+    )
     out.write("-- ─── makers ──────────────────────────────────────────────────────────────\n")
     out.write(
         "-- vendors has no unique constraint on name, so ON CONFLICT is unavailable:\n"
@@ -582,7 +609,7 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
         "-- rather than pick one. `maker_name` must never resolve to 'Unknown Maker' —\n"
         "-- Product.resolvedMakerName drops those rows client-side.\n"
     )
-    out.write("DO $ff$\nDECLARE\n  v_vendor uuid;\n  v_n int;\nBEGIN\n")
+    out.write("DO $ff$\nDECLARE\n  v_n int;\nBEGIN\n")
 
     makers = {}
     for row in rows:
@@ -674,12 +701,12 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
                 q_array(images),
                 q(row.source_url),
                 q_int(row.quality_score),
-                q_ts(row.published_at),
-                q_ts(row.published_at) if row.photo_verified else "NULL",
+                q_published(row),
+                q_published(row) if row.photo_verified else "NULL",
                 q_int(row.shipping_flat_cents),
                 q(row.maker_name),
                 q(assigned_by),
-                q_ts(row.published_at),
+                q_published(row),
             )
         )
         out.write(
@@ -728,7 +755,6 @@ def render_sql(rows, storage_base_url, uploader_uid, assigned_by, profile="relea
         "  END IF;\n"
         "END\n$ff$;\n\n" % q(PROVENANCE_TAG)
     )
-    out.write("COMMIT;\n")
     return out.getvalue()
 
 
