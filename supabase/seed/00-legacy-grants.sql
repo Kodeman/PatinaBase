@@ -12439,3 +12439,159 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_ab_variant_stats(uuid) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.can_view_profile(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_view_profile(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON public.profiles FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE DELETE ON public.profiles FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.current_profile_role() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.current_profile_role() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.search_shareable_designers(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.search_shareable_designers(text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.list_vendor_profiles() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_vendor_profiles() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON public.notification_preferences FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON public.notification_preferences TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON public.vendors FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT ( id, name, website, logo_url, hero_image_url, market_position, production_model, founded_year, ownership, headquarters_city, headquarters_state, parent_company_id, primary_category, secondary_categories, designer_rating_avg, review_count, lead_times, social_links, brand_story, made_in, is_patina_catalog, founding_circle, created_at, updated_at ) ON public.vendors TO anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.vendors TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON public.user_engagement_scores FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON public.consumer_funnel FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON public.designer_funnel FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON public.conversion_funnel FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.user_engagement_scores TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.consumer_funnel TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.designer_funnel TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.conversion_funnel TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_increment_scan_upload_attempt.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.increment_scan_upload_attempt(UUID) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00556_increment_scan_upload_attempt.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.increment_scan_upload_attempt(UUID) TO anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
