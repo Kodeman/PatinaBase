@@ -20,6 +20,7 @@
 import { NextRequest } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
 import { GET as listVendors } from '../route';
+import { GET as getVendor } from '../[id]/route';
 
 jest.mock('@patina/supabase/server', () => ({ createServerClient: jest.fn() }));
 
@@ -42,6 +43,8 @@ const TRADE_COLUMNS = [
 ];
 
 const LIST_URL = 'https://app.patina.cloud/api/catalog/vendors';
+const DETAIL_URL = 'https://app.patina.cloud/api/catalog/vendors/vendor-1';
+const DETAIL_PARAMS = { params: Promise.resolve({ id: 'vendor-1' }) };
 
 /** A client whose `getUser()` resolves to the given auth result. */
 function clientWithUser(
@@ -102,5 +105,66 @@ describe('GET /api/catalog/vendors', () => {
     }
     expect(selectArg).toContain('brand_story');
     expect(selectArg).toContain('made_in');
+  });
+});
+
+describe('GET /api/catalog/vendors/[id]', () => {
+  it('returns 401 and never queries vendors when there is no session', async () => {
+    const from = jest.fn();
+    mockCreateServerClient.mockResolvedValue(clientWithUser(NO_USER, from));
+
+    const response = await getVendor(new NextRequest(DETAIL_URL), DETAIL_PARAMS);
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'Unauthorized' });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when getUser reports an auth error', async () => {
+    const from = jest.fn();
+    mockCreateServerClient.mockResolvedValue(clientWithUser(AUTH_ERROR, from));
+
+    const response = await getVendor(new NextRequest(DETAIL_URL), DETAIL_PARAMS);
+
+    expect(response.status).toBe(401);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('serves the trade file to a signed-in caller, from named columns rather than *', async () => {
+    const single = jest
+      .fn()
+      .mockResolvedValue({ data: { id: 'vendor-1', trade_terms: 'net 30' }, error: null });
+    const eq = jest.fn(() => ({ single }));
+    const select = jest.fn(() => ({ eq }));
+    const from = jest.fn(() => ({ select }));
+    mockCreateServerClient.mockResolvedValue(clientWithUser(SIGNED_IN, from));
+
+    const response = await getVendor(new NextRequest(DETAIL_URL), DETAIL_PARAMS);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ id: 'vendor-1', trade_terms: 'net 30' });
+    expect(from).toHaveBeenCalledWith('vendors');
+    expect(eq).toHaveBeenCalledWith('id', 'vendor-1');
+
+    const selectArg = String(select.mock.calls[0]?.[0]);
+    expect(selectArg).not.toContain('*');
+    // The detail route is the designer's trade view: the trade file stays,
+    // behind the guard. Removing it would break the surface, not secure it.
+    for (const column of TRADE_COLUMNS) {
+      expect(selectArg).toContain(column);
+    }
+  });
+
+  it('still returns 404 when the row does not exist', async () => {
+    const single = jest.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
+    const select = jest.fn(() => ({ eq: jest.fn(() => ({ single })) }));
+    mockCreateServerClient.mockResolvedValue(
+      clientWithUser(SIGNED_IN, jest.fn(() => ({ select }))),
+    );
+
+    const response = await getVendor(new NextRequest(DETAIL_URL), DETAIL_PARAMS);
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Vendor not found' });
   });
 });
