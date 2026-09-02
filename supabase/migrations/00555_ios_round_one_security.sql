@@ -94,6 +94,54 @@
 --     missing (RF3-06); an exact-privilege-set ASSERT for anon on
 --     designer_clients (RF3-01); and the three new guards above.
 --
+-- WHAT FIX ROUND 3 PASS 3 ADDS, on top of both lists above:
+--   • ⚠ RULING TAKEN, RF3-02. "Users can insert own profile" gains the
+--     VOCABULARY guard pass 2 handed back: role IN ('homeowner','client',
+--     'designer'). It is a vocabulary check, NOT a pin to the caller's current
+--     value, and `is_designer IS NOT TRUE` is unchanged — so ruling B2 v3(a)
+--     stands in substance (role grants nothing) while the two labels pass 2
+--     measured a caller landing in the missing-row window, 'vendor' and
+--     'admin', stop being reachable. §a, §a4, and the ASSERT that used to
+--     police `NOT ILIKE '%role%'` on that policy.
+--   • RF3-13. "Designers can create homeowner profiles" (00017) is restricted
+--     to callers who HOLD designer authority — the same
+--     `current_profile_is_designer() IS TRUE OR user_roles ⨝ roles domain IN
+--     ('designer','admin')` predicate as (i-b) and (i-c) — and the created row
+--     must be role IN ('homeowner','client') AND is_designer IS NOT TRUE. It
+--     was TO PUBLIC with `auth.uid() IS NOT NULL AND role = 'homeowner'`: named
+--     designers, admitted everybody, and was the last INSERT route by which a
+--     self-signup could plant a profiles row at an arbitrary id. The policy
+--     MOVED from §(a) to (a2)(i-b2) because a policy's functions resolve at
+--     CREATE POLICY time and the helper is defined in (i-a).
+--   • RF3-14. can_view_profile's TWO roster legs now require the roster row's
+--     designer_id to hold the same two authority signals. Pass 2 closed the
+--     legacy row's WRITE and its own matrix showed the READ still answering
+--     200 with email and phone; this closes it. The teammate leg needed it as
+--     much as the direct one, because is_studio_comember's first branch is
+--     `p_owner = auth.uid()`. Every place that claimed the legacy row was
+--     "closed" now says which half is closed by what, and that THE ROW ITSELF
+--     remains — a data job for KODY-RUNBOOK B7a/B7b, not a policy one.
+--   • RF3-19. Grant hygiene on the two AUTHORITY tables. anon loses
+--     INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES on public.roles and
+--     public.user_roles; authenticated loses INSERT/DELETE/TRUNCATE/REFERENCES
+--     and KEEPS UPDATE, because `SELECT … FOR SHARE` is charged to the UPDATE
+--     privilege and 00511's SECURITY INVOKER trigger set_project_studio_id()
+--     row-share-locks both tables on every authenticated project write
+--     (measured — the first cut took public_sd_hardening_contract_test.sql
+--     red). SELECT is kept for both roles, for the executor-init ACL reason
+--     designer_clients already documents. New section (f), which lists every
+--     reader, the single session-side write in the repo, and that lock.
+--   • RF3-17. The four definer views are asserted closed to `authenticated`
+--     too, not only to anon — §(d) revokes from both and asserted one.
+--   • RF3-18. The exact-privilege-set ASSERT moves off
+--     information_schema.table_privileges, which cannot see PG 17's MAINTAIN,
+--     onto pg_class.relacl via aclexplode(), which can. Its claim to catch
+--     "a verb nobody thought to list" is true now.
+--   • RF3-20. A second verification block that CALLS each of the five helpers
+--     once under a fabricated auth.uid(), so shape checks are backed by eight
+--     data-independent behaviour checks. Fixture-dependent behaviour stays in
+--     supabase/tests/rls/00555_ios_round_one_security.test.sql.
+--
 -- ── WHAT THIS FIXES, STATED PLAINLY ────────────────────────────────────────
 --
 -- This migration closes the ANONYMOUS read. It does NOT make profiles PII-safe
@@ -149,17 +197,24 @@
 --
 -- Two limits, both deliberate, both needing a ruling (see DECISION DM-1):
 --
--- 1. THE COUNTERPARTY PREDICATE IS SELF-ASSERTABLE. `can_view_profile` admits a
---    caller who shares a roster row, project, proposal, invoice, lead, direct
---    order, room-scan share, message thread or studio with the target. Several
---    of those tables let an ordinary authenticated user INSERT the linking row
---    themselves — `designer_clients`, `projects`, `comms_thread_participants`,
---    `project_team_members` and `room_scan_associations` all have INSERT
---    policies reachable by a signed-up designer. So a determined signed-in user
---    can still manufacture a relationship and read a target profile. This is
---    strictly better than `USING (true)` — it costs a write, leaves an audit
---    trail, and cannot be done at all by the anon key — but it is a speed bump,
---    not a wall.
+-- 1. THE COUNTERPARTY PREDICATE IS STILL PARTLY SELF-ASSERTABLE.
+--    `can_view_profile` admits a caller who shares a roster row, project,
+--    proposal, invoice, lead, direct order, room-scan share, message thread or
+--    studio with the target. Several of those tables let an ordinary
+--    authenticated user INSERT the linking row themselves — `projects`,
+--    `comms_thread_participants`, `project_team_members` and
+--    `room_scan_associations` all have INSERT policies reachable by a signed-up
+--    designer. So a determined signed-in user can still manufacture a
+--    relationship and read a target profile. This is strictly better than
+--    `USING (true)` — it costs a write, leaves an audit trail, and cannot be
+--    done at all by the anon key — but it is a speed bump, not a wall.
+--
+--    `designer_clients` was on that list until fix round 3 pass 3 and is not
+--    any more, in either time direction: a NEW row cannot be minted by a
+--    non-designer (the restrictive policies in (i-c)), and a row that ALREADY
+--    EXISTS grants nothing, because both roster legs now require the row's
+--    designer_id to hold designer authority (RF3-14, above). The other four
+--    tables are untouched here and remain the honest residual.
 --
 -- 2. ROW VISIBILITY IS ALL-COLUMN. Once a caller is admitted by any leg, they
 --    read the WHOLE row: email, phone, stripe_customer_id,
@@ -382,11 +437,55 @@ AS $$
      AND (
        p_profile_id = (SELECT auth.uid())
 
-       -- designer ↔ client roster, both directions
+       -- designer ↔ client roster, both directions.
+       --
+       -- ── RF3-14, fix round 3 pass 3: the row only counts when its
+       --    designer_id ACTUALLY HOLDS designer authority ──────────────────
+       --
+       -- (i-b) closes the legacy roster row on the WRITE side and (i-c) closes
+       -- the mint prospectively, but neither touches a row that already exists,
+       -- and this leg turned such a row into a full PII READ of the named
+       -- client. Measured on a local stack with the rest of this migration
+       -- applied, with a designer_clients row planted out of band (the shape a
+       -- pre-00555 row has) for a non-designer signup:
+       --   GET /rest/v1/profiles?id=eq.<client>&select=id,email,phone → 200, PII
+       -- That was the residual reported as "case 7's GET is deliberately still
+       -- open" in fix round 3 pass 2. It is not open any more.
+       --
+       -- The predicate is the same two-signal one every other authority
+       -- decision in this file reads (ruling B2 v3(b)): profiles.is_designer,
+       -- or a user_roles grant in the designer or admin domain. NEVER
+       -- profiles.role — handle_new_user labels every email/password signup
+       -- 'designer', so a role leg would re-admit exactly the population RF2-01
+       -- removed.
+       --
+       -- Reading profiles from inside this function is safe and does NOT
+       -- recurse: the function is SECURITY DEFINER owned by postgres, which
+       -- also owns profiles, so the subquery is not subject to profiles' own
+       -- policies. That is the same property (a2)'s helpers rely on; the 42P17
+       -- trap only bites an INVOKER-evaluated subquery inside a policy.
+       --
+       -- This leg is a RELATIONSHIP term and stays one. The clause does not ask
+       -- what the CALLER is — a homeowner still reads their own designer, and a
+       -- designer still reads their own client. It asks whether the roster row
+       -- is a real designer↔client relationship at all.
        OR EXISTS (
          SELECT 1 FROM designer_clients dc
-         WHERE (dc.designer_id = (SELECT auth.uid()) AND dc.client_id = p_profile_id)
-            OR (dc.client_id  = (SELECT auth.uid()) AND dc.designer_id = p_profile_id)
+         WHERE (
+                (dc.designer_id = (SELECT auth.uid()) AND dc.client_id = p_profile_id)
+             OR (dc.client_id  = (SELECT auth.uid()) AND dc.designer_id = p_profile_id)
+               )
+           AND (
+             EXISTS (
+               SELECT 1 FROM profiles dp
+               WHERE dp.id = dc.designer_id AND dp.is_designer IS TRUE
+             )
+             OR EXISTS (
+               SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+               WHERE ur.user_id = dc.designer_id
+                 AND r.domain IN ('designer', 'admin')
+             )
+           )
        )
 
        -- a studio teammate's client. people_directory's client branch is
@@ -395,10 +494,28 @@ AS $$
        -- profile is consistent with what the co-member can already read, and
        -- without it people_directory.phone (00478:150, `pr.phone`, which has NO
        -- COALESCE fallback) goes NULL for every teammate's client.
+       --
+       -- RF3-14 applies HERE TOO, and this leg is the one that made the fix
+       -- non-optional. is_studio_comember's FIRST branch is `p_owner =
+       -- auth.uid()` (00315), so a row a caller minted for THEMSELVES satisfies
+       -- `is_studio_comember(dc.designer_id)` through the self-branch — the
+       -- teammate leg was a second, independent route to the same legacy-row
+       -- read, and narrowing only the leg above would have left it open.
        OR EXISTS (
          SELECT 1 FROM designer_clients dc
          WHERE dc.client_id = p_profile_id
            AND public.is_studio_comember(dc.designer_id)
+           AND (
+             EXISTS (
+               SELECT 1 FROM profiles dp
+               WHERE dp.id = dc.designer_id AND dp.is_designer IS TRUE
+             )
+             OR EXISTS (
+               SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+               WHERE ur.user_id = dc.designer_id
+                 AND r.domain IN ('designer', 'admin')
+             )
+           )
        )
 
        -- the two named sides of a project, plus its lead designer and creator.
@@ -535,9 +652,21 @@ COMMENT ON FUNCTION public.can_view_profile(uuid) IS
   'proposal team, invoice, engaged lead, direct order, LIVE room-scan share, '
   'live message thread, or studio/org co-membership. SECURITY DEFINER because '
   'the predicate reads tables whose own RLS reads back through profiles. '
-  'CAVEAT 1: several of those linking rows are INSERTable by an ordinary '
-  'authenticated user, so this predicate is SELF-ASSERTABLE — it raises the cost '
-  'of reading a stranger''s profile, it does not prevent it. CAVEAT 2: admitting '
+  'BOTH ROSTER LEGS additionally require the roster row''s designer_id to hold '
+  'real designer authority — profiles.is_designer, or a user_roles grant in the '
+  'designer or admin domain (RF3-14, fix round 3 pass 3). Without it a '
+  'designer_clients row minted before this migration by an ordinary signup, '
+  'which (i-c) cannot reach, was a full PII read of the client it named; and '
+  'the teammate leg was a second route to the same read, because '
+  'is_studio_comember''s first branch is `p_owner = auth.uid()` so a '
+  'self-minted row satisfies it. '
+  'CAVEAT 1: several of the OTHER linking rows are INSERTable by an ordinary '
+  'authenticated user — projects, comms_thread_participants, '
+  'project_team_members, room_scan_associations — so this predicate is still '
+  'SELF-ASSERTABLE through them: it raises the cost of reading a stranger''s '
+  'profile, it does not prevent it. designer_clients is no longer one of them, '
+  'on either side: the mint is refused by designer_clients_writer_is_designer '
+  'and a legacy row is refused by the authority clause above. CAVEAT 2: admitting '
   'a caller exposes the WHOLE row, including email, phone and '
   'stripe_customer_id, until the PII split (DECISION DM-1 in migration 00555) '
   'lands. CAVEAT 3: it is EXECUTEable by authenticated and lives in the '
@@ -621,7 +750,9 @@ CREATE POLICY profiles_select_agent_reader ON public.profiles
 -- DELETE after this migration, and profiles_id_fkey stops a fabricated uuid),
 -- which is why this is a door matching a window rather than a live hole.
 --
--- ROLE IS DELIBERATELY NOT PINNED HERE — RULING B2 v3(a), finding RF2-07.
+-- ROLE IS NOT PINNED TO A VALUE HERE — RULING B2 v3(a), finding RF2-07 — BUT
+-- IT IS HELD TO A VOCABULARY. FABLE RULING, fix round 3 pass 3 (RF3-02).
+--
 -- Fix round 2 pinned `role IS NOT DISTINCT FROM 'homeowner'` on this policy.
 -- That was the same category error B2 v3 corrects everywhere else in the file:
 -- it treats profiles.role as though it were an authorization input, so the
@@ -634,49 +765,76 @@ CREATE POLICY profiles_select_agent_reader ON public.profiles
 -- with role = 'designer' has stamped a word on it and gained nothing. The one
 -- column that WOULD be authority is still pinned.
 --
--- Pinned to a literal rather than to a helper: there is no OLD row to read on an
--- INSERT, and no legitimate authenticated INSERT of a profiles row exists in
--- the codebase at all — every profile write outside handle_new_user() is an
--- adminClient / edge-function upsert as service_role (admin-portal
+-- What the unpinned column DID cost is a SPOOFING surface, measured in fix
+-- round 3 pass 2 (§a4, RF3-02) over HTTP against a live signup JWT whose
+-- profiles row had been removed:
+--   POST /rest/v1/profiles {"id": self, "role": "vendor"}    → 201, row lands
+--   POST /rest/v1/profiles {"id": self, "role": "admin"}     → 201, row lands
+--   POST /rest/v1/profiles {"id": self, "is_designer": true} → 403 (pin holds)
+-- `role = 'vendor'` puts the caller in the designer portal's comms vendor
+-- picker (§a4's list_vendor_profiles), and `role = 'admin'` makes
+-- comms_resolve_role (00103) print `admin` beside their name in a thread.
+-- Neither grants anything — the words are labels — but both let an account
+-- wear a title it was never given.
+--
+-- ⚠ THE RULING, taken this pass: add the VOCABULARY guard
+--   role IN ('homeowner', 'client', 'designer')
+-- and nothing more. It is a vocabulary check, not an authority check, so it
+-- does not read on B2 v3(a)'s prohibition, and it deliberately does NOT pin the
+-- column to its current value: there is no current value to read on an INSERT,
+-- and pinning to a literal is exactly the guess RF2-07 removed. All three
+-- strings are the labels the product legitimately writes — 'homeowner' and
+-- 'client' are the two halves of the client vocabulary (ruling B2 v3(e)) and
+-- 'designer' is handle_new_user's own column default, which case 6f of the test
+-- requires to keep landing. 'vendor' and 'admin' are the two the guard removes.
+-- `is_designer IS NOT TRUE` is unchanged and is still the only AUTHORITY pin
+-- on this leg.
+--
+-- It breaks nothing: no legitimate authenticated INSERT of a profiles row
+-- exists in the codebase at all — every profile write outside handle_new_user()
+-- is an adminClient / edge-function upsert as service_role (admin-portal
 -- users + applications onboard, designer-portal clients/invite,
--- designer-invite, workspace-member-invite), all BYPASSRLS.
+-- designer-invite, workspace-member-invite), all BYPASSRLS — and
+-- handle_new_user is SECURITY DEFINER, so its own 'designer' default is not
+-- subject to this policy either way.
+--
+-- The W2 role-vocabulary reconciliation (see (i-b)) is still where the split
+-- itself should die; this guard is what stops the list growing in the meantime.
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile" ON public.profiles
   FOR INSERT TO authenticated
   WITH CHECK (
     (SELECT auth.uid()) = id
     AND is_designer IS NOT TRUE
+    AND role IN ('homeowner', 'client', 'designer')
   );
 
--- The sibling INSERT policy, 00017's "Designers can create homeowner profiles",
--- for the same reason: it pins `role = 'homeowner'` and says nothing about
--- is_designer, and is_designer is the column designer authority actually reads
--- (00286/00330/00285 — see (a2)(i-a)). Postgres ORs permissive WITH CHECKs, so
--- leaving it unpinned would OR straight around the line above and let any
--- authenticated caller insert `role = 'homeowner', is_designer = true` for an
--- arbitrary id. Also re-scoped from PUBLIC to authenticated, matching the
--- UPDATE sibling below; anon no longer holds INSERT on this table at all, so
--- the re-scope is a statement of intent rather than a behaviour change.
-DROP POLICY IF EXISTS "Designers can create homeowner profiles" ON public.profiles;
-CREATE POLICY "Designers can create homeowner profiles" ON public.profiles
-  FOR INSERT TO authenticated
-  WITH CHECK (
-    (SELECT auth.uid()) IS NOT NULL
-    AND role = 'homeowner'
-    AND is_designer IS NOT TRUE
-  );
+COMMENT ON POLICY "Users can insert own profile" ON public.profiles IS
+  'A caller may insert their OWN profiles row. The window is narrow — '
+  'handle_new_user writes the row inside the auth.users insert for every '
+  'account the platform creates, so this leg is only reachable after a failed '
+  'trigger, a partial delete-account or a backfill gap — and the policy holds '
+  'two things inside it. is_designer IS NOT TRUE is the AUTHORITY pin (the '
+  'column 00286/00330/00285 and search_shareable_designers read). '
+  'role IN (''homeowner'',''client'',''designer'') is a VOCABULARY guard, added '
+  'in 00555''s third fix round (RF3-02): the column was previously unpinned, '
+  'and a caller in that window could land role = ''vendor'' (putting themselves '
+  'in the comms vendor picker) or role = ''admin'' (making comms_resolve_role '
+  'print admin beside their name). It grants nothing either way — profiles.role '
+  'is a LABEL, ruling B2 v3(a) — so this closes a SPOOFING surface, not an '
+  'escalation. The guard is a vocabulary check and NOT a pin to the current '
+  'value: there is no OLD row on an INSERT, and pinning to a literal is the '
+  'guess RF2-07 removed. Reconciling the ''homeowner''/''client'' split is a W2 '
+  'migration.';
 
-COMMENT ON POLICY "Designers can create homeowner profiles" ON public.profiles IS
-  'A designer adding a client may insert a profiles row for them. WITH CHECK '
-  'pins role = ''homeowner'' (00017, unchanged) AND is_designer IS NOT TRUE '
-  '(00555) — the label and the authority. Without the second pin this policy '
-  'ORs around the is_designer pin on "Users can insert own profile" and any '
-  'authenticated caller can mint a designer-authority row. The role literal is '
-  'kept here because it is 00017''s own contract for what a designer may '
-  'create — it is NOT an authority decision, and ruling B2 v3(a) is why the '
-  'OWN-row INSERT policy beside it stopped pinning role at all. Re-scoped to '
-  'authenticated (was PUBLIC) in 00555. The arbitrary-id half is unchanged and '
-  'is CAVEAT 1 in this file.';
+-- ⚠ THE SIBLING INSERT POLICY, 00017's "Designers can create homeowner
+-- profiles", USED TO BE RECREATED HERE. It has MOVED to (a2)(i-b2), below the
+-- helper it now calls: fix round 3 pass 3 gave it the same caller-authority
+-- predicate as its UPDATE sibling (RF3-13), that predicate calls
+-- public.current_profile_is_designer(), and Postgres resolves a policy's
+-- functions at CREATE POLICY time — so it cannot be created before (a2) defines
+-- the helper. Nothing about it is optional: the verification block at the foot
+-- of this file asserts it exists (RF3-05) and asserts every one of its pins.
 
 -- Grant hygiene, mirroring 00510: a grant no caller may use is a grant waiting
 -- for a policy mistake. REVOKE ALL PRIVILEGES rather than an enumerated list —
@@ -949,11 +1107,37 @@ COMMENT ON POLICY "Users can update own profile" ON public.profiles IS
 -- removed. The EXISTS is inline and invoker-evaluated over the caller's OWN
 -- user_roles rows, the same shape profiles_select_admin above already uses.
 --
--- This makes the legacy-row exposure a lockout rather than a capability: a
--- pre-00555 roster row owned by a non-designer stops granting the write the
--- moment this applies, with no data change and nothing to backfill. KODY-RUNBOOK
--- B7a's audit is what says whether any such owner exists on production, and it
--- is now a HARD STOP rather than a read-and-decide.
+-- ── WHAT THE LEGACY ROW STILL BUYS, STATED EXACTLY (corrected RF3-14) ──────
+--
+-- Fix round 3 pass 2 wrote "this makes the legacy-row exposure a lockout rather
+-- than a capability" here, and pass 2's own attack matrix contradicted it three
+-- lines later: the WRITE answered `200 []` and the READ answered
+-- `200 [{id, email, phone}]`. The predicate above closes one half. Say both:
+--
+--   CLOSED, WRITE  — this policy. A pre-00555 roster row owned by an account
+--                    with no designer authority no longer selects the client's
+--                    profiles row, in either clause, so it buys no rename and
+--                    no invoice-email rewrite. Test case 7m.
+--   CLOSED, READ   — can_view_profile's two roster legs, which since RF3-14
+--                    require the roster row's designer_id to hold the same two
+--                    signals. Without that the same row was still a full-row
+--                    PII read of the client it named (email, phone,
+--                    stripe_customer_id). Test case 7m3.
+--   STILL THERE    — THE ROW ITSELF. This migration deletes no data: the
+--                    designer_clients row survives, keeps satisfying every
+--                    other predicate in the schema that merely joins the table
+--                    (public.client_designer_roster, people_directory's client
+--                    branch, the 00224 storage policy), and still counts toward
+--                    a designer's client list the day its owner is granted real
+--                    authority. Removing it is a DATA job, not a policy one:
+--                    KODY-RUNBOOK B7a is the read-only audit that says whether
+--                    production carries any such row (now a HARD STOP before
+--                    B5, because the same accounts lose the mint, the write and
+--                    the read at once, and one user_roles grant restores all
+--                    three), and B7b is the accompanying one-time backfill.
+--
+-- Nothing above needs a data change to take effect, and nothing above is
+-- reversible by the row's owner.
 --
 -- What this does NOT close, stated rather than implied: a caller who really IS
 -- a designer can still roster an arbitrary homeowner (designer_clients accepts
@@ -1049,7 +1233,10 @@ COMMENT ON POLICY "Designers can update their client profiles" ON public.profile
   'this migration deliberately does not delete roster rows that already exist — '
   'so every pre-00555 row minted by a non-designer kept a profile write and, '
   'through can_view_profile''s roster leg, a PII read. The restrictive policies '
-  'on designer_clients close the MINT; this predicate closes the LEGACY ROW. '
+  'on designer_clients close the MINT; this predicate closes the legacy row''s '
+  'WRITE; can_view_profile''s matching roster-leg predicate (RF3-14) closes its '
+  'READ. The ROW ITSELF is untouched by all three and is cleaned, if production '
+  'carries any, by KODY-RUNBOOK B7a/B7b. '
   'BOTH clauses then also '
   'carry role IN (''homeowner'',''client'') AND is_designer IS NOT TRUE: the '
   'USING half reads the OLD row, so a designer, admin or vendor on a roster is '
@@ -1067,6 +1254,83 @@ COMMENT ON POLICY "Designers can update their client profiles" ON public.profile
   'reads. Without a WITH CHECK at all this policy fell back to its USING and '
   'became an OR-branch around the pins on "Users can update own profile". '
   'Re-scoped to authenticated (was PUBLIC) in 00555.';
+
+-- ─── (i-b2) the INSERT sibling of the policy above — RF3-13 ───────────────
+--
+-- 00017's "Designers can create homeowner profiles" is recreated HERE, and not
+-- up in section (a) beside "Users can insert own profile" where the rest of the
+-- profiles INSERT work lives, for one mechanical reason: the caller-authority
+-- predicate below calls public.current_profile_is_designer(), Postgres resolves
+-- a policy's functions at CREATE POLICY time, and (i-a) is where that helper is
+-- created. Section (a) carries a pointer saying so.
+
+-- The policy is restricted to callers who HOLD DESIGNER AUTHORITY, by the same
+-- two-signal predicate everything else in this file uses (ruling B2 v3(b)):
+-- profiles.is_designer, or a user_roles grant in the designer or admin domain.
+-- Never profiles.role — handle_new_user labels every email/password signup
+-- 'designer', so a role leg here would hand this policy straight back to
+-- anyone who can complete a signup form, which is the same defect RF2-01
+-- removed from designer_clients and RF3-03 removed from the UPDATE sibling.
+--
+-- Without the caller predicate this was the last INSERT route by which a
+-- self-signup could plant a profiles row at an ARBITRARY id — the id half of
+-- CAVEAT 1 — and, paired with (i-b), plant one it could then keep editing. The
+-- arbitrary-id half is still not narrowed (a designer may legitimately create a
+-- client's row before that client has an auth.users row of their own), but the
+-- population that can reach it is now real designers rather than every account
+-- on the platform.
+--
+-- And the created row is held to the CLIENT vocabulary plus the authority pin:
+--   role IN ('homeowner', 'client')   ruling B2 v3(e) — the same two strings
+--                                     the UPDATE sibling reads (i-b), because
+--                                     profiles.role carries no CHECK constraint
+--                                     and comms_resolve_role (00103) treats
+--                                     every non-admin/designer/vendor label as
+--                                     a client. 'homeowner' alone was 00017's
+--                                     literal and it is too narrow for the same
+--                                     reason RF2-06 found it too narrow there.
+--   is_designer IS NOT TRUE           a designer may create a client, never
+--                                     another designer.
+-- Also re-scoped from PUBLIC to authenticated; anon no longer holds INSERT on
+-- this table at all, so the re-scope is a statement of intent.
+DROP POLICY IF EXISTS "Designers can create homeowner profiles" ON public.profiles;
+CREATE POLICY "Designers can create homeowner profiles" ON public.profiles
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    (SELECT auth.uid()) IS NOT NULL
+    AND (
+      public.current_profile_is_designer() IS TRUE
+      OR EXISTS (
+        SELECT 1
+        FROM user_roles ur
+        JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = (SELECT auth.uid())
+          AND r.domain IN ('designer', 'admin')
+      )
+    )
+    AND role IN ('homeowner', 'client')
+    AND is_designer IS NOT TRUE
+  );
+
+COMMENT ON POLICY "Designers can create homeowner profiles" ON public.profiles IS
+  'A designer adding a client may insert a profiles row for them. The WITH '
+  'CHECK now opens with the CALLER''S OWN authority — profiles.is_designer, or '
+  'a user_roles grant in the designer or admin domain, never profiles.role '
+  '(ruling B2 v3(b), finding RF3-13). 00017 shipped this policy TO PUBLIC with '
+  '`auth.uid() IS NOT NULL AND role = ''homeowner''`, so its name said '
+  '"Designers" and its predicate said "anyone signed in": it was the last '
+  'INSERT route by which a self-signup could plant a profiles row at an '
+  'arbitrary id. It then holds the created row to the client vocabulary, '
+  'role IN (''homeowner'',''client'') (ruling B2 v3(e) — the same two strings '
+  'the UPDATE sibling reads, because comms_resolve_role treats every '
+  'non-admin/designer/vendor label as a client), AND to is_designer IS NOT TRUE '
+  '(00555): a designer may create a client, never another designer. Without '
+  'that second pin this policy ORs around the is_designer pin on "Users can '
+  'insert own profile" and any authenticated caller can mint a '
+  'designer-authority row. Re-scoped to authenticated (was PUBLIC) in 00555. '
+  'The ARBITRARY-ID half is deliberately unchanged — a designer may create a '
+  'client''s row before that client has an account — and is CAVEAT 1 in this '
+  'file; what changed is that only real designer authority can reach it.';
 
 -- ─── (i-c) the ENABLING PRIMITIVE: who may mint a designer_clients row ─────
 --
@@ -1567,10 +1831,13 @@ COMMENT ON FUNCTION public.search_shareable_designers(text) IS
 --   POST /rest/v1/profiles {"id": self, "role": "vendor"}  → 201, row lands
 --   POST /rest/v1/profiles {"id": self, "role": "admin"}   → 201, row lands
 --   POST /rest/v1/profiles {"id": self, "is_designer": true} → 403 (the pin holds)
--- So a caller in that state CAN put themselves in this directory, and can make
--- comms_resolve_role (00103) print 'admin' beside their name in a thread.
+-- So a caller in that state COULD put themselves in this directory, and could
+-- make comms_resolve_role (00103) print 'admin' beside their name in a thread.
+-- Those two measurements are what fix round 3 pass 3's vocabulary guard closes
+-- (see the ✅ block below); the paragraphs between here and it are the reasoning
+-- that led to it, kept because they are the record of how narrow the window is.
 --
--- What actually bounds it is the WINDOW, not the policy: the INSERT needs the
+-- What bounded it before that guard was the WINDOW, not the policy: the INSERT needs the
 -- caller's profiles row to be ABSENT, and handle_new_user writes that row inside
 -- the auth.users insert for every account the platform creates. The row is
 -- missing only after a failed trigger, a partially completed delete-account or a
@@ -1579,18 +1846,29 @@ COMMENT ON FUNCTION public.search_shareable_designers(text) IS
 -- label: the one-way ratchet above lets role fall to 'homeowner' and nowhere
 -- else.
 --
--- NOT FIXED HERE, deliberately, and this is the one open question in this file.
--- A vocabulary guard on the own-row INSERT — `role IN ('homeowner','designer',
--- 'client')` — would close it and is a VOCABULARY check rather than an authority
--- check, so it does not read on B2 v3(a)'s prohibition. It is not taken because
--- ruling B2 v3(a) as written says the own-row INSERT leg pins is_designer ONLY,
--- and the verification block below asserts exactly that. Reversing it is a
--- two-line change (the WITH CHECK and that ASSERT) and belongs to whoever holds
--- the ruling, not to this pass. Consequence if it stays as-is: an account in the
--- missing-row window can wear the words 'vendor' or 'admin'. It gains no
--- privilege from either — the design-request rail reads is_designer, the admin
--- read policy reads user_roles — but it is a SPOOFING surface in comms, and the
--- W2 role-vocabulary reconciliation (i-b) names is where it should die for good.
+-- ✅ FIXED IN FIX ROUND 3 PASS 3, by Fable's ruling on exactly this question.
+-- Pass 2 left it open: it recorded that a vocabulary guard on the own-row
+-- INSERT — `role IN ('homeowner','client','designer')` — would close the two
+-- 201s above, that it is a VOCABULARY check rather than an authority check and
+-- so does not read on B2 v3(a)'s prohibition, and that taking it was the
+-- ruling-holder's call rather than the pass's, because B2 v3(a) as written says
+-- that leg pins is_designer ONLY.
+--
+-- The ruling is taken. Section (a)'s "Users can insert own profile" now carries
+-- the three-string vocabulary guard beside the unchanged `is_designer IS NOT
+-- TRUE` authority pin, and the verification block asserts the vocabulary rather
+-- than asserting the absence of any role predicate. The column is still NOT
+-- pinned to a value — there is no OLD row on an INSERT and pinning to a literal
+-- is the guess RF2-07 removed — so B2 v3(a) stands as written in substance:
+-- profiles.role remains a label that grants nothing.
+--
+-- What that means for THIS function: a caller in the missing-row window can no
+-- longer put themselves in this picker at all. `role = 'vendor'` is refused by
+-- the guard on INSERT, and the one-way ratchet on "Users can update own
+-- profile" lets role fall only to 'homeowner', so UPDATE cannot reach it
+-- either. The same guard closes the `role = 'admin'` spoof in
+-- comms_resolve_role (00103). The W2 role-vocabulary reconciliation (i-b) is
+-- still where the two-string split itself should die.
 
 CREATE OR REPLACE FUNCTION public.list_vendor_profiles()
 RETURNS TABLE (
@@ -1870,12 +2148,16 @@ GRANT SELECT ON public.conversion_funnel      TO service_role;
 --   profiles "Designers can create homeowner profiles" was
 --   `WITH CHECK ((auth.uid() IS NOT NULL) AND (role = 'homeowner'))` — any
 --   authenticated user may insert a profiles row with any id, as long as the
---   role string is 'homeowner'. PARTLY handled in (a): the policy is re-scoped
---   to authenticated and now also pins `is_designer IS NOT TRUE`, because
---   without that it ORed around the pins on "Users can insert own profile" and
---   the authority column was insertable outright. The ARBITRARY-ID half is
---   untouched and stays a ruling for the same review — it is one of the
---   self-assertion routes named in CAVEAT 1.
+--   role string is 'homeowner'. Handled in (a2)(i-b2): the policy is re-scoped
+--   to authenticated, pins `is_designer IS NOT TRUE` (without which it ORed
+--   around the pins on "Users can insert own profile" and the authority column
+--   was insertable outright), holds the created row to the client vocabulary,
+--   and — since fix round 3 pass 3, RF3-13 — asks the CALLER for real designer
+--   authority. The ARBITRARY-ID half itself is deliberately untouched: a
+--   designer may legitimately create a client's row before that client has an
+--   account. What changed is the population that can reach it, from every
+--   signed-in account to designer/admin authority holders. It remains one of
+--   the self-assertion routes named in CAVEAT 1.
 
 DROP POLICY IF EXISTS "Service role full access on audience_segments"    ON public.audience_segments;
 DROP POLICY IF EXISTS "Service role full access on automated_sequences"  ON public.automated_sequences;
@@ -1884,6 +2166,135 @@ DROP POLICY IF EXISTS "Service role full access on campaigns"            ON publ
 DROP POLICY IF EXISTS "Service role full access on email_templates"      ON public.email_templates;
 DROP POLICY IF EXISTS "Service role full access on sequence_enrollments" ON public.sequence_enrollments;
 DROP POLICY IF EXISTS "Service role full access to user sessions"        ON public.user_sessions;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (f) public.user_roles and public.roles — grant hygiene on the two tables
+--     THIS FILE TREATS AS AUTHORITY (RF3-19)
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- Ruling B2 v3(b) is the spine of this migration: authority comes from
+-- public.user_roles (roles.domain IN ('designer','admin')) or
+-- profiles.is_designer, never from profiles.role. Six predicates added or
+-- rewritten above read user_roles — profiles_select_admin, both clauses of
+-- "Designers can update their client profiles", "Designers can create homeowner
+-- profiles" (i-b2), both designer_clients restrictive policies,
+-- search_shareable_designers and, since RF3-14, both of can_view_profile's
+-- roster legs.
+--
+-- Neither table has ever had a WRITE POLICY. 00021 is the only migration that
+-- creates policies on them and it creates exactly two, both SELECT:
+--   roles       "Roles readable by authenticated"  FOR SELECT TO authenticated USING (true)
+--   user_roles  "Users can view their roles"       FOR SELECT USING (user_id = auth.uid())
+-- RLS is enabled on both (00021:253, :258). So every INSERT/UPDATE/DELETE grant
+-- either role holds is a grant with no policy to use it — the same latent
+-- hazard (a2) removed from profiles and (i-c) removed from designer_clients,
+-- on the tables that decide who is a designer and who is an admin. A single
+-- future permissive write policy, or one `FORCE ROW LEVEL SECURITY` slip, turns
+-- the grant into self-promotion straight past everything above.
+--
+-- ── WHO ACTUALLY READS AND WRITES THESE TABLES, CHECKED BEFORE REVOKING ────
+--
+-- WRITES — every one is service_role or SECURITY DEFINER, and therefore
+-- BYPASSRLS or owner-privileged, and unaffected:
+--   admin-portal  /api/users, /api/users/[id]/roles, /api/roles/*,
+--                 /api/admin/applications/[type]/[id]/onboard — all adminClient
+--   designer-portal /api/clients/invite:175,181 — adminClient
+--   edge functions designer-invite:242, workspace-member-invite:209,342 — admin client
+--   SQL           handle_new_user (SECURITY DEFINER, this file),
+--                 00556's admin_create_studio_for_user:329 and
+--                 admin_add_studio_member:441 (both SECURITY DEFINER),
+--                 00126's backfill (a migration, runs as postgres)
+--
+-- READS under a session — SELECT is all any of them needs, and SELECT is kept:
+--   packages/supabase/src/hooks/use-auth.ts:84, use-permissions.ts:126,159,
+--     285,306 — browser client, all SELECT
+--   apps/mobile/Patina ProfileService.swift:99 and
+--     apps/mobile/Capture SupabaseSessionService.swift:420 — the
+--     `user_roles → roles.domain` join, both SELECT
+--   the three portal middlewares (admin:105, designer:25, client:29) build a
+--     service-role client from SUPABASE_SERVICE_ROLE_KEY, so they are not
+--     session-side at all
+--
+-- ⚠ THE ONE SESSION-SIDE WRITE IN THE REPO, listed rather than assumed away:
+--   packages/supabase/src/hooks/use-onboarding.ts:308
+--     useApproveDesignerApplication() upserts into user_roles on the BROWSER
+--     client (createBrowserClient(), use-onboarding.ts:9).
+--   It is already dead, and this REVOKE does not kill it: user_roles carries no
+--   INSERT or UPDATE policy, so RLS refuses that upsert today and the hook's
+--   `if (grantError) throw` surfaces it. The REVOKE changes the error's origin
+--   from a policy denial to a grant denial — the same 42501, the same code
+--   path. It is also NOT MOUNTED: a grep over apps/ for
+--   useApproveDesignerApplication returns only the definition and the package
+--   barrel's re-export. The correct fix when someone wires designer-application
+--   approval into a page is the admin-portal route that already does it
+--   (/api/admin/applications/[type]/[id]/onboard, adminClient) — never a write
+--   policy on user_roles.
+--
+-- ⚠⚠ AND THE VERB THAT IS **NOT** REVOKED FROM `authenticated`: UPDATE.
+--
+-- Not because anything writes these tables under a session — nothing does —
+-- but because Postgres charges a ROW-SHARE LOCK to the UPDATE privilege.
+-- 00511's public.set_project_studio_id() is a SECURITY **INVOKER** plpgsql
+-- trigger on public.projects, and its authority-lock ladder is:
+--     PERFORM role.id FROM public.roles AS role
+--      WHERE role.domain = 'designer' ORDER BY role.id FOR SHARE;
+--     PERFORM user_role.id FROM public.user_roles AS user_role
+--       JOIN public.roles AS role ON role.id = user_role.role_id
+--      WHERE user_role.user_id = NEW.designer_id ... FOR SHARE OF user_role;
+-- `SELECT … FOR SHARE` requires UPDATE privilege on the locked relation, so
+-- revoking UPDATE takes EVERY authenticated project insert or update with it.
+-- Measured, not predicted — the first cut of this section revoked all five
+-- verbs from both roles and
+--   supabase/tests/edge_api/public_sd_hardening_contract_test.sql
+-- went red on:
+--   ERROR: permission denied for table roles
+--   HINT:  GRANT UPDATE ON public.roles TO authenticated;
+--   CONTEXT: SQL statement "SELECT role.id FROM public.roles AS role … FOR SHARE"
+--            PL/pgSQL function set_project_studio_id() line 151
+--            SQL statement "INSERT INTO public.projects (…)"
+-- 00482 takes the same shape on the retained-service rail. So UPDATE is granted
+-- back to `authenticated` explicitly, with this paragraph as the reason, and it
+-- costs nothing: RLS is enabled on both tables and NEITHER carries an UPDATE
+-- POLICY, so an actual UPDATE statement is still refused — the grant satisfies
+-- a lock's permission check without opening a write. Fixing the trigger to lock
+-- as DEFINER is the right end state and is not this migration's job.
+--
+-- anon does NOT keep UPDATE, and that asymmetry is deliberate and safe: anon
+-- cannot reach set_project_studio_id at all, and this very migration already
+-- proves it — the same function takes `FOR SHARE` on public.designer_clients
+-- (00511:264), and §(i-c) above leaves anon holding SELECT and nothing else on
+-- that table. If an anon caller could fire this trigger, the designer_clients
+-- revoke would already have broken it.
+--
+-- SELECT IS DELIBERATELY KEPT FOR BOTH ROLES, INCLUDING anon, and for the same
+-- reason the designer_clients block spells out at length: Postgres checks the
+-- ACL of every table named in a relation's policy set at executor init, BEFORE
+-- filtering those policies by role. Dozens of tables carry an admin policy that
+-- joins user_roles ⨝ roles, so revoking anon's SELECT here would 42501 anon
+-- reads of tables that have nothing to do with roles. RLS keeps anon at zero
+-- rows anyway — `roles`' only policy is TO authenticated and user_roles' is
+-- `user_id = auth.uid()`, which is NULL for anon — so the grant satisfies a
+-- permission check without opening a read.
+--
+-- TRIGGER and MAINTAIN are left alone, as on profiles and designer_clients:
+-- not reachable through PostgREST, and clearing them would be a change this
+-- migration cannot test. 00290's fc_sync_is_designer_from_role trigger fires on
+-- user_roles and is unaffected either way — Postgres checks no privilege when
+-- firing a trigger.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.user_roles FROM anon;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.roles      FROM anon;
+REVOKE INSERT,         DELETE, TRUNCATE, REFERENCES ON public.user_roles FROM authenticated;
+REVOKE INSERT,         DELETE, TRUNCATE, REFERENCES ON public.roles      FROM authenticated;
+
+-- Explicit, for the same post-flip reason the vendors and designer_clients
+-- blocks state: on a fresh local stack nothing grants these during the
+-- migration replay, and the verification block below asserts them. The UPDATE
+-- pair is the `FOR SHARE` lock 00511's set_project_studio_id() needs, NOT a
+-- write path — both tables have RLS on and neither carries an UPDATE policy.
+GRANT SELECT ON public.user_roles TO anon, authenticated;
+GRANT SELECT ON public.roles      TO anon, authenticated;
+GRANT UPDATE ON public.user_roles TO authenticated;
+GRANT UPDATE ON public.roles      TO authenticated;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Verification — fails the transaction rather than shipping a half-applied fix
@@ -1930,30 +2341,48 @@ BEGIN
       AND p.polcmd = 'a' AND p.polpermissive
       AND NOT (pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer IS NOT TRUE%')
   ), 'a permissive INSERT policy on profiles does not pin is_designer — a homeowner can insert themselves designer authority';
-  -- There is deliberately NO companion assertion that the INSERT legs pin role.
-  -- Fix round 2 had one; RULING B2 v3(a) removed the pin it guarded (RF2-07),
-  -- because profiles.role is a label and pinning it on INSERT only forced the
-  -- policy to guess which label a row was entitled to. 00017's "Designers can
-  -- create homeowner profiles" still carries its own role literal — that is
-  -- 00017's contract, not an authority check — and the guard below proves the
-  -- own-row policy did NOT quietly keep one.
-  --
   -- RF3-06: stated as EXISTS + NOT EXISTS rather than as a scalar subquery.
-  -- Written as `ASSERT (SELECT … NOT ILIKE '%role%' FROM pg_policy WHERE …)`,
-  -- a DROPPED policy makes the subquery return NULL, ASSERT NULL fails, and the
-  -- operator is told the policy "still pins role" — about a policy that is not
-  -- there. The two failures are different repairs and now report separately.
+  -- Written as `ASSERT (SELECT … <predicate> FROM pg_policy WHERE …)`, a
+  -- DROPPED policy makes the subquery return NULL, ASSERT NULL fails, and the
+  -- operator is told the policy is misshapen — about a policy that is not
+  -- there. The two failures are different repairs and report separately.
   ASSERT EXISTS (
     SELECT 1 FROM pg_policy p
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Users can insert own profile'
   ), '"Users can insert own profile" is missing — the own-row INSERT path is gone';
-  ASSERT NOT EXISTS (
-    SELECT 1 FROM pg_policy p
+  -- RF3-02, fix round 3 pass 3. Fix round 2 asserted the own-row leg PINNED
+  -- role; pass 2 asserted it mentioned role NOWHERE (ruling B2 v3(a), RF2-07);
+  -- this pass asserts the third and correct shape — a VOCABULARY guard that
+  -- does not pin the column to a value.
+  --
+  -- The three literals are what the product legitimately writes: 'homeowner'
+  -- and 'client' are the two halves of the client vocabulary (B2 v3(e)) and
+  -- 'designer' is handle_new_user's own column default. 'vendor' and 'admin'
+  -- are what the guard removes, and are asserted ABSENT because they are the
+  -- two labels pass 2 measured a caller landing (201/201) in the missing-row
+  -- window — 'vendor' lists the caller in list_vendor_profiles' picker,
+  -- 'admin' makes comms_resolve_role print admin beside their name.
+  --
+  -- current_profile_role is asserted ABSENT: a pin to the CURRENT value would
+  -- be the guess RF2-07 removed, and there is no OLD row on an INSERT to read.
+  --
+  -- The two NEGATIVE patterns carry `::text` and that is load-bearing. The
+  -- SIBLING policy's caller-authority EXISTS deparses as
+  -- `r.domain = ANY (ARRAY['designer'::role_domain, 'admin'::role_domain])`,
+  -- so a bare '%''admin''%' matches a perfectly correct policy. profiles.role
+  -- is text, so its vocabulary literals always render as 'x'::text.
+  ASSERT (
+    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''homeowner''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''client''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''designer''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) NOT ILIKE '%''vendor''::text%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) NOT ILIKE '%''admin''::text%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) NOT ILIKE '%current_profile_role%'
+    FROM pg_policy p
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Users can insert own profile'
-      AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%role%'
-  ), '"Users can insert own profile" still pins role — ruling B2 v3(a) says the own-row INSERT leg pins is_designer only';
+  ), '"Users can insert own profile" does not carry the RF3-02 vocabulary guard — role must be held to (''homeowner'',''client'',''designer''), never to ''vendor''/''admin'', and never pinned to the caller''s current value';
   -- RF3-05: and the SIBLING INSERT policy exists at all. The is_designer guard
   -- above is a NOT EXISTS over the permissive INSERT set, so dropping this
   -- policy makes that guard pass VACUOUSLY — it was the one tamper of 27 the
@@ -1964,6 +2393,30 @@ BEGIN
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Designers can create homeowner profiles'
   ), '"Designers can create homeowner profiles" is missing — the Add Client insert path is gone, and the is_designer INSERT guard above now passes vacuously';
+  -- RF3-13: and it asks who the CALLER is. 00017 shipped it TO PUBLIC with
+  -- `auth.uid() IS NOT NULL AND role = 'homeowner'`, which named designers and
+  -- admitted everybody — the last INSERT route by which a self-signup could
+  -- plant a profiles row at an arbitrary id. Same two-signal predicate as the
+  -- UPDATE sibling and the designer_clients restrictive policies, and the same
+  -- prohibition: never profiles.role.
+  ASSERT (
+    SELECT COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '') ILIKE '%current_profile_is_designer%'
+       AND COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '') ILIKE '%user_roles%'
+       AND COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '') NOT ILIKE '%current_profile_role%'
+    FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Designers can create homeowner profiles'
+  ), '"Designers can create homeowner profiles" does not check the CALLER''s own designer authority (RF3-13) — any signed-in account can plant a profiles row at an arbitrary id';
+  -- and the created row is held to the client vocabulary (B2 v3(e)) — both
+  -- strings, quoted, for the reason the UPDATE sibling's guard states.
+  ASSERT (
+    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''homeowner''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''client''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer IS NOT TRUE%'
+    FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Designers can create homeowner profiles'
+  ), '"Designers can create homeowner profiles" does not hold the created row to role IN (''homeowner'',''client'') AND is_designer IS NOT TRUE (RF3-13)';
 
   -- anon keeps nothing on profiles or notification_preferences
   ASSERT NOT has_table_privilege('anon', 'public.profiles'::regclass, 'SELECT'),
@@ -1997,15 +2450,30 @@ BEGIN
   ASSERT NOT has_table_privilege('anon', 'public.designer_clients'::regclass, 'MAINTAIN'),
     'anon still holds MAINTAIN on designer_clients';
   -- RF3-01: and SELECT is the ONLY thing anon keeps. The assertions above name
-  -- the write verbs one at a time; this one fails on a verb nobody thought to
-  -- list, so the probe in KODY-RUNBOOK B7 / 00555_probes.md §9f-ib can say
-  -- "want 1" without that 1 being able to hide a returned write grant.
+  -- the write verbs one at a time; this one is the catch-all behind them, so
+  -- the probe in KODY-RUNBOOK B7 / 00555_probes.md §9f-ib can ask for the
+  -- privilege SET rather than a count.
+  --
+  -- ⚠ CORRECTED IN FIX ROUND 3 PASS 3 (RF3-18). Pass 2 wrote this against
+  -- information_schema.table_privileges and claimed it "fails on a verb nobody
+  -- thought to list". It did not. information_schema is defined by the SQL
+  -- standard and enumerates only the standard verbs; PG 17's MAINTAIN is not
+  -- one of them, so the single verb this migration REVOKEs by name on three
+  -- other tables — the one the grant-hygiene comment in (a) calls out as what
+  -- an enumerated REVOKE silently leaves behind — was the one verb this
+  -- "exact set" check could not see. A returned MAINTAIN grant would have read
+  -- as exactly 'SELECT' and passed.
+  --
+  -- pg_class.relacl through aclexplode() is Postgres' own representation and
+  -- carries every privilege type the server knows, MAINTAIN included. The
+  -- separate `NOT has_table_privilege(… 'MAINTAIN')` assertion above stays;
+  -- this one now actually backs it up.
   ASSERT (
-    SELECT string_agg(privilege_type, ',' ORDER BY privilege_type)
-    FROM information_schema.table_privileges
-    WHERE table_schema = 'public' AND table_name = 'designer_clients'
-      AND grantee = 'anon'
-  ) = 'SELECT', 'anon holds something other than exactly SELECT on designer_clients';
+    SELECT COALESCE(string_agg(DISTINCT a.privilege_type, ',' ORDER BY a.privilege_type), '<none>')
+    FROM pg_class c, aclexplode(c.relacl) a
+    WHERE c.oid = 'public.designer_clients'::regclass
+      AND a.grantee = 'anon'::regrole::oid
+  ) = 'SELECT', 'anon holds something other than exactly SELECT on designer_clients (read from pg_class.relacl, so MAINTAIN counts)';
 
   -- authenticated keeps what the portals and apps need, and loses what it never used
   ASSERT has_table_privilege('authenticated', 'public.profiles'::regclass, 'SELECT'),
@@ -2064,6 +2532,23 @@ BEGIN
     'anon can still read designer_funnel';
   ASSERT NOT has_table_privilege('anon', 'public.conversion_funnel'::regclass, 'SELECT'),
     'anon can still read conversion_funnel';
+  -- RF3-17: and to the SIGNED-IN key. The four REVOKEs in §(d) name
+  -- `PUBLIC, anon, authenticated`, but only anon was asserted — so a future
+  -- edit that dropped `authenticated` from those lines would have passed the
+  -- whole verification block while leaving every signed-in user reading
+  -- user_engagement_scores (id, email, role) through a view that bypasses
+  -- profiles RLS by construction. That is the one of the four this file calls
+  -- the blocker, and it is a second door onto exactly the email list §(a)
+  -- closes. The nine browser-client call sites that 42501 as a result are
+  -- READERS §4, none of them mounted.
+  ASSERT NOT has_table_privilege('authenticated', 'public.user_engagement_scores'::regclass, 'SELECT'),
+    'authenticated can still read user_engagement_scores (id, email, role) — the definer view bypasses profiles RLS, so §(a) is decorative for any signed-in caller';
+  ASSERT NOT has_table_privilege('authenticated', 'public.consumer_funnel'::regclass, 'SELECT'),
+    'authenticated can still read consumer_funnel';
+  ASSERT NOT has_table_privilege('authenticated', 'public.designer_funnel'::regclass, 'SELECT'),
+    'authenticated can still read designer_funnel';
+  ASSERT NOT has_table_privilege('authenticated', 'public.conversion_funnel'::regclass, 'SELECT'),
+    'authenticated can still read conversion_funnel';
   ASSERT has_table_privilege('service_role', 'public.user_engagement_scores'::regclass, 'SELECT'),
     'service_role lost user_engagement_scores — the admin analytics route breaks';
 
@@ -2084,6 +2569,27 @@ BEGIN
     'anon can execute can_view_profile';
   ASSERT has_function_privilege('authenticated', 'public.can_view_profile(uuid)', 'EXECUTE'),
     'authenticated cannot execute can_view_profile';
+
+  -- RF3-14: BOTH of can_view_profile's roster legs require the roster row's
+  -- designer_id to hold real designer authority. Without it a designer_clients
+  -- row minted before this migration — which (i-c)'s restrictive policies
+  -- cannot reach — was a full-row PII read of the client it named, and the
+  -- teammate leg was a second route to the same read because
+  -- is_studio_comember's first branch is `p_owner = auth.uid()`.
+  --
+  -- The guard reads the FUNCTION BODY, and it names the aliases rather than the
+  -- column: `is_designer` appears in this file inside
+  -- current_profile_is_designer's own name, and `user_roles` appears in several
+  -- policies, so a word-level match would pass on a body that had dropped the
+  -- clause. `dp.is_designer` and `ur.user_id = dc.designer_id` exist only here.
+  -- Two occurrences of each are required — one leg is not both legs.
+  ASSERT (
+    SELECT (length(p.prosrc) - length(replace(p.prosrc, 'dp.is_designer IS TRUE', ''))) / length('dp.is_designer IS TRUE') = 2
+       AND (length(p.prosrc) - length(replace(p.prosrc, 'ur.user_id = dc.designer_id', ''))) / length('ur.user_id = dc.designer_id') = 2
+       AND p.prosrc NOT ILIKE '%current_profile_role%'
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'can_view_profile'
+  ), 'can_view_profile does not require BOTH roster legs'' designer_id to hold designer authority (RF3-14) — a pre-00555 self-minted roster row is still a PII read of the client it names';
 
   -- role self-elevation is closed, and the server default is in place
   ASSERT (
@@ -2293,6 +2799,115 @@ BEGIN
     WHERE n.nspname='public' AND p.proname='search_shareable_designers'
       AND p.prosrc ILIKE '%email%'
   ), 'search_shareable_designers references email';
+
+  -- (f) RF3-19: the two authority tables keep SELECT for both roles and hold no
+  -- write verb for either. Neither has ever carried a write POLICY (00021 makes
+  -- exactly two policies on them, both SELECT), so every write grant was a
+  -- grant with no caller — on the tables ruling B2 v3(b) makes the source of
+  -- all authority in this file.
+  ASSERT has_table_privilege('anon', 'public.user_roles'::regclass, 'SELECT'),
+    'anon lost SELECT on user_roles — Postgres checks the ACL of every table named in a policy set at executor init, so dozens of unrelated anon reads now 42501';
+  ASSERT has_table_privilege('anon', 'public.roles'::regclass, 'SELECT'),
+    'anon lost SELECT on roles — same executor-init ACL check as user_roles';
+  ASSERT has_table_privilege('authenticated', 'public.user_roles'::regclass, 'SELECT'),
+    'authenticated lost SELECT on user_roles — every role resolution in both portals and both iOS apps breaks';
+  ASSERT has_table_privilege('authenticated', 'public.roles'::regclass, 'SELECT'),
+    'authenticated lost SELECT on roles — the user_roles ⨝ roles.domain join breaks';
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM unnest(ARRAY['public.user_roles', 'public.roles']) AS t(rel),
+         unnest(ARRAY['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES']) AS v(verb)
+    WHERE has_table_privilege('anon', t.rel::regclass, v.verb)
+  ), 'anon still holds a write verb on user_roles or roles — neither table has a write POLICY, so the grant has no caller and one future permissive policy turns it into self-promotion';
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM unnest(ARRAY['public.user_roles', 'public.roles']) AS t(rel),
+         unnest(ARRAY['INSERT', 'DELETE', 'TRUNCATE', 'REFERENCES']) AS v(verb)
+    WHERE has_table_privilege('authenticated', t.rel::regclass, v.verb)
+  ), 'authenticated still holds INSERT, DELETE, TRUNCATE or REFERENCES on user_roles or roles';
+  -- UPDATE is the one verb `authenticated` keeps, and it is asserted PRESENT
+  -- rather than absent: `SELECT … FOR SHARE` is charged to the UPDATE
+  -- privilege, and 00511's SECURITY INVOKER trigger set_project_studio_id()
+  -- row-share-locks both tables on every authenticated project write. Revoking
+  -- it takes every project insert with it — measured, see the block above.
+  ASSERT has_table_privilege('authenticated', 'public.user_roles'::regclass, 'UPDATE'),
+    'authenticated lost UPDATE on user_roles — set_project_studio_id() FOR SHARE locks it, so every authenticated project insert now 42501s';
+  ASSERT has_table_privilege('authenticated', 'public.roles'::regclass, 'UPDATE'),
+    'authenticated lost UPDATE on roles — set_project_studio_id() FOR SHARE locks it, so every authenticated project insert now 42501s';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Verification, part 2 — BEHAVIOUR, not shape (RF3-20)
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- Everything above reads pg_policy, pg_proc and the ACLs: it proves the objects
+-- have the shape this file intends. It cannot prove any of them RUNS. A helper
+-- that compiles, is SECURITY DEFINER, pins its search_path and holds the right
+-- grants can still return the wrong answer — and four policies now depend on
+-- three of these helpers, so a helper that errors takes the table with it.
+--
+-- The five checks below call each helper once, under a fabricated auth.uid()
+-- set with `set_config(…, is_local => true)`. is_local means the setting dies
+-- with this transaction (at the COMMIT below), so nothing leaks into the
+-- session that ran the migration; the block resets it explicitly anyway.
+--
+-- Every assertion here is DATA-INDEPENDENT — it holds on an empty database, on
+-- a fresh local stack and on production — because a migration's verification
+-- block must not depend on rows it did not create. The behaviour that DOES
+-- depend on fixtures (which counterparty legs admit whom, what the ratchet
+-- refuses, what the pickers return) is the test suite's job:
+-- supabase/tests/rls/00555_ios_round_one_security.test.sql, run through
+-- scripts/run-sql-tests.sh, which is the local gate.
+DO $$
+DECLARE
+  -- Two uuids that cannot exist: v4-shaped, in the 00555-probe band, and never
+  -- inserted anywhere. Every EXISTS leg in can_view_profile is keyed on real
+  -- ids, so both answers below are structural rather than lucky.
+  v_probe uuid := '00000000-0000-4000-8000-0000005550a1';
+  v_other uuid := '00000000-0000-4000-8000-0000005550a2';
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+                     json_build_object('sub', v_probe::text, 'role', 'authenticated')::text,
+                     true);
+
+  -- current_profile_role / current_profile_is_designer: a caller with NO
+  -- profiles row reads NULL, not false and not an error. This is the case the
+  -- ratchet on "Users can update own profile" meets in the missing-row window
+  -- §a4 describes, and `IS NOT DISTINCT FROM` is what makes NULL safe there —
+  -- an `IN (…)` spelling would refuse the owner's own write. §a2(i-a) says so
+  -- in prose; this is the check.
+  ASSERT public.current_profile_role() IS NULL,
+    'current_profile_role() did not return NULL for a caller with no profiles row';
+  ASSERT public.current_profile_is_designer() IS NULL,
+    'current_profile_is_designer() did not return NULL for a caller with no profiles row';
+
+  -- can_view_profile: the self leg admits, and a stranger with no relationship
+  -- of any kind does not. FALSE and not NULL — a NULL here would make
+  -- profiles_select_counterparty deny silently for reasons no one could read.
+  ASSERT public.can_view_profile(v_probe) IS TRUE,
+    'can_view_profile() refused the caller their OWN row — profiles_select_counterparty is broken';
+  ASSERT public.can_view_profile(v_other) IS FALSE,
+    'can_view_profile() did not return FALSE for a stranger with no relationship';
+
+  -- search_shareable_designers: the two-character floor holds against a
+  -- WILDCARD query. '%' is one character after the escape, so the floor refuses
+  -- it; without the escape it would be a pattern matching every designer on the
+  -- platform, which is the enumeration the floor exists to prevent.
+  ASSERT (SELECT count(*) FROM public.search_shareable_designers('%')) = 0,
+    'search_shareable_designers() returned rows for the single-character wildcard query ''%'' — the LIKE escape or the two-character floor is not working';
+
+  -- and both directories refuse an unauthenticated caller outright, which is
+  -- the `auth.uid() IS NOT NULL` line in each body rather than the EXECUTE
+  -- grant (anon cannot reach them at all; this proves the in-body guard).
+  PERFORM set_config('request.jwt.claims', '', true);
+  ASSERT (SELECT count(*) FROM public.list_vendor_profiles()) = 0,
+    'list_vendor_profiles() returned rows with no auth.uid() — its in-body authentication guard is not working';
+  ASSERT (SELECT count(*) FROM public.search_shareable_designers('leah')) = 0,
+    'search_shareable_designers() returned rows with no auth.uid() — its in-body authentication guard is not working';
+  ASSERT public.can_view_profile(v_probe) IS FALSE,
+    'can_view_profile() admitted a caller with no auth.uid()';
+
+  PERFORM set_config('request.jwt.claims', '', true);
 END $$;
 
 COMMIT;

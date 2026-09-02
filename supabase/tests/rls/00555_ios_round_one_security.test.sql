@@ -43,9 +43,15 @@
 --      not (5c-5d), and products JOIN vendors resolves (5e), which is the
 --      column-grant design's whole reason for existing.
 --   6. profiles INSERT — the anon leg is gone; a user may still insert own row;
---      no permissive INSERT policy will accept is_designer=true (6e); and the
---      own-row leg no longer pins role at all (6f, ruling B2 v3(a)/RF2-07),
---      because role is a label and pinning it made the policy guess.
+--      no permissive INSERT policy will accept is_designer=true (6e); the
+--      own-row leg no longer pins role to a VALUE (6f, ruling B2 v3(a)/RF2-07),
+--      because role is a label and pinning it made the policy guess; but it IS
+--      held to a VOCABULARY (6f3-6f5, RF3-02) — 'vendor' and 'admin' refused,
+--      'client' and the 'designer' default accepted. 6g is the sibling policy
+--      "Designers can create homeowner profiles" (RF3-13): a self-signup
+--      carrying the LABEL 'designer' cannot plant a profiles row at somebody
+--      else's id, a real designer still can (the Add Client insert path), and
+--      what a designer creates is a client, never another designer.
 --   7. self-elevation — the owner may edit their row, may NOT raise their role
 --      (7c/7e) or their is_designer (7f/7f2) on either permissive UPDATE
 --      policy, and MAY perform the one-way self-DOWNGRADE ruling B2 v3(c)
@@ -64,8 +70,10 @@
 --      rather than 'homeowner' (ruling B2 v3(e)). 7m is the LEGACY row the
 --      restrictive policies cannot reach — planted out of band, the way a
 --      pre-00555 row exists — and it must no longer buy its non-designer holder
---      a rename (7m1) or an invoice-email rewrite (7m2). (profile_cards was CUT
---      from 00555; 7a asserts it is absent.)
+--      a rename (7m1), an invoice-email rewrite (7m2), or — RF3-14, added in
+--      fix round 3 pass 3 — the counterparty READ of the profile it names
+--      (7m3/7m3b), while a REAL designer keeps that read (7m4).
+--      (profile_cards was CUT from 00555; 7a asserts it is absent.)
 --   8. search_shareable_designers — finds by name, never returns email,
 --      enforces the 2-char floor including against a WILDCARD query (8h),
 --      and the LIMIT, closed to anon.
@@ -80,7 +88,16 @@
 --      no TRUNCATE/REFERENCES on profiles (RF2-09) or on designer_clients
 --      (RF3-07), handle_new_user is not EXECUTEable by PUBLIC, anon or
 --      authenticated (RF2-10 / RF3-11), and all five helpers pin
---      `search_path=public, pg_temp` (RF2-11).
+--      `search_path=public, pg_temp` (RF2-11). Fix round 3 pass 3 adds: the
+--      exact-privilege-set check reads pg_class.relacl through aclexplode()
+--      rather than information_schema, which cannot see PG 17's MAINTAIN
+--      (RF3-18); the four definer views are closed to `authenticated` too and
+--      not only to anon (RF3-17); public.roles and public.user_roles keep
+--      SELECT for both roles, hold no write verb for anon, and keep only
+--      UPDATE for authenticated — the verb `SELECT … FOR SHARE` is charged to,
+--      which 00511's SECURITY INVOKER set_project_studio_id() needs on every
+--      authenticated project write (RF3-19); and the three new policy/function
+--      shapes are asserted (RF3-02, RF3-13, RF3-14).
 --  11. handle_new_user's default role — ruling B2 v3(a): UNCHANGED from 00313.
 --      Every signup with no honored 'homeowner' hint lands 'designer',
 --      whatever provider it came in on.
@@ -652,6 +669,15 @@ BEGIN
   ASSERT n = 0, 'FAIL 6c: a forged profile row exists';
 
   -- 6d: an authenticated user still cannot insert someone else's row.
+  --
+  -- Mal is a homeowner with is_designer false and no designer/admin grant. Two
+  -- policies could have admitted this: "Users can insert own profile" refuses
+  -- it because the id is not his, and "Designers can create homeowner profiles"
+  -- refuses it because of RF3-13's caller-authority predicate. Before that
+  -- predicate landed the second policy said only `auth.uid() IS NOT NULL AND
+  -- role = 'homeowner'`, and this case passed for the accidental reason that
+  -- the role string here is 'client' rather than 'homeowner'. It now passes for
+  -- the reason it names. 6g is the case that proves the predicate directly.
   PERFORM pg_temp.assume_user('a0000000-0000-4000-8000-000000000003');
   BEGIN
     INSERT INTO public.profiles (id, email, role)
@@ -676,6 +702,8 @@ BEGIN
   -- (RF2-07), because profiles.role is a label and pinning it forced the policy
   -- to guess which label a row was entitled to. 6f now asserts the own-row
   -- INSERT lands with the column DEFAULT intact and the write is NOT refused.
+  -- 6f3 is its other half, added in fix round 3 pass 3 (RF3-02): the column is
+  -- unpinned but held to a VOCABULARY, so 'vendor' and 'admin' are refused.
   --
   -- Both permissive INSERT policies matter: Postgres ORs the WITH CHECKs, so
   -- "Designers can create homeowner profiles" (00017) unpinned would OR around
@@ -714,13 +742,15 @@ BEGIN
     'FAIL 6e: an authenticated user inserted a profiles row carrying is_designer = true — '
     'designer authority is mintable through the INSERT leg';
 
-  -- 6f: the own-row INSERT leg does NOT pin role (ruling B2 v3(a), RF2-07).
-  --     The caller inserts THEIR OWN row with role omitted; the column DEFAULT
-  --     'designer' applies and the write must LAND. Fix round 2's pin would
-  --     have refused this, which is the regression this case guards: a user
-  --     whose profiles row was lost could not re-create it, and every honest
-  --     label the product uses ('designer', 'vendor', 'client') was
-  --     unreachable through a policy that only ever admitted 'homeowner'.
+  -- 6f: the own-row INSERT leg does NOT pin role to a VALUE (ruling B2 v3(a),
+  --     RF2-07). The caller inserts THEIR OWN row with role omitted; the column
+  --     DEFAULT 'designer' applies and the write must LAND. Fix round 2's pin
+  --     would have refused this, which is the regression this case guards: a
+  --     user whose profiles row was lost could not re-create it, and the honest
+  --     labels the product uses ('designer', 'client') were unreachable through
+  --     a policy that only ever admitted 'homeowner'. The vocabulary guard
+  --     RF3-02 added carries 'designer', so this case is unaffected by it —
+  --     which is half the reason the guard lists three strings and not two.
   PERFORM pg_temp.assume_user('76767676-7676-4676-8676-767676767676');
   INSERT INTO public.profiles (id, email)
   VALUES ('76767676-7676-4676-8676-767676767676', 'p555-default@test.invalid');
@@ -747,6 +777,165 @@ BEGIN
    WHERE id = '76767676-7676-4676-8676-767676767676';
   ASSERT n = 0,
     'FAIL 6f2: a caller inserted their OWN profiles row carrying is_designer = true';
+
+  -- 6f3: the VOCABULARY guard — RF3-02, fix round 3 pass 3.
+  --
+  -- The column is unpinned, not unguarded. Fix round 3 pass 2 measured, over
+  -- HTTP against a live signup JWT whose profiles row had been removed:
+  --   POST /rest/v1/profiles {"id": self, "role": "vendor"} → 201, row lands
+  --   POST /rest/v1/profiles {"id": self, "role": "admin"}  → 201, row lands
+  -- 'vendor' puts the caller in the designer portal's comms vendor picker
+  -- (list_vendor_profiles selects `role = 'vendor'`, and section 8b is the
+  -- proof that it does); 'admin' makes comms_resolve_role (00103) print `admin`
+  -- beside their name in every thread. Neither grants a privilege — role is a
+  -- label — so this is spoofing, and the guard is what ends it.
+  --
+  -- Same window as 6f: a live auth.users row whose profiles row is absent.
+  -- Both attempts must be refused and the row must still not exist afterwards.
+  PERFORM pg_temp.assume_user('76767676-7676-4676-8676-767676767676');
+  BEGIN
+    INSERT INTO public.profiles (id, email, role)
+    VALUES ('76767676-7676-4676-8676-767676767676', 'p555-default@test.invalid', 'vendor');
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT COUNT(*) INTO n FROM public.profiles
+   WHERE id = '76767676-7676-4676-8676-767676767676';
+  ASSERT n = 0,
+    'FAIL 6f3: a caller inserted their own profiles row labelled ''vendor'' — the RF3-02 '
+    'vocabulary guard is missing, and that row is now in the comms vendor picker';
+
+  PERFORM pg_temp.assume_user('76767676-7676-4676-8676-767676767676');
+  BEGIN
+    INSERT INTO public.profiles (id, email, role)
+    VALUES ('76767676-7676-4676-8676-767676767676', 'p555-default@test.invalid', 'admin');
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT COUNT(*) INTO n FROM public.profiles
+   WHERE id = '76767676-7676-4676-8676-767676767676';
+  ASSERT n = 0,
+    'FAIL 6f4: a caller inserted their own profiles row labelled ''admin'' — comms_resolve_role '
+    'will print admin beside their name';
+
+  -- 6f5: and the vocabulary still admits the two client strings, so the guard
+  --      is a guard and not a freeze. 'client' is the half of the vocabulary
+  --      ruling B2 v3(e) exists for; without it a caller in this window could
+  --      not write the label the comms rail already treats as the default.
+  PERFORM pg_temp.assume_user('76767676-7676-4676-8676-767676767676');
+  INSERT INTO public.profiles (id, email, role)
+  VALUES ('76767676-7676-4676-8676-767676767676', 'p555-default@test.invalid', 'client');
+  PERFORM pg_temp.reset_role();
+
+  SELECT role INTO role_after FROM public.profiles
+   WHERE id = '76767676-7676-4676-8676-767676767676';
+  ASSERT role_after = 'client',
+    'FAIL 6f5: the vocabulary guard refused ''client'', which is half the client vocabulary '
+    '(ruling B2 v3(e)) — got ' || COALESCE(role_after, '<null>');
+
+  DELETE FROM public.profiles WHERE id = '76767676-7676-4676-8676-767676767676';
+END $$;
+
+-- ─── 6g. "Designers can create homeowner profiles" — RF3-13 ────────────────
+--
+-- 00017 shipped this policy `TO PUBLIC WITH CHECK ((auth.uid() IS NOT NULL)
+-- AND (role = 'homeowner'))`. Its NAME says designers; its PREDICATE said
+-- anyone signed in. It accepts an ARBITRARY id, so it was the last INSERT route
+-- by which a self-signup could plant a profiles row for somebody else — and,
+-- paired with the sibling UPDATE policy, keep editing it.
+--
+-- 6d already fails for a non-designer, but only because the role string there
+-- is 'client'; before this pass 'homeowner' would have sailed through. These
+-- two cases test the predicate itself: Sig (the email/password self-signup —
+-- label 'designer', is_designer FALSE, no designer/admin grant) must be
+-- refused, and Dana (is_designer TRUE) must still be able to do the thing the
+-- designer portal's Add Client flow does.
+DO $$
+DECLARE
+  n INTEGER;
+BEGIN
+  -- Two live auth.users rows with no profiles row — the shape a designer's Add
+  -- Client insert actually targets is an id with no row yet, and a fabricated
+  -- uuid would be rejected by profiles_id_fkey before any policy ran.
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role)
+  VALUES
+    ('6c000000-0000-4000-8000-0000000000c1', 'p555-newclient-a@test.invalid', '', NOW(), NOW(), NOW(),
+     '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+    ('6c000000-0000-4000-8000-0000000000c2', 'p555-newclient-b@test.invalid', '', NOW(), NOW(), NOW(),
+     '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated')
+  ON CONFLICT (id) DO NOTHING;
+  DELETE FROM public.profiles
+   WHERE id IN ('6c000000-0000-4000-8000-0000000000c1',
+                '6c000000-0000-4000-8000-0000000000c2');
+
+  -- 6g1: the self-signup cannot plant one.
+  PERFORM pg_temp.assume_user('51000000-0000-4000-8000-000000000008');
+  BEGIN
+    INSERT INTO public.profiles (id, email, role)
+    VALUES ('6c000000-0000-4000-8000-0000000000c1', 'p555-newclient-a@test.invalid', 'homeowner');
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT COUNT(*) INTO n FROM public.profiles
+   WHERE id = '6c000000-0000-4000-8000-0000000000c1';
+  ASSERT n = 0,
+    'FAIL 6g1: an email/password self-signup carrying the LABEL ''designer'' inserted a '
+    'homeowner profiles row at somebody else''s id — "Designers can create homeowner '
+    'profiles" is not checking the caller''s own authority (RF3-13)';
+
+  -- 6g2: a REAL designer still can. This is the Add Client insert path; if it
+  --      breaks, the designer portal cannot create a client.
+  PERFORM pg_temp.assume_user('d0000000-0000-4000-8000-000000000001');
+  INSERT INTO public.profiles (id, email, role)
+  VALUES ('6c000000-0000-4000-8000-0000000000c2', 'p555-newclient-b@test.invalid', 'homeowner');
+  PERFORM pg_temp.reset_role();
+
+  SELECT COUNT(*) INTO n FROM public.profiles
+   WHERE id = '6c000000-0000-4000-8000-0000000000c2';
+  ASSERT n = 1,
+    'FAIL 6g2: a real designer could not create a client profile — the RF3-13 predicate is '
+    'too tight and the Add Client flow is broken';
+
+  -- 6g3: and the created row is held to the client vocabulary + the authority
+  --      pin. A designer may create a client, never another designer.
+  DELETE FROM public.profiles WHERE id = '6c000000-0000-4000-8000-0000000000c2';
+  PERFORM pg_temp.assume_user('d0000000-0000-4000-8000-000000000001');
+  BEGIN
+    INSERT INTO public.profiles (id, email, role, is_designer)
+    VALUES ('6c000000-0000-4000-8000-0000000000c2', 'p555-newclient-b@test.invalid',
+            'homeowner', TRUE);
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT COUNT(*) INTO n FROM public.profiles
+   WHERE id = '6c000000-0000-4000-8000-0000000000c2';
+  ASSERT n = 0,
+    'FAIL 6g3: a designer created a row carrying is_designer = true';
+
+  PERFORM pg_temp.assume_user('d0000000-0000-4000-8000-000000000001');
+  BEGIN
+    INSERT INTO public.profiles (id, email, role)
+    VALUES ('6c000000-0000-4000-8000-0000000000c2', 'p555-newclient-b@test.invalid', 'vendor');
+  EXCEPTION WHEN check_violation OR insufficient_privilege THEN
+    NULL;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  SELECT COUNT(*) INTO n FROM public.profiles
+   WHERE id = '6c000000-0000-4000-8000-0000000000c2';
+  ASSERT n = 0,
+    'FAIL 6g4: a designer created a row outside the client vocabulary (role = ''vendor'')';
+
+  RAISE NOTICE '00555 designer-creates-client INSERT assertions passed.';
 END $$;
 
 -- ─── 7. self-elevation (was: profile_cards, cut from 00555) ────────────────
@@ -1376,6 +1565,8 @@ END $$;
 DO $$
 DECLARE
   name_now TEXT;
+  n_rows   INTEGER;
+  can_see  BOOLEAN;
 BEGIN
   UPDATE public.profiles SET display_name = 'Mal Unrelated'
    WHERE id = 'a0000000-0000-4000-8000-000000000003';
@@ -1419,6 +1610,52 @@ BEGIN
            WHERE id = 'a0000000-0000-4000-8000-000000000003')
          = 'p555-mal@test.invalid',
     'FAIL 7m2: a legacy roster row let a non-designer redirect a homeowner''s invoice email';
+
+  -- 7m3: the READ half — RF3-14, fix round 3 pass 3.
+  --
+  -- 7m1/7m2 close the WRITE. Fix round 3 pass 2's own attack matrix recorded
+  -- the read still open on the same row:
+  --   GET /rest/v1/profiles?id=eq.<home>&select=id,email,phone  200 [{…}]
+  -- because can_view_profile's roster leg asked only whether a designer_clients
+  -- row existed, not whether the account it named as the designer was one.
+  -- Both roster legs now require that account to hold profiles.is_designer or a
+  -- designer/admin user_roles grant.
+  --
+  -- The TEAMMATE leg is the one that makes this non-optional and it is not
+  -- obvious: is_studio_comember's first branch is `p_owner = auth.uid()`
+  -- (00315), so `EXISTS (dc.client_id = <target> AND
+  -- is_studio_comember(dc.designer_id))` is satisfied by a row the caller
+  -- minted for THEMSELVES. Narrowing only the direct leg would have left this
+  -- case green through the wrong door.
+  PERFORM pg_temp.assume_user('51000000-0000-4000-8000-000000000008');
+  SELECT COUNT(*) INTO n_rows FROM public.profiles
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  PERFORM pg_temp.reset_role();
+  ASSERT n_rows = 0,
+    'FAIL 7m3: a non-designer holding a PRE-00555 roster row still READ the profile it names '
+    '— email, phone and stripe_customer_id included. can_view_profile''s roster legs are not '
+    'checking the roster row''s designer authority (RF3-14)';
+
+  -- 7m3b: and the predicate itself says so, not just the policy that calls it.
+  --       A zero-row SELECT could in principle come from a grant or a different
+  --       policy; this pins the answer to can_view_profile.
+  PERFORM pg_temp.assume_user('51000000-0000-4000-8000-000000000008');
+  SELECT public.can_view_profile('a0000000-0000-4000-8000-000000000003') INTO can_see;
+  PERFORM pg_temp.reset_role();
+  ASSERT can_see IS FALSE,
+    'FAIL 7m3b: can_view_profile() itself still admits the legacy-row holder — got '
+      || COALESCE(can_see::text, '<null>');
+
+  -- 7m4: the positive control. Dana holds a roster row against the same target
+  --      (minted in 7k1) and IS a designer, so the leg must still admit her —
+  --      RF3-14 must narrow the leg, not delete it.
+  PERFORM pg_temp.assume_user('d0000000-0000-4000-8000-000000000001');
+  SELECT COUNT(*) INTO n_rows FROM public.profiles
+   WHERE id = 'a0000000-0000-4000-8000-000000000003';
+  PERFORM pg_temp.reset_role();
+  ASSERT n_rows = 1,
+    'FAIL 7m4: a REAL designer lost the counterparty read of their own rostered client — '
+    'RF3-14 narrowed can_view_profile''s roster leg too far';
 
   DELETE FROM public.designer_clients WHERE id = 'dc555000-0000-4000-8000-0000000000aa';
 
@@ -1765,14 +2002,20 @@ BEGIN
   ASSERT has_table_privilege('authenticated'::name, 'public.designer_clients'::regclass, 'INSERT'),
     'authenticated lost INSERT on designer_clients — the Add Client flow is broken';
   -- RF3-01: SELECT is the only thing anon keeps. The six assertions above name
-  -- verbs one at a time; this one fails on a verb nobody listed, which is what
-  -- lets the operator-facing probe say "want 1" safely.
+  -- verbs one at a time; this one is the catch-all behind them.
+  --
+  -- ⚠ RF3-18, fix round 3 pass 3: read pg_class.relacl through aclexplode(),
+  -- not information_schema.table_privileges. information_schema is defined by
+  -- the SQL standard and enumerates only the standard verbs, so PG 17's
+  -- MAINTAIN is invisible to it — the one verb the migration REVOKEs by name on
+  -- three tables was the one verb this "exact set" check could not see, and a
+  -- returned MAINTAIN grant read as exactly 'SELECT' and passed.
   ASSERT (
-    SELECT string_agg(privilege_type, ',' ORDER BY privilege_type)
-    FROM information_schema.table_privileges
-    WHERE table_schema = 'public' AND table_name = 'designer_clients'
-      AND grantee = 'anon'
-  ) = 'SELECT', 'anon holds something other than exactly SELECT on designer_clients';
+    SELECT COALESCE(string_agg(DISTINCT a.privilege_type, ',' ORDER BY a.privilege_type), '<none>')
+    FROM pg_class c, aclexplode(c.relacl) a
+    WHERE c.oid = 'public.designer_clients'::regclass
+      AND a.grantee = 'anon'::regrole::oid
+  ) = 'SELECT', 'anon holds something other than exactly SELECT on designer_clients (read from relacl, so MAINTAIN counts)';
   -- RF3-07: the TRUNCATE/REFERENCES pair the profiles block clears, on the
   -- roster table this section calls load-bearing. Measured before the fix:
   -- designer_clients authenticated=arwdDxtm, profiles authenticated=arwtm.
@@ -1801,6 +2044,105 @@ BEGIN
                   || COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), ''))
                ILIKE '%user_roles%')
   ), 'a designer_clients restrictive policy does not read user_roles';
+
+  -- ── fix round 3 pass 3 ───────────────────────────────────────────────────
+
+  -- RF3-17: the four SECURITY DEFINER views are revoked FROM PUBLIC, anon AND
+  -- authenticated, and only anon was ever asserted. user_engagement_scores
+  -- projects id, email, role over profiles with security_invoker = false, so it
+  -- bypasses every policy in section 2 by construction — a signed-in reader
+  -- there makes the whole of §(a) decorative.
+  ASSERT NOT has_table_privilege('authenticated'::name, 'public.user_engagement_scores'::regclass, 'SELECT'),
+    'authenticated can still read user_engagement_scores (id, email, role) through a definer view';
+  ASSERT NOT has_table_privilege('authenticated'::name, 'public.consumer_funnel'::regclass, 'SELECT'),
+    'authenticated can still read consumer_funnel';
+  ASSERT NOT has_table_privilege('authenticated'::name, 'public.designer_funnel'::regclass, 'SELECT'),
+    'authenticated can still read designer_funnel';
+  ASSERT NOT has_table_privilege('authenticated'::name, 'public.conversion_funnel'::regclass, 'SELECT'),
+    'authenticated can still read conversion_funnel';
+
+  -- RF3-19: the two authority tables. Neither has ever carried a write POLICY
+  -- (00021 creates exactly two policies on them, both SELECT), so every write
+  -- grant was a grant with no caller — on the tables ruling B2 v3(b) makes the
+  -- source of all authority in this migration. SELECT is KEPT for both roles,
+  -- anon included, for the executor-init ACL reason the designer_clients block
+  -- above spells out: dozens of tables carry an admin policy that joins
+  -- user_roles ⨝ roles.
+  ASSERT has_table_privilege('anon'::name, 'public.user_roles'::regclass, 'SELECT'),
+    'anon lost SELECT on user_roles — unrelated anon reads now 42501 at executor init';
+  ASSERT has_table_privilege('anon'::name, 'public.roles'::regclass, 'SELECT'),
+    'anon lost SELECT on roles';
+  ASSERT has_table_privilege('authenticated'::name, 'public.user_roles'::regclass, 'SELECT'),
+    'authenticated lost SELECT on user_roles — role resolution breaks in both portals and both iOS apps';
+  ASSERT has_table_privilege('authenticated'::name, 'public.roles'::regclass, 'SELECT'),
+    'authenticated lost SELECT on roles';
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM unnest(ARRAY['public.user_roles', 'public.roles']) AS t(rel),
+         unnest(ARRAY['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES']) AS v(verb)
+    WHERE has_table_privilege('anon'::name, t.rel::regclass, v.verb)
+  ), 'anon still holds a write verb on user_roles or roles (RF3-19)';
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM unnest(ARRAY['public.user_roles', 'public.roles']) AS t(rel),
+         unnest(ARRAY['INSERT', 'DELETE', 'TRUNCATE', 'REFERENCES']) AS v(verb)
+    WHERE has_table_privilege('authenticated'::name, t.rel::regclass, v.verb)
+  ), 'authenticated still holds INSERT, DELETE, TRUNCATE or REFERENCES on user_roles or roles (RF3-19)';
+  -- UPDATE is the one verb `authenticated` keeps on these two, and it is
+  -- asserted PRESENT. `SELECT … FOR SHARE` is charged to the UPDATE privilege,
+  -- and 00511's SECURITY INVOKER trigger set_project_studio_id() row-share-locks
+  -- public.roles and public.user_roles on every authenticated project write.
+  -- Revoking it takes every project insert with it — measured: the first cut of
+  -- RF3-19 took supabase/tests/edge_api/public_sd_hardening_contract_test.sql
+  -- red with `permission denied for table roles` from
+  -- set_project_studio_id() line 151.
+  ASSERT has_table_privilege('authenticated'::name, 'public.user_roles'::regclass, 'UPDATE'),
+    'authenticated lost UPDATE on user_roles — set_project_studio_id() FOR SHARE locks it';
+  ASSERT has_table_privilege('authenticated'::name, 'public.roles'::regclass, 'UPDATE'),
+    'authenticated lost UPDATE on roles — set_project_studio_id() FOR SHARE locks it';
+
+  -- RF3-02: the own-row INSERT leg is held to a VOCABULARY — three strings,
+  -- and not the two that spoof ('vendor' lists the caller in the comms vendor
+  -- picker, 'admin' relabels them in comms_resolve_role). Not a pin to the
+  -- caller's current value: there is no OLD row on an INSERT.
+  ASSERT (
+    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''homeowner''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''client''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''designer''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) NOT ILIKE '%''vendor''::text%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) NOT ILIKE '%''admin''::text%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) NOT ILIKE '%current_profile_role%'
+    FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Users can insert own profile'
+  ), '"Users can insert own profile" does not carry the RF3-02 vocabulary guard';
+
+  -- RF3-13: the sibling INSERT policy asks what the CALLER is, and holds the
+  -- created row to the client vocabulary plus the authority pin.
+  ASSERT (
+    SELECT COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '') ILIKE '%current_profile_is_designer%'
+       AND COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '') ILIKE '%user_roles%'
+       AND COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '') NOT ILIKE '%current_profile_role%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''homeowner''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''client''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer IS NOT TRUE%'
+    FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Designers can create homeowner profiles'
+  ), '"Designers can create homeowner profiles" is not the RF3-13 shape — caller authority, client vocabulary, is_designer pin';
+
+  -- RF3-14: BOTH of can_view_profile's roster legs require the roster row's
+  -- designer_id to hold designer authority. The guard names the ALIASES, not
+  -- the columns: `is_designer` is a substring of current_profile_is_designer's
+  -- own name and `user_roles` appears in several policies, so a word-level
+  -- match would pass on a body that had dropped the clause. Two occurrences of
+  -- each — one leg is not both legs. Case 7m3 is the behavioural half.
+  ASSERT (
+    SELECT (length(p.prosrc) - length(replace(p.prosrc, 'dp.is_designer IS TRUE', ''))) / length('dp.is_designer IS TRUE') = 2
+       AND (length(p.prosrc) - length(replace(p.prosrc, 'ur.user_id = dc.designer_id', ''))) / length('ur.user_id = dc.designer_id') = 2
+    FROM pg_proc p JOIN pg_namespace nn ON nn.oid = p.pronamespace
+    WHERE nn.nspname = 'public' AND p.proname = 'can_view_profile'
+  ), 'can_view_profile does not require BOTH roster legs'' designer_id to hold designer authority (RF3-14)';
 
   RAISE NOTICE '00555 security assertions passed.';
 END $$;

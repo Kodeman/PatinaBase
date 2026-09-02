@@ -12632,6 +12632,54 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.user_roles FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.roles FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE INSERT, DELETE, TRUNCATE, REFERENCES ON public.user_roles FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE INSERT, DELETE, TRUNCATE, REFERENCES ON public.roles FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.user_roles TO anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.roles TO anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT UPDATE ON public.user_roles TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT UPDATE ON public.roles TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00556_admin_studio_management.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.is_studio_comember(uuid) FROM PUBLIC, anon;
