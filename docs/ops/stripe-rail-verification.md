@@ -36,12 +36,13 @@ lines up exactly with the alignment fix and the two synthetic
   2026-08-12 deliveries the reconciliation doc traced to the same account.
   That is exactly what you'd expect if `create-checkout-session` — the only
   function whose `STRIPE_SECRET_KEY` usage actually **mints objects under an
-  account** (`supabase/functions/create-checkout-session/index.ts:1244`,
-  `new Stripe(STRIPE_SECRET_KEY, …)`) — has been creating sessions under the
-  sandbox account the whole time. (`stripe-webhook` also references
-  `STRIPE_SECRET_KEY`, but only to satisfy the SDK constructor for signature
-  verification — `index.ts:103-104` — it doesn't determine which account the
-  webhook trusts; that's `STRIPE_WEBHOOK_SECRET` alone.)
+  account** (the `new Stripe(STRIPE_SECRET_KEY, …)` constructor in
+  `supabase/functions/create-checkout-session/index.ts`) — has been creating
+  sessions under the sandbox account the whole time. (`stripe-webhook` also
+  references `STRIPE_SECRET_KEY`, but only to satisfy the SDK constructor for
+  signature verification — the `new Stripe(...)` constructor in
+  `supabase/functions/stripe-webhook/index.ts` — it doesn't determine which
+  account the webhook trusts; that's `STRIPE_WEBHOOK_SECRET` alone.)
 - Two Middle-West-tagged events (`evt_3TsrIGJmCVe1Jxdu…`, 2026-07-13) and one
   more (`evt_1Tv5yVJmCVe1JxduDCyjt5IY`, 2026-07-20) did pass signature
   verification at the time — proving the *webhook secret* pointed at some
@@ -74,7 +75,7 @@ edge function runtime (which has `STRIPE_SECRET_KEY` in its own `Deno.env`)
 would return the account id/business name with zero secret exposure — but
 that requires deploying a diagnostic code path, which this task deliberately
 did not do (out of scope for a read-only diagnosis, and not requested).
-Kody can settle it in ten seconds without touching prod: Stripe Dashboard →
+Kody can settle it in one move: Stripe Dashboard →
 **switch to Middle West Studio** → Developers → API keys — though the key
 shown there can't be compared directly against `supabase secrets list`'s
 `STRIPE_SECRET_KEY` (that's a one-way hash digest, not a last-4); instead,

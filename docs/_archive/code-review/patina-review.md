@@ -1,3 +1,5 @@
+> ARCHIVED 2026-09 — describes the retired self-hosted Coolify/GHCR stack; production is Cloudflare + Strata. Historical record only.
+
 # Patina Monorepo Architecture Review
 
 **Reviewer:** Senior architect, external eyes
