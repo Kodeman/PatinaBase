@@ -108,12 +108,36 @@ Deno.test("buildIssueBody escapes pipes and newlines in client-supplied cells", 
   assertEquals(body.split("\n").filter((l) => l.startsWith("| Route |")).length, 1);
 });
 
-Deno.test("buildIssueBody collapses a multi-line note into the quote", () => {
+Deno.test("buildIssueBody escapes a backslash before the pipe it precedes", () => {
+  // `\|` escaped in the wrong order becomes `\\|` — an escaped backslash and a
+  // live pipe, which would end the cell and let the rest forge table columns.
   const body = buildIssueBody({
-    row: row({ note: "Totals\ngo\r\nblank" }),
+    row: row({ screen_name: "Doc \\| Fake | Injected" }),
     screenshotUrl: null,
   });
-  assertStringIncludes(body, "> Totals go blank");
+
+  assertStringIncludes(body, "| Screen | Doc \\\\\\| Fake \\| Injected |");
+  assertEquals(body.split("\n").filter((l) => l.startsWith("| Screen |")).length, 1);
+});
+
+Deno.test("buildIssueBody fences the note, so a mention never notifies", () => {
+  const body = buildIssueBody({
+    row: row({ note: "Totals\ngo blank @kody see #123" }),
+    screenshotUrl: null,
+  });
+
+  assertStringIncludes(body, "```text\nTotals\ngo blank @kody see #123\n```");
+});
+
+Deno.test("buildIssueBody neutralises a fence inside the note", () => {
+  const body = buildIssueBody({
+    row: row({ note: "before\n```\n@kody escaped the fence\n```\nafter" }),
+    screenshotUrl: null,
+  });
+
+  // Exactly the two fences the body itself opened and closed.
+  assertEquals(body.split("\n").filter((l) => l.trim().startsWith("```")).length, 2);
+  assertStringIncludes(body, "```text\nbefore\n'''\n@kody escaped the fence\n'''\nafter\n```");
 });
 
 Deno.test("buildIssueBody prints the reason when a path was not signed", () => {

@@ -30,6 +30,13 @@ const ISSUE_LABELS = ["tester-report", "bug"];
 
 /** The claim marker: one invocation at a time may talk to GitHub for a row. */
 const CLAIM = "filing";
+/**
+ * How long a claim holds. A crash between the claim and the write-back would
+ * otherwise strand the row in `filing` forever, and every retry would decline
+ * it as "another invocation is filing this row". Longer than any plausible
+ * GitHub call, short enough that a stuck row recovers on its own.
+ */
+const CLAIM_TTL_MS = 5 * 60 * 1000;
 
 // deno-lint-ignore no-explicit-any
 type SupabaseLike = any;
@@ -133,12 +140,23 @@ export async function handler(
   // invoke_edge_function is fire-and-forget and a retry is always possible, so
   // two invocations can meet on one row. The guarded update is the lock: only
   // the caller whose UPDATE actually matched a row goes on to file.
+  // The claim stamps `updated_at` so a later invocation can tell a live claim
+  // from a stranded one: an unclaimed row, a row whose error is something else
+  // (a retry after a failure), or a claim older than CLAIM_TTL_MS all qualify.
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - CLAIM_TTL_MS).toISOString();
   const { data: claimed, error: claimErr } = await admin
     .from("feedback")
-    .update({ github_issue_error: CLAIM })
+    .update({
+      github_issue_error: CLAIM,
+      updated_at: now.toISOString(),
+    })
     .eq("id", feedbackId)
     .is("github_issue_number", null)
-    .or(`github_issue_error.is.null,github_issue_error.neq.${CLAIM}`)
+    .or(
+      `github_issue_error.is.null,github_issue_error.neq.${CLAIM},` +
+        `and(github_issue_error.eq.${CLAIM},updated_at.lt.${staleBefore})`,
+    )
     .select("id");
   if (claimErr) return json({ ok: false, error: claimErr.message }, 500);
   if (!claimed || claimed.length === 0) {
@@ -216,7 +234,10 @@ export async function handler(
       github_issue_url: url,
       github_issue_error: null,
     })
-    .eq("id", feedbackId);
+    .eq("id", feedbackId)
+    // Same guard as the claim: a row that already carries a number belongs to
+    // whichever invocation filed it, and its link must not be overwritten.
+    .is("github_issue_number", null);
   if (writeErr) return json({ ok: false, error: writeErr.message, number, url }, 500);
 
   return json({ ok: true, number, url });

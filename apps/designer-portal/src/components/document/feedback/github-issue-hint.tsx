@@ -17,12 +17,22 @@ export const ISSUE_POLL_MS = 10_000;
 /** After this long with neither url nor error, stop waiting and say so. */
 export const ISSUE_TIMEOUT_MS = 5 * 60 * 1000;
 
+/**
+ * The edge function's claim marker (handler.ts CLAIM). It is written to
+ * `github_issue_error` before GitHub is called, so it is an in-flight state,
+ * not a failure — a row wearing it is still being filed and must keep polling.
+ */
+const FILING = 'filing';
+/** The trigger's abuse bound (migration 00558): twenty bug reports in an hour. */
+const RATE_LIMITED = 'rate limited';
+
 function isBug(note: Feedback): boolean {
   return note.report_kind === 'bug';
 }
 
 function unresolved(note: Feedback): boolean {
-  return !note.github_issue_url && !note.github_issue_error;
+  if (note.github_issue_url) return false;
+  return !note.github_issue_error || note.github_issue_error === FILING;
 }
 
 /** A bug of the current user's, filed within the timeout, still unresolved. */
@@ -54,7 +64,16 @@ export function GithubHint({ note, userId }: { note: Feedback; userId?: string }
       </a>
     );
   }
-  if (note.github_issue_error) {
+  if (note.github_issue_error === RATE_LIMITED) {
+    // The only reason a tester can act on: wait, or say it in the note.
+    return (
+      <p className="font-mono text-[11px] text-[var(--color-terracotta-ink)]">
+        Not filed: too many bug reports this hour.
+      </p>
+    );
+  }
+  // `filing` falls through to the in-flight copy below until it goes stale.
+  if (note.github_issue_error && note.github_issue_error !== FILING) {
     return (
       <p className="font-mono text-[11px] text-[var(--color-terracotta-ink)]">
         {isSuperAdmin

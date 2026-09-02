@@ -73,8 +73,28 @@ export interface IssueBodyInput {
  */
 function cell(value: string | number | null | undefined): string {
   const raw = value === null || value === undefined ? "" : String(value);
-  const s = raw.replace(/[\r\n]+/g, " ").replace(/\|/g, "\\|").trim();
+  const s = raw
+    .replace(/[\r\n]+/g, " ")
+    // Backslashes first: escaping pipes first would turn a reporter's own
+    // `\` before a `|` into `\\|` — an escaped backslash followed by a live
+    // pipe, which ends the cell after all.
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .trim();
   return s.length > 0 ? s : "—";
+}
+
+/**
+ * The note, rendered as a fenced block. A blockquote still renders the
+ * reporter's markdown — an `@mention` in a note would notify a real person and
+ * a `#123` would cross-link a real issue, on GitHub's account rather than the
+ * reporter's. Inside a fence nothing renders; the only escape from a fence is
+ * a fence, so any backtick run in the note is neutralised first.
+ */
+function noteBlock(note: string | null | undefined): string[] {
+  const body = (note ?? "").trim();
+  if (!body) return ["_(bucket only — no note)_"];
+  return ["```text", body.replace(/`{3,}/g, "'''"), "```"];
 }
 
 export function buildIssueBody({
@@ -91,7 +111,7 @@ export function buildIssueBody({
   const lines: string[] = [];
   lines.push("**Reported from the Patina designer portal (Tester Notes).**");
   lines.push("");
-  lines.push(row.note?.trim() ? `> ${collapse(row.note)}` : "_(bucket only — no note)_");
+  lines.push(...noteBlock(row.note));
   lines.push("");
   lines.push("| Field | Value |");
   lines.push("| --- | --- |");

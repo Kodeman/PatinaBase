@@ -40,6 +40,13 @@ interface FakeState {
   profile: Record<string, unknown> | null;
   claimAllowed: boolean;
   updates: Record<string, unknown>[];
+  /**
+   * The filters each write carried, positionally parallel to `updates`. The
+   * guards ARE the concurrency design here — an update that reaches the row
+   * without them is a lost claim or an overwritten issue link — so they are
+   * recorded and asserted rather than taken on trust.
+   */
+  filters: string[][];
   signedFor: [string, number][];
 }
 
@@ -47,24 +54,35 @@ function fakeClient(state: FakeState) {
   class Builder {
     isUpdate = false;
     isFeedback: boolean;
+    // Filled as the chain is built; handed to state.filters at update() time,
+    // by reference, because the filters follow the update in the chain.
+    filters: string[] = [];
     constructor(table: string) {
       this.isFeedback = table === "feedback";
     }
     select() {
       return this;
     }
-    eq() {
+    eq(column: string, value: unknown) {
+      this.filters.push(`eq:${column}:${String(value)}`);
       return this;
     }
-    is() {
+    is(column: string, value: unknown) {
+      this.filters.push(`is:${column}:${String(value)}`);
       return this;
     }
-    or() {
+    neq(column: string, value: unknown) {
+      this.filters.push(`neq:${column}:${String(value)}`);
+      return this;
+    }
+    or(filter: string) {
+      this.filters.push(`or:${filter}`);
       return this;
     }
     update(values: Record<string, unknown>) {
       this.isUpdate = true;
       state.updates.push(values);
+      state.filters.push(this.filters);
       return this;
     }
     maybeSingle() {
@@ -125,9 +143,25 @@ function state(overrides: Partial<FakeState> = {}): FakeState {
     profile: { email: "leah@example.com", full_name: "Leah", display_name: null },
     claimAllowed: true,
     updates: [],
+    filters: [],
     signedFor: [],
     ...overrides,
   };
+}
+
+/**
+ * The claim write: the marker plus a fresh `updated_at`, which is what lets a
+ * later invocation tell a live claim from one a crash stranded. The timestamp
+ * is `now()`, so it is asserted by shape.
+ */
+function assertClaimWrite(values: Record<string, unknown>) {
+  assertEquals(values.github_issue_error, "filing");
+  assertEquals(typeof values.updated_at, "string");
+  assertEquals(
+    Number.isNaN(Date.parse(values.updated_at as string)),
+    false,
+  );
+  assertEquals(Object.keys(values).sort(), ["github_issue_error", "updated_at"]);
 }
 
 function post(body: unknown, jwt = SERVICE_JWT): Request {
@@ -180,7 +214,8 @@ Deno.test("skips when another invocation already claimed the row", async () => {
   assertEquals(res.status, 200);
   assertStringIncludes((await res.json()).skipped, "another invocation");
   // Only the claim attempt itself was written; GitHub was never called.
-  assertEquals(s.updates, [{ github_issue_error: "filing" }]);
+  assertEquals(s.updates.length, 1);
+  assertClaimWrite(s.updates[0]);
 });
 
 Deno.test("writes the reason when GITHUB_TOKEN is unset", async () => {
@@ -206,10 +241,9 @@ Deno.test("writes a terse reason and 502s on a GitHub error", async () => {
   );
 
   assertEquals(res.status, 502);
-  assertEquals(s.updates, [
-    { github_issue_error: "filing" },
-    { github_issue_error: "github 422" },
-  ]);
+  assertEquals(s.updates.length, 2);
+  assertClaimWrite(s.updates[0]);
+  assertEquals(s.updates[1], { github_issue_error: "github 422" });
   // The response body never reaches the row.
   assertEquals(JSON.stringify(s.updates).includes("Validation Failed"), false);
 });
@@ -239,17 +273,51 @@ Deno.test("writes the issue number and url on success", async () => {
     number: 7,
     url: "https://github.com/o/r/issues/7",
   });
-  assertEquals(s.updates, [
-    { github_issue_error: "filing" },
-    {
-      github_issue_number: 7,
-      github_issue_url: "https://github.com/o/r/issues/7",
-      github_issue_error: null,
-    },
-  ]);
+  assertEquals(s.updates.length, 2);
+  assertClaimWrite(s.updates[0]);
+  assertEquals(s.updates[1], {
+    github_issue_number: 7,
+    github_issue_url: "https://github.com/o/r/issues/7",
+    github_issue_error: null,
+  });
   assertStringIncludes(sentBody, "[Tester] Document: Totals go blank");
   // The author owns the path, so it was signed — for two weeks.
   assertEquals(s.signedFor, [[`${AUTHOR}/shot.png`, 14 * 24 * 60 * 60]]);
+});
+
+Deno.test("guards the claim on the issue number and lets a stale claim through", async () => {
+  const s = state();
+  await handler(
+    post({ record: { id: s.row!.id } }),
+    makeDeps(s, {
+      env: { GITHUB_TOKEN: "t" },
+      fetchImpl: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ number: 9, html_url: "u" }), { status: 201 }),
+        ),
+    }),
+  );
+
+  const [claim, success] = s.filters;
+
+  // A row that already carries a number is never re-claimed…
+  assertEquals(claim.includes("is:github_issue_number:null"), true);
+  // …and among the unfiled, the claim is available to an unclaimed row, to one
+  // carrying some other error (a retry after a failure), or to a claim that a
+  // crash stranded more than the TTL ago.
+  const or = claim.find((f) => f.startsWith("or:")) ?? "";
+  assertStringIncludes(or, "github_issue_error.is.null");
+  assertStringIncludes(or, "github_issue_error.neq.filing");
+  assertStringIncludes(or, "and(github_issue_error.eq.filing,updated_at.lt.");
+
+  // The cutoff is a real timestamp, and it is in the past.
+  const cutoff = or.match(/updated_at\.lt\.([^),]+)/)?.[1] ?? "";
+  assertEquals(Number.isNaN(Date.parse(cutoff)), false);
+  assertEquals(Date.parse(cutoff) < Date.now(), true);
+
+  // The write-back carries the same guard: a link filed by another invocation
+  // is never overwritten.
+  assertEquals(success.includes("is:github_issue_number:null"), true);
 });
 
 Deno.test("never signs a screenshot path the author does not own", async () => {
