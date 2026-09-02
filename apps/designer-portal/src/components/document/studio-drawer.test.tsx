@@ -6,7 +6,6 @@ import {
   within,
 } from '@testing-library/react';
 import { StudioDrawer } from './studio-drawer';
-import { openFeedbackSheet } from './feedback/feedback-sheet';
 
 const mockPush = jest.fn();
 const mockOpenTimer = jest.fn();
@@ -90,14 +89,6 @@ jest.mock('./hours-ledger', () => ({
   HoursLedger: () => <div>Hours ledger</div>,
 }));
 
-jest.mock('./feedback/feedback-ledger', () => ({
-  FeedbackLedger: () => <div>Feedback ledger</div>,
-}));
-
-jest.mock('./feedback/feedback-sheet', () => ({
-  openFeedbackSheet: jest.fn(),
-}));
-
 jest.mock('./account/account-nameplate', () => ({
   AccountNameplate: () => <div>Designer account</div>,
 }));
@@ -110,7 +101,6 @@ describe('StudioDrawer', () => {
     mockInHandToday = 0;
     mockPresenceOthers = [];
     mockUnseenFeedback = [];
-    jest.mocked(openFeedbackSheet).mockClear();
     window.localStorage.clear();
   });
 
@@ -142,9 +132,10 @@ describe('StudioDrawer', () => {
     expect(
       within(menu).queryByRole('button', { name: 'Feedback' }),
     ).not.toBeInTheDocument();
+    // Feedback left the books hub entirely — the Tester widget owns it now.
     expect(
-      within(menu).getByRole('button', { name: 'Leave a note' }),
-    ).toBeInTheDocument();
+      within(menu).queryByRole('button', { name: 'Leave a note' }),
+    ).not.toBeInTheDocument();
   });
 
   it('F11 — closing a books-menu sheet returns focus to Ledgers once the opening row has unmounted', async () => {
@@ -195,13 +186,16 @@ describe('StudioDrawer', () => {
     });
   });
 
-  it('offers feedback contextually from the books hub', () => {
+  it('no longer carries a feedback doorway — the Tester widget owns it', () => {
     render(<StudioDrawer />);
     fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Leave a note' }));
 
-    expect(openFeedbackSheet).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('group')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Leave a note/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Feedback' }),
+    ).not.toBeInTheDocument();
   });
 
   it('C-AP-05 — prints Find anything ⌘K as a door of its own', () => {
@@ -280,17 +274,12 @@ describe('StudioDrawer', () => {
     ).toHaveTextContent('You and 2 others');
   });
 
-  it('carries the shipped-feedback signal into the single feedback entrance', () => {
+  it('does not badge shipped feedback — the Tester pill carries that dot now', () => {
     mockUnseenFeedback = [{ id: 'feedback-1' }];
     render(<StudioDrawer />);
     fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
 
-    expect(
-      screen.getByRole('button', { name: /Leave a note.*Shipped/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Feedback' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Shipped/i)).not.toBeInTheDocument();
   });
 });
 

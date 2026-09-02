@@ -101,7 +101,6 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 jest.mock('../account/account-sheet', () => ({ openAccount: jest.fn() }));
 jest.mock('../accounts/invoice-overlays', () => ({ openInvoiceComposer: jest.fn() }));
 jest.mock('../overlays/post-sheet', () => ({ openPost: jest.fn() }));
-jest.mock('../feedback/feedback-sheet', () => ({ openFeedbackSheet: jest.fn() }));
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 jest.mock('../rooms/drafting/draft-proposal-opener', () => ({
   openDraftProposalPicker: jest.fn(),

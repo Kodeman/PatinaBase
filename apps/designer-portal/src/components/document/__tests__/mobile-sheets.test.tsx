@@ -71,9 +71,6 @@ jest.mock('@/hooks/document-time-provider', () => ({
 }));
 
 jest.mock('../overlays/post-sheet', () => ({ openPost: jest.fn() }));
-jest.mock('../feedback/feedback-sheet', () => ({
-  openFeedbackSheet: jest.fn(),
-}));
 jest.mock('../account/mobile-account-header', () => ({
   MobileAccountHeader: () => null,
 }));

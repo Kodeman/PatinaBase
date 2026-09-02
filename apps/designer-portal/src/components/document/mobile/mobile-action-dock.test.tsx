@@ -8,7 +8,6 @@ import {
   type MobilePrimaryAction,
   type MobileSecondaryAction,
 } from './mobile-shell';
-import { openFeedbackSheet } from '../feedback/feedback-sheet';
 import { ProposalShareInstrument } from '../proposal-share-instrument';
 import { DocumentGuide } from '../document-guide';
 import { MOBILE_ACTION_PRIORITY, signedProposalMobileAction } from './lifecycle-mobile-action';
@@ -62,10 +61,6 @@ jest.mock('../overlays/post-sheet', () => ({
   openPost: () => mockOpenPost(),
 }));
 
-jest.mock('../feedback/feedback-sheet', () => ({
-  openFeedbackSheet: jest.fn(),
-}));
-
 jest.mock('../overlays/share-sheet', () => ({
   ShareSheet: ({ open }: { open: boolean }) =>
     open ? <div role="dialog" aria-label="Share sheet" /> : null,
@@ -106,7 +101,6 @@ describe('unified mobile edge owner', () => {
       heldProjectId: null,
     };
     mockOpenPost.mockClear();
-    jest.mocked(openFeedbackSheet).mockClear();
   });
 
   it('renders the registered primary action in one bar and no second dock', () => {
@@ -260,9 +254,10 @@ describe('unified mobile edge owner', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Ledgers')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Leave a note' }));
-    expect(openFeedbackSheet).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('group')).not.toBeInTheDocument();
+    // The feedback row moved out to the Tester widget.
+    expect(
+      screen.queryByRole('button', { name: /Leave a note/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('SP-11/SP-15 — The Post sits under a Mail & messages group and reads a state-only NEW', () => {
@@ -403,22 +398,6 @@ describe('unified mobile edge owner', () => {
 
     expect(screen.queryByRole('group')).not.toBeInTheDocument();
     expect(more).toHaveFocus();
-  });
-
-  it('carries the shipped-feedback signal into the single feedback entrance', () => {
-    mockUnseenFeedback = [{ id: 'feedback-1' }];
-    render(
-      <MobileShellProvider>
-        <MobileBar />
-      </MobileShellProvider>,
-    );
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'More studio actions' }),
-    );
-    expect(
-      screen.getByRole('button', { name: /Leave a note.*Shipped/i }),
-    ).toBeInTheDocument();
   });
 
   it('yields the edge while a log offer OWNS it', () => {

@@ -43,10 +43,6 @@ jest.mock('@/hooks/document-time-provider', () => ({
 }));
 
 jest.mock('../overlays/post-sheet', () => ({ openPost: jest.fn() }));
-jest.mock('../feedback/feedback-sheet', () => ({
-  openFeedbackSheet: jest.fn(),
-}));
-
 /** The zone publishes the phone's primary act, so it only ever stands inside
  *  the mobile shell — as it does on the document. */
 const render = (ui: ReactElement) =>
