@@ -1,11 +1,29 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00556 — public.increment_scan_upload_attempt: the one object the iOS
+-- 00557 — public.increment_scan_upload_attempt: the one object the iOS
 --         uploader calls that production does not have
 --
--- Number re-checked against `ls supabase/migrations/*.sql | sort -V | tail -3`
--- on 2026-09-02: head was 00554, and 00555_ios_round_one_security.sql is minted
--- in the same pass. Concurrent sessions mint in this band — re-check before the
--- prod apply and renumber this file (name + this banner) on collision.
+-- ── NUMBER ─────────────────────────────────────────────────────────────────
+--
+-- This file was minted as 00556 and RENUMBERED to 00557 on 2026-09-02.
+-- 00556 is taken by 00556_admin_studio_management.sql (commit d69e23f3f on
+-- admin-studios/build, also at origin/admin-studios/build), which was ALREADY
+-- APPLIED to the shared local stack. Two files at one number means one is
+-- silently skipped.
+--
+-- `ls supabase/migrations` inside one worktree CANNOT see a peer branch, which
+-- is how the collision was missed the first time. The check that can:
+--
+--   git log --all --diff-filter=A --format='' --name-only -- 'supabase/migrations/*.sql' \
+--     | grep -E '^supabase/migrations/005[4-9][0-9]' | sort -u
+--   git worktree list
+--   psql "$STRATA_DB_URL" -X -q -tAc \
+--     "SELECT version || '|' || name FROM supabase_migrations.schema_migrations
+--       ORDER BY version DESC LIMIT 3"
+--
+-- Concurrent sessions mint in this band. Run all three AGAIN immediately before
+-- the prod apply and renumber this file (filename, this banner, the test file,
+-- and supabase/seed/00-legacy-grants.sql via generate-legacy-grants.py) on a
+-- fresh collision.
 --
 -- Lineage: new function. Nothing in supabase/migrations/ has ever defined it —
 --   grep -rln "CREATE OR REPLACE FUNCTION[^(]*increment_scan_upload_attempt" \
@@ -35,6 +53,10 @@
 --   LANGUAGE sql · SECURITY INVOKER · RETURNS void · the auth.uid() owner gate
 --   inside the WHERE rather than a policy of its own · COMMENT ON FUNCTION ·
 --   an explicit EXECUTE grant at the foot.
+--
+-- Two deliberate departures from 00082, neither of which changes behaviour:
+-- the table is schema-qualified (`public.room_scans`) and search_path is pinned
+-- (`SET search_path TO 'public'`). See the comment above the function body.
 --
 -- SECURITY INVOKER is the load-bearing half. The function runs as the caller,
 -- so room_scans RLS applies to it in full and the `user_id = auth.uid()` clause
@@ -79,12 +101,19 @@
 
 BEGIN;
 
+-- room_scans is schema-qualified and search_path is pinned, which 00082's
+-- mark_scan_upload_complete does not do. 00282 shipped a bare table name that
+-- resolved locally and failed on Strata with 42883 under the push session's
+-- search_path; Supabase's linter also raises function_search_path_mutable on an
+-- unpinned function. Neither changes behaviour, and SECURITY INVOKER is
+-- untouched, so the D13 mirror still holds where it matters.
 CREATE OR REPLACE FUNCTION public.increment_scan_upload_attempt(p_scan_id UUID)
   RETURNS void
   LANGUAGE sql
   SECURITY INVOKER
+  SET search_path TO 'public'
 AS $$
-  UPDATE room_scans
+  UPDATE public.room_scans
      SET upload_attempt_count = upload_attempt_count + 1,
          upload_started_at    = COALESCE(upload_started_at, NOW()),
          status               = 'uploading'
@@ -123,6 +152,9 @@ END $$;
 COMMIT;
 
 -- ── AFTER APPLY ────────────────────────────────────────────────────────────
+--   • the ledger row (this file is applied with `psql -f`, never `db push`):
+--       INSERT INTO supabase_migrations.schema_migrations (version, name)
+--       VALUES ('00557','increment_scan_upload_attempt') ON CONFLICT DO NOTHING;
 --   • python3 scripts/generate-legacy-grants.py  (this file adds GRANT/REVOKE)
 --   • pnpm db:generate                           (public schema gained a function)
 --   • bash scripts/run-sql-tests.sh              (whole suite vs KNOWN_FAILURES.md)
@@ -130,3 +162,6 @@ COMMIT;
 --       SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 --        WHERE n.nspname='public' AND p.proname='increment_scan_upload_attempt';
 --       -- before: 0   after: 1
+--
+-- The full apply sequence, with Step 0's deploy gate and the rollback, is
+-- artifacts/ios-testflight-polish-2026-09-01/build/waves/w0/KODY-RUNBOOK.md.

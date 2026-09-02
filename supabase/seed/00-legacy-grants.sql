@@ -12584,13 +12584,13 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00556_increment_scan_upload_attempt.sql
+-- 00557_increment_scan_upload_attempt.sql
 DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.increment_scan_upload_attempt(UUID) FROM PUBLIC;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00556_increment_scan_upload_attempt.sql
+-- 00557_increment_scan_upload_attempt.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.increment_scan_upload_attempt(UUID) TO anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;

@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00556 — increment_scan_upload_attempt: owner gate, monotonicity, ACL parity
+-- 00557 — increment_scan_upload_attempt: owner gate, monotonicity, ACL parity
 --
 -- NOTE ON STYLE: supabase/tests/** is not pgTAP. Every file in that tree is a
 -- plain psql script — BEGIN, fixtures, pg_temp role-assumption helpers, DO
@@ -10,7 +10,7 @@
 -- Run (single file, for iteration):
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
 --     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/rls/00556_increment_scan_upload_attempt.test.sql
+--     -f supabase/tests/rls/00557_increment_scan_upload_attempt.test.sql
 --
 -- Run (the actual gate — whole suite against KNOWN_FAILURES.md):
 --   bash scripts/run-sql-tests.sh
@@ -26,6 +26,9 @@
 --      auth.uid() gate, same contract as mark_scan_upload_complete
 --   4. ACL parity with 00082: not SECURITY DEFINER, PUBLIC holds no EXECUTE,
 --      anon and authenticated both do (ruling D13)
+--   5. the two departures from 00082 that guard against the 00282 failure
+--      mode: search_path is PINNED and room_scans is SCHEMA-QUALIFIED, so the
+--      function cannot resolve a different table under a caller's search_path
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -167,7 +170,32 @@ BEGIN
       AND p.proname IN ('increment_scan_upload_attempt', 'mark_scan_upload_complete')
   ), 'the two scan-upload RPCs must both be SECURITY INVOKER';
 
-  RAISE NOTICE '00556 assertions passed.';
+  RAISE NOTICE '00557 assertions passed.';
+END $$;
+
+-- ─── 5. search_path is pinned and the table is schema-qualified ────────────
+--
+-- 00282 shipped a bare table name that resolved locally and failed on Strata
+-- with 42883 under the push session's search_path. These two assertions are
+-- what stop this file drifting back to 00082's unpinned shape.
+
+DO $$
+DECLARE
+  v_config text[];
+  v_src    text;
+BEGIN
+  SELECT p.proconfig, p.prosrc INTO v_config, v_src
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'increment_scan_upload_attempt';
+
+  ASSERT v_config IS NOT NULL
+     AND EXISTS (SELECT 1 FROM unnest(v_config) c WHERE c LIKE 'search_path=%'),
+    'FAIL 5a: increment_scan_upload_attempt does not pin search_path (function_search_path_mutable)';
+
+  ASSERT v_src ILIKE '%public.room_scans%',
+    'FAIL 5b: increment_scan_upload_attempt does not schema-qualify room_scans';
+
+  RAISE NOTICE '00557 search_path assertions passed.';
 END $$;
 
 -- ROLLBACK so the test is idempotent.
