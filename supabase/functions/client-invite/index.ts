@@ -218,6 +218,48 @@ async function handleAccept(req: Request): Promise<Response> {
     return json({ error: 'update_failed' }, 500);
   }
 
+  // Label the accepting account a client (ruling B2 v3(d), migration 00555).
+  //
+  // handle_new_user gives every signup with no explicit 'homeowner' hint
+  // profiles.role = 'designer' — that is the pre-00555 default and 00555
+  // deliberately leaves it alone. The client-portal invite-accept form signs up
+  // over email/password with no hint (AcceptInviteForm.tsx:64), so a client who
+  // arrives through this invitation lands labelled a designer.
+  //
+  // This handler is the one server-side moment that KNOWS the caller is a
+  // client: they hold an unexpired client_invitations token addressed to their
+  // own email. So it corrects the label here, as service_role — the only
+  // principal that may write the column upward or sideways. profiles.role is a
+  // label, not authority (00555 §a2), so this changes what the person is CALLED
+  // — comms_resolve_role, the funnel views, the onboarding automation — and
+  // grants nothing.
+  //
+  // CONSTRAINT (no test file exists for this function; this comment is the
+  // contract): the write must stay scoped to the accepting user's OWN id, must
+  // run only after the invitation has been validated and marked accepted, and
+  // must NOT fail the request. An invitation that was accepted but left
+  // mislabelled is a cosmetic defect the Block B7 backfill sweeps up; an
+  // invitation that reports failure after accepted_at is already written is a
+  // stuck client. Log and continue.
+  //
+  // Known and accepted: a real DESIGNER who accepts a client invitation
+  // addressed to their own email is relabelled too. Their authority is
+  // untouched — profiles.is_designer and their user_roles grants are not
+  // written here, and nothing in the schema reads role for authorization — so
+  // the cost is the word beside their name in a comms thread until an admin
+  // resets it. Guarding on is_designer was considered and not taken: it would
+  // make this handler's behaviour depend on a column it has no business
+  // reading, for a case that is one person accepting their own client invite.
+  // The `.neq` keeps the common re-accept a no-op.
+  const { error: roleErr } = await admin
+    .from('profiles')
+    .update({ role: 'homeowner' })
+    .eq('id', user.id)
+    .neq('role', 'homeowner');
+  if (roleErr) {
+    console.error('client-invite: accept role relabel failed', roleErr);
+  }
+
   return json({ ok: true, designerId: inv.designer_id });
 }
 
