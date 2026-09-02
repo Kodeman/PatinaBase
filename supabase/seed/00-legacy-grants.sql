@@ -12472,6 +12472,12 @@ END $g$;
 
 -- 00555_ios_round_one_security.sql
 DO $g$ BEGIN
+  REVOKE TRUNCATE, REFERENCES ON public.profiles FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.current_profile_role() FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -12491,6 +12497,30 @@ END $g$;
 -- 00555_ios_round_one_security.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.current_profile_is_designer() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON public.designer_clients FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.designer_clients TO anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.designer_clients TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00555_ios_round_one_security.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

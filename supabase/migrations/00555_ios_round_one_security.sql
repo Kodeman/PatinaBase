@@ -12,11 +12,64 @@
 --
 -- Function lineage (skill: patina-db-migrations step 2):
 --   handle_new_user  00013 → 00023 → 00028 → 00039 → 00040 → 00126 → 00313 → (this)
---                    body grafted verbatim from 00313; the only delta is the
---                    role CASE, which now branches on the identity provider
---                    (ruling B2) instead of COALESCEing to one constant. See (a2)(ii)
+--                    body AND signature grafted VERBATIM from 00313, role CASE
+--                    and `SET search_path TO 'public'` included: RULING B2 v3
+--                    restores the pre-00555 default, so the only deltas are a
+--                    REVOKE of EXECUTE from PUBLIC/anon (RF2-10) and a COMMENT.
+--                    See (a2)(ii). Fix rounds 1 and 2 had this function
+--                    branching on the identity provider; v3 reverses that.
 --   can_view_profile / current_profile_role / current_profile_is_designer /
---   search_shareable_designers / list_vendor_profiles  new here
+--   search_shareable_designers / list_vendor_profiles  new here, all five
+--                    SECURITY DEFINER with `SET search_path = public, pg_temp`
+--                    (RF2-11 — pg_temp named explicitly rather than left to the
+--                    implicit front-of-path entry)
+--
+-- ── FABLE RULING B2 v3 (2026-09-02) — VERBATIM ─────────────────────────────
+--
+-- Supersedes B2 v1 and B2 v2 wherever they appear in this file, in
+-- build/waves/w0/wave-report.md and in build/waves/w0/KODY-RUNBOOK.md. Where a
+-- comment below still explains v1 or v2, it is kept as HISTORY and says so.
+--
+--   (a) profiles.role is a LABEL, never an authorization input. handle_new_user
+--       keeps the pre-00555 default ('designer' for any signup without an
+--       explicit role hint — portals unchanged, Apple/Google on the portals
+--       unchanged); an explicit 'homeowner' hint still wins.
+--   (b) Authority comes only from user_roles (roles.domain IN
+--       ('designer','admin')) or profiles.is_designer, which are written only
+--       by service_role / SECURITY DEFINER paths. Every policy or function this
+--       migration adds that decides authority predicates on those two, never on
+--       profiles.role.
+--   (c) The own-row profiles UPDATE policy allows role to change ONLY to
+--       'homeowner' (a self-downgrade; never upward) and is_designer only to
+--       false; the iOS app performs that self-downgrade after Apple/Google
+--       sign-in (that is W1 · L1-A's A3-07 fix; write the integration note
+--       artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/l1-a-notes.md
+--       with the exact contract: after signInWithIdToken/OAuth, PATCH profiles
+--       set role='homeowner' where id = self, idempotent, once).
+--   (d) The client-invite edge function's accept path sets
+--       profiles.role='homeowner' for the accepting user as service_role
+--       (RF2-02) — supabase/functions/client-invite/index.ts handleAccept; add
+--       it to the runbook as a Kody-run deploy step in Block A (deploy
+--       client-invite after merge) and note that already-accepted clients need
+--       a one-time backfill query (write it, read-only preview + the UPDATE, in
+--       Block B7).
+--   (e) The sibling policy "Designers can update their client profiles" treats
+--       role IN ('homeowner','client') as the client vocabulary in USING and
+--       WITH CHECK (RF2-06), with a W2 note that the 'client'/'homeowner' split
+--       must be reconciled.
+--
+-- WHAT v3 CHANGES IN THIS FILE, in one list:
+--   • handle_new_user goes back to 00313 verbatim — COALESCE(v_role,'designer')
+--     and the explicit-hint arm. The provider CASE is gone. (a2)(ii).
+--   • The two RESTRICTIVE designer_clients policies drop their profiles.role
+--     leg and read user_roles + is_designer instead. (a2)(i-c), RF2-01.
+--   • "Users can update own profile" allows the self-DOWNGRADE its old pin
+--     forbade — role to 'homeowner', is_designer to false, never upward.
+--     (a2)(i-a), ruling (c).
+--   • "Designers can update their client profiles" reads role
+--     IN ('homeowner','client'). (a2)(i-b), ruling (e), RF2-06.
+--   • "Users can insert own profile" no longer pins role at all — only
+--     is_designer. (a) below, RF2-07.
 --
 -- ── WHAT THIS FIXES, STATED PLAINLY ────────────────────────────────────────
 --
@@ -194,6 +247,15 @@
 --      re-opens every vendor profile's full row to every signed-in user and so
 --      only makes sense after DM-1b. Recommendation: (i).
 --
+--   4. supabase/functions/client-invite/index.ts handleAccept — RULING B2 v3(d).
+--      With (ii) reverted to the pre-00555 'designer' default, a client who
+--      accepts a designer's invitation by signing up over email/password lands
+--      profiles.role = 'designer'. The accept path is the one server-side
+--      moment that KNOWS the caller is a client, so it stamps
+--      profiles.role = 'homeowner' as service_role, right where it marks the
+--      invitation accepted. Deploy step: KODY-RUNBOOK Block A (A10). The
+--      one-time backfill for clients who already accepted is Block B7.
+--
 --   The full blast-radius list, including the silent degradations, is in the
 --   READERS block at the foot of this file.
 --
@@ -274,13 +336,23 @@ BEGIN;
 -- through profiles. Evaluating them as the invoker recurses. Definer + a pinned
 -- search_path is the shape 00315_studio_comember_helper.sql already uses for
 -- is_studio_comember, which this function calls.
+--
+-- RULING B2 v3(b), checked in fix round 3 (RF2-01): every leg below is a
+-- RELATIONSHIP term — a roster row, a project, a proposal, an invoice, a lead,
+-- a direct order, a live scan share, a live thread, a studio or org
+-- co-membership. Not one of them reads profiles.role, and none of them should:
+-- the question this function answers is "do these two people know each other",
+-- which is never a question about a label. The one authority-shaped leg on the
+-- table, the admin read, is a separate POLICY (profiles_select_admin) and it
+-- reads user_roles. Nothing here needed changing; recorded so the next reviewer
+-- does not have to re-derive it.
 
 CREATE OR REPLACE FUNCTION public.can_view_profile(p_profile_id uuid)
 RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
   SELECT p_profile_id IS NOT NULL
      AND (SELECT auth.uid()) IS NOT NULL
@@ -517,17 +589,29 @@ CREATE POLICY profiles_select_agent_reader ON public.profiles
 -- postgres, and every invite path uses service_role — neither is subject to
 -- this policy, so the leg has no legitimate caller.
 --
--- The two column pins are the INSERT half of (a2) below, and they are not
--- decorative: profiles.role's column DEFAULT is 'designer' and is_designer is
--- nullable, so an INSERT that simply OMITS role lands a designer. (a2) closes
--- self-elevation on UPDATE; without these, the same elevation is one INSERT
--- away for any live auth.users row that has no profiles row yet — a partially
--- completed delete-account, a backfill gap, a failed trigger. The window is
--- narrow (handle_new_user always writes the row, authenticated has no DELETE
--- after this migration, and profiles_id_fkey stops a fabricated uuid), which
--- is why this is a door matching a window rather than a live hole.
+-- The is_designer pin is the INSERT half of (a2) below, and it is not
+-- decorative: is_designer is nullable, so an INSERT may carry it outright.
+-- (a2) closes self-elevation on UPDATE; without this, the same elevation is one
+-- INSERT away for any live auth.users row that has no profiles row yet — a
+-- partially completed delete-account, a backfill gap, a failed trigger. The
+-- window is narrow (handle_new_user always writes the row, authenticated has no
+-- DELETE after this migration, and profiles_id_fkey stops a fabricated uuid),
+-- which is why this is a door matching a window rather than a live hole.
 --
--- Pinned to literals rather than to a helper: there is no OLD row to read on an
+-- ROLE IS DELIBERATELY NOT PINNED HERE — RULING B2 v3(a), finding RF2-07.
+-- Fix round 2 pinned `role IS NOT DISTINCT FROM 'homeowner'` on this policy.
+-- That was the same category error B2 v3 corrects everywhere else in the file:
+-- it treats profiles.role as though it were an authorization input, so the
+-- policy has to guess which label the row is entitled to — and it guessed
+-- wrong for a designer re-creating their own missing profiles row, and wrong
+-- for the client vocabulary ('client', see (i-b)). Under v3 the label carries
+-- no authority: designer_clients' restrictive policies read user_roles and
+-- is_designer (i-c), the design-request rail reads is_designer, and
+-- profiles_select_admin reads user_roles. A caller who inserts their own row
+-- with role = 'designer' has stamped a word on it and gained nothing. The one
+-- column that WOULD be authority is still pinned.
+--
+-- Pinned to a literal rather than to a helper: there is no OLD row to read on an
 -- INSERT, and no legitimate authenticated INSERT of a profiles row exists in
 -- the codebase at all — every profile write outside handle_new_user() is an
 -- adminClient / edge-function upsert as service_role (admin-portal
@@ -538,7 +622,6 @@ CREATE POLICY "Users can insert own profile" ON public.profiles
   FOR INSERT TO authenticated
   WITH CHECK (
     (SELECT auth.uid()) = id
-    AND role IS NOT DISTINCT FROM 'homeowner'
     AND is_designer IS NOT TRUE
   );
 
@@ -562,11 +645,15 @@ CREATE POLICY "Designers can create homeowner profiles" ON public.profiles
 
 COMMENT ON POLICY "Designers can create homeowner profiles" ON public.profiles IS
   'A designer adding a client may insert a profiles row for them. WITH CHECK '
-  'pins role = ''homeowner'' (00017) AND is_designer IS NOT TRUE (00555) — the '
-  'label and the authority. Without the second pin this policy ORs around the '
-  'column pins on "Users can insert own profile" and any authenticated caller '
-  'can mint a designer-authority row. Re-scoped to authenticated (was PUBLIC) '
-  'in 00555. The arbitrary-id half is unchanged and is CAVEAT 1 in this file.';
+  'pins role = ''homeowner'' (00017, unchanged) AND is_designer IS NOT TRUE '
+  '(00555) — the label and the authority. Without the second pin this policy '
+  'ORs around the is_designer pin on "Users can insert own profile" and any '
+  'authenticated caller can mint a designer-authority row. The role literal is '
+  'kept here because it is 00017''s own contract for what a designer may '
+  'create — it is NOT an authority decision, and ruling B2 v3(a) is why the '
+  'OWN-row INSERT policy beside it stopped pinning role at all. Re-scoped to '
+  'authenticated (was PUBLIC) in 00555. The arbitrary-id half is unchanged and '
+  'is CAVEAT 1 in this file.';
 
 -- Grant hygiene, mirroring 00510: a grant no caller may use is a grant waiting
 -- for a policy mistake. REVOKE ALL PRIVILEGES rather than an enumerated list —
@@ -580,6 +667,18 @@ GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
 -- deletion happens via the delete-account edge function as service_role.
 REVOKE DELETE ON public.profiles FROM authenticated;
 
+-- RF2-09. The same argument, one step further. `GRANT SELECT, INSERT, UPDATE`
+-- above is additive — it does not clear what the pre-flip creation default
+-- already handed `authenticated`, which on Strata is the full `arwdDxtm` set.
+-- TRUNCATE is not row-level and RLS does NOT constrain it: a grantee with
+-- TRUNCATE empties public.profiles in one statement, policies or no policies.
+-- REFERENCES lets a grantee point a new FK at profiles and then pin rows
+-- against deletion. Neither has a caller — every legitimate DDL-adjacent write
+-- is postgres or service_role. TRIGGER and MAINTAIN are left alone: they are
+-- not reachable through PostgREST at all and clearing them here would be a
+-- change this migration cannot test.
+REVOKE TRUNCATE, REFERENCES ON public.profiles FROM authenticated;
+
 -- ─── (a2) profiles.role AND profiles.is_designer: close the self-elevation ──
 -- ───      the UPDATE policies leave open                                    ──
 --
@@ -587,22 +686,38 @@ REVOKE DELETE ON public.profiles FROM authenticated;
 --     CREATE POLICY "Users can update own profile" ON profiles
 --       FOR UPDATE USING (auth.uid() = id);
 -- No WITH CHECK and no column restriction. Combined with the UPDATE grant three
--- lines above, ANY authenticated user can set their own profiles.role to
--- 'designer'. That is a privilege-escalation path, and it is not hypothetical
--- for this program: finding A3-07's proposed client-side remedy (the Apple
--- sign-in path writing role: homeowner after success, because supabase-swift's
--- signInWithIdToken has no data: parameter) works ONLY because this hole exists.
--- Without the two changes below, a "security migration" would entrench the hole
--- and the app would depend on it — and any later migration that restricts the
--- role column would silently turn Apple sign-ups back into designers.
+-- lines above, ANY authenticated user can set their own profiles.is_designer to
+-- true — the column the design-request pool actually reads as authority — and
+-- their own profiles.role to anything at all.
 --
--- Fix, in two halves:
---   (i)  the client may update its own row but may NOT change its own role,
---        NOR its own is_designer (i-a) — on either of the table's two
---        permissive UPDATE policies (i-b);
---   (ii) the SERVER decides an app sign-up's role from the identity provider
---        (below, in the handle_new_user block), so role is never the client's
---        to set.
+-- ── HOW RULING B2 v3 RESHAPES THIS SECTION ─────────────────────────────────
+--
+-- v1 and v2 of this section argued that role was an escalation path and had to
+-- be frozen, and moved the signup default into handle_new_user to compensate.
+-- v3 says the first half of that was a category error: **profiles.role is a
+-- LABEL, never an authorization input.** Nothing in the schema grants anything
+-- because role says 'designer' — the design-request rail (00286/00330/00285)
+-- reads is_designer, profiles_select_admin reads user_roles, and after RF2-01
+-- so do the designer_clients restrictive policies in (i-c). So freezing role
+-- bought no security, and it cost the one thing the product needs: A3-07's fix.
+--
+-- A3-07 is that an Apple/Google sign-up lands profiles.role = 'designer',
+-- because supabase-swift's signInWithIdToken and signInWithOAuth carry no
+-- `data:` parameter and so cannot send the 'homeowner' hint the email path
+-- sends. v3 fixes it where it belongs — in the client, which is the only party
+-- that knows the sign-in came from the Patina app — by allowing exactly one
+-- self-write of the column: a DOWNGRADE.
+--
+-- Fix, in three parts:
+--   (i)  the client may update its own row, may NOT raise its own is_designer,
+--        and may change its own role in ONE direction only — to 'homeowner'
+--        (i-a) — on either of the table's two permissive UPDATE policies (i-b);
+--   (ii) handle_new_user keeps the pre-00555 'designer' default (B2 v3(a)), so
+--        nothing about the portals' own signup changes;
+--   (iii) the two paths that KNOW a new account is a client do the downgrade:
+--        the iOS app after Apple/Google sign-in (B2 v3(c), W1 · L1-A, contract
+--        in build/waves/w1/l1-a-notes.md) and client-invite's accept handler as
+--        service_role (B2 v3(d)).
 -- The pin has to read the caller's CURRENT role, and a WITH CHECK sees only
 -- the NEW row — there is no OLD in a WITH CHECK. Reading public.profiles
 -- inline is therefore the obvious shape and it does not work: the subquery is
@@ -621,7 +736,7 @@ RETURNS text
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
   SELECT p.role FROM profiles p WHERE p.id = (SELECT auth.uid());
 $$;
@@ -633,10 +748,11 @@ GRANT  EXECUTE ON FUNCTION public.current_profile_role() TO authenticated;
 
 COMMENT ON FUNCTION public.current_profile_role() IS
   'The calling user''s own profiles.role, read past RLS. Exists solely so the '
-  '"Users can update own profile" WITH CHECK can pin the role column without '
-  'the inline subquery that made the policy self-recursive (42P17). Returns '
-  'only the caller''s own row, so being PostgREST-exposed to authenticated '
-  'tells a caller nothing it could not already read. Added 00555.';
+  '"Users can update own profile" WITH CHECK can hold the role column to '
+  '"unchanged, or downgraded to homeowner" without the inline subquery that '
+  'made the policy self-recursive (42P17). Returns only the caller''s own row, '
+  'so being PostgREST-exposed to authenticated tells a caller nothing it could '
+  'not already read. Added 00555.';
 
 -- (i-a) profiles.is_designer, pinned by the SAME mechanism and for a stronger
 -- reason than role.
@@ -668,7 +784,7 @@ RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
   SELECT p.is_designer FROM profiles p WHERE p.id = (SELECT auth.uid());
 $$;
@@ -682,23 +798,56 @@ COMMENT ON FUNCTION public.current_profile_is_designer() IS
   'authority column without the inline subquery that makes the policy '
   'self-recursive (42P17). Returns only the caller''s own row. Added 00555.';
 
+-- RULING B2 v3(c). The WITH CHECK is a RATCHET, not a freeze: each column is
+-- either unchanged, or moved one step DOWN.
+--
+--   role         unchanged, or set to 'homeowner'
+--   is_designer  unchanged, or set to false
+--
+-- Written as `x IS NOT DISTINCT FROM <current> OR x = <floor>` rather than the
+-- `x IN (<current>, <floor>)` the ruling states in prose, because the two are
+-- not equivalent under NULL and the difference is a live outage. profiles.role
+-- is NOT NULL, but profiles.is_designer is NULLABLE, and `NULL IN (NULL, false)`
+-- evaluates to NULL — which a WITH CHECK treats as a refusal. A legacy row with
+-- is_designer NULL would therefore have been unable to write its own
+-- display_name. The IS NOT DISTINCT FROM leg is NULL-safe and does the same job.
+--
+-- Why 'homeowner' is a safe destination and not a hole: the label grants
+-- nothing (see the section header), and the authority columns are still pinned
+-- upward — is_designer can only fall, and user_roles is not writable from here
+-- at all. There is no role string a caller can reach through this policy that
+-- admits them anywhere. Setting role = 'homeowner' on a real designer's own row
+-- is self-harm, not escalation; it costs them their own comms label
+-- (comms_resolve_role, 00103) and nothing else, and only they can do it.
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles
   FOR UPDATE TO authenticated
   USING  ((SELECT auth.uid()) = id)
   WITH CHECK (
     (SELECT auth.uid()) = id
-    AND role IS NOT DISTINCT FROM public.current_profile_role()
-    AND is_designer IS NOT DISTINCT FROM public.current_profile_is_designer()
+    AND (
+      role IS NOT DISTINCT FROM public.current_profile_role()
+      OR role = 'homeowner'
+    )
+    AND (
+      is_designer IS NOT DISTINCT FROM public.current_profile_is_designer()
+      OR is_designer = false
+    )
   );
 
 COMMENT ON POLICY "Users can update own profile" ON public.profiles IS
-  'Owner may update their own row. WITH CHECK pins profiles.role AND '
-  'profiles.is_designer to their current values: both are service_role / admin '
-  'grants, never client writes. is_designer is the stronger of the two — it is '
-  'the column the design-request pool (00286), accept_design_request (00330) '
-  'and search_shareable_designers read as designer authority. Added 00555 (was '
-  'USING-only since 00013).';
+  'Owner may update their own row. WITH CHECK is a one-way RATCHET on the two '
+  'identity columns (ruling B2 v3(c)): profiles.role may only stay as it is or '
+  'become ''homeowner'', and profiles.is_designer may only stay as it is or '
+  'become false. Never upward. is_designer is the one that carries AUTHORITY — '
+  'it is the column the design-request pool (00286), accept_design_request '
+  '(00330) and search_shareable_designers read; profiles.role is a LABEL and '
+  'grants nothing. The self-downgrade leg exists so the iOS app can correct '
+  'A3-07 after an Apple/Google sign-in (W1 · L1-A: PATCH role=''homeowner'' on '
+  'its own row, once, idempotent) without needing the wide-open USING-only '
+  'policy 00013 shipped. Both legs use IS NOT DISTINCT FROM, not IN, because '
+  'is_designer is nullable and a NULL inside an IN list refuses the owner''s '
+  'own no-op write. Added 00555 (was USING-only since 00013).';
 
 -- (i-b) the SIBLING policy, without which (i) is decorative.
 --
@@ -760,6 +909,33 @@ COMMENT ON POLICY "Users can update own profile" ON public.profiles IS
 -- live Add Client flow and a W2 item, tracked, not smuggled in here. What it
 -- DOES close is the same trick run by a non-designer, and the demotion of any
 -- designer by anyone — see the restrictive policy on designer_clients below.
+-- RULING B2 v3(e), finding RF2-06: the client vocabulary is TWO strings, not
+-- one, so `role = 'homeowner'` alone was too narrow. The evidence, all of it
+-- checkable on a local stack:
+--   • public.profiles.role carries NO CHECK constraint and no enum — the only
+--     constraint on the table is profiles_availability_status_check. Any string
+--     at all is a legal value, so a policy cannot assume a closed set.
+--   • public.comms_resolve_role (00103:37-42) is the one function that
+--     INTERPRETS the column, and its client branch is `ELSE 'client'` — every
+--     role that is not admin/designer/vendor is a client to the comms rail.
+--   • public.roles carries a `client` row in the `consumer` domain beside
+--     `app_user`, and this migration's own test fixture uses it: `Cleo`,
+--     `role = 'client'`, is Dana's rostered client in
+--     supabase/tests/rls/00555_ios_round_one_security.test.sql.
+-- With the single literal in the USING clause, a designer whose client row says
+-- 'client' could not edit that client's display_name AT ALL: the policy would
+-- not select the row, the PATCH would answer 200 [] and the rename would
+-- silently do nothing. Both clauses therefore read
+-- `role IN ('homeowner', 'client')`.
+--
+-- ⚠ W2: THE SPLIT ITSELF IS THE BUG. Two strings mean the same thing here and
+-- nothing decides which one a row gets — handle_new_user writes 'homeowner' for
+-- a hinted signup and 'designer' otherwise, /api/auth/invite/accept and the
+-- admin onboard paths write their own, client-invite's accept handler now
+-- writes 'homeowner' (B2 v3(d)), and 00017's INSERT sibling still pins the
+-- single literal 'homeowner'. Reconciling the vocabulary (one string, a
+-- backfill, and a CHECK constraint or an enum) is a W2 migration, filed here so
+-- the next reader does not have to rediscover that this list is a workaround.
 DROP POLICY IF EXISTS "Designers can update their client profiles" ON public.profiles;
 CREATE POLICY "Designers can update their client profiles" ON public.profiles
   FOR UPDATE TO authenticated
@@ -769,7 +945,7 @@ CREATE POLICY "Designers can update their client profiles" ON public.profiles
       WHERE dc.client_id = profiles.id
         AND dc.designer_id = (SELECT auth.uid())
     )
-    AND role = 'homeowner'
+    AND role IN ('homeowner', 'client')
     AND is_designer IS NOT TRUE
   )
   WITH CHECK (
@@ -778,23 +954,28 @@ CREATE POLICY "Designers can update their client profiles" ON public.profiles
       WHERE dc.client_id = profiles.id
         AND dc.designer_id = (SELECT auth.uid())
     )
-    AND role = 'homeowner'
+    AND role IN ('homeowner', 'client')
     AND is_designer IS NOT TRUE
   );
 
 COMMENT ON POLICY "Designers can update their client profiles" ON public.profiles IS
   'A designer may edit a profile on their designer_clients roster. BOTH clauses '
-  'carry role = ''homeowner'' AND is_designer IS NOT TRUE: the USING half reads '
-  'the OLD row, so a designer, admin or vendor on a roster is not selectable by '
-  'this policy at all and cannot be demoted or renamed through it; the WITH '
-  'CHECK half reads the NEW row, so an editable client cannot be promoted. '
-  'Pinning only the WITH CHECK to those literals — the 2026-09-02 first cut — '
-  'left demotion wide open, because a demotion satisfies the literals. The '
-  'role half matches the INSERT sibling "Designers can create homeowner '
-  'profiles" (00017); the is_designer half is the authority the design-request '
-  'pool (00286/00330) reads. Without a WITH CHECK at all this policy fell back '
-  'to its USING and became an OR-branch around the pins on "Users can update '
-  'own profile". Re-scoped to authenticated (was PUBLIC) in 00555.';
+  'carry role IN (''homeowner'',''client'') AND is_designer IS NOT TRUE: the '
+  'USING half reads the OLD row, so a designer, admin or vendor on a roster is '
+  'not selectable by this policy at all and cannot be demoted or renamed '
+  'through it; the WITH CHECK half reads the NEW row, so an editable client '
+  'cannot be promoted, and cannot be relabelled out of the client vocabulary '
+  'either. Pinning only the WITH CHECK to literals — the 2026-09-02 first cut — '
+  'left demotion wide open, because a demotion satisfies them. The two-string '
+  'client vocabulary is ruling B2 v3(e): profiles.role has no CHECK constraint, '
+  'comms_resolve_role (00103) treats every non-admin/designer/vendor role as a '
+  'client, and public.roles carries a ''client'' row — so ''homeowner'' alone '
+  'made a designer unable to rename a client whose row says ''client''. '
+  'Reconciling the split is a W2 migration. The '
+  'is_designer half is the authority the design-request pool (00286/00330) '
+  'reads. Without a WITH CHECK at all this policy fell back to its USING and '
+  'became an OR-branch around the pins on "Users can update own profile". '
+  'Re-scoped to authenticated (was PUBLIC) in 00555.';
 
 -- ─── (i-c) the ENABLING PRIMITIVE: who may mint a designer_clients row ─────
 --
@@ -822,21 +1003,61 @@ COMMENT ON POLICY "Designers can update their client profiles" ON public.profile
 -- view rather than a base-table policy, and narrowing SELECT here would be a
 -- second, unrelated change.
 --
--- The predicate reads BOTH designer signals, because they can legitimately
--- disagree. profiles.is_designer is set by 00290's trigger off a
--- DESIGNER-DOMAIN user_roles grant, and handle_new_user writes every signup an
--- 'app_user' grant — so a designer who self-signed-up on the portal carries
--- profiles.role = 'designer' with is_designer still false until an invite or an
--- admin grant lands. is_designer alone would lock those designers out of their
--- own Add Client flow. Both columns are now server-controlled (the pins above),
--- so neither is a caller-supplied input.
+-- ── THE PREDICATE, AND WHY IT DOES NOT READ profiles.role (RF2-01) ────────
+--
+-- RULING B2 v3(b): authority comes only from public.user_roles
+-- (roles.domain IN ('designer','admin')) or profiles.is_designer. Both are
+-- written exclusively by service_role or by SECURITY DEFINER paths —
+-- user_roles by the admin portal, the invite edge functions and 00552's
+-- onboarding rail; is_designer by 00290's fc_sync_is_designer_from_role
+-- trigger, which fires off a DESIGNER-DOMAIN user_roles grant, and by
+-- designer-invite / workspace-member-invite. Neither is reachable from a client
+-- write: the profiles UPDATE policy above lets is_designer fall and never rise,
+-- and nothing in the schema lets an authenticated caller INSERT into user_roles.
+--
+-- Fix round 2 shipped this predicate with a third leg,
+-- `current_profile_role() IN ('designer','admin','super_admin')`, on the
+-- argument that a portal self-signup carries role = 'designer' before any grant
+-- lands and would otherwise be locked out of its own Add Client flow. That leg
+-- is the whole vulnerability. handle_new_user gives EVERY email/password signup
+-- role = 'designer' (B2 v3(a) restores exactly that default), so the leg reads:
+-- *anyone who can complete a signup form may mint a roster row* — which is the
+-- primitive (i-b) exists to contain, restored by the policy meant to close it.
+-- It is not even a hard case: the "locked-out self-signup designer" is not a
+-- designer yet by any measure the rest of the schema accepts. The same account
+-- is refused by claim_design_request (00286), accept_design_request (00330),
+-- design_request_submit (00285) and search_shareable_designers, all of which
+-- read is_designer. Admitting it HERE and nowhere else would have been the
+-- inconsistency, not the fix. A designer becomes one when an invite or an admin
+-- grant lands — that is a real event, and it sets both signals.
+--
+-- The user_roles leg is not redundant with is_designer even though 00290's
+-- trigger syncs one from the other: the trigger is AFTER INSERT ON user_roles
+-- and a row that predates 00290, or one written while the trigger was dropped,
+-- carries the grant with is_designer still false. Reading both is the belt to
+-- the trigger's braces. `domain IN ('designer','admin')` rather than a name
+-- list because names change and domains do not — public.roles carries
+-- independent_designer / studio_admin / studio_designer / studio_owner in the
+-- designer domain and ml_operator / quality_control / super_admin /
+-- support_agent in admin.
+--
+-- The EXISTS is inline rather than a helper for the same reason
+-- profiles_select_admin's is: it is evaluated as the INVOKER, over the caller's
+-- OWN user_roles rows, which the caller can already read. No new SECURITY
+-- DEFINER surface, and nothing to grant.
 DROP POLICY IF EXISTS designer_clients_writer_is_designer ON public.designer_clients;
 CREATE POLICY designer_clients_writer_is_designer ON public.designer_clients
   AS RESTRICTIVE
   FOR INSERT TO authenticated
   WITH CHECK (
     public.current_profile_is_designer() IS TRUE
-    OR public.current_profile_role() IN ('designer', 'admin', 'super_admin')
+    OR EXISTS (
+      SELECT 1
+      FROM user_roles ur
+      JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = (SELECT auth.uid())
+        AND r.domain IN ('designer', 'admin')
+    )
   );
 
 DROP POLICY IF EXISTS designer_clients_updater_is_designer ON public.designer_clients;
@@ -845,11 +1066,23 @@ CREATE POLICY designer_clients_updater_is_designer ON public.designer_clients
   FOR UPDATE TO authenticated
   USING (
     public.current_profile_is_designer() IS TRUE
-    OR public.current_profile_role() IN ('designer', 'admin', 'super_admin')
+    OR EXISTS (
+      SELECT 1
+      FROM user_roles ur
+      JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = (SELECT auth.uid())
+        AND r.domain IN ('designer', 'admin')
+    )
   )
   WITH CHECK (
     public.current_profile_is_designer() IS TRUE
-    OR public.current_profile_role() IN ('designer', 'admin', 'super_admin')
+    OR EXISTS (
+      SELECT 1
+      FROM user_roles ur
+      JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = (SELECT auth.uid())
+        AND r.domain IN ('designer', 'admin')
+    )
   );
 
 COMMENT ON POLICY designer_clients_writer_is_designer ON public.designer_clients IS
@@ -858,16 +1091,59 @@ COMMENT ON POLICY designer_clients_writer_is_designer ON public.designer_clients
   '"designer_clients_studio_rw") are satisfied by designer_id = auth.uid(), so '
   'before 00555 any authenticated account could mint the relationship row that '
   'admits it to "Designers can update their client profiles" on profiles and to '
-  'can_view_profile''s roster leg. Reads both designer signals because a '
-  'self-signed-up portal designer has role = ''designer'' before 00290''s '
-  'trigger sets is_designer. Added 00555.';
+  'can_view_profile''s roster leg. The predicate reads ONLY the two authority '
+  'signals — profiles.is_designer, and a user_roles grant in the designer or '
+  'admin domain — never profiles.role (ruling B2 v3(b), finding RF2-01): '
+  'handle_new_user gives every email/password signup role = ''designer'', so a '
+  'role leg here would hand the mint back to anyone who can complete a signup '
+  'form. Added 00555.';
 
 COMMENT ON POLICY designer_clients_updater_is_designer ON public.designer_clients IS
   'RESTRICTIVE: only a designer may re-point an existing roster row. Same '
-  'predicate and same reasoning as designer_clients_writer_is_designer — the '
-  'INSERT leg is the mint, this one stops a legacy row being aimed at a new '
-  'client_id by a caller who is no longer (or never was) a designer. '
-  'Added 00555.';
+  'predicate and same reasoning as designer_clients_writer_is_designer — '
+  'profiles.is_designer or a designer/admin-domain user_roles grant, never '
+  'profiles.role. The INSERT leg is the mint, this one stops a legacy row being '
+  'aimed at a new client_id by a caller who is no longer (or never was) a '
+  'designer. Added 00555.';
+
+-- Grant hygiene on this table, the same argument as profiles above (RF2-08).
+-- anon holds the full arwdDxtm set on public.designer_clients, inherited from
+-- the pre-flip creation default: SELECT, INSERT, UPDATE, DELETE, TRUNCATE,
+-- REFERENCES, TRIGGER and PG 17's MAINTAIN, on the table that decides who is
+-- whose client. The WRITE half has no caller in any environment and is the
+-- hazard — an anon INSERT is the roster-mint primitive (i-c) closes for
+-- authenticated callers, reachable with the key that ships in the iOS binary.
+--
+-- ⚠ THE SELECT IS LOAD-BEARING, AND NOT FOR A CALLER OF THIS TABLE. The first
+-- cut of this revoke took SELECT too, on the strength of a grep over apps/,
+-- packages/ and supabase/functions/ that found zero anon-key reads — which is
+-- true, and was the wrong place to look. `storage.objects` carries the policy
+-- "Designers manage discovery folio objects" (00224:165), whose USING clause
+-- reads designer_clients, and Postgres checks the ACL of every table named in a
+-- relation's policy set at executor init — BEFORE filtering those policies by
+-- role. The policy is `TO authenticated`; the check is not. So revoking SELECT
+-- made EVERY anon read of storage.objects raise
+--   42501  permission denied for table designer_clients
+--   HINT   Grant the required privileges to the current role with:
+--          GRANT SELECT ON public.designer_clients TO anon;
+-- and took two unrelated suites red on a fresh stack
+-- (supabase/tests/storage/project_documents_caller_binding_test.sql and
+--  supabase/tests/mood_boards/share_security_test.sql). Reproduced and
+-- re-verified on the local stack, 2026-09-02.
+--
+-- Keeping SELECT costs nothing. RLS is enabled on the table and the only policy
+-- that admits anon is 00014's `FOR ALL TO PUBLIC USING (auth.uid() = designer_id)`,
+-- where auth.uid() is NULL for an anon caller — so an anon SELECT returns zero
+-- rows. The grant satisfies a permission check; it does not open a read.
+--
+-- The GRANT back to authenticated is explicit for the reason the vendors block
+-- states: on a post-2026-05-30 stack nothing grants it during a migration
+-- replay, and the assertion at the foot of this file would then fail the
+-- transaction on a fresh local reset. Additive on prod, load-bearing locally.
+-- FOR ALL policies on this table cover all four verbs, so all four are granted.
+REVOKE ALL PRIVILEGES ON public.designer_clients FROM anon;
+GRANT SELECT ON public.designer_clients TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.designer_clients TO authenticated;
 
 -- (ii) the server-side default. handle_new_user() is SECURITY DEFINER and owned
 -- by postgres, so it is not subject to the policy above.
@@ -877,97 +1153,69 @@ COMMENT ON POLICY designer_clients_updater_is_designer ON public.designer_client
 -- 00313_handle_new_user_client_role_hint.sql, which is the
 --   grep -rln "CREATE OR REPLACE FUNCTION[^(]*handle_new_user" \
 --     supabase/migrations/*.sql | sort | tail -1
--- winner. The ONLY delta is the role CASE: 00313 resolved a client hint or NULL
--- and then COALESCEd to the single constant 'designer'; this version resolves
--- the default from the IDENTITY PROVIDER instead. 00313's security rule is
--- untouched — a client-supplied role hint is honored ONLY when it is the
--- literal 'homeowner', so raw_user_meta_data can never self-assign an elevated
--- role, and that hint still wins over the provider default.
+-- winner — role CASE, COALESCE and all. 00313's security rule is untouched: a
+-- client-supplied role hint is honored ONLY when it is the literal 'homeowner',
+-- so raw_user_meta_data can never self-assign an elevated role.
 --
 -- An earlier draft of this migration left the body out and asked whoever
 -- applied the file to paste it in at apply time. That is not replayable: a
 -- local `supabase db reset` would produce a database where this function is
 -- unchanged, and the guard that was supposed to catch it
 -- (pg_get_functiondef LIKE '%homeowner%') is satisfied twice over by 00313's
--- own body — it would report success over a skipped step. Both are fixed here.
+-- own body — it would report success over a skipped step. Both are fixed here:
+-- the body is present, and the guard below matches on the COALESCE.
 --
--- ── RULING B2 (Fable, 2026-09-02; direction corrected the same day) ───────
--- The default role is decided by the IDENTITY PROVIDER, not by one constant,
--- and the allowlist names the surface that keeps the PRIVILEGED value:
+-- ── RULING B2 v3 (Fable, 2026-09-02) — THE DEFAULT DOES NOT MOVE ──────────
 --
---   email/password provider → 'designer'    (the pre-00555 default. This is
---                                            the designer portal's own
---                                            self-signup page and nothing
---                                            else: it sends no role metadata
---                                            and must stay a designer)
---   every other provider    → 'homeowner'   (apple, google, and any OAuth
---                                            provider added later; also a row
---                                            carrying no raw_app_meta_data)
---   explicit role metadata  → wins, as today (00313: only the literal
---                                            'homeowner' is honored)
+-- This function is UNCHANGED from 00313 in behaviour. Every signup with no
+-- honored 'homeowner' hint still lands profiles.role = 'designer'. The portals
+-- are unchanged; Apple and Google on the portals are unchanged.
 --
--- The first cut of this ruling had the allowlist pointed the other way —
--- `WHEN provider = 'apple' THEN 'homeowner' ELSE 'designer'` — which reopened
--- A3-07 for the SECOND button on the same screen. AuthService.signInWithGoogle
--- (:399-421, wired at ContentView.swift:48, AuthSheet.swift:59,
--- AuthViewModel.swift:314) calls signInWithOAuth, which carries no `data:`
--- parameter, exactly as signInWithIdToken does not: a round-one homeowner who
--- tapped "Continue with Google" landed as a designer. Proved in a rolled-back
--- transaction: {"provider":"google","providers":["google"]} → 'designer', and a
--- row with no raw_app_meta_data at all → 'designer'. Ruling D3 removes the
--- Google button from the Welcome screen in W1, but a trigger default must not
--- depend on a client-side button being absent, and an allowlist that defaults
--- the UNKNOWN provider to the privileged value hands the same bug to every
--- provider added after this file.
+-- Two earlier cuts of this migration changed it, and both were wrong:
 --
--- WHY it is needed at all: an Apple sign-up carries no creation metadata
--- (supabase-swift's signInWithIdToken has no data: parameter), so it fell
--- through to 00313's 'designer' fallback — which is how A3-07's tester became a
--- designer. A3-07's proposed client-side remedy (the app writing its own role
--- after sign-in) works only through the self-elevation hole (i) above closes,
--- so with that hole shut the default MUST move to the server.
+--   B2 v1  flipped COALESCE(v_role,'designer') to COALESCE(v_role,'homeowner').
+--          That fixed the iOS path and broke the designer portal's own signup
+--          page (apps/designer-portal/src/app/auth/signup/page.tsx:147-157
+--          sends name/company/phone and NO role), which would have written
+--          every portal designer as a 'homeowner' and had
+--          public.comms_resolve_role (00103:37-42) label them `client` in every
+--          thread.
+--   B2 v2  replaced the constant with a CASE on raw_app_meta_data->>'provider',
+--          allowlisting 'email' to 'designer' and defaulting everything else to
+--          'homeowner'.
 --
--- WHY it is provider-shaped rather than a flat 'homeowner': an earlier draft
--- flipped the constant, which fixed the Apple path and broke the portal's own
--- self-signup page (apps/designer-portal/src/app/auth/signup/page.tsx:147-157
--- sends name/company/phone and NO role) — every portal designer would have
--- landed as profiles.role = 'homeowner' and been labelled `client` in every
--- comms thread by public.comms_resolve_role (00103:37-42). Branching on the
--- provider serves both surfaces with no client-controlled input: GoTrue writes
--- raw_app_meta_data server-side and the client cannot set it.
+-- v3 reverses v2 for a reason that is about the SHAPE of the fix, not its
+-- direction. The provider CASE moved a PRODUCT decision — "is this new account
+-- a client or a designer?" — into an auth.users trigger, where the only
+-- evidence available is which button the person tapped. That is not the same
+-- question. A designer can sign in with Apple; a client can sign up with an
+-- email and a password (the client-portal invite-accept form does exactly that,
+-- AcceptInviteForm.tsx:64). v2 would have written the wrong answer for both,
+-- silently, at the one moment the row is created and nobody is looking.
 --
--- WHY the allowlist names 'email' and not the OAuth providers: 'email' is the
--- only provider that identifies ONE surface. Every OAuth provider Patina has or
--- adds is reached from the iOS app's Welcome screen, and none of them can carry
--- creation metadata (neither signInWithIdToken nor signInWithOAuth takes a
--- `data:` parameter in supabase-swift), so an OAuth row is a homeowner by
--- construction. The client portal's invite-accept form also signs up over
--- email/password with no role hint (AcceptInviteForm.tsx:64) and therefore also
--- lands 'designer' from this trigger — unchanged from every migration since
--- 00013, and corrected immediately afterwards by /api/auth/invite/accept, which
--- runs as service_role. Not a regression this file introduces, and not one it
--- fixes; it is on the same W2 list as the rest of the role vocabulary.
+-- And it bought nothing, because profiles.role is a LABEL (B2 v3(a)). Nothing
+-- in the schema grants authority from it: the design-request rail reads
+-- is_designer, profiles_select_admin reads user_roles, and after RF2-01 so do
+-- the designer_clients restrictive policies in (i-c). A wrong label is a
+-- cosmetic defect — a client mislabelled 'designer' sees the wrong word in a
+-- comms thread — not a privilege escalation.
 --
--- HOW the provider is read. GoTrue populates raw_app_meta_data at the SAME
--- INSERT that fires this trigger — signupNewUser sets
---   {"provider": "<name>", "providers": ["<name>"]}
--- on the user model before tx.Create, which is why every seeded row in
--- supabase/seed/dev-accounts.sql carries the pair. `provider` is nonetheless
--- the DEPRECATED half of that pair (GoTrue's own source marks it "TODO:
--- Deprecate"), and an account that later links a second identity accumulates
--- names in `providers` while `provider` keeps the first. So the designer branch
--- requires BOTH legs to say email and only email: the `provider` scalar reads
--- 'email' AND no OTHER name appears in the `providers` array. A row that names
--- email alongside anything else, a row with only an array, and a row with no
--- raw_app_meta_data at all all fall to 'homeowner' — the unprivileged side,
--- which is where an unrecognised shape belongs.
+-- So the label is corrected where the answer is actually KNOWN, by the two
+-- callers that know it:
 --
--- The authoritative role table is public.user_roles — this function still
--- writes 'app_user' there for every signup regardless of provider — and
--- profiles.is_designer is synced from user_roles by 00290's trigger. So this
--- CASE decides the profiles.role STRING only, which is what 00050's
--- designer-onboarding automation, 00103/00104's comms participant-role
--- derivation and 00038's funnel views branch on.
+--   • the iOS app, after an Apple/Google sign-in, PATCHes its OWN row to
+--     role = 'homeowner' — permitted by the one-way ratchet on
+--     "Users can update own profile" above (B2 v3(c)). This is A3-07's fix, and
+--     it is W1 · L1-A; the contract is written out in
+--     artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/l1-a-notes.md.
+--   • supabase/functions/client-invite/index.ts handleAccept, as service_role,
+--     when a client accepts a designer's invitation (B2 v3(d)). Deployed in
+--     KODY-RUNBOOK Block A step A10; the one-time backfill for clients who
+--     already accepted is Block B7.
+--
+-- user_roles is untouched either way — every signup still gets the 'app_user'
+-- grant, and profiles.is_designer is still synced from user_roles by 00290's
+-- trigger.
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
@@ -988,31 +1236,15 @@ BEGIN
   -- (Elevated roles are granted exclusively server-side via user_roles / admin
   -- action, never from signup metadata.)
   --
-  -- With no honored hint the default comes from the identity provider
-  -- (RULING B2). The allowlist names the surface that keeps the PRIVILEGED
-  -- value: an email/password signup is the designer portal's own self-signup
-  -- page and keeps the pre-00555 'designer' default it depends on. Every other
-  -- provider — apple, google, anything added later — and any row whose
-  -- raw_app_meta_data is missing or unrecognised lands 'homeowner'. Defaulting
-  -- the UNKNOWN provider to 'designer' is what made an Apple sign-up a designer
-  -- (A3-07) and would have done the same for the Google button beside it.
-  -- raw_app_meta_data is written by GoTrue, never by the client.
+  -- With no honored hint the default is 'designer', exactly as it has been
+  -- since 00013 — see the COALESCE on the INSERT below. RULING B2 v3(a): this
+  -- is a LABEL, not an authorization input, and it is corrected by the two
+  -- callers that know the answer (the iOS app's own self-downgrade after an
+  -- Apple/Google sign-in, and client-invite's accept handler as service_role),
+  -- not guessed from an identity provider inside a trigger.
   v_role := CASE
     WHEN NEW.raw_user_meta_data->>'role' = 'homeowner' THEN 'homeowner'
-    WHEN NEW.raw_app_meta_data->>'provider' = 'email'
-         AND NOT EXISTS (
-           SELECT 1
-             FROM jsonb_array_elements_text(
-                    CASE
-                      WHEN jsonb_typeof(NEW.raw_app_meta_data->'providers') = 'array'
-                        THEN NEW.raw_app_meta_data->'providers'
-                      ELSE '[]'::jsonb
-                    END
-                  ) AS other(name)
-            WHERE other.name <> 'email'
-         )
-      THEN 'designer'
-    ELSE 'homeowner'
+    ELSE NULL
   END;
 
   -- Display name from metadata (email/password path sends display_name; other
@@ -1027,7 +1259,7 @@ BEGIN
     NEW.id,
     NEW.email,
     v_display_name,
-    v_role
+    COALESCE(v_role, 'designer')
   )
   ON CONFLICT (id) DO NOTHING;
 
@@ -1044,18 +1276,28 @@ BEGIN
 END;
 $$;
 
+-- RF2-10. handle_new_user is a SECURITY DEFINER function owned by postgres and
+-- it lives in the PostgREST-exposed public schema, so a bare EXECUTE grant to
+-- PUBLIC means the anon key can POST /rest/v1/rpc/handle_new_user. It is a
+-- trigger function, so a direct call raises 0A000 rather than doing anything —
+-- but it is exposed surface with no caller. The trigger itself is unaffected:
+-- Postgres does not check EXECUTE when firing a trigger. Same hygiene 00290
+-- already applied to fc_sync_is_designer_from_role.
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon;
+
 COMMENT ON FUNCTION public.handle_new_user() IS
   'auth.users INSERT trigger. Creates the profiles row and the default '
   'user_roles ''app_user'' grant. A client-supplied raw_user_meta_data role '
-  'hint is honored ONLY for the literal ''homeowner'' (00313). With no honored '
-  'hint the default is decided by the identity provider as of 00555 (ruling '
-  'B2), as an ALLOWLIST on the privileged value: raw_app_meta_data naming '
-  '''email'' and only ''email'' — the designer portal''s metadata-less '
-  'self-signup — keeps the pre-00555 ''designer'' default; every other '
-  'provider (apple, google, any OAuth added later) and any missing or '
-  'unrecognised raw_app_meta_data lands ''homeowner''. From 00013 through '
-  '00313 every metadata-less signup fell back to ''designer'', which is how '
-  'both an Apple and a Google sign-up became a designer.';
+  'hint is honored ONLY for the literal ''homeowner'' (00313); with no honored '
+  'hint the default is ''designer'', unchanged since 00013 and deliberately '
+  'left alone by 00555 (ruling B2 v3(a)). profiles.role is a LABEL, not an '
+  'authorization input — the design-request rail reads profiles.is_designer '
+  'and the admin/roster policies read user_roles — so a new account that is '
+  'really a client is RELABELLED by the two callers that know it: the iOS app '
+  'self-downgrades its own row after an Apple/Google sign-in (permitted by the '
+  'one-way ratchet on "Users can update own profile"), and client-invite''s '
+  'accept handler writes ''homeowner'' as service_role. 00555 changed only the '
+  'EXECUTE grant on this function, never its body.';
 
 -- ─── public.profile_cards: CUT, deliberately ──────────────────────────────
 -- An earlier draft created a narrow `profile_cards` view here (security_invoker,
@@ -1099,6 +1341,19 @@ COMMENT ON FUNCTION public.handle_new_user() IS
 -- 'a', which is precisely what the two-character floor exists to prevent. With
 -- the escape, the floor means what it says. ESCAPE '\' is stated explicitly
 -- rather than relying on standard_conforming_strings.
+--
+-- WHO COUNTS AS A DESIGNER HERE — RULING B2 v3(b), finding RF2-01. This is the
+-- one authority-shaped predicate in the function, and it is about the TARGET
+-- row rather than the caller (any signed-in user may search). It therefore
+-- reads the same two signals every other authority decision in this file reads:
+-- profiles.is_designer, or a user_roles grant in the 'designer' domain. It does
+-- NOT read profiles.role, which would have put every email/password self-signup
+-- into a directory the whole product treats as vetted. The user_roles leg is
+-- belt to 00290's braces — that trigger normally syncs is_designer from the
+-- grant, but a grant written before 00290, or while the trigger was dropped,
+-- leaves is_designer false on a real designer. 'admin' is deliberately NOT in
+-- this domain list: an admin is not a shareable designer, and this is a product
+-- directory, not a permission check.
 
 CREATE OR REPLACE FUNCTION public.search_shareable_designers(p_query text)
 RETURNS TABLE (
@@ -1110,7 +1365,7 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
   WITH q AS (
     SELECT '%' || replace(replace(replace(btrim(COALESCE(p_query, '')),
@@ -1125,7 +1380,16 @@ AS $$
          p.avatar_url
   FROM profiles p, q
   WHERE (SELECT auth.uid()) IS NOT NULL
-    AND p.is_designer IS TRUE
+    AND (
+      p.is_designer IS TRUE
+      OR EXISTS (
+        SELECT 1
+        FROM user_roles ur
+        JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = p.id
+          AND r.domain = 'designer'
+      )
+    )
     AND q.raw_len >= 2
     AND (
       p.display_name  ILIKE q.pattern ESCAPE '\'
@@ -1168,6 +1432,19 @@ COMMENT ON FUNCTION public.search_shareable_designers(text) IS
 -- small, curated internal set, and adding pagination would change the hook's
 -- contract as well as its source. If the vendor count grows past a few hundred,
 -- give it the same two-character / LIMIT 20 shape as search_shareable_designers.
+--
+-- `p.role = 'vendor'` STAYS, and it is not a violation of ruling B2 v3(b).
+-- Checked explicitly in fix round 3 alongside RF2-01, because the rule is
+-- "authority never predicates on profiles.role" and this line reads role. It
+-- decides no authority: it selects a DIRECTORY, and the caller side of the
+-- predicate is `auth.uid() IS NOT NULL` — any signed-in user. There is no
+-- is_designer analogue for vendors and no vendor domain in public.roles
+-- (consumer / designer / manufacturer / admin), so there is nothing else to
+-- read. And the label is not self-servable: after this migration a client may
+-- write role only to 'homeowner' (the one-way ratchet above), and the INSERT
+-- policies either omit role entirely or pin it to 'homeowner' — so 'vendor'
+-- reaches a row only through service_role. A caller cannot list themselves into
+-- this picker. Reconciling the role vocabulary is the same W2 item (i-b) names.
 
 CREATE OR REPLACE FUNCTION public.list_vendor_profiles()
 RETURNS TABLE (
@@ -1178,7 +1455,7 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
   SELECT p.id, p.full_name, p.avatar_url
   FROM profiles p
@@ -1477,23 +1754,29 @@ BEGIN
       AND pg_get_expr(polwithcheck, polrelid) ILIKE '%auth.uid() IS NULL%'
   ), 'the anon leg of "Users can insert own profile" survived';
 
-  -- and the INSERT leg pins the same two columns the UPDATE leg does. Postgres
-  -- ORs the permissive WITH CHECKs, so BOTH policies have to carry the pin or
-  -- neither does: profiles.role DEFAULTs to 'designer' and is_designer is
-  -- nullable, so an unpinned INSERT is a one-statement elevation for any live
-  -- auth.users row that has no profiles row yet.
+  -- and EVERY permissive INSERT leg pins the AUTHORITY column. Postgres ORs the
+  -- permissive WITH CHECKs, so both policies have to carry the pin or neither
+  -- does: is_designer is nullable, so an unpinned INSERT is a one-statement
+  -- elevation for any live auth.users row that has no profiles row yet.
   ASSERT NOT EXISTS (
     SELECT 1 FROM pg_policy p
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polcmd = 'a' AND p.polpermissive
       AND NOT (pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer IS NOT TRUE%')
   ), 'a permissive INSERT policy on profiles does not pin is_designer — a homeowner can insert themselves designer authority';
-  ASSERT NOT EXISTS (
-    SELECT 1 FROM pg_policy p
+  -- There is deliberately NO companion assertion that the INSERT legs pin role.
+  -- Fix round 2 had one; RULING B2 v3(a) removed the pin it guarded (RF2-07),
+  -- because profiles.role is a label and pinning it on INSERT only forced the
+  -- policy to guess which label a row was entitled to. 00017's "Designers can
+  -- create homeowner profiles" still carries its own role literal — that is
+  -- 00017's contract, not an authority check — and the guard below proves the
+  -- own-row policy did NOT quietly keep one.
+  ASSERT (
+    SELECT pg_get_expr(p.polwithcheck, p.polrelid) NOT ILIKE '%role%'
+    FROM pg_policy p
     WHERE p.polrelid = 'public.profiles'::regclass
-      AND p.polcmd = 'a' AND p.polpermissive
-      AND NOT (pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%role%homeowner%')
-  ), 'a permissive INSERT policy on profiles does not pin role to homeowner — the column DEFAULT is designer';
+      AND p.polname  = 'Users can insert own profile'
+  ), '"Users can insert own profile" still pins role — ruling B2 v3(a) says the own-row INSERT leg pins is_designer only';
 
   -- anon keeps nothing on profiles or notification_preferences
   ASSERT NOT has_table_privilege('anon', 'public.profiles'::regclass, 'SELECT'),
@@ -1509,11 +1792,42 @@ BEGIN
   ASSERT NOT has_table_privilege('anon', 'public.notification_preferences'::regclass, 'DELETE'),
     'anon still holds DELETE on notification_preferences';
 
+  -- (RF2-08) and no WRITE on designer_clients, where it held the full arwdDxtm
+  -- set. SELECT stays and is asserted PRESENT: a storage.objects policy names
+  -- this table, and Postgres checks that ACL before filtering policies by role,
+  -- so revoking it 42501s every anon read of storage.objects. RLS returns anon
+  -- zero rows regardless.
+  ASSERT has_table_privilege('anon', 'public.designer_clients'::regclass, 'SELECT'),
+    'anon lost SELECT on designer_clients — every anon read of storage.objects now 42501s (00224 policy)';
+  ASSERT NOT has_table_privilege('anon', 'public.designer_clients'::regclass, 'INSERT'),
+    'anon still holds INSERT on designer_clients — the roster mint is open to the key in the iOS binary';
+  ASSERT NOT has_table_privilege('anon', 'public.designer_clients'::regclass, 'UPDATE'),
+    'anon still holds UPDATE on designer_clients';
+  ASSERT NOT has_table_privilege('anon', 'public.designer_clients'::regclass, 'DELETE'),
+    'anon still holds DELETE on designer_clients';
+  ASSERT NOT has_table_privilege('anon', 'public.designer_clients'::regclass, 'TRUNCATE'),
+    'anon still holds TRUNCATE on designer_clients';
+  ASSERT NOT has_table_privilege('anon', 'public.designer_clients'::regclass, 'MAINTAIN'),
+    'anon still holds MAINTAIN on designer_clients';
+
   -- authenticated keeps what the portals and apps need, and loses what it never used
   ASSERT has_table_privilege('authenticated', 'public.profiles'::regclass, 'SELECT'),
     'authenticated lost SELECT on profiles';
   ASSERT NOT has_table_privilege('authenticated', 'public.profiles'::regclass, 'DELETE'),
     'authenticated still holds DELETE on profiles';
+  -- (RF2-09) TRUNCATE is not row-level: RLS does not constrain it, so the grant
+  -- is a one-statement wipe of the table. REFERENCES lets a grantee pin rows
+  -- with an FK of their own.
+  ASSERT NOT has_table_privilege('authenticated', 'public.profiles'::regclass, 'TRUNCATE'),
+    'authenticated still holds TRUNCATE on profiles — RLS does not constrain TRUNCATE';
+  ASSERT NOT has_table_privilege('authenticated', 'public.profiles'::regclass, 'REFERENCES'),
+    'authenticated still holds REFERENCES on profiles';
+  ASSERT has_table_privilege('authenticated', 'public.designer_clients'::regclass, 'SELECT'),
+    'authenticated lost SELECT on designer_clients — the roster rail is broken';
+  ASSERT has_table_privilege('authenticated', 'public.designer_clients'::regclass, 'INSERT'),
+    'authenticated lost INSERT on designer_clients — the Add Client flow is broken';
+  ASSERT has_table_privilege('authenticated', 'public.designer_clients'::regclass, 'UPDATE'),
+    'authenticated lost UPDATE on designer_clients';
   ASSERT has_table_privilege('authenticated', 'public.notification_preferences'::regclass, 'SELECT'),
     'authenticated lost SELECT on notification_preferences';
   ASSERT has_table_privilege('authenticated', 'public.vendors'::regclass, 'SELECT'),
@@ -1610,6 +1924,18 @@ BEGIN
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Users can update own profile'
   ), '"Users can update own profile" WITH CHECK does not pin is_designer to its current value — a homeowner can PATCH themselves into the design-request pool';
+  -- ruling B2 v3(c): the pin is a RATCHET, so the only other value either column
+  -- may take is the floor. Assert the floor legs are present AND that they are
+  -- the only escape — `is_designer = false`, never `= true`.
+  ASSERT (
+    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer = false%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) NOT ILIKE '%is_designer = true%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%role = ''homeowner''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) NOT ILIKE '%role = ''designer''%'
+    FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Users can update own profile'
+  ), '"Users can update own profile" WITH CHECK is not the one-way ratchet ruling B2 v3(c) requires — role may only fall to homeowner and is_designer only to false';
   ASSERT (
     SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%is_designer IS NOT TRUE%'
     FROM pg_policy p
@@ -1617,15 +1943,28 @@ BEGIN
       AND p.polname  = 'Designers can update their client profiles'
   ), '"Designers can update their client profiles" WITH CHECK does not pin is_designer — a self-inserted designer_clients row still reaches designer authority';
   -- and the OLD-row half, which is what stops a DEMOTION. Pinning only the new
-  -- row to `role = 'homeowner' AND is_designer IS NOT TRUE` is satisfied by
+  -- row to the client vocabulary + is_designer IS NOT TRUE is satisfied by
   -- construction when the attacker is turning a designer INTO a homeowner.
+  -- Both client strings are required (ruling B2 v3(e), RF2-06): dropping
+  -- 'client' from the list makes a designer unable to rename their own client.
+  -- The patterns QUOTE the strings, because the unquoted words `client` and
+  -- `designer_clients` are all over this predicate's EXISTS subquery and an
+  -- ILIKE '%client%' would pass on a policy that had dropped the literal.
   ASSERT (
     SELECT pg_get_expr(p.polqual, p.polrelid) ILIKE '%is_designer IS NOT TRUE%'
-       AND pg_get_expr(p.polqual, p.polrelid) ILIKE '%role%homeowner%'
+       AND pg_get_expr(p.polqual, p.polrelid) ILIKE '%''homeowner''%'
+       AND pg_get_expr(p.polqual, p.polrelid) ILIKE '%''client''%'
     FROM pg_policy p
     WHERE p.polrelid = 'public.profiles'::regclass
       AND p.polname  = 'Designers can update their client profiles'
-  ), '"Designers can update their client profiles" USING does not read the OLD row''s role/is_designer — a rostered designer can be demoted and renamed';
+  ), '"Designers can update their client profiles" USING does not read the OLD row''s role/is_designer over BOTH client strings — a rostered designer can be demoted, or a ''client''-labelled client cannot be renamed';
+  ASSERT (
+    SELECT pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''homeowner''%'
+       AND pg_get_expr(p.polwithcheck, p.polrelid) ILIKE '%''client''%'
+    FROM pg_policy p
+    WHERE p.polrelid = 'public.profiles'::regclass
+      AND p.polname  = 'Designers can update their client profiles'
+  ), '"Designers can update their client profiles" WITH CHECK does not carry both client strings (ruling B2 v3(e))';
   ASSERT NOT has_function_privilege('anon', 'public.current_profile_is_designer()', 'EXECUTE'),
     'anon can execute current_profile_is_designer';
   ASSERT has_function_privilege('authenticated', 'public.current_profile_is_designer()', 'EXECUTE'),
@@ -1648,23 +1987,70 @@ BEGIN
       AND p.polcmd = 'w'
   ), 'designer_clients has no restrictive UPDATE policy — a legacy roster row can be re-pointed by a non-designer';
 
-  -- Read the provider BRANCH, and its DIRECTION, not the word. 00313's body
-  -- already contains the literal 'homeowner' twice (the CASE arm and its
-  -- SECURITY comment), so a LIKE '%homeowner%' guard passes on the UNFIXED
-  -- function and would report success over a skipped edit. raw_app_meta_data
-  -- appears nowhere in 00313, so it is the clean discriminator for the graft —
-  -- and `ELSE 'homeowner'` is the discriminator for the allowlist pointing the
-  -- right way. The first cut of ruling B2 shipped `ELSE 'designer'`, which
-  -- passed a graft-only guard while defaulting every unknown provider (google
-  -- included) to the privileged value.
+  -- RF2-01: and neither of them reads profiles.role. Fix round 2 shipped both
+  -- with an `OR current_profile_role() IN ('designer','admin','super_admin')`
+  -- leg, which handed the mint back to every email/password signup — because
+  -- handle_new_user writes exactly that label for one. The guard names the
+  -- helper rather than the word "role": `role` is a substring of far too much
+  -- of this predicate to match on.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.designer_clients'::regclass
+      AND p.polname IN ('designer_clients_writer_is_designer',
+                        'designer_clients_updater_is_designer')
+      AND (COALESCE(pg_get_expr(p.polqual, p.polrelid), '')
+             || COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), ''))
+          ILIKE '%current_profile_role%'
+  ), 'a designer_clients restrictive policy still reads profiles.role — ruling B2 v3(b) says authority is user_roles or is_designer only';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.designer_clients'::regclass
+      AND p.polname IN ('designer_clients_writer_is_designer',
+                        'designer_clients_updater_is_designer')
+      AND NOT ((COALESCE(pg_get_expr(p.polqual, p.polrelid), '')
+                  || COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), ''))
+               ILIKE '%user_roles%')
+  ), 'a designer_clients restrictive policy does not read user_roles — the designer-grant leg is missing';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_policy p
+    WHERE p.polrelid = 'public.designer_clients'::regclass
+      AND p.polname IN ('designer_clients_writer_is_designer',
+                        'designer_clients_updater_is_designer')
+      AND NOT ((COALESCE(pg_get_expr(p.polqual, p.polrelid), '')
+                  || COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), ''))
+               ILIKE '%current_profile_is_designer%')
+  ), 'a designer_clients restrictive policy does not read profiles.is_designer';
+
+  -- RULING B2 v3(a): handle_new_user is 00313 VERBATIM. The guard reads the
+  -- COALESCE, which is the line the two reverted cuts replaced — v1 with
+  -- COALESCE(v_role,'homeowner'), v2 with a CASE on raw_app_meta_data that had
+  -- no COALESCE at all. It also rejects raw_app_meta_data outright: that token
+  -- appears nowhere in 00313, so its presence means a provider branch crept
+  -- back in. A `LIKE '%homeowner%'` guard would prove nothing either way —
+  -- 00313's body carries the literal twice, in the hint arm and its comment.
   ASSERT (
-    SELECT pg_get_functiondef(p.oid) LIKE '%raw_app_meta_data%'
-       AND pg_get_functiondef(p.oid) LIKE '%''email''%'
-       AND pg_get_functiondef(p.oid) LIKE '%ELSE ''homeowner''%'
-       AND pg_get_functiondef(p.oid) NOT LIKE '%ELSE ''designer''%'
+    SELECT pg_get_functiondef(p.oid) LIKE '%COALESCE(v_role, ''designer'')%'
+       AND pg_get_functiondef(p.oid) NOT LIKE '%raw_app_meta_data%'
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public' AND p.proname = 'handle_new_user'
-  ), 'handle_new_user() does not default an unknown identity provider to homeowner (ruling B2)';
+  ), 'handle_new_user() is not 00313''s body — ruling B2 v3(a) keeps COALESCE(v_role, ''designer'') and no identity-provider branch';
+  -- RF2-10
+  ASSERT NOT has_function_privilege('anon', 'public.handle_new_user()', 'EXECUTE'),
+    'anon can execute handle_new_user';
+  ASSERT NOT has_function_privilege('public', 'public.handle_new_user()', 'EXECUTE'),
+    'PUBLIC can execute handle_new_user';
+
+  -- RF2-11: every function this migration creates pins search_path explicitly,
+  -- pg_temp included. A SECURITY DEFINER function that leaves pg_temp implicitly
+  -- at the front of the path can be shadowed by a caller-created temp object.
+  ASSERT (
+    SELECT bool_and('search_path=public, pg_temp' = ANY (COALESCE(p.proconfig, '{}')))
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname IN ('can_view_profile', 'current_profile_role',
+                        'current_profile_is_designer',
+                        'search_shareable_designers', 'list_vendor_profiles')
+  ), 'a 00555 helper does not pin search_path to "public, pg_temp"';
   ASSERT NOT has_function_privilege('anon', 'public.search_shareable_designers(text)', 'EXECUTE'),
     'anon can execute search_shareable_designers';
   ASSERT has_function_privilege('authenticated', 'public.search_shareable_designers(text)', 'EXECUTE'),
@@ -1811,6 +2197,14 @@ COMMIT;
 --   FOLLOW-UPS block at the head of this file.
 --
 -- ── AFTER APPLY ────────────────────────────────────────────────────────────
+--   • supabase functions deploy client-invite       (RULING B2 v3(d): the accept
+--     handler now writes profiles.role = 'homeowner' for the accepting user.
+--     KODY-RUNBOOK Block A step A10. Clients who accepted BEFORE that deploy
+--     keep the old label until the one-time backfill in Block B7b.)
+--   • the two read-only pre-apply audits in KODY-RUNBOOK B7a — who owns a
+--     designer_clients row, by the two signals the new restrictive policies
+--     read. Run them BEFORE the apply: they say whether (a2)(i-c) costs any
+--     real production designer their Add Client flow.
 --   • python3 scripts/generate-legacy-grants.py  (this file adds GRANT/REVOKE,
 --     so supabase/seed/00-legacy-grants.sql must be regenerated or a fresh
 --     local stack will diverge from prod ACLs)
