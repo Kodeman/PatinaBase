@@ -109,7 +109,11 @@ struct ARPlacementView: View {
         case .saved:
             toastPill(text: "Saved to your room ✓", tint: PatinaColors.success)
         case .failed(let msg):
-            toastPill(text: "Save failed: \(msg)", tint: PatinaColors.clay)
+            // C4-08: `msg` is now always a complete, app-authored sentence
+            // (ARPlacementViewModel.saveFailureMessage) — no "Save failed: "
+            // prefix, or the toast would read "Save failed: We couldn't
+            // save this. Try again."
+            toastPill(text: msg, tint: PatinaColors.clay)
         }
     }
 
