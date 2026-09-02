@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Mobile Receiving Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--sf:#FFFFFF;--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+html{scroll-behavior:smooth;background:var(--ow)}
+body{font-family:var(--fb);color:var(--ch);line-height:1.6;-webkit-font-smoothing:antialiased}
+.w{max-width:1180px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+section{padding:clamp(2rem,4vw,4rem) 0}
+
+/* Cover */
+.cover{min-height:60vh;display:flex;flex-direction:column;justify-content:flex-end;padding:4rem clamp(1.5rem,5vw,4rem);background:var(--ch);color:var(--ow)}
+.cover h1{font-family:var(--fd);font-weight:400;font-size:clamp(2rem,4.5vw,3.2rem);line-height:1.12;letter-spacing:-0.02em;color:var(--ow)}
+.cover h1 span{display:block;font-style:italic;color:var(--cl);font-weight:400;font-size:0.55em}
+.cover-sub{font-size:0.95rem;color:rgba(250,247,242,0.55);max-width:620px;margin:1rem 0 2.5rem;line-height:1.75}
+.cover-strata{display:flex;flex-direction:column;gap:6px;margin-bottom:2rem}
+.cover-strata div{height:2px;border-radius:1px}
+.cover-strata div:nth-child(1){width:100px;background:var(--cl)}
+.cover-strata div:nth-child(2){width:75px;background:var(--cl);opacity:0.5}
+.cover-strata div:nth-child(3){width:50px;background:var(--cl);opacity:0.25}
+
+h1,.h1{font-family:var(--fd);font-weight:400;font-size:clamp(1.6rem,3.5vw,2.4rem);line-height:1.15;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h2,.h2{font-family:var(--fd);font-weight:400;font-size:clamp(1.3rem,2.8vw,1.85rem);line-height:1.2;letter-spacing:-0.02em;margin-bottom:0.5rem}
+h3,.h3{font-family:var(--fd);font-weight:500;font-size:1.1rem;margin-bottom:0.4rem}
+h1 em,h2 em,h3 em{font-style:italic;color:var(--cl)}
+.meta{font-family:var(--fm);font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao)}
+.body{font-family:var(--fb);font-size:0.92rem;line-height:1.7;color:var(--mo);max-width:680px}
+.eyebrow{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);margin-bottom:0.75rem}
+.cm{display:flex;gap:3rem;flex-wrap:wrap}.cm .meta{margin-bottom:0.2rem;color:rgba(250,247,242,0.3)}.cm p{font-size:0.85rem;color:rgba(250,247,242,0.7)}
+
+.sm{display:flex;flex-direction:column;gap:4px;padding:1.5rem 0}
+.sm div{height:1.5px;border-radius:1px}
+.sm div:nth-child(1){width:60px;background:var(--mo)}
+.sm div:nth-child(2){width:48px;background:var(--cl);opacity:0.7}
+.sm div:nth-child(3){width:36px;background:var(--cl);opacity:0.35}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.25rem}
+@media(max-width:768px){.g2,.g3{grid-template-columns:1fr}}
+
+.principle{padding:1.25rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf)}
+.p-num{font-family:var(--fd);font-weight:300;font-size:2rem;color:var(--cl);line-height:1;font-style:italic;margin-bottom:0.4rem}
+.p-t{font-family:var(--fd);font-weight:500;font-size:1rem;margin-bottom:0.3rem}
+.p-d{font-family:var(--fb);font-size:0.78rem;color:var(--mo);line-height:1.6}
+
+/* Phone frame */
+.phone-row{display:flex;gap:1.25rem;flex-wrap:wrap;justify-content:center;margin:2rem 0;align-items:flex-start}
+.phone{width:280px;background:var(--ch);border-radius:32px;padding:8px;flex-shrink:0;box-shadow:0 24px 60px rgba(0,0,0,0.15)}
+.phone-inner{background:var(--ow);border-radius:24px;overflow:hidden;height:580px;display:flex;flex-direction:column;position:relative}
+.phone-status{display:flex;justify-content:space-between;align-items:center;padding:8px 18px 4px;font-family:var(--fb);font-size:0.55rem;font-weight:600;color:var(--ch)}
+.phone-status .signal{display:flex;gap:2px;align-items:center}
+.phone-screen{flex:1;overflow-y:auto;background:var(--ow)}
+.phone-bottom{padding:6px 0;display:flex;justify-content:center}
+.phone-bottom-bar{width:80px;height:4px;background:var(--ch);border-radius:2px;opacity:0.6}
+.phone-label{text-align:center;font-family:var(--fm);font-size:0.55rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao);margin-top:0.85rem;max-width:280px}
+.phone-label strong{display:block;font-family:var(--fd);font-weight:500;font-size:0.85rem;color:var(--ch);font-style:italic;letter-spacing:0;text-transform:none;margin-bottom:0.2rem}
+
+/* Mobile screen elements */
+.m-header{padding:0.85rem 1rem 0.5rem;border-bottom:1px solid var(--pe);background:var(--sf)}
+.m-back{font-family:var(--fb);font-size:0.7rem;color:var(--cl);margin-bottom:0.5rem}
+.m-title{font-family:var(--fd);font-weight:500;font-size:1rem;line-height:1.2}
+.m-sub{font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.15rem}
+
+.m-content{padding:1rem}
+.m-section-head{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);margin:0.85rem 0 0.4rem}
+.m-section-head:first-child{margin-top:0}
+
+.m-card{padding:0.85rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;margin-bottom:0.5rem}
+.m-card-h{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.3rem}
+.m-card-t{font-family:var(--fb);font-weight:500;font-size:0.78rem;color:var(--ch);line-height:1.3}
+.m-card-d{font-family:var(--fb);font-size:0.62rem;color:var(--ao);line-height:1.5;margin-top:0.15rem}
+.m-card-meta{font-family:var(--fm);font-size:0.5rem;color:var(--ao);text-transform:uppercase;letter-spacing:0.06em}
+
+.m-pill{display:inline-block;font-family:var(--fm);font-size:0.45rem;text-transform:uppercase;letter-spacing:0.04em;padding:2px 6px;border-radius:2px;white-space:nowrap}
+.m-pill.today{background:rgba(196,165,123,0.12);color:var(--cl)}
+.m-pill.due{background:rgba(212,160,144,0.12);color:var(--te)}
+.m-pill.done{background:rgba(168,181,160,0.12);color:var(--sa)}
+.m-pill.warn{background:rgba(232,197,71,0.12);color:var(--gh)}
+
+.m-btn{display:flex;align-items:center;justify-content:center;padding:0.85rem;border-radius:8px;font-family:var(--fb);font-weight:500;font-size:0.82rem;text-align:center;width:100%}
+.m-btn-p{background:var(--ch);color:var(--ow)}
+.m-btn-c{background:var(--cl);color:white}
+.m-btn-s{background:transparent;border:1.5px solid var(--pe);color:var(--ch)}
+.m-btn-d{background:rgba(212,160,144,0.1);color:var(--te);border:1.5px solid rgba(212,160,144,0.3)}
+.m-btn-large{padding:1.1rem;font-size:0.92rem;border-radius:10px}
+
+.m-fixed-bottom{position:absolute;bottom:0;left:0;right:0;padding:1rem;background:linear-gradient(180deg,rgba(250,247,242,0),var(--ow) 30%);display:flex;flex-direction:column;gap:0.5rem}
+
+.m-checklist-item{display:flex;gap:0.6rem;padding:0.6rem 0;border-bottom:1px solid var(--pe);align-items:center}
+.m-checklist-item:last-child{border-bottom:none}
+.m-check{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--pe);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--pe)}
+.m-check.on{border-color:var(--sa);background:var(--sa);color:white}
+.m-check.no{border-color:var(--te);background:var(--te);color:white}
+.m-checklist-l{font-family:var(--fb);font-size:0.78rem;color:var(--ch);flex:1}
+.m-checklist-tap{font-family:var(--fb);font-size:0.65rem;color:var(--ao);font-style:italic}
+
+.m-photos{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.4rem;margin:0.6rem 0}
+.m-photo{aspect-ratio:1;background:var(--pe);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--ao);font-family:var(--fd);font-size:1.2rem;font-style:italic;position:relative;overflow:hidden}
+.m-photo.taken{background:linear-gradient(135deg,#d4c4a8,#b89878)}
+.m-photo.empty{background:transparent;border:1.5px dashed var(--pe)}
+.m-photo .num{position:absolute;top:4px;left:4px;font-family:var(--fm);font-size:0.45rem;background:rgba(44,41,38,0.6);color:white;padding:1px 4px;border-radius:2px;letter-spacing:0.04em}
+
+.m-bigaction{padding:1.5rem 1rem;border-radius:12px;background:var(--ch);color:var(--ow);text-align:center;margin-bottom:0.75rem}
+.m-bigaction-icon{font-family:var(--fd);font-size:2rem;color:var(--cl);font-style:italic;margin-bottom:0.3rem;line-height:1}
+.m-bigaction-t{font-family:var(--fd);font-weight:500;font-size:1.1rem;margin-bottom:0.2rem}
+.m-bigaction-d{font-family:var(--fb);font-size:0.7rem;color:rgba(250,247,242,0.6);line-height:1.5}
+
+.m-success{padding:1.5rem 1rem;text-align:center}
+.m-success-strata{display:flex;flex-direction:column;gap:4px;align-items:center;margin-bottom:1rem}
+.m-success-strata div{height:2px;border-radius:1px}
+.m-success-strata div:nth-child(1){width:60px;background:var(--cl)}
+.m-success-strata div:nth-child(2){width:42px;background:var(--cl);opacity:0.5}
+.m-success-strata div:nth-child(3){width:28px;background:var(--cl);opacity:0.25}
+.m-success-t{font-family:var(--fd);font-weight:500;font-size:1.25rem;font-style:italic;margin-bottom:0.5rem}
+.m-success-d{font-family:var(--fb);font-size:0.78rem;color:var(--mo);line-height:1.6;margin-bottom:1rem}
+
+.callout{padding:0.85rem 1rem;background:rgba(196,165,123,0.05);border-left:2px solid var(--cl);border-radius:0 4px 4px 0;margin:1rem 0;font-family:var(--fb);font-size:0.75rem;color:var(--mo);line-height:1.55}
+.callout-l{display:block;font-family:var(--fm);font-size:0.5rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.2rem}
+
+.spec-row{display:grid;grid-template-columns:140px 1fr;gap:1rem;padding:0.55rem 0;border-bottom:1px solid var(--pe);font-size:0.75rem}
+.spec-row:last-child{border-bottom:none}
+.spec-row-l{font-family:var(--fm);font-size:0.5rem;color:var(--ao);text-transform:uppercase;letter-spacing:0.06em;padding-top:0.15rem}
+.spec-row-r{font-family:var(--fb);color:var(--mo);line-height:1.55}
+.spec-row-r strong{color:var(--ch);font-weight:500}
+
+.pq{padding:1.5rem 0;border-top:1px solid var(--pe);border-bottom:1px solid var(--pe);margin:2rem 0}
+.pq blockquote{font-family:var(--fd);font-size:clamp(1rem,2.2vw,1.35rem);font-style:italic;line-height:1.5;max-width:680px}
+.pq cite{display:block;font-family:var(--fm);font-size:0.55rem;font-style:normal;text-transform:uppercase;letter-spacing:0.06em;color:var(--ao);margin-top:0.6rem}
+
+.fade{opacity:0;transform:translateY(10px);transition:opacity 0.5s ease,transform 0.5s ease}
+.fade.vis{opacity:1;transform:translateY(0)}
+
+.thumb{aspect-ratio:1;border-radius:5px;background:linear-gradient(135deg,#d4c4a8,#a08868);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-family:var(--fd);font-size:0.85rem;font-style:italic}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <p class="meta" style="margin-bottom:1rem;color:rgba(250,247,242,0.4)">Procurement Workspace · Companion Doc</p>
+  <div class="cover-strata"><div></div><div></div><div></div></div>
+  <h1>Mobile Receiving Flow<span>Three photos, two taps, done</span></h1>
+  <p class="cover-sub">The phone is the receiving tool. Leah stands next to a carton on her studio floor. The flow optimizes for the 95% case — item arrives, looks fine, log it and move on. The exhaustive inspection checklist surfaces only when something's wrong. v1 confirmed: phone-only, designed at 375px (iPhone), designer-receiving, no third-party portal.</p>
+  <div class="cm">
+    <div><p class="meta">Platform</p><p>Mobile web · 375px primary · iOS/Android</p></div>
+    <div><p class="meta">Audience</p><p>Designer (studio owner) · Solo or studio team</p></div>
+    <div><p class="meta">Target session time</p><p>30 seconds happy path · 2 minutes with damage</p></div>
+  </div>
+</div>
+
+<!-- DESIGN PRINCIPLES -->
+<section class="fade">
+<div class="w">
+  <p class="eyebrow">Design principles</p>
+  <h1>Built for <em>standing next to a carton.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">Receiving isn't done at a desk. It's done on a studio floor or in a garage with one hand free, sometimes in a rush, sometimes after hours when the delivery driver is impatient. Every design decision optimizes for those conditions. Speed is courtesy.</p>
+
+  <div class="g3">
+    <div class="principle">
+      <div class="p-num">01</div>
+      <div class="p-t">Big targets, thumb-zone actions</div>
+      <div class="p-d">Primary buttons are 48–56px tall. Critical actions sit in the bottom third of the screen where the thumb reaches naturally. No tap targets smaller than 44×44px. Designed for one-handed use.</div>
+    </div>
+    <div class="principle">
+      <div class="p-num">02</div>
+      <div class="p-t">Happy path is silent</div>
+      <div class="p-d">Item arrived, count matches, no damage: 3 taps and done. No checklist questions, no friction. The system trusts the designer. The exhaustive inspection appears only when she taps "Issue found."</div>
+    </div>
+    <div class="principle">
+      <div class="p-num">03</div>
+      <div class="p-t">Photos are the truth</div>
+      <div class="p-d">Three photos minimum on every receive (overall, label/PO, packaging condition). Optional additional photos for any concern. Photos timestamp and geolocate automatically. They're the warranty insurance.</div>
+    </div>
+    <div class="principle">
+      <div class="p-num">04</div>
+      <div class="p-t">Damage path is fast too</div>
+      <div class="p-d">Even the not-happy path optimizes for speed. Tap "Issue found" → mark issue type → take 2 additional photos → describe in 1 sentence (voice-to-text default). Auto-drafts the vendor claim email. Two minutes.</div>
+    </div>
+    <div class="principle">
+      <div class="p-num">05</div>
+      <div class="p-t">Offline-tolerant</div>
+      <div class="p-d">Photos and notes capture locally first, sync when connection returns. The studio garage might not have great signal. The flow never blocks waiting for a network round-trip.</div>
+    </div>
+    <div class="principle">
+      <div class="p-num">06</div>
+      <div class="p-t">Receipt is reassurance</div>
+      <div class="p-d">After logging, a clean success state. Strata Mark. "Logged." Photo grid for verification. Direct link to the item in the desktop workspace. Leah closes the app knowing it's done.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- HAPPY PATH -->
+<section class="fade" style="background:var(--ch);color:var(--ow)">
+<div class="w">
+  <p class="eyebrow">The Happy Path · 95% of arrivals</p>
+  <h1 style="color:var(--ow)">From notification <em>to logged.</em></h1>
+  <p class="body" style="color:rgba(250,247,242,0.6);margin-bottom:1rem">Six screens. Three photos. Two taps that aren't photos. Average session time: 30 seconds. This is the flow Leah uses most days — items arrive on schedule, look fine, get logged into the system, move forward.</p>
+
+  <div class="phone-row">
+
+    <!-- 1. NOTIFICATION -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>9:41</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen">
+            <div class="m-header" style="background:linear-gradient(180deg,var(--sf),var(--ow))">
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--ao);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.4rem">Patina · Today</div>
+              <div class="m-title">Tuesday <em style="color:var(--cl);font-family:var(--fd)">May 6</em></div>
+              <div class="m-sub">Two deliveries scheduled today</div>
+            </div>
+            <div class="m-content">
+              <div class="m-section-head">Arriving today</div>
+              <div class="m-card" style="border-left:3px solid var(--cl);background:rgba(196,165,123,0.04)">
+                <div class="m-card-h">
+                  <div>
+                    <div class="m-card-t">Meadow Linen Sectional</div>
+                    <div class="m-card-d">Chen Residence · PO WS-188<br>Woodward & Sons · 1 large carton</div>
+                  </div>
+                  <span class="m-pill today">Today</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem">
+                  <span class="m-card-meta">Manna Freight · ETA 2-4 PM</span>
+                  <span class="m-pill due">Balance $3,400</span>
+                </div>
+              </div>
+              <div class="m-card">
+                <div class="m-card-h">
+                  <div>
+                    <div class="m-card-t">Brass Drawer Pulls (×24)</div>
+                    <div class="m-card-d">Whitfield · PO RJ-005<br>Rejuvenation · Small parcel</div>
+                  </div>
+                  <span class="m-pill today">Today</span>
+                </div>
+                <div class="m-card-meta" style="margin-top:0.5rem">UPS · ETA before 5 PM</div>
+              </div>
+
+              <div class="m-section-head">Pending inspection</div>
+              <div class="m-card">
+                <div class="m-card-t">Heirloom Console</div>
+                <div class="m-card-d" style="margin-top:0.2rem">Olsen Lake · Arrived May 4 · <span style="color:var(--gh)">Not yet checked</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label" style="color:rgba(250,247,242,0.5)"><strong style="color:var(--ow)">1. Today screen</strong>Procurement card surfaces today's deliveries. Tap any card to begin receiving.</p>
+    </div>
+
+    <!-- 2. RECEIVE INTRO -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>2:17</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen">
+            <div class="m-header">
+              <div class="m-back">← Today</div>
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem">Receiving · PO WS-188</div>
+              <div class="m-title">Meadow Linen <em>Sectional</em></div>
+              <div class="m-sub">Chen Residence · Woodward & Sons</div>
+            </div>
+            <div class="m-content">
+              <div style="padding:0.85rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf);margin-bottom:0.85rem">
+                <div class="spec-row">
+                  <span class="spec-row-l">PO</span>
+                  <span class="spec-row-r"><strong>WS-188</strong></span>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-row-l">Cartons</span>
+                  <span class="spec-row-r"><strong>1 large</strong> · ~7' × 3' × 3'</span>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-row-l">Carrier</span>
+                  <span class="spec-row-r">Manna Freight</span>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-row-l">Project</span>
+                  <span class="spec-row-r">Chen Residence · Living</span>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-row-l">Install date</span>
+                  <span class="spec-row-r">May 22, 2026 · <span style="color:var(--cl)">2 weeks storage</span></span>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-row-l">Balance</span>
+                  <span class="spec-row-r" style="color:var(--te)"><strong>$3,400 due on delivery</strong></span>
+                </div>
+              </div>
+
+              <div class="callout">
+                <span class="callout-l">Receiving here?</span>Middlewest Studio · 4127 Atwood Ave · You'll have one hand free for photos.
+              </div>
+            </div>
+            <div class="m-fixed-bottom">
+              <div class="m-btn m-btn-c m-btn-large">Item arrived → Start receive</div>
+              <div class="m-btn m-btn-s">Not here yet</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>2. Item detail · ready to receive</strong>Everything Leah needs to confirm: this is the right item, the carton matches, install date is in two weeks. Big start button.</p>
+    </div>
+
+    <!-- 3. PHOTO 1 -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status" style="color:white">
+            <span>2:18</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen" style="background:#1a1816;padding:0;position:relative">
+            <div style="position:absolute;top:60px;left:0;right:0;padding:0 1rem;z-index:2">
+              <div style="font-family:var(--fm);font-size:0.5rem;color:rgba(255,255,255,0.6);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem">Photo 1 of 3</div>
+              <div style="font-family:var(--fd);font-weight:500;font-size:1.05rem;color:white;font-style:italic">The full carton</div>
+              <div style="font-family:var(--fb);font-size:0.7rem;color:rgba(255,255,255,0.7);margin-top:0.2rem;line-height:1.5">Step back so the whole carton is visible. Helps document what condition it arrived in.</div>
+            </div>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;aspect-ratio:1;border:2px solid rgba(255,255,255,0.3);border-radius:8px;display:flex;align-items:center;justify-content:center">
+              <div style="width:60px;height:60px;border:2px solid rgba(255,255,255,0.5);border-radius:8px"></div>
+            </div>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:300px;aspect-ratio:1;border-radius:8px;background:linear-gradient(135deg,rgba(196,165,123,0.3),rgba(139,115,85,0.2))"></div>
+            <div style="position:absolute;bottom:140px;left:0;right:0;padding:0 1rem;text-align:center">
+              <div style="font-family:var(--fm);font-size:0.55rem;color:rgba(255,255,255,0.6);letter-spacing:0.06em;text-transform:uppercase">Tap circle to capture</div>
+            </div>
+            <div style="position:absolute;bottom:30px;left:0;right:0;padding:0 1rem;display:flex;justify-content:space-between;align-items:center">
+              <div style="font-family:var(--fb);font-size:0.7rem;color:rgba(255,255,255,0.6)">Skip</div>
+              <div style="width:64px;height:64px;border-radius:50%;background:white;border:4px solid rgba(255,255,255,0.3);box-shadow:0 4px 16px rgba(0,0,0,0.3)"></div>
+              <div style="font-family:var(--fb);font-size:0.7rem;color:rgba(255,255,255,0.6)">Flash</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>3. Photo 1 · the full carton</strong>Camera opens immediately. Big shutter button. Title and tip orient the user without slowing the moment.</p>
+    </div>
+
+  </div>
+
+  <div class="phone-row" style="margin-top:0">
+
+    <!-- 4. CONFIRM -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>2:19</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen">
+            <div class="m-header">
+              <div class="m-back">← Cancel</div>
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem">Confirm & log</div>
+              <div class="m-title">Looks good?</div>
+              <div class="m-sub">Meadow Linen Sectional · WS-188</div>
+            </div>
+            <div class="m-content">
+              <div class="m-section-head">Your photos</div>
+              <div class="m-photos">
+                <div class="m-photo taken"><span class="num">1</span></div>
+                <div class="m-photo taken"><span class="num">2</span></div>
+                <div class="m-photo taken"><span class="num">3</span></div>
+              </div>
+              <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);font-style:italic;margin-bottom:1rem">Full carton · PO label · Packaging</div>
+
+              <div class="m-section-head">Quick check</div>
+              <div style="background:var(--sf);border:1px solid var(--pe);border-radius:6px;padding:0.5rem 0.85rem;margin-bottom:0.85rem">
+                <div class="m-checklist-item">
+                  <div class="m-check on">✓</div>
+                  <div class="m-checklist-l">Count matches · 1 carton</div>
+                </div>
+                <div class="m-checklist-item">
+                  <div class="m-check on">✓</div>
+                  <div class="m-checklist-l">PO matches label</div>
+                </div>
+                <div class="m-checklist-item">
+                  <div class="m-check on">✓</div>
+                  <div class="m-checklist-l">Packaging intact, no damage</div>
+                </div>
+              </div>
+              <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);text-align:center;font-style:italic">All three default to checked. Tap any to unmark.</div>
+            </div>
+            <div class="m-fixed-bottom">
+              <div class="m-btn m-btn-p m-btn-large">Log received ✓</div>
+              <div class="m-btn m-btn-d">Issue found →</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>4. Confirm screen</strong>The three checks default to passed. Tap to unmark if something's off. Primary action is the happy path; damage path is one tap away.</p>
+    </div>
+
+    <!-- 5. BALANCE PAYMENT -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>2:19</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen">
+            <div class="m-header">
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem">One more thing</div>
+              <div class="m-title">Balance <em>$3,400</em></div>
+              <div class="m-sub">Woodward & Sons · 50/50 terms · due on delivery</div>
+            </div>
+            <div class="m-content">
+              <p style="font-family:var(--fb);font-size:0.78rem;color:var(--mo);line-height:1.6;margin-bottom:1rem">This balance was scheduled to come due when the item arrives. How did you pay?</p>
+
+              <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:1rem">
+                <div style="padding:0.85rem;border:1.5px solid var(--cl);border-radius:6px;background:rgba(196,165,123,0.04);display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--ch)">Paid on delivery</div>
+                    <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">Check or card to driver</div>
+                  </div>
+                  <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid var(--cl);background:var(--cl)"></div>
+                </div>
+                <div style="padding:0.85rem;border:1.5px solid var(--pe);border-radius:6px;background:var(--sf);display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--ch)">Paid before delivery</div>
+                    <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">ACH or wire on file</div>
+                  </div>
+                  <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid var(--pe)"></div>
+                </div>
+                <div style="padding:0.85rem;border:1.5px solid var(--pe);border-radius:6px;background:var(--sf);display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-family:var(--fb);font-weight:500;font-size:0.82rem;color:var(--ch)">Not yet — pay later</div>
+                    <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.1rem">Stays in "due" status</div>
+                  </div>
+                  <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid var(--pe)"></div>
+                </div>
+              </div>
+
+              <div class="m-section-head">Payment date</div>
+              <div style="padding:0.7rem;border:1px solid var(--pe);border-radius:6px;background:var(--sf);font-family:var(--fb);font-size:0.78rem;color:var(--ch);text-align:center">May 6, 2026 (today)</div>
+            </div>
+            <div class="m-fixed-bottom">
+              <div class="m-btn m-btn-c m-btn-large">Confirm payment & finish →</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>5. Balance payment step</strong>Only shown if there's an open balance due. Three options. Default pre-selected based on vendor terms. Tap and continue.</p>
+    </div>
+
+    <!-- 6. SUCCESS -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>2:19</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen">
+            <div class="m-success" style="padding-top:3rem">
+              <div class="m-success-strata"><div></div><div></div><div></div></div>
+              <div class="m-success-t">Logged.</div>
+              <div class="m-success-d">Meadow Linen Sectional moved to <strong>Delivered</strong>.<br>Balance $3,400 paid logged.<br>3 photos saved.</div>
+
+              <div style="text-align:left;padding:0 1rem;margin-top:1.5rem">
+                <div class="m-section-head">Next 14 days</div>
+                <div class="m-card" style="border-left:3px solid var(--cl)">
+                  <div class="m-card-t">Stored at Middlewest Studio</div>
+                  <div class="m-card-d" style="margin-top:0.2rem">Until install · May 22, 2026</div>
+                </div>
+                <div class="m-card">
+                  <div class="m-card-t">Chen Residence install begins</div>
+                  <div class="m-card-d" style="margin-top:0.2rem">In 16 days</div>
+                </div>
+              </div>
+            </div>
+            <div class="m-fixed-bottom">
+              <div class="m-btn m-btn-p m-btn-large">Done — back to Today</div>
+              <div class="m-btn m-btn-s">Next delivery →</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>6. Success state</strong>Strata Mark. Plain confirmation. What happened, what's next. Two follow-up actions: done, or continue to next delivery if there is one.</p>
+    </div>
+
+  </div>
+
+  <div class="pq" style="border-color:rgba(250,247,242,0.15)">
+    <blockquote style="color:var(--ow)">"The driver was still in the truck when I finished. Three photos, three taps, paid the balance, done. That's the moment we're designing for."</blockquote>
+    <cite>Happy path · Target experience</cite>
+  </div>
+</div>
+</section>
+
+<!-- DAMAGE PATH -->
+<section class="fade">
+<div class="w">
+  <div class="sm"><div></div><div></div><div></div></div>
+  <p class="eyebrow">The Damage Path · 5% of arrivals · The expensive 5%</p>
+  <h1>When something's <em>wrong.</em></h1>
+  <p class="body" style="margin-bottom:1rem">Industry research is unanimous: damage discovered later (on install day, weeks after arrival) is the most expensive failure in procurement. Catching damage at receipt is the single highest-leverage moment in the entire workflow. The damage path is designed to make doing-the-right-thing easy enough that Leah doesn't skip it under time pressure.</p>
+
+  <p class="body" style="margin-bottom:1.5rem">The path branches at the "Issue found" button on Screen 4. Below: what happens when she taps it.</p>
+
+  <div class="phone-row">
+
+    <!-- 7. ISSUE TYPE -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>2:19</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen">
+            <div class="m-header" style="border-left:3px solid var(--te);background:rgba(212,160,144,0.04)">
+              <div class="m-back">← Cancel</div>
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--te);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem">Issue found</div>
+              <div class="m-title">What's wrong?</div>
+              <div class="m-sub">Tap all that apply</div>
+            </div>
+            <div class="m-content">
+              <div style="display:flex;flex-direction:column;gap:0.5rem">
+                <div style="padding:1rem;border:1.5px solid var(--te);background:rgba(212,160,144,0.06);border-radius:6px;display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch)">Damaged</div>
+                    <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.15rem">Scratch, chip, dent, fabric damage</div>
+                  </div>
+                  <div style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--te);background:var(--te);color:white;display:flex;align-items:center;justify-content:center;font-size:0.7rem">✓</div>
+                </div>
+                <div style="padding:1rem;border:1.5px solid var(--pe);border-radius:6px;background:var(--sf);display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch)">Wrong item</div>
+                    <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.15rem">Different from what was ordered</div>
+                  </div>
+                  <div style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--pe)"></div>
+                </div>
+                <div style="padding:1rem;border:1.5px solid var(--pe);border-radius:6px;background:var(--sf);display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch)">Wrong count</div>
+                    <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.15rem">Missing or extra cartons</div>
+                  </div>
+                  <div style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--pe)"></div>
+                </div>
+                <div style="padding:1rem;border:1.5px solid var(--pe);border-radius:6px;background:var(--sf);display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch)">Finish or color off</div>
+                    <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.15rem">Doesn't match spec</div>
+                  </div>
+                  <div style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--pe)"></div>
+                </div>
+                <div style="padding:1rem;border:1.5px solid var(--pe);border-radius:6px;background:var(--sf);display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch)">Other concern</div>
+                    <div style="font-family:var(--fb);font-size:0.65rem;color:var(--ao);margin-top:0.15rem">Anything else worth documenting</div>
+                  </div>
+                  <div style="width:18px;height:18px;border-radius:3px;border:1.5px solid var(--pe)"></div>
+                </div>
+              </div>
+            </div>
+            <div class="m-fixed-bottom">
+              <div class="m-btn m-btn-d m-btn-large">Continue · 2 photos needed</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>7. Issue type</strong>Five categorical options, multi-select. Each is a tap with a generous target. Continue button surfaces what comes next.</p>
+    </div>
+
+    <!-- 8. DAMAGE PHOTOS -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status" style="color:white">
+            <span>2:20</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen" style="background:#1a1816;padding:0;position:relative">
+            <div style="position:absolute;top:60px;left:0;right:0;padding:0 1rem;z-index:2">
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--te);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem">Damage photo 1 of 2</div>
+              <div style="font-family:var(--fd);font-weight:500;font-size:1.05rem;color:white;font-style:italic">Close-up of the issue</div>
+              <div style="font-family:var(--fb);font-size:0.7rem;color:rgba(255,255,255,0.7);margin-top:0.2rem;line-height:1.5">Get close. Show the damage clearly. The vendor's claim review will scrutinize this image.</div>
+            </div>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:300px;aspect-ratio:1;border-radius:8px;background:linear-gradient(135deg,#8a7560,#5c4a3c);position:relative">
+              <div style="position:absolute;top:45%;left:30%;width:18px;height:18px;background:rgba(212,160,144,0.9);border-radius:50%;box-shadow:0 0 0 4px rgba(212,160,144,0.3)"></div>
+            </div>
+            <div style="position:absolute;bottom:140px;left:0;right:0;padding:0 1rem;text-align:center">
+              <div style="font-family:var(--fm);font-size:0.55rem;color:rgba(255,255,255,0.6);letter-spacing:0.06em;text-transform:uppercase">Auto-zoom on tap</div>
+            </div>
+            <div style="position:absolute;bottom:30px;left:0;right:0;padding:0 1rem;display:flex;justify-content:space-between;align-items:center">
+              <div style="font-family:var(--fb);font-size:0.7rem;color:rgba(255,255,255,0.6)">Skip</div>
+              <div style="width:64px;height:64px;border-radius:50%;background:white;border:4px solid rgba(255,255,255,0.3);box-shadow:0 4px 16px rgba(0,0,0,0.3)"></div>
+              <div style="font-family:var(--fb);font-size:0.7rem;color:rgba(255,255,255,0.6)">Flash</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>8. Damage photos</strong>Two extra photos required: close-up of the damage, and context shot. Together with the 3 standard photos, the claim has 5 photos of evidence.</p>
+    </div>
+
+    <!-- 9. VOICE DESCRIBE -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>2:21</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen">
+            <div class="m-header">
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--te);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem">Describe the issue</div>
+              <div class="m-title">In a sentence or two</div>
+              <div class="m-sub">Used in the claim email — keep it factual</div>
+            </div>
+            <div class="m-content">
+              <div style="border:1.5px solid var(--cl);border-radius:8px;background:var(--sf);padding:0.85rem;min-height:120px;font-family:var(--fb);font-size:0.78rem;color:var(--ch);line-height:1.6">
+                Sectional arm — about 2 inches of fabric scuffed, looks like it caught on something during shipping. Carton was intact, no visible exterior damage. Otherwise the piece looks correct.<span style="display:inline-block;width:2px;height:14px;background:var(--cl);vertical-align:middle;margin-left:2px"></span>
+              </div>
+
+              <div style="display:flex;justify-content:center;margin:1rem 0">
+                <div style="width:56px;height:56px;border-radius:50%;background:var(--cl);display:flex;align-items:center;justify-content:center;color:white;font-family:var(--fd);font-size:1.1rem;font-style:italic;box-shadow:0 4px 16px rgba(196,165,123,0.3)">●</div>
+              </div>
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--ao);text-align:center;letter-spacing:0.08em;text-transform:uppercase">Hold to speak · Tap to type</div>
+
+              <div class="callout" style="margin-top:1.25rem">
+                <span class="callout-l">Voice-to-text default</span>The mic transcribes as Leah speaks. She can edit before sending. Voice is faster than typing on the studio floor with one hand free.
+              </div>
+            </div>
+            <div class="m-fixed-bottom">
+              <div class="m-btn m-btn-p m-btn-large">Continue to claim →</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>9. Voice description</strong>Tap-to-type fallback, but voice is the path. Pre-populated only if a default exists for the issue type. Auto-transcribed; editable.</p>
+    </div>
+
+  </div>
+
+  <div class="phone-row" style="margin-top:0">
+
+    <!-- 10. CLAIM REVIEW -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>2:22</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen">
+            <div class="m-header">
+              <div class="m-back">← Back</div>
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem">Review claim</div>
+              <div class="m-title">Email to <em>Woodward & Sons</em></div>
+              <div class="m-sub">Drafted for you · review and send</div>
+            </div>
+            <div class="m-content" style="padding-bottom:8rem">
+              <div style="padding:0.85rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;margin-bottom:0.85rem">
+                <div class="spec-row">
+                  <span class="spec-row-l">To</span>
+                  <span class="spec-row-r">claims@woodwardandsons.com</span>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-row-l">Subject</span>
+                  <span class="spec-row-r">PO WS-188 · Damage on Receipt</span>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-row-l">Attached</span>
+                  <span class="spec-row-r"><strong>5 photos</strong> + PO summary</span>
+                </div>
+              </div>
+
+              <div style="padding:0.85rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;font-family:var(--fb);font-size:0.72rem;line-height:1.6;color:var(--mo);max-height:200px;overflow:hidden;position:relative">
+                <p>Hi Woodward & Sons team,</p>
+                <p style="margin-top:0.5rem">PO WS-188 arrived today (May 6, 2026) with damage. Documenting per your warranty policy:</p>
+                <p style="margin-top:0.5rem"><strong>Issue:</strong> Sectional arm — about 2 inches of fabric scuffed, looks like it caught on something during shipping. Carton was intact, no visible exterior damage. Otherwise the piece looks correct.</p>
+                <p style="margin-top:0.5rem"><strong>Photos attached:</strong> Full carton (1), PO label (1), packaging (1), damage close-up (1), damage context (1).</p>
+                <div style="position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(180deg,transparent,var(--sf))"></div>
+              </div>
+              <div style="text-align:center;font-family:var(--fb);font-size:0.65rem;color:var(--ao);font-style:italic;margin-top:0.4rem">Tap to expand · Edit before sending</div>
+            </div>
+            <div class="m-fixed-bottom">
+              <div class="m-btn m-btn-c m-btn-large">Send claim email</div>
+              <div class="m-btn m-btn-s">Save draft, send later</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>10. Claim review</strong>Auto-drafted email with all the right data. Leah scans, taps Send. Save-draft option for when she wants to add a personal note later.</p>
+    </div>
+
+    <!-- 11. WHAT TO DO WITH IT -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>2:22</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen">
+            <div class="m-header">
+              <div style="font-family:var(--fm);font-size:0.5rem;color:var(--cl);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem">One more decision</div>
+              <div class="m-title">What now?</div>
+              <div class="m-sub">The piece is here. What's the plan?</div>
+            </div>
+            <div class="m-content">
+              <div style="display:flex;flex-direction:column;gap:0.5rem">
+                <div style="padding:1rem;border:1.5px solid var(--cl);background:rgba(196,165,123,0.04);border-radius:6px">
+                  <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch);margin-bottom:0.2rem">Accept and store</div>
+                  <div style="font-family:var(--fb);font-size:0.7rem;color:var(--ao);line-height:1.5">Keep it. Awaiting vendor response on repair, replacement, or credit. Most common.</div>
+                </div>
+                <div style="padding:1rem;border:1.5px solid var(--pe);border-radius:6px;background:var(--sf)">
+                  <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch);margin-bottom:0.2rem">Refuse delivery</div>
+                  <div style="font-family:var(--fb);font-size:0.7rem;color:var(--ao);line-height:1.5">Send back with the driver. Used only when damage is severe and obvious.</div>
+                </div>
+                <div style="padding:1rem;border:1.5px solid var(--pe);border-radius:6px;background:var(--sf)">
+                  <div style="font-family:var(--fb);font-weight:500;font-size:0.85rem;color:var(--ch);margin-bottom:0.2rem">Reorder needed</div>
+                  <div style="font-family:var(--fb);font-size:0.7rem;color:var(--ao);line-height:1.5">Trigger a Change Order in the project. Auto-creates a "decision needed" entry for client.</div>
+                </div>
+              </div>
+
+              <div class="callout" style="margin-top:1.25rem">
+                <span class="callout-l">What changes in the workspace</span>Status moves to "Delivered with damage." Claim opens in the Receiving · Damage tab. Project Detail surfaces the issue. Client is not notified — Leah controls that timing.
+              </div>
+            </div>
+            <div class="m-fixed-bottom">
+              <div class="m-btn m-btn-c m-btn-large">Confirm: Accept & store</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>11. Disposition</strong>Three paths for what to do with the damaged piece while the claim is pending. "Accept and store" pre-selected — the realistic default.</p>
+    </div>
+
+    <!-- 12. DAMAGE SUCCESS -->
+    <div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>2:23</span>
+            <span class="signal">●●●</span>
+          </div>
+          <div class="phone-screen">
+            <div class="m-success" style="padding-top:2.5rem">
+              <div class="m-success-strata"><div></div><div></div><div></div></div>
+              <div class="m-success-t" style="color:var(--ch)">Logged with claim.</div>
+              <div class="m-success-d">Meadow Linen Sectional · <strong>Delivered with damage</strong><br>Claim email sent to Woodward & Sons<br>Status: <strong style="color:var(--te)">Awaiting vendor response</strong></div>
+
+              <div style="text-align:left;padding:0 1rem;margin-top:1rem">
+                <div class="m-section-head">What's been done</div>
+                <div class="m-checklist-item">
+                  <div class="m-check on">✓</div>
+                  <div class="m-checklist-l">5 photos attached to PO record</div>
+                </div>
+                <div class="m-checklist-item">
+                  <div class="m-check on">✓</div>
+                  <div class="m-checklist-l">Claim email sent at 2:23 PM</div>
+                </div>
+                <div class="m-checklist-item">
+                  <div class="m-check on">✓</div>
+                  <div class="m-checklist-l">Reminder set: follow up in 3 business days</div>
+                </div>
+                <div class="m-checklist-item">
+                  <div class="m-check on">✓</div>
+                  <div class="m-checklist-l">Balance payment paused pending resolution</div>
+                </div>
+              </div>
+            </div>
+            <div class="m-fixed-bottom">
+              <div class="m-btn m-btn-p m-btn-large">Done — back to Today</div>
+              <div class="m-btn m-btn-s">View claim status</div>
+            </div>
+          </div>
+          <div class="phone-bottom"><div class="phone-bottom-bar"></div></div>
+        </div>
+      </div>
+      <p class="phone-label"><strong>12. Damage success state</strong>Same calm closing as the happy path, with the actions taken listed. The "balance payment paused" line is a quiet payment-integration win.</p>
+    </div>
+
+  </div>
+</div>
+</section>
+
+<!-- TECHNICAL SPEC -->
+<section class="fade" style="background:var(--ow)">
+<div class="w">
+  <div class="sm"><div></div><div></div><div></div></div>
+  <p class="eyebrow">Technical specification</p>
+  <h1>What Claude Code <em>needs to build.</em></h1>
+  <p class="body" style="margin-bottom:1.5rem">The flows above are user-facing. Below is the implementation spec — component dimensions, interaction patterns, capture targets, data model touchpoints, and edge cases. This is the contract for what Sprint 2 ships.</p>
+
+  <div class="g2">
+    <div>
+      <h3>Viewport & layout</h3>
+      <div style="padding:1rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;margin-bottom:1rem">
+        <div class="spec-row">
+          <span class="spec-row-l">Primary viewport</span>
+          <span class="spec-row-r"><strong>375px</strong> — iPhone SE/12 mini baseline. Test 390px (iPhone 14), 414px (Plus models).</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Min tap target</span>
+          <span class="spec-row-r"><strong>44 × 44 px</strong> per Apple HIG. Primary actions <strong>≥ 56px</strong> tall.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Thumb zone</span>
+          <span class="spec-row-r">Primary CTAs in the <strong>bottom third</strong> of the screen. Sticky bottom bar with linear-gradient fade above.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Safe areas</span>
+          <span class="spec-row-r">Respect iOS notch + home indicator. Use <code style="font-family:var(--fm);font-size:0.7rem;background:var(--pe);padding:1px 4px;border-radius:2px">env(safe-area-inset-*)</code> for all positioning.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Orientation</span>
+          <span class="spec-row-r">Portrait only. Camera screens hard-lock portrait.</span>
+        </div>
+      </div>
+
+      <h3>Camera & photo capture</h3>
+      <div style="padding:1rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px">
+        <div class="spec-row">
+          <span class="spec-row-l">API</span>
+          <span class="spec-row-r">Native <code style="font-family:var(--fm);font-size:0.7rem;background:var(--pe);padding:1px 4px;border-radius:2px">&lt;input type="file" accept="image/*" capture="environment"&gt;</code> for v1. Native MediaStream API in Phase 2 for live overlay.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Compression</span>
+          <span class="spec-row-r">Resize to 1600px on longest edge. JPEG quality 0.85. Average file 200-400 KB.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">EXIF</span>
+          <span class="spec-row-r">Preserve timestamp + GPS. These are the warranty audit trail.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Offline storage</span>
+          <span class="spec-row-r">IndexedDB. Up to 50 MB of pending photos. Sync queue processed on reconnect.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Upload target</span>
+          <span class="spec-row-r">Supabase Storage. Naming: <code style="font-family:var(--fm);font-size:0.7rem;background:var(--pe);padding:1px 4px;border-radius:2px">receiving/{po_id}/{photo_type}-{idx}.jpg</code></span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3>Voice-to-text</h3>
+      <div style="padding:1rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;margin-bottom:1rem">
+        <div class="spec-row">
+          <span class="spec-row-l">API</span>
+          <span class="spec-row-r">Web Speech API (<code style="font-family:var(--fm);font-size:0.7rem;background:var(--pe);padding:1px 4px;border-radius:2px">SpeechRecognition</code>) for v1. Falls back to native keyboard if browser unsupported.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Language</span>
+          <span class="spec-row-r">en-US default. Configurable per user in Settings.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">UX</span>
+          <span class="spec-row-r">Hold-to-record. Release stops. Tap-to-edit in text field after transcription. Mic stays available for re-recording.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Privacy</span>
+          <span class="spec-row-r">Audio not stored. Only the transcribed text persists.</span>
+        </div>
+      </div>
+
+      <h3>State management</h3>
+      <div style="padding:1rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px">
+        <div class="spec-row">
+          <span class="spec-row-l">Flow state</span>
+          <span class="spec-row-r">Zustand store. Persists to sessionStorage so a mid-flow refresh doesn't lose progress.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Network state</span>
+          <span class="spec-row-r"><code style="font-family:var(--fm);font-size:0.7rem;background:var(--pe);padding:1px 4px;border-radius:2px">navigator.onLine</code> + service-worker fetch interception. Visible offline indicator when disconnected.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Pending operations</span>
+          <span class="spec-row-r">Queue in IndexedDB. Background sync via service worker on reconnect.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Optimistic UI</span>
+          <span class="spec-row-r">All state transitions show immediately. Sync errors surface as non-blocking toast.</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-row-l">Idempotency</span>
+          <span class="spec-row-r">Each receive operation generates a client-side UUID. Backend deduplicates if the sync retries.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:2rem">Data model touchpoints</h3>
+  <div style="padding:1.25rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px;margin-bottom:1.5rem">
+    <div class="spec-row">
+      <span class="spec-row-l">receive_event</span>
+      <span class="spec-row-r">New table. Fields: <strong>id, po_id, received_at, received_by_user_id, status (clean/damaged), notes, lat, lng, client_uuid</strong>.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">receive_photo</span>
+      <span class="spec-row-r">New table. Fields: <strong>id, receive_event_id, photo_type (overall/label/packaging/damage_close/damage_context), storage_path, taken_at, exif_json</strong>.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">damage_claim</span>
+      <span class="spec-row-r">New table. Fields: <strong>id, receive_event_id, issue_types (jsonb), description, claim_email_sent_at, vendor_response, disposition (accept_store/refuse/reorder), resolved_at</strong>.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">po (existing)</span>
+      <span class="spec-row-r">Status transitions via receive_event: <strong>Shipped → Delivered</strong> (clean) or <strong>Shipped → Delivered with damage</strong>. Auto-pause balance payment if damaged.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">payment_record (existing)</span>
+      <span class="spec-row-r">Balance state transitions: <strong>pending → due</strong> on Delivered. <strong>due → paid</strong> on payment confirmation. <strong>due → paused</strong> on damage claim.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">notification</span>
+      <span class="spec-row-r">Trigger to studio owner on claim sent, claim response received, claim resolution.</span>
+    </div>
+  </div>
+
+  <h3>Edge cases & error handling</h3>
+  <div style="padding:1.25rem;background:var(--sf);border:1px solid var(--pe);border-radius:6px">
+    <div class="spec-row">
+      <span class="spec-row-l">No PO match</span>
+      <span class="spec-row-r">If item arrives without a scheduled PO (rare): "Log unscheduled delivery" flow. Manually pick the project + item. Same photo flow.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">Multi-carton split delivery</span>
+      <span class="spec-row-r">PO with multiple cartons can be received partially. Flow shows "1 of 3 cartons" and allows partial receive. Reminder set for remaining cartons.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">Wrong item arrived</span>
+      <span class="spec-row-r">"Issue found · Wrong item" triggers expanded flow: which item is this actually? Photo of label. Auto-drafts vendor email with mis-shipment evidence.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">Camera denied permission</span>
+      <span class="spec-row-r">Fallback to file picker (existing photos). Banner explains why camera helps. Doesn't block the flow.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">Offline at receive</span>
+      <span class="spec-row-r">Full flow works offline. Indicator "Will sync when online." On reconnect: silent background sync, success toast.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">Carrier requires signature</span>
+      <span class="spec-row-r">Out of scope for v1. Leah signs the driver's device separately. Patina doesn't capture POD signatures in v1.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">Claim email delivery failure</span>
+      <span class="spec-row-r">SMTP failure surfaces inline. Claim stays in "draft" status. Retry available. Sent emails BCC'd to studio owner's email for backup.</span>
+    </div>
+    <div class="spec-row">
+      <span class="spec-row-l">Vendor has no email on file</span>
+      <span class="spec-row-r">Block claim send. Direct Leah to update vendor record with claims email address. One-tap flow to add it inline.</span>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- CLOSE -->
+<section class="fade" style="background:var(--ow)">
+<div class="w">
+  <div class="pq">
+    <blockquote>"The most valuable thing the mobile receiving flow does isn't speed. It's making the right thing easy enough that Leah does it every time — even when she's tired, even when the driver is impatient, even when the carton looks fine and she could just sign and move on. The flow earns its place by being faster than not using it."</blockquote>
+    <cite>Mobile Receiving Flow · North Star</cite>
+  </div>
+
+  <h2 style="margin-top:2rem">Built for the studio floor. <em>Built for warranty truth.</em></h2>
+  <p class="body" style="margin-top:1rem;margin-bottom:2rem">v1 ships in Sprint 2 alongside the Calendar view. Web-app technology stack (responsive PWA), iOS-first testing, Android tested at launch. The flow is 12 screens total — 6 for the happy path, 6 more for the damage branch. Average happy-path session: 30 seconds. Average damage-path session: 2 minutes. Both end with reassurance and a record that holds up to vendor scrutiny.</p>
+
+  <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:2rem;border-top:1px solid var(--pe);flex-wrap:wrap;gap:1rem">
+    <div>
+      <div style="font-family:var(--fd);font-weight:400;font-size:1rem">Patina · Procurement Workspace</div>
+      <div style="font-family:var(--fd);font-style:italic;font-size:0.78rem;color:var(--ao)">Where Time Adds Value</div>
+    </div>
+    <div class="meta">Mobile Receiving Flow · v1 · April 2026</div>
+  </div>
+</div>
+</section>
+
+<script>
+const f=document.querySelectorAll('.fade');
+const o=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis')})},{threshold:0.08,rootMargin:'0px 0px -40px 0px'});
+f.forEach(s=>o.observe(s));
+</script>
+</body>
+</html>

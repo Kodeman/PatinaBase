@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina Monorepo Architecture Review</title>
+<style>
+  :root {
+    --bg: #0b0b0c;
+    --bg-2: #131316;
+    --bg-3: #1c1c21;
+    --border: #26262c;
+    --text: #e8e8ea;
+    --text-muted: #9a9aa3;
+    --text-dim: #5a5a63;
+    --accent: #d4d4d6;
+    --p0: #c95757;
+    --p0-bg: rgba(201, 87, 87, 0.08);
+    --p0-border: rgba(201, 87, 87, 0.3);
+    --p1: #d49a4a;
+    --p1-bg: rgba(212, 154, 74, 0.08);
+    --p1-border: rgba(212, 154, 74, 0.3);
+    --p2: #4ea3a3;
+    --p2-bg: rgba(78, 163, 163, 0.08);
+    --p2-border: rgba(78, 163, 163, 0.3);
+    --p3: #7e7e88;
+    --p3-bg: rgba(126, 126, 136, 0.08);
+    --p3-border: rgba(126, 126, 136, 0.3);
+    --good: #6aa17a;
+    --font-sans: 'Inter Tight', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+    --font-display: 'Fraunces', Georgia, serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  main {
+    scroll-snap-type: y mandatory;
+    overflow-y: scroll;
+    height: 100vh;
+  }
+  .slide {
+    min-height: 100vh;
+    padding: 6vh 8vw;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    border-bottom: 1px solid var(--border);
+  }
+  .slide-number {
+    position: absolute;
+    top: 4vh;
+    right: 8vw;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .slide-label {
+    position: absolute;
+    top: 4vh;
+    left: 8vw;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  h1, h2, h3 { font-weight: 600; letter-spacing: -0.02em; }
+  h1.display {
+    font-family: var(--font-display);
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    line-height: 1.05;
+    font-weight: 400;
+    letter-spacing: -0.03em;
+  }
+  h1.display em { font-style: italic; color: var(--text-muted); }
+  h1 { font-size: clamp(2rem, 4vw, 3rem); margin-bottom: 0.6em; }
+  h2 { font-size: clamp(1.6rem, 3vw, 2.2rem); margin-bottom: 0.5em; color: var(--text); }
+  h3 { font-size: 1.15rem; margin-bottom: 0.4em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+  p { margin-bottom: 0.8em; color: var(--text); max-width: 70ch; }
+  p.lead { font-size: 1.25rem; color: var(--text); max-width: 65ch; line-height: 1.55; }
+  p.muted { color: var(--text-muted); }
+  strong { color: var(--text); font-weight: 600; }
+  em { color: var(--text-muted); font-style: italic; }
+  code, pre { font-family: var(--font-mono); font-size: 0.9em; }
+  code { background: var(--bg-3); padding: 0.1em 0.4em; border-radius: 3px; color: var(--accent); }
+  pre {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    padding: 1em 1.2em;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    max-width: 60rem;
+  }
+  pre code { background: transparent; padding: 0; }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 0.15em 0.6em;
+    border-radius: 2px;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    text-transform: uppercase;
+    border: 1px solid;
+  }
+  .tag.p0 { color: var(--p0); border-color: var(--p0-border); background: var(--p0-bg); }
+  .tag.p1 { color: var(--p1); border-color: var(--p1-border); background: var(--p1-bg); }
+  .tag.p2 { color: var(--p2); border-color: var(--p2-border); background: var(--p2-bg); }
+  .tag.p3 { color: var(--p3); border-color: var(--p3-border); background: var(--p3-bg); }
+  .tag.good { color: var(--good); border-color: rgba(106, 161, 122, 0.3); background: rgba(106, 161, 122, 0.08); }
+
+  .row { display: flex; flex-wrap: wrap; gap: 2rem; }
+  .cols-2 > * { flex: 1 1 22rem; }
+  .cols-3 > * { flex: 1 1 18rem; }
+  .gap-sm { gap: 1rem; }
+  .mt { margin-top: 1.5rem; }
+  .mt-lg { margin-top: 2.5rem; }
+
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.5rem 1.8rem;
+  }
+  .card.p0 { border-left: 3px solid var(--p0); }
+  .card.p1 { border-left: 3px solid var(--p1); }
+  .card.p2 { border-left: 3px solid var(--p2); }
+  .card.p3 { border-left: 3px solid var(--p3); }
+  .card h3 { color: var(--text); margin-bottom: 0.6em; }
+  .card .file {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.5em;
+  }
+
+  ul.bullets { list-style: none; padding: 0; }
+  ul.bullets li {
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+    position: relative;
+    color: var(--text);
+  }
+  ul.bullets li::before {
+    content: "—";
+    position: absolute;
+    left: 0;
+    color: var(--text-dim);
+  }
+  ul.bullets li code { font-size: 0.85em; }
+
+  .stat {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 2.5rem;
+    color: var(--text);
+    line-height: 1;
+  }
+  .stat .unit { font-size: 1rem; color: var(--text-muted); margin-left: 0.3em; font-family: var(--font-sans); }
+  .stat-label { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.4em; letter-spacing: 0.05em; }
+
+  /* Roadmap columns */
+  .roadmap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-top: 2rem; }
+  .roadmap .col h3 { color: var(--text); font-size: 1.4rem; text-transform: none; letter-spacing: -0.01em; font-weight: 600; margin-bottom: 0.2em; }
+  .roadmap .col .when { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1em; font-family: var(--font-mono); }
+  .roadmap .col ul { list-style: none; padding: 0; }
+  .roadmap .col li {
+    font-size: 0.9rem;
+    color: var(--text);
+    padding: 0.45em 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .roadmap .col li .id { font-family: var(--font-mono); color: var(--text-muted); margin-right: 0.6em; font-size: 0.8em; }
+
+  .ascii {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+    white-space: pre;
+    background: var(--bg-2);
+    padding: 1.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  /* SVG matrix */
+  .matrix-wrapper { margin-top: 1.5rem; max-width: 64rem; }
+  svg { display: block; max-width: 100%; height: auto; }
+  .matrix-legend { display: flex; gap: 2rem; margin-top: 1.2rem; font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap; }
+  .matrix-legend .item { display: flex; align-items: center; gap: 0.5rem; }
+  .matrix-legend .dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; }
+
+  /* TL;DR */
+  .tldr-thesis {
+    font-family: var(--font-display);
+    font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+    line-height: 1.4;
+    font-weight: 400;
+    color: var(--text);
+    border-left: 2px solid var(--accent);
+    padding-left: 1.5rem;
+    margin: 2rem 0;
+    max-width: 60rem;
+    font-style: italic;
+  }
+  .tldr-thesis strong { color: var(--text); font-weight: 600; font-style: normal; }
+
+  .three-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 2rem; }
+  .three-actions .action { background: var(--bg-2); border: 1px solid var(--p0-border); padding: 1.5rem; border-radius: 4px; border-left: 3px solid var(--p0); }
+  .three-actions .action .num { color: var(--p0); font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.1em; }
+  .three-actions .action h3 { color: var(--text); font-size: 1.1rem; margin: 0.5rem 0; text-transform: none; letter-spacing: -0.01em; font-weight: 600; }
+  .three-actions .action p { font-size: 0.9rem; margin: 0; color: var(--text-muted); }
+
+  .arch-diagram { margin: 1.5rem 0; }
+  .arch-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem; margin-top: 2rem; }
+
+  .not-recommended {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    border-radius: 4px;
+    margin-top: 1.5rem;
+    max-width: 60rem;
+  }
+  .not-recommended ul { list-style: none; padding: 0; }
+  .not-recommended li { padding: 0.8em 0; border-bottom: 1px solid var(--border); color: var(--text); }
+  .not-recommended li:last-child { border-bottom: none; }
+  .not-recommended li strong { color: var(--text); }
+  .not-recommended li::before { content: "✗ "; color: var(--text-dim); margin-right: 0.4em; }
+
+  .footer-link { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.9rem; }
+  .footer-link a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--text-dim); }
+
+  /* Nav indicator */
+  .nav-indicator {
+    position: fixed;
+    right: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    z-index: 100;
+  }
+  .nav-indicator a {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    opacity: 0.4;
+    transition: all 0.2s;
+  }
+  .nav-indicator a:hover, .nav-indicator a.active { opacity: 1; background: var(--accent); }
+
+  @media (max-width: 768px) {
+    .slide { padding: 5vh 6vw; }
+    .three-actions, .roadmap, .arch-stats { grid-template-columns: 1fr; }
+    .nav-indicator { display: none; }
+  }
+</style>
+</head>
+<body>
+<nav class="nav-indicator">
+  <a href="#s1" title="Cover"></a>
+  <a href="#s2" title="TL;DR"></a>
+  <a href="#s3" title="What was reviewed"></a>
+  <a href="#s4" title="What's working"></a>
+  <a href="#s5" title="Risk/effort matrix"></a>
+  <a href="#s6" title="P0 — Auth"></a>
+  <a href="#s7" title="P1 — Ops"></a>
+  <a href="#s8" title="P2 — Duplication"></a>
+  <a href="#s9" title="P2 — Backend"></a>
+  <a href="#s10" title="P3 — Hygiene"></a>
+  <a href="#s11" title="Roadmap"></a>
+  <a href="#s12" title="What this is NOT"></a>
+  <a href="#s13" title="Read more"></a>
+</nav>
+
+<main>
+
+<!-- ============ SLIDE 1: COVER ============ -->
+<section id="s1" class="slide">
+  <div class="slide-label">Architecture Review</div>
+  <div class="slide-number">01 / 13</div>
+  <h1 class="display">Patina<br><em>monorepo architecture review.</em></h1>
+  <p class="muted mt-lg">Self-review · 2026-05-16 · HEAD <code>332adb2</code></p>
+  <p class="muted mt" style="max-width: 50rem;">Backend, three Next.js portals, a Plasmo extension, a SwiftUI iOS app, four backend stacks, ~624K lines of TypeScript, ~347K lines of Swift, 21K lines of SQL.</p>
+</section>
+
+<!-- ============ SLIDE 2: TL;DR ============ -->
+<section id="s2" class="slide">
+  <div class="slide-label">TL;DR</div>
+  <div class="slide-number">02 / 13</div>
+  <h1>The thesis, and three things to do this week.</h1>
+  <p class="tldr-thesis">
+    Patina's product surface has outgrown its boundaries: the auth layer trusts unverified tokens, three portals re-implement the same hooks, and four backend stacks share unclear ownership — none of which require a rewrite, but all of which require deciding what the seams are before the next feature. <strong>The fix is mostly subtraction, not addition.</strong>
+  </p>
+  <div class="three-actions">
+    <div class="action">
+      <div class="num">DO THIS WEEK · 01</div>
+      <h3>Verify JWT signatures</h3>
+      <p>Today, <code>packages/auth/src/index.ts</code> base64-decodes the payload and trusts it. Anyone with a valid-shaped JWT is admin.</p>
+    </div>
+    <div class="action">
+      <div class="num">DO THIS WEEK · 02</div>
+      <h3>Kill the silent default-role fallback</h3>
+      <p>All three portals default new accounts to their namesake role (<code>admin</code> / <code>designer</code> / <code>client</code>) when <code>app_metadata.roles</code> is missing.</p>
+    </div>
+    <div class="action">
+      <div class="num">DO THIS WEEK · 03</div>
+      <h3>Wire CI gates</h3>
+      <p>One workflow runs <code>lint && typecheck && test && build</code> as required checks on PRs. Main is broken today; this stops the bleeding.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 3: WHAT WAS REVIEWED ============ -->
+<section id="s3" class="slide">
+  <div class="slide-label">Scope</div>
+  <div class="slide-number">03 / 13</div>
+  <h1>What was reviewed.</h1>
+  <p class="muted">The whole monorepo at HEAD. Static analysis + direct file reads + parallel explore-agent sweeps across backend, frontend, and mobile/infra. Findings verified against actual source.</p>
+
+  <div class="arch-diagram">
+    <svg viewBox="0 0 900 380" role="img" aria-label="Patina architecture diagram">
+      <defs>
+        <style>
+          .box { fill: #1c1c21; stroke: #26262c; stroke-width: 1; }
+          .box-text { fill: #e8e8ea; font-family: 'Inter Tight', sans-serif; font-size: 13px; font-weight: 500; }
+          .box-sub { fill: #9a9aa3; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+          .arrow { stroke: #5a5a63; stroke-width: 1; fill: none; }
+          .layer-label { fill: #5a5a63; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; }
+          .seam { stroke: #c95757; stroke-width: 1; stroke-dasharray: 3 3; fill: none; }
+        </style>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#5a5a63"/>
+        </marker>
+      </defs>
+
+      <!-- Layer: clients -->
+      <text x="20" y="35" class="layer-label">CLIENTS</text>
+      <rect x="60" y="50" width="150" height="50" class="box" rx="3"/>
+      <text x="135" y="75" class="box-text" text-anchor="middle">Designer Portal</text>
+      <text x="135" y="91" class="box-sub" text-anchor="middle">Next.js · 92 pages</text>
+
+      <rect x="230" y="50" width="150" height="50" class="box" rx="3"/>
+      <text x="305" y="75" class="box-text" text-anchor="middle">Admin Portal</text>
+      <text x="305" y="91" class="box-sub" text-anchor="middle">Next.js · 72 pages</text>
+
+      <rect x="400" y="50" width="150" height="50" class="box" rx="3"/>
+      <text x="475" y="75" class="box-text" text-anchor="middle">Client Portal</text>
+      <text x="475" y="91" class="box-sub" text-anchor="middle">Next.js · 32 pages</text>
+
+      <rect x="580" y="50" width="135" height="50" class="box" rx="3"/>
+      <text x="647" y="75" class="box-text" text-anchor="middle">Chrome Extension</text>
+      <text x="647" y="91" class="box-sub" text-anchor="middle">Plasmo</text>
+
+      <rect x="735" y="50" width="135" height="50" class="box" rx="3"/>
+      <text x="802" y="75" class="box-text" text-anchor="middle">iOS App</text>
+      <text x="802" y="91" class="box-sub" text-anchor="middle">SwiftUI · 347K LOC</text>
+
+      <!-- Seam line: portal duplication -->
+      <path d="M 60 110 Q 230 130 550 110" class="seam"/>
+      <text x="290" y="140" class="box-sub" style="fill: #c95757;">3× duplicated auth hooks + middleware (~850 LOC)</text>
+
+      <!-- Layer: middleware -->
+      <text x="20" y="170" class="layer-label">PROXY</text>
+      <rect x="60" y="180" width="500" height="40" class="box" rx="3" stroke="#c95757" stroke-opacity="0.4"/>
+      <text x="310" y="200" class="box-text" text-anchor="middle">@patina/api-routes — 9,338 LOC</text>
+      <text x="310" y="215" class="box-sub" text-anchor="middle">proxy · retry · circuit breaker · chunked-cookie reassembly</text>
+
+      <!-- Layer: backends -->
+      <text x="20" y="250" class="layer-label">BACKEND</text>
+      <rect x="60" y="265" width="180" height="60" class="box" rx="3"/>
+      <text x="150" y="287" class="box-text" text-anchor="middle">3 NestJS services</text>
+      <text x="150" y="305" class="box-sub" text-anchor="middle">orders · media · projects</text>
+
+      <rect x="260" y="265" width="180" height="60" class="box" rx="3"/>
+      <text x="350" y="287" class="box-text" text-anchor="middle">~24 edge functions</text>
+      <text x="350" y="305" class="box-sub" text-anchor="middle">Supabase Deno · overlap zone</text>
+
+      <rect x="460" y="265" width="180" height="60" class="box" rx="3"/>
+      <text x="550" y="287" class="box-text" text-anchor="middle">Postgres functions</text>
+      <text x="550" y="305" class="box-sub" text-anchor="middle">incl. 380-LOC sproc</text>
+
+      <rect x="660" y="265" width="180" height="60" class="box" rx="3" stroke-dasharray="3 3" stroke="#7e7e88"/>
+      <text x="750" y="287" class="box-text" text-anchor="middle" style="fill: #9a9aa3;">aesthete-engine</text>
+      <text x="750" y="305" class="box-sub" text-anchor="middle">Python · experimental</text>
+
+      <!-- Layer: foundation -->
+      <text x="20" y="350" class="layer-label">FOUNDATION</text>
+      <rect x="60" y="345" width="780" height="22" class="box" rx="3"/>
+      <text x="450" y="361" class="box-text" text-anchor="middle">Supabase · Postgres · 143 migrations · Auth (GoTrue) · Realtime · Storage · self-hosted on Coolify</text>
+
+      <!-- Arrows -->
+      <line x1="135" y1="100" x2="135" y2="178" class="arrow" marker-end="url(#arr)"/>
+      <line x1="305" y1="100" x2="305" y2="178" class="arrow" marker-end="url(#arr)"/>
+      <line x1="475" y1="100" x2="475" y2="178" class="arrow" marker-end="url(#arr)"/>
+      <line x1="310" y1="220" x2="310" y2="263" class="arrow" marker-end="url(#arr)"/>
+    </svg>
+  </div>
+
+  <div class="arch-stats">
+    <div><div class="stat">143<span class="unit">migrations</span></div><div class="stat-label">Supabase, including a 380-LOC sproc</div></div>
+    <div><div class="stat">11<span class="unit">packages</span></div><div class="stat-label">3 are well-factored, the rest are overweight</div></div>
+    <div><div class="stat">9.3<span class="unit">K LOC</span></div><div class="stat-label">in @patina/api-routes alone</div></div>
+    <div><div class="stat">4<span class="unit">backend stacks</span></div><div class="stat-label">with no written rubric for which is for what</div></div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 4: WHAT'S WORKING ============ -->
+<section id="s4" class="slide">
+  <div class="slide-label">Strengths</div>
+  <div class="slide-number">04 / 13</div>
+  <h1>What's working. <em style="color: var(--good); font-style: normal; font-size: 0.7em;">(keep)</em></h1>
+  <p class="muted">Six things this codebase does well. These are the patterns to <strong>protect</strong> while editing the rest.</p>
+
+  <div class="row cols-2 mt-lg">
+    <div class="card">
+      <span class="tag good">SOLID</span>
+      <h3>Monorepo + Turborepo discipline</h3>
+      <p class="muted">pnpm workspaces with explicit <code>dev:minimal / dev:designer / dev:frontend / dev:backend</code> filters. These aren't band-aids; they reflect real understanding of which surfaces overlap.</p>
+    </div>
+    <div class="card">
+      <span class="tag good">SOLID</span>
+      <h3>Type centralization in @patina/types</h3>
+      <p class="muted">53 files, value-object pattern (<code>Money</code>, <code>Email</code>, <code>Color</code>, <code>Address</code>, <code>Phone</code>) with validation tests. Rare in TS projects — shows real architectural thinking.</p>
+    </div>
+    <div class="card">
+      <span class="tag good">SOLID</span>
+      <h3>React Query + custom hooks</h3>
+      <p class="muted">Portals don't sprinkle <code>fetch()</code> calls; they consume hooks from <code>@patina/supabase</code>. Query keys encapsulated. This is the correct pattern.</p>
+    </div>
+    <div class="card">
+      <span class="tag good">SOLID</span>
+      <h3>iOS phase-based routing</h3>
+      <p class="muted">Recent refactor (<code>7924475</code>, <code>fa56fec</code>) removed coordinator + first-launch + threshold logic in favor of auth-phase-driven nav. Continuation array handles concurrent <code>waitForAuthReady()</code> callers. Clean.</p>
+    </div>
+    <div class="card">
+      <span class="tag good">SOLID</span>
+      <h3>Idempotent deploy script</h3>
+      <p class="muted"><code>infra/deploy.sh</code> supports <code>--skip-build / --skip-migrate / --skip-seed</code> and validates origin/main sync before proceeding. Structure is good even where individual steps need fixing.</p>
+    </div>
+    <div class="card">
+      <span class="tag good">SOLID</span>
+      <h3>Conventional commits + auto-memory</h3>
+      <p class="muted">Commit history is grep-friendly. <code>.claude/projects/.../memory/</code> has institutional knowledge that survives session resets — a real edge for AI-assisted dev.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 5: RISK/EFFORT MATRIX ============ -->
+<section id="s5" class="slide">
+  <div class="slide-label">Prioritization</div>
+  <div class="slide-number">05 / 13</div>
+  <h1>The risk / effort matrix.</h1>
+  <p class="lead">The story is in the top-left: <strong>the four worst findings are also the cheapest to fix.</strong></p>
+
+  <div class="matrix-wrapper">
+    <svg viewBox="0 0 880 480" role="img" aria-label="Risk versus effort scatter">
+      <defs>
+        <style>
+          .axis { stroke: #5a5a63; stroke-width: 1; }
+          .grid { stroke: #26262c; stroke-width: 1; stroke-dasharray: 2 4; }
+          .axis-label { fill: #9a9aa3; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.05em; }
+          .tier-label { fill: #5a5a63; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+          .dot-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; fill: #e8e8ea; }
+          .quadrant-hint { fill: #5a5a63; font-family: 'Inter Tight', sans-serif; font-size: 11px; font-style: italic; }
+        </style>
+      </defs>
+
+      <!-- Axes -->
+      <line x1="80" y1="40" x2="80" y2="420" class="axis"/>
+      <line x1="80" y1="420" x2="850" y2="420" class="axis"/>
+
+      <!-- Row gridlines + Y labels -->
+      <line x1="80" y1="110" x2="850" y2="110" class="grid"/>
+      <line x1="80" y1="190" x2="850" y2="190" class="grid"/>
+      <line x1="80" y1="280" x2="850" y2="280" class="grid"/>
+
+      <text x="70" y="80" class="axis-label" text-anchor="end">P0</text>
+      <text x="70" y="155" class="axis-label" text-anchor="end">P1</text>
+      <text x="70" y="240" class="axis-label" text-anchor="end">P2</text>
+      <text x="70" y="355" class="axis-label" text-anchor="end">P3</text>
+
+      <text x="35" y="230" class="axis-label" transform="rotate(-90 35 230)" text-anchor="middle">RISK →</text>
+
+      <!-- Col gridlines + X labels -->
+      <line x1="270" y1="40" x2="270" y2="420" class="grid"/>
+      <line x1="460" y1="40" x2="460" y2="420" class="grid"/>
+      <line x1="650" y1="40" x2="650" y2="420" class="grid"/>
+
+      <text x="175" y="445" class="axis-label" text-anchor="middle">HOURS</text>
+      <text x="365" y="445" class="axis-label" text-anchor="middle">DAYS</text>
+      <text x="555" y="445" class="axis-label" text-anchor="middle">WEEKS</text>
+      <text x="750" y="445" class="axis-label" text-anchor="middle">QUARTERS</text>
+      <text x="465" y="470" class="axis-label" text-anchor="middle">EFFORT →</text>
+
+      <!-- P0 ROW (red dots) -->
+      <!-- Hours: A2, A3 -->
+      <circle cx="150" cy="75" r="9" fill="#c95757"/><text x="150" y="78" class="dot-label" text-anchor="middle" fill="#fff">A2</text>
+      <circle cx="195" cy="95" r="9" fill="#c95757"/><text x="195" y="98" class="dot-label" text-anchor="middle" fill="#fff">A3</text>
+      <!-- Days: A1, A4, A5 -->
+      <circle cx="320" cy="75" r="9" fill="#c95757"/><text x="320" y="78" class="dot-label" text-anchor="middle" fill="#fff">A1</text>
+      <circle cx="395" cy="95" r="9" fill="#c95757"/><text x="395" y="98" class="dot-label" text-anchor="middle" fill="#fff">A4</text>
+      <circle cx="365" cy="75" r="9" fill="#c95757"/><text x="365" y="78" class="dot-label" text-anchor="middle" fill="#fff">A5</text>
+
+      <!-- P1 ROW (amber dots) -->
+      <!-- Hours: D4 -->
+      <circle cx="170" cy="155" r="9" fill="#d49a4a"/><text x="170" y="158" class="dot-label" text-anchor="middle" fill="#000">D4</text>
+      <!-- Days: D1, D2, D3 -->
+      <circle cx="310" cy="155" r="9" fill="#d49a4a"/><text x="310" y="158" class="dot-label" text-anchor="middle" fill="#000">D1</text>
+      <circle cx="365" cy="170" r="9" fill="#d49a4a"/><text x="365" y="173" class="dot-label" text-anchor="middle" fill="#000">D2</text>
+      <circle cx="420" cy="155" r="9" fill="#d49a4a"/><text x="420" y="158" class="dot-label" text-anchor="middle" fill="#000">D3</text>
+
+      <!-- P2 ROW (teal dots) -->
+      <!-- Days: B1, B2, C4 -->
+      <circle cx="310" cy="235" r="9" fill="#4ea3a3"/><text x="310" y="238" class="dot-label" text-anchor="middle" fill="#000">B1</text>
+      <circle cx="365" cy="250" r="9" fill="#4ea3a3"/><text x="365" y="253" class="dot-label" text-anchor="middle" fill="#000">B2</text>
+      <circle cx="420" cy="235" r="9" fill="#4ea3a3"/><text x="420" y="238" class="dot-label" text-anchor="middle" fill="#000">C4</text>
+      <!-- Weeks: B3, C3 -->
+      <circle cx="520" cy="235" r="9" fill="#4ea3a3"/><text x="520" y="238" class="dot-label" text-anchor="middle" fill="#000">B3</text>
+      <circle cx="580" cy="250" r="9" fill="#4ea3a3"/><text x="580" y="253" class="dot-label" text-anchor="middle" fill="#000">C3</text>
+      <!-- Quarters: C1 -->
+      <circle cx="750" cy="240" r="9" fill="#4ea3a3"/><text x="750" y="243" class="dot-label" text-anchor="middle" fill="#000">C1</text>
+
+      <!-- P3 ROW (gray dots) -->
+      <!-- Hours: C2, E2 -->
+      <circle cx="150" cy="340" r="9" fill="#7e7e88"/><text x="150" y="343" class="dot-label" text-anchor="middle" fill="#fff">C2</text>
+      <circle cx="200" cy="355" r="9" fill="#7e7e88"/><text x="200" y="358" class="dot-label" text-anchor="middle" fill="#fff">E2</text>
+      <!-- Days: E1, E4, E5, E6 -->
+      <circle cx="305" cy="340" r="9" fill="#7e7e88"/><text x="305" y="343" class="dot-label" text-anchor="middle" fill="#fff">E1</text>
+      <circle cx="350" cy="360" r="9" fill="#7e7e88"/><text x="350" y="363" class="dot-label" text-anchor="middle" fill="#fff">E4</text>
+      <circle cx="395" cy="340" r="9" fill="#7e7e88"/><text x="395" y="343" class="dot-label" text-anchor="middle" fill="#fff">E5</text>
+      <circle cx="440" cy="360" r="9" fill="#7e7e88"/><text x="440" y="363" class="dot-label" text-anchor="middle" fill="#fff">E6</text>
+      <!-- Weeks: E3, E7 -->
+      <circle cx="530" cy="345" r="9" fill="#7e7e88"/><text x="530" y="348" class="dot-label" text-anchor="middle" fill="#fff">E3</text>
+      <circle cx="590" cy="370" r="9" fill="#7e7e88"/><text x="590" y="373" class="dot-label" text-anchor="middle" fill="#fff">E7</text>
+
+      <!-- Quadrant hint -->
+      <rect x="120" y="50" width="280" height="80" rx="4" fill="none" stroke="#c95757" stroke-width="1" stroke-opacity="0.4" stroke-dasharray="4 4"/>
+      <text x="260" y="35" class="quadrant-hint" text-anchor="middle" style="fill: #c95757; opacity: 0.8;">fix this week → high risk, low cost</text>
+    </svg>
+
+    <div class="matrix-legend">
+      <div class="item"><div class="dot" style="background: #c95757;"></div>P0 · auth security</div>
+      <div class="item"><div class="dot" style="background: #d49a4a;"></div>P1 · ship discipline</div>
+      <div class="item"><div class="dot" style="background: #4ea3a3;"></div>P2 · architecture</div>
+      <div class="item"><div class="dot" style="background: #7e7e88;"></div>P3 · hygiene</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 6: P0 AUTH ============ -->
+<section id="s6" class="slide">
+  <div class="slide-label"><span class="tag p0">P0</span> · Theme A</div>
+  <div class="slide-number">06 / 13</div>
+  <h1>Auth security.</h1>
+  <p class="lead">Anyone with a valid-shaped JWT can claim to be admin. <strong>Four findings, ~1 week total to fix.</strong></p>
+
+  <div class="row cols-2 mt-lg">
+    <div class="card p0">
+      <span class="tag p0">A1</span>
+      <h3>JWT signatures are not verified</h3>
+      <p class="muted">The guard splits the token, base64-decodes the middle segment, and trusts the JSON. <code>SUPABASE_JWT_SECRET</code> is never consulted.</p>
+<pre><code>const payload = JSON.parse(
+  Buffer.from(payloadPart, 'base64url').toString('utf-8')
+);
+// No signature verification.
+if (payload.exp && payload.exp * 1000 < Date.now()) return false;</code></pre>
+      <div class="file">packages/auth/src/index.ts:79-91</div>
+    </div>
+
+    <div class="card p0">
+      <span class="tag p0">A2</span>
+      <h3>Dev fallback synthesizes a privileged user</h3>
+      <p class="muted">If the env var is unset, every unauthenticated request is treated as a logged-in user — exactly the misconfiguration that occurs silently after a Coolify env-panel edit.</p>
+<pre><code>if (!process.env.SUPABASE_JWT_SECRET) {
+  request.user = {
+    sub: 'dev-user',
+    email: 'dev@patina.com',
+    role: 'authenticated'
+  };
+  return true;
+}</code></pre>
+      <div class="file">packages/auth/src/index.ts:69-74</div>
+    </div>
+
+    <div class="card p0">
+      <span class="tag p0">A3</span>
+      <h3>Silent default-role fallback per portal</h3>
+      <p class="muted">If <code>app_metadata.roles</code> is missing, the portal silently grants its namesake role. A new account landing on <code>admin.patina.cloud</code> is admin.</p>
+<pre><code>const roles = (user.app_metadata?.roles as string[]) ||
+              (user.user_metadata?.roles as string[]) ||
+              ['admin'];  // ← per portal: admin / designer / client</code></pre>
+      <div class="file">apps/{admin,designer,client}-portal/src/hooks/use-auth.ts</div>
+    </div>
+
+    <div class="card p0">
+      <span class="tag p0">A4</span>
+      <h3>PermissionsGuard is a stub</h3>
+      <p class="muted">Every controller that uses <code>@RequirePermissions(...)</code> is decoratively guarded but the guard does nothing. The decorator is theatrical.</p>
+<pre><code>@Injectable()
+export class PermissionsGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    return true;
+  }
+}</code></pre>
+      <div class="file">packages/auth/src/index.ts:115-121</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 7: P1 OPS ============ -->
+<section id="s7" class="slide">
+  <div class="slide-label"><span class="tag p1">P1</span> · Theme D</div>
+  <div class="slide-number">07 / 13</div>
+  <h1>Ship discipline.</h1>
+  <p class="lead">CI runs but doesn't gate. Coolify deploys silently land stale. Eight compose files with no documented hierarchy. <strong>~1 week to fix.</strong></p>
+
+  <div class="row cols-2 mt-lg">
+    <div class="card p1">
+      <span class="tag p1">D1</span>
+      <h3>No CI gates</h3>
+      <p class="muted"><code>.github/workflows/docker-publish.yml</code> builds images on push, but no workflow blocks merges on <code>lint / typecheck / test / build</code>. Main can be broken at any time.</p>
+      <div class="file">→ Add pr-checks.yml; require as status check on main · 1 day</div>
+    </div>
+
+    <div class="card p1">
+      <span class="tag p1">D2</span>
+      <h3>Coolify doesn't force-pull</h3>
+      <p class="muted">Memory note (verified): <code>/restart</code> + <code>/deploy</code> skip image pull. Deploys silently run stale images. The reliable path is SSH + <code>docker compose pull && up --force-recreate</code>.</p>
+      <div class="file">→ Pin to image digests, or force-pull in deploy.sh · 1 day</div>
+    </div>
+
+    <div class="card p1">
+      <span class="tag p1">D3</span>
+      <h3>Eight docker-compose files</h3>
+      <p class="muted">Across <code>/</code>, <code>/infra/</code>, <code>/infra/coolify/</code>, <code>/services/*</code>. Two (<code>infra/docker-compose.deploy.yml</code>, <code>infra/docker-compose.frontend.yml</code>) smell stale.</p>
+      <div class="file">→ Canonical compose in infra/coolify/; infra/README.md mapping · 2 days</div>
+    </div>
+
+    <div class="card p1">
+      <span class="tag p1">D4</span>
+      <h3>Hardcoded IP + stale env detritus</h3>
+      <p class="muted"><code>infra/deploy.sh:27</code> falls back to <code>192.168.1.14</code>. <code>infra/.env.swp</code> dates to March; <code>.env.bak-*</code> files have no rotation policy.</p>
+      <div class="file">→ Require PATINA_PROD_SSH; delete the stale files · 1 hour</div>
+    </div>
+  </div>
+
+  <p class="muted mt"><span class="tag good">NOT a problem</span> &nbsp; Secrets are properly gitignored — <code>.env</code> and <code>secrets.txt</code> exist on disk but never tracked. (An explore agent got this wrong; correcting the record.)</p>
+</section>
+
+<!-- ============ SLIDE 8: P2 DUPLICATION ============ -->
+<section id="s8" class="slide">
+  <div class="slide-label"><span class="tag p2">P2</span> · Theme B</div>
+  <div class="slide-number">08 / 13</div>
+  <h1>Portal duplication.</h1>
+  <p class="lead">~850 LOC of near-identical auth hooks and middleware live across three portals because the shared scaffold was <em>forked</em> instead of <em>factored</em>.</p>
+
+  <div class="ascii mt-lg">
+BEFORE                                          AFTER
+──────                                          ─────
+
+apps/designer-portal/src/hooks/use-auth.ts  ┐
+  161 LOC                                    │   packages/auth/src/hooks/use-patina-auth.ts
+                                             │     ~120 LOC
+apps/admin-portal/src/hooks/use-auth.ts     ─┼─→
+  146 LOC                                    │   apps/{designer,admin,client}-portal/
+                                             │     src/hooks/use-auth.ts
+apps/client-portal/src/hooks/use-auth.ts    ─┘     5 LOC each (re-export with role)
+  151 LOC
+
+(usePermissions + useRequireAuth are        ────────────────────────────────────────
+ char-for-char identical across all 3)      Net: ~330 LOC removed.
+
+Same shape for middleware.ts: 148/129/129  →   createPatinaMiddleware(config)
+                                                Each portal middleware.ts: ~5 LOC
+
+@patina/supabase/src/hooks/index.ts: 849 LOC barrel, 104 top-level exports
+  →  Split into sub-paths: /auth, /orders, /projects, /catalog, /comms, /realtime
+     Run usage audit. Archive what no portal imports.
+  </div>
+
+  <p class="muted mt"><strong>Effort:</strong> B1 (3 days) · B2 (2 days) · B3 (1 week, defer until C1 lands so we don't export hooks for soon-deleted edge functions).</p>
+</section>
+
+<!-- ============ SLIDE 9: P2 4-STACK BACKEND ============ -->
+<section id="s9" class="slide">
+  <div class="slide-label"><span class="tag p2">P2</span> · Theme C</div>
+  <div class="slide-number">09 / 13</div>
+  <h1>The four-stack backend.</h1>
+  <p class="lead">Four backend stacks share unclear ownership. The middleware layer is <strong>9,338 lines</strong> — an API gateway for a product with three services.</p>
+
+  <div class="row cols-2 mt-lg">
+    <div>
+      <h3 style="color: var(--text); text-transform: none; font-size: 1.1rem; letter-spacing: -0.01em;">The proposed rubric</h3>
+      <div class="ascii" style="font-size: 0.8rem;">
+USE A SUPABASE EDGE FUNCTION WHEN:
+  · trigger is a Supabase event
+    (db trigger, auth webhook, storage)
+  · stateless and completes in &lt; 5s
+  · no @patina/* package imports needed
+
+USE A NESTJS SERVICE ENDPOINT WHEN:
+  · trigger is an HTTP request from
+    portal or external client
+  · stateful, long-running, or
+    composes multiple services
+  · code reuses @patina/types,
+    @patina/cache, domain models
+
+CURRENTLY COLLIDING (decide a side):
+  · automation-processor
+  · decision-reminders
+  · campaign-dispatcher
+      </div>
+    </div>
+
+    <div>
+      <h3 style="color: var(--text); text-transform: none; font-size: 1.1rem; letter-spacing: -0.01em;">@patina/api-routes diet</h3>
+      <table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono); font-size: 0.8rem;">
+            <th style="text-align: left; padding: 0.5em 0;">File</th>
+            <th style="text-align: right; padding: 0.5em 0;">LOC</th>
+            <th style="text-align: right; padding: 0.5em 0;">Action</th>
+          </tr>
+        </thead>
+        <tbody style="font-family: var(--font-mono); font-size: 0.78rem;">
+          <tr style="border-bottom: 1px solid var(--border);"><td>proxy-to-backend.ts</td><td style="text-align: right;">742</td><td style="text-align: right; color: var(--p1);">slim → 200</td></tr>
+          <tr style="border-bottom: 1px solid var(--border);"><td>retry.ts</td><td style="text-align: right;">543</td><td style="text-align: right; color: var(--p0);">→ p-retry</td></tr>
+          <tr style="border-bottom: 1px solid var(--border);"><td>circuit-breaker.ts</td><td style="text-align: right;">530</td><td style="text-align: right; color: var(--p0);">delete</td></tr>
+          <tr style="border-bottom: 1px solid var(--border);"><td>*.example.ts (3 files)</td><td style="text-align: right;">1,189</td><td style="text-align: right; color: var(--p0);">delete</td></tr>
+          <tr style="border-bottom: 1px solid var(--border);"><td>metrics, tracing, logger</td><td style="text-align: right;">997</td><td style="text-align: right; color: var(--good);">keep</td></tr>
+          <tr style="border-bottom: 1px solid var(--border);"><td>with-{auth,role,validation}</td><td style="text-align: right;">424</td><td style="text-align: right; color: var(--good);">keep</td></tr>
+          <tr style="font-weight: 600;"><td style="padding-top: 0.6em;">TOTAL today</td><td style="text-align: right; padding-top: 0.6em;">9,338</td><td style="text-align: right; padding-top: 0.6em; color: var(--p2);">→ ~2,500</td></tr>
+        </tbody>
+      </table>
+      <p class="muted mt" style="font-size: 0.85rem;">Net delete: ~6,500 LOC. Reliability is the platform's job (Cloudflare + <code>p-retry</code>), not bespoke infrastructure's.</p>
+    </div>
+  </div>
+
+  <p class="muted mt"><strong>C3:</strong> extract 380-LOC <code>activate_proposal_as_project</code> from migration 00140 into a versioned <code>.sql</code> file + pgTAP test + run an RLS audit pass. · <strong>C2:</strong> label <code>aesthete-engine</code> as experimental; exclude from prod runbooks.</p>
+</section>
+
+<!-- ============ SLIDE 10: P3 HYGIENE ============ -->
+<section id="s10" class="slide">
+  <div class="slide-label"><span class="tag p3">P3</span> · Theme E</div>
+  <div class="slide-number">10 / 13</div>
+  <h1>Hygiene. <em style="font-style: normal; color: var(--text-muted); font-size: 0.7em;">(opportunistic — don't block)</em></h1>
+  <p class="muted">Cleanup that improves daily DX without changing the architecture. Do these between feature work.</p>
+
+  <ul class="bullets mt-lg" style="columns: 2; column-gap: 3rem; max-width: 70rem;">
+    <li><strong>E1</strong> · Merge <code>@patina/shared</code> into <code>@patina/types</code>. Boundary is accidental. <em>1d</em></li>
+    <li><strong>E2</strong> · Move TanStack Query to pnpm catalog; align <code>5.17.19</code> vs <code>5.51.1</code>. <em>2h</em></li>
+    <li><strong>E3</strong> · Vitest scaffolding per portal; one critical-path test each. <em>1w</em></li>
+    <li><strong>E4</strong> · xcconfig-driven Supabase URL in iOS (currently hardcoded to prod). <em>2h</em></li>
+    <li><strong>E5</strong> · Encrypt Chrome extension offline queue; document FIFO eviction. <em>1d</em></li>
+    <li><strong>E6</strong> · Husky + lint-staged + SwiftLint pre-commit hook. <em>2h</em></li>
+    <li><strong>E7</strong> · Storybook for <code>@patina/patina-design-system</code> (if growing). <em>3d</em></li>
+  </ul>
+</section>
+
+<!-- ============ SLIDE 11: ROADMAP ============ -->
+<section id="s11" class="slide">
+  <div class="slide-label">Sequencing</div>
+  <div class="slide-number">11 / 13</div>
+  <h1>30 / 60 / 90.</h1>
+  <p class="muted">One engineer-month puts P0 and P1 to bed. The architecture work spreads across the rest of the quarter.</p>
+
+  <div class="roadmap">
+    <div class="col">
+      <h3 style="color: var(--p0);">30 days</h3>
+      <div class="when">Security + reliability</div>
+      <ul>
+        <li><span class="id">A1</span>JWT signature verification</li>
+        <li><span class="id">A2</span>Delete dev synthetic-user fallback</li>
+        <li><span class="id">A3</span>Kill silent default-role fallback</li>
+        <li><span class="id">A4</span>Implement PermissionsGuard</li>
+        <li><span class="id">A5</span>Audit proxy token reassembly</li>
+        <li><span class="id">D1</span>CI gates on PRs</li>
+        <li><span class="id">D2</span>Coolify force-pull / digest pinning</li>
+        <li><span class="id">D4</span>Kill hardcoded IP + stale envs</li>
+      </ul>
+    </div>
+
+    <div class="col">
+      <h3 style="color: var(--p2);">60 days</h3>
+      <div class="when">Reduce duplication</div>
+      <ul>
+        <li><span class="id">B1</span>Shared usePatinaAuth hook</li>
+        <li><span class="id">B2</span>createPatinaMiddleware factory</li>
+        <li><span class="id">C4</span>Slim @patina/api-routes (~6,500 LOC out)</li>
+        <li><span class="id">D3</span>Canonical compose; infra/README.md</li>
+        <li><span class="id">E1</span>Merge @patina/shared → @patina/types</li>
+        <li><span class="id">E2</span>pnpm catalog for @tanstack/react-query</li>
+      </ul>
+    </div>
+
+    <div class="col">
+      <h3 style="color: var(--p3);">90 days</h3>
+      <div class="when">Architecture clarity</div>
+      <ul>
+        <li><span class="id">B3</span>Split @patina/supabase barrel</li>
+        <li><span class="id">C1</span>Edge-vs-NestJS rubric + migrations</li>
+        <li><span class="id">C2</span>Quarantine aesthete-engine</li>
+        <li><span class="id">C3</span>Extract sproc + RLS audit</li>
+        <li><span class="id">E3-E7</span>Hygiene as opportunistic</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 12: WHAT THIS DOES NOT REQUIRE ============ -->
+<section id="s12" class="slide">
+  <div class="slide-label">Counter-intuitive close</div>
+  <div class="slide-number">12 / 13</div>
+  <h1>What this does <em>not</em> require.</h1>
+  <p class="lead">Recommendations carry their own cost. Some plausible moves were considered and rejected.</p>
+
+  <div class="not-recommended">
+    <ul>
+      <li><strong>No rewrite.</strong> Problems are local. Auth is broken in 4 specific files; portal scaffolding is duplicated in 3 specific patterns. A rewrite trades fixable problems for unknown ones.</li>
+      <li><strong>No framework migration.</strong> Next.js 15 + React 19 + NestJS + Supabase is a fine stack for this product. Switching anything introduces months of churn for marginal gain.</li>
+      <li><strong>No Supabase replacement.</strong> Self-hosted Supabase on Coolify is unusual but works, and the team has institutional knowledge of its quirks. Migrating to Neon + Clerk + S3 would cost a quarter and change nothing about application code.</li>
+      <li><strong>No microservices split.</strong> The 3 NestJS services already exist; the question is whether to consolidate them, not split them further.</li>
+      <li><strong>No "harden aesthete-engine now."</strong> Experimental, per status. Investing in OpenAPI contracts is premature until the ML hypothesis validates.</li>
+      <li><strong>No new tooling category.</strong> No new observability stack, no new package manager, no new build tool. Infra is sufficient; configuration is the gap.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ SLIDE 13: READ MORE ============ -->
+<section id="s13" class="slide">
+  <div class="slide-label">Companion document</div>
+  <div class="slide-number">13 / 13</div>
+  <h1 class="display">Read the full report.</h1>
+  <p class="lead mt-lg">All 21 findings with code snippets, file:line evidence, effort estimates, and a copy-pasteable checklist.</p>
+  <p class="footer-link mt-lg"><a href="./patina-review.md">→ patina-review.md</a></p>
+  <p class="muted mt">Or run <code>grep -n 'P0\|P1\|P2\|P3' docs/code-review/patina-review.md</code> for fast navigation.</p>
+</section>
+
+</main>
+
+<script>
+  // Active dot in nav indicator
+  const links = document.querySelectorAll('.nav-indicator a');
+  const sections = Array.from(document.querySelectorAll('.slide'));
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) {
+        const idx = sections.indexOf(e.target);
+        links.forEach((l, i) => l.classList.toggle('active', i === idx));
+      }
+    });
+  }, { threshold: 0.5 });
+  sections.forEach((s) => observer.observe(s));
+
+  // Arrow key navigation
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+      e.preventDefault();
+      const current = sections.find((s) => s.getBoundingClientRect().top >= -50 && s.getBoundingClientRect().top < window.innerHeight / 2);
+      const idx = current ? sections.indexOf(current) : 0;
+      if (idx + 1 < sections.length) sections[idx + 1].scrollIntoView();
+    } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+      e.preventDefault();
+      const current = sections.find((s) => s.getBoundingClientRect().top >= -50 && s.getBoundingClientRect().top < window.innerHeight / 2);
+      const idx = current ? sections.indexOf(current) : 0;
+      if (idx > 0) sections[idx - 1].scrollIntoView();
+    }
+  });
+</script>
+</body>
+</html>
