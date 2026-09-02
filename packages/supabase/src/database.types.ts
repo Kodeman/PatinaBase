@@ -30778,6 +30778,7 @@ export type Database = {
         Args: { p_project_id: string; p_title: string }
         Returns: Json
       }
+      current_profile_is_designer: { Args: never; Returns: boolean }
       current_profile_role: { Args: never; Returns: string }
       cut_schedule_revision: {
         Args: { p_project_id: string; p_reason?: string }
