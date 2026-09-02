@@ -92,6 +92,21 @@ struct ReleaseConfigurationTests {
         #expect(appInfo["MinimumOSVersion"] as? String == "26.0")
     }
 
+    // MARK: - A2-14 / C-29 — the cold-launch ground
+
+    /// The generated launch config was empty, so frame one of the product was
+    /// the system background: pure white against an off-white app ground, pure
+    /// black against a warm-graphite one. `INFOPLIST_KEY_UILaunchScreen_*`
+    /// resolves but is not written through by this toolchain (it yields a
+    /// nested, empty `UILaunchScreen`), so the dictionary is declared in
+    /// `Patina/Info.plist` and generation is off. This assertion is what keeps
+    /// that from silently reverting.
+    @Test("the launch screen declares the app's own ground colour")
+    func launchScreenHasTheAppGround() throws {
+        let launch = try #require(appInfo["UILaunchScreen"] as? [String: Any])
+        #expect(launch["UIColorName"] as? String == "LaunchBackground")
+    }
+
     // MARK: - A2-06 — export compliance
 
     /// Without this key every upload parks in "Missing Compliance" until
