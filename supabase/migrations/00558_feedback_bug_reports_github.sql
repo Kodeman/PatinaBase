@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00557 — Feedback bug reports → GitHub issues
+-- 00558 — Feedback bug reports → GitHub issues
 --
 -- The Tester Notes widget (a flag-gated `tester-notes` doorway that rides every
 -- designer-portal route) lets a tester mark a note as a BUG. A bug is not just

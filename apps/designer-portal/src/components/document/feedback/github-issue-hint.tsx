@@ -3,7 +3,7 @@
 /**
  * What a bug report's GitHub issue looks like in the ledger and the detail view.
  *
- * A bug row is written before the issue exists: migration 00557's trigger hands
+ * A bug row is written before the issue exists: migration 00558's trigger hands
  * the row to the feedback-github-issue edge function, which writes back either
  * an issue number/url or a reason. `invoke_edge_function` is fire-and-forget, so
  * a crash can leave a row with neither — hence the timeout below, after which

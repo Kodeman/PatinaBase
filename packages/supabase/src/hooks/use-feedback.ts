@@ -14,7 +14,7 @@ const SIGNED_URL_TTL_SECONDS = 60 * 10; // 10 minutes — a detail-view read.
 export type FeedbackBucket = 'working' | 'not_working' | 'missing' | 'change';
 export type FeedbackWeight = 'low' | 'med' | 'high';
 export type FeedbackStatus = 'noted' | 'building' | 'shipped' | 'archived';
-/** A plain note, or a bug that files a GitHub issue on insert (00557). */
+/** A plain note, or a bug that files a GitHub issue on insert (00558). */
 export type FeedbackReportKind = 'note' | 'bug';
 
 export interface Feedback {
@@ -71,7 +71,7 @@ export interface CreateFeedbackInput {
   element?: string | null;
   /** The pre-captured screen (R7.2.4). Uploaded before the row is written. */
   screenshot?: Blob | null;
-  /** 'bug' fires the GitHub-issue trigger (00557). Defaults to 'note'. */
+  /** 'bug' fires the GitHub-issue trigger (00558). Defaults to 'note'. */
   report_kind?: FeedbackReportKind;
   user_agent?: string | null;
 }

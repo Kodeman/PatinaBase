@@ -1,6 +1,6 @@
 // feedback-github-issue — file a GitHub issue for a feedback row marked as a bug.
 //
-// Fired by the AFTER INSERT trigger on public.feedback (migration 00557) via
+// Fired by the AFTER INSERT trigger on public.feedback (migration 00558) via
 // invoke_edge_function, which passes `{ record: <the feedback row> }` with a
 // service-role Bearer. No browser calls it, so there is no CORS block; the
 // gateway verifies the JWT (verify_jwt = true) and this function additionally
