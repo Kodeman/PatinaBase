@@ -25,15 +25,22 @@ import { BUCKETS, WEIGHTS, bucketMeta, captureContext } from '@/lib/document/fee
 
 const YELLOW = '#ffd60a';
 
-export function FeedbackForm({ onSubmitted }: { onSubmitted?: () => void }) {
+export function FeedbackForm({
+  /** Pre-selected bucket from a one-tap doorway (`document:open-feedback`). */
+  initialBucket = null,
+}: {
+  initialBucket?: FeedbackBucket | null;
+}) {
   const pathname = usePathname();
   const create = useCreateFeedback();
 
-  const [bucket, setBucket] = useState<FeedbackBucket | null>(null);
+  // The widget remounts this form on every open, so the initial bucket is the
+  // whole of the pre-selection: no effect syncs it afterwards.
+  const [bucket, setBucket] = useState<FeedbackBucket | null>(initialBucket);
   const [note, setNote] = useState('');
   const [weight, setWeight] = useState<FeedbackWeight | null>(null);
   const [includeShot, setIncludeShot] = useState(true);
-  const [isBug, setIsBug] = useState(false);
+  const [isBug, setIsBug] = useState(initialBucket === 'not_working');
   // Once she touches the switch, "Not working" stops flipping it for her.
   const [bugTouched, setBugTouched] = useState(false);
   const [shot, setShot] = useState<Blob | null>(null);
@@ -92,7 +99,6 @@ export function FeedbackForm({ onSubmitted }: { onSubmitted?: () => void }) {
       setWeight(null);
       setIsBug(false);
       setBugTouched(false);
-      onSubmitted?.();
     } catch {
       // Never lose what she wrote: inline error, note preserved.
       setError('Couldn’t leave the note. It’s still here — try again.');

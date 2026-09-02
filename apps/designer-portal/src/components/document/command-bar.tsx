@@ -255,6 +255,9 @@ export function CommandBar() {
   // ever appear as a "This surface" row, gated on both a project in hand and
   // the surface's own flag — never in the unfiltered doorway lists.
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
+  // "Leave a note" is the Tester Notes doorway; without the flag the widget is
+  // not mounted and the row would dispatch its open event into nothing.
+  const { value: testerNotesOn } = useFeatureFlag('tester-notes');
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -541,7 +544,7 @@ export function CommandBar() {
     // The studio's own controls — F5 adds "Browse the Help Center" (distinct
     // from the contextual "Help…" panel). Kept filterable so "sign out",
     // "settings", "feedback" still resolve when typed.
-    const utilityRows: PaletteRow[] = [
+    const allUtilityRows: PaletteRow[] = [
       {
         kind: 'help',
         key: 'help-center',
@@ -613,6 +616,9 @@ export function CommandBar() {
         match: 'log out logout sign off leave sign out',
       },
     ];
+    const utilityRows: PaletteRow[] = allUtilityRows.filter(
+      (row) => row.key !== 'leave-note' || testerNotesOn,
+    );
 
     const addToProjectRow: PaletteRow | null = inHandRow?.project_id && inHandRow.active_section === 'project'
       ? {
@@ -929,6 +935,7 @@ export function CommandBar() {
     user?.email,
     signOut,
     callSheetOn,
+    testerNotesOn,
   ]);
 
   // F1 — queried (debounced ~300ms, not per-keystroke) + zeroResult.

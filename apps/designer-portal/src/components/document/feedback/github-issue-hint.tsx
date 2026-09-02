@@ -10,7 +10,7 @@
  * the row stops claiming to be in flight and says so plainly.
  */
 
-import type { Feedback } from '@patina/supabase';
+import { useIsSuperAdmin, type Feedback } from '@patina/supabase';
 
 /** How often the ledger re-reads while an issue is still in flight. */
 export const ISSUE_POLL_MS = 10_000;
@@ -32,7 +32,16 @@ export function awaitingIssue(note: Feedback, userId?: string): boolean {
   return Date.now() - new Date(note.created_at).getTime() < ISSUE_TIMEOUT_MS;
 }
 
-export function GithubHint({ note }: { note: Feedback }) {
+/** Whether this note has anything to say about an issue at all. */
+export function hasGithubHint(note: Feedback): boolean {
+  return isBug(note) || !!note.github_issue_url || !!note.github_issue_error;
+}
+
+export function GithubHint({ note, userId }: { note: Feedback; userId?: string }) {
+  // The raw reason is plumbing (HTTP status, missing token) and can carry
+  // GitHub's own prose; only the triager reads it.
+  const { isSuperAdmin } = useIsSuperAdmin();
+
   if (note.github_issue_url) {
     return (
       <a
@@ -48,12 +57,14 @@ export function GithubHint({ note }: { note: Feedback }) {
   if (note.github_issue_error) {
     return (
       <p className="font-mono text-[11px] text-[var(--color-terracotta-ink)]">
-        Issue not filed — {note.github_issue_error}
+        {isSuperAdmin
+          ? `Issue not filed — ${note.github_issue_error}`
+          : 'Couldn’t file the GitHub issue.'}
       </p>
     );
   }
   if (!isBug(note)) return null;
-  if (awaitingIssue(note)) {
+  if (awaitingIssue(note, userId)) {
     return (
       <p className="font-mono text-[11px] text-[var(--color-aged-oak)]">
         Filing the issue…

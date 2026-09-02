@@ -22,7 +22,6 @@ import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
 import { DocumentAction } from '../document-action';
 import { openPost } from '../overlays/post-sheet';
 import { useMobileShell } from './mobile-shell';
-import { useHydrated } from '@/hooks/use-hydrated';
 
 function findSurface(key: string) {
   const surface = ALL_STUDIO_SURFACES.find((s) => s.key === key);
@@ -84,7 +83,6 @@ const MOBILE_BAR_FLOOR_PX = 72;
 
 export function MobileBar() {
   const pathname = usePathname();
-  const hydrated = useHydrated();
   const {
     activeDoc,
     sheet,

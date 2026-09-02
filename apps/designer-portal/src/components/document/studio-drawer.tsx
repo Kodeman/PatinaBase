@@ -22,7 +22,6 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   BookOpenText,
-  MessageSquareText,
   Search,
   type LucideIcon,
 } from 'lucide-react';
@@ -45,7 +44,6 @@ import { fmtMinutes } from '@/lib/document/time-derivation';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { AccountNameplate } from './account/account-nameplate';
 import { openCommandBar, type OpenLedgerContext } from './command-bar';
-import { useHydrated } from '@/hooks/use-hydrated';
 
 /** R93/R107 — the six doors, sourced from the Studio Surface Registry: label,
  *  icon, and weight all come from one place now, so a rename or re-icon
@@ -133,7 +131,6 @@ function presenceSentence(others: string[]): string | null {
 export function StudioDrawer() {
   const router = useRouter();
   const pathname = usePathname();
-  const hydrated = useHydrated();
   const [openLedger, setOpenLedger] = useState<SheetKey | null>(null);
   const [booksOpen, setBooksOpen] = useState(false);
   const [recentBook, setRecentBook] = useState<SheetKey | null>(null);

@@ -18,10 +18,14 @@ interface OpenDetail {
 
 /** `bucket` pre-selects (e.g. a one-tap "Working"). */
 export function openFeedbackSheet(opts?: OpenDetail) {
+  // Capture starts first, but the open is still dispatched synchronously: the
+  // panel (and with it the form's screenshot listener) is mounted before the
+  // blob can resolve a beat later.
+  const shot = captureScreenshot();
   window.dispatchEvent(
     new CustomEvent('document:open-feedback', { detail: opts ?? {} }),
   );
-  captureScreenshot().then((blob) => {
+  shot.then((blob) => {
     window.dispatchEvent(
       new CustomEvent('document:feedback-screenshot', { detail: blob }),
     );

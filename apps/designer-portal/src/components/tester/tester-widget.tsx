@@ -10,17 +10,25 @@
  * carries `data-feedback-layer`, which the screenshotter filters out, so a
  * captured screen is the screen and never the widget.
  *
+ * Every doorway (the pill, ⌘⇧F, ⌘K's "Leave a note") goes through
+ * {@link openFeedbackSheet}, which starts the screenshot and then dispatches
+ * `document:open-feedback`; this component only listens. That is the whole
+ * reason the pill does not call `setOpen` directly — an open that skips the
+ * opener is an open with no screenshot.
+ *
  * z-[68] deliberately: above fullscreen viewers (z-60) and toasts (z-65), below
  * the command bar (z-70).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bug, X } from 'lucide-react';
-import { useUnseenShipped } from '@patina/supabase';
+import { useUnseenShipped, type FeedbackBucket } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { FeedbackLedger } from '@/components/document/feedback/feedback-ledger';
+import { openFeedbackSheet } from '@/components/document/feedback/open-feedback';
+import { topActiveModalDialog } from '@/components/document/overlays/active-dialog';
 import { FeedbackForm } from './feedback-form';
 
 const YELLOW = '#ffd60a';
@@ -33,57 +41,111 @@ export function TesterWidget() {
   const hydrated = useHydrated();
   const { value: enabled, isLoading } = useFeatureFlag('tester-notes');
   const { user } = useAuth();
-  const { data: unseen } = useUnseenShipped();
+  // The root layout also renders the signed-out pages; nothing shows there,
+  // and nothing listens or queries there either.
+  const live = hydrated && !isLoading && !!enabled && !!user;
 
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('new');
+  // Bumped on every open so the form remounts: bucket, note, weight, the
+  // screenshot and any error all start clean, the way the old sheet's mount did.
+  const [openSeq, setOpenSeq] = useState(0);
+  const [initialBucket, setInitialBucket] = useState<FeedbackBucket | null>(null);
 
-  const openOn = useCallback((next: Tab) => {
-    setTab(next);
+  const openNew = useCallback((bucket: FeedbackBucket | null) => {
+    setInitialBucket(bucket);
+    setOpenSeq((n) => n + 1);
+    setTab('new');
     setOpen(true);
   }, []);
 
   useEffect(() => {
-    const onOpen = () => openOn('new');
+    if (!live) return;
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ bucket?: FeedbackBucket }>).detail;
+      openNew(detail?.bucket ?? null);
+    };
     window.addEventListener('document:open-feedback', onOpen);
     return () => window.removeEventListener('document:open-feedback', onOpen);
-  }, [openOn]);
+  }, [live, openNew]);
 
   // ⌘⇧F — the keyboard doorway the old feedback button owned.
   useEffect(() => {
+    if (!live) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
-        openOn('new');
+        openFeedbackSheet();
         return;
       }
-      if (e.key === 'Escape') setOpen(false);
+      // Esc closes this panel only when it is open, and never out from under a
+      // modal dialog stacked on top of it — that one owns the key.
+      if (e.key === 'Escape' && open && !topActiveModalDialog()) setOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [openOn]);
+  }, [live, open]);
 
-  // The root layout also renders the signed-out pages; nothing shows there.
-  if (!hydrated || isLoading || !enabled || !user) return null;
+  if (!live) return null;
+
+  return (
+    <TesterInstrument
+      open={open}
+      onClose={() => setOpen(false)}
+      tab={tab}
+      onTab={setTab}
+      openSeq={openSeq}
+      initialBucket={initialBucket}
+    />
+  );
+}
+
+/**
+ * Everything that queries lives here, below the flag/auth gate — a signed-out
+ * or unflagged visitor must never spend a request on the tester's ledger.
+ */
+function TesterInstrument({
+  open,
+  onClose,
+  tab,
+  onTab,
+  openSeq,
+  initialBucket,
+}: {
+  open: boolean;
+  onClose: () => void;
+  tab: Tab;
+  onTab: (tab: Tab) => void;
+  openSeq: number;
+  initialBucket: FeedbackBucket | null;
+}) {
+  const { data: unseen } = useUnseenShipped();
+  const pillRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const wasOpen = useRef(open);
+
+  // The keyboard follows the panel: in to the first bucket on open, back to
+  // the pill on close.
+  useEffect(() => {
+    if (open && tab === 'new') {
+      panelRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
+    }
+  }, [open, tab, openSeq]);
+
+  useEffect(() => {
+    if (wasOpen.current && !open) pillRef.current?.focus();
+    wasOpen.current = open;
+  }, [open]);
 
   const hasUnseen = !!unseen && unseen.length > 0;
 
   return (
     <div data-feedback-layer style={{ fontFamily: 'system-ui, sans-serif' }}>
-      <style>{`
-        @media (max-width: 639px) {
-          [data-tester-panel] {
-            left: 0 !important;
-            right: 0 !important;
-            width: auto !important;
-          }
-        }
-      `}</style>
-
       {!open && (
         <button
+          ref={pillRef}
           type="button"
-          onClick={() => openOn('new')}
+          onClick={() => openFeedbackSheet()}
           className="fixed left-4 z-[68]"
           style={{
             bottom: BOTTOM,
@@ -122,6 +184,7 @@ export function TesterWidget() {
 
       {open && (
         <div
+          ref={panelRef}
           data-tester-panel
           role="dialog"
           aria-label="Tester notes"
@@ -153,7 +216,7 @@ export function TesterWidget() {
             </span>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={onClose}
               aria-label="Close tester notes"
               style={{
                 marginLeft: 'auto',
@@ -169,20 +232,21 @@ export function TesterWidget() {
           </div>
 
           <div role="tablist" aria-label="Tester notes tabs" style={{ display: 'flex', borderBottom: '1px solid #333' }}>
-            <TabButton label="New note" on={tab === 'new'} onClick={() => setTab('new')} />
-            <TabButton label="Past notes" on={tab === 'past'} onClick={() => setTab('past')} />
+            <TabButton label="New note" on={tab === 'new'} onClick={() => onTab('new')} />
+            <TabButton label="Past notes" on={tab === 'past'} onClick={() => onTab('past')} />
           </div>
 
           <div style={{ overflowY: 'auto', flex: 1 }}>
-            {tab === 'new' ? (
-              <div style={{ padding: 12 }}>
-                <FeedbackForm />
-              </div>
-            ) : (
+            {/* The form stays mounted behind `hidden`: a half-written note
+                survives a trip to Past notes and back. */}
+            <div hidden={tab !== 'new'} style={{ padding: 12 }}>
+              <FeedbackForm key={openSeq} initialBucket={initialBucket} />
+            </div>
+            {tab === 'past' && (
               // The ledger is a Patina surface; give it its own paper ground
               // rather than restyling it for the black panel.
               <div style={{ background: 'var(--color-paper, #fff)', padding: 12 }}>
-                <FeedbackLedger compact onNew={() => setTab('new')} />
+                <FeedbackLedger compact onNew={() => onTab('new')} />
               </div>
             )}
           </div>

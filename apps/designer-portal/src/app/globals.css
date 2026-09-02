@@ -248,6 +248,16 @@
   }
 }
 
+/* The Tester Notes panel (tester-widget.tsx) hangs off the same floating
+   anchor as the pill; on a phone it goes full-bleed instead of a 380px card. */
+@media (max-width: 639px) {
+  [data-tester-panel] {
+    left: 0 !important;
+    right: 0 !important;
+    width: auto !important;
+  }
+}
+
 /* The Document motion (spec v1.1 §10): vertical settle only — paper never
    slides in from screen edges. Used by Doc* overlay wrappers (R3). */
 @keyframes doc-sheet-up {

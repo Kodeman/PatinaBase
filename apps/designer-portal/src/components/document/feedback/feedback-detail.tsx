@@ -30,7 +30,7 @@ import {
   buildTimeline,
 } from '@/lib/document/feedback';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
-import { GithubHint } from './github-issue-hint';
+import { GithubHint, hasGithubHint } from './github-issue-hint';
 
 function fmtWhen(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -146,9 +146,11 @@ export function FeedbackDetail({
         <ContextCell label="Kind" value={note.report_kind} />
       </dl>
 
-      <div className="mt-2">
-        <GithubHint note={note} />
-      </div>
+      {hasGithubHint(note) && (
+        <div className="mt-2">
+          <GithubHint note={note} userId={user?.id} />
+        </div>
+      )}
 
       {shotUrl && (
         <a

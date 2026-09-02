@@ -29,6 +29,7 @@ import {
   GithubHint,
   ISSUE_POLL_MS,
   awaitingIssue,
+  hasGithubHint,
 } from './github-issue-hint';
 
 function age(iso: string): string {
@@ -151,9 +152,11 @@ export function FeedbackLedger({
                   <StatusPill status={n.status} />
                   <span className="w-7 shrink-0 text-right font-mono text-[11px] text-[var(--color-aged-oak)]">{age(n.created_at)}</span>
                 </button>
-                <div className="ml-5 pb-2">
-                  <GithubHint note={n} />
-                </div>
+                {hasGithubHint(n) && (
+                  <div className="ml-5 pb-2">
+                    <GithubHint note={n} userId={user?.id} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
