@@ -154,3 +154,96 @@ This contract needs **00555 applied** (KODY-RUNBOOK Block B). Before it, the own
 00013's `USING`-only version, which permits the PATCH too — so the app code works either way and L1-A is
 not blocked on the migration. After it, the PATCH is permitted *because of the ratchet*, and any
 attempt to write `role = 'designer'` or `is_designer = true` from the app will start returning 403.
+
+---
+
+## From L1-E (Copy) — 2026-09-02
+
+Six rows, exact final text. Full reasoning for each in `build/waves/w1/l1-e-copy-deck.md`.
+
+### Task A-L1E-1 — `A-52`, the Companion's guest copy
+
+`Features/Companion/Services/CompanionActionRows.swift`, three spots — needs `isAuthenticated` (or
+`LocalStoreClaim.hasGuestWork` for the home row) threaded into the row builders, since the same
+functions draw for both a guest and a signed-in person today:
+
+- `:32-34` (`homeRow`) — guest hint: `"See what's on Patina"`. Signed-in / guest with local rooms:
+  unchanged, `"Back to your space"`.
+- `:220-223` (`pieceActRow`, `.askAboutPiece`) — guest hint: `"Sign in and a designer will get back to
+  you"`. Signed-in, no designer yet: `"A designer will get back to you"` (was "will come back to
+  you" — the small tense cleanup applies to both states so they read as one voice).
+- `Features/Notifications/Views/NotificationFeedView.swift:193` (`guestInviteView` — already correctly
+  branched on auth state; only the sentence inside it still presumes a designer) — message:
+  `"Sign in to see updates on your projects and messages here."` Title `"Nothing yet"` (`:192`) is
+  unchanged.
+
+### Task A-L1E-2 — `A-79`, the local-store claim sheet
+
+`Features/Collections/Views/LocalStoreClaimSheet.swift:17`. Add `roomCount`/`pieceCount` to
+`LocalStoreClaim` (computed alongside `hasGuestWork`) and compose the title from them:
+
+- rooms only: `"Keep the {n} room{s} you saved on this phone?"`
+- pieces only: `"Keep the {n} piece{s} you saved on this phone?"`
+- both: `"Keep the {r} room{s} and {p} piece{s} you saved on this phone?"`
+- concrete example (0 rooms, 1 piece): `"Keep the 1 piece you saved on this phone?"`
+
+`s` = `""` at count 1, else `"s"`. `:23`'s body sentence is unchanged — it never claims a count, so it
+stays true at any count > 0. The sheet is already never shown at zero (`LocalStoreClaim.shouldAsk`
+requires `hasGuestWork`) — no change needed for that half of the finding.
+
+### Task A-L1E-3 — `A-101`, the delete-account copy
+
+`Features/Account/AccountDeletionService.swift`, three constants, one verb throughout ("Delete
+account" — not "Close"):
+
+- `:41` `confirmationTitle` → `"Delete account"`
+- `:42-43` `confirmationBody` → `"This deletes your Patina account, including your saved rooms,
+  pieces, and messages. Any project you completed with a designer stays in our records — with your
+  name and contact details removed — as required for our legal and accounting obligations. This can't
+  be undone."` Grounded in `supabase/functions/delete-account/index.ts` +
+  `supabase/migrations/00538_client_account_anonymize.sql`: the server soft-deletes the auth user and
+  purges rooms/scans/saved items/started threads, but **never** touches `proposals`, `projects`,
+  `invoices`, `client_decisions`, `designer_clients` — those survive indefinitely, PII-stripped. There
+  is no fixed purge window in the code; do not invent one.
+- `:39` `failureCopy` → `"We couldn't delete your account just now. Try again, or write to
+  hello@patina.cloud."` (same one-verb sweep, nothing else changed)
+
+### Task A-L1E-4 — `A-06`, apostrophe sweep
+
+`Features/Onboarding/Views/OnboardingFlowView.swift:31,57,58` — convert the three straight apostrophes
+(U+0027) to typographic (U+2019), matching `:37`'s existing `"the room's shape"`. No text otherwise
+changes: `"Let's discover yours."` / `"...then we'll show you..."` / `"Let's begin"`, all with U+2019.
+
+### Task A-L1E-5 — `C5-20`, two brand-voice rewrites
+
+- `OnboardingFlowView.swift:32` — `ctaText: "Let's begin"` (reuses page 3's own CTA verbatim, U+2019
+  apostrophe per Task A-L1E-4 — write it once, both pages match byte-for-byte).
+- `Features/Authentication/Views/AuthenticationView.swift:134` (`headerSubtitle`, `.signUp` case) —
+  `"Save your rooms and pieces, and pick them up on any device."`
+
+### Task A-L1E-6 — `C5-10`'s five L1-A-owned casing rows
+
+- `Features/Account/AccountView.swift:184` — `PatinaButton("Sign out", style: .secondary)`
+- `Features/QRAuth/Views/QRScannerView.swift:201` — `PatinaButton("Open settings", ...)`
+- `Features/FirstLaunch/Views/CameraPermissionView.swift:223` — `Text("Open settings")`
+- `Features/Authentication/Views/AuthenticationView.swift:526,528,530,532` (`submitButtonTitle`) —
+  `"Sign in"` / `"Create account"` / `"Email me a code"` (unchanged) / `"Send reset link"`
+- `Features/Authentication/Views/AuthenticationView.swift:632` (mode-switcher) — `"Sign up"` / `"Sign
+  in"`
+
+### Task A-L1E-7 — `B-23`, no deck row needed
+
+`Features/StyleQuiz/Views/StyleResultView.swift:65` — the finding's own fix line already names the
+exact replacement, verbatim: `"Your portrait is yours — reset it any time in Settings."` Verified
+against the current string ("Your portrait stays on this device and can be reset in Settings.") —
+matches the evidence exactly; nothing for a copy review to add.
+
+> ⚠ **File-overlap flag for the steward.** `CompanionActionRows.swift` is also touched by
+> `l1-c-notes.md`'s `A-60`/`C-22` note, at `:36-54` — different, non-overlapping lines from Task
+> A-L1E-1's `:32-34`/`:220-223`. L1-C merges first (D14); rebase onto its result before applying this
+> task.
+
+### VISION check on this note
+
+None of the six rows adds tab/zone/dashboard framing, a shadow, red/green status, a badge, an
+engagement mechanic or the word "AI" — every one is a string rewrite or a count-aware composition.
