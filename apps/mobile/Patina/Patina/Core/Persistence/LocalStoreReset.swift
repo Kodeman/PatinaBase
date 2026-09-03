@@ -118,6 +118,14 @@ enum LocalStoreReset {
             PatinaLog.auth.error("[LocalStoreReset] guest wipe failed: \(error.localizedDescription)")
         }
 
+        // `RoomTombstones` is deliberately NOT cleared here (review
+        // RL1B2-10). A tombstone is only ever written for a room that had a
+        // `remoteId`, and the loop above keeps every such room because it is
+        // the ACCOUNT's, not the guest's. So the ids in that list belong to
+        // the same account whose rooms this wipe is preserving; dropping them
+        // would let the next reconcile re-insert a room the person confirmed
+        // away. The account-change wipe above clears them, because there the
+        // rows really do belong to somebody else.
         RoomSelectionStore.shared.clear()
         deleteScanBundles()
         RoomSyncCoordinator.shared.forget()
