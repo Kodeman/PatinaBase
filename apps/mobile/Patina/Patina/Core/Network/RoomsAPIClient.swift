@@ -419,6 +419,20 @@ public enum RoomsAPIError: Error {
     case http(status: Int, body: String)
 }
 
+/// C4-08: a plain `Error` renders as Swift's default description — module
+/// name, case name and, for `.http`, the response body — anywhere a caller
+/// reads `localizedDescription`. Conforming the type is what stops the next
+/// caller repeating it. The status and the body are never in the sentence.
+extension RoomsAPIError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .notAuthenticated: return "Please sign in to continue."
+        case .emptyResponse: return "We didn't get a response. Try again."
+        case .http: return "Something went wrong. Try again."
+        }
+    }
+}
+
 // URLComponents helper: append query items to a URL
 private extension URL {
     func appending(queryItems: [URLQueryItem]) -> URL {

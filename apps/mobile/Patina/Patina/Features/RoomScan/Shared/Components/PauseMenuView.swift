@@ -60,8 +60,8 @@ struct PauseMenuView: View {
             .padding(.horizontal, 32)
         }
         .alert("Discard this scan?", isPresented: $showLeaveConfirmation) {
-            Button("Discard Scan", role: .destructive, action: onLeave)
-            Button("Keep Scanning", role: .cancel) {}
+            Button("Discard scan", role: .destructive, action: onLeave)
+            Button("Keep scanning", role: .cancel) {}
         } message: {
             Text("Nothing from this walk will be saved.")
         }

@@ -64,12 +64,8 @@ struct RoomBudgetBar: View {
     }
 
     private static func money(_ cents: Int) -> String {
-        let dollars = cents / 100
-        if dollars == 0 { return "$0" }
-        if dollars >= 1000 {
-            return "$\(String(format: "%.1f", Double(dollars) / 1000))K"
-        }
-        return "$\(dollars)"
+        // C5-14
+        PatinaCurrency.formatWholeDollars(cents: cents)
     }
 
 }

@@ -227,8 +227,8 @@ struct ProjectListView: View {
     }
 
     private func formatPrice(_ cents: Int) -> String {
-        let dollars = cents / 100
-        return "$\(dollars.formatted())"
+        // C5-14
+        PatinaCurrency.formatWholeDollars(cents: cents)
     }
 }
 

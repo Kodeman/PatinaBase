@@ -125,7 +125,7 @@ public struct ScanReviewView: View {
     private var errorState: some View {
         VStack(spacing: 16) {
             Spacer()
-            Text("Something went wrong")
+            Text("Something went wrong.")
                 .font(PatinaTypography.patinaVoiceLarge)
                 .foregroundStyle(PatinaColors.Text.primary.opacity(0.8))
             if let loadError {

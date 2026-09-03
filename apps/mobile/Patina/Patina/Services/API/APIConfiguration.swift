@@ -160,13 +160,10 @@ public enum APIConfiguration {
     /// 30 s. This one only bounds a pathological trickle.
     public static let resourceTimeout: TimeInterval = 300.0
 
-    /// The style quiz's own budget.
-    ///
-    /// C1-04: the quiz RPC ran on `requestTimeout`, so a tester who answered
-    /// the fifth question sat on Q5 for up to thirty seconds. The local
-    /// profile is already the fallback when this RPC does not answer, so the
-    /// app has no reason to wait a third of a minute to use it.
-    public static let quizTimeout: TimeInterval = 8.0
+    /// C1-04 — the style-quiz RPC has a local fallback already computed
+    /// (`StyleQuizViewModel.computeLocalResult`), so a slow server must not
+    /// hold the reader on the last question for the full request budget.
+    public static let quizSubmissionTimeout: TimeInterval = 8.0
 
     /// File upload timeout
     public static let uploadTimeout: TimeInterval = 120.0

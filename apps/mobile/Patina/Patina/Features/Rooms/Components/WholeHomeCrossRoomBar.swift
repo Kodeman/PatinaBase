@@ -45,13 +45,8 @@ struct WholeHomeCrossRoomBar: View {
     }
 
     private var summary: String {
-        let dollars = totalCents / 100
-        let dollarString: String
-        if dollars >= 1000 {
-            dollarString = "$\(String(format: "%.1f", Double(dollars) / 1000))K"
-        } else {
-            dollarString = "$\(dollars)"
-        }
+        // C5-14
+        let dollarString = PatinaCurrency.formatWholeDollars(cents: totalCents)
         let roomWord = roomCount == 1 ? "room" : "rooms"
         let itemWord = itemCount == 1 ? "item" : "items"
         return "\(roomCount) \(roomWord) · \(itemCount) \(itemWord) · \(dollarString) total"

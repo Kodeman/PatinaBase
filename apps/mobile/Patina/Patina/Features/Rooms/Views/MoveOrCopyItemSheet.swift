@@ -77,7 +77,8 @@ struct MoveOrCopyItemSheet: View {
                 Text(item.productName)
                     .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.primary)
-                Text("\(item.makerName) · \(item.fullFormattedPrice)")
+                Text([item.resolvedMakerName, item.fullFormattedPrice]
+                    .compactMap { $0 }.joined(separator: " · "))
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.3)
                     .foregroundStyle(PatinaColors.Text.muted)

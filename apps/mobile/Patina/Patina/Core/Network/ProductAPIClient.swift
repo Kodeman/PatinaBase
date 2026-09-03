@@ -249,7 +249,7 @@ actor ProductAPIClient {
         // computed profile is already the fallback, so waiting longer than
         // this buys the person nothing and costs them the fifth question
         // sitting under their finger.
-        request.timeoutInterval = APIConfiguration.quizTimeout
+        request.timeoutInterval = APIConfiguration.quizSubmissionTimeout
 
         let params: [String: Any] = [
             "quiz_answers": [
