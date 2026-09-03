@@ -266,6 +266,45 @@ struct OnboardingResumptionTests {
         #expect(deletion.contains("OnboardingCompletion.shared.forgetAll()"))
     }
 
+    /// RL2A-14 — `establishSession` awaits `OnboardingCompletion.resolve`
+    /// BEFORE publishing the session (that ordering is what removed the 130 ms
+    /// cross-fade through the intro carousel), so the server read sits on the
+    /// launch path. It runs only when the device flag is false and the account
+    /// is not in the device record — a fresh install whose session is restored,
+    /// and every first sign-in on a new phone.
+    ///
+    /// 2 s is inside L1-B's 8 s `LaunchWatchdog.stallDeadline`. Pinned so a
+    /// later change to the budget has to be deliberate rather than incidental.
+    @Test("the server read's share of the launch path is a pinned two seconds")
+    func theServerReadBudgetIsTwoSeconds() {
+        #expect(OnboardingCompletion.serverReadBudget == .seconds(2))
+    }
+
+    /// And the budget is a ceiling, not a hope: a read that never returns is
+    /// abandoned and onboarding proceeds, rather than stalling the launch.
+    @Test("a hanging server read is abandoned at the budget")
+    @MainActor
+    func aHangingReadIsAbandoned() async {
+        let (completion, defaults) = store("OnboardingResumptionTests.budget")
+        defer { defaults.removePersistentDomain(forName: "OnboardingResumptionTests.budget") }
+        let flag = AppSettings.shared.hasCompletedOnboarding
+        defer { AppSettings.shared.hasCompletedOnboarding = flag }
+        AppSettings.shared.hasCompletedOnboarding = false
+
+        let started = ContinuousClock.now
+        await completion.resolve(
+            userId: "user-hangs",
+            budget: .milliseconds(50),
+            hasServerStyleProfile: { _ in
+                try? await Task.sleep(for: .seconds(30))
+                return true
+            }
+        )
+        #expect(started.duration(to: .now) < .seconds(5))
+        // The read never answered, so nothing was flipped on its word.
+        #expect(!AppSettings.shared.hasCompletedOnboarding)
+    }
+
     @Test("finishing onboarding records the account as well as the device")
     func completionRecordsTheAccount() throws {
         let host = try SourcePin.read("Patina/Features/FirstLaunch/Views/OnboardingFlowHost.swift")

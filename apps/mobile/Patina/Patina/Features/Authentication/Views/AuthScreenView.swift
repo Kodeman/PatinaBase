@@ -241,8 +241,12 @@ struct AuthScreenView: View {
             }
             .font(PatinaTypography.uiAction)
             .foregroundStyle(PatinaColors.Text.primary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
+            // A-L1C-2 item 2, verbatim (RL2A-13): the row grows to a second
+            // line rather than shrinking the label to 75%.
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .minimumScaleFactor(0.8)
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 50)
             .background(PatinaColors.Background.secondary)
@@ -404,8 +408,11 @@ struct AuthProviderRow: View {
                 }
                 Text(title)
                     .font(PatinaTypography.uiAction)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    // A-L1C-2 item 2, verbatim (RL2A-13).
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(PatinaColors.Text.primary)
             .frame(maxWidth: .infinity)
