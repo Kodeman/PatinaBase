@@ -157,23 +157,44 @@ struct BrandVoiceLintTests {
         }
     }
 
-    /// The two directories PROGRAM.md §3 and `steward.md` §5.6 give this lane
-    /// as **globs**, not as named files. Walked rather than listed:
-    /// `RL1E3-03` found `DesignRequestStatusService.swift` and
-    /// `DesignRequestCoordinator.swift` unswept — eleven straight apostrophes,
-    /// eight of them on sentences Today renders — because `deckFiles` named
-    /// one file of `Services/DesignServices/`'s four.
+    /// Every directory this lane owns, as **globs** rather than named files.
+    ///
+    /// `RL1E3-03` added the first two, after `deckFiles` named one file of
+    /// `Services/DesignServices/`'s four and the other three carried eleven
+    /// straight apostrophes.
+    ///
+    /// `RL1E4-01` adds the remaining four. PROGRAM.md §3 · L1-E's ownership
+    /// rule is "the three files it owns outright **and any file no other W1
+    /// lane owns**" — a clause the deck already edits under
+    /// (`Services/Companion/**`, `Features/Collections/Views/**`,
+    /// `App/Coordinators/Coordinator.swift`, `Features/Conversation/**`) while
+    /// the lint only walked the two directories named as globs. Every
+    /// directory the lane edits in is walked now, so "L1-E's files are swept"
+    /// means the ownership set and not a subset of it.
     private static let ownedDirectories = [
         "Patina/Features/ARPlacement",
-        "Patina/Services/DesignServices"
+        "Patina/Services/DesignServices",
+        "Patina/Features/DesignServices",
+        "Patina/Services/Companion",
+        "Patina/Features/Collections/Views",
+        "Patina/Features/Conversation"
+    ]
+
+    /// The one file inside `ownedDirectories` another lane owns:
+    /// `steward.md` §5.4 gives `Features/DesignServices/DesignerConsultationView.swift`
+    /// to **L1-C**. Excluded from the walk rather than swept here, so a row in
+    /// it goes to L1-C as a deck row like every other cross-lane row.
+    private static let ownedGlobExclusions = [
+        "Patina/Features/DesignServices/DesignerConsultationView.swift"
     ]
 
     /// Every `.swift` file under `ownedDirectories`, as (readable path, source).
     private static func ownedGlobSources() throws -> [(path: String, source: String)] {
         try ownedDirectories.flatMap { directory in
-            try SourcePin.swiftFiles(under: directory).map { absolute in
-                (absolute.components(separatedBy: "/apps/mobile/Patina/").last ?? absolute,
-                 try String(contentsOfFile: absolute, encoding: .utf8))
+            try SourcePin.swiftFiles(under: directory).compactMap { absolute in
+                let readable = absolute.components(separatedBy: "/apps/mobile/Patina/").last ?? absolute
+                guard !ownedGlobExclusions.contains(readable) else { return nil }
+                return (readable, try String(contentsOfFile: absolute, encoding: .utf8))
             }
         }
     }
@@ -186,19 +207,16 @@ struct BrandVoiceLintTests {
     private static let deckFiles = [
         "Patina/Design/Components/PatinaErrorState.swift",
         "../PatinaDesignKit/Sources/PatinaDesignKit/Tokens/TimeOfDay.swift",
-        "Patina/Features/DesignServices/DesignRequestFlowView+Steps.swift",
-        "Patina/Services/Companion/Models/CompanionAPIModels.swift",
-        // `RL1E2-21`: this lane added two `PatinaLog.companion.error` lines
-        // here and the file was outside the scan.
-        "Patina/Services/Companion/CompanionAPIClient.swift",
+        // `RL1E4-01`: this lane's pin on `Coordinator.swift`. `AppCoordinator.swift`
+        // is L1-F's whole file; `Coordinator.swift` is a different file in no
+        // lane's glob, so it is named here rather than by walking
+        // `App/Coordinators/`, which would drag L1-F's file in with it.
         "Patina/App/Coordinators/Coordinator.swift",
-        "Patina/Features/Collections/Views/CollectionsView.swift",
         "Patina/Features/Collections/ViewModels/CollectionsViewModel.swift",
         // `RL1E2-03`: PROGRAM.md §3 lists this file FIRST under "files it owns
         // outright" and the scan never read it; eleven of its sentences were
         // still U+0027, several on the invoice branch D10 makes live.
-        "Patina/Features/Purchase/OrderFailureCopy.swift",
-        "Patina/Features/Conversation/Models/StyleProfile.swift"
+        "Patina/Features/Purchase/OrderFailureCopy.swift"
     ]
 
     @Test("every file this wave's copy deck touches carries no brand-voice violation")
@@ -217,10 +235,14 @@ struct BrandVoiceLintTests {
 
     // MARK: - The globs this lane owns outright (`RL1E3-03`)
 
-    /// Seven files today: three under `ARPlacement`, four under
-    /// `DesignServices`. The count is asserted so a moved or renamed
-    /// directory is a hard failure rather than an empty set that passes.
-    private static let ownedGlobFileCount = 7
+    /// Thirty-one files today: three under `Features/ARPlacement`, four under
+    /// `Services/DesignServices`, thirteen under `Features/DesignServices`
+    /// (fourteen less L1-C's `DesignerConsultationView.swift`), four under
+    /// `Services/Companion`, four under `Features/Collections/Views` and three
+    /// under `Features/Conversation`. The count is asserted so a moved or
+    /// renamed directory is a hard failure rather than an empty set that
+    /// passes.
+    private static let ownedGlobFileCount = 31
 
     @Test("every file in L1-E's own globs carries no brand-voice violation")
     func ownedGlobsAreClean() throws {
@@ -246,8 +268,19 @@ struct BrandVoiceLintTests {
         }
     }
 
-    // MARK: - The deck's rows in files another lane owns (`RL1E2-01`)
-    //
+}
+
+// MARK: - The deck's rows in files another lane owns (`RL1E2-01`)
+
+/// `RL1E4-01`: the cross-lane pins live in an extension rather than in the
+/// suite's own body. Adding the `DesignerConsultationView` pin took the struct
+/// past SwiftLint's 300-line `type_body_length`, and the honest fix is that
+/// this half of the file is a different job from the lint engine above it —
+/// one `@Test` per file another lane owns, growing by one every review round.
+/// Swift Testing associates a `@Test` in an extension with the extended suite,
+/// so the suite and its count are unchanged.
+extension BrandVoiceLintTests {
+
     // One `@Test` per file, so a half-applied group cannot hide behind a
     // sibling assertion (`RL1E2-05`), and every read is hoisted out of the
     // wrapper, so a file another lane renames is a hard failure rather than a
@@ -335,6 +368,19 @@ struct BrandVoiceLintTests {
         try Self.pinDirtyToday(
             "Patina/Features/Companion/Services/CompanionActionRows.swift",
             row: "deck row A-52 / CompanionActionRows.swift:38 is L1-C's; unwrap after L1-C merges"
+        )
+    }
+
+    /// `RL1E4-01`: the one file inside this lane's widened walk that another
+    /// lane owns. It is excluded from `ownedDirectories` and pinned here
+    /// instead, so the row goes to L1-C like every other cross-lane row.
+    /// Two recorded issues on this branch; one after L1-C merges, because
+    /// `A1-14` deletes `designerCard` and `:68` with it.
+    @Test("L1-C · the consultation hero types its apostrophes as U+2019")
+    func designerConsultationApostrophesAreCurly() throws {
+        try Self.pinDirtyToday(
+            "Patina/Features/DesignServices/DesignerConsultationView.swift",
+            row: "deck row A-06 / DesignerConsultationView.swift:25 is L1-C's; unwrap after L1-C merges"
         )
     }
 
