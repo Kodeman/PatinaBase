@@ -122,19 +122,27 @@ struct NounConsistencyTests {
         }
     }
 
+    /// `RL1E3-07`: this and the two needles below used to scan the whole
+    /// source, so a comment naming the retired word satisfied them. They read
+    /// string literals now — the approach `roleWordsCollapseToOnePerKind`
+    /// already takes at the foot of this file.
     @Test("the Companion menu promises no Portal")
     func companionMenuPromisesNoPortal() throws {
-        let source = try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
+        let literals = BrandVoiceLintTests.stringLiterals(
+            in: try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
+        )
         withKnownIssue("deck row C-22 / CompanionActionRows.swift:36-39's hint is L1-C's") {
-            #expect(!source.contains("Portal"))
+            #expect(!literals.contains { $0.contains("Portal") })
         }
     }
 
     @Test("the profile screen no longer carries the retired 'YOUR PROFILE' header")
     func profileHeaderIsRetired() throws {
-        let source = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
+        let literals = BrandVoiceLintTests.stringLiterals(
+            in: try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
+        )
         withKnownIssue("deck row A-60 / ProfileView.swift:148 is L1-C's") {
-            #expect(!source.contains("Text(\"YOUR PROFILE\")"))
+            #expect(!literals.contains("YOUR PROFILE"))
         }
     }
 
@@ -171,9 +179,11 @@ struct NounConsistencyTests {
     /// `companionNudgeLabel` outright.
     @Test("the quiz's dead 'Next question' nudge is gone")
     func theQuizNudgeIsGone() throws {
-        let source = try SourcePin.read("Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift")
+        let literals = BrandVoiceLintTests.stringLiterals(
+            in: try SourcePin.read("Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift")
+        )
         withKnownIssue("deck row A-13 / StyleQuizViewModel.swift:44-47 is L1-A's; unwrap after L1-A merges") {
-            #expect(!source.contains("\"Next question →\""))
+            #expect(!literals.contains { $0.contains("Next question") })
         }
     }
 
