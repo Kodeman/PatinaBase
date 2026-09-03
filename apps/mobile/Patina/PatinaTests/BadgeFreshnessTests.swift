@@ -129,36 +129,72 @@ struct BadgeFreshnessTests {
         #expect(code.components(separatedBy: "publishUnreadCount()").count - 1 >= 7)
     }
 
-    /// The bell reads the shared service. `DailyRoomView.swift` is L1-C's file,
-    /// so the binding itself arrives there as integration note **L1F→C-1**;
-    /// this pins the half that lives in this lane — that nothing in the
-    /// notifications feature computes a second count of its own.
+    /// Every spelling of "count the unread rows yourself" this app has reached
+    /// for. Round 2 grepped only the first, which is why `RL1F-25` found a
+    /// THIRD number — the Studio tab's "6 unread updates" — disagreeing with
+    /// both the bell and the feed while this test stayed green.
+    private static let secondCountSpellings = [
+        "notifications.filter { !$0.isRead }.count",
+        "unreadNotifications.count"
+    ]
+
+    /// The files whose owning lane still owes the one-line binding, and the
+    /// note that carries it. Each is recorded as a known issue **without**
+    /// `isIntermittent`, so the block fails the moment the note lands and the
+    /// wave is told to delete it — a bar, not a waiver. Round 2 wrote
+    /// `isIntermittent: true`, which passes in both states and therefore could
+    /// never report anything (`RL1F-19`).
+    private static let owed = [
+        "Patina/Features/Home/Views/DailyRoomView.swift":
+            "C2-07 · note L1F→C-1 is owed by L1-C — DELETE this block when it stops recording",
+        "Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift":
+            "RL1F-25 · note L1F→B-5 is owed by L1-B — DELETE this block when it stops recording"
+    ]
+
+    /// The bell reads the shared service. `DailyRoomView.swift` is L1-C's file
+    /// and `StudioQueueBuilder.swift` is L1-B's (steward ruling S-3), so both
+    /// bindings arrive there as integration notes; this pins the half that
+    /// lives in this lane — that nothing computes a second count of its own —
+    /// and names the two that are owed for as long as they are owed.
     @Test("the notifications feature computes no second count")
     func thereIsNoSecondCount() throws {
-        // Widened to `Features/Home` after the round-1 review: the scan covered
-        // only the feed, and `C2-07` reproduced exactly as written — the bell
-        // still badged 3 after "Mark all read", because the SECOND count is in
-        // Today's own file, which the scan could not see.
-        //
-        // `DailyRoomView.swift` is L1-C's under the contested-file table, and
-        // C2-07's other half went there as note `L1F→C-1`. L1-C merges first
-        // (D14), so on this branch the line is still there. Recorded as a known
-        // issue rather than waived away: it passes in both states by design,
-        // and the test report names it for as long as it is owed — which is the
-        // convention L1-B set for exactly this shape this wave.
-        let owedToL1C = "Patina/Features/Home/Views/DailyRoomView.swift"
         let files = SourcePin.swiftFiles(under: "Patina/Features/Notifications")
             + SourcePin.swiftFiles(under: "Patina/Features/Home")
+            + SourcePin.swiftFiles(under: "Patina/Features/Profile")
         for path in files {
             let code = SourceScan.code(in: try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8))
-            let single = !code.contains("notifications.filter { !$0.isRead }.count")
-            if path.hasSuffix(owedToL1C) {
-                withKnownIssue("C2-07 · note L1F→C-1 is owed by L1-C", isIntermittent: true) {
-                    #expect(single, "C2-07's other half is still unapplied — \(path)")
+            // The declaration of `unreadNotifications` is not a second count —
+            // it is the array the second count was taken of. Only `.count` on
+            // it is.
+            let single = !Self.secondCountSpellings.contains { code.contains($0) }
+            if let note = Self.owed.first(where: { path.hasSuffix($0.key) })?.value {
+                withKnownIssue(Comment(rawValue: note)) {
+                    #expect(single, "the other half is still unapplied — \(path)")
                 }
             } else {
                 #expect(single, "VISION §6: one count of what needs you, from one service — \(path)")
             }
         }
+    }
+
+    /// `DeepLinkHandler` and `BadgeCountService` are singletons whose whole
+    /// reason to exist is that two surfaces used to hold two objects. A second
+    /// instance reproduces that by accident, so the test seam is `private` +
+    /// `#if DEBUG` in both, and a test-only default of `.standard` would let a
+    /// suite read the running simulator's real domain (`RL1F-32`, `RL1F-33`).
+    @Test("the singletons' test seams are unreachable from product code")
+    func theTestSeamsAreSealed() throws {
+        let handler = SourceScan.code(
+            in: try SourcePin.read("Patina/App/DeepLinking/DeepLinkHandler.swift")
+        )
+        #expect(handler.contains("private init(queue: PendingLinkQueue)"))
+        #expect(handler.contains("static func makeForTests(queue: PendingLinkQueue)"))
+        #expect(!handler.contains("    init(queue: PendingLinkQueue)"))
+
+        let service = SourceScan.code(
+            in: try SourcePin.read("Patina/Services/Badges/BadgeCountService.swift")
+        )
+        #expect(!service.contains("makeForTests(defaults: UserDefaults = .standard)"))
+        #expect(service.contains("patina.tests.badges."))
     }
 }

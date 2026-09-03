@@ -195,8 +195,19 @@ final class BadgeCountService {
     #if DEBUG
     /// A detached instance for tests, which need to `apply(…)` fixtures
     /// without touching the singleton every other surface reads.
-    static func makeForTests(defaults: UserDefaults = .standard) -> BadgeCountService {
-        BadgeCountService(defaults: defaults)
+    ///
+    /// The omitted argument is a **private, empty suite**, never `.standard`:
+    /// `init` now calls `restorePersistedCounts()`, so a `.standard` default
+    /// would read the running simulator's own
+    /// `patina.badge_counts.last_successful.v1` into five of the six counts and
+    /// make every suite that omits it clone-dependent (`RL1F-33`). The suites
+    /// that need the counts to persist across two instances pass their own.
+    static func makeForTests(defaults: UserDefaults? = nil) -> BadgeCountService {
+        BadgeCountService(
+            defaults: defaults
+                ?? UserDefaults(suiteName: "patina.tests.badges.\(UUID().uuidString)")
+                ?? .standard
+        )
     }
     #endif
 
