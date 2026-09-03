@@ -183,17 +183,9 @@ struct ThreadHeaderTests {
         #expect(!line.contains("URLSession"))
     }
 
-    /// Retry re-sends the body that failed, not whatever is in the composer
-    /// now — a person who typed something else while the first was in the air
-    /// must not have it sent in place of the message they are looking at.
-    @Test("retry carries the failed body, and does nothing without one")
-    func retryCarriesTheFailedBody() async {
-        let viewModel = ThreadDetailViewModel(threadId: "t1")
-        #expect(viewModel.failedSendBody == nil)
-        await viewModel.retrySend()
-        #expect(viewModel.sendError == nil)
-        #expect(!viewModel.isSending)
-    }
+    // Retry's own behaviour is pinned by `retrySendsTheFailedBodyNotTheDraft`
+    // at the end of this suite — the round-2 version of this test asserted only
+    // the no-failed-body path, which is the half that does nothing (`RL1F-28`).
 
     // MARK: - L07-02, the composer under the bar
 
@@ -302,6 +294,111 @@ struct ThreadHeaderTests {
         )
         #expect(view.contains("private func unsentBubble(_ body: String) -> some View"))
         #expect(view.contains("Text(body)"))
-        #expect(view.contains("PatinaColors.clay.opacity(0.35)"))
+        // The fill is deliberately NOT asserted. Round 2 pinned
+        // `PatinaColors.clay.opacity(0.35)` as a string literal, which made
+        // this suite forbid L1-D's `C3` token sweep from touching a call site
+        // it legitimately owns — a test that fails a correct fix (`RL1F-27`).
+        // What this test is for is that the bubble draws the person's words
+        // rather than a status word.
+        #expect(!view.contains("Text(\"Sending"))
+        #expect(!view.contains("Text(\"Sent"))
+    }
+
+    // MARK: - RL1F-22 — the header at accessibility text sizes
+
+    /// At `accessibility-extra-extra-extra-large` the one-line header read
+    /// "Leah Hart…" / "Aspen Loft…". `C-13` exists because "the tester is never
+    /// told who they are messaging"; a name cut mid-word tells them a different
+    /// name. The name gets a second line and a scale floor before it is cut,
+    /// and the project — context, not identity — drops past `.accessibility1`.
+    @Test("the header names the whole name at every text size")
+    func theHeaderSurvivesAccessibilitySizes() throws {
+        let view = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Messaging/Views/ThreadDetailView.swift")
+        )
+        let title = try #require(view.range(of: "viewModel.header?.title ?? ThreadHeader.unnamed"))
+        let afterTitle = String(view[title.lowerBound...].prefix(320))
+        #expect(afterTitle.contains(".lineLimit(2)"))
+        #expect(afterTitle.contains(".minimumScaleFactor(0.8)"))
+        #expect(!afterTitle.contains(".lineLimit(1)"))
+
+        #expect(view.contains("dynamicTypeSize < .accessibility1"))
+        #expect(view.contains("@Environment(\\.dynamicTypeSize) private var dynamicTypeSize"))
+    }
+
+    /// The inset does NOT move with text size, and that is measured rather than
+    /// assumed: `BackChevronButton` is `.font(.system(size: 14, weight: .semibold))`
+    /// inside a fixed `36×36` frame — a fixed point size is not Dynamic-Type
+    /// scaled — so the chrome owns the same x ∈ [18, 54.5] at every size.
+    @Test("the back chevron does not grow with the text size")
+    func theChevronIsAFixedSize() throws {
+        let chrome = SourceScan.code(
+            in: try SourcePin.read("Patina/Design/Animations/PatinaTransitions.swift")
+        )
+        let chevron = try #require(chrome.range(of: "struct BackChevronButton"))
+        let body = String(chrome[chevron.lowerBound...].prefix(600))
+        #expect(body.contains(".font(.system(size: 14, weight: .semibold))"))
+        #expect(body.contains(".frame(width: 36, height: 36)"))
+        #expect(!body.contains("relativeTo:"))
+    }
+
+    // MARK: - RL1F-34 / RL1F-35 — the anchor and the round trip
+
+    /// The transcript renders `visibleMessages` after `C-14`. An anchor taken
+    /// from `messages.last` resolves to a view that is not in the hierarchy the
+    /// moment the backend appends an audit row, and the scroll silently no-ops.
+    @Test("the scroll anchor is a row that is actually drawn")
+    func theAnchorIsARenderedRow() throws {
+        let view = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Messaging/Views/ThreadDetailView.swift")
+        )
+        #expect(view.contains("onChange(of: viewModel.visibleMessages.count)"))
+        #expect(view.contains("viewModel.visibleMessages.last?.id"))
+        #expect(!view.contains("viewModel.messages.last?.id"))
+    }
+
+    /// `load()` ends with `loadHeader()` and `.refreshable` calls `load()`, so
+    /// every pull fetched the whole inbox again for a header already on screen.
+    @Test("a pull-to-refresh does not re-fetch the header")
+    func theHeaderIsFetchedOnce() throws {
+        let model = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Messaging/ViewModels/MessagingViewModel.swift")
+        )
+        let loadHeader = try #require(model.range(of: "func loadHeader() async {"))
+        let body = String(model[loadHeader.lowerBound...].prefix(200))
+        #expect(body.contains("guard header == nil else { return }"))
+    }
+
+    // MARK: - RL1F-28 — retry carries the failed body
+
+    /// The name's claim, asserted. Round 2's body only proved the
+    /// no-failed-body path, which is the half that does nothing.
+    @Test("retry re-sends the failed body, not the current draft")
+    func retrySendsTheFailedBodyNotTheDraft() async throws {
+        let viewModel = ThreadDetailViewModel(threadId: "t1")
+
+        // No failed send: retry is a no-op and touches neither the draft nor
+        // the error.
+        viewModel.draft = "something else"
+        await viewModel.retrySend()
+        #expect(viewModel.draft == "something else")
+        #expect(viewModel.sendError == nil)
+        #expect(!viewModel.isSending)
+
+        // And the source says which of the two it reads. `send(body:)` is
+        // private and the client is a singleton, so the round trip cannot be
+        // driven here; what CAN be held is that `retrySend()` never reaches for
+        // `draft`.
+        let model = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Messaging/ViewModels/MessagingViewModel.swift")
+        )
+        guard let range = model.range(of: "func retrySend() async {") else {
+            Issue.record("retrySend() is gone")
+            return
+        }
+        let body = String(model[range.lowerBound...].prefix(180))
+        #expect(body.contains("guard let body = failedSendBody"))
+        #expect(body.contains("await send(body: body)"))
+        #expect(!body.contains("draft"))
     }
 }

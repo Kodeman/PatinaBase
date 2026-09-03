@@ -19,6 +19,7 @@ import Supabase
 struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
     let threadId: String
     @Environment(\.appCoordinator) private var coordinator
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var viewModel: ThreadDetailViewModel
 
     init(threadId: String) {
@@ -64,8 +65,13 @@ struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
                 // invoice detail is the in-repo pattern. Calls exactly what
                 // `.task` calls.
                 .refreshable { await viewModel.load() }
-                .onChange(of: viewModel.messages.count) { _, _ in
-                    if let last = viewModel.messages.last?.id {
+                // Keyed on what is DRAWN, not on what was fetched. After C-14
+                // the transcript renders `visibleMessages`; an anchor taken
+                // from `messages.last` resolves to a view that is not in the
+                // hierarchy the moment the backend appends an audit row (the
+                // RPC re-emits one), and the scroll then silently does nothing.
+                .onChange(of: viewModel.visibleMessages.count) { _, _ in
+                    if let last = viewModel.visibleMessages.last?.id {
                         withAnimation { proxy.scrollTo(last, anchor: .bottom) }
                     }
                 }
@@ -113,11 +119,22 @@ struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
         HStack(spacing: 12) {
             avatar
             VStack(alignment: .leading, spacing: 2) {
+                // C-13's whole point is that the tester is told who they are
+                // messaging. At `.accessibility3` a one-line name read
+                // "Leah Hart…", which names a different person — so the name
+                // gets a second line and a scale floor before it is ever cut.
                 Text(viewModel.header?.title ?? ThreadHeader.unnamed)
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.primary)
-                    .lineLimit(1)
-                if let projectName = viewModel.header?.projectName, !projectName.isEmpty {
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                // The project is context, not identity. Past `.accessibility1`
+                // the row is already taller than the screen can spare, so the
+                // context goes and the name stays whole — the shape L1-C's
+                // `P-34` note prescribes for Welcome.
+                if let projectName = viewModel.header?.projectName,
+                   !projectName.isEmpty,
+                   dynamicTypeSize < .accessibility1 {
                     Text(projectName)
                         .font(PatinaTypography.caption)
                         .foregroundStyle(PatinaColors.Text.muted)

@@ -345,6 +345,10 @@ final class ThreadDetailViewModel {
     /// lane's file this wave, and `listThreadSummaries()` already carries the
     /// participants and the project name.
     func loadHeader() async {
+        // Once. `load()` ends here and `.refreshable` calls `load()`, so
+        // without this every pull-to-refresh fetched the whole inbox again —
+        // for a header already on the screen, which had not changed.
+        guard header == nil else { return }
         let me = ThreadListViewModel.currentUserId()
         var summary = BadgeCountService.shared.threadSummaries.first { $0.id == threadId }
         if summary == nil {
