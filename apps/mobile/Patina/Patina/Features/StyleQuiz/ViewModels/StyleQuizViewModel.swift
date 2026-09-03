@@ -26,6 +26,16 @@ final class StyleQuizViewModel {
     private var questionStartTime: Date = Date()
     private var questionTimings: [Int: TimeInterval] = [:]
 
+    /// The scheduled single-select auto-advance, held so `goBack()` can
+    /// cancel it.
+    @ObservationIgnored
+    private var pendingAdvance: Task<Void, Never>?
+
+    /// Where saved progress lives. A seam so a test can use its own suite
+    /// rather than writing into `UserDefaults.standard` beside 1600 others.
+    @ObservationIgnored
+    private let defaults: UserDefaults
+
     // MARK: - Computed Properties
 
     var currentQuestionData: QuizQuestion {
@@ -51,24 +61,16 @@ final class StyleQuizViewModel {
         selections[currentQuestion] != nil && !(selections[currentQuestion]?.isEmpty ?? true)
     }
 
-    /// A-13 — the nudge is gone on any step that already has a real button.
-    ///
-    /// "Next question →" was a StaticText with no button role and no action,
-    /// 26 pt above `companion.quiz.continue` — same arrow, same meaning, and
-    /// tapping it did nothing. Only the last step, where the multi-select
-    /// Continue reads "Continue" rather than naming the destination, keeps a
-    /// line — and only when there is no Continue button to contradict.
-    var companionNudgeLabel: String? {
-        guard currentQuestion == questions.count - 1, canAdvance,
-              currentQuestionData.type.isSingleSelect else { return nil }
-        return "See your style"
-    }
-
     // MARK: - Init
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         questionStartTime = Date()
         restoreSavedProgress()
+    }
+
+    deinit {
+        pendingAdvance?.cancel()
     }
 
     // MARK: - Saved Progress (R05)
@@ -100,19 +102,19 @@ final class StyleQuizViewModel {
     func saveProgress() {
         let snapshot = SavedProgress(currentQuestion: currentQuestion, selections: selections)
         if let data = try? JSONEncoder().encode(snapshot) {
-            UserDefaults.standard.set(data, forKey: Self.savedProgressKey)
+            defaults.set(data, forKey: Self.savedProgressKey)
         }
     }
 
     /// Drop any persisted snapshot ("Discard & exit", or quiz submitted).
     func discardSavedProgress() {
-        UserDefaults.standard.removeObject(forKey: Self.savedProgressKey)
+        defaults.removeObject(forKey: Self.savedProgressKey)
     }
 
     /// Resume from a prior "Save progress & exit", if one exists. Called
     /// once from `init` — the view creates a fresh view model per entry.
     private func restoreSavedProgress() {
-        guard let data = UserDefaults.standard.data(forKey: Self.savedProgressKey),
+        guard let data = defaults.data(forKey: Self.savedProgressKey),
               let saved = try? JSONDecoder().decode(SavedProgress.self, from: data) else { return }
         currentQuestion = min(max(saved.currentQuestion, 0), questions.count - 1)
         selections = saved.selections
@@ -136,14 +138,26 @@ final class StyleQuizViewModel {
         }
         selections[question] = current
 
-        // Auto-advance for single-select after brief delay
+        // Auto-advance for single-select after brief delay. The task is HELD:
+        // an unowned one fires after a Back tap made inside the half-second —
+        // which is exactly when someone who mis-tapped a swatch taps it — and
+        // pushes them forward again.
         if questions[question].type.isSingleSelect {
             recordTiming()
-            Task { @MainActor [weak self] in
+            pendingAdvance?.cancel()
+            pendingAdvance = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(0.5))
+                guard !Task.isCancelled else { return }
                 self?.advance()
             }
         }
+    }
+
+    /// Drop a scheduled auto-advance. Called wherever the reader has taken the
+    /// navigation back into their own hands.
+    func cancelPendingAdvance() {
+        pendingAdvance?.cancel()
+        pendingAdvance = nil
     }
 
     // MARK: - Navigation
@@ -160,6 +174,7 @@ final class StyleQuizViewModel {
     }
 
     func goBack() {
+        cancelPendingAdvance()
         if currentQuestion > 0 {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                 currentQuestion -= 1

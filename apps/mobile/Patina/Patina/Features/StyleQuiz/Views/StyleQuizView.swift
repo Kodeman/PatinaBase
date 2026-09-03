@@ -23,6 +23,9 @@ struct StyleQuizView: View {
     @State private var hasPresentedCompanion = false
     /// R05: drives the mid-quiz "save or discard?" exit confirmation.
     @State private var showExitDialog = false
+    /// P-18: how much room the Companion pill takes at the bottom, so the
+    /// sign-in link can sit above it rather than under it.
+    @State private var pillHeight: CGFloat = 0
 
     /// Optional callback when quiz completes (for onboarding flow)
     var onComplete: ((StyleProfileResult) -> Void)?
@@ -74,9 +77,18 @@ struct StyleQuizView: View {
                         .accessibilityIdentifier("StyleQuiz.SignInButton")
                 }
             }
+            // The pill is an overlay, so the column has to reserve its height
+            // or the link is painted inside the Companion's charcoal panel —
+            // tappable, but reading as a stray label on the Companion rather
+            // than a door off the page. Measured rather than guessed, because
+            // the panel grows with Dynamic Type.
+            .padding(.bottom, pillHeight + 28 + 12)
 
             // Companion-style journey progress pill at bottom
             quizProgressPill
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    pillHeight = $0
+                }
                 .padding(.bottom, 28)
 
             if viewModel.isSubmitting {
@@ -244,20 +256,12 @@ struct StyleQuizView: View {
 
     private var quizProgressPill: some View {
         let isMultiSelect = !viewModel.currentQuestionData.type.isSingleSelect
-        let nudge = viewModel.companionNudgeLabel
 
         return CompanionHearthView(
             presentation: companionPresentation,
             onDismiss: nil
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                if let nudge, !nudge.isEmpty {
-                    Text(nudge)
-                        .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.Text.inverse.opacity(0.78))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
                 if isMultiSelect {
                     Button {
                         guard viewModel.canAdvance else { return }

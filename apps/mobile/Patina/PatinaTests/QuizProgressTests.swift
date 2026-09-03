@@ -24,9 +24,13 @@ import Testing
 @MainActor
 struct QuizProgressTests {
 
+    /// Its own defaults suite: this suite runs beside 1600 others and has no
+    /// business writing into the shared domain.
     private func freshViewModel() -> StyleQuizViewModel {
-        UserDefaults.standard.removeObject(forKey: "styleQuiz.savedProgress.v1")
-        return StyleQuizViewModel()
+        let suite = "QuizProgressTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return StyleQuizViewModel(defaults: defaults)
     }
 
     // MARK: - A-21 · answers recorded
@@ -79,26 +83,64 @@ struct QuizProgressTests {
 
     // MARK: - A-13 · the dead nudge
 
-    @Test("no nudge sits above a Continue button that already says the same thing")
-    func noDeadNudgeAboveContinue() {
-        let viewModel = freshViewModel()
-        // Q2 is multi-select — it has the real Continue button, so no nudge.
-        viewModel.currentQuestion = 1
-        viewModel.toggleSelection(question: 1, option: 0)
-        #expect(!viewModel.currentQuestionData.type.isSingleSelect)
-        #expect(viewModel.companionNudgeLabel == nil)
-    }
-
-    @Test("the arrow that did nothing is gone")
+    /// Round one closed A-13 by making `companionNudgeLabel` unreachable —
+    /// the guard required `isSingleSelect` on the LAST question, and the last
+    /// question (id 4, `.iconList`) is the one multi-select case. Dead code
+    /// that reads as live is a worse record than no code, so the property and
+    /// its render site are gone.
+    @Test("the nudge that did nothing is gone, not merely unreachable")
     func nextQuestionArrowIsGone() throws {
-        // Comment lines out first — the doc comment above `companionNudgeLabel`
-        // quotes the string it removed, which is the record of why.
-        let code = try SourcePin.read("Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift")
+        let source = try SourcePin.read("Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift")
+        #expect(!source.contains("companionNudgeLabel"))
+
+        let view = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleQuizView.swift")
+        #expect(!view.contains("companionNudgeLabel"))
+        #expect(!view.contains("\"See your style\""))
+
+        let code = source
             .split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")
         #expect(!code.contains("\"Next question →\""))
-        #expect(!code.contains("\"See your style →\""))
+    }
+
+    // MARK: - The auto-advance is owned
+
+    /// On Q1/Q3/Q4 — imageGrid, materialCards, budgetTiers, all single-select
+    /// — a selection schedules an advance 0.5 s out. Tap Back inside that
+    /// half-second (exactly when someone who mis-tapped a swatch does) and an
+    /// unowned task fired afterwards and pushed them forward again.
+    @Test("Back cancels the pending auto-advance")
+    func backCancelsThePendingAutoAdvance() async {
+        let viewModel = freshViewModel()
+        viewModel.currentQuestion = 2
+        viewModel.toggleSelection(question: 2, option: 0)
+        #expect(viewModel.currentQuestionData.type.isSingleSelect)
+
+        viewModel.goBack()
+        #expect(viewModel.currentQuestion == 1)
+
+        // Well past the 0.5 s the advance was scheduled for.
+        try? await Task.sleep(for: .seconds(1.2))
+        #expect(viewModel.currentQuestion == 1, "the cancelled advance still fired")
+    }
+
+    /// P-18's door is real, but round one drew it inside the Companion pill's
+    /// charcoal panel — measured on the clone, the pill ran to y≈846 and the
+    /// link occupied y 796–840. The column reserves the pill's measured height
+    /// so the link sits above it at every Dynamic Type size.
+    @Test("the sign-in door clears the Companion pill")
+    func theSignInDoorClearsTheCompanionPill() throws {
+        let source = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleQuizView.swift")
+        #expect(source.contains("@State private var pillHeight: CGFloat = 0"))
+        #expect(source.contains(".padding(.bottom, pillHeight + 28 + 12)"))
+        #expect(source.contains(".onGeometryChange(for: CGFloat.self) { $0.size.height }"))
+
+        // The inset belongs to the column that holds the link, and the link is
+        // still inside it.
+        let column = try #require(source.range(of: "StyleQuiz.SignInButton"))
+        let inset = try #require(source.range(of: ".padding(.bottom, pillHeight + 28 + 12)"))
+        #expect(column.lowerBound < inset.lowerBound)
     }
 
     // MARK: - C1-04 · submit has a reader
