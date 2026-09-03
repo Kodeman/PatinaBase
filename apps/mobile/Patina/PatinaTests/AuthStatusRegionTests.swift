@@ -76,10 +76,15 @@ struct AuthStatusRegionTests {
 
     @Test("a verify clears the send's success line before it starts")
     func verifyClearsTheSuccessLine() throws {
+        // RL2A-12 moved the in-flight flag out of the Task and onto the
+        // synchronous pass, so this anchors on the function rather than on the
+        // assignment — and asserts the ordering it stands for.
         let source = try SourcePin.read("Patina/Features/Authentication/ViewModels/AuthViewModel.swift")
-        let start = try #require(source.range(of: "self.isVerifyingOtp = true"))
-        let block = String(source[start.lowerBound...].prefix(500))
-        #expect(block.contains("self.successMessage = nil"))
+        let start = try #require(source.range(of: "public func verifyOtp() async {"))
+        let block = String(source[start.upperBound...].prefix(1600))
+        let clear = try #require(block.range(of: "self.successMessage = nil"))
+        let call = try #require(block.range(of: "self.verifyOtpHandler(email, token)"))
+        #expect(clear.lowerBound < call.lowerBound)
     }
 
     @Test("the status carries its meaning in words, not in red-and-green (VISION §6)")
