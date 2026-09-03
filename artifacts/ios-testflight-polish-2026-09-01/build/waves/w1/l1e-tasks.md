@@ -381,3 +381,176 @@ Every deck-shaped review finding: `RL1E-02` (closing paragraph), `RL1E-03` (re-a
 - [ ] `apps/mobile/Patina/scripts/ios-gate.sh release`
 - [ ] `apps/mobile/Patina/scripts/ios-gate.sh unit`
 - [ ] `apps/mobile/Patina/scripts/ios-gate.sh lint-delta main`
+
+---
+
+# Fix round 2 (`RL1E2-01` … `RL1E2-24`) — 2026-09-02
+
+`IOS_GATE_UDID=2AF6D0CA-91AB-446E-AFA3-4C126AD5827B`
+
+**The VISION check.** Twenty-four review findings, and not one fix adds or entrenches a tab, a zone, a
+dashboard, a shadow, red/green status, a badge, an engagement mechanic, or the word "AI". The
+inventory, so the claim is checkable rather than asserted:
+
+- Eleven are **test-shape** repairs (`RL1E2-05`, `-08`, `-15`, `-16`, `-17`, `-18`, `-21`, `-22`) or
+  **wave-record** repairs (`RL1E2-06`, `-23`, `-24`) — no product surface at all.
+- Nine are **one-word or one-glyph string edits** (`RL1E2-01`, `-02`, `-03`, `-04`, `-09`, `-13`,
+  `-19`, `-20`, and `RL1E2-07`'s ratifications).
+- `RL1E2-10` adds an **inflection** to a visible count label ("1 piece", not "1 pieces") — the same
+  `C-30` shape already ruled, changing which word renders, not the layout.
+- `RL1E2-12` changes which **enum arm** a non-network error maps to; nothing new is drawn.
+- `RL1E2-11` and `RL1E2-14` are routed as notes and a recorded consequence; neither adds UI.
+
+`RL1E2-18` moves the AI-word lint from leading-space needles to word boundaries, which makes the "zero
+occurrences of AI" rule **stronger**, in the direction VISION asks. No exception is claimed.
+
+**The notes I must apply** — every `<lane>-notes.md` section addressed to L1-E, as numbered tasks. Read
+from the shared main checkout at `/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/l1-e-notes.md`
+(mtime 22:29, newer than this branch's frozen copy — see Task G1):
+
+| # | note | task |
+|---|---|---|
+| 1 | **O13 → L1-E** (`l1-e-notes.md:248-283`, from L1-B) — six strings L1-B introduced that no deck row covers: `ProductModel.matchLabel`'s `"Strong match"` / `"Good match"` / `"Worth a look"` / `"Not scored yet"`, and `LocalStoreRecoveryNotice`'s title and body. "If the deck rewrites them, say so before L1-E rebases." | **G6** — all six answered as deck rows, plus the seventh L1-B has since added (`CollectionsView`'s `.failed` sentence) |
+| 2 | **From L1-C** (`:8-91`) — deck rows applied, three strings L1-C wrote, one row deleted, one row not applied | Already answered in fix round 1 (Tasks F7, F10); re-checked, nothing new outstanding |
+| 3 | **Note E-L1A-1/-2/-3** (`:93-163`, `:204-247`) — L1-A's applied rows, the `AuthMode` header residue, three new sentences, and the `A-52` re-route | Already answered in fix round 1 (Tasks F8, F10); `RL1E2-24` leaves **one** item open — L1-A has not answered `A-101`'s retention-period exception. Re-sent in **G9**, reported as open |
+| 4 | **D→E-1** (`:165-203`, from L1-D) — `stillChoosingPieces` ratification | Already answered in fix round 1 (Task F9) |
+
+**The notes I will send** — every change this lane needs in another lane's file, with the exact final
+text, written to `build/waves/w1/l1e-notes-out.md` **and** appended to the target lane's
+`<lane>-notes.md` in the shared main checkout (Task **G9**):
+
+| target | rows |
+|---|---|
+| `l1-a-notes.md` | five straight-apostrophe corrections (`RL1E2-01`); `QuizModels.swift:112`'s `"journey"` title (`RL1E2-02`); the `A-101` retention ratification, re-asked (`RL1E2-24`) |
+| `l1-b-notes.md` | three straight-apostrophe corrections (`RL1E2-01`); `MoneyFailureCopy` + `ScanReviewView` + `ScanWalkView`'s `"Let’s try that again"` (`RL1E2-04`); `CollectionsView`'s empty-state noun, because L1-B rewrites that block (`RL1E2-11`); the four `"Curated"` display names (`RL1E2-19`); `LocalStoreRecoveryNotice`'s two apostrophes and the four `matchLabel` ratifications (`RL1E2-07`) |
+| `l1-c-notes.md` | `HomeStoryRetryRow`'s `"Let’s try that again"` (`RL1E2-04`); `C-38` is **not** closed by L1-C's edit — the live path is `StyleProfile`, fixed here (`RL1E2-20`); the greeting-wrap row, filed properly this time (`RL1E2-14`) |
+| `l1-f-notes.md` | nothing new this round |
+
+---
+
+## Fix-round-2 coverage — every review finding to a task
+
+| id | sev | task | test that pins it |
+|---|---|---|---|
+| `RL1E2-01` | blocker | **G2**, **G9** | `BrandVoiceLintTests.crossLane*ApostrophesAreCurly` — one `@Test` per file |
+| `RL1E2-02` | blocker | **G3**, **G9** | `BrandVoiceLintTests.styleQuizIsClean` now calls `Self.lint` over the whole file |
+| `RL1E2-03` | major | **G4** | `BrandVoiceLintTests.apostrophesAreCurly` (`OrderFailureCopy.swift` added to `deckFiles`) |
+| `RL1E2-04` | major | **G2**, **G9** | `BrandVoiceLintTests.crossLaneMoney/Home/RoomScanApostrophesAreCurly` |
+| `RL1E2-05` | major | **G2** | the wrappers themselves — one `@Test` per deck row |
+| `RL1E2-06` | major | **G1** | `git ls-tree HEAD` in the report |
+| `RL1E2-07` | major | **G6**, **G9** | `BrandVoiceLintTests.crossLaneLocalStoreRecoveryApostrophesAreCurly` |
+| `RL1E2-08` | major | **G7** | new `NounConsistencyTests.recommendationCardsCarryNoBoilerplate`, `SentenceCaseTests.roomCTAIsAFixedLabel`, `NounConsistencyTests.theQuizNudgeIsGone` |
+| `RL1E2-09` | major | **G5** | `NounConsistencyTests.theSavedTabsSayPieces` |
+| `RL1E2-10` | major | **G5** | `PluralisationTests.boardRowInflectsItsVisibleCount` |
+| `RL1E2-11` | major | **G9** | `NounConsistencyTests.unownedSitesSayPieces` (already) + the note |
+| `RL1E2-12` | minor | **G4** | `DesignServicesErrorMappingTests.mapErrorOnlyClaimsAConnectionForARealOne` |
+| `RL1E2-13` | minor | **G5** | `SentenceCaseTests.theSavedScreenDoesNotMixCasing` |
+| `RL1E2-14` | minor | **G8**, **G9** | recorded row + note (no code) |
+| `RL1E2-15` | minor | **G2** | the reads are hoisted; a missing file now throws out of the `@Test` |
+| `RL1E2-16` | minor | **G2** | `ErrorVoiceTests.rawDetailIsStillLogged` pins the exact call |
+| `RL1E2-17` | minor | **G2** | `GreetingWindowTests` is `throws` throughout |
+| `RL1E2-18` | minor | **G2** | `BrandVoiceLintTests.lint` uses word boundaries for all four AI needles |
+| `RL1E2-19` | minor | **G7**, **G9** | `BrandVoiceLintTests.crossLaneStyleModelsAreClean` |
+| `RL1E2-20` | minor | **G4**, **G7** | `NounConsistencyTests.recommendationCardsCarryNoBoilerplate` |
+| `RL1E2-21` | minor | **G2** | `CompanionAPIClient.swift` added to `deckFiles` |
+| `RL1E2-22` | minor | **G8** | — (wave-record correction) |
+| `RL1E2-23` | minor | **G8** | — (wave-record correction) |
+| `RL1E2-24` | minor | **G9** | — (reported open; not this lane's to ratify) |
+
+---
+
+## Task G1 — drop the five inbox files this lane does not own (`RL1E2-06`)
+
+- [ ] `git rm` `l1-b-notes.md`, `l1-c-notes.md`, `l1-d-notes.md`, `l1-f-notes.md`, `l1-e-notes.md`
+  from the branch, and restore `l1-a-notes.md` to `main`'s version — L1-A's own branch modifies it and
+  a second lane's +800 lines would conflict at merge.
+- [ ] Verify: `git ls-tree --name-only HEAD .../waves/w1/` lists exactly `l1-a-notes.md` (unmodified),
+  `l1-e-copy-deck.md`, `l1e-notes-out.md`, `l1e-tasks.md`.
+- [ ] Commit `chore(first-flight): drop the shared W1 inboxes this lane does not own`.
+
+## Task G2 — repair the seven suites' shape (`RL1E2-05`, `-15`, `-16`, `-17`, `-18`, `-21`, and `-01`/`-04`'s pins)
+
+- [ ] Failing test first: add the cross-lane apostrophe pins for the eight files the deck names for
+  another lane — `AccountDeletionService`, `RoomsAPIClient`, `ScanUploadFailureCopy`,
+  `MoneyFailureCopy`, `HomeStoryRetryRow`, `ScanReviewView`, `ScanWalkView`,
+  `LocalStoreRecoveryNotice` — **one `@Test` per file**, each `withKnownIssue`-wrapped, each reading
+  its source *outside* the wrapper.
+- [ ] Run: `ios-gate.sh unit` → the eight record known issues (green here, red-on-unwrap after merge).
+- [ ] Split every multi-row `withKnownIssue` in `NounConsistencyTests`, `SentenceCaseTests`,
+  `GuestPromiseTests`, `BrandVoiceLintTests`, `PluralisationTests` into one `@Test` per deck row.
+- [ ] Hoist every `try SourcePin.read` out of every wrapper.
+- [ ] `GreetingWindowTests`: `try!` static → `throws` + `try` per test.
+- [ ] `BrandVoiceLintTests`: word-boundary regex for `gpt`, `llm`, `artificial intelligence`,
+  `machine learning`; add `Services/Companion/CompanionAPIClient.swift` to `deckFiles`.
+- [ ] `ErrorVoiceTests.rawDetailIsStillLogged`: pin the exact DesignServices log call.
+- [ ] Run: `ios-gate.sh unit`. Commit `test(copy): one pin per deck row, and a lint that reads the whole deck`.
+
+## Task G3 — the quiz's fifth question (`RL1E2-02`)
+
+- [ ] Failing test first: `BrandVoiceLintTests.styleQuizIsClean` calls `Self.lint` over
+  `QuizModels.swift` instead of six hand-written `contains`.
+- [ ] Run: the wrapper records the `"journey"` issue (and the two `"Curated"` labels).
+- [ ] Deck row + note to L1-A with the exact final title. No code change here — `StyleQuiz/**` is L1-A's.
+- [ ] Commit with G2.
+
+## Task G4 — the three source fixes in files this lane owns (`RL1E2-03`, `-12`, `-20`)
+
+- [ ] Failing test first: add `Features/Purchase/OrderFailureCopy.swift` to `deckFiles`;
+  add `DesignServicesErrorMappingTests.mapErrorOnlyClaimsAConnectionForARealOne`;
+  add `NounConsistencyTests.recommendationCardsCarryNoBoilerplate`.
+- [ ] Run: `ios-gate.sh unit` → three failures.
+- [ ] Implement: sweep `OrderFailureCopy.swift`'s eleven straight apostrophes to U+2019;
+  `DesignServicesError.map(_:)` maps a real `URLError` to `.networkError` and everything else to
+  `.submissionFailed` (the arm `map(message:detail:)` already uses as its catch-all);
+  `StyleProfile.recommendationRationale`'s room-name fallback returns `nil`.
+- [ ] Run: `ios-gate.sh unit` → green.
+- [ ] Commit `fix(copy): the purchase path's apostrophes, an honest catch-all, and C-38's live half`.
+
+## Task G5 — the Saved screen (`RL1E2-09`, `-10`, `-13`)
+
+- [ ] Failing test first: `NounConsistencyTests.theSavedTabsSayPieces`,
+  `PluralisationTests.boardRowInflectsItsVisibleCount`,
+  `SentenceCaseTests.theSavedScreenDoesNotMixCasing`.
+- [ ] Run → three failures.
+- [ ] Implement in `Features/Collections/**` (no W1 lane — steward.md §5.1's residue row):
+  `allItemsTab = "All pieces"`; the board row's visible count inflects and says "piece";
+  `"New Board"` → `"New board"`, `"Create Board"` → `"Create board"`.
+- [ ] Run → green. Commit `fix(copy): the Saved screen says pieces, inflects its counts, and picks one casing`.
+
+## Task G6 — answer L1-B's O13 (`RL1E2-07`)
+
+- [ ] Read all seven strings; write a deck row for each — four ratified as written, three corrected.
+- [ ] Pin `LocalStoreRecoveryNotice`'s two apostrophes in G2's cross-lane list.
+- [ ] Commit with G8.
+
+## Task G7 — the three rows with no pin (`RL1E2-08`, `-19`, `-20`)
+
+- [ ] Add `SentenceCaseTests.roomCTAIsAFixedLabel` (`B-20`),
+  `NounConsistencyTests.recommendationCardsCarryNoBoilerplate` (`C-38`, both halves),
+  `NounConsistencyTests.theQuizNudgeIsGone` (`A-13`),
+  `BrandVoiceLintTests.crossLaneStyleModelsAreClean` (`RL1E2-19`).
+- [ ] Correct the coverage table's two wrong claims and `RL1E2-22`'s wrong function name.
+- [ ] Run → green. Commit with G2/G4.
+
+## Task G8 — deck revision 3 (`RL1E2-14`, `-22`, `-23`, and every row above)
+
+- [ ] Rewrite `l1-e-copy-deck.md`: the new rows, the greeting-wrap row filed properly, the honest gate
+  tail with the isolation run and the `S-L1A-1` citation, the corrected pin table.
+- [ ] Commit `docs(first-flight): copy deck revision 3`.
+
+## Task G9 — notes out
+
+- [ ] `l1e-notes-out.md` rewritten; each block appended to `l1-a-notes.md`, `l1-b-notes.md`,
+  `l1-c-notes.md` **in the shared main checkout** (not committed — see G1).
+
+## Task G10 — self-check on the clone
+
+- [ ] Launch with `-DeploymentTarget local`, no `-PatinaFlags`; sign in as `client@patina.dev`;
+  screenshot each changed screen before/after into `shots/w1-l1e/`; one ledger line per shot.
+
+## Task G11 — gate
+
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh build`
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh release`
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh unit`
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh lint-delta main`
