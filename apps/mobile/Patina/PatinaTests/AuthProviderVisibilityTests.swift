@@ -211,4 +211,24 @@ struct AuthProviderVisibilityTests {
         let sheet = try SourcePin.read("Patina/Features/Authentication/Views/AuthSheet.swift")
         #expect(sheet.contains("isLoading: AuthService.shared.isLoading"))
     }
+
+    // MARK: - RL3A-07 · the glyph scales with what it sits beside
+
+    /// `A-03`/`P-02` replaced `Text(icon)` — a string, which scaled with the
+    /// label — with `.font(.system(size: 16, weight: .regular))`, which does
+    /// not. At accessibility-XXXL the envelope stayed a small glyph beside a
+    /// two-line ~40 pt "Continue with email": a regression inside the fix.
+    @Test("the provider row's symbol takes the same type ramp as its title")
+    func theProviderGlyphScalesWithItsLabel() throws {
+        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthScreenView.swift")
+        let start = try #require(source.range(of: "struct AuthProviderRow: View {"))
+        let row = String(source[start.lowerBound...])
+        #expect(row.contains("Image(systemName: systemImage)"))
+        #expect(row.contains(".font(PatinaTypography.uiAction)"))
+        #expect(row.contains(".imageScale(.medium)"))
+        #expect(
+            !row.contains(".font(.system(size:"),
+            "a fixed-point font is back on the provider row"
+        )
+    }
 }

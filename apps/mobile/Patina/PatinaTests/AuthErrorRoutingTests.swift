@@ -115,7 +115,11 @@ struct AuthErrorRoutingTests {
         // Not `if let errorMessage { Text(...) }` at the stack level — a
         // Group with an else branch, framed to a constant.
         #expect(source.contains("static let statusSlotHeight: CGFloat = 52"))
-        #expect(source.contains(".frame(height: AuthScreenView.statusSlotHeight)"))
+        // RL3A-08: still one constant, now read through `@ScaledMetric` so the
+        // reservation grows with the ramp it reserves for.
+        #expect(source.contains("@ScaledMetric(relativeTo: .subheadline)"))
+        #expect(source.contains("private var slotHeight: CGFloat = AuthScreenView.statusSlotHeight"))
+        #expect(source.contains(".frame(height: slotHeight)"))
         let start = try #require(source.range(of: "struct AuthStatusSlot: View {"))
         let end = try #require(source.range(of: "// MARK: - Provider row"))
         let slot = String(source[start.lowerBound..<end.lowerBound])
@@ -127,11 +131,18 @@ struct AuthErrorRoutingTests {
     /// with a message and without one, so showing or clearing an error cannot
     /// move the buttons underneath it. Round one compared a static constant to
     /// itself, which is true of any constant and proves nothing about layout.
-    @Test("the reserved height does not depend on whether a message is pending")
+    ///
+    /// RL3A-08 — and it is measured at an accessibility size too. The slot was
+    /// a hard 52 at every size: 52.16 pt of gap at the default type size and
+    /// 52.08 pt at accessibility-extra-extra-extra-large, measured on the AX
+    /// tree, while two lines of `bodySmall` at that size are roughly 100 pt.
+    @Test("the reserved height does not depend on whether a message is pending", arguments: [
+        DynamicTypeSize.large, DynamicTypeSize.accessibility5
+    ])
     @MainActor
-    func reservedHeightIsIndependentOfContent() {
+    func reservedHeightIsIndependentOfContent(size: DynamicTypeSize) {
         func height(_ slot: AuthStatusSlot) -> CGFloat {
-            UIHostingController(rootView: slot).sizeThatFits(
+            UIHostingController(rootView: slot.environment(\.dynamicTypeSize, size)).sizeThatFits(
                 in: CGSize(width: 393, height: CGFloat.greatestFiniteMagnitude)
             ).height
         }
@@ -140,9 +151,19 @@ struct AuthErrorRoutingTests {
         let long = height(AuthStatusSlot(
             errorMessage: "Apple Sign In couldn't be completed. Please try again."
         ))
-        #expect(empty == short, "empty \(empty) vs short \(short)")
-        #expect(empty == long, "empty \(empty) vs long \(long)")
-        #expect(empty == AuthScreenView.statusSlotHeight)
+        #expect(empty == short, "\(size): empty \(empty) vs short \(short)")
+        #expect(empty == long, "\(size): empty \(empty) vs long \(long)")
+
+        if size == .large {
+            #expect(empty == AuthScreenView.statusSlotHeight)
+        } else {
+            // The whole of RL3A-08: the reservation is not the same 52 pt for
+            // a reader at accessibility-XXXL as it is at the default size.
+            #expect(
+                empty > AuthScreenView.statusSlotHeight,
+                "the slot did not scale: \(empty) at \(size)"
+            )
+        }
     }
 
     /// A sheet-level failure never becomes a root-level message, driven rather

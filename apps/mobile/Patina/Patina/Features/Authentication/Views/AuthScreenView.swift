@@ -334,18 +334,29 @@ struct AuthScreenView: View {
 
 // MARK: - Status slot (P-29, C2-21)
 //
-// Always in the layout, always `AuthScreenView.statusSlotHeight` tall. The
+// Always in the layout, and always the same height for a given reader. The
 // message inside it changes; the geometry never does. Its own type so a test
 // can measure the thing that used to move the stack, rather than compare a
 // constant to itself.
+//
+// RL3A-08: the height was a hard 52 at every type size, while the two lines
+// it reserves for are `bodySmall` — `relativeTo: .subheadline` — so at
+// accessibility sizes the message overflowed onto the provider stack.
+// `.minimumScaleFactor` resolves width pressure, not height, and
+// `.frame(height:)` does not clip. `@ScaledMetric` grows the reservation on
+// the same ramp as the text it reserves for, so P-29's "nothing moves" holds
+// for a reader at any size rather than only at the default one.
 
 struct AuthStatusSlot: View {
     let errorMessage: String?
     var pendingLinkNotice: String?
 
+    @ScaledMetric(relativeTo: .subheadline)
+    private var slotHeight: CGFloat = AuthScreenView.statusSlotHeight
+
     /// L1F→A-2's precedence: something went wrong and they must act beats a
     /// promise being kept. A person who just failed to sign in does not need
-    /// to be told their link is safe in the same 52 pt.
+    /// to be told their link is safe in the same slot.
     var message: (text: String, isError: Bool)? {
         if let errorMessage { return (errorMessage, true) }
         if let pendingLinkNotice { return (pendingLinkNotice, false) }
@@ -375,7 +386,7 @@ struct AuthStatusSlot: View {
                 Color.clear
             }
         }
-        .frame(height: AuthScreenView.statusSlotHeight)
+        .frame(height: slotHeight)
         .frame(maxWidth: .infinity)
         .accessibilityHidden(message == nil)
     }
@@ -402,8 +413,13 @@ struct AuthProviderRow: View {
                     ProgressView()
                         .tint(PatinaColors.Text.primary)
                 } else if let systemImage {
+                    // RL3A-07: a fixed 16 pt did not scale, and the `Text(icon)`
+                    // it replaced did — at accessibility-XXXL a small envelope
+                    // sat beside a two-line ~40 pt label. The symbol takes the
+                    // title's own ramp instead.
                     Image(systemName: systemImage)
-                        .font(.system(size: 16, weight: .regular))
+                        .font(PatinaTypography.uiAction)
+                        .imageScale(.medium)
                         .foregroundStyle(PatinaColors.Text.primary)
                 }
                 Text(title)
