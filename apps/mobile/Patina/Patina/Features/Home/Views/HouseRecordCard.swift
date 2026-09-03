@@ -352,30 +352,45 @@ struct HouseRecordRowView: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 4) {
-                        title
-                        state
-                    }
-                } else {
-                    HStack(alignment: .center, spacing: PatinaSpacing.lg) {
-                        title
-                        Spacer(minLength: PatinaSpacing.sm)
-                        state
-                    }
-                }
+        // C-20, the half a token could not reach. This was one `Button` with
+        // `.disabled(row.route == nil)`, and SwiftUI halves a disabled plain
+        // button's ink: `Text.primary` at 0.5 over the card is 4.27:1 — the
+        // finding's own rendered number — and the meta line 3.01:1, with light
+        // mode worse than dark at 2.96:1 and 1.86:1. Raising the ramp moved the
+        // meta by a third of a point and could not move the body at all,
+        // because the dim is a modifier. A row with nowhere to go is not a
+        // broken control; it is a sentence, and it is rendered as one.
+        Group {
+            if row.route == nil {
+                rowContent
+            } else {
+                Button(action: onTap) { rowContent }
+                    .buttonStyle(.plain)
             }
-            .frame(minHeight: 56)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .disabled(row.route == nil)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
         .accessibilityAddTraits(row.route == nil ? [] : .isButton)
+    }
+
+    private var rowContent: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    title
+                    state
+                }
+            } else {
+                HStack(alignment: .center, spacing: PatinaSpacing.lg) {
+                    title
+                    Spacer(minLength: PatinaSpacing.sm)
+                    state
+                }
+            }
+        }
+        .frame(minHeight: 56)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var title: some View {
