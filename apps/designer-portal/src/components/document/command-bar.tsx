@@ -531,7 +531,10 @@ export function CommandBar() {
     });
 
     const surfaceRow = (s: StudioSurface): PaletteRow => ({
-      kind: s.kind,
+      // Host surfaces (Desk, Document) exist only to answer the help panel —
+      // they are absent from every list this builds rows from, so the branch
+      // is unreachable; it exists to keep the palette's own kind union closed.
+      kind: s.kind === 'host' ? 'room' : s.kind,
       key: s.key,
       label: s.label,
       sub: s.subLabel ?? (s.kind === 'room' ? 'room ↗' : 'ledger'),
