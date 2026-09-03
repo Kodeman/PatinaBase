@@ -685,10 +685,44 @@ checkout's working copy only, never committed here.
 
 ## Task H7 — the unwrap pass, scheduled (`RL1E3-05`)
 
-- [ ] Write it as a numbered task in this file with the expected count and the exact command that
-  produces it, so the "all seven suites green on the integration tip" exit criterion has a step
-  behind it instead of a hope. It runs **after** this lane rebases onto the integration tip, which
-  is after merge 5 (D14: L1-C → L1-D → L1-B → L1-F → L1-A → L1-E).
+PROGRAM.md §3 · L1-E's exit criterion is "all seven suites green on the integration tip". Every
+`withKnownIssue` in this lane's suites is a row another lane owns; once that lane's row lands, the
+wrapper fails with **"Known issue was expected but was not recorded"** — the designed signal, and
+also a mechanical commit that nothing scheduled until now. This is that step. It runs **after** this
+lane rebases onto the integration tip, i.e. after merge 5 (D14: L1-C → L1-D → L1-B → L1-F → L1-A →
+L1-E), and it is the last thing this lane does before its own merge.
+
+**The count, and how to reproduce it** — `grep -rc "withKnownIssue" PatinaTests/*.swift` on this
+branch at `5ae9126d6`:
+
+| suite | wrappers |
+|---|---:|
+| `NounConsistencyTests.swift` | 15 |
+| `SentenceCaseTests.swift` | 11 |
+| `BrandVoiceLintTests.swift` | 10 |
+| `GuestPromiseTests.swift` | 6 |
+| `ErrorVoiceTests.swift` | 5 |
+| `PluralisationTests.swift` | 1 |
+| **total** | **48** |
+
+The gate's "known issues" number (104 on the last green run) counts *recorded issues*, not wrappers,
+and includes pre-existing ones in other suites — 48 is the number that maps to unwrap edits.
+
+- [ ] Rebase onto the integration tip.
+- [ ] `ios-gate.sh unit`. Every "Known issue was expected but was not recorded" names a wrapper whose
+  row has landed: delete the `withKnownIssue(...)` and let the assertion stand unwrapped.
+- [ ] Every wrapper that still records an issue names a row that did **not** land: those are the
+  fix-round list, not the unwrap list. Report them by row id rather than unwrapping them.
+- [ ] Re-run → the whole `PatinaTests` tier green with **zero** known issues from these six suites.
+- [ ] Commit `test(copy): unwrap the deck rows that landed`.
+
+**The ordering constraint the steward has to hold** (not this lane's to enforce):
+`BrandVoiceLintTests.roomsAPIClientApostrophesAreCurly` is deliberately **unwrapped** — the file is
+clean on `main` — and `first-flight/w1-l1b` adds `"We didn't get a response. Try again."` at
+`RoomsAPIClient.swift:430` with U+0027. L1-B merges third and L1-E sixth, so **the integration tip is
+red between merge 3 and this rebase unless L1-B applies `E3-L1B-1`'s `RoomsAPIClient` row first.**
+The red is that row, not a defect in the pin.
+
 - [ ] Commit with H5.
 
 ## Task H8 — self-check on the clone
