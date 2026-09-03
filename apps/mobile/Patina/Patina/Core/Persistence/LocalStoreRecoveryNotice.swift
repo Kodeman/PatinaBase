@@ -16,10 +16,10 @@ struct LocalStoreRecoveryNotice: View {
 
     let onDismiss: () -> Void
 
-    static let title = "We had to start this phone's copy over"
+    static let title = "We had to start this phone’s copy over"
     static let body = """
         Something went wrong with the copy of your home kept on this phone, \
-        and we couldn't read it. Anything saved to your account is still \
+        and we couldn’t read it. Anything saved to your account is still \
         there and will come back as you go. Rooms you scanned on this phone \
         and never sent are gone.
         """

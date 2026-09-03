@@ -163,7 +163,7 @@ struct CollectionsView: View {
             } else if scopedSavedItems.isEmpty {
                 VStack(spacing: 12) {
                     Spacer().frame(height: 40)
-                    Text("No saved items yet")
+                    Text("No saved pieces yet")
                         .font(PatinaTypography.h5)
                         .foregroundStyle(PatinaColors.Text.primary)
                     Text("Browse recommendations and save pieces you love")

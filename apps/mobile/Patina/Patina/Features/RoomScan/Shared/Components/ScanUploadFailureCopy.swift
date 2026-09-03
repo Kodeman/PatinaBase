@@ -22,8 +22,8 @@ import Foundation
 
 enum ScanUploadFailureCopy {
 
-    static let connection = "Upload paused — check your connection. It'll pick up automatically."
-    static let unfinished = "We couldn't finish uploading your scan. Try again from here."
+    static let connection = "Upload paused — check your connection. It’ll pick up automatically."
+    static let unfinished = "We couldn’t finish uploading your scan. Try again from here."
 
     /// The sentence for a package that is failed or parked.
     ///

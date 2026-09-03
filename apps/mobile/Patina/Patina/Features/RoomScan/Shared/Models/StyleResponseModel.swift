@@ -20,7 +20,7 @@ public enum VisualResonance: String, Codable, CaseIterable {
         case .warmMinimal:   return "Warm Minimal"
         case .coolModern:    return "Cool Modern"
         case .layeredComfort: return "Layered Comfort"
-        case .curatedMix:    return "Curated Mix"
+        case .curatedMix:    return "Collected Mix"
         }
     }
 }
@@ -94,9 +94,9 @@ public enum InvestmentTier: String, Codable, CaseIterable, Identifiable {
     public var displayName: String {
         switch self {
         case .budgetStarter: return "Thoughtful Starter"
-        case .budgetMid:     return "Curated Comfort"
+        case .budgetMid:     return "Considered Comfort"
         case .budgetPremium: return "Heirloom Investment"
-        case .budgetDesigner: return "Let's Discuss"
+        case .budgetDesigner: return "Let’s Discuss"
         }
     }
 
@@ -104,7 +104,7 @@ public enum InvestmentTier: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .budgetStarter:  return "Smart finds that punch above their price"
         case .budgetMid:      return "Quality pieces that last"
-        case .budgetPremium:  return "Pieces you'll pass down"
+        case .budgetPremium:  return "Pieces you’ll pass down"
         case .budgetDesigner: return "Connect with a designer"
         }
     }
