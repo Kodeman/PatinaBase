@@ -261,8 +261,19 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             // pieces you love or take the style quiz") and pointed at a door
             // with nothing behind it: tuning taste cannot conjure rows that
             // are not in the catalogue.
-            PatinaEmptyState(PatinaEmptyStateContent.stillChoosingPieces)
-                .padding(.top, 60)
+            //
+            // But the chip goes to the RPC as `p_category` (SP-02), so a
+            // category with no rows also lands here — and "your designer is
+            // still choosing pieces for you" over a catalogue that is fine
+            // tells the tester who tapped "Lighting" something false. The
+            // honest-empty sentence is claimed only for the unfiltered case.
+            if viewModel.activeFilter == "All" {
+                PatinaEmptyState(PatinaEmptyStateContent.stillChoosingPieces)
+                    .padding(.top, 60)
+            } else {
+                PatinaEmptyState(PatinaEmptyStateContent.noPiecesInThisCategory)
+                    .padding(.top, 60)
+            }
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVGrid(columns: [

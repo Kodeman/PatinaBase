@@ -25,7 +25,7 @@ struct ImagePlaceholderTests {
 
     @Test("the three states are three states, and none of them is a bare fill")
     func threeDistinctStates() throws {
-        let source = try SourcePin.read(
+        let source = try SourcePin.readCode(
             "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaAsyncImage.swift"
         )
         // Loading is not the same view as missing…
@@ -87,7 +87,7 @@ struct ImagePlaceholderTests {
             "Patina/Features/ProductDetail/Views/ProductDetailView.swift",
             "Patina/Features/Home/Views/DailyStoryDetailView.swift"
         ] {
-            let source = try SourcePin.read(path)
+            let source = try SourcePin.readCode(path)
             #expect(
                 source.contains("PatinaAsyncImage("),
                 "\(path) does not render PatinaAsyncImage — A-36"
@@ -101,21 +101,30 @@ struct ImagePlaceholderTests {
 
     /// `C-27`. Chrome over a photograph takes an opaque ground, because a
     /// material's contrast is a function of the photo behind it.
+    ///
+    /// `RL1D-R3-06`: this named one file, so the fix reached the browse grid and
+    /// stopped at the screen a tester opens from every tile. Piece detail's
+    /// Back / Help / Share / Save are one `floatingCircleButton` — the identical
+    /// `Circle().fill(.ultraThinMaterial)` — over a 340 pt hero.
     @Test("no chrome over a product photograph rides on a material")
     func chromeOverAPhotographUsesTheScrim() throws {
-        let source = try SourcePin.read(
-            "Patina/Features/Recommendations/Views/RecommendationsView.swift"
-        )
-        #expect(
-            !source.contains("ultraThinMaterial"),
-            "the browse grid still floats its heart, its ⋯ and its match pill on .ultraThinMaterial — 2.01:1 and 1.86:1 over a light tile"
-        )
+        for path in [
+            "Patina/Features/Recommendations/Views/RecommendationsView.swift",
+            "Patina/Features/ProductDetail/Views/ProductDetailBlocks.swift",
+            "Patina/Features/Shared/Views/ProductCard.swift"
+        ] {
+            let source = try SourcePin.readCode(path)
+            #expect(
+                !source.contains("ultraThinMaterial"),
+                "\(path) still floats chrome over a photograph on .ultraThinMaterial — C-27 measured that at 2.01:1, and the ink at 1.86:1"
+            )
+        }
     }
 
     /// `A3-01`, the table's only blocker. The sentence has to be on a screen.
     @Test("the browse surface renders the honest empty state when nothing comes back")
     func browseRendersTheHonestEmptyState() throws {
-        let source = try SourcePin.read(
+        let source = try SourcePin.readCode(
             "Patina/Features/Recommendations/Views/RecommendationsView.swift"
         )
         #expect(
@@ -125,6 +134,26 @@ struct ImagePlaceholderTests {
         #expect(
             !source.contains("Take the style quiz"),
             "browse still offers the quiz when the catalogue is empty — tuning taste cannot conjure rows that are not there"
+        )
+    }
+
+    /// `RL1D-R3-11`. The honest-empty sentence is a claim about the catalogue,
+    /// and browse's chip goes to the RPC as `p_category` — so an empty category
+    /// arrives through the same branch. Saying "your designer is still choosing
+    /// pieces for you" to a tester who tapped "Lighting" is a false statement
+    /// about a catalogue that is fine.
+    @Test("the honest empty state is claimed only for an empty catalogue, not an empty filter")
+    func theHonestEmptyStateIsOnlyClaimedForAnEmptyCatalogue() throws {
+        let source = try SourcePin.readCode(
+            "Patina/Features/Recommendations/Views/RecommendationsView.swift"
+        )
+        #expect(
+            source.contains("viewModel.activeFilter == \"All\""),
+            "browse renders the empty-catalogue sentence without checking whether a category filter is on"
+        )
+        #expect(
+            source.contains("PatinaEmptyStateContent.noPiecesInThisCategory"),
+            "the filtered-empty case has no sentence of its own"
         )
     }
 }
