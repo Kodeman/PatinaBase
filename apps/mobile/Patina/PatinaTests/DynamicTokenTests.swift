@@ -33,10 +33,10 @@ struct DynamicTokenTests {
                 ("Background.primary", PatinaColors.Background.primary),
                 ("Background.secondary", PatinaColors.Background.secondary)
             ] {
-                let r = PatinaContrast.ratio(PatinaColors.Border.hairline, on: ground, style)
+                let measured = PatinaContrast.ratio(PatinaColors.Border.hairline, on: ground, style)
                 #expect(
-                    r <= 1.6,
-                    "Border.hairline on \(name) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(r)):1 — a rule, not a hairline"
+                    measured <= 1.6,
+                    "Border.hairline on \(name) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1 — a rule, not a hairline"
                 )
             }
         }

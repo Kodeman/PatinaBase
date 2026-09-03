@@ -110,10 +110,24 @@ public struct PatinaButton: View {
                 }
             }
             .foregroundStyle(foregroundColor)
+            // A-63 (L1-F's note L1F→D-1): the capsule had no horizontal padding
+            // at all — its width came only from `maxWidth: .infinity`. Under
+            // `.fixedSize()` (which `PatinaEmptyState` applies to every CTA)
+            // that collapses to exactly the label's width, and a 26 pt corner
+            // radius on a 50 pt box is a circle that cuts its own text. The
+            // padding is inside the frame, so an intrinsically-sized capsule is
+            // always wider than its label; an `.infinity`-width call site
+            // absorbs it and is unchanged.
+            .padding(.horizontal, PatinaSpacing.lg)
             .frame(maxWidth: style == .ghost ? nil : .infinity)
             .frame(height: 52)
             .background(backgroundColor)
             .clipShape(Capsule())
+            // GAP1B-07 (L1-C's note D-L1C-2): `.ghost` has a clear background,
+            // so its accessibility frame collapsed to the text's own bounds —
+            // 17.6 pt on both decision-sheet Cancels. The hit region is the
+            // 52 pt capsule for every style now, not just the filled ones.
+            .contentShape(Capsule())
             .overlay(
                 Capsule()
                     .stroke(borderColor, lineWidth: style == .secondary ? 1.5 : 0)

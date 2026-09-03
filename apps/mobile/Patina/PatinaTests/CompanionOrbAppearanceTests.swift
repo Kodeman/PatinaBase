@@ -32,14 +32,14 @@ struct CompanionOrbAppearanceTests {
             "Background.dark resolves identically in both appearances — this is C-01's root"
         )
         for style in PatinaContrast.appearances {
-            let r = PatinaContrast.ratio(
+            let measured = PatinaContrast.ratio(
                 PatinaColors.Background.dark,
                 on: PatinaColors.Background.primary,
                 style
             )
             #expect(
-                r >= 1.8,
-                "the companion surface on the page in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(r)):1; C-01 measured 1.15:1 in dark"
+                measured >= 1.8,
+                "the companion surface on the page in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1; C-01 measured 1.15:1 in dark"
             )
         }
     }
@@ -48,14 +48,14 @@ struct CompanionOrbAppearanceTests {
     @Test("light ink on the companion surface stays clear of AA in both appearances")
     func theMarkStaysLegibleOnTheSurface() {
         for style in PatinaContrast.appearances {
-            let r = PatinaContrast.ratio(
+            let measured = PatinaContrast.ratio(
                 PatinaColors.OnDark.primary,
                 on: PatinaColors.Background.dark,
                 style
             )
             #expect(
-                r >= 4.5,
-                "OnDark.primary on the companion surface in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(r)):1"
+                measured >= 4.5,
+                "OnDark.primary on the companion surface in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1"
             )
         }
     }
@@ -93,15 +93,15 @@ struct CompanionOrbAppearanceTests {
     /// why it is wrong rather than going quietly green.
     @Test("Text.inverse is still the wrong token for a permanently dark panel")
     func textInverseIsStillWrongForThePanel() {
-        let r = PatinaContrast.ratio(
+        let measured = PatinaContrast.ratio(
             PatinaColors.Text.inverse,
             opacity: 0.72,
             on: PatinaColors.Background.dark,
             .dark
         )
         #expect(
-            r < 3.0,
-            "Text.inverse at 0.72 on the panel in dark now measures \(PatinaContrast.rounded(r)):1 — if this passes, C-02's premise changed and the note to L1-C needs rewriting"
+            measured < 3.0,
+            "Text.inverse at 0.72 on the panel in dark now measures \(PatinaContrast.rounded(measured)):1 — if this passes, C-02's premise changed and the note to L1-C needs rewriting"
         )
     }
 }

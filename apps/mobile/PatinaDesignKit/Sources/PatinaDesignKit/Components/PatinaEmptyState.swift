@@ -94,7 +94,7 @@ public extension PatinaEmptyStateContent {
     /// lands before build 1 (`D2`), every product surface has to say the same
     /// true thing when nothing comes back — and it must not offer a door there
     /// is nothing behind.
-    static let stillCuratingPieces = PatinaEmptyStateContent(
+    static let stillChoosingPieces = PatinaEmptyStateContent(
         icon: "square.stack",
         title: "Nothing here yet",
         message: "Your designer is still choosing pieces for you. This fills in as they do."
@@ -105,8 +105,8 @@ public extension PatinaEmptyStateContent {
     VStack(spacing: PatinaSpacing.xxl) {
         PatinaEmptyState(
             icon: "tray",
-            title: "No products yet",
-            message: "Products you capture will appear here, ready to add to a room."
+            title: "Still building the collection",
+            message: "New pieces are added by hand — check back soon."
         )
 
         PatinaEmptyState(

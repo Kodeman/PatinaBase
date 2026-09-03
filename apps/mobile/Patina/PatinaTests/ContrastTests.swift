@@ -48,10 +48,10 @@ struct ContrastTests {
         for style in PatinaContrast.appearances {
             for (inkName, ink) in body {
                 for (groundName, ground) in Self.grounds {
-                    let r = PatinaContrast.ratio(ink, on: ground, style)
+                    let measured = PatinaContrast.ratio(ink, on: ground, style)
                     #expect(
-                        r >= 4.5,
-                        "\(inkName) on \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(r)):1, below the 4.5:1 body bar"
+                        measured >= 4.5,
+                        "\(inkName) on \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below the 4.5:1 body bar"
                     )
                 }
             }
@@ -62,10 +62,10 @@ struct ContrastTests {
     func metaTextClearsTheMetaBar() {
         for style in PatinaContrast.appearances {
             for (groundName, ground) in Self.grounds {
-                let r = PatinaContrast.ratio(PatinaColors.Text.muted, on: ground, style)
+                let measured = PatinaContrast.ratio(PatinaColors.Text.muted, on: ground, style)
                 #expect(
-                    r >= 3.0,
-                    "Text.muted on \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(r)):1, below the 3:1 meta bar"
+                    measured >= 3.0,
+                    "Text.muted on \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below the 3:1 meta bar"
                 )
             }
         }
@@ -98,10 +98,10 @@ struct ContrastTests {
     func interactiveInkClearsAA() {
         for style in PatinaContrast.appearances {
             for (groundName, ground) in Self.grounds {
-                let r = PatinaContrast.ratio(PatinaColors.Text.interactive, on: ground, style)
+                let measured = PatinaContrast.ratio(PatinaColors.Text.interactive, on: ground, style)
                 #expect(
-                    r >= 4.5,
-                    "Text.interactive on \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(r)):1, below 4.5:1"
+                    measured >= 4.5,
+                    "Text.interactive on \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below 4.5:1"
                 )
             }
         }
@@ -113,14 +113,14 @@ struct ContrastTests {
     func everyFilledButtonLabelClearsAA() {
         for style in PatinaContrast.appearances {
             for buttonStyle in PatinaButtonStyle.filledCases {
-                let r = PatinaContrast.ratio(
+                let measured = PatinaContrast.ratio(
                     buttonStyle.patinaLabelColor,
                     on: buttonStyle.patinaFillColor,
                     style
                 )
                 #expect(
-                    r >= 4.5,
-                    "PatinaButton .\(buttonStyle) label on its fill in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(r)):1, below 4.5:1"
+                    measured >= 4.5,
+                    "PatinaButton .\(buttonStyle) label on its fill in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below 4.5:1"
                 )
             }
         }
@@ -131,10 +131,10 @@ struct ContrastTests {
     @Test("the tier pill's label clears AA on its own fill")
     func tierPillLabelClearsAA() {
         for style in PatinaContrast.appearances {
-            let r = PatinaContrast.ratio(TierPill.labelColor, on: TierPill.fillColor, style)
+            let measured = PatinaContrast.ratio(TierPill.labelColor, on: TierPill.fillColor, style)
             #expect(
-                r >= 4.5,
-                "TierPill label on its fill in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(r)):1, below 4.5:1"
+                measured >= 4.5,
+                "TierPill label on its fill in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below 4.5:1"
             )
         }
     }

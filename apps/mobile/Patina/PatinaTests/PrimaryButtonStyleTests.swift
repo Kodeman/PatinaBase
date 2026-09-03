@@ -28,18 +28,18 @@ struct PrimaryButtonStyleTests {
             let primaryFill = PatinaContrast.components(PatinaButtonStyle.primary.patinaFillColor, style)
             let clayFill = PatinaContrast.components(PatinaButtonStyle.clay.patinaFillColor, style)
             #expect(
-                abs(primaryFill.r - clayFill.r) < 0.002
-                    && abs(primaryFill.g - clayFill.g) < 0.002
-                    && abs(primaryFill.b - clayFill.b) < 0.002,
+                abs(primaryFill.red - clayFill.red) < 0.002
+                    && abs(primaryFill.green - clayFill.green) < 0.002
+                    && abs(primaryFill.blue - clayFill.blue) < 0.002,
                 "in \(PatinaContrast.name(style)) .clay and .primary still fill with different colours — C-41's two competing primaries"
             )
 
             let primaryLabel = PatinaContrast.components(PatinaButtonStyle.primary.patinaLabelColor, style)
             let clayLabel = PatinaContrast.components(PatinaButtonStyle.clay.patinaLabelColor, style)
             #expect(
-                abs(primaryLabel.r - clayLabel.r) < 0.002
-                    && abs(primaryLabel.g - clayLabel.g) < 0.002
-                    && abs(primaryLabel.b - clayLabel.b) < 0.002,
+                abs(primaryLabel.red - clayLabel.red) < 0.002
+                    && abs(primaryLabel.green - clayLabel.green) < 0.002
+                    && abs(primaryLabel.blue - clayLabel.blue) < 0.002,
                 "in \(PatinaContrast.name(style)) .clay and .primary label in different colours"
             )
         }
@@ -55,7 +55,7 @@ struct PrimaryButtonStyleTests {
             for buttonStyle in PatinaButtonStyle.filledCases {
                 let fill = PatinaContrast.components(buttonStyle.patinaFillColor, style)
                 #expect(
-                    !(abs(accent.r - fill.r) < 0.002 && abs(accent.g - fill.g) < 0.002 && abs(accent.b - fill.b) < 0.002),
+                    !(abs(accent.red - fill.red) < 0.002 && abs(accent.green - fill.green) < 0.002 && abs(accent.blue - fill.blue) < 0.002),
                     "PatinaButton .\(buttonStyle) fills with the accent in \(PatinaContrast.name(style))"
                 )
             }
@@ -75,6 +75,34 @@ struct PrimaryButtonStyleTests {
             !source.contains("isEnabled ? PatinaColors"),
             "PatinaButton picks a different colour when disabled — that is the A-90 pattern"
         )
+    }
+
+    /// `A-63` (L1-F's note) and `GAP1B-07` (L1-C's note), both of which resolve
+    /// to the same three lines of this lane's component.
+    ///
+    /// `A-63`: the capsule had no horizontal padding, so under the `.fixedSize()`
+    /// `PatinaEmptyState` applies it collapsed to the label's own width — the
+    /// guest bell's "Sign in" measured 50.17 × 53.5 pt, a circle cutting its own
+    /// text. `GAP1B-07`: `.ghost` has a clear background and no content shape, so
+    /// its hit region was the text's bounds — 17.6 pt on both decision sheets.
+    @Test("the capsule is wider than its label, and every style's hit region is the capsule")
+    func theCapsuleIsAControlNotAnOutline() throws {
+        let source = try SourcePin.read(
+            "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaButton.swift"
+        )
+        #expect(
+            source.contains(".padding(.horizontal, PatinaSpacing.lg)"),
+            "PatinaButton has no horizontal padding — A-63"
+        )
+        #expect(
+            source.contains(".contentShape(Capsule())"),
+            "PatinaButton's hit region is still the label's bounds for .ghost — GAP1B-07"
+        )
+        // The padding has to sit INSIDE the frame, or an .infinity-width call
+        // site grows by 48 pt and every sheet footer moves.
+        let padding = try #require(source.range(of: ".padding(.horizontal, PatinaSpacing.lg)"))
+        let frame = try #require(source.range(of: ".frame(maxWidth: style == .ghost ? nil : .infinity)"))
+        #expect(padding.lowerBound < frame.lowerBound, "the padding is applied outside the frame")
     }
 
     /// `P-35` / `C3-03`. Pure black on the warm near-black canvas is 1.27:1 —

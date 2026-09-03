@@ -50,14 +50,14 @@ struct ImagePlaceholderTests {
     @Test("overlay chrome on a light tile holds its contrast")
     func overlayChromeHoldsContrastOverALightTile() {
         for style in PatinaContrast.appearances {
-            let r = PatinaContrast.ratio(
+            let measured = PatinaContrast.ratio(
                 PatinaColors.OnDark.primary,
                 on: PatinaColors.Scrim.chrome,
                 style
             )
             #expect(
-                r >= 4.5,
-                "chrome ink on the scrim in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(r)):1; C-27 measured 2.01:1 over a blank tile"
+                measured >= 4.5,
+                "chrome ink on the scrim in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1; C-27 measured 2.01:1 over a blank tile"
             )
         }
     }
@@ -66,11 +66,11 @@ struct ImagePlaceholderTests {
     /// the catalogue lands (`D2`), the app has to say something true when it
     /// does — one sentence, in one place, so all four product surfaces say it
     /// the same way.
-    @Test("the still-curating state exists, says something true, and leads nowhere dead")
-    func stillCuratingStateIsAvailable() {
-        let state = PatinaEmptyStateContent.stillCuratingPieces
+    @Test("the empty-catalogue state exists, says something true, and leads nowhere dead")
+    func emptyCatalogueStateIsAvailable() {
+        let state = PatinaEmptyStateContent.stillChoosingPieces
         #expect(state.title == "Nothing here yet")
         #expect(state.message == "Your designer is still choosing pieces for you. This fills in as they do.")
-        #expect(state.ctaTitle == nil, "the still-curating state must not offer an action there is nothing behind")
+        #expect(state.ctaTitle == nil, "the empty-catalogue state must not offer an action there is nothing behind")
     }
 }
