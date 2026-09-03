@@ -6,7 +6,7 @@
  * the union when you call `useHelpContent('my-key', 'tooltip', 'designer')`.
  */
 
-export type Persona = 'designer' | 'maker' | 'consumer' | 'admin' | 'all'
+export type Persona = 'designer' | 'teammate' | 'maker' | 'consumer' | 'admin' | 'all'
 
 export type HelpContentType =
   | 'tooltip'

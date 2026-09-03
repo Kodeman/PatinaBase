@@ -36,6 +36,7 @@ export default defineType({
       options: {
         list: [
           { title: 'Designer', value: 'designer' },
+          { title: 'Teammate', value: 'teammate' },
           { title: 'Maker / Manufacturer', value: 'maker' },
           { title: 'Consumer', value: 'consumer' },
           { title: 'Admin', value: 'admin' },

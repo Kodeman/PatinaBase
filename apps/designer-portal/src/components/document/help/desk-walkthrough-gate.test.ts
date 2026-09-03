@@ -7,6 +7,7 @@ import {
   shouldAutoOpenDeskWalkthrough,
   shouldOfferDeskWalkthrough,
   hasDeskWalkthroughReplayParam,
+  resolveDeskWalkthroughPersona,
   DESK_WALKTHROUGH_SHIP_DATE,
   type DeskWalkthroughGateInput,
 } from './desk-walkthrough-gate';
@@ -191,5 +192,43 @@ describe('hasDeskWalkthroughReplayParam', () => {
   it('does not match an empty or unrelated search', () => {
     expect(hasDeskWalkthroughReplayParam('')).toBe(false);
     expect(hasDeskWalkthroughReplayParam('?person=abc')).toBe(false);
+  });
+});
+
+describe('resolveDeskWalkthroughPersona (flag onboarding-teammate-persona, L7)', () => {
+  it('resolves designer for an owner, flag on', () => {
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: false, membershipRole: 'owner' }),
+    ).toBe('designer');
+  });
+
+  it('resolves teammate for a non-owner active member, flag on', () => {
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: false, membershipRole: 'member' }),
+    ).toBe('teammate');
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: false, membershipRole: 'admin' }),
+    ).toBe('teammate');
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: false, membershipRole: 'guest' }),
+    ).toBe('teammate');
+  });
+
+  it('resolves designer when there is no membership, flag on', () => {
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: false, membershipRole: null }),
+    ).toBe('designer');
+  });
+
+  it('resolves designer when the flag is off, even for a non-owner member', () => {
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: false, flagLoading: false, membershipRole: 'member' }),
+    ).toBe('designer');
+  });
+
+  it('resolves designer while the flag is loading, even for a non-owner member', () => {
+    expect(
+      resolveDeskWalkthroughPersona({ flagEnabled: true, flagLoading: true, membershipRole: 'member' }),
+    ).toBe('designer');
   });
 });

@@ -51,7 +51,7 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useProfile } from '@patina/supabase';
+import { useOrganizations, useProfile } from '@patina/supabase';
 import {
   SurfaceKeys,
   TourController,
@@ -63,6 +63,7 @@ import {
   type TourState,
 } from '@patina/help-system';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { markMarginNoteSeen } from '@/components/document/margin-note';
 import { openCaptureLead } from '@/components/document/command-bar';
@@ -70,6 +71,7 @@ import { useHelpState } from './help-state-provider';
 import {
   DESK_WALKTHROUGH_TOUR_ID,
   hasDeskWalkthroughReplayParam,
+  resolveDeskWalkthroughPersona,
   shouldAutoOpenDeskWalkthrough,
   shouldOfferDeskWalkthrough,
 } from './desk-walkthrough-gate';
@@ -187,6 +189,45 @@ const STEPS: CoachmarkStep[] = [
   },
 ];
 
+// ─── The six steps, teammate persona (L7, flag `onboarding-teammate-persona`) ─
+//
+// Same anchors, same order, same surface keys as STEPS above — only the
+// fallback copy differs (Sanity's `coachmarkContent` schema already carries
+// per-persona copy for these surface keys, so a published teammate variant
+// wins over this fallback exactly like the designer path). Bodies quoted
+// verbatim from proposals/customer-success-lead.md §3 "The first hire's
+// first day" table; steps 3 and 5 are unchanged from the designer copy —
+// the proposal notes they were "already right for anyone."
+const STEPS_TEAMMATE: CoachmarkStep[] = [
+  {
+    ...STEPS[0],
+    fallbackHeading: 'The Desk',
+    fallbackBody:
+      "Every live job in the studio lands here, one line each. A mark at the margin means someone's hand is needed — not always yours.",
+  },
+  {
+    ...STEPS[1],
+    fallbackHeading: 'One client, one document',
+    fallbackBody:
+      "Each client's work is one document, brief through care. Pick one up and the studio sees what you did in it.",
+  },
+  { ...STEPS[2] },
+  {
+    ...STEPS[3],
+    fallbackHeading: 'The studio drawer',
+    fallbackBody:
+      "The studio's doors, always at the bottom. Hours log themselves while a document is in hand, so time you spend here is time the studio can bill.",
+  },
+  { ...STEPS[4] },
+  {
+    ...STEPS[5],
+    fallbackHeading: 'Begin with a lead',
+    fallbackBody:
+      "Anything you begin here belongs to the studio, not to you. Start where you're asked; the rest keeps.",
+    fallbackCtaLabel: 'Capture a lead',
+  },
+];
+
 // ─── Suppression + offer context (shared with desk/page.tsx) ──────────────────
 
 interface DeskWalkthroughContextValue {
@@ -273,6 +314,24 @@ function DeskWalkthroughInner() {
   const { setSuppressFirstTouch, setOfferEligible } = useContext(DeskWalkthroughContext);
   const { data: profile } = useProfile();
   const { isLoading: engagementsLoading } = useDeskEngagements();
+
+  // ── L7 — teammate persona (flag `onboarding-teammate-persona`) ────────────
+  //
+  // owner → 'designer'; any other active organization_members role →
+  // 'teammate'; no membership / flag off / flag loading → 'designer' (today's
+  // behaviour, unchanged). `resolveDeskWalkthroughPersona` is the pure gate
+  // this reads through.
+  const { value: teammatePersonaFlagOn, isLoading: teammatePersonaFlagLoading } =
+    useFeatureFlag('onboarding-teammate-persona');
+  const { data: orgs } = useOrganizations();
+  const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
+  const persona = resolveDeskWalkthroughPersona({
+    flagEnabled: teammatePersonaFlagOn,
+    flagLoading: teammatePersonaFlagLoading,
+    membershipRole:
+      studio?.membership.status === 'active' ? studio.membership.role : null,
+  });
+  const steps = persona === 'teammate' ? STEPS_TEAMMATE : STEPS;
 
   const [isDesktop, setIsDesktop] = useState(false);
   const [tourRecord, setTourRecord] = useState<TourState>({});
@@ -498,16 +557,24 @@ function DeskWalkthroughInner() {
         onSkip={handleSkip}
         onLater={handleLater}
         laterLabel="Show me later"
-        persona="designer"
-        fallbackTitle="This is your Desk"
-        fallbackBody="Every client’s project is one document, and every document lives here. Six stops, about a minute, and you’ll know your way around. You can leave at any step."
+        persona={persona}
+        fallbackTitle={
+          persona === 'teammate'
+            ? `You're in — ${studio?.name ?? 'the studio'}.`
+            : 'This is your Desk'
+        }
+        fallbackBody={
+          persona === 'teammate'
+            ? 'From here, her desk and yours are the same desk. Six stops, about a minute.'
+            : 'Every client’s project is one document, and every document lives here. Six stops, about a minute, and you’ll know your way around. You can leave at any step.'
+        }
         className="shadow-none"
       />
 
       <TourController
         tourId={DESK_WALKTHROUGH_TOUR_ID}
-        steps={STEPS}
-        persona="designer"
+        steps={steps}
+        persona={persona}
         paused={commandBarOpen}
         coachmarkClassName={COACHMARK_CLASSNAME}
         onComplete={handleComplete}
