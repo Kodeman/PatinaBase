@@ -22,18 +22,27 @@ struct StudioHubView: View {
                 guestState
             } else if viewModel.isLoading && !viewModel.hasLoaded {
                 loadingState
-            } else if viewModel.failedSources.count == 7 {
-                errorState
             } else {
-                if let loadMessage = viewModel.loadMessage {
-                    partialLoadNotice(loadMessage)
-                }
+                // L07-05: the staleness line is drawn ABOVE the branch, so it
+                // reaches the total-failure shape too. Inside the `else` it was
+                // structurally unreachable — the one shape that most needs it —
+                // and a warm hub kept printing "5 things need your eye" as
+                // current with every section replaced by the error card and
+                // nothing anywhere saying when that count was last true.
                 if let stalenessLine = viewModel.stalenessLine {
                     StudioHubStalenessLine(text: stalenessLine)
                 }
 
-                ForEach(StudioQueueSectionKind.allCases) { kind in
-                    sectionCard(viewModel.snapshot.section(kind))
+                if viewModel.failedSources.count == 7 {
+                    errorState
+                } else {
+                    if let loadMessage = viewModel.loadMessage {
+                        partialLoadNotice(loadMessage)
+                    }
+
+                    ForEach(StudioQueueSectionKind.allCases) { kind in
+                        sectionCard(viewModel.snapshot.section(kind))
+                    }
                 }
             }
         }
@@ -68,7 +77,14 @@ struct StudioHubView: View {
                     .foregroundStyle(PatinaColors.Text.interactive)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel("Studio summary: \(hint)")
-            } else if viewModel.hasLoaded {
+            } else if viewModel.hasLoaded && viewModel.failedSources.isEmpty {
+                // R-01: `hasLoaded` alone is "a load finished", not "a load
+                // answered". A failed refresh leaves every hint nil, so the
+                // hub printed "Nothing needs your attention right now."
+                // directly above its own "We couldn't gather your Studio"
+                // card — an assertion of emptiness on the strength of a
+                // request that never landed. Emptiness is only claimable when
+                // something actually came back.
                 Text("Nothing needs your attention right now.")
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.secondary)

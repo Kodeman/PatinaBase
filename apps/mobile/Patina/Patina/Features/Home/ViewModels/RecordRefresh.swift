@@ -30,6 +30,9 @@ enum RecordRefresh {
     enum Step: String, Equatable {
         case discardedForeignRecord
         case paintedSnapshot
+        /// R-02: the sources did not answer and a record was on disk, so this
+        /// pass built nothing, saved nothing and stamped nothing.
+        case keptPreviousRecord
         case built
         case saved
         case attributed
@@ -55,6 +58,15 @@ enum RecordRefresh {
     ///     nothing: moving "when you last saw the Record" forward on an open
     ///     that showed nothing takes the `isNew` ticks off rows nobody's eyes
     ///     reached (C5). The caller that does put the record on screen stamps.
+    ///   - sourcesAnswered: whether the fetches the builder reads came back.
+    ///     False means every one of them failed, so `build` would compose the
+    ///     record out of zeros it never learned — and step 3 would write that
+    ///     over the record on disk. R-02: the first offline cold launch lost
+    ///     the designer seat, and the NEXT one opened on "Nothing needs you
+    ///     right now." / "Nothing moved yet." for a client with an overdue
+    ///     decision, an unpaid invoice and a sent proposal. One pull-to-refresh
+    ///     brought all of it back, which is the proof the data was never gone:
+    ///     the failed refresh is what deleted it.
     @discardableResult
     static func run(
         snapshots: RecordSnapshotStore = .shared,
@@ -63,6 +75,7 @@ enum RecordRefresh {
         sessionUserId: String?,
         now: Date = Date(),
         stampVisit: Bool = true,
+        sourcesAnswered: Bool = true,
         build: (_ previous: HouseRecord?, _ lastSeenAt: Date?) -> HouseRecord,
         paint: (HouseRecord) -> Void
     ) -> Outcome {
@@ -86,6 +99,15 @@ enum RecordRefresh {
         if let previous {
             paint(previous)
             steps.append(.paintedSnapshot)
+        }
+
+        // R-02: nothing answered, and there is a record on disk. It is already
+        // painted; leave the file, the attribution and the visit stamp alone.
+        // Not stamping is deliberate — a refresh that learned nothing must not
+        // take the `isNew` ticks off rows on the strength of it.
+        if !sourcesAnswered, let previous {
+            steps.append(.keptPreviousRecord)
+            return Outcome(record: previous, steps: steps)
         }
 
         let record = build(previous, lastSeen.lastSeenAt)

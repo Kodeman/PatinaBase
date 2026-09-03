@@ -177,6 +177,15 @@ final class BadgeCountService {
         let proposalsAwaitingSignatureCount: Int
         let payableInvoiceCount: Int
         let projectCount: Int
+        /// R-02, second half. The counts alone restore the numbers and lose the
+        /// SEAT: `DesignerSeat.make` reads these rows, not `projectCount`, so
+        /// an offline cold launch drew a house with no designer in it — the
+        /// walk's shots 36/37. Decoded as `[]` on a payload written before this
+        /// field existed, which is the same floor the counts already have.
+        /// Optional so a payload written before this field existed still
+        /// decodes — an absent key is `nil`, not a decode failure that would
+        /// throw the whole floor away.
+        let projects: [RemoteProject]?
         let storedAt: Date
     }
 
@@ -226,6 +235,10 @@ final class BadgeCountService {
         proposalsAwaitingSignatureCount = stored.proposalsAwaitingSignatureCount
         payableInvoiceCount = stored.payableInvoiceCount
         projectCount = stored.projectCount
+        // `projectsLoaded` stays FALSE: these rows are a floor to draw, not a
+        // claim that `listProjects()` answered. Everything that gates on a
+        // fetch having landed still waits for one.
+        projects = stored.projects ?? []
     }
 
     private func persistCounts(now: Date = Date()) {
@@ -237,6 +250,7 @@ final class BadgeCountService {
             proposalsAwaitingSignatureCount: proposalsAwaitingSignatureCount,
             payableInvoiceCount: payableInvoiceCount,
             projectCount: projectCount,
+            projects: projects,
             storedAt: now
         )
         guard let data = try? encoder.encode(stored) else { return }

@@ -298,6 +298,12 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     HouseRecordCard(
                         record: viewModel.record,
                         drawsEmpties: AuthService.shared.isAuthenticated && tier >= .engaged,
+                        // R-03: the Studio says when its numbers are from and
+                        // Today said nothing at all. Same rule, same words.
+                        stalenessLine: RecordStaleness.line(
+                            refreshFailed: badges.lastRefreshFailed,
+                            record: viewModel.record
+                        ),
                         onRow: openRecordRow,
                         onSeeAll: { half in
                             PostHogService.shared.capture("today_record_see_all_tapped", properties: [

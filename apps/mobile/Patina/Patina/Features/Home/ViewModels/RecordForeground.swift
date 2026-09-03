@@ -139,6 +139,13 @@ enum RecordForeground {
         let outcome = RecordRefresh.run(
             sessionUserId: AuthService.shared.currentUserId,
             stampVisit: stampVisit,
+            // R-02: the builder is pure and reads whatever `BadgeCountService`
+            // is holding. When every one of its fetches failed it is holding
+            // no rows, so the record it composes is empty — and saving that
+            // over the snapshot is what turned the SECOND offline cold launch
+            // into "Nothing needs you right now." A refresh that learned
+            // nothing must not be allowed to write.
+            sourcesAnswered: !BadgeCountService.shared.lastRefreshFailed,
             build: { previous, lastSeenAt in
                 HouseRecordBuilder.build(
                     from: BadgeCountService.shared,

@@ -82,6 +82,42 @@ struct BadgeCountPersistenceTests {
         #expect(next.projectCount == 2)
     }
 
+    /// R-02's other half, walked. The counts alone restore the NUMBERS and lose
+    /// the SEAT: `DesignerSeat.make` reads `projects`, not `projectCount`, so
+    /// the walk's first offline cold launch kept the record rows and drew a
+    /// house with no designer in it (shots 36/37). The rows are the floor too.
+    @Test("the project rows survive a cold launch, not just their count")
+    func theProjectRowsSurviveAColdLaunch() throws {
+        let store = defaults()
+        try loaded(BadgeCountService.makeForTests(defaults: store))
+
+        let next = BadgeCountService.makeForTests(defaults: store)
+
+        #expect(next.projects.count == 2)
+        #expect(next.projects.map(\.name) == ["Oak Street", "Aspen Loft"])
+        // …and they are still only a floor.
+        #expect(next.projectsLoaded == false)
+    }
+
+    /// A payload written before the rows joined the blob still decodes. If it
+    /// threw, the whole floor — every count — would go with it.
+    @Test("a pre-rows payload still restores its counts")
+    func anOlderPayloadStillDecodes() throws {
+        let store = defaults()
+        let json = """
+        {"pendingDecisionCount":3,"unreadMessageCount":1,
+         "proposalsAwaitingSignatureCount":0,"payableInvoiceCount":2,
+         "projectCount":2,"storedAt":"2026-09-03T12:00:00Z"}
+        """
+        store.set(Data(json.utf8), forKey: "patina.badge_counts.last_successful.v1")
+
+        let next = BadgeCountService.makeForTests(defaults: store)
+
+        #expect(next.pendingDecisionCount == 3)
+        #expect(next.payableInvoiceCount == 2)
+        #expect(next.projects.isEmpty)
+    }
+
     /// The whole point of the finding: a restored number is not an answer.
     @Test("restored counts do not claim a fetch answered")
     func theFloorIsNotALoadedClaim() throws {

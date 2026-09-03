@@ -227,4 +227,89 @@ struct RecordRefreshOrderTests {
 
         #expect(!outcome.steps.contains(.discardedForeignRecord))
     }
+
+    // MARK: - R-02 · a refresh that learned nothing must not write
+
+    /// The walk's shot 83: a client with an overdue decision, an unpaid invoice
+    /// and a sent proposal opened Today on "Nothing needs you right now." /
+    /// "Nothing moved yet." One pull-to-refresh brought all of it back, which
+    /// is the proof the rows were never gone — the PREVIOUS offline launch had
+    /// built an empty record out of five failed fetches and saved it over the
+    /// snapshot.
+    @Test("a failed refresh keeps the record on disk instead of writing zeros over it")
+    func aFailedRefreshDoesNotEmptyTheRecord() {
+        let (snapshots, lastSeen, owner) = stores()
+        snapshots.save(record(lastSeenAt: nil, moved: [row(id: "kept")]))
+        owner.stamp("client-a")
+
+        var built = false
+        var painted: [String] = []
+
+        let outcome = RecordRefresh.run(
+            snapshots: snapshots, lastSeen: lastSeen, owner: owner,
+            sessionUserId: "client-a",
+            sourcesAnswered: false,
+            build: { _, _ in
+                built = true
+                return record(lastSeenAt: nil)
+            },
+            paint: { painted.append($0.moved.first?.id ?? "empty") }
+        )
+
+        #expect(!built, "the builder ran on rows nothing fetched")
+        #expect(painted == ["kept"], "the empty record reached the screen")
+        #expect(outcome.record.moved.first?.id == "kept")
+        #expect(outcome.steps.contains(.keptPreviousRecord))
+        #expect(!outcome.steps.contains(.saved), "the empty record was written to disk")
+        // And the file itself still holds the rows.
+        #expect(snapshots.load()?.moved.first?.id == "kept")
+    }
+
+    /// The visit stamp goes with it: a refresh that learned nothing must not
+    /// take the `isNew` ticks off rows on the strength of it.
+    @Test("a failed refresh does not claim the visit")
+    func aFailedRefreshDoesNotStampTheVisit() {
+        let (snapshots, lastSeen, owner) = stores()
+        snapshots.save(record(lastSeenAt: nil, moved: [row(id: "kept")]))
+        owner.stamp("client-a")
+
+        let outcome = RecordRefresh.run(
+            snapshots: snapshots, lastSeen: lastSeen, owner: owner,
+            sessionUserId: "client-a",
+            stampVisit: true,
+            sourcesAnswered: false,
+            build: { _, _ in record(lastSeenAt: nil) },
+            paint: { _ in }
+        )
+
+        #expect(!outcome.steps.contains(.stamped))
+        #expect(lastSeen.lastSeenAt == nil)
+    }
+
+    /// The first launch on a dead network has nothing to keep, so the pass
+    /// still runs: an empty record is the honest answer when there has never
+    /// been another one.
+    @Test("with no record on disk a failed refresh still builds")
+    func aFailedRefreshWithNothingHeldStillBuilds() {
+        let (snapshots, lastSeen, owner) = stores()
+
+        let outcome = RecordRefresh.run(
+            snapshots: snapshots, lastSeen: lastSeen, owner: owner,
+            sessionUserId: "client-a",
+            sourcesAnswered: false,
+            build: { _, _ in record(lastSeenAt: nil) },
+            paint: { _ in }
+        )
+
+        #expect(outcome.steps.contains(.built))
+        #expect(!outcome.steps.contains(.keptPreviousRecord))
+    }
+
+    /// And the ask is wired: `RecordForeground` is the one production caller,
+    /// and it has to hand the verdict over or the guard above is decoration.
+    @Test("the foreground pass tells the refresh whether anything answered")
+    func theForegroundPassPassesTheVerdict() throws {
+        let source = try SourcePin.read("Patina/Features/Home/ViewModels/RecordForeground.swift")
+        #expect(source.contains("sourcesAnswered: !BadgeCountService.shared.lastRefreshFailed"))
+    }
 }

@@ -180,6 +180,40 @@ enum HouseRecordDates {
     static let needsYouEmpty = "Nothing needs you right now."
 }
 
+// MARK: - Staleness (R-03)
+
+/// When the Record on screen is not what the house holds, Today says so — in a
+/// word, never a dot and never a badge (VISION §6, the same constraint
+/// `StudioHubViewModel.stalenessLine` carries).
+///
+/// R-03's third half went to L1-B after merge and nothing ever produced a line:
+/// `grep stalenessLine` resolved only to the Studio. So Today drew a record
+/// composed before the network died with no signal of any kind, and the reader
+/// had no way to tell a quiet house from an unreachable one.
+enum RecordStaleness {
+
+    /// - Parameters:
+    ///   - refreshFailed: `BadgeCountService.lastRefreshFailed` — every one of
+    ///     the fetches the Record is built from came back empty-handed.
+    ///   - record: what is on screen. An empty record is not stale, it is the
+    ///     error state, and the card's own empty lines carry it.
+    static func line(
+        refreshFailed: Bool,
+        record: HouseRecord?,
+        now: Date = Date()
+    ) -> String? {
+        guard refreshFailed, let record else { return nil }
+        guard !record.needsYou.isEmpty || !record.moved.isEmpty else { return nil }
+        return "Last updated \(formatter.localizedString(for: record.window.end, relativeTo: now))."
+    }
+
+    private static let formatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
+}
+
 // MARK: - The card
 
 struct HouseRecordCard: View {
@@ -193,6 +227,8 @@ struct HouseRecordCard: View {
     /// True from engaged upward. Only there is an empty half a true answer;
     /// below it the caller does not mount the card at all.
     let drawsEmpties: Bool
+    /// R-03: `RecordStaleness.line(...)`, or nil when the last refresh answered.
+    var stalenessLine: String?
     var now: Date = Date()
     var onRow: (HouseRecordRow) -> Void = { _ in }
     var onSeeAll: (Half) -> Void = { _ in }
@@ -207,6 +243,15 @@ struct HouseRecordCard: View {
                     .foregroundStyle(PatinaColors.Text.muted)
                     .padding(.bottom, PatinaSpacing.sm)
                     .accessibilityAddTraits(.isHeader)
+            }
+
+            if let stalenessLine {
+                Text(stalenessLine)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, PatinaSpacing.sm)
+                    .accessibilityIdentifier("DailyRoomView.RecordStaleness")
             }
 
             half(

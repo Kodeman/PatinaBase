@@ -464,4 +464,33 @@ extension LoadStateHonestyTests {
         )
         #expect(code.contains("stalenessLine"))
     }
+
+    /// `L07-05`, walked. O12 put the render site inside the branch that draws
+    /// the SECTIONS, so the one shape that most needs the line — every source
+    /// failed, every section replaced by the error card, "5 things need your
+    /// eye" still printed as current — could never reach it. The line has to
+    /// be drawn above the branch, not inside its healthy arm.
+    @Test
+    func theStalenessLineIsDrawnAboveTheErrorBranch() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Profile/Views/StudioHubView.swift")
+        )
+        let staleness = try #require(code.range(of: "StudioHubStalenessLine(text: stalenessLine)"))
+        let errorArm = try #require(code.range(of: "viewModel.failedSources.count == 7"))
+        #expect(staleness.lowerBound < errorArm.lowerBound,
+                "the staleness line is still unreachable in the total-failure shape (L07-05)")
+    }
+
+    /// `R-01`, walked. `hasLoaded` means "a load finished", not "a load
+    /// answered", so the header printed "Nothing needs your attention right
+    /// now." directly above its own "We couldn't gather your Studio" card.
+    @Test
+    func theStudioHubDoesNotAssertEmptinessOnAFailedLoad() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Profile/Views/StudioHubView.swift")
+        )
+        #expect(!code.contains("} else if viewModel.hasLoaded {"),
+                "the empty-summary sentence still prints on a failed load (R-01)")
+        #expect(code.contains("viewModel.hasLoaded && viewModel.failedSources.isEmpty"))
+    }
 }
