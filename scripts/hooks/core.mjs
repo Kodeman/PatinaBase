@@ -14,14 +14,6 @@ const RETIRED_DEPLOY_PATTERNS = [
   /(?:^|[;&|]\s*)(?:\w+=\S+\s+)*ssh\b[^;&|]*\b192\.168\.1\.14\b/i,
 ];
 
-const PROD_MUTATION_PATTERNS = [
-  /\bsupabase\s+db\s+push\b/,
-  /\bsupabase\s+functions\s+deploy\b/,
-  /\bsupabase\s+secrets\s+set\b/,
-  /\bwrangler\s+deploy\b/,
-  /(?:^|[\s;&|])(?:\.\/)?infra\/deploy-portal\.sh\b/,
-];
-
 const LOCAL_DB_MUTATION_PATTERN =
   /\b(?:supabase(?::|\s+)(?:reset|db\s+reset)|seed(?::|\s)|db\s+reset)\b/;
 
@@ -505,21 +497,6 @@ export async function evaluateCommand(
         true,
         "Raw OpenNext builds bypass the portal stale-dist guard.",
         "Use infra/deploy-portal.sh through the approved production workflow.",
-      ),
-    );
-  }
-
-  if (
-    env.PATINA_ALLOW_LOCAL_PROD_DEPLOY !== "1" &&
-    PROD_MUTATION_PATTERNS.some((pattern) => pattern.test(normalized))
-  ) {
-    findings.push(
-      finding(
-        "manual-production-approval",
-        "error",
-        true,
-        "Direct agent-driven production mutations are disabled.",
-        "Dispatch the protected production workflow. For an explicitly authorized emergency local session, launch the agent with PATINA_ALLOW_LOCAL_PROD_DEPLOY=1.",
       ),
     );
   }

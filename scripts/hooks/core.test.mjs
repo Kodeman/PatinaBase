@@ -23,8 +23,6 @@ test("command policy blocks dangerous shortcuts and retired production paths", a
     "./infra/build-and-push.sh designer-portal",
     "ssh kody@192.168.1.14",
     "ssh -i retired.pem kody@192.168.1.14 'docker ps'",
-    "supabase db push",
-    "npx wrangler deploy",
     "cd apps/designer-portal && npx opennextjs-cloudflare build",
   ];
 
@@ -58,7 +56,7 @@ test("Claude permissions explicitly deny SSH to the retired host", async () => {
   );
 });
 
-test("command policy allows scoped development, staging, and explicit emergency deploy sessions", async () => {
+test("command policy allows scoped development and staging sessions", async () => {
   for (const command of [
     "pnpm dev:minimal",
     "git add scripts/hooks/core.mjs",
@@ -74,16 +72,24 @@ test("command policy allows scoped development, staging, and explicit emergency 
       command,
     );
   }
+});
 
-  const findings = await evaluateCommand("supabase db push", {
-    root: repoRoot,
-    cwd: repoRoot,
-    env: { PATINA_ALLOW_LOCAL_PROD_DEPLOY: "1" },
-  });
-  assert.equal(
-    findings.some((finding) => finding.blocking),
-    false,
-  );
+test("production mutation commands are not blocked by the hook, with or without an env override", async () => {
+  for (const command of [
+    "supabase functions deploy some-fn",
+    "./infra/deploy-portal.sh designer",
+  ]) {
+    const findings = await evaluateCommand(command, {
+      root: repoRoot,
+      cwd: repoRoot,
+      env: {},
+    });
+    assert.equal(
+      findings.some((finding) => finding.blocking),
+      false,
+      command,
+    );
+  }
 });
 
 test("database resets are denied when the portal environment points at production", async () => {

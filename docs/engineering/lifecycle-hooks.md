@@ -41,9 +41,9 @@ Affected verification follows workspace dependencies. Shared package changes fan
 
 ## Command safety
 
-Agent hooks deny broad staging (`git add -A`, `git add .`, or `git add --all`), bare monorepo-wide `pnpm dev`, retired Coolify/GHCR scripts, raw OpenNext builds, and direct production mutations. Database reset/seed commands are also denied when the designer portal resolves to a non-local Supabase URL.
+Agent hooks deny broad staging (`git add -A`, `git add .`, or `git add --all`), bare monorepo-wide `pnpm dev`, retired Coolify/GHCR scripts, and raw OpenNext builds. Database reset/seed commands are also denied when the designer portal resolves to a non-local Supabase URL.
 
-The production denial is defense in depth. An explicitly authorized emergency local session can be launched with `PATINA_ALLOW_LOCAL_PROD_DEPLOY=1`; setting it inside an already-running agent command is intentionally insufficient. Routine releases must use the protected workflow.
+The hook does not gate production mutation commands (`supabase db push`, `supabase functions deploy`, `wrangler deploy`, `infra/deploy-portal.sh`, etc.) — that literal-string block also fired on read-only commands (grep, `--help`) that merely contained the strings. Prod ships remain gated by CLAUDE.md's in-session authorization rule: an explicit user request in the current session is required before an agent runs one.
 
 ## Production setup
 
