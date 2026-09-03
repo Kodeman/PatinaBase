@@ -88,4 +88,45 @@ struct CoachMarkAnchorTests {
         )
         #expect(code.contains("accessibilityLabel: String"))
     }
+
+    // MARK: - B-10's tab half (RL1C-16)
+
+    @Test("a suspended tour shows no card")
+    @MainActor
+    func aSuspendedTourShowsNoCard() {
+        let model = FirstLaunchTourModel()
+        model.startTour(triggerSource: "test")
+        #expect(model.isActive)
+        #expect(model.isShowingPopover(forAnchor: .homeGreeting))
+
+        // Switching to Spaces left step 1 ("This is your Daily Room…") sitting
+        // squarely on the Whole Home card it does not describe: `.homeGreeting`
+        // lives in `DailyRoomView`, which stays mounted at opacity 0 behind the
+        // Spaces stack, so the popover anchored to a hidden frame
+        // (shots/w1-review-l1c/17-popover.png).
+        model.setSubjectOnScreen(false)
+        #expect(!model.isShowingPopover(forAnchor: .homeGreeting),
+                "the tour still draws over the tab it is not describing (B-10)")
+
+        // Suspension is not abandonment: the tour is still running and comes
+        // back when its subject does. `skip()` would persist `abandoned` and
+        // the tester would never see it again.
+        #expect(model.isActive)
+        model.setSubjectOnScreen(true)
+        #expect(model.isShowingPopover(forAnchor: .homeGreeting))
+    }
+
+    @Test("both roots publish their visibility into the tour, not only into its start gate")
+    func bothRootsTellTheTourWhenTheirSurfaceLeaves() throws {
+        let tour = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
+        )
+        // `canAutoStart` is the hosts' own "my surface is on screen" signal —
+        // `tabs.isShowingTodayRoot` on the four-tab root, `navigationPath.isEmpty`
+        // on the flag-off one. It gated only the START; the same answer is what
+        // decides whether a card may draw.
+        #expect(tour.contains("onChange(of: canAutoStart"),
+                "the model is never told the host's surface went away (B-10)")
+        #expect(tour.contains("setSubjectOnScreen("))
+    }
 }

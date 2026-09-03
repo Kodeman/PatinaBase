@@ -12,6 +12,14 @@
 //  `ProductDetailRoomSaveTests` and `CompanionSheetDriverTests` depend on the
 //  sheet arms and W2 restores the buttons once the articles exist.
 //
+//  **What the `.helpPanel(` assertions below are for.** They hold a SEAM open,
+//  not a live feature. With every trigger removed, nothing sets
+//  `isHelpPanelPresented` in `DailyRoomView`, `ProfileView` or `YourSpacesView`,
+//  so each of those three sheets is deliberately unreachable state for round
+//  one. Each `@State` declaration says so in a comment. A reader who deletes the
+//  wiring because "nothing presents it" turns this file red on purpose: the
+//  point is that W2 has something to restore the button TO.
+//
 //  L0.4's Tasks C-L04-1…4 plus B-L04-1, moved here by steward ruling S-1.
 //
 
