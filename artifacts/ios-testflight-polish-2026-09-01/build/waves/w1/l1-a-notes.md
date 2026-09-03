@@ -247,3 +247,591 @@ matches the evidence exactly; nothing for a copy review to add.
 
 None of the six rows adds tab/zone/dashboard framing, a shadow, red/green status, a badge, an
 engagement mechanic or the word "AI" — every one is a string rewrite or a count-aware composition.
+
+---
+
+## From L1-C (Layout, Companion, Dynamic Type) — 2026-09-02
+
+Two findings sit in **L1-C's** W1 table with a `⇢L1-A` cross-reference, and both live in
+`Features/Authentication/**`, which is L1-A's glob. **L1-C did not edit that tree.** Exact final text
+below; also in `build/waves/w1/l1c-notes-out.md` §3 and §4.
+
+### Task A-L1C-1 — `GAP1B-08`: 44 pt on the six auth text links
+
+`GAP1B-08`'s `codeNote`: *"Files are L1-A-owned; the skeleton assigns the tap-target work to L1-C, so
+this needs an integration note."*
+
+Measured, via `idb ui describe-all` on the Welcome and Sign In screens:
+
+| control | measured height |
+|---|---|
+| "Have a password? Sign in" | 14.67 pt |
+| "Terms of Service" | 14.67 pt |
+| "Privacy Policy" | 14.67 pt |
+| "Forgot password?" | 17.0 pt |
+| "Use magic link" | 17.0 pt |
+| "Sign Up" | 17.0 pt |
+
+All six against Apple's 44 pt floor, and they are the **first controls a TestFlight tester meets**.
+
+**Exact final text** — on each of the six, applied to the `Button` (not to the `Text` inside its
+label, which does not extend the button's hit region):
+
+```swift
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+```
+
+A `Button` whose label is bare `Text` hit-tests the glyph bounds; `.contentShape(Rectangle())` after
+a `minHeight` frame is what makes the whole 44 pt row tappable. Two of the six sit side by side in
+the legal line — give each its own frame rather than the row, so the two links stay separately
+targetable.
+
+Suggested pin, in L1-A's own suite:
+
+```swift
+    @Test("every auth text link reaches the 44 pt floor")
+    func authLinksAre44Points() throws {
+        for file in ["Patina/Features/Authentication/Views/AuthenticationView.swift",
+                     "Patina/Features/Authentication/Views/AuthScreenView.swift"] {
+            let code = SourceScan.code(in: try SourcePin.read(file))
+            let links = code.components(separatedBy: "Button(").count - 1
+            let framed = code.components(separatedBy: "frame(minHeight: 44)").count - 1
+            #expect(framed >= links, "\((file as NSString).lastPathComponent): a link is under 44 pt (GAP1B-08)")
+        }
+    }
+```
+
+(L1-A knows the real file names; the two above are the ones the finding's evidence points at.)
+
+### Task A-L1C-2 — `P-34`: the Welcome screen at accessibility text sizes
+
+At `content_size accessibility-extra-extra-extra-large` (`shots/P/40-welcome-ax3xl.png`) every button
+label truncates — "Start with a piece…", "Continue with…" (Google), "Continue wit…" (email), "Look
+around f…", "Have a password? S…", "By continuing, y…", "Term… and Priva…" — "Have a password? S…"
+and "Welcome home" run edge to edge with no left gutter, and the screen does not scroll, so the legal
+links cannot be read at all. This is the first screen in the app.
+
+**The four changes, in the order they matter:**
+
+1. **A `ScrollView` fallback above `.accessibility1`.** The screen is a fixed `VStack` today. Wrap
+   the body so it can scroll when it no longer fits:
+
+   ```swift
+       @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+       var body: some View {
+           Group {
+               if dynamicTypeSize.isAccessibilitySize {
+                   ScrollView(showsIndicators: false) { welcomeContent }
+               } else {
+                   welcomeContent
+               }
+           }
+       }
+   ```
+
+2. **Multi-line button labels instead of truncation.** On each CTA's label:
+
+   ```swift
+       .lineLimit(2)
+       .multilineTextAlignment(.center)
+       .minimumScaleFactor(0.8)
+       .fixedSize(horizontal: false, vertical: true)
+   ```
+
+3. **Stacked legal links.** "Terms of Service" and "Privacy Policy" share a row that truncates both.
+   Use the same `ViewThatFits` shape L1-C used on the room-type chips:
+
+   ```swift
+       ViewThatFits(in: .horizontal) {
+           legalRow          // the HStack it is today
+           VStack(alignment: .leading, spacing: 8) { legalLinks }
+       }
+   ```
+
+4. **Let the Apple button scale.** `SignInWithAppleButton.swift` is carved out to **L1-D** by name in
+   PROGRAM.md §3 (`C3-03`, `P-35`), so this fourth item is L1-D's, not L1-A's — recorded here because
+   its fixed height is what truncates "Continue with…" first, on the same screen.
+
+`GAP1B-08`'s 44 pt frames (Task A-L1C-1) land on the same screen; do both in one pass.
+
+### VISION check on these two notes
+
+Neither adds tab/zone/dashboard framing, a shadow, red/green status, a badge, an engagement mechanic
+or the word "AI". Both enlarge or reflow controls that already exist.
+
+---
+
+## From L1-F (notifications, messaging, widget, deep links) — 2026-09-02
+
+Full text, with the other three notes this lane sent, is at `build/waves/w1/l1f-notes-out.md`.
+
+## L1F→A-1 → **L1-A** · acknowledge a held link on the auth screen (`C2-21`, `GAP7B-09`)
+
+**Findings.** `C2-21` and `GAP7B-09` (both T0/major): *a deep link tapped while signed out is queued
+invisibly / never arrives, and nothing says anything had been kept.* Round one opens **signed out**, so
+this is the first state every tester is in. `GAP7B-09`'s three shapes were all silent: warm at the auth
+wall, cold at Welcome, and after signing in from the cold one the destination never appeared at all.
+
+Both fix lines say the same thing: *"acknowledge it on the auth screen in one line."*
+
+**What L1-F has built.** `PendingLinkQueue` — a bounded, persisted FIFO — keeps the link and the
+coordinator replays it on arrival at `.main`. `AppCoordinator` publishes:
+
+```swift
+    public private(set) var pendingLinkNotice: String?
+    public static let pendingLinkNoticeLine = "We'll open what you tapped once you're in."
+```
+
+`pendingLinkNotice` is set the moment an arrival is kept and cleared the moment the queue drains, so it
+cannot outlive the thing it is about. `DeepLinkQueueTests.aQueuedLinkIsAcknowledged` and
+`.theNoticeIsAHomeownerSentence` pin both halves.
+
+**What L1-A applies — two files, both this lane's.**
+
+**1. `Features/Authentication/Views/AuthScreenView.swift`** — a second optional line beside the error
+banner it already has. Add the property beside `errorMessage`:
+
+```swift
+    /// A link the person tapped before they could be shown it, being held until
+    /// they are in (`C2-21`, `GAP7B-09`). `AppCoordinator.pendingLinkNotice`.
+    var pendingLinkNotice: String? = nil
+```
+
+and render it immediately AFTER the existing `if let errorMessage { … }` block (so a real failure is
+still the first thing read):
+
+```swift
+            if let pendingLinkNotice {
+                Text(pendingLinkNotice)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 16)
+                    .accessibilityIdentifier("auth.welcome.pendingLinkNotice")
+            }
+```
+
+Muted, not red: nothing has gone wrong. It is a promise the app keeps two taps later.
+
+**2. `ContentView.swift`** (the `.auth` case, which steward §5.2 gives to L1-A) — pass it in, beside
+the `errorMessage:` argument already there:
+
+```swift
+                    errorMessage: AuthService.shared.errorMessage,
+                    pendingLinkNotice: coordinator.pendingLinkNotice
+```
+
+**Not asked for:** `AuthSheet.swift`'s `AuthScreenView(…)` call needs no change — the parameter
+defaults to nil, and a link held while a modal auth sheet is up is acknowledged by the sheet's own
+dismissal into the destination.
+
+**One behaviour change worth knowing about**, because it touches the magic-link path L1-A owns: the
+`patina://auth…` arm of `DeepLinkHandler` is now explicitly exempt from the queue **in every phase**,
+including `.launching`. Before, a magic-link callback that arrived during the splash was stashed in
+`pendingDeepLink` and drained only on arrival at `.main` — which is unreachable until that callback is
+handled, so it was never drained. `DeepLinkQueueTests.authCallbacksBypassTheQueue` holds it open.
+
+
+---
+
+# From L1-D (Tokens, dark mode, contrast, iconography) — 2026-09-02
+
+Appended by L1-D. The full set, with the notes sent to the other lanes, is
+`build/waves/w1/l1d-notes-out.md`. Each block below is a numbered task for this lane's own
+task list, carrying exact final text.
+
+Written by L1-D on 2026-09-02 from `first-flight/w1-l1d` (base `ba83aa67f`). Every note below is
+**also appended verbatim** to its target lane's inbox — `l1-a-notes.md`, `l1-b-notes.md`,
+`l1-c-notes.md`, `l1-f-notes.md` — because a note nobody schedules is not a plan.
+
+**What L1-D shipped that these notes depend on.** All of it is on `first-flight/w1-l1d`, in
+`PatinaDesignKit` and this lane's four `Patina/**` files, and all of it merges **second**
+(D14: L1-C → **L1-D** → L1-B → L1-F → L1-A → L1-X → L1-E). So every token named below exists by the
+time any other lane rebases.
+
+| New API | What it is for |
+|---|---|
+| `PatinaColors.Border.hairline` | The quiet rule: card edges, list separators, the tab bar's top line. Light `#E5E2DD` (unchanged) / dark `#322E29`. Replaces `PatinaColors.pearl` wherever pearl was drawing a **border or divider** |
+| `PatinaColors.Border.strong` | The rule a tester is meant to see: field outlines, unselected chip edges, an "inactive step" fill. Light `#C8C3BB` / dark `#524C45` |
+| `PatinaColors.Border.onDark` | A hairline on a `Background.dark` object, where the page behind it is what it has to separate from. Static `#756B61`, 3.18:1 on the dark canvas |
+| `PatinaColors.OnDark.primary` / `.secondary` / `.muted` | Ink for a surface that is dark in **both** appearances. Static — it does not flip. `#FAF7F2` / `#D8D2C8` / `#B7AE9F` |
+| `PatinaColors.Scrim.chrome` | An opaque ground for a control drawn over a photograph. Static `#332F2B`; `OnDark.primary` on it is 12.42:1 whatever the photo |
+| `PatinaColors.clayInk` (`#82612F`) | Interactive labels and filled accent surfaces that carry a light label. `Text.interactive`'s light side is now this: `clayDeep` was 3.54:1 |
+| `PatinaColors.errorDeep` (`#9C4C3F`) | The destructive fill. `error` under `offWhite` is 3.03:1 |
+| `PatinaTypography.voiceLead` · `voiceSmall` · `voiceCaption` · `bodySerif` · `h6` · `monoLarge` | The six ramp gaps the 44 remaining inline `.font(.custom(…))` sites were reaching past |
+
+**Changed behaviour, so nobody is surprised at merge:**
+
+- **`PatinaColors.Background.dark` is now adaptive** — light `charcoal` (unchanged) / dark `#524B44`.
+  Seven surfaces read it: the Companion orb and panel, `AddedToRoomToast`, `DesignerConsultationView`'s
+  hero, `RoomBudgetBar`, `WholeHomeCrossRoomBar`. In dark mode they were 1.15:1 against the page and
+  had no body at all (`C-01`). Their light-mode look is byte-identical.
+- **`PatinaButtonStyle.clay` now renders the `.primary` treatment** (`C-41`). The five call sites —
+  `InvoiceDetailView:219`, `ProposalDetailView:165`, `ProposalSignSheet:69`, `DecisionDetailView:425`,
+  `DecisionDeferSheet:59` — keep compiling and stop being tan. `.destructive` fills with `errorDeep`.
+  `PatinaButtonStyle` also publishes `patinaFillColor`, `patinaLabelColor`, `patinaBorderColor` and
+  `filledCases`.
+- **`DarkPalette.textSecondary` and `textMuted` are raised** (`#DFD2C0`, `#C7B99F`) — `C-20`.
+- **`PatinaAsyncImage` takes a `caption:`** and has three states, not two: `loading` (shimmering mark),
+  `failed` (mark + "Tap to retry"), `missing` (mark + the caption, no retry). Passing `url: nil` now
+  gives the *missing* state rather than the failure state.
+- **`PatinaTests` now links `PatinaDesignKit`.** `apps/mobile/Patina/Patina.xcodeproj/project.pbxproj`
+  gains one `XCSwiftPackageProductDependency` on the test target. Before this, a test referencing any
+  kit symbol compiled and then failed to link (`Undefined symbols … PatinaDesignKit.PatinaColors…`),
+  which is why `HomeHeaderTests` says the target "does not link PatinaDesignKit" and pins `TimeOfDay`
+  through a source read. It does now. Steward ruling **S-5** assumed the link already existed; it did
+  not, and this is the smaller of the two fixes it implies.
+
+---
+
+---
+
+## D→A-1 · L1-A · `P-25` — the OTP field announces a code that is not there
+
+`Features/Authentication/Views/AuthenticationView.swift:326-331`.
+
+`scan_ui` on the **empty** field returns `AXValue: "000000"`, so VoiceOver announces a six-digit code
+to a tester who has typed nothing — and the placeholder is itself a plausible code. Visually, empty
+and filled differ only in text opacity: same glyphs, same position, same font.
+
+Replace the field with:
+
+```swift
+                    TextField("", text: $viewModel.otpToken, prompt: Text("Enter the 6-digit code"))
+                        .textContentType(.oneTimeCode)
+                        .keyboardType(.numberPad)
+                        .font(.system(.title2, design: .monospaced))
+                        .tracking(8)
+                        .multilineTextAlignment(.center)
+                        .accessibilityLabel("Sign-in code")
+                        .accessibilityValue(
+                            viewModel.otpToken.isEmpty
+                                ? "Empty"
+                                : "\(viewModel.otpToken.count) of 6 digits entered"
+                        )
+```
+
+and give the field a filled state that differs by more than opacity — the one-line version is a border
+that changes with content, using L1-D's new tokens:
+
+```swift
+                        .overlay(
+                            RoundedRectangle(cornerRadius: PatinaRadius.md, style: .continuous)
+                                .stroke(
+                                    viewModel.otpToken.isEmpty
+                                        ? PatinaColors.Border.strong
+                                        : PatinaColors.Text.interactive,
+                                    lineWidth: viewModel.otpToken.isEmpty ? 1 : 1.5
+                                )
+                        )
+```
+
+`P-25` is scored to L1-D and its file is L1-A's; L1-D closes nothing here without this task.
+
+---
+
+---
+
+## D→A-2 · L1-A · `C3-06` and `A-73` — the auth form's affordance is inverted
+
+`AuthenticationView.swift:513-520` (the form primary) and `:366-372` (the OTP **Verify** button) both
+read:
+
+```swift
+.background(viewModel.isFormValid ? PatinaColors.Interactive.active : PatinaColors.clay)
+```
+
+Enabled is neutral charcoal; **disabled is the brand accent** — the warmest, most tappable-looking
+colour in the palette — and the label stays `Text.inverse` in both, so the disabled state is also the
+2.18:1 case. On the email-code path every round-one tester walks, the button looks *more* live before
+the field is valid than after.
+
+Both sites become one filled style dimmed when disabled:
+
+```swift
+.background(PatinaColors.Interactive.active)
+.opacity(viewModel.isFormValid ? 1.0 : 0.4)
+```
+
+and for the OTP button, the same shape with its own predicate:
+
+```swift
+.background(PatinaColors.Interactive.active)
+.opacity(otpToken.count == 6 && !isVerifying ? 1.0 : 0.4)
+```
+
+`PatinaButton` already does exactly this (`.opacity(isEnabled ? 1.0 : 0.5)`), so if either site can be
+replaced outright by `PatinaButton(..., style: .primary, isEnabled:)` that is better still.
+
+Also on L1-A's screens, same finding family (`A-73`), each a one-line swap:
+
+| file:line | today | final |
+|---|---|---|
+| `Features/Authentication/Views/AuthScreenView.swift:124` | `.stroke(PatinaColors.pearl, lineWidth: 1.5)` | `.stroke(PatinaColors.Border.strong, lineWidth: 1.5)` |
+| `Features/Onboarding/Views/OnboardingFlowView.swift:230` | `.fill(PatinaColors.pearl.opacity(0.6))` | `.fill(PatinaColors.Border.hairline)` |
+| `Features/StyleQuiz/Views/StyleQuizView.swift:139` | `.overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))` | `.overlay(Circle().stroke(PatinaColors.Border.hairline, lineWidth: 0.5))` |
+| `Features/StyleQuiz/Views/StyleResultView.swift:153` | `.fill(PatinaColors.pearl)` | `.fill(PatinaColors.Border.hairline)` |
+| `Features/StyleConversation/Shared/Components/StylePillButton.swift:36` | `isSelected ? PatinaColors.Interactive.active : PatinaColors.pearl,` | `isSelected ? PatinaColors.Interactive.active : PatinaColors.Border.strong,` |
+| `Features/StyleConversation/Views/PriorityView.swift:71` | `isSelected ? PatinaColors.Interactive.active : PatinaColors.pearl,` | `isSelected ? PatinaColors.Interactive.active : PatinaColors.Border.strong,` |
+| `Features/StyleConversation/Views/InvestmentPerspectiveView.swift:60` | `.fill(PatinaColors.pearl)` | `.fill(PatinaColors.Border.hairline)` |
+
+`C3-05`'s quiz half is also L1-A's: `StyleQuizView.swift:239,243,325,329,335` put an `offWhite`/white
+label on a `clay` fill at 2.18:1, on the app's minute-two screen. Route the **selected** state through
+`FilterChip(title:isActive:)` or, in place, swap the fill to `PatinaColors.Interactive.active` and the
+label to `PatinaColors.Text.inverse`. Never `clay` under a light label.
+
+---
+
+---
+
+## D→A-3 · L1-A · `A-11` — full-colour emoji are the quiz's iconography
+
+`Features/StyleQuiz/Models/QuizModels.swift:80-84`, `:104-107`, `:114-117`, rendered at
+`Features/StyleQuiz/Views/StyleQuizView.swift:269-280` as `Text(icon).font(.system(size: 20/24))`.
+
+VoiceOver reads the glyph as part of the label — `"🍷, Love having people over…"` — and Q4 mixes 🌱 and
+💬 with flat black ✦ and ◆ in one four-item list. This is the template-app tell, on the onboarding
+path every tester walks in minute two.
+
+**Exact replacement.** Change the `icon` strings to SF Symbol names, and render them as symbols in one
+weight and one colour so the icon never carries state:
+
+| question | option | today | SF Symbol |
+|---|---|---|---|
+| Q2 | Love having people over | `🍷` | `wineglass` |
+| Q2 | My quiet sanctuary | `🧘` | `moon.stars` |
+| Q2 | Work from this room | `💻` | `laptopcomputer` |
+| Q2 | Family central | `👨‍👩‍👧` | `figure.2.and.child.holdinghands` |
+| Q2 | Personal retreat | `📚` | `books.vertical` |
+| Q4 | (the 🌱 option) | `🌱` | `leaf` |
+| Q4 | (the ✦ option) | `✦` | `sparkle` |
+| Q4 | (the ◆ option) | `◆` | `diamond` |
+| Q4 | (the 💬 option) | `💬` | `bubble.left.and.bubble.right` |
+| Q5 | (the 🏠 option) | `🏠` | `house` |
+| Q5 | (the ✨ option) | `✨` | `sparkles` |
+| Q5 | (the 🔄 option) | `🔄` | `arrow.triangle.2.circlepath` |
+| Q5 | (the 💎 option) | `💎` | `diamond.inset.filled` |
+
+At the call site, `StyleQuizView.swift:269-280`:
+
+```swift
+                Image(systemName: option.icon)
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .frame(width: 28, height: 28)
+                    .accessibilityHidden(true)
+```
+
+One weight, one colour, no fill variants, no colour semantics — and `accessibilityHidden` so the
+option's label is the sentence alone, not "wineglass, Love having people over".
+
+**VISION note, carried so the lane does not have to re-derive it:** a line symbol that carries no state
+is not a badge and not red/green status, so this fix does not collide with §6.
+
+---
+
+---
+
+## D→A-4 · L1-A · `C3-15` — the inline fonts in L1-A's files
+
+Nine sites. Two of them (`ScanFloorPlanPreviewView`) have **no `relativeTo:` at all**, so they ignore
+Dynamic Type outright.
+
+| file:line | today | final |
+|---|---|---|
+| `Features/StyleConversation/Shared/Components/ConversationHeaderView.swift:28` | `.font(.custom("PlayfairDisplay-Italic", size: 26, relativeTo: .title2))` | `.font(PatinaTypography.voiceLead)` |
+| `Features/StyleConversation/Views/ContemplativePauseView.swift:29` | `.font(.custom("PlayfairDisplay-Italic", size: 20, relativeTo: .title3))` | `.font(PatinaTypography.patinaVoiceLarge)` |
+| `Features/StyleConversation/Views/VisualResonanceView.swift:73` | `.font(.custom("Inter-SemiBold", size: 11, relativeTo: .caption2))` | `.font(PatinaTypography.captionMedium)` |
+| `Features/StyleConversation/Shared/Components/StyleSwatchCell.swift:35` | `.font(.custom("Inter-SemiBold", size: 11, relativeTo: .caption2))` | `.font(PatinaTypography.captionMedium)` |
+| `Features/StyleConversation/Views/InvestmentPerspectiveView.swift:34-38` | the two-face ternary at 18 pt | `.font(isDiscussRow ? PatinaTypography.patinaVoice : PatinaTypography.h5)` |
+| `Features/StyleConversation/Views/InvestmentPerspectiveView.swift:49` | `.font(.custom("DMMono-Regular", size: 11, relativeTo: .caption2))` | `.font(PatinaTypography.mono)` |
+| `Features/StyleConversation/Views/PriorityView.swift:54` | `.font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .callout))` | `.font(PatinaTypography.bodySerif)` |
+| `Features/StyleReveal/Views/ScanFloorPlanPreviewView.swift:108` | `.font(.custom("DMMono-Regular", size: 11))` | `.font(PatinaTypography.mono)` |
+| `Features/StyleReveal/Views/ScanFloorPlanPreviewView.swift:113` | `.font(.custom("DMMono-Regular", size: 11))` | `.font(PatinaTypography.mono)` |
+
+`InvestmentPerspectiveView.swift:40` also carries a comment saying `Inter-Light` is not bundled — if a
+call below it still names that face, it takes `PatinaTypography.bodySmall`. The suite that catches an
+unbundled face is `PatinaTests/TypographyAdoptionTests.everyNamedFaceIsRegistered`.
+
+---
+
+---
+
+## D→A-5 · L1-A · `GAP4-16` needs nothing from `StyleContinueButton`
+
+Recorded so the lane does not fix it twice. `GAP4-16` — the Reveal's only CTA is invisible in light
+mode, a charcoal capsule on a charcoal ground — is **closed on `first-flight/w1-l1d`** in
+`RevealView.swift`, which L1-D owns: the screen now carries `.environment(\.colorScheme, .dark)`, so
+its permanently-charcoal ground resolves `Interactive.active` on the near-white side and the capsule
+appears. `Features/StyleReveal/Views/StyleContinueButton.swift` is **unchanged and should stay
+unchanged** — its `Interactive.active` fill and `Text.inverse` label are correct once the scheme
+matches the ground, and hard-coding an on-charcoal variant there would break it on any light screen
+that reuses it.
+
+---
+
+
+---
+
+# From L1-D — round 2 (2026-09-02, after reading `l1-d-notes.md` and the copy deck)
+
+Written after L1-D read its own inbox (`l1-d-notes.md`, four notes) and `l1-e-copy-deck.md`, both of
+which landed while this lane was mid-build. Round 1 is `l1d-notes-out.md`. Each block below is
+appended verbatim to its target lane's inbox.
+
+---
+
+---
+
+## D→A-6 · L1-A · the Apple button's in-flight spinner has to invert with the style
+
+**This is the note `D-L1A-1` asked L1-D to send back.** L1-A's own wording:
+
+> L1-A's `AuthScreenView` wraps this button in a `ZStack` for `C1-05`'s in-flight spinner and dims it
+> to `opacity(0.35)` while the Apple exchange is in flight; the spinner is tinted
+> `PatinaColors.Text.inverse`, which reads on the `.black` style. **If you take the `.white` style in
+> dark mode, the spinner tint needs to invert with it.**
+
+L1-D took it. `SignInWithAppleButton.swift` now reads
+`.signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)`, **sim-verified on a cold dark
+launch** (`shots/w1-l1d/before-02-welcome-dark.png` vs `after-02-welcome-dark.png`).
+
+So in dark mode the button is a near-white capsule, and `Text.inverse` resolves to `#211E1B` in dark —
+which is the *correct* colour for a spinner on it. In **light** mode the button is black and
+`Text.inverse` resolves to `#FAF7F2` — also correct. **`Text.inverse` is already the right token in
+both appearances**, because it flips in exactly the same direction the Apple button now does.
+
+Nothing to change. This note exists so the contract is closed rather than left open, and so the pairing
+is written down before someone "fixes" the spinner to a static colour and breaks one of the two cases.
+
+If L1-A would rather be explicit than rely on the coincidence, the equivalent literal is:
+
+```swift
+                        ProgressView()
+                            .tint(colorScheme == .dark ? PatinaColors.charcoal : PatinaColors.offWhite)
+```
+
+**One more thing L1-A should know:** the button also carries `.id(colorScheme)` now.
+`SignInWithAppleButton` wraps `ASAuthorizationAppleIDButton`, whose style is fixed when the UIView is
+made — sim-verified: a **cold** launch picked the right style, but flipping the system appearance
+while the screen was up left the old one. Changing the view's identity with the scheme is what rebuilds
+it. It also means the button is re-created on an appearance change, so any `@State` inside it resets —
+in practice only the nonce, which is rotated per attempt anyway.
+
+---
+
+---
+
+## D→A-7 · L1-A · `AuthButton` is kept, deliberately
+
+`D-L1A-3` reports that `AuthButton`'s only two call sites (`AuthScreenView.swift:82,85`) are gone on
+L1-A's branch, leaving it with zero call sites, and says deleting it is L1-D's call.
+
+**L1-D is not deleting it this wave.** Two reasons, both about the merge rather than the code:
+
+1. L1-A merges **fifth** and L1-D merges **second** (D14). If L1-D deletes `AuthButton` now and
+   anything on the integration tip still references it before L1-A lands — a fix round, a partial
+   merge, a rebase that drops L1-A — the tree does not compile, and the lane that finds out is not this
+   one.
+2. Deleting a public type from the design kit is a change no finding in this lane's table asks for.
+   `A-03` / `P-02` are closed by L1-A's replacement, not by the old type's absence.
+
+It is now dead code with a `#Preview` reference, and it is a clean W2 deletion once L1-A is on `main`.
+Its `pearl` border was swept to `Border.strong` with the rest of the component, so it carries no
+`C3-01` debt while it waits.
+
+---
+
+---
+
+## From L1-F — round 2 (2026-09-02)
+
+Written after L1-F read its own inbox (`l1-f-notes.md`) and `l1-e-copy-deck.md`. Full text,
+with what L1-F applied from those notes, is at `build/waves/w1/l1f-notes-out.md`.
+
+## L1F→A-2 → **L1-A** · reply on `F-L1A-2`: the exact sentence and the property to read
+
+You asked for the sentence and the property name, and said the acknowledgement belongs as a **second,
+lower-priority case in `AuthScreenView`'s existing fixed-height status slot** rather than a second
+element, because `P-29` is that nothing on that screen may move. **Agreed — and that supersedes
+`L1F→A-1`'s block**, which asked for a separate `Text` under the error banner. Use this instead.
+
+**The property** (shipped, on `first-flight/w1-l1f`, `App/Coordinators/AppCoordinator.swift`):
+
+```swift
+    public private(set) var pendingLinkNotice: String?
+
+    public static let pendingLinkNoticeLine = "We'll open what you tapped once you're in."
+```
+
+`AppCoordinator` is `@Observable`, so the slot repaints on its own. It is set the moment an arrival is
+kept and cleared the moment the queue drains on arrival at `.main`, so it cannot outlive the thing it
+is about. `DeepLinkQueueTests.aQueuedLinkIsAcknowledged` pins both edges;
+`.theNoticeIsAHomeownerSentence` pins that the line names no URL, no vendor and no error.
+
+**The sentence:** `"We'll open what you tapped once you're in."` — 40 characters, one line at the
+default size. It is deliberately not "your link is waiting": the person does not think of it as a
+link, they think of it as the invoice they tapped in Mail.
+
+**The slot's precedence, as L1-F would rank it** (your call — you own `P-29`):
+
+1. `AuthService.shared.errorMessage` — something went wrong and they must act.
+2. `coordinator.pendingLinkNotice` — nothing is wrong; a promise is being kept.
+
+So: render the notice only when `errorMessage == nil`. A person who just failed to sign in does not
+need to be told their link is safe in the same 52 pt.
+
+**The one call-site change** in `ContentView.swift`'s `.auth` case, beside the `errorMessage:`
+argument that is already there:
+
+```swift
+                    errorMessage: AuthService.shared.errorMessage,
+                    pendingLinkNotice: coordinator.pendingLinkNotice
+```
+
+`AuthSheet.swift`'s `AuthScreenView(…)` call needs nothing: the parameter defaults to nil, and a link
+held while the modal sheet is up is acknowledged by the sheet dismissing into the destination.
+
+**Not blocking L1-F.** If the slot never renders it, the link still arrives — the queue is not
+cosmetic. What is lost is the acknowledgement half of `C2-21` / `GAP7B-09`, which is the half that
+stops a tester concluding the link did nothing. L1-F reports it open against L1-A until it lands.
+
+**One behaviour change in the auth path L1-A owns, restated because it is easy to miss:** the
+`patina://auth…` arm of `DeepLinkHandler` is now explicitly exempt from the queue **in every phase**,
+including `.launching`. Before, a magic-link callback arriving during the splash was stashed in
+`pendingDeepLink` and drained only on arrival at `.main` — unreachable until that callback is handled,
+so it was never drained. `DeepLinkQueueTests.authCallbacksBypassTheQueue` holds it open.
+
+---
+
+## From L1-B (Data, persistence, resilience) — 2026-09-02 · **heads-up, no task**
+
+Nothing here asks L1-A for a change. Three facts about `first-flight/w1-l1b` that touch files or
+behaviour near L1-A's, recorded so the merge holds no surprises. Full context in
+`build/waves/w1/l1b-notes-out.md`.
+
+1. **`Patina/PatinaApp.swift` gains one line** — `.localStoreRecoveryNotice()`, on the `ContentView()`
+   chain beside `.modelContainer(…)`. `PatinaApp.swift` is in no lane's glob; the modifier and the
+   screen it presents live entirely in `Core/Persistence/` (L1-B's). It is `C7-01`'s one-time "we had
+   to start this phone's copy over" screen — a `fullScreenCover` that mounts only on the launch after
+   a `ModelContainer` failure and is a no-op on every other launch. **`ContentView.swift` is
+   untouched by L1-B**, including its `.launching` case: `SplashView`'s new stall state and its
+   shorter animation are inside `Features/Splash/**`, and its initialiser is unchanged, so the
+   `SplashView { }` call site at `:22-31` compiles as it stands.
+
+2. **The splash now says something when a launch never resolves** (`C1-19`). After
+   `LaunchWatchdog.stallDeadline` (8 s) with `AuthService.isAuthStateReady` still false, `SplashView`
+   draws *"We couldn't reach Patina — try again."*. The half that actually moves the person —
+   `AppCoordinator` falling through to `.auth` at the same deadline — is L1-F's, sent as Task
+   F-L1B-1. When it lands, a stalled launch arrives on **L1-A's `.auth` screen** rather than sitting
+   on the splash. Nothing on that screen needs to change; it is named here because L1-A owns what the
+   person meets there.
+
+3. **`Services/Auth/AuthService.swift` is untouched by L1-B**, as the glob says.
+   `LocalStoreOwnership.ownerKey` (new, `Core/Persistence/`) reads the same
+   `"local_store_owner_user_id"` key `AuthService` writes at `:229`, and
+   `AccountIsolationTests.theOwnerKeyMatchesTheOneAuthServiceWrites` pins the two spellings together —
+   so if L1-A renames that key, that test is where it will surface.

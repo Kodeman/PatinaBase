@@ -210,3 +210,174 @@ revised by review
 - [ ] `apps/mobile/Patina/scripts/ios-gate.sh unit`
 - [ ] `apps/mobile/Patina/scripts/ios-gate.sh lint-delta main`
 - [ ] Record every command's tail verbatim in the final report.
+
+---
+---
+
+# FIX ROUND — 2026-09-02, after the adversarial review (22 findings, `RL1E-01`…`RL1E-22`)
+
+Same lane, fresh context, same branch `first-flight/w1-l1e`, same worktree
+`/Users/kody/Code/patina-merged/.codex/worktrees/agent-ff-w1-l1e`.
+
+`IOS_GATE_UDID=2AF6D0CA-91AB-446E-AFA3-4C126AD5827B`
+
+**The VISION check (fix round).** Every fix below is a string, a test, or a markdown row. Nothing adds
+or entrenches a tab, a zone, a dashboard, a shadow, red/green status, a badge, an engagement mechanic,
+or the word "AI". Two fixes deserve naming because they touch words a tester reads:
+
+- `RL1E-12` renames two style-quiz option labels (`"Eclectic Curated"` → `"Collected Eclectic"`,
+  `"Curated Comfort"` → `"Considered Comfort"`). Both are taxonomy labels on the first-run path; the
+  rename removes a banned lexicon word and adds nothing. The wire `key`s (`eclectic_curated`,
+  `curated_comfort`) are **unchanged** — they are spectrum-mapping inputs, not copy.
+- `RL1E-13` restores diagnostic logging. `PatinaLog` is `os.Logger`; nothing is rendered to a tester,
+  so no status colour or badge is introduced.
+
+**The notes I must apply.** `build/waves/w1/l1-e-notes.md` now exists and carries three sections
+addressed to this lane. Each is a numbered task below:
+
+1. **From L1-C** — record of six deck rows applied, four `C5-10` casing rows applied, one row deleted
+   (`C5-05`, Help Center removed), one row *not* applied (`C5-06` — correctly, it is L1-E's own file),
+   three VoiceOver labels L1-C wrote, and **one open question**: `SettingsView.swift:212,214`'s alert
+   still reads `"Sign Out"` in both title and confirm button, and `AccountActionsTests` pins that
+   literal. L1-C asks L1-E for the two strings **and** the pin update together → **Task F7**.
+2. **From L1-A** — record of ten deck rows applied verbatim, `P-30`'s "sign-in code" naming, and
+   **one open question**: L1-A wrote five new sentences with **straight** apostrophes and asks whether
+   `A-06`'s sweep is scoped to `OnboardingFlowView` or app-wide → **Task F8**.
+3. **From L1-D (round 2)** — `PatinaEmptyState`'s deck row applied, and the constant renamed
+   `stillCuratingPieces` → `stillChoosingPieces` with different words from the deck's, offered back to
+   L1-E to change → **Task F9**.
+
+**The notes I will send.** Exact final text for every change this fix round wants in another lane's
+file, written to `build/waves/w1/l1e-notes-out.md` **and** appended to the target's
+`build/waves/w1/<lane>-notes.md`:
+
+- **L1-A** — `RL1E-11` (`StyleResultView` CTA), `RL1E-12` (two quiz labels), `RL1E-16`
+  (`A-101` retention acknowledgement), `RL1E-07` (`A-13` string ratified), Task F8's answer.
+- **L1-B** — `RL1E-10`'s `C5-09` rows in `CrossRoomView.swift` and `RoomProjectView.swift`.
+- **L1-C** — `RL1E-11` (`"Retake Style Quiz"`), `RL1E-10`'s `ProfileView` accessibility label,
+  Task F7's two `Sign Out` alert strings + pin, `RL1E-15` (the greeting now wraps on the flags-off
+  header).
+- **L1-F** — a `## From L1-E (Copy)` section acknowledging `NotificationFeedView.swift`'s `A-52` row
+  (`RL1E-03b`); L1-F already applied it, so the note is a confirmation, not a request.
+- **Steward** — `RL1E-03`/`RL1E-04`/`RL1E-22` ownership items and `RL1E-01`'s unwrap step go in the
+  final report, not into a lane file.
+
+---
+
+## Fix-round coverage — every review finding to a task
+
+| review id | severity | task | verified by |
+|---|---|---|---|
+| `RL1E-01` | blocker | F2 | `ios-gate.sh unit` green on this branch |
+| `RL1E-02` | blocker | F3, F4, F5, F6, F10 | four new suites compile and run |
+| `RL1E-03` | major | F10 (deck), F11 (notes) | deck rows addressed to the steward's owner |
+| `RL1E-04` | major | F10 | recorded: L1-A already applied it (`l1-e-notes.md`, Note E-L1A-1) |
+| `RL1E-05` | major | F1 | `BrandVoiceLintTests.apostrophesAreCurly` |
+| `RL1E-06` | major | F2 | same test |
+| `RL1E-07` | major | F10 | deck rows for `A-13` and `GAP1B-01` |
+| `RL1E-08` | major | F1 | `ErrorVoiceTests.errorSentencesEndInPeriods` + `theTwoServicesShareOneNetworkSentence` |
+| `RL1E-09` | major | F0 | `diff` against the live main-checkout files |
+| `RL1E-10` | major | F1, F10, F11 | `NounConsistencyTests` |
+| `RL1E-11` | major | F10, F11 | `SentenceCaseTests` |
+| `RL1E-12` | major | F10, F11 | `BrandVoiceLintTests.styleQuizIsClean` |
+| `RL1E-13` | minor | F1 | `ErrorVoiceTests.rawDetailIsStillLogged` (source pin) |
+| `RL1E-14` | minor | F2 | `GreetingWindowTests.hourBandsArePinned` |
+| `RL1E-15` | minor | F11 | note to L1-C |
+| `RL1E-16` | minor | F10, F11 | deck exception row + L1-A acknowledgement |
+| `RL1E-17` | minor | F2 | assertions rewritten |
+| `RL1E-18` | minor | F2 | lint scans string literals only |
+| `RL1E-19` | minor | F10 | fenced block under `### C5-16` |
+| `RL1E-20` | minor | F4 | `NounConsistencyTests.noRoleWordIsRendered` |
+| `RL1E-21` | minor | F10 | recorded consequence, declined with a reason |
+| `RL1E-22` | minor | F10 + report | deck records the no-id `.badRequest` fix |
+
+---
+
+## Task F0 — restore the three truncated notes files (`RL1E-09`)
+
+- [ ] `diff` each of `l1-a-notes.md`, `l1-b-notes.md`, `l1-c-notes.md`, `l1-d-notes.md` in this
+  worktree against the live copy in the main checkout; confirm main is a strict superset
+  (0 lines present only in the worktree copy).
+- [ ] Copy all four live files over the worktree copies.
+- [ ] Re-verify the `## From L1-E` section survives in each.
+- [ ] Commit `docs(first-flight): restore the full shared notes files L1-E had snapshotted stale`.
+
+## Task F1 — the source fixes in files this lane owns
+
+Failing test first for each (Tasks F2–F6 hold the tests; write them before this task's edits land).
+
+- [ ] `RL1E-05` — every user-facing string in `DesignServicesService.swift`,
+  `CompanionAPIModels.swift` and `ARPlacementViewModel.swift` uses **U+2019**, not U+0027.
+- [ ] `RL1E-08` — one punctuation rule in `CompanionAPIError.errorDescription`: a complete failure
+  sentence ends in a period. All six generic arms follow it. `DesignServicesError.networkError` and
+  `CompanionAPIError.networkError` become **byte-identical**.
+- [ ] `RL1E-13` — the raw detail is logged, not discarded: `PatinaLog` at `error` level (not
+  `#if DEBUG` — `os.Logger.error` is the level that survives into a Release archive, which is the
+  whole point in a TestFlight round) at `DesignServicesService.submitDesignRequest`'s catch, at
+  `CompanionAPIClient`'s `.badRequest` and `.serverError` throw sites, and unconditionally at
+  `ARPlacementViewModel.saveCurrentPlacement`'s catch.
+- [ ] `RL1E-10` — `C5-09`'s two sites in files **no W1 lane owns**, applied here:
+  `App/Coordinators/Coordinator.swift:135,198` and
+  `Features/Collections/Views/CollectionsView.swift:151`.
+
+## Task F2 — repair the three existing suites (`RL1E-01`, `RL1E-06`, `RL1E-14`, `RL1E-17`, `RL1E-18`)
+
+- [ ] `ErrorVoiceTests` — wrap each cross-lane source-scan in `withKnownIssue`, naming the deck row
+  and the owning lane, so the suite is green on this branch and fails loudly at the deck pass once the
+  row has landed (the signal to unwrap it). Fix `sendingStepFallbackIsCanonical`'s vacuous negative
+  assertion and `companionGenericFailuresAreCanonical`'s "two"/three mismatch. Add
+  `errorSentencesEndInPeriods`, `theTwoServicesShareOneNetworkSentence` and `rawDetailIsStillLogged`.
+- [ ] `BrandVoiceLintTests` — extract double-quoted string literals before linting, so a
+  `curationScore` identifier or a comment quoting a finding cannot fail the gate. Add
+  `apostrophesAreCurly` (`A-06`'s missing lint half). Add `styleQuizIsClean`. Wrap the two L1-A files
+  in `withKnownIssue`.
+- [ ] `GreetingWindowTests` — add `hourBandsArePinned`, pinning all six `case N..<M` arms of
+  `TimeOfDay.current`.
+
+## Task F3 — `PatinaTests/NounConsistencyTests.swift` (`RL1E-02`, `RL1E-10`, `RL1E-20`)
+
+## Task F4 — `PatinaTests/PluralisationTests.swift` (`RL1E-02`)
+
+## Task F5 — `PatinaTests/SentenceCaseTests.swift` (`RL1E-02`, `RL1E-11`)
+
+## Task F6 — `PatinaTests/GuestPromiseTests.swift` (`RL1E-02`)
+
+Each of F3–F6 is a scoped source-pin suite on the exact `file:line` sites the deck names, wrapping any
+site whose owning lane has not merged yet in `withKnownIssue` naming the row and lane.
+
+## Task F7 — answer L1-C's open question (`l1-e-notes.md`, "One thing the deck does not cover")
+
+- [ ] Supply the two `SettingsView.swift:212,214` alert strings and the `AccountActionsTests` pin
+  update as a deck row + an integration note to L1-C.
+
+## Task F8 — answer L1-A's open question (`l1-e-notes.md`, Note E-L1A-3)
+
+- [ ] Rule the scope of `A-06`'s apostrophe sweep and send the answer to L1-A.
+
+## Task F9 — answer L1-D's open question (`l1-e-notes.md`, D→E-1)
+
+- [ ] Ratify or replace `PatinaEmptyState.stillChoosingPieces`'s two strings.
+
+## Task F10 — rewrite `l1-e-copy-deck.md`
+
+Every deck-shaped review finding: `RL1E-02` (closing paragraph), `RL1E-03` (re-address three rows),
+`RL1E-04`, `RL1E-07` (`A-13`, `GAP1B-01`), `RL1E-10` (`C5-09` scope + all eight sites), `RL1E-11`,
+`RL1E-12`, `RL1E-16` (`A-101` exception), `RL1E-19` (fenced block), `RL1E-21` (recorded consequence),
+`RL1E-22` (no-id `.badRequest` fix recorded).
+
+## Task F11 — notes out
+
+- [ ] `l1e-notes-out.md` rewritten, and each block appended to `l1-a-notes.md`, `l1-b-notes.md`,
+  `l1-c-notes.md`, `l1-f-notes.md` in **both** this worktree and the shared main checkout.
+
+## Task F12 — self-check on the clone
+
+- [ ] Launch with `-DeploymentTarget local`, no `-PatinaFlags`; screenshot each changed screen
+  before/after into `shots/w1-l1e/`; one ledger line per shot.
+
+## Task F13 — gate
+
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh build`
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh release`
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh unit`
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh lint-delta main`
