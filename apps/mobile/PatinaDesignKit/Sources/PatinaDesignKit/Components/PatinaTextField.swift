@@ -4,7 +4,7 @@
 //
 //  Patina Design System - Text Field
 //
-//  The de-facto "softCream fill + pearl/clay border" text field, lifted
+//  The de-facto "softCream fill + hairline border" text field, lifted
 //  into a single reusable component (PT-5-2). Supports an optional label,
 //  placeholder, helper text, an error state, and a secure variant.
 //
@@ -14,7 +14,7 @@ import SwiftUI
 /// Patina Design System - Text Field
 ///
 /// A labelled text field matching the de-facto pattern across the app
-/// (soft-cream fill, rounded clay-tinted border). Use the `error` binding
+/// (soft-cream fill, a `Border.strong` outline). Use the `error` binding
 /// to surface validation copy; when set, the border and helper text turn
 /// to the error accent.
 public struct PatinaTextField: View {
@@ -57,11 +57,18 @@ public struct PatinaTextField: View {
 
     private var hasError: Bool { error?.isEmpty == false }
 
+    /// `C3-01`. The resting outline was `clay.opacity(0.2)` — a fixed sRGB
+    /// literal at 20 %, so on the dark canvas it composited toward the light
+    /// clay and read brighter than the label above it. `Border.strong` is the
+    /// rule a tester is *meant* to see, which is what a field's edge is.
+    /// `error` stays the error outline: a 1.5 pt stroke is non-text and takes
+    /// the 3:1 bar, which it clears in both appearances; the field's error
+    /// *prose* is `Text.error`.
     private var borderColor: Color {
         if hasError { return PatinaColors.error }
         return isFocused
             ? PatinaColors.Text.interactive.opacity(0.5)
-            : PatinaColors.clay.opacity(0.2)
+            : PatinaColors.Border.strong
     }
 
     public var body: some View {
@@ -76,7 +83,7 @@ public struct PatinaTextField: View {
                 if let icon {
                     Image(systemName: icon)
                         .foregroundStyle(
-                            hasError ? PatinaColors.error : PatinaColors.Text.muted
+                            hasError ? PatinaColors.Text.error : PatinaColors.Text.muted
                         )
                         .frame(width: 20)
                 }
@@ -101,7 +108,7 @@ public struct PatinaTextField: View {
             if let error, !error.isEmpty {
                 Text(error)
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.error)
+                    .foregroundStyle(PatinaColors.Text.error)
                     .accessibilityIdentifier("patinaTextField.errorText")
             } else if let helper, !helper.isEmpty {
                 Text(helper)

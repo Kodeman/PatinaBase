@@ -22,6 +22,14 @@ public enum PatinaTypography {
 
     public static let display2 = Font.custom(displayFont + "-Medium", size: 40, relativeTo: .largeTitle)
 
+    /// C3-15: the Reveal's aesthetic-name hero asked for `PlayfairDisplay-Light`
+    /// at 42 pt. That face is not vendored, so `Font.custom` fell back to San
+    /// Francisco silently. The finding's fix line offers two ways out —
+    /// "ship PlayfairDisplay-Light **or** change that call to -Regular" — and
+    /// this is the second. `display2` is Medium, a weight heavier than either
+    /// option, and this hero is the screen that names the tester's taste.
+    public static let display2Regular = Font.custom(displayFont + "-Regular", size: 40, relativeTo: .largeTitle)
+
     public static let displaySmall = Font.custom(displayFont + "-Medium", size: 28, relativeTo: .title2)
 
     public static let h1 = Font.custom(displayFont + "-Medium", size: 32, relativeTo: .title)
@@ -63,6 +71,13 @@ public enum PatinaTypography {
     public static let caption = Font.custom(bodyFont + "-Medium", size: 12, relativeTo: .caption)
 
     public static let captionMedium = Font.custom(bodyFont + "-SemiBold", size: 12, relativeTo: .caption)
+
+    /// C3-15: a serif caption. The browse tile's price was an inline 11 pt
+    /// Playfair Medium; promoting it to `captionMedium` would have quietly
+    /// changed the price — the one thing a tester reads on a tile — from the
+    /// brand's serif to Inter. Promoting a call site to a token is not a
+    /// licence to restyle it.
+    public static let captionSerif = Font.custom(displayFont + "-Medium", size: 12, relativeTo: .caption)
 
     /// Smallest UI text — 10px Inter, dense metadata (room context bars,
     /// insight/pairing strips, badge numerals). R22: replaces the raw

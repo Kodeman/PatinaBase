@@ -43,7 +43,14 @@ struct ContrastTests {
     func bodyTextClearsAA() {
         let body: [(String, Color)] = [
             ("Text.primary", PatinaColors.Text.primary),
-            ("Text.secondary", PatinaColors.Text.secondary)
+            ("Text.secondary", PatinaColors.Text.secondary),
+            // `Text.error` is ink at fifteen sites — "Overdue" on the Today
+            // Record card, the past-due line on invoices, decisions and
+            // proposals, and every sheet's validation message. It is prose a
+            // tester has to read, so it takes the body bar, not the 3:1
+            // non-text bar. `PatinaColors.error` itself computes 3.03:1 on the
+            // light canvas, which is what put it here.
+            ("Text.error", PatinaColors.Text.error)
         ]
         for style in PatinaContrast.appearances {
             for (inkName, ink) in body {
@@ -109,10 +116,16 @@ struct ContrastTests {
 
     /// `A-73`, `A-90`, `C3-05`. Every filled style the button component
     /// publishes, label against its own fill.
+    ///
+    /// `.secondary` is excluded here and measured separately below: its "fill"
+    /// is `Background.primary`, i.e. the page colour, so measuring its label
+    /// against it re-measures body-text-on-page — which `bodyTextClearsAA`
+    /// already covers — and would stay green in the one case that can actually
+    /// fail, a `.secondary` button placed on a card.
     @Test("every filled button puts its label at 4.5:1 or better on its own fill")
     func everyFilledButtonLabelClearsAA() {
         for style in PatinaContrast.appearances {
-            for buttonStyle in PatinaButtonStyle.filledCases {
+            for buttonStyle in PatinaButtonStyle.filledCases where buttonStyle != .secondary {
                 let measured = PatinaContrast.ratio(
                     buttonStyle.patinaLabelColor,
                     on: buttonStyle.patinaFillColor,
@@ -121,6 +134,26 @@ struct ContrastTests {
                 #expect(
                     measured >= 4.5,
                     "PatinaButton .\(buttonStyle) label on its fill in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below 4.5:1"
+                )
+            }
+        }
+    }
+
+    /// `.secondary` paints no fill of its own — it takes the colour of
+    /// whatever it is placed on. A secondary button sits on the page on the
+    /// Welcome screen and on a card inside a sheet, so its label owes the body
+    /// bar against **both** grounds, which is the case the `filledCases` loop
+    /// above could not see.
+    @Test("the outline button's label holds on both grounds it is used on")
+    func secondaryButtonLabelHoldsOnEveryGround() {
+        for style in PatinaContrast.appearances {
+            for (groundName, ground) in Self.grounds {
+                let label = PatinaContrast.ratio(
+                    PatinaButtonStyle.secondary.patinaLabelColor, on: ground, style
+                )
+                #expect(
+                    label >= 4.5,
+                    "PatinaButton .secondary label on \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(label)):1, below 4.5:1"
                 )
             }
         }

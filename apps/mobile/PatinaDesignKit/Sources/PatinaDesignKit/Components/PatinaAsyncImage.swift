@@ -106,7 +106,11 @@ public struct PatinaAsyncImage: View {
             )
             .overlay(shimmer)
             .clipped()
-            .accessibilityLabel(PatinaAsyncImageState.loading.accessibilityLabel)
+            // Hidden, and therefore given no label: a tile that is still
+            // loading has nothing to say that the card's own combined label
+            // does not already say, and announcing "Loading image" mid-scroll
+            // is noise. `PatinaAsyncImageState.loading.accessibilityLabel`
+            // exists for the other two states, which are not hidden.
             .accessibilityHidden(true)
     }
 

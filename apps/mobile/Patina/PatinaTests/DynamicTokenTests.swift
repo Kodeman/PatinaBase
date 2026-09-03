@@ -92,4 +92,30 @@ struct DynamicTokenTests {
             #expect(!PatinaContrast.isAdaptive(color), "\(name) adapts — it is ink for a permanently dark surface and must not")
         }
     }
+
+    /// `Background.dark` has exactly one job: a deliberately dark **object**
+    /// drawn on the page — the orb, the panel, the toast, the budget bars, the
+    /// consultation hero — which has to separate from whatever is behind it.
+    /// That is why it lifts to `#524B44` in dark mode.
+    ///
+    /// A full-screen immersive ground is not that object; it *is* the page,
+    /// and there is nothing for it to separate from. The story reader is the
+    /// only such surface, its call site carries a comment saying it "stays
+    /// charcoal in both modes", and pointing it at `Background.dark` made that
+    /// comment false: the reader became a mid warm-grey. This pins the split
+    /// so the next person to add a full-screen dark ground does not reach for
+    /// the object token.
+    @Test("the immersive reader's ground is static charcoal, not the object token")
+    func theImmersiveReaderStaysCharcoal() throws {
+        #expect(
+            !PatinaContrast.isAdaptive(PatinaColors.charcoal),
+            "charcoal became adaptive — the immersive reader depends on it being one value"
+        )
+
+        let source = try SourcePin.read("Patina/Features/Home/Views/DailyStoryDetailView.swift")
+        #expect(
+            !source.contains("PatinaColors.Background.dark"),
+            "DailyStoryDetailView paints its full-screen ground with Background.dark, which lifts to #524B44 in dark mode — the reader is the page, not an object on it"
+        )
+    }
 }

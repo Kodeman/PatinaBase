@@ -104,4 +104,41 @@ struct CompanionOrbAppearanceTests {
             "Text.inverse at 0.72 on the panel in dark now measures \(PatinaContrast.rounded(measured)):1 — if this passes, C-02's premise changed and the note to L1-C needs rewriting"
         )
     }
+
+    // MARK: - The call sites
+    //
+    // The four assertions above measure tokens. A token that no screen uses
+    // fixes nothing, and the first round of this lane shipped exactly that:
+    // the right tokens, a counterfactual pinning the *premise*, and both call
+    // sites untouched. These pin the fix.
+
+    /// `C-02`. The panel's status line, by name.
+    @Test("the companion panel's subtitle is painted with on-dark ink, not the flipping token")
+    func thePanelSubtitleUsesOnDarkInk() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Companion/Components/CompanionHearthView.swift"
+        )
+        #expect(
+            !source.contains("PatinaColors.Text.inverse"),
+            "CompanionHearthView still paints the panel with Text.inverse, which resolves to #211E1B in dark — that is C-02, and it is 1.11:1"
+        )
+    }
+
+    /// `C-01`. Every disc the Companion draws, including the Liquid Glass tint
+    /// on the State-5 minimal pill, which the first round left as a hard-coded
+    /// `charcoal.opacity(0.7)` on the dark canvas.
+    @Test("no companion disc is tinted with a hard-coded charcoal")
+    func everyCompanionDiscIsAdaptive() throws {
+        for path in [
+            "Patina/Features/Companion/Views/CompanionOverlay.swift",
+            "Patina/Features/Companion/Components/CompanionHearthView.swift",
+            "Patina/Features/Companion/Components/CompanionMarkView.swift"
+        ] {
+            let source = try SourcePin.read(path)
+            #expect(
+                !source.contains("PatinaColors.charcoal.opacity"),
+                "\(path) tints a companion surface with a hard-coded charcoal — on the dark canvas that is C-01's 1.15:1 all over again"
+            )
+        }
+    }
 }

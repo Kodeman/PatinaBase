@@ -105,6 +105,12 @@ public enum PatinaColors {
         static let textMuted = Color(hex: "C7B99F")
         /// Interactive text on dark — lighter clay reads better than clayInk
         static let textInteractive = clay
+        /// Error ink on dark. `errorDeep` is the light side's answer and is
+        /// 2.78:1 on the dark canvas — darkening for one appearance blinds the
+        /// other. This is `error` lifted until it clears the body bar on the
+        /// card (5.53:1), which is where "Overdue" and every sheet's
+        /// validation line actually sit.
+        static let textError = Color(hex: "DE8A7B")
     }
 
     // MARK: - Semantic Colors
@@ -199,6 +205,16 @@ public enum PatinaColors {
         /// one of them its dark-mode contrast.
         public static let interactive = Color.patinaDynamic(
             light: clayInk, dark: DarkPalette.textInteractive
+        )
+        /// `A-73`. The status colour `error` is ink at fifteen sites —
+        /// "Overdue" on the Today Record card, the past-due line on invoices,
+        /// decisions and proposals, and every sheet's validation message — and
+        /// it computes **3.03:1** on the light canvas, below AA for prose a
+        /// tester has to read. `error` itself is untouched: it stays the
+        /// non-text value for the error border and the 10 %-opacity washes,
+        /// which take the 3:1 bar and pass it.
+        public static let error = Color.patinaDynamic(
+            light: errorDeep, dark: DarkPalette.textError
         )
     }
 
