@@ -132,3 +132,29 @@ export function hasDeskWalkthroughReplayParam(search: string): boolean {
   const params = new URLSearchParams(query);
   return params.get(DESK_WALKTHROUGH_REPLAY_PARAM) === DESK_WALKTHROUGH_TOUR_ID;
 }
+
+/**
+ * L7 — the teammate persona (flag `onboarding-teammate-persona`).
+ *
+ * Resolution (orchestrator clarification): owner → `'designer'`; any other
+ * active `organization_members` role → `'teammate'`; no membership, or the
+ * flag off/loading → `'designer'` — i.e. today's unchanged behaviour. Pure so
+ * it's testable without mounting `useFeatureFlag` or `useOrganizations`.
+ */
+export interface DeskWalkthroughPersonaInput {
+  /** `useFeatureFlag('onboarding-teammate-persona').value` */
+  flagEnabled: boolean;
+  /** `useFeatureFlag('onboarding-teammate-persona').isLoading` */
+  flagLoading: boolean;
+  /** The signed-in person's own `organization_members.role` for their studio,
+   *  or `null` when they have no (active) membership. */
+  membershipRole: 'owner' | 'admin' | 'member' | 'guest' | null;
+}
+
+export function resolveDeskWalkthroughPersona(
+  input: DeskWalkthroughPersonaInput,
+): 'designer' | 'teammate' {
+  if (!input.flagEnabled || input.flagLoading) return 'designer';
+  if (!input.membershipRole || input.membershipRole === 'owner') return 'designer';
+  return 'teammate';
+}

@@ -31,8 +31,15 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(''),
 }));
 
+const mockUseOrganizations = jest.fn(() => ({ data: undefined as unknown }));
 jest.mock('@patina/supabase', () => ({
   useProfile: () => ({ data: { created_at: '2020-01-01T00:00:00Z' } }),
+  useOrganizations: () => mockUseOrganizations(),
+}));
+
+const mockUseFeatureFlag = jest.fn(() => ({ value: false, isLoading: false }));
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (flagName: string) => mockUseFeatureFlag(flagName),
 }));
 
 jest.mock('@/hooks/use-desk-engagements', () => ({
@@ -46,7 +53,13 @@ jest.mock('./help-state-provider', () => ({
 const mockGetTourState = jest.fn(() => ({}));
 const mockSetTourState = jest.fn();
 const mockTourCaptured: {
-  steps?: Array<{ anchorSelector?: string }>;
+  steps?: Array<{ anchorSelector?: string; fallbackHeading?: string; fallbackBody?: string }>;
+  persona?: string;
+} = {};
+const mockWelcomeCaptured: {
+  persona?: string;
+  fallbackTitle?: string;
+  fallbackBody?: string;
 } = {};
 
 // Trap 1/2 (patina-testing): mock the RESOLVED barrel path so next/jest's SWC
@@ -68,13 +81,20 @@ jest.mock('../../../../../../packages/help-system/src/index.ts', () => ({
       Document: { Welcome: 'designer-portal/document/welcome' },
     },
   },
-  WelcomeModal: () => null,
+  WelcomeModal: (props: { persona?: string; fallbackTitle?: string; fallbackBody?: string }) => {
+    mockWelcomeCaptured.persona = props.persona;
+    mockWelcomeCaptured.fallbackTitle = props.fallbackTitle;
+    mockWelcomeCaptured.fallbackBody = props.fallbackBody;
+    return null;
+  },
   TourController: (props: {
-    steps: Array<{ anchorSelector?: string }>;
+    steps: Array<{ anchorSelector?: string; fallbackHeading?: string; fallbackBody?: string }>;
+    persona?: string;
     onComplete?: () => void;
     children: (api: unknown) => React.ReactNode;
   }) => {
     mockTourCaptured.steps = props.steps;
+    mockTourCaptured.persona = props.persona;
     const api = {
       currentStep: props.steps.length - 1,
       totalSteps: props.steps.length,
@@ -104,6 +124,10 @@ beforeEach(() => {
   mockOpenCaptureLead.mockClear();
   mockSetTourState.mockClear();
   mockGetTourState.mockClear();
+  mockUseOrganizations.mockReturnValue({ data: undefined });
+  mockUseFeatureFlag.mockReturnValue({ value: false, isLoading: false });
+  delete mockTourCaptured.persona;
+  delete mockWelcomeCaptured.persona;
 });
 
 describe('DeskWalkthrough — step 1 anchor', () => {
@@ -135,5 +159,84 @@ describe('DeskWalkthrough — step 6 acts', () => {
     // actually ran (TourController's internal setTourState is stubbed away
     // in this fake, so it is not the completion signal here).
     expect(window.localStorage.getItem('patina:margin-note:desk-first-touch')).not.toBeNull();
+  });
+});
+
+// ─── L7 — teammate persona (flag `onboarding-teammate-persona`) ───────────────
+
+const MEMBER_ORG = {
+  id: 'org-1',
+  type: 'design_studio',
+  name: "Leah's Studio",
+  membership: { id: 'mem-1', role: 'member', status: 'active', joined_at: null },
+};
+
+const OWNER_ORG = {
+  ...MEMBER_ORG,
+  membership: { id: 'mem-2', role: 'owner', status: 'active', joined_at: null },
+};
+
+describe('DeskWalkthrough — teammate persona (L7)', () => {
+  it('flag off: a non-owner member still gets the designer steps and persona (unchanged behaviour)', () => {
+    mockUseFeatureFlag.mockReturnValue({ value: false, isLoading: false });
+    mockUseOrganizations.mockReturnValue({ data: [MEMBER_ORG] });
+
+    render(<DeskWalkthrough />);
+
+    expect(mockTourCaptured.persona).toBe('designer');
+    expect(mockWelcomeCaptured.persona).toBe('designer');
+    expect(mockTourCaptured.steps?.[0]?.fallbackHeading).toBe('The Desk');
+  });
+
+  it('flag loading: a non-owner member still gets the designer steps and persona (unchanged behaviour)', () => {
+    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: true });
+    mockUseOrganizations.mockReturnValue({ data: [MEMBER_ORG] });
+
+    render(<DeskWalkthrough />);
+
+    expect(mockTourCaptured.persona).toBe('designer');
+    expect(mockWelcomeCaptured.persona).toBe('designer');
+  });
+
+  it('flag on, owner: designer steps and persona', () => {
+    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
+    mockUseOrganizations.mockReturnValue({ data: [OWNER_ORG] });
+
+    render(<DeskWalkthrough />);
+
+    expect(mockTourCaptured.persona).toBe('designer');
+    expect(mockWelcomeCaptured.persona).toBe('designer');
+  });
+
+  it('flag on, no membership: designer steps and persona', () => {
+    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
+    mockUseOrganizations.mockReturnValue({ data: [] });
+
+    render(<DeskWalkthrough />);
+
+    expect(mockTourCaptured.persona).toBe('designer');
+  });
+
+  it('flag on, non-owner active member: teammate persona, STEPS_TEAMMATE fallback copy, and the welcome-modal teammate copy', () => {
+    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
+    mockUseOrganizations.mockReturnValue({ data: [MEMBER_ORG] });
+
+    render(<DeskWalkthrough />);
+
+    expect(mockTourCaptured.persona).toBe('teammate');
+    // Step 1's teammate body is the only one that changes for step 1 (proposal
+    // table row 1) — pins the fallback content swap, verbatim from
+    // proposals/customer-success-lead.md §3.
+    expect(mockTourCaptured.steps?.[0]?.fallbackHeading).toBe('The Desk');
+    expect(mockTourCaptured.steps?.[0]?.fallbackBody).toBe(
+      "Every live job in the studio lands here, one line each. A mark at the margin means someone's hand is needed — not always yours.",
+    );
+    expect(mockTourCaptured.steps).toHaveLength(6);
+
+    expect(mockWelcomeCaptured.persona).toBe('teammate');
+    expect(mockWelcomeCaptured.fallbackTitle).toBe("You're in — Leah's Studio.");
+    expect(mockWelcomeCaptured.fallbackBody).toBe(
+      'From here, her desk and yours are the same desk. Six stops, about a minute.',
+    );
   });
 });

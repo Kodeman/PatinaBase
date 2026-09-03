@@ -31,6 +31,13 @@ const ASPECT_RATIO_CLASS: Record<AspectRatio, string> = {
 export interface VideoPlayerProps {
   /** Direct asset URL (Sanity CDN URL, Mux playback URL, etc.). Takes precedence over CMS lookup. */
   src?: string
+  /**
+   * Cloudflare Stream video id (decision 14, 2026-09-03). When set, renders
+   * `https://iframe.videodelivery.net/<streamUid>` in an iframe instead of
+   * the native `<video>` element — takes precedence over `src`. The `src`
+   * path is otherwise unchanged.
+   */
+  streamUid?: string
   /** Surface key from the help-system registry — resolves to a videoContent doc in Sanity. */
   surfaceKey?: string
   /** Optional poster image URL. */
@@ -89,6 +96,7 @@ function isVideoShaped(content: unknown): content is VideoContent {
  */
 export function VideoPlayer({
   src,
+  streamUid,
   surfaceKey,
   poster,
   captionsUrl,
@@ -154,11 +162,36 @@ export function VideoPlayer({
     [surfaceKey, effectiveSrc],
   )
 
+  const frameClass = ASPECT_RATIO_CLASS[aspectRatio]
+
+  // Cloudflare Stream (decision 14, 2026-09-03) — streamUid takes precedence
+  // over src, same as an explicit src takes precedence over the CMS lookup.
+  // The existing src-based <video> path below is otherwise unchanged.
+  if (streamUid) {
+    return (
+      <div className={cn('w-full', className)}>
+        <div
+          data-help-video-frame
+          className={cn(
+            'relative w-full overflow-hidden rounded-md bg-black',
+            frameClass,
+          )}
+        >
+          <iframe
+            className="absolute inset-0 h-full w-full"
+            src={`https://iframe.videodelivery.net/${streamUid}`}
+            title={ariaLabel}
+            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    )
+  }
+
   // Silent absence: no usable source means we render nothing. Honor spec §13.4
   // — help-system surfaces should never block the UI when content is missing.
   if (!effectiveSrc) return null
-
-  const frameClass = ASPECT_RATIO_CLASS[aspectRatio]
 
   return (
     <div className={cn('w-full', className)}>
