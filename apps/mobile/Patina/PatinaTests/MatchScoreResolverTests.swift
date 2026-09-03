@@ -118,6 +118,24 @@ struct MatchScoreResolverTests {
         #expect(product("a", score: 1).hasMatchScore)
     }
 
+    /// `matchLabel` is the right thing to *say* — VoiceOver reads "Not scored
+    /// yet" and that is honest. It is the wrong thing to *draw*: both render
+    /// sites put it inside a capsule tinted `PatinaColors.success`, so a piece
+    /// opened by id in a session that never scored it drew a green verdict
+    /// badge announcing the absence of a verdict (review `RL1B3-04`).
+    ///
+    /// `matchVerdict` is the drawable half, and it is `nil` when there is no
+    /// verdict, so a guarded call site draws nothing at all.
+    @Test
+    func anUnscoredPieceHasNoVerdictAtAll() {
+        #expect(product("a", score: 0).matchVerdict == nil)
+        #expect(product("a", score: 73).matchVerdict == "Strong match")
+        #expect(product("a", score: 57).matchVerdict == "Good match")
+        #expect(product("a", score: 41).matchVerdict == "Worth a look")
+        // The spoken string is unchanged — E3-L1B-3 ratified all four bands.
+        #expect(product("a", score: 0).matchLabel == "Not scored yet")
+    }
+
     /// The client no longer maps `quality_score` into the match.
     @Test
     func theRawMapperNoLongerBorrowsQualityScore() throws {
@@ -143,5 +161,36 @@ struct MatchScoreResolverTests {
 
         room.items = [unscored]
         #expect(room.averageMatchScore == nil)
+    }
+}
+
+// MARK: - The cross-lane half
+
+/// `A-34`/`C-11`'s remaining half is note **O11**: the two render sites are
+/// `ProductDetailView.swift` and `RecommendationsView.swift`, both L1-C's
+/// files, and L1-C has already merged (review `RL1B3-03`). Until the note is
+/// applied, an unscored piece draws `matchLabel` inside a
+/// `PatinaColors.success` capsule.
+///
+/// A known issue, deliberately **not** `isIntermittent`: green while the note
+/// is genuinely owed, red the moment the guard lands — which is the signal to
+/// delete this block. Scheduling is `l1b-notes-out.md` §S6.
+@MainActor
+extension MatchScoreResolverTests {
+
+    @Test(
+        "the verdict pills guard on matchVerdict",
+        arguments: [
+            "Patina/Features/ProductDetail/Views/ProductDetailView.swift",
+            "Patina/Features/Recommendations/Views/RecommendationsView.swift"
+        ]
+    )
+    func theVerdictPillsAreStillUnguarded(path: String) throws {
+        let code = SourceScan.code(in: try SourcePin.read(path))
+        withKnownIssue(
+            "a verdict pill owes its matchVerdict guard (l1b-notes-out.md O11, merge 1)"
+        ) {
+            #expect(code.contains("matchVerdict"))
+        }
     }
 }

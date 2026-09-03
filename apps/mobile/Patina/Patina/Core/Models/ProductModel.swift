@@ -211,6 +211,16 @@ struct Product: Identifiable, Hashable, Codable {
     /// Whether `matchLabel` is describing a score the app actually has.
     var hasMatchScore: Bool { matchScore > 0 }
 
+    /// The drawable half of `matchLabel`, and `nil` when there is no verdict.
+    ///
+    /// `matchLabel` is the right thing to *say* — VoiceOver reading "Not
+    /// scored yet" is honest. It is the wrong thing to *draw*: both render
+    /// sites put it in a capsule tinted `PatinaColors.success`, so a piece
+    /// opened by id in a session that never scored it drew a green verdict
+    /// badge announcing the absence of a verdict (review `RL1B3-04`). A call
+    /// site that reads this one draws nothing instead.
+    var matchVerdict: String? { hasMatchScore ? matchLabel : nil }
+
     var hasARModel: Bool {
         usdzURL != nil
     }
