@@ -67,12 +67,29 @@ struct TestAccountLoginFallback: Sendable {
         }
     )
 
-    /// Whether the pair is even worth sending. Deliberately NOT an allow-list:
-    /// the only thing rejected here is a request the server could not act on
-    /// anyway, so no real address is ever singled out and no one can read the
-    /// roster off the binary.
+    /// The one domain a test account can be on. Patina's own, and public —
+    /// it is on the App Store listing and in every invite — so it is not a
+    /// roster and names nobody. Ruling D7's identity is on it; so was the
+    /// retired one.
+    ///
+    /// Extending the Vault allow-list (`app_setting 'test_login_accounts'`) to
+    /// an address outside this domain needs an app change, and that is the
+    /// deliberate trade: without it every mistyped sixth digit from a real
+    /// homeowner POSTs their address and the code they typed to a pre-auth
+    /// public endpoint — and `C1-37`'s auto-verify fires on every one of them,
+    /// which would also feed 00551's rate limiter with genuine-user traffic.
+    static let testAccountDomain = "@patina.cloud"
+
+    /// Whether the pair is even worth sending.
+    ///
+    /// Still NOT an allow-list: it names a domain, never an address, so no
+    /// person is singled out and no roster can be read off the binary. The
+    /// server remains the only thing that decides — every miss on a
+    /// `@patina.cloud` address still comes back as the same generic 403.
     static func isWorthAttempting(email: String, code: String) -> Bool {
-        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !address.isEmpty
+            && address.lowercased().hasSuffix(testAccountDomain)
             && !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 

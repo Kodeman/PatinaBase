@@ -42,21 +42,21 @@ struct TestAccountLoginFallbackTests {
     @Test("a generic 403 — the only answer a miss ever gets — fails closed")
     func genericDenyFailsClosed() async {
         let sut = fallback(mint: { _, _ in throw NetworkError.serverError(statusCode: 403, message: nil) })
-        #expect(await sut.attempt(email: "someone@example.com", code: "111111") == false)
+        #expect(await sut.attempt(email: "firstflight@patina.cloud", code: "111111") == false)
     }
 
     @Test("a 200 with no token_hash fails closed")
     func missingHashFailsClosed() async {
         let sut = fallback(mint: { _, _ in .init(tokenHash: nil) })
-        #expect(await sut.attempt(email: "a@b.co", code: "000000") == false)
+        #expect(await sut.attempt(email: "firstflight@patina.cloud", code: "000000") == false)
         let empty = fallback(mint: { _, _ in .init(tokenHash: "") })
-        #expect(await empty.attempt(email: "a@b.co", code: "000000") == false)
+        #expect(await empty.attempt(email: "firstflight@patina.cloud", code: "000000") == false)
     }
 
     @Test("a 429 rate limit fails closed")
     func rateLimitFailsClosed() async {
         let sut = fallback(mint: { _, _ in throw NetworkError.rateLimited })
-        #expect(await sut.attempt(email: "a@b.co", code: "000000") == false)
+        #expect(await sut.attempt(email: "firstflight@patina.cloud", code: "000000") == false)
     }
 
     @Test("a hash that will not redeem fails closed")
@@ -65,37 +65,52 @@ struct TestAccountLoginFallbackTests {
             mint: { _, _ in .init(tokenHash: "h") },
             redeem: { _ in throw NetworkError.unauthorized }
         )
-        #expect(await throwing.attempt(email: "a@b.co", code: "000000") == false)
+        #expect(await throwing.attempt(email: "firstflight@patina.cloud", code: "000000") == false)
 
         let sessionless = fallback(mint: { _, _ in .init(tokenHash: "h") }, redeem: { _ in false })
-        #expect(await sessionless.attempt(email: "a@b.co", code: "000000") == false)
+        #expect(await sessionless.attempt(email: "firstflight@patina.cloud", code: "000000") == false)
     }
 
-    @Test("an empty email or code is never sent — nothing else is filtered")
-    func onlyUnsendablePairsAreWithheld() async {
+    /// PROGRAM.md §3 · L1-A: "never sends the pair for a non-test address
+    /// (A3-16, D7)". Without the gate every failed OTP POSTed a real person's
+    /// address and the code they typed to a pre-auth public endpoint — and
+    /// C1-37's auto-verify fires that on every mistyped sixth digit, which
+    /// also feeds 00551's rate limiter with genuine-user traffic.
+    @Test("no pair leaves the device for a non-test address")
+    func noPairLeavesTheDeviceForANonTestAddress() async {
         let sent = TestLoginBox<Int>(0)
         let sut = fallback(
             mint: { _, _ in sent.withLock { $0 += 1 }; return .init(tokenHash: "h") }
         )
+        // Unsendable at all.
         #expect(await sut.attempt(email: "", code: "000000") == false)
-        #expect(await sut.attempt(email: "a@b.co", code: "   ") == false)
+        #expect(await sut.attempt(email: "firstflight@patina.cloud", code: "   ") == false)
+        // A real homeowner mistyping their code.
+        #expect(await sut.attempt(email: "anyone@anywhere.test", code: "424242") == false)
+        #expect(await sut.attempt(email: "someone@gmail.com", code: "000000") == false)
+        // A near-miss that must not pass: the domain has to END the address.
+        #expect(await sut.attempt(email: "me@patina.cloud.example.com", code: "000000") == false)
         #expect(sent.withLock { $0 } == 0)
 
-        // Any real-looking pair goes to the server — the server decides.
-        #expect(await sut.attempt(email: "anyone@anywhere.test", code: "424242"))
-        #expect(sent.withLock { $0 } == 1)
+        // Ruling D7's identity, and the retired one. Case is not a gate.
+        #expect(await sut.attempt(email: "firstflight@patina.cloud", code: "000000"))
+        #expect(await sut.attempt(email: "Tester@Patina.Cloud", code: "000000"))
+        #expect(sent.withLock { $0 } == 2)
     }
 
     @Test("THE ALLOW-LIST IS THE SERVER'S — the app carries no address list")
     func noAllowListInTheBinary() throws {
         let service = try SourcePin.read("Patina/Services/Auth/TestAccountLoginFallback.swift")
-        // No hard-coded tester identity, and no domain gate. `isWorthAttempting`
-        // rejects only a pair the server could not act on at all.
-        #expect(!service.contains("patina.cloud\""))
-        #expect(!service.contains("@patina"))
+        // A domain, never an address: nothing in the binary names a person,
+        // and every miss still comes back as the same generic 403, so the
+        // roster stays unreadable from here.
+        #expect(!service.contains("firstflight@"))
+        #expect(!service.contains("tester@"))
         #expect(!service.lowercased().contains("allowlist ="))
         #expect(service.contains("func isWorthAttempting"))
-        #expect(TestAccountLoginFallback.isWorthAttempting(email: "a@b.co", code: "1"))
+        #expect(TestAccountLoginFallback.testAccountDomain == "@patina.cloud")
+        #expect(TestAccountLoginFallback.isWorthAttempting(email: "anyone@patina.cloud", code: "1"))
+        #expect(!TestAccountLoginFallback.isWorthAttempting(email: "a@b.co", code: "1"))
         #expect(!TestAccountLoginFallback.isWorthAttempting(email: " ", code: "1"))
     }
 
