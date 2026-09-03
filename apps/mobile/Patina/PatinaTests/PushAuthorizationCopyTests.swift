@@ -94,6 +94,26 @@ struct PushAuthorizationCopyTests {
         #expect(code.contains("PushPrimerView.OpenSettings"))
     }
 
+    /// Round 2: `.granted` is not a state the pre-ask switch can be in —
+    /// `outcome(for:)` produces only `.alreadyAuthorized`, `.denied` or `.ask`.
+    /// It shares `.ask`'s arm so the switch stays exhaustive over the enum
+    /// without reading as a fourth reachable case.
+    @Test("the pre-ask switch has no unreachable arm")
+    func thePreAskSwitchHasNoUnreachableArm() throws {
+        for status in [
+            UNAuthorizationStatus.notDetermined, .denied, .authorized,
+            .provisional, .ephemeral
+        ] {
+            #expect(PushTokenService.outcome(for: status) != .granted)
+        }
+
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Services/API/PushTokenService.swift")
+        )
+        #expect(code.contains("case .ask, .granted:"))
+        #expect(code.contains("case .granted:\n            break") == false)
+    }
+
     /// Q7's sentence is ruled verbatim and this lane does not touch it.
     @Test("the promise the ask is made on is unchanged")
     func theRuledSentenceIsUntouched() {

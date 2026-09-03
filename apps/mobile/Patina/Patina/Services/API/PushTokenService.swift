@@ -79,9 +79,11 @@ final class PushTokenService {
             return .alreadyAuthorized
         case .denied:
             return .denied
-        case .ask:
-            break
-        case .granted:
+        // `.granted` is unreachable here — `outcome(for:)` returns only
+        // `.alreadyAuthorized`, `.denied` or `.ask` — and is listed so the
+        // switch stays exhaustive over the enum rather than over the three
+        // cases one function happens to produce today.
+        case .ask, .granted:
             break
         }
 
