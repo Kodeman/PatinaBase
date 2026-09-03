@@ -109,6 +109,13 @@ struct ScanFallbackEntryView: View {
                         Text(emoji).font(.system(size: 20))
                         Text(label)
                             .font(PatinaTypography.caption)
+                            // Review RL1B2-18: at
+                            // `accessibility-extra-large` a three-across grid
+                            // is narrower than the word, and the cells read
+                            // "Bedroo m". One line that shrinks is the only
+                            // honest answer for a six-cell picker.
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                     }
                     .foregroundStyle(selectedType == id ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                     .frame(maxWidth: .infinity)

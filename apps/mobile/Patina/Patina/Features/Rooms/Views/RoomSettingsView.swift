@@ -303,6 +303,11 @@ struct RoomSettingsView: View {
                 .foregroundStyle(PatinaColors.terracotta)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
+                // Review RL1B2-17: `describe_screen` measured this control's
+                // hit area at 100.7 × 14.7 pt — the glyph box, not the 46 pt
+                // row — on the one irreversible action on the screen. A tap
+                // at its visual centre selected the tab behind it.
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
