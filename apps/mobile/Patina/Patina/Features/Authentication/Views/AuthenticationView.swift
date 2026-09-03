@@ -160,9 +160,9 @@ public struct AuthenticationView: View {
         case .signUp:
             return "Save your rooms and pieces, and pick them up on any device."
         case .magicLink:
-            return "We'll email you a sign-in code — no password needed"
+            return "We’ll email you a sign-in code — no password needed"
         case .resetPassword:
-            return "We'll send you a reset link"
+            return "We’ll send you a reset link"
         }
     }
 
@@ -403,7 +403,7 @@ public struct AuthenticationView: View {
             if viewModel.mode != .magicLink {
                 HStack(spacing: PatinaSpacing.xs) {
                     Text(viewModel.mode == .signIn
-                         ? "Don't have an account?"
+                         ? "Don’t have an account?"
                          : "Already have an account?")
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.Text.muted)

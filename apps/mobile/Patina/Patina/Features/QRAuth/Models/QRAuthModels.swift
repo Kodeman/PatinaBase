@@ -231,9 +231,9 @@ public enum QRAuthError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .invalidQRFormat:
-            return "This QR code isn't valid for Patina authentication."
+            return "This QR code isn’t valid for Patina authentication."
         case .invalidURLScheme:
-            return "This QR code isn't from Patina."
+            return "This QR code isn’t from Patina."
         case .invalidSessionToken:
             return "The session token is invalid."
         case .invalidExpiration:

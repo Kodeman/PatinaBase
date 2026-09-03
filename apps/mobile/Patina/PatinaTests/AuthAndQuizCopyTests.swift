@@ -26,7 +26,14 @@ struct AuthAndQuizCopyTests {
         "Patina/Features/StyleQuiz/Models/QuizModels.swift",
         "Patina/Features/Account/AccountView.swift",
         "Patina/Features/Account/AccountDeletionService.swift",
-        "Patina/Features/Authentication/ViewModels/AuthViewModel.swift"
+        "Patina/Features/Authentication/ViewModels/AuthViewModel.swift",
+        // RL3A-11 — three more files this lane owns. The sign-in sheet was
+        // rendering both glyphs at once: a straight-apostrophe header subtitle
+        // ("We'll email you a sign-in code") over the curly-apostrophe failure
+        // sentences round two introduced two rows below it.
+        "Patina/Features/Authentication/Views/AuthenticationView.swift",
+        "Patina/Features/StyleConversation/ViewModels/StyleConversationViewModel.swift",
+        "Patina/Features/QRAuth/Models/QRAuthModels.swift"
     ]
 
     // MARK: - A-L1E-8 · C5-10
