@@ -177,6 +177,15 @@ struct HelpPanelSheetTests {
         )
         let raw = url.absoluteString
         #expect(raw.contains("%22designer-portal/today/dashboard%22"))
+        // R-10: the GROQ contains `surfaceKey + "/"`, and `URLComponents`
+        // does not percent-encode `+`. Sanity form-decodes it back to a
+        // space, the query stops parsing, and EVERY article fetch on every
+        // surface returned HTTP 400 — which is why the panel has never shown
+        // an article on any build. Read `absoluteString`, not the decoded
+        // query: `URLComponents` turns `%2B` back into `+`, which is exactly
+        // why the test above never caught this.
+        #expect(raw.contains("surfaceKey%20%2B%20%22/%22"))
+        #expect(raw.contains("surfaceKey + ") == false)
     }
 
     // MARK: Article-list fetching
@@ -251,34 +260,71 @@ struct HelpPanelSheetTests {
         #expect(partial.summary == "")
     }
 
+    /// R-10: this used to pin the swallow as intended behaviour. A transport
+    /// failure is not "no articles here yet".
     @Test
-    func fetchArticles_swallowsNetworkErrorAndReturnsEmpty() async throws {
+    func fetchArticles_throwsOnNetworkError() async {
         struct Boom: Error {}
         let session = ListStubURLSession()
         session.error = Boom()
         let client = SanityHelpClient(session: session)
 
-        // Should NOT throw — network failures collapse to [].
-        let results = try await client.fetchArticles(
-            forSurfaceKey: "designer-portal/today/dashboard"
-        )
-
-        #expect(results.isEmpty)
+        await #expect(throws: HelpArticleFetchError.self) {
+            _ = try await client.fetchArticles(
+                forSurfaceKey: "designer-portal/today/dashboard"
+            )
+        }
         #expect(session.requestCount == 1)
     }
 
     @Test
-    func fetchArticles_swallowsNon2xxAndReturnsEmpty() async throws {
+    func fetchArticles_throwsOnNon2xx() async {
         let session = ListStubURLSession()
         session.enqueue([.nonOk(500)])
         let client = SanityHelpClient(session: session)
 
-        let results = try await client.fetchArticles(
+        await #expect(throws: HelpArticleFetchError.self) {
+            _ = try await client.fetchArticles(
+                forSurfaceKey: "designer-portal/today/dashboard"
+            )
+        }
+        #expect(session.requestCount == 1)
+    }
+
+    /// The distinction the finding is actually about, at the seam the sheet
+    /// reads: a 400 is a failure, `{"result":[]}` is an empty screen. The
+    /// sheet renders `loadError` for the first and the "on the way" copy for
+    /// the second, and before this they were the same value.
+    @Test
+    func aFourHundredAndAnEmptyResultAreDifferentAnswers() async throws {
+        let failing = ListStubURLSession()
+        failing.enqueue([.nonOk(400)])
+        await #expect(throws: HelpArticleFetchError.self) {
+            _ = try await SanityHelpClient(session: failing).fetchArticles(
+                forSurfaceKey: "designer-portal/today/dashboard"
+            )
+        }
+
+        let empty = ListStubURLSession()
+        empty.enqueue([.ok(emptyResultPayload)])
+        let results = try await SanityHelpClient(session: empty).fetchArticles(
             forSurfaceKey: "designer-portal/today/dashboard"
         )
-
         #expect(results.isEmpty)
-        #expect(session.requestCount == 1)
+    }
+
+    /// A failure must not be cached: `PatinaErrorState`'s retry would do
+    /// nothing for the five-minute TTL, which is worse than the bug.
+    @Test
+    func aFailureIsNotNegativelyCached() async {
+        let session = ListStubURLSession()
+        session.enqueue([.nonOk(400), .nonOk(400)])
+        let client = SanityHelpClient(session: session)
+
+        for _ in 0..<2 {
+            _ = try? await client.fetchArticles(forSurfaceKey: "designer-portal/today/dashboard")
+        }
+        #expect(session.requestCount == 2, "the retry was served from a cached failure")
     }
 
     @Test

@@ -30,13 +30,24 @@
 //
 //  Failure mode
 //  ------------
-//  Network errors, decoding errors, and "missing content" all collapse to
-//  `nil` so help-content downtime never crashes the UI (spec §13.4). The
-//  client logs warnings via `print` rather than throwing; in production
-//  this lands in OSLog via stdout capture.
+//  For `fetchContent`, network errors, decoding errors and "missing content"
+//  all collapse to `nil` so help-content downtime never crashes the UI
+//  (spec §13.4) — every caller there has an inline fallback string.
+//
+//  `fetchArticles` is the exception, and R-10 is why: the article sheet HAS
+//  a designed error state and a designed empty state, and collapsing a
+//  failure into `[]` meant an HTTP 400 rendered as "No help articles yet /
+//  Help content for this screen is on the way." It throws.
 //
 
 import Foundation
+
+/// Why an article list did not come back. The two cases the client can
+/// actually tell apart; the sheet needs only that it failed.
+enum HelpArticleFetchError: Error {
+    case transport(Error)
+    case http(status: Int)
+}
 
 // MARK: - SanityHelpClient
 
@@ -232,8 +243,11 @@ public actor SanityHelpClient {
     ///   `Features/Help/SurfaceKeys.swift`.
     /// - Returns: Up to 20 `HelpArticleSummary` entries, ordered by
     ///   surface-key specificity.
-    /// - Throws: `InvalidSurfaceKeyError` when `surfaceKey` is malformed.
-    ///   All other failures collapse to an empty array.
+    /// - Throws: `InvalidSurfaceKeyError` when `surfaceKey` is malformed, and
+    ///   `HelpArticleFetchError` when the request does not come back.
+    ///   R-10: these used to collapse to an empty array, so the sheet could
+    ///   not tell a failure from a screen with no articles and told the
+    ///   reader the second when the first was true.
     public func fetchArticles(
         forSurfaceKey surfaceKey: SurfaceKey
     ) async throws -> [HelpArticleSummary] {
@@ -261,17 +275,22 @@ public actor SanityHelpClient {
                     "[SanityHelpClient] Article-list non-2xx status=\(http.statusCode)" +
                     " url=\(url.absoluteString)"
                 )
-                articleListCache[surfaceKey] = ArticleListCacheEntry(value: [], storedAt: now())
-                return []
+                // R-10: this used to cache `[]` and return it, so an HTTP 400
+                // arrived in `HelpPanelSheet`'s EMPTY branch and was rendered
+                // as "No help articles yet / Help content for this screen is
+                // on the way." The negative cache write goes with it: a
+                // five-minute cached failure makes the retry button do
+                // nothing for five minutes.
+                throw HelpArticleFetchError.http(status: http.statusCode)
             }
             let summaries = try decodeArticleList(data: data)
             articleListCache[surfaceKey] = ArticleListCacheEntry(value: summaries, storedAt: now())
             return summaries
+        } catch let error as HelpArticleFetchError {
+            throw error
         } catch {
             PatinaLog.ui.error("[SanityHelpClient] Article-list fetch failed: \(error)")
-            // Cache the miss briefly so a transient blip doesn't hammer Sanity.
-            articleListCache[surfaceKey] = ArticleListCacheEntry(value: [], storedAt: now())
-            return []
+            throw HelpArticleFetchError.transport(error)
         }
     }
 
@@ -311,6 +330,10 @@ public actor SanityHelpClient {
             URLQueryItem(name: "query", value: query),
             URLQueryItem(name: "$sk", value: jsonStringLiteral(surfaceKey)),
         ]
+        // URLComponents leaves `+` unescaped; Sanity form-decodes it to a
+        // space, which breaks `surfaceKey + "/"` in the GROQ and 400s.
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
         return components.url
     }
 
