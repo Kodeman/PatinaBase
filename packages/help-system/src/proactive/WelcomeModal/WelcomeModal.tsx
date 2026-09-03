@@ -27,6 +27,12 @@
  *   - Escape / backdrop click   → onOpenChange(false) + analytics action='dismiss'
  *     The dismiss action is fired only once per close cycle (a CTA click does
  *     NOT also fire dismiss — the CTA handlers shortcut the close path).
+ *   - Optional third action, `onLater` — a quiet text CTA (not a button-styled
+ *     one) rendered between the two, for a consumer whose tour distinguishes
+ *     "not now" from "later" (e.g. the Desk Walkthrough's "Show me later",
+ *     decisions #2). Absent when `onLater` is not supplied — every existing
+ *     consumer keeps its two-CTA contract untouched.
+ *       Tertiary  → onLater()      + analytics action='later'
  *
  * First-signin gating:
  *   - This component does NOT detect first-signin itself. The consumer is
@@ -70,6 +76,14 @@ export interface WelcomeModalProps {
   onStartTour?: () => void
   /** Secondary CTA — closes without starting a tour. */
   onSkip?: () => void
+  /**
+   * Optional tertiary action — closes without starting a tour, distinct from
+   * `onSkip`. Rendered as a quiet text link between the primary and secondary
+   * buttons only when supplied; omitted entirely otherwise.
+   */
+  onLater?: () => void
+  /** Label for the `onLater` action. Defaults to "Show me later". */
+  laterLabel?: string
   /** Persona used by useHelpContent to resolve the Sanity content variant. */
   persona?: Persona
   /** Fallback title if Sanity returns null. */
@@ -87,6 +101,7 @@ export interface WelcomeModalProps {
 
 const DEFAULT_PRIMARY_CTA = 'Take the tour'
 const DEFAULT_SECONDARY_CTA = 'Skip for now'
+const DEFAULT_LATER_CTA = 'Show me later'
 const DEFAULT_FALLBACK_TITLE = 'Welcome to Patina'
 const DEFAULT_FALLBACK_BODY =
   'Take a brief tour to see how everything fits together, or jump in and explore.'
@@ -99,6 +114,8 @@ export function WelcomeModal({
   onOpenChange,
   onStartTour,
   onSkip,
+  onLater,
+  laterLabel,
   persona = 'all',
   fallbackTitle,
   fallbackBody,
@@ -123,7 +140,7 @@ export function WelcomeModal({
   // anything else (Escape, backdrop click, programmatic close) defaults to
   // 'dismiss'. We reset to null after each capture so a fresh open cycle
   // doesn't carry stale state.
-  const lastActionRef = React.useRef<'start_tour' | 'skip' | null>(null)
+  const lastActionRef = React.useRef<'start_tour' | 'skip' | 'later' | null>(null)
 
   // Track previous open state so we can fire the 'shown' event exactly once
   // per closed→open transition, not on every rerender while open.
@@ -198,6 +215,20 @@ export function WelcomeModal({
     }
   }, [surfaceKey, persona, onSkip, onOpenChange])
 
+  const handleLater = React.useCallback(() => {
+    lastActionRef.current = 'later'
+    safeCapture(HELP_EVENTS.WELCOME_MODAL_ACTION, {
+      surface_key: surfaceKey,
+      persona,
+      action: 'later',
+    })
+    try {
+      onLater?.()
+    } finally {
+      onOpenChange(false)
+    }
+  }, [surfaceKey, persona, onLater, onOpenChange])
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={handleOpenChange}>
       <DialogPrimitive.Portal>
@@ -257,6 +288,20 @@ export function WelcomeModal({
             >
               {secondaryLabel}
             </button>
+            {onLater && (
+              <button
+                type="button"
+                onClick={handleLater}
+                data-testid="welcome-modal-later"
+                className={[
+                  'inline-flex items-center justify-center px-2 py-2 text-sm text-muted-foreground',
+                  'underline decoration-1 underline-offset-2 transition-colors hover:text-foreground',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                ].join(' ')}
+              >
+                {laterLabel ?? DEFAULT_LATER_CTA}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleStartTour}

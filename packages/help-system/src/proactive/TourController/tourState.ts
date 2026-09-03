@@ -44,12 +44,20 @@ export interface TourState {
   completed?: boolean
   /** True once the user explicitly skipped the tour. */
   abandoned?: boolean
-  /** Zero-based step index the user was on when they skipped. */
+  /** Zero-based step index the user was on when they skipped (or deferred). */
   atStep?: number
   /** ISO timestamp of completion. */
   completedAt?: string
   /** ISO timestamp of abandonment. */
   abandonedAt?: string
+  /**
+   * True when the user chose "Show me later" rather than declining outright.
+   * Distinct from `abandoned`: a deferred tour is NOT resolved (spec §11.2 /
+   * decisions #2) — the eligible offer surface (a margin note, say) may
+   * re-offer it exactly once. A consumer clears this once that re-offer is
+   * shown or acted on, so the deferral itself never re-fires.
+   */
+  later?: boolean
 }
 
 /** Storage key prefix — shared with the migration scanner. */

@@ -35,6 +35,7 @@ import { StudioSetupWhisper } from '@/components/document/account/studio-setup-w
 import { deriveSetupSteps } from '@/lib/document/studio-setup';
 import {
   START_DESK_WALKTHROUGH_EVENT,
+  clearDeskWalkthroughLater,
   useDeskWalkthroughOffer,
   useSuppressDeskFirstTouch,
 } from '@/components/document/help/desk-walkthrough';
@@ -203,7 +204,10 @@ export default function DeskPage() {
         <div>
           {/* The signature move: greeting in Playfair, the first name in
               Playfair italic, Aged Oak. Kept modest so the folios lead. */}
-          <h1 className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]">
+          <h1
+            data-tour-anchor="desk-greeting"
+            className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]"
+          >
             {firstName ? (
               <>
                 {greetingWord},{' '}
@@ -339,6 +343,10 @@ export default function DeskPage() {
             <MarginNote
               noteKey="desk-walkthrough-offer"
               actionEvents={[START_DESK_WALKTHROUGH_EVENT]}
+              // A deferred ("Show me later") record only earns one re-offer
+              // (decisions #2) — clear it as soon as this note is seen,
+              // whether dismissed (×) or acted on (the tour starting).
+              onSeen={clearDeskWalkthroughLater}
               className="mb-10"
             >
               New desk, same studio — your projects are all here as documents
