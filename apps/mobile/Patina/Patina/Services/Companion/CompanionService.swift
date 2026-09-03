@@ -279,18 +279,18 @@ public final class CompanionService: CompanionServiceProtocol {
         let lowercased = input.lowercased()
 
         if lowercased.contains("hello") || lowercased.contains("hi") {
-            return "Hello! I'm so glad you're here. What brings you to think about your space today?"
+            return "Hello! I’m so glad you’re here. What brings you to think about your space today?"
         }
 
         if lowercased.contains("wood") {
-            return "Wood has such a grounding quality, doesn't it? The grain tells a story of years of growth. Do you find yourself drawn to lighter woods like oak, or darker ones like walnut?"
+            return "Wood has such a grounding quality, doesn’t it? The grain tells a story of years of growth. Do you find yourself drawn to lighter woods like oak, or darker ones like walnut?"
         }
 
         if lowercased.contains("help") || lowercased.contains("looking") {
-            return "I'd love to help. Rather than showing you everything at once, let's discover what truly speaks to you. What's the feeling you want when you walk into your space?"
+            return "I’d love to help. Rather than showing you everything at once, let’s discover what truly speaks to you. What’s the feeling you want when you walk into your space?"
         }
 
-        return "That's a beautiful way to think about it. Tell me more about what matters to you in your home."
+        return "That’s a beautiful way to think about it. Tell me more about what matters to you in your home."
     }
 
     private func detectIntent(from message: String) -> ConversationIntent? {
@@ -329,17 +329,17 @@ public final class CompanionService: CompanionServiceProtocol {
     private func getNewUserGreeting(timeOfDay: TimeOfDay) -> String {
         switch timeOfDay {
         case .dawn:
-            return "Good morning. There's something special about this quiet hour. I'm Patina, and I'm here to help you discover furniture that truly belongs in your space."
+            return "Good morning. There’s something special about this quiet hour. I’m Patina, and I’m here to help you discover furniture that truly belongs in your space."
         case .morning:
-            return "Good morning. I'm Patina. I'm here to help you discover furniture that truly belongs in your space—pieces that will feel like they've always been there."
+            return "Good morning. I’m Patina. I’m here to help you discover furniture that truly belongs in your space—pieces that will feel like they’ve always been there."
         case .day:
-            return "Hello. I'm Patina. I'm not here to sell you furniture—I'm here to help you understand what your space needs, and to find pieces that will grow with your life."
+            return "Hello. I’m Patina. I’m not here to sell you furniture—I’m here to help you understand what your space needs, and to find pieces that will grow with your life."
         case .afternoon:
-            return "Good afternoon. I'm Patina. I'm here to help you discover furniture that feels like it was made for your space—pieces with character that will grow with your life."
+            return "Good afternoon. I’m Patina. I’m here to help you discover furniture that feels like it was made for your space—pieces with character that will grow with your life."
         case .evening:
-            return "Good evening. As the day winds down, it's a lovely time to think about home. I'm Patina, and I'd love to explore your space with you."
+            return "Good evening. As the day winds down, it’s a lovely time to think about home. I’m Patina, and I’d love to explore your space with you."
         case .night:
-            return "Hello, night owl. Sometimes the quiet hours are best for imagining. I'm Patina, and I'm here whenever you're ready to explore."
+            return "Hello, night owl. Sometimes the quiet hours are best for imagining. I’m Patina, and I’m here whenever you’re ready to explore."
         }
     }
 
@@ -348,10 +348,10 @@ public final class CompanionService: CompanionServiceProtocol {
                        timeOfDay == .night ? "Hello again" : "Welcome back"
 
         if let style = context.styleProfile, style.isComplete {
-            return "\(greeting). I've been thinking about what we discussed. Ready to explore some pieces that might resonate with your style?"
+            return "\(greeting). I’ve been thinking about what we discussed. Ready to explore some pieces that might resonate with your style?"
         }
 
-        return "\(greeting). It's nice to see you again. Where would you like to pick up?"
+        return "\(greeting). It’s nice to see you again. Where would you like to pick up?"
     }
 }
 

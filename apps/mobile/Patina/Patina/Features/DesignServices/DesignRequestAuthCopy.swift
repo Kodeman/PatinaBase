@@ -20,5 +20,5 @@ enum DesignRequestAuthCopy {
     static let wallTitle = "Sign in to send your request"
 
     /// Shown on the Review step to a guest, before the send is attempted.
-    static let reviewHint = "You'll sign in to send this."
+    static let reviewHint = "You’ll sign in to send this."
 }

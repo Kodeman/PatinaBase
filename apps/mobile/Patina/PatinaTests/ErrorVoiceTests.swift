@@ -158,6 +158,34 @@ struct ErrorVoiceTests {
         )
     }
 
+    /// `RL1E4-03`: the upload coordinator's catch arm put
+    /// `error.localizedDescription` into a `.failed` payload **and** into a
+    /// persisted `lastError` column. `livePhase(for:)` hands that payload to
+    /// `ScanUploadProgressView`, which is one `Text(err)` away from `C4-08`
+    /// on a second surface, and the column outlives the process. Both now
+    /// carry one fixed sentence and the cause goes to the log.
+    @Test("the scan-upload coordinator never stores a thrown error's text")
+    func scanUploadCoordinatorNeverStoresRawErrorText() throws {
+        let source = try SourcePin.read("Patina/Services/DesignServices/DesignRequestCoordinator.swift")
+        #expect(!source.contains(".failed(error.localizedDescription)"))
+        #expect(!source.contains("draft.lastError = error.localizedDescription"))
+        #expect(
+            source.contains("PatinaLog.sync.error(\"[DesignServices] scan upload failed:"),
+            "dropping the raw text from the payload dropped it from the log too"
+        )
+    }
+
+    /// The catch arm sets this line outright; the two `??` fallbacks
+    /// (`uploadScan`'s post-upload branch and `livePhase(for:)`) reach for it
+    /// when the package row carries no diagnostic of its own. Pinning the
+    /// constant's bytes keeps those three sites one sentence — and keeps its
+    /// apostrophe U+2019, which the payload's own lint cannot see because
+    /// `.failed`'s argument is a constant reference, not a literal.
+    @Test("every failed upload phase carries the coordinator's one fixed line")
+    func failedUploadPhaseIsOneFixedLine() {
+        #expect(DesignRequestCoordinator.uploadFailureLine == "Upload didn’t finish")
+    }
+
     // MARK: - L1-E's own files, already applied here
 
     @Test("PatinaErrorState's own preview text is the canonical bare headline")
