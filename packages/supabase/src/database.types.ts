@@ -9500,6 +9500,7 @@ export type Database = {
       organization_members: {
         Row: {
           created_at: string
+          first_document_opened_at: string | null
           id: string
           invitation_expires_at: string | null
           invitation_token: string | null
@@ -9516,6 +9517,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          first_document_opened_at?: string | null
           id?: string
           invitation_expires_at?: string | null
           invitation_token?: string | null
@@ -9532,6 +9534,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          first_document_opened_at?: string | null
           id?: string
           invitation_expires_at?: string | null
           invitation_token?: string | null
@@ -32279,6 +32282,7 @@ export type Database = {
         }
       }
       mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
+      mark_first_document_opened: { Args: never; Returns: undefined }
       mark_media_entry_legal_hold: {
         Args: { p_hold: boolean; p_id: string; p_reason?: string }
         Returns: undefined

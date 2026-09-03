@@ -159,6 +159,19 @@ jest.mock('@patina/supabase', () => ({
     isError: false,
   }),
   useResolvedSchedule: () => mockResolvedSchedule,
+  // L3 (00559) — the first-hire-opened marker's own reads. None of this
+  // suite's cases exercise the checklist; the fixed shape below (owner, no
+  // studio) keeps the mount effect a no-op everywhere except its own tests.
+  useOrganizations: () => ({ data: [] }),
+  useOrganizationMembers: () => ({ data: [] }),
+  useMarkFirstDocumentOpened: () => ({ mutate: jest.fn() }),
+}));
+
+/* L3 (00559) — mirrors account-studio-page.test.tsx's own-module mock,
+   rather than threading @patina/supabase's useSession/useProfile (what the
+   real useAuth calls) through this suite's already-large mock surface. */
+jest.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({ user: { id: 'owner-user' } }),
 }));
 
 /* The money ladder under the ticket's Money row: four commercial reads that

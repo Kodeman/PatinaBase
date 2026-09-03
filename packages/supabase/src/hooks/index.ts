@@ -748,6 +748,7 @@ export {
   useLeaveOrganization,
   useTransferOrganizationOwnership,
   useSetMyMemberTitle,
+  useMarkFirstDocumentOpened,
   useUpdateMemberStaffRole,
 } from "./use-organizations";
 export type {

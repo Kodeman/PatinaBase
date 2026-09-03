@@ -32,6 +32,9 @@ import {
   useBoards,
   usePurchaseOrders,
   useResolvedSchedule,
+  useOrganizations,
+  useOrganizationMembers,
+  useMarkFirstDocumentOpened,
 } from '@patina/supabase';
 import {
   rollupVerdicts,
@@ -53,6 +56,7 @@ import {
   readRecentDocumentsInHand,
 } from '@/lib/analytics/document-events';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
+import { useAuth } from '@/hooks/use-auth';
 import { useProposal } from '@/hooks/use-proposals';
 import {
   deriveSections,
@@ -870,6 +874,30 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // closed: with the flag off this page prints exactly the composition it has
   // always printed, and every fixed part of the paper is identical either way.
   const worktableOn = useFeatureFlag('worktable').value;
+
+  // L3 (00559) — the checklist's sixth row fires here, not on the Desk: the
+  // moment it marks is a non-owner member opening a real Document. Reads the
+  // member's own row off the same studio-membership list the Desk/Studio
+  // pages already fetch; the mutation itself is a once-only server-side
+  // no-op after the first success (mark_first_document_opened's own guard),
+  // so gating on the cached flag here is a client-side courtesy, not the
+  // correctness boundary.
+  const { user } = useAuth();
+  const { data: myOrgs } = useOrganizations();
+  const myStudio = myOrgs?.find((o) => o.type === 'design_studio') ?? myOrgs?.[0] ?? null;
+  const { data: myStudioMembers } = useOrganizationMembers(myStudio?.id ?? '');
+  const myMembership = myStudioMembers?.find((m) => m.user_id === user?.id);
+  const markFirstDocumentOpened = useMarkFirstDocumentOpened();
+  useEffect(() => {
+    if (!myStudio || !myMembership) return;
+    if (myMembership.role === 'owner') return;
+    if (myMembership.first_document_opened_at != null) return;
+    markFirstDocumentOpened.mutate({ organizationId: myStudio.id });
+    // Fire-and-forget, once per arrival at this effect's inputs settling —
+    // the mutation's own onSuccess invalidation flips first_document_opened_at
+    // to non-null, which is what actually stops a repeat call on re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myStudio?.id, myMembership?.role, myMembership?.first_document_opened_at]);
 
   const {
     data: resolution,
