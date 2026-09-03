@@ -63,6 +63,30 @@ extension StyleQuizView {
         .padding(24)
     }
 
+    // MARK: - Option icon (A-11)
+
+    /// SF Symbols, one weight and one colour, so the icon never carries state
+    /// — and hidden from VoiceOver, so the option's label is the sentence
+    /// alone rather than "wineglass, Love having people over".
+    @ViewBuilder
+    func optionIcon(_ icon: String, isSelected: Bool, isBudget: Bool) -> some View {
+        let symbol = Image(systemName: icon)
+            .font(.system(size: 22, weight: .light))
+            .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.secondary)
+
+        if isBudget {
+            symbol
+                .frame(width: 44, height: 44)
+                .background(isSelected ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
+                .clipShape(RoundedRectangle(cornerRadius: 11))
+                .accessibilityHidden(true)
+        } else {
+            symbol
+                .frame(width: 56, height: 28)
+                .accessibilityHidden(true)
+        }
+    }
+
     // MARK: - List View (Q2, Q4, Q5)
 
     func listView(options: [QuizOption], questionId: Int, selections: Set<Int>, isBudget: Bool) -> some View {
@@ -73,34 +97,8 @@ extension StyleQuizView {
                         selectOption(question: questionId, option: index)
                     } label: {
                         HStack(spacing: 14) {
-                            // A-11: SF Symbols, one weight and one colour, so
-                            // the icon never carries state and VoiceOver reads
-                            // the sentence alone rather than "wineglass, Love
-                            // having people over".
                             if let icon = option.icon {
-                                if isBudget {
-                                    Image(systemName: icon)
-                                        .font(.system(size: 22, weight: .light))
-                                        .foregroundStyle(
-                                            selections.contains(index)
-                                                ? PatinaColors.Text.inverse
-                                                : PatinaColors.Text.secondary
-                                        )
-                                        .frame(width: 44, height: 44)
-                                        .background(selections.contains(index) ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
-                                        .clipShape(RoundedRectangle(cornerRadius: 11))
-                                        .accessibilityHidden(true)
-                                } else {
-                                    Image(systemName: icon)
-                                        .font(.system(size: 22, weight: .light))
-                                        .foregroundStyle(
-                                            selections.contains(index)
-                                                ? PatinaColors.Text.inverse
-                                                : PatinaColors.Text.secondary
-                                        )
-                                        .frame(width: 56, height: 28)
-                                        .accessibilityHidden(true)
-                                }
+                                optionIcon(icon, isSelected: selections.contains(index), isBudget: isBudget)
                             }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(option.label)

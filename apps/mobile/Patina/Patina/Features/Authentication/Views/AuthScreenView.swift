@@ -43,7 +43,7 @@ struct AuthScreenView: View {
     var isLoading: Bool = false
     /// C2-21 / GAP7B-09 — a link tapped while signed out is held, and this
     /// says so. Second in the slot's precedence: an error wins (L1F→A-2).
-    var pendingLinkNotice: String? = nil
+    var pendingLinkNotice: String?
 
     /// The catalog resolves once per process; every auth surface may ask.
     @State private var catalog = AuthProviderCatalog.shared

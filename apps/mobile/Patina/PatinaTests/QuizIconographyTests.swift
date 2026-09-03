@@ -62,10 +62,12 @@ struct QuizIconographyTests {
         let source = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleQuizView+Questions.swift")
         #expect(source.contains("Image(systemName: icon)"))
         #expect(!source.contains("Text(icon)"))
+        // One symbol, built once, so the weight and the tint cannot diverge
+        // between the budget chip and the plain row.
         let weights = source.components(separatedBy: ".font(.system(size: 22, weight: .light))").count - 1
-        #expect(weights == 2, "expected both icon sites in one weight, found \(weights)")
+        #expect(weights == 1, "expected one icon definition, found \(weights)")
         let hidden = source.components(separatedBy: ".accessibilityHidden(true)").count - 1
-        #expect(hidden == 2, "expected both icon sites hidden, found \(hidden)")
+        #expect(hidden == 2, "expected both icon shapes hidden, found \(hidden)")
     }
 
     // MARK: - C3-05 · never clay under a light label
