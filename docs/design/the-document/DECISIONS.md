@@ -10695,5 +10695,3 @@ its 48px crop folded and its full plate unfolded, and neither replaces the other
 **Ruled by Kody, same interview**, resolving the question of the Orders sheet's four tabs against R96's "a sheet stays one page" guardrail. AMENDS R96: the guardrail narrows to **documents** — `/doc/[id]` and its sections never page. **Ledgers and sheets** (Orders, Hours, Accounts, People — R96's own laid-sheet family) may page internally; the four-tab Orders sheet stands as shipped, unchanged, and the glossary entry for it is written to describe that truthfully rather than as an exception.
 
 *Entries add: R134 · last id = R134*
-
-*Entries add: R128 · last id = R128*
