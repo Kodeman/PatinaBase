@@ -21,13 +21,22 @@
 //     widget to sit one open behind; it must be able to SAY so.
 //   • `ownerId` names the account the payload was built for (B-16). It was
 //     omitted on the theory that the file is CLEARED on sign-out instead — but
-//     `RecordSnapshotStore.remove()`'s only caller is
-//     `LocalStoreReset.wipeUserScopedData()`, which runs when a DIFFERENT
-//     account signs IN. Sign-out itself calls neither, so a signed-out phone
-//     kept a named designer and "Leah Hartwell picked up your request." on its
-//     Home Screen. Two things close it: the sign-out seam writes a placeholder
-//     (`clearForSignedOut()`), and that placeholder is recognisable BECAUSE it
-//     carries no owner.
+//     nothing on the sign-out path removed it. `RecordSnapshotStore.remove()`
+//     has three callers — `LocalStoreReset.wipeUserScopedData()`,
+//     `RecordIdentity.admits` and `RecordRefresh.run` — and every one of them
+//     runs on an ARRIVAL: a different account signing in, or a record that
+//     turns out to belong to nobody. `AuthService.signOut()` calls none of
+//     them, so a signed-out phone kept a named designer and "Leah Hartwell
+//     picked up your request." on its Home Screen. Two things close it: the
+//     sign-out seam writes a placeholder (`clearForSignedOut()`), and that
+//     placeholder is recognisable BECAUSE it carries no owner.
+//
+//     In practice a sign-out usually ends with NO file at all: clearing the
+//     stamp is what makes an in-flight `RecordRefresh` for the ended session
+//     decide `.discard`, and its `remove()` deletes the placeholder moments
+//     later. Both states draw the same card, which is why the placeholder is
+//     still worth writing — it covers the window before the delete, and the
+//     delete that fails (`RL1F-24`).
 //
 //     What `ownerId` buys is exactly that, and no more: **nil is the
 //     placeholder**. Nothing compares a non-nil owner against the live session,

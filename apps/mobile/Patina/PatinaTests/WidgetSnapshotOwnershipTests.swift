@@ -211,4 +211,121 @@ struct WidgetSnapshotOwnershipTests {
         let call = try #require(code.range(of: "clearOwner()"))
         #expect(call.lowerBound > signOut.lowerBound)
     }
+
+    /// The file, decoded the way the widget process decodes it — through
+    /// `HouseWidgetPayload`, not through the app's own `WidgetSnapshot`. What
+    /// the app wrote and what the widget draws are two types on purpose.
+    private func widgetSees(_ store: RecordSnapshotStore) throws -> HouseWidgetPayload {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(
+            HouseWidgetPayload.self,
+            from: Data(contentsOf: store.widgetFileURL)
+        )
+    }
+
+    // MARK: - RL1F-21 — the sign-in window
+
+    /// A store whose stamp is empty, exactly as it is for the first save after
+    /// a sign-in: `clearForSignedOut` cleared it, and `RecordRefresh` stamps
+    /// AFTER it saves. Reproduced on the clone: real rows on disk with
+    /// `ownerId` absent, and `save` reloads WidgetKit in the same breath, so
+    /// the no-data card is pushed over real content.
+    private func unstampedStore(reloads: ReloadCounter, stamped: ReloadCounter) -> RecordSnapshotStore {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("patina.tests.owner.\(UUID().uuidString)")
+        return RecordSnapshotStore(
+            appGroupIdentifier: "group.does.not.exist.\(UUID().uuidString)",
+            fallbackDirectory: directory,
+            reloadWidgets: { reloads.record($0) },
+            flagIsOn: { true },
+            ownerId: { nil },
+            clearOwner: {},
+            stampOwner: { stamped.record($0) }
+        )
+    }
+
+    @Test("a save that names its session cannot write an unowned payload")
+    func aNamedSaveIsOwned() throws {
+        let reloads = ReloadCounter()
+        let stamped = ReloadCounter()
+        let store = unstampedStore(reloads: reloads, stamped: stamped)
+
+        store.save(record(), houseLine: "Aspen Loft", now: referenceDate, owner: Self.owner)
+
+        let written = try #require(store.loadWidgetSnapshot())
+        #expect(written.ownerId == Self.owner)
+        let payload = try widgetSees(store)
+        #expect(payload.isPlaceholder == false)
+        #expect(payload.drawableRows.count == 1)
+        // The stamp is written too, so the NEXT save — the one that names
+        // nothing — is owned as well.
+        #expect(stamped.last == Self.owner)
+    }
+
+    @Test("a save that names nothing still defers to the stamp")
+    func anUnnamedSaveDefersToTheStamp() throws {
+        let reloads = ReloadCounter()
+        let stamped = ReloadCounter()
+        let store = unstampedStore(reloads: reloads, stamped: stamped)
+
+        store.save(record(), houseLine: "Aspen Loft", now: referenceDate)
+
+        let written = try #require(store.loadWidgetSnapshot())
+        #expect(written.ownerId == nil, "an unstamped save for no session stays a placeholder")
+        #expect(stamped.count == 0, "naming nothing must not invent an owner")
+    }
+
+    /// The caller's half. `RecordRefresh.run` is `Features/Home/**` — L1-C's
+    /// glob — so it leaves as note `L1F→C-3`. Recorded as a known issue
+    /// WITHOUT `isIntermittent`, so this fails the moment the note lands and
+    /// the wave is told to delete the block.
+    @Test("the record rebuild names the session it saves for")
+    func theRebuildNamesItsSession() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Home/ViewModels/RecordRefresh.swift")
+        )
+        withKnownIssue(
+            "RL1F-21 · note L1F→C-3 is owed by L1-C — DELETE this block when it stops recording"
+        ) {
+            #expect(code.contains("snapshots.save(record, owner: sessionUserId)"))
+        }
+    }
+
+    // MARK: - RL1F-24 — what a sign-out actually leaves behind
+
+    /// The real order, which no test drove before: the placeholder is written,
+    /// then an in-flight `RecordRefresh` for the ended session decides
+    /// `.discard` (the stamp is gone) and `remove()` takes the placeholder with
+    /// it. Both states are no-data; the doc comments now say so.
+    @Test("a sign-out ends with a placeholder, then with no file at all")
+    func aSignOutEndsWithNoFile() throws {
+        let reloads = ReloadCounter()
+        let store = store(reloads: reloads)
+
+        store.save(record(), houseLine: "Aspen Loft", now: referenceDate)
+        #expect(try #require(store.loadWidgetSnapshot()).ownerId == Self.owner)
+
+        store.clearForSignedOut(now: referenceDate)
+        let placeholder = try #require(store.loadWidgetSnapshot())
+        #expect(placeholder.ownerId == nil)
+        #expect(try widgetSees(store).isPlaceholder)
+
+        store.remove()
+        #expect(store.loadWidgetSnapshot() == nil, "remove() takes the placeholder too")
+        #expect(store.hasSnapshot == false)
+    }
+
+    /// And the comments that explain the mechanism name all three callers,
+    /// rather than the one the round-2 text claimed.
+    @Test("the design comments name every caller of remove()")
+    func theCommentsNameEveryCaller() throws {
+        let store = try SourcePin.read("Patina/Core/Persistence/RecordSnapshotStore.swift")
+        #expect(store.contains("**Three callers**"))
+        #expect(!store.contains("`remove()`'s only caller"))
+
+        let snapshot = try SourcePin.read("Patina/Core/Persistence/WidgetSnapshot.swift")
+        #expect(!snapshot.contains("remove()`'s only caller"))
+        #expect(snapshot.contains("has three callers"))
+    }
 }
