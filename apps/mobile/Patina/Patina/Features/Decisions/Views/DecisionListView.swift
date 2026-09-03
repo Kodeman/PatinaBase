@@ -9,6 +9,7 @@ import SwiftUI
 
 struct DecisionListView: View {
     @Environment(\.appCoordinator) private var coordinator
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var viewModel = DecisionsListViewModel()
 
     var body: some View {
@@ -70,19 +71,22 @@ struct DecisionListView: View {
 
     private func decisionCard(_ d: RemoteClientDecision) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(d.title ?? "Decision")
-                    .font(PatinaTypography.h5)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                Spacer()
-                if let type = d.decision_type {
-                    Text(type.capitalized)
-                        .font(PatinaTypography.monoTiny)
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(PatinaColors.clay.opacity(0.1))
-                        .clipShape(Capsule())
+            // C-06: title and badge shared one row at every text size, so at
+            // accessibility-extra-large the badge took the width the title
+            // needed and "Design Development sign-off" broke inside the word —
+            // "Design Developme / nt sign-off". Above the accessibility
+            // threshold the badge takes its own line and the title gets the
+            // whole column.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    decisionTitle(d)
+                    if let type = d.decision_type { decisionTypeBadge(type) }
+                }
+            } else {
+                HStack {
+                    decisionTitle(d)
+                    Spacer()
+                    if let type = d.decision_type { decisionTypeBadge(type) }
                 }
             }
             // R20: project context so the client knows which engagement
@@ -111,6 +115,29 @@ struct DecisionListView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(decisionAccessibilityLabel(d))
+    }
+
+    private func decisionTitle(_ decision: RemoteClientDecision) -> some View {
+        Text(decision.title ?? "Decision")
+            .font(PatinaTypography.h5)
+            .foregroundStyle(PatinaColors.Text.primary)
+            .minimumScaleFactor(0.7)
+            .allowsTightening(true)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func decisionTypeBadge(_ type: String) -> some View {
+        Text(type.capitalized)
+            .font(PatinaTypography.monoTiny)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .allowsTightening(true)
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundStyle(PatinaColors.Text.interactive)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(PatinaColors.clay.opacity(0.1))
+            .clipShape(Capsule())
     }
 
     /// Aggregated VoiceOver label for a decision card: title + type + description,

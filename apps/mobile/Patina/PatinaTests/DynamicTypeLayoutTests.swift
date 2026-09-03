@@ -183,4 +183,50 @@ struct DynamicTypeLayoutTests {
         #expect(code.contains("DailyGreetingHeader.stacksControls(at:")
                 || code.contains("Self.stacksControls(at:"))
     }
+
+    // MARK: - C-06's three remaining surfaces, walked at AX-XL
+
+    /// "Design Developme / nt sign-off". The title and the type badge shared
+    /// one row at every text size, so at an accessibility size the badge took
+    /// the width the title needed and the title broke inside a word — on the
+    /// list a client opens to answer the thing Procurement is waiting on.
+    @Test("a decision card's title does not break mid-word")
+    func theDecisionCardTitleStacksAtAccessibilitySizes() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Decisions/Views/DecisionListView.swift")
+        )
+        #expect(code.contains("dynamicTypeSize.isAccessibilitySize"),
+                "the card never stacks, so its title keeps fighting the badge (C-06)")
+        #expect(code.contains("private func decisionTitle("))
+        #expect(code.contains("private func decisionTypeBadge("))
+        let title = try #require(code.range(of: "private func decisionTitle("))
+        let block = String(code[title.lowerBound...].prefix(400))
+        #expect(block.contains("minimumScaleFactor"),
+                "the title has no scale floor (C-06)")
+    }
+
+    /// "TOTA / L" and "EXPI / RY", on the sheet where a client signs. The
+    /// restated-terms label column was a hard 78 pt at every text size.
+    @Test("the sign sheet's term labels keep a column they fit in")
+    func theSignSheetLabelColumnScales() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Proposals/Views/ProposalSignSheet.swift")
+        )
+        #expect(!code.contains("frame(width: 78, alignment: .leading)"),
+                "the label column is still a hard 78 pt (C-06)")
+        #expect(code.contains("@ScaledMetric(relativeTo: .caption)"))
+        #expect(code.contains("frame(width: labelColumnWidth, alignment: .leading)"))
+    }
+
+    /// "Recommende / d" — one word in a capsule, wrapped inside itself.
+    @Test("the recommended badge is one line at every text size")
+    func theRecommendedBadgeDoesNotWrap() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Decisions/Views/DecisionDetailView.swift")
+        )
+        let badge = try #require(code.range(of: "Text(\"Recommended\")"))
+        let block = String(code[badge.lowerBound...].prefix(400))
+        #expect(block.contains(".lineLimit(1)"), "the badge still wraps inside its word (C-06)")
+        #expect(block.contains(".minimumScaleFactor("))
+    }
 }

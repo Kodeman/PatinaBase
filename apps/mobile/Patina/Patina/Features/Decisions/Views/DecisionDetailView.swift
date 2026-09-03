@@ -228,7 +228,17 @@ struct DecisionDetailView: View {
                 Spacer()
                 if isRecommended {
                     Text("Recommended")
+                        // C-06: the badge is one word in a capsule beside a
+                        // title that takes the rest of the row. At
+                        // accessibility-extra-large the capsule was squeezed
+                        // below the word's own width and it wrapped inside
+                        // itself — "Recommende / d". One line, tightened, and
+                        // never split.
                         .font(PatinaTypography.monoTiny)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .allowsTightening(true)
+                        .fixedSize(horizontal: true, vertical: false)
                         .foregroundStyle(PatinaColors.Text.interactive)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)

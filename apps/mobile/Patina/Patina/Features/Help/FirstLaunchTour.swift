@@ -638,6 +638,32 @@ public final class FirstLaunchTourModel {
     /// `steps.count`, NOT the display-facing `totalSteps` — otherwise a skipped
     /// step would make the final popover's button read "Next" and dead-end.
     public var isOnFinalStep: Bool { currentStep >= steps.count - 1 }
+
+    // MARK: - B-10 · the scrim's cut-out
+
+    /// Where each mounted anchor sits in the tour root's coordinate space,
+    /// reported by the anchor modifier on every layout pass.
+    private var anchorFrames: [FirstLaunchTourAnchor: CGRect] = [:]
+
+    /// Told by the anchor modifier whenever the layout moves it.
+    public func reportAnchorFrame(_ anchor: FirstLaunchTourAnchor, rect: CGRect) {
+        guard anchorFrames[anchor] != rect else { return }
+        anchorFrames[anchor] = rect
+    }
+
+    /// The frame the scrim leaves un-dimmed, or nil when nothing is showing.
+    ///
+    /// `B-10`'s other half. The card places correctly — step 1 sits below the
+    /// greeting and the greeting stays visible — but it is drawn over two live
+    /// record rows with no dim and no cut-out, so the reader is told to look at
+    /// one thing while the card sits on two others that look equally live. The
+    /// fix the finding names is a dim with the subject punched out of it.
+    public var highlightRect: CGRect? {
+        guard isActive, isSubjectOnScreen else { return nil }
+        guard steps.indices.contains(currentStep) else { return nil }
+        guard let rect = anchorFrames[steps[currentStep].anchor], rect != .zero else { return nil }
+        return rect
+    }
 }
 
 // MARK: - Orchestrator view
@@ -691,6 +717,15 @@ public struct FirstLaunchTour<Content: View>: View {
 
     public var body: some View {
         content()
+            // B-10: the dim, with the step's own subject punched out of it.
+            // Inside the named coordinate space below, so the cut-out's rect
+            // and the anchors' measurements share one origin.
+            .overlay {
+                if let rect = model.highlightRect {
+                    FirstLaunchTourScrim(highlight: rect)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: model.highlightRect)
             // Names the root the anchors measure themselves against, so each
             // one can place its card on the side of itself that has room
             // (`FirstLaunchTourPopoverPlacement`).
@@ -751,6 +786,46 @@ public struct FirstLaunchTour<Content: View>: View {
     }
 }
 
+// MARK: - The scrim (B-10)
+
+/// The dim the tour draws over everything except the thing it is naming.
+///
+/// A coach mark that sits on live content with nothing separating them asks the
+/// reader to work out which of the three cards under it is the subject. The
+/// cut-out answers that without moving anything: the anchor keeps its own
+/// pixels at full contrast and the rest of the screen recedes.
+///
+/// Deliberately not hit-testable — the popover already owns dismissal (an
+/// outside tap is a skip), and a scrim that swallowed taps would change what
+/// tapping outside the card does.
+private struct FirstLaunchTourScrim: View {
+    let highlight: CGRect
+
+    /// Breathing room around the subject, so the cut-out reads as a spotlight
+    /// rather than as a crop.
+    private static let inset: CGFloat = 8
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(Color.black.opacity(0.28))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .frame(
+                    width: highlight.width + Self.inset * 2,
+                    height: highlight.height + Self.inset * 2
+                )
+                .position(x: highlight.midX, y: highlight.midY)
+                .blendMode(.destinationOut)
+        }
+        // Without this the destination-out blend punches through the whole
+        // window instead of through the scrim alone.
+        .compositingGroup()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .transition(.opacity)
+    }
+}
+
 // MARK: - Anchor modifier
 
 /// Environment key for the orchestrator model. Using `@Environment` over
@@ -777,16 +852,21 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: FirstLaunchTourPopoverPlacement.AnchorGeometry.self) { proxy in
-                FirstLaunchTourPopoverPlacement.AnchorGeometry(
-                    midY: proxy.frame(
-                        in: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
-                    ).midY,
+                let frame = proxy.frame(
+                    in: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
+                )
+                return FirstLaunchTourPopoverPlacement.AnchorGeometry(
+                    midY: frame.midY,
                     containerHeight: proxy.bounds(
                         of: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
-                    )?.height ?? 0
+                    )?.height ?? 0,
+                    rect: frame
                 )
             } action: { measured in
                 geometry = measured
+                // B-10: the scrim's cut-out. Reported for every anchor; the
+                // model draws only the one the current step names.
+                model?.reportAnchorFrame(anchor, rect: measured.rect)
             }
             // Track this anchor's presence so the orchestrator can skip a step
             // whose anchor never mounts (e.g. `.addToRoom` for a zero-room
