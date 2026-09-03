@@ -46,20 +46,35 @@ struct RefreshableSurfacesTests {
             "Patina/Features/Projects/Views/ProjectDetailView.swift"
         ] {
             let source = try SourcePin.read(path)
-            let task = try #require(
-                source.components(separatedBy: ".task {").last?
-                    .components(separatedBy: "}").first
-            )
-            let refresh = try #require(
-                source.components(separatedBy: ".refreshable {").last?
-                    .components(separatedBy: "}").first
-            )
+            let task = try #require(Self.closure(after: ".task {", in: source))
+            let refresh = try #require(Self.closure(after: ".refreshable {", in: source))
             #expect(
                 task.trimmingCharacters(in: .whitespacesAndNewlines)
                     == refresh.trimmingCharacters(in: .whitespacesAndNewlines),
                 "\(path): the refresh and the task do different work"
             )
         }
+    }
+
+    /// The closure's real extent, brace-matched.
+    ///
+    /// Splitting on the first `}` worked only because this lane's two screens
+    /// each call one function. `DailyRoomView`'s block (note O3) is ten
+    /// statements with nested braces, so the naive split would have compared
+    /// two different fragments and reported agreement (review RL1B-19).
+    private static func closure(after marker: String, in source: String) -> String? {
+        guard let start = source.range(of: marker, options: .backwards) else { return nil }
+        var depth = 1
+        var body = ""
+        for character in source[start.upperBound...] {
+            if character == "{" { depth += 1 }
+            if character == "}" {
+                depth -= 1
+                if depth == 0 { return body }
+            }
+            body.append(character)
+        }
+        return nil
     }
 
     /// The in-repo pattern the finding names, kept as the reference.
@@ -73,10 +88,15 @@ struct RefreshableSurfacesTests {
     /// The four tab roots — the whole of `C4-12`'s headline and all of
     /// `R-03`. Every one is L1-C's file this wave; the exact text is in
     /// `build/waves/w1/l1-c-notes.md` (Task C-L1B-1).
-    /// `isIntermittent` because the assertion is true only once the owning
-    /// lane has merged: this suite must not redden L1-B's own gate before
-    /// then, and must not redden the integration gate after. Either way the
-    /// state is in the test report, by name.
+    ///
+    /// A known issue, and deliberately NOT `isIntermittent`: an intermittent
+    /// one passes in both states, which made this ledger unfalsifiable — an
+    /// unapplied note looked exactly like an applied one (review RL1B-03).
+    /// Without it the run is green here, where the note is genuinely open,
+    /// and fails the moment L1-C's `.refreshable` lands — an unrecorded known
+    /// issue. That failure is the tripwire: the steward's checklist item in
+    /// `l1b-notes-out.md` §S1 replaces this block with a hard `#expect` at
+    /// the merge that makes it fire. It cannot be silently forgotten.
     @Test(
         "the four tab roots can be pulled to refresh",
         arguments: [
@@ -89,15 +109,15 @@ struct RefreshableSurfacesTests {
     func theTabRootsRefresh(path: String) throws {
         let present = try hasRefreshable(path)
         withKnownIssue(
-            "a tab root owes .refreshable (l1b-notes-out.md O3, applied by L1-C)",
-            isIntermittent: true
+            "a tab root owes .refreshable (l1b-notes-out.md O3, applied by L1-C)"
         ) {
             #expect(present)
         }
     }
 
     /// The two remaining Studio details, in other lanes' files: the decision
-    /// detail (L1-C, O4) and the thread detail (L1-F, O8).
+    /// detail (L1-C, O4) and the thread detail (L1-F, O8). Same tripwire as
+    /// above — not `isIntermittent`, so the ledger can actually be wrong.
     @Test(
         "the remaining Studio details can be pulled to refresh",
         arguments: [
@@ -108,8 +128,7 @@ struct RefreshableSurfacesTests {
     func theRemainingDetailsRefresh(path: String) throws {
         let present = try hasRefreshable(path)
         withKnownIssue(
-            "a Studio detail owes .refreshable (l1b-notes-out.md O4 / O8)",
-            isIntermittent: true
+            "a Studio detail owes .refreshable (l1b-notes-out.md O4 / O8)"
         ) {
             #expect(present)
         }
