@@ -73,7 +73,11 @@ struct CompanionSheetDriverTests {
         let source = try SourcePin.read(
             "Patina/Features/Companion/Views/CompanionOverlay.swift"
         )
-        #expect(source.contains("presented = .help"))
+        // C5-02: `onHelp: nil` retires the chip that set `presented = .help`
+        // for round one, because no ios-app/companion article exists and the
+        // panel opened empty. The arm, the sheet and the surface key stay
+        // mounted; W2 restores the trigger.
+        #expect(source.contains("case .help:"))
         #expect(source.contains("HelpPanelSheet("))
         #expect(source.contains("SurfaceKeys.IOSApp.Companion.root"))
     }

@@ -32,18 +32,17 @@ struct DesignerConsultationView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(PatinaColors.Background.dark)
 
-                // Designer card
-                designerCard
-                    .padding(.horizontal, 24)
-                    .padding(.top, 28)
-
+                // A1-14: a hard-coded "Matched Designer" card sat here — a
+                // gradient circle, a name nothing resolves, and a promise the
+                // screen cannot keep. The hero above says what this is; the
+                // door below is the only act.
                 // Door into the request flow
                 PatinaButton("Start a request", style: .primary) {
                     coordinator.presentDesignServices(roomId: nil)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 32)
-                .padding(.bottom, 120)
+                .companionBottomClearance()
             }
         }
         .background(PatinaColors.Background.primary)
@@ -52,29 +51,6 @@ struct DesignerConsultationView: View {
         .patinaScreen(title: nil, style: .dark)
     }
 
-    private var designerCard: some View {
-        HStack(spacing: 16) {
-            Circle()
-                .fill(PatinaGradients.earth)
-                .frame(width: 60, height: 60)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Matched Designer")
-                    .font(PatinaTypography.h5)
-                    .foregroundStyle(PatinaColors.Text.primary)
-
-                MonoLabel(text: "Based on your style profile")
-
-                Text("We'll pair you with a designer who understands your aesthetic")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.secondary)
-                    .lineSpacing(2)
-            }
-        }
-        .padding(20)
-        .background(PatinaColors.Background.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
 }
 
 #Preview {

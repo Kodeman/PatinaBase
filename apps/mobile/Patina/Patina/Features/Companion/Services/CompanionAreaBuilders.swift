@@ -71,7 +71,8 @@ extension CompanionActionProvider {
 
     static func discoveryItems(
         _ screen: AppRoute,
-        context: CompanionContext
+        context: CompanionContext,
+        isAuthenticated: Bool
     ) -> [CompanionActionItem] {
         switch screen {
         case .emergence, .roomEmergence:
@@ -92,7 +93,8 @@ extension CompanionActionProvider {
             }
             // Exactly one suggested row per panel: once the piece has an act,
             // the act is it and "Save" steps back.
-            return [saveRow(label: "Save", suggested: false), pieceActRow(act)]
+            return [saveRow(label: "Save", suggested: false),
+                    pieceActRow(act, isAuthenticated: isAuthenticated)]
         default: // .arPlacement
             return [
                 item("camera", "Save photo", "Capture this view",

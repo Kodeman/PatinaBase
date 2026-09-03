@@ -55,88 +55,140 @@ struct DailyGreetingHeader: View {
     /// hosts, which moves to the bar with it) does not draw.
     var showsStudioControl: Bool = true
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// C-06 / GAP1B-03. The greeting shares one horizontal band with the bell,
+    /// the help glyph and the Studio pill, so its width is whatever the
+    /// cluster leaves — about 150 pt. At XXXL the serif h4 broke inside words
+    /// ("Good / afternoo / n."), at AX-XXXL into six fragments, while the
+    /// Studio chip truncated to "Stu…" and still drew its count. Above
+    /// `.accessibility1` the band splits: the greeting takes the full content
+    /// width and the cluster gets its own row underneath.
+    static func stacksControls(at size: DynamicTypeSize) -> Bool {
+        size.isAccessibilitySize
+    }
+
     var body: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(dateString)
-                    .font(PatinaTypography.monoLabel)
-                    .tracking(0.5)
-                    .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.Text.muted)
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(greeting)
-                        .font(PatinaTypography.h4)
-                        .foregroundStyle(PatinaColors.Text.primary)
-                        .lineSpacing(0)
-                        .fixedSize(horizontal: false, vertical: true)
-                    // Contextual help: explains what the "Daily Room" feed
-                    // is — a curated mix of one editorial story and a stream
-                    // of room-aware product recommendations refreshed daily.
-                    HelpInfoIcon(
-                        surfaceKey: SurfaceKeys.IOSApp.Home.dailyGreeting,
-                        fallback: "Today keeps Patina focused: one useful next move, one editorial story, and one active room.",
-                        size: 13
-                    )
-                }
-            }
-            // First-launch tour anchor — Step 1 popover attaches to the title
-            // row of the greeting header. Wrapping the inner VStack rather
-            // than the whole HStack so the popover arrow lands on the title.
-            .firstLaunchTourAnchor(.homeGreeting)
-            // The surface keeps its canonical name for VoiceOver even though
-            // the greeting is what the screen prints (C4).
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Today")
-            Spacer()
-            HStack(spacing: 4) {
-                // PT-3-7: bell (notifications) glyph with unread-count badge.
-                if let onBellTap {
-                    Button(action: onBellTap) {
-                        Image(systemName: "bell")
-                            .font(.system(size: 17, weight: .regular))
-                            .foregroundStyle(PatinaColors.Text.secondary)
-                            .frame(width: 36, height: 36)
-                            .overlay(alignment: .topTrailing) {
-                                UnreadBadge(count: unreadCount)
-                                    .offset(x: -4, y: 4)
-                            }
-                            .contentShape(Rectangle())
+        Group {
+            if Self.stacksControls(at: dynamicTypeSize) {
+                VStack(alignment: .leading, spacing: 12) {
+                    titleColumn
+                    HStack(spacing: 4) {
+                        controlCluster
+                        anchoredStudioControl
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Notifications")
-                    .accessibilityValue(unreadCount > 0 ? "\(unreadCount) unread" : "No unread notifications")
-                    .accessibilityHint("Opens your notifications.")
-                    .accessibilityIdentifier("DailyRoomView.BellButton")
                 }
-                // Optional `?` help-panel trigger. The parent screen owns the
-                // sheet state and binds via the closure so this view stays a
-                // pure presentation component.
-                if let onHelpTap {
-                    Button(action: onHelpTap) {
-                        Image(systemName: "questionmark.circle")
-                            .font(.system(size: 17, weight: .regular))
-                            .foregroundStyle(PatinaColors.Text.secondary)
-                            .frame(width: 36, height: 36)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Help")
-                    .accessibilityHint("Opens the help panel for this screen.")
-                    .accessibilityIdentifier("DailyRoomView.HelpButton")
+            } else {
+                HStack(alignment: .top) {
+                    titleColumn
+                    Spacer()
+                    controlCluster
+                    anchoredStudioControl
                 }
-            }
-            if showsStudioControl {
-                studioControl
-                    // First-launch tour anchor — Step 3 popover attaches to the
-                    // same slot the monogram held; the control there is now
-                    // labelled, and carries the count. The anchor travels with
-                    // the control: on the house-first root the door is the bar's
-                    // Studio tab and the anchor is mounted there instead.
-                    .firstLaunchTourAnchor(.profileMonogram)
             }
         }
         .padding(.top, 56)
         .padding(.horizontal, PatinaSpacing.mdLarge)
+    }
+
+    /// The Studio pill and its tour anchor, in ONE place.
+    ///
+    /// Both layout branches draw it, and
+    /// `FirstLaunchTourTests.everyDefaultStepAnchorHasExactlyOneProductionMountPerRoot`
+    /// requires exactly one mount of `.profileMonogram` in this file — two
+    /// branches each carrying the modifier would be two popovers for one step.
+    @ViewBuilder
+    private var anchoredStudioControl: some View {
+        if showsStudioControl {
+            studioControl
+                // First-launch tour anchor — Step 3 popover attaches to the
+                // same slot the monogram held; the control there is now
+                // labelled, and carries the count. The anchor travels with the
+                // control: on the house-first root the door is the bar's Studio
+                // tab and the anchor is mounted there instead.
+                .firstLaunchTourAnchor(.profileMonogram)
+        }
+    }
+
+    private var titleColumn: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(dateString)
+                .font(PatinaTypography.monoLabel)
+                .tracking(0.5)
+                .textCase(.uppercase)
+                .foregroundStyle(PatinaColors.Text.muted)
+                // "TUESDA / Y · / SEP 1" — one line, scaled, never split.
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .allowsTightening(true)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(greeting)
+                    .font(PatinaTypography.h4)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .lineSpacing(0)
+                    .minimumScaleFactor(0.7)
+                    .allowsTightening(true)
+                    .fixedSize(horizontal: false, vertical: true)
+                // Contextual help: explains what the "Daily Room" feed
+                // is — a curated mix of one editorial story and a stream
+                // of room-aware product recommendations refreshed daily.
+                HelpInfoIcon(
+                    surfaceKey: SurfaceKeys.IOSApp.Home.dailyGreeting,
+                    fallback: "Today keeps Patina focused: one useful next move, one editorial story, and one active room.",
+                    size: 13,
+                    accessibilityLabel: "About Today"
+                )
+            }
+        }
+        // First-launch tour anchor — Step 1 popover attaches to the title
+        // row of the greeting header. Wrapping the inner VStack rather
+        // than the whole HStack so the popover arrow lands on the title.
+        .firstLaunchTourAnchor(.homeGreeting)
+        // The surface keeps its canonical name for VoiceOver even though
+        // the greeting is what the screen prints (C4).
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Today")
+    }
+
+    private var controlCluster: some View {
+        HStack(spacing: 4) {
+            // PT-3-7: bell (notifications) glyph with unread-count badge.
+            if let onBellTap {
+                Button(action: onBellTap) {
+                    Image(systemName: "bell")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .frame(width: 36, height: 36)
+                        .overlay(alignment: .topTrailing) {
+                            UnreadBadge(count: unreadCount)
+                                .offset(x: -4, y: 4)
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Notifications")
+                .accessibilityValue(unreadCount > 0 ? "\(unreadCount) unread" : "No unread notifications")
+                .accessibilityHint("Opens your notifications.")
+                .accessibilityIdentifier("DailyRoomView.BellButton")
+            }
+            // Optional `?` help-panel trigger. The parent screen owns the
+            // sheet state and binds via the closure so this view stays a
+            // pure presentation component.
+            if let onHelpTap {
+                Button(action: onHelpTap) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Help")
+                .accessibilityHint("Opens the help panel for this screen.")
+                .accessibilityIdentifier("DailyRoomView.HelpButton")
+            }
+        }
     }
 
     /// The Studio control: the surface's name and the one attention count,
@@ -190,6 +242,18 @@ private struct UnreadBadge: View {
                 .padding(.horizontal, PatinaSpacing.xs)
                 .frame(minWidth: 14, minHeight: 14)
                 .background(Capsule().fill(PatinaColors.clay))
+                // The bell glyph is a fixed 17 pt inside a 36 pt frame, so an
+                // uncapped badge outgrows the control it marks: at
+                // accessibility-XXXL the "3" was a ~40 pt disc with the bell
+                // nowhere on screen behind it (shots/w1-l1c/05-today-ax3xl-light.png).
+                // A first cap at `xxxLarge` was still a ~24 pt disc occluding
+                // most of a 17 pt glyph — a clay circle with one sliver of bell
+                // outline (shots/w1-review-l1c/10b-bell-badge-crop.png). A badge
+                // is a mark ON a control, not body copy: it scales to the top of
+                // the standard ramp's usable band for a 17 pt glyph and stops.
+                // Its count is announced by the button's accessibilityValue, so
+                // nothing is lost by not growing it.
+                .dynamicTypeSize(...DynamicTypeSize.large)
                 .accessibilityHidden(true)
         }
     }

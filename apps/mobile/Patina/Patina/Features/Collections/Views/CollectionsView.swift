@@ -185,7 +185,7 @@ struct CollectionsView: View {
             }
         }
         .padding(24)
-        .padding(.bottom, 100)
+        .companionBottomClearance()
         .sheet(isPresented: Binding(
             get: { notePieceId != nil },
             set: { if !$0 { notePieceId = nil } }
@@ -288,7 +288,7 @@ private extension CollectionsView {
             }
         }
         .padding(24)
-        .padding(.bottom, 100)
+        .companionBottomClearance()
     }
 
     var emptyBoardsState: some View {

@@ -67,7 +67,7 @@ struct MatchIntroductionView: View {
             }
             .padding(.horizontal, 24)
             .padding(.top, 72)
-            .padding(.bottom, 120)
+            .companionBottomClearance()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(PatinaColors.Background.primary)

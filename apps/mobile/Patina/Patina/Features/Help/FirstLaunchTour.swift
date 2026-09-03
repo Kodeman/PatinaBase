@@ -144,6 +144,23 @@ public final class FirstLaunchTourModel {
     /// Ordered step list. Index 0 is the first popover shown.
     public let steps: [FirstLaunchTourStep]
 
+    /// `false` while the host's surface is not on screen.
+    ///
+    /// B-10's tab half: the host's `canAutoStart` gated only the START. Once
+    /// armed, switching to the Spaces tab left step 1 — "This is your Daily
+    /// Room" — sitting on the Whole Home card it does not describe, because
+    /// `.homeGreeting` lives in `DailyRoomView`, which stays mounted at
+    /// opacity 0 behind the Spaces stack, so the popover anchored to a hidden
+    /// frame. Suspending is deliberately not `skip()`: skipping persists
+    /// `abandoned` and the tester would never see the tour again.
+    public private(set) var isSubjectOnScreen: Bool = true
+
+    /// Told by the host whenever its surface comes or goes.
+    public func setSubjectOnScreen(_ onScreen: Bool) {
+        guard isSubjectOnScreen != onScreen else { return }
+        isSubjectOnScreen = onScreen
+    }
+
     /// Zero-based active step index. When `isActive == true` the anchor
     /// matching `steps[currentStep].anchor` displays its popover.
     public private(set) var currentStep: Int = 0
@@ -591,7 +608,7 @@ public final class FirstLaunchTourModel {
     /// `anchor`. The `.firstLaunchTourAnchor` modifier reads this to decide
     /// whether to mount its popover.
     public func isShowingPopover(forAnchor anchor: FirstLaunchTourAnchor) -> Bool {
-        guard isActive else { return false }
+        guard isActive, isSubjectOnScreen else { return false }
         guard steps.indices.contains(currentStep) else { return false }
         return steps[currentStep].anchor == anchor
     }
@@ -688,6 +705,13 @@ public struct FirstLaunchTour<Content: View>: View {
             // `id: canAutoStart` is load-bearing — a plain `.task` runs once at
             // mount and would burn the one-shot while Home sits under a pushed
             // route. Keying on the gate re-runs the check when the cover clears.
+            // The host's own "my surface is on screen" answer —
+            // `tabs.isShowingTodayRoot` on the four-tab root,
+            // `navigationPath.isEmpty` on the flag-off one. It gated only the
+            // start; it is also what decides whether a card may draw (B-10).
+            .onChange(of: canAutoStart, initial: true) { _, onScreen in
+                model.setSubjectOnScreen(onScreen)
+            }
             .task(id: canAutoStart) {
                 guard canAutoStart else { return }
                 // S4-1 — install the Supabase adapter when the user is
@@ -843,34 +867,58 @@ private struct FirstLaunchTourPopoverCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Step \(stepNumber) of \(totalSteps)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(PatinaTypography.monoLabel)
+                .tracking(0.5)
+                .foregroundStyle(PatinaColors.Text.muted)
                 .accessibilityIdentifier("FirstLaunchTour.StepIndicator")
 
             Text(resolvedHeading)
-                .font(.headline)
+                .font(PatinaTypography.h5)
+                .foregroundStyle(PatinaColors.Text.primary)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("FirstLaunchTour.Heading")
 
             Text(resolvedBody)
-                .font(.body)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("FirstLaunchTour.Body")
 
-            HStack {
+            HStack(spacing: 12) {
                 Spacer()
-                Button("Skip", role: .cancel, action: onSkip)
-                    .accessibilityIdentifier("FirstLaunchTour.SkipButton")
+                Button(action: onSkip) {
+                    Text("Skip")
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("FirstLaunchTour.SkipButton")
 
                 Button(action: onNext) {
                     Text(isFinalStep ? "Done" : (resolvedCtaLabel ?? "Next"))
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.offWhite)
+                        .padding(.horizontal, 20)
+                        .frame(minHeight: 44)
+                        .background(PatinaColors.clay)
+                        .clipShape(Capsule())
+                        .contentShape(Capsule())
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
                 .accessibilityIdentifier(isFinalStep ? "FirstLaunchTour.DoneButton" : "FirstLaunchTour.NextButton")
             }
         }
         .padding(16)
         .frame(maxWidth: 320)
+        // B-09: the card is the only stock-iOS surface a tester meets — Skip
+        // was system-blue text and Next a system-blue capsule in an otherwise
+        // cream, brown and black app. The styles above are explicit, and this
+        // covers anything inside the popover they do not reach (the caret in a
+        // field, a selection handle) without depending on the global accent.
+        .tint(PatinaColors.clay)
         .accessibilityElement(children: .combine)
         .task(id: step.surfaceKey) {
             await loadContent()

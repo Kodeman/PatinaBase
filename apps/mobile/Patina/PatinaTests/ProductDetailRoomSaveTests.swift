@@ -223,8 +223,12 @@ struct ProductDetailRoomSaveTests {
         #expect(source.contains("sheet(item: $presented)"))
         #expect(source.contains(".sheet(isPresented:") == false)
         #expect(source.contains(".helpPanel(") == false)
-        // Both routes still exist, and both still reach a sheet.
-        #expect(source.contains("presented = .help"))
+        // Both routes still reach a sheet. C5-02: the `?` chip that set
+        // `presented = .help` is hidden for round one — no ios-app/* help
+        // article exists, so it opened on an empty panel — but the arm, its
+        // sheet and its surface key stay mounted and W2 restores the trigger.
+        // `HelpDoorRemovalTests` pins the removal from the other side.
+        #expect(source.contains("case .help:"))
         #expect(source.contains("presented = .roomPicker"))
         #expect(source.contains("HelpPanelSheet("))
     }

@@ -22,6 +22,15 @@ enum CompanionDisplayMode: Equatable {
     case hidden
 }
 
+// A-50 took the coach mark out of an inline `.overlay` and into its own
+// property, which drops this body from 502 lines to 497 — across the
+// `type_body_length` *error* threshold and into its *warning* band, which
+// `lint-delta` counts. The body is smaller than it was; the split belongs to
+// W2's hygiene pass, not to a layout fix. Same scoped disable, same reason, as
+// `SettingsView` and `DailyRoomView` already carry. Region form rather than
+// `disable:next`, so the doc comment stays attached to the declaration.
+// swiftlint:disable type_body_length
+
 /// The Companion — Floating Strata Mark that serves as the app's primary navigation
 public struct CompanionOverlay: View {
     @Environment(\.appCoordinator) private var coordinator
@@ -351,37 +360,44 @@ public struct CompanionOverlay: View {
                     .padding(.bottom, 12)
             }
 
+            // A-50 / B-10: this card used to be drawn as an
+            // `.overlay(alignment: .topLeading)` ON `CompanionHearthView` with
+            // `.offset(y: -16)`, so "These are your next steps" covered the
+            // panel title, the first action row and part of the close control
+            // — the reader was told to look at rows the card was sitting on.
+            // It takes the intro bubble's slot instead: a sibling ABOVE the
+            // panel, which is where the panel's own content is not.
+            if state.isExpanded, showCoachmark {
+                coachmarkBubbleView
+                    .padding(.bottom, 12)
+            }
+
             CompanionHearthView(
                 presentation: canonicalPresentation,
                 attention: coaching.markAttention,
                 wakePhase: wakePhase,
                 onPrimaryAction: hearthPrimaryAction,
                 onHintAction: hearthHintAction,
-                onHelp: {
-                    collapseToButton()
-                    Task {
-                        try? await Task.sleep(for: .seconds(0.3))
-                        presented = .help
-                    }
-                },
+                // Round one: no ios-app/companion help articles exist, so the
+                // `?` would open on an empty panel (C5-02). W2 restores it.
+                onHelp: nil,
                 onDismiss: { collapseToButton() },
                 expandedContent: {
                     expandedView
                 }
             )
-            .overlay(alignment: .topLeading) {
-                if state.isExpanded, showCoachmark {
-                    companionCoachmark
-                        .offset(y: -16)
-                        .padding(.trailing, 88)
-                        .transition(
-                            reduceMotion
-                                ? .opacity
-                                : .move(edge: .top).combined(with: .opacity)
-                        )
-                }
-            }
         }
+    }
+
+    /// The coach mark in its own row above the panel.
+    private var coachmarkBubbleView: some View {
+        companionCoachmark
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(
+                reduceMotion
+                    ? .opacity
+                    : .move(edge: .top).combined(with: .opacity)
+            )
     }
 
     private func trackCanonicalExposure() {
@@ -795,34 +811,34 @@ public struct CompanionOverlay: View {
 
     private func companionAction(icon: String, label: String, hint: String, isSuggested: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                // Icon
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isSuggested ? PatinaColors.clay : Color.white.opacity(0.08))
-                        .frame(width: 36, height: 36)
-                    Image(systemName: icon)
-                        .font(.system(size: 16))
-                        .foregroundStyle(isSuggested ? PatinaColors.offWhite : PatinaColors.pearl)
+            // C-06: the row gives its words what is left of a 280-odd point
+            // panel after a 36 pt icon, 28 pt of inset and a chevron — about
+            // 190 pt, narrower than "recommendations" sets at an accessibility
+            // size, so the title broke inside itself ("Your recommenda /
+            // tions", the finding's own fragment). `minimumScaleFactor` cannot
+            // fix that: with no `lineLimit` SwiftUI wraps rather than shrinks.
+            // Above `.accessibility1` the icon and the chevron take their own
+            // row and the words get the whole width — the same answer the Today
+            // header takes for `GAP1B-03`.
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 14) {
+                            actionIcon(icon, isSuggested: isSuggested)
+                            Spacer()
+                            actionChevron
+                        }
+                        actionText(label: label, hint: hint)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                } else {
+                    HStack(spacing: 14) {
+                        actionIcon(icon, isSuggested: isSuggested)
+                        actionText(label: label, hint: hint)
+                        Spacer()
+                        actionChevron
+                    }
                 }
-
-                // Text
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(label)
-                        .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.offWhite)
-                    Text(hint)
-                        .font(PatinaTypography.monoSmall)
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                        .tracking(0.3)
-                        .textCase(.uppercase)
-                }
-
-                Spacer()
-
-                Text("\u{203A}")
-                    .font(.system(size: 14))
-                    .foregroundStyle(PatinaColors.agedOak)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -833,7 +849,51 @@ public struct CompanionOverlay: View {
         .buttonStyle(.plain)
     }
 
+    private func actionIcon(_ icon: String, isSuggested: Bool) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isSuggested ? PatinaColors.clay : Color.white.opacity(0.08))
+                .frame(width: 36, height: 36)
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(isSuggested ? PatinaColors.offWhite : PatinaColors.pearl)
+        }
+    }
+
+    private var actionChevron: some View {
+        Text("\u{203A}")
+            .font(.system(size: 14))
+            .foregroundStyle(PatinaColors.agedOak)
+    }
+
+    /// The line limits are what make `minimumScaleFactor` bite. SwiftUI shrinks
+    /// text only to avoid TRUNCATION: given unlimited lines it wraps instead,
+    /// and a single word wider than the line it is offered — "recommendations"
+    /// sets past 330 pt at an accessibility size — breaks inside itself
+    /// whatever scale floor is set. Two lines and a 0.6 floor is the pair.
+    private func actionText(label: String, hint: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.offWhite)
+                .lineLimit(2)
+                .minimumScaleFactor(0.6)
+                .allowsTightening(true)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(hint)
+                .font(PatinaTypography.monoSmall)
+                .foregroundStyle(PatinaColors.Text.interactive)
+                .tracking(0.3)
+                .textCase(.uppercase)
+                .lineLimit(2)
+                .minimumScaleFactor(0.6)
+                .allowsTightening(true)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
 }
+// swiftlint:enable type_body_length
 
 private extension CompanionOverlay {
     // MARK: - Actions

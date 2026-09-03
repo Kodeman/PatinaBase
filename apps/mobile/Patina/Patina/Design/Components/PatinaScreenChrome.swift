@@ -68,31 +68,48 @@ private struct PatinaScreenChrome: ViewModifier {
         content
             .patinaTopBand()
             .toolbar(.hidden, for: .navigationBar)
-            .overlay(alignment: .topLeading) {
-                HStack(spacing: 12) {
-                    if !isTabRoot {
-                        BackChevronButton(style: style) { coordinator.goBack() }
-                    }
-                    if let title {
-                        // SP-19 / b-notes §3: the chevron and title float over a
-                        // ScrollView with the system bar hidden, so on a scrolled
-                        // screen the title sat directly on live content (the
-                        // re-walk caught the slot over INV-2026-0142). The
-                        // chevron carries its own pill; the title had nothing.
-                        Text(title)
-                            .font(PatinaTypography.h5)
-                            .foregroundStyle(titleColor)
-                            .lineLimit(1)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule(style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                            )
-                    }
+            // B-27: a tab root has no chevron, so the title WAS the whole
+            // floating overlay — a grey capsule pinned top-left while rows
+            // scrolled under it, cutting "Conversation" and "What's been
+            // billed…" in half (shots/B/49, 57). A tab root has room for a
+            // real band: the title is drawn in the safe area and the content
+            // is inset below it, so nothing travels underneath.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if isTabRoot, let title {
+                    Text(title)
+                        .font(PatinaTypography.h5)
+                        .foregroundStyle(titleColor)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 10)
+                        .background(PatinaColors.Background.primary)
                 }
-                .padding(.top, 8)
-                .padding(.leading, 18)
+            }
+            .overlay(alignment: .topLeading) {
+                // A pushed screen keeps the floating chevron: it is a 36 pt
+                // control in a corner over a hero, not a bar across the
+                // content column, and every pushed screen's own header is
+                // already laid out under it.
+                if !isTabRoot {
+                    HStack(spacing: 12) {
+                        BackChevronButton(style: style) { coordinator.goBack() }
+                        if let title {
+                            Text(title)
+                                .font(PatinaTypography.h5)
+                                .foregroundStyle(titleColor)
+                                .lineLimit(1)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule(style: .continuous)
+                                        .fill(.ultraThinMaterial)
+                                )
+                        }
+                    }
+                    .padding(.top, 8)
+                    .padding(.leading, 18)
+                }
             }
     }
 

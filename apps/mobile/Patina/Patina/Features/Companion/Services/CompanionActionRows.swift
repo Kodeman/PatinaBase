@@ -29,12 +29,18 @@ extension CompanionActionProvider {
 
     // MARK: - Tail / identity
 
-    static func homeRow() -> CompanionActionItem {
-        item("house", "Home", "Back to your space", route: .heroFrame, id: "home")
+    /// A-52: "Back to your space" was drawn identically for a guest who has
+    /// never scanned a room — a promise about a space that does not exist. It
+    /// is true the moment there is local work, signed in or not.
+    static func homeRow(isAuthenticated: Bool, hasLocalWork: Bool) -> CompanionActionItem {
+        let hint = (isAuthenticated || hasLocalWork)
+            ? "Back to your space"
+            : "See what's on Patina"
+        return item("house", "Home", hint, route: .heroFrame, id: "home")
     }
 
     static func profileRow() -> CompanionActionItem {
-        item("person.circle", "Your profile", "Style · Settings · Portal",
+        item("person.circle", "Your studio", "Style · Settings",
              route: .profile, id: "profile")
     }
 
@@ -49,7 +55,7 @@ extension CompanionActionProvider {
     // MARK: - Studio links
 
     static func studioRow() -> CompanionActionItem {
-        item("rectangle.grid.1x2", "Your studio", "Projects · Messages · Decisions",
+        item("rectangle.grid.1x2", "Your projects", "Projects",
              route: .projectList, id: "your_studio")
     }
 
@@ -202,7 +208,12 @@ extension CompanionActionProvider {
     /// the bar's label, so the two surfaces cannot say different things about
     /// the same piece, and the row performs the bar's act rather than a
     /// lookalike of it.
-    static func pieceActRow(_ act: PieceAct) -> CompanionActionItem {
+    ///
+    /// A-52: `.askAboutPiece` is the guest-visible case, and it promised that a
+    /// designer would come back to someone with no account for one to reach.
+    /// `PieceActResolver` already walls the tap; this is what is read before
+    /// the wall.
+    static func pieceActRow(_ act: PieceAct, isAuthenticated: Bool) -> CompanionActionItem {
         let icon: String
         let hint: String
         let analyticsId: String
@@ -219,7 +230,9 @@ extension CompanionActionProvider {
             analyticsId = "piece_buy"
         case .askAboutPiece:
             icon = "bubble.left"
-            hint = "A designer will come back to you"
+            hint = isAuthenticated
+                ? "A designer will get back to you"
+                : "Sign in and a designer will get back to you"
             analyticsId = "piece_ask"
         }
         return CompanionActionItem(

@@ -28,7 +28,6 @@ struct InvoiceDetailView: View {
                     InvoiceLineItemsBlock(invoice: invoice)
                     memoSection(invoice)
                     InvoicePaymentsBlock(invoice: invoice)
-                    payFooter(invoice)
                 } else if let error = viewModel.error {
                     errorView(error)
                 } else {
@@ -36,7 +35,28 @@ struct InvoiceDetailView: View {
                         .padding(.top, 80)
                 }
             }
-            .padding(.bottom, MoneyScreenMetrics.bottomClearance(houseFirst: coordinator.isHouseFirstRoot))
+            // With the act pinned below, the scroll only needs air under its
+            // last section; the bar's clearance travels with the footer.
+            .padding(.bottom, isPayFooterPinned
+                     ? 24
+                     : MoneyScreenMetrics.bottomClearance(houseFirst: coordinator.isHouseFirstRoot))
+        }
+        // GAP2-24: on first paint the CTA frame was {y:875, h:52} on an 874 pt
+        // screen — entirely below the fold, on a screen a tester reaches from
+        // "Your invoice is due". B-28: after a failure it was pushed behind
+        // the tab bar (pay at y=812.33, bar from y=791) and the failure panel
+        // was clipped with no scroll to reveal it. This screen earns a fixed
+        // footer: the act and the sentence above it are on screen at rest, at
+        // every scroll offset, and after a failure.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let invoice = viewModel.invoice, isPayFooterPinned {
+                payFooter(invoice)
+                    .padding(.top, 12)
+                    .padding(.bottom, MoneyScreenMetrics.bottomClearance(
+                        houseFirst: coordinator.isHouseFirstRoot
+                    ))
+                    .background(PatinaColors.Background.primary)
+            }
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
@@ -200,6 +220,13 @@ struct InvoiceDetailView: View {
     }
 
     // MARK: - Pay footer
+
+    /// True when `payFooter` draws anything — the two branches below.
+    private var isPayFooterPinned: Bool {
+        guard let invoice = viewModel.invoice else { return false }
+        return invoice.isVoid
+            || (invoice.isPayable && viewModel.confirmState != .confirming)
+    }
 
     @ViewBuilder
     private func payFooter(_ invoice: RemoteInvoice) -> some View {

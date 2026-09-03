@@ -317,56 +317,6 @@ struct ProductDetailView: View {
                             product.placeholderGradient
                                 .frame(height: 340)
                         }
-
-                        // Top bar — back, help, share, and save actions.
-                        HStack(spacing: 8) {
-                            Button { dismiss() } label: {
-                                floatingCircleButton(icon: "chevron.left")
-                            }
-                            .accessibilityLabel("Back")
-
-                            Spacer()
-
-                            // Contextual help panel — tap the `?` chip to open
-                            // a sheet listing every help article for this
-                            // surface (`ios-app/product-detail`).
-                            Button {
-                                presented = .help
-                            } label: {
-                                floatingCircleButton(icon: "questionmark")
-                            }
-                            .accessibilityLabel("Help")
-                            .accessibilityHint("Opens the help panel for this product.")
-                            .accessibilityIdentifier("ProductDetailView.HelpButton")
-
-                            // Share button — real ShareLink (R25) sharing the
-                            // product name + its portal URL. Not wrapped in
-                            // HelpTooltip: the tooltip's tap-to-reveal gesture
-                            // would conflict with the ShareLink's own tap
-                            // (same pattern as the AR button below), so the
-                            // share-action help copy ships through the help
-                            // panel (`?` button) instead.
-                            ShareLink(
-                                item: Self.shareURL(for: product),
-                                subject: Text(product.name),
-                                message: Text(Self.shareMessage(for: product))
-                            ) {
-                                floatingCircleButton(icon: "square.and.arrow.up")
-                            }
-                            .simultaneousGesture(TapGesture().onEnded {
-                                viewModel.trackShare()
-                            })
-                            .accessibilityLabel("Share")
-                            .accessibilityHint("Shares a link to this piece.")
-                            .accessibilityIdentifier("ProductDetailView.ShareButton")
-
-                            Button { viewModel.toggleSave(context: modelContext) } label: {
-                                floatingCircleButton(icon: viewModel.isSaved ? "heart.fill" : "heart")
-                            }
-                            .accessibilityLabel(viewModel.isSaved ? "Remove from saved" : "Save")
-                        }
-                        .padding(.top, 56)
-                        .padding(.horizontal, 16)
                     }
 
                     // Content
@@ -523,7 +473,9 @@ struct ProductDetailView: View {
                         soldByBlock(product)
 
                         Spacer()
-                            .frame(height: 120)
+                            .frame(height: Self.actBarReservation(
+                                houseFirst: coordinator.isHouseFirstRoot
+                            ))
                     }
                     .padding(24)
                 }
@@ -532,6 +484,53 @@ struct ProductDetailView: View {
             // Bottom action bar
             bottomBar(product: product)
         }
+        // A-45: this row used to be a child of the hero ZStack INSIDE the
+        // ScrollView, so one swipe took the chevron to y = -43 together with
+        // Share and Save — after reading the description there was no visible
+        // way back, no way to share and no way to save. As an overlay on the
+        // screen it stays where it was drawn at every scroll offset.
+        .overlay(alignment: .top) {
+            topControls(product)
+        }
+    }
+
+    /// Back, Share and Save — pinned, not scrolled (A-45).
+    private func topControls(_ product: Product) -> some View {
+        HStack(spacing: 8) {
+            Button { dismiss() } label: {
+                floatingCircleButton(icon: "chevron.left")
+            }
+            .accessibilityLabel("Back")
+
+            Spacer()
+
+            // Share button — real ShareLink (R25) sharing the product name +
+            // its portal URL. Not wrapped in HelpTooltip: the tooltip's
+            // tap-to-reveal gesture would conflict with the ShareLink's own
+            // tap (same pattern as the AR button below), so the share-action
+            // help copy is deferred to W2 with the rest of the ios-app help
+            // articles.
+            ShareLink(
+                item: Self.shareURL(for: product),
+                subject: Text(product.name),
+                message: Text(Self.shareMessage(for: product))
+            ) {
+                floatingCircleButton(icon: "square.and.arrow.up")
+            }
+            .simultaneousGesture(TapGesture().onEnded {
+                viewModel.trackShare()
+            })
+            .accessibilityLabel("Share")
+            .accessibilityHint("Shares a link to this piece.")
+            .accessibilityIdentifier("ProductDetailView.ShareButton")
+
+            Button { viewModel.toggleSave(context: modelContext) } label: {
+                floatingCircleButton(icon: viewModel.isSaved ? "heart.fill" : "heart")
+            }
+            .accessibilityLabel(viewModel.isSaved ? "Remove from saved" : "Save")
+        }
+        .padding(.top, 56)
+        .padding(.horizontal, 16)
     }
 
     // MARK: - The act
@@ -539,6 +538,24 @@ struct ProductDetailView: View {
     /// W2's clearance under the pinned act on a root with nothing else at that
     /// edge: the home indicator's own room, and no more.
     private static let pinnedActBottomInset: CGFloat = 36
+
+    /// What the scroll column must leave under its last block so the screen's
+    /// OWN pinned act bar does not sit on the sold-by paragraph.
+    ///
+    /// C9-04: this was the literal `120`, written across two lines so the
+    /// keystone scan walked past it. It is not a Companion figure —
+    /// `companionBottomClearance()` answers 57 pt on the house-first root and
+    /// the bar is taller than that — it is the bar's own height: the 44 pt
+    /// capsule, its 16 pt top pad, and whatever clearance the bar's bottom edge
+    /// already takes. Derived from those three so a change to any of them moves
+    /// this too.
+    private static let actBarCapsuleHeight: CGFloat = 44
+
+    static func actBarReservation(houseFirst: Bool) -> CGFloat {
+        actBarCapsuleHeight + 16 + (houseFirst
+            ? MoneyScreenMetrics.bottomClearance(houseFirst: true)
+            : pinnedActBottomInset)
+    }
 
     /// The width the Companion's minimal corner mark takes out of the bar's
     /// trailing edge: the 44 pt mark plus a hair of air. Its own trailing

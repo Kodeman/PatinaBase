@@ -142,6 +142,11 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
 
             content
         }
+        // R-06: the root VStack claimed only its content's height, so the
+        // cream ground stopped where the content stopped and the loading,
+        // error and empty states floated as a band in white (y=296…613 on an
+        // 874 pt window). Claim the screen BEFORE painting the ground.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the "Browse pieces" header
         // above carries the title, so the chrome adds only the back chevron.
@@ -160,6 +165,10 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             async let seed: Void = viewModel.seedSavedState(context: modelContext)
             async let load: Void = viewModel.loadRecommendations(roomId: roomRemoteId)
             _ = await (seed, load)
+        }
+        // C4-12 / R-03 (L1-B's note).
+        .refreshable {
+            await viewModel.loadRecommendations(roomId: roomRemoteId)
         }
         // SP-11: the loop the app invited and then closed — a piece can now be
         // put into a room from the card menu.
@@ -275,7 +284,7 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 120)
+                .companionBottomClearance()
             }
         }
     }
@@ -415,9 +424,8 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
         if let tastePortrait {
             return tastePortrait.recommendationRationale(for: product, roomName: scopedRoomName)
         }
-        if let scopedRoomName {
-            return "Selected from Patina's room-aware edit for \(scopedRoomName)."
-        }
+        // C-38: the same truncated boilerplate under every card in a
+        // room-scoped grid. The Pieces tab already prints nothing here.
         return nil
     }
 

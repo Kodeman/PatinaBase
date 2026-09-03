@@ -54,6 +54,17 @@ struct DecisionDeferSheet: View {
                         .accessibilityIdentifier("decisionDefer.error")
                 }
 
+            }
+            .padding(24)
+        }
+        .background(PatinaColors.Background.primary)
+        .patinaTopBand()
+        // GAP1B-02: at AX-XL the visible sheet ended inside the note editor,
+        // Send was a clipped sliver at the sheet's bottom edge and Cancel was
+        // not on screen at all — the client could not send the message the
+        // sheet exists to send. The pair is pinned instead.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 12) {
                 PatinaButton(
                     "Send",
                     style: .clay,
@@ -64,15 +75,17 @@ struct DecisionDeferSheet: View {
                 }
                 .accessibilityIdentifier("decisionDefer.send")
 
-                PatinaButton("Cancel", style: .ghost, isEnabled: !isSending) {
+                // GAP1B-07, as on the consent sheet.
+                PatinaButton("Cancel", style: .secondary, isEnabled: !isSending) {
                     onCancel()
                     dismiss()
                 }
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 16)
+            .background(PatinaColors.Background.primary)
         }
-        .background(PatinaColors.Background.primary)
-        .patinaTopBand()
         .onAppear {
             if note.isEmpty { note = deferral.draft(decisionTitle: decisionTitle) }
         }

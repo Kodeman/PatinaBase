@@ -947,4 +947,32 @@ struct FirstLaunchTourTests {
         #expect(model.isOnFinalStep)
         #expect(model.isActive)
     }
+
+    // MARK: - B-09: the tour card is the app's, not the system's
+
+    @Test
+    func theTourCardIsPaintedInPatinaColours() throws {
+        // "Skip" was system-blue text and "Next" a system-blue filled capsule
+        // inside a system-styled bubble — the only blue in an otherwise cream,
+        // brown and black app (shots/B/14-guest-today.png, 15-tour-step2.png).
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
+        )
+        #expect(!code.contains("buttonStyle(.borderedProminent)"),
+                "the tour's Next is still a system capsule (B-09)")
+        #expect(code.contains("PatinaTypography."),
+                "the tour card still uses the system type ramp (B-09)")
+        #expect(code.contains("tint(PatinaColors."),
+                "the tour card still inherits whatever tint it is given (B-09)")
+    }
+
+    @Test
+    func theTourKeepsItsThreeFallbackBodies() throws {
+        // L0.4: the binary fallbacks are what the Sanity publish is being made
+        // to match. Restyling the card must not touch them, or the publish
+        // drifts from the build the day it lands.
+        #expect(FirstLaunchTourModel.defaultSteps.count == 3)
+        #expect(FirstLaunchTourModel.defaultSteps[0].fallback?.heading == "Welcome to Patina")
+        #expect(FirstLaunchTourModel.defaultSteps[2].fallback?.heading == "Your Studio")
+    }
 }

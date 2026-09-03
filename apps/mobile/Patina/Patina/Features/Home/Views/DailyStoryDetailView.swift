@@ -147,7 +147,7 @@ struct DailyStoryDetailView: View {
         }
         .padding(.top, 22)
         .padding(.horizontal, 20)
-        .padding(.bottom, 100)
+        .companionBottomClearance()
     }
 
     private var dragToDismiss: some Gesture {

@@ -108,15 +108,26 @@ public struct HelpTooltip<Trigger: View>: View {
             .onTapGesture {
                 handleTriggerTap()
             }
+            // C-18: `.onTapGesture` exposes no activate action, so VoiceOver
+            // could see the trigger and never open it. The gesture stays for
+            // touch; this is the same act for the accessibility tree.
+            .accessibilityAction {
+                handleTriggerTap()
+            }
             .popover(isPresented: $isPresented, arrowEdge: .top) {
                 if let body = effectiveBody {
-                    // 14pt base text — uses `.body` font so Dynamic Type
-                    // scales the popover content for accessibility.
+                    // B-07 / C-18: the bubble takes its height from the text.
+                    // It used to read `.padding` → `.frame` → `.fixedSize`,
+                    // which let the frame's proposal win: 86.3 pt of copy in a
+                    // ~75 pt bubble, clipped at the top AND the bottom, and
+                    // translucent enough to read the greeting through it.
                     Text(body)
                         .font(.body)
-                        .padding(12)
-                        .frame(maxWidth: maxWidth)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: maxWidth, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
+                        .background(PatinaColors.Background.primary)
                         // `presentationCompactAdaptation` keeps the popover
                         // a true popover on iPhone (rather than auto-promoting
                         // to a sheet at compact widths), matching the web
