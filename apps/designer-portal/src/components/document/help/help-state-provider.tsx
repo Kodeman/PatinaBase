@@ -78,7 +78,7 @@ export function HelpStateProvider({ children }: { children: ReactNode }) {
           setMarginNoteStateBackend(marginNoteBackend, true);
           setFirstAuthoredStateBackend(firstAuthoredBackend, true);
         }
-        await migrateLocalToSupabase(backends, marginNoteBackend);
+        await migrateLocalToSupabase(backends, marginNoteBackend, firstAuthoredBackend);
       } catch (err) {
         // Hydration failure must not crash the host — the backends fall back to
         // empty in-memory state and the next mount retries. Log only.

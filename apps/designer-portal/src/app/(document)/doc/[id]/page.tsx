@@ -83,6 +83,7 @@ import {
   deriveSendWallLine,
 } from '@/lib/document/proposal-watch-derivation';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
+import { shouldFireZoneFlight } from '@/lib/document/zone-flight';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
 import { documentResolutionState } from '@/lib/document/document-resolution-state';
 import { DocSpine } from '@/components/document/doc-spine';
@@ -1232,7 +1233,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // "pick-up/put-down thrash" stuck signal (synthesis §10, R-b). `pickedUpAt`
   // resets on arrival at a distinct engagement id; `wrote` latches on any
   // margin-rail note/decision write (DOCUMENT_WRITE_EVENT); the guard fires
-  // at most once per pick-up.
+  // at most once per pick-up. The pick-up/latch bookkeeping stays here (it
+  // needs live refs); the actual fire/no-fire decision is the pure
+  // `shouldFireZoneFlight` helper (lib/document/zone-flight.ts) so it's unit
+  // testable without rendering the page (ZF-2).
   const zoneFlightRef = useRef<{
     docId: string;
     pickedUpAt: number;
@@ -1255,17 +1259,47 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     window.addEventListener(DOCUMENT_WRITE_EVENT, onWrite);
     return () => window.removeEventListener(DOCUMENT_WRITE_EVENT, onWrite);
   }, []);
-  const fireZoneFlightIfDue = useCallback(() => {
+  // ZF-1 fix — `nextPath: null` means an explicit put-down (Esc / a "Put
+  // down" action): those are genuine exits regardless of destination. A
+  // route-away instead passes the actual destination path so a same-document
+  // sub-route (Plans/Spec Book/Boards) can be told apart from leaving the
+  // document.
+  const fireZoneFlightIfDue = useCallback((nextPath: string | null) => {
     const z = zoneFlightRef.current;
-    if (!z.docId || z.fired || z.wrote) return;
     const heldMs = Date.now() - z.pickedUpAt;
-    if (heldMs >= 10_000) return;
+    if (
+      !shouldFireZoneFlight({
+        heldMs,
+        wrote: z.wrote,
+        alreadyFired: z.fired,
+        // The URL id, not `row.engagement_id`: `id` accepts ANY of the
+        // engagement's keys (engagement_id/project_id/proposal_id/lead_id —
+        // see useDocumentEngagement's docstring) and Plans/Spec Book/Boards
+        // are literally `/doc/${id}/...`, so `id` is what a same-document
+        // sub-route actually shares.
+        docId: id,
+        nextPath,
+      })
+    ) {
+      return;
+    }
     z.fired = true;
     documentEvents.zoneFlight({ doc_id: z.docId, held_ms: heldMs });
-  }, []);
-  // Navigating away (route change unmounts this page) is a put-down too —
-  // covers every exit that isn't the explicit Esc handled below.
-  useEffect(() => () => fireZoneFlightIfDue(), [fireZoneFlightIfDue]);
+  }, [id]);
+  // Navigating away unmounts this page — but that also happens for a
+  // same-document sub-route (Plans/Spec Book/Boards are separate route
+  // components sharing no layout with this one), which is NOT a put-down.
+  // `usePathname()`'s value captured in this effect's closure would be
+  // stale by the time the cleanup runs (it's the pathname from the render
+  // that registered the effect, not the destination); reading
+  // `window.location.pathname` live, at unmount time, gives the real
+  // destination instead — Next's client router updates the URL before it
+  // swaps the page component, so by the time this cleanup runs the browser
+  // is already on the new path.
+  useEffect(
+    () => () => fireZoneFlightIfDue(window.location.pathname),
+    [fireZoneFlightIfDue],
+  );
 
   // Esc puts down (D1) — unless something above it owns the key. A sheet is
   // first (it is the topmost thing on the screen and closes itself), then an
@@ -1281,7 +1315,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       if (isEditableTarget(e.target)) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (openShelf) return;
-      fireZoneFlightIfDue();
+      // Explicit put-down — always a genuine exit, never gated on a
+      // destination path (nextPath: null).
+      fireZoneFlightIfDue(null);
       router.push('/desk');
     };
     document.addEventListener('keydown', onKey);

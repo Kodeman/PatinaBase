@@ -287,6 +287,7 @@ describe('migrateLocalToSupabase', () => {
       toursMigrated: 0,
       featureAnnouncementsMigrated: 0,
       marginNotesMigrated: 0,
+      firstAuthoredMigrated: 0,
     })
   })
 
@@ -317,6 +318,42 @@ describe('migrateLocalToSupabase', () => {
     expect(
       window.localStorage.getItem('patina:margin-note:desk-first-touch'),
     ).toBeNull()
+  })
+
+  it('sweeps the patina:first-authored key into the first-authored backend and clears it', async () => {
+    window.localStorage.setItem('patina:first-authored', '1747699200000')
+    const { client } = makeStubClient({})
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    const firstAuthoredBackend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    await backends.hydrate()
+    await firstAuthoredBackend.hydrate()
+    const result = await migrateLocalToSupabase(backends, undefined, firstAuthoredBackend)
+    expect(result.firstAuthoredMigrated).toBe(1)
+    expect(firstAuthoredBackend.hasAuthored()).toBe(true)
+    expect(window.localStorage.getItem('patina:first-authored')).toBeNull()
+  })
+
+  it('does not double-count first-authored when the backend already has it, but still clears the local key', async () => {
+    window.localStorage.setItem('patina:first-authored', '1')
+    const { client } = makeStubClient({ firstAuthoredAt: '2026-01-01T00:00:00Z' })
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    const firstAuthoredBackend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    await backends.hydrate()
+    await firstAuthoredBackend.hydrate()
+    const result = await migrateLocalToSupabase(backends, undefined, firstAuthoredBackend)
+    expect(result.firstAuthoredMigrated).toBe(0)
+    expect(window.localStorage.getItem('patina:first-authored')).toBeNull()
+  })
+
+  it('leaves first-authored untouched when no local key exists', async () => {
+    const { client } = makeStubClient({})
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    const firstAuthoredBackend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    await backends.hydrate()
+    await firstAuthoredBackend.hydrate()
+    const result = await migrateLocalToSupabase(backends, undefined, firstAuthoredBackend)
+    expect(result.firstAuthoredMigrated).toBe(0)
+    expect(firstAuthoredBackend.hasAuthored()).toBe(false)
   })
 })
 
