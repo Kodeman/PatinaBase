@@ -175,12 +175,56 @@ Run `ios-gate.sh unit` after each merge and the three of them will name any line
   `PatinaColors.OnDark.*`, `PatinaColors.Scrim.chrome`, `PatinaColors.Text.error`,
   `PatinaColors.clayInk` (now with call sites), and the typography members `display2Regular`,
   `h4Medium`, `h5Regular`, `captionRegular`, `captionSerif`. Lanes 3–6 can use all of them.
-- **A pre-existing flake, so it is not met cold:** `PatinaTests/OrderHandoffTests` and
-  `CompanionCoachingModelTests.introGate_freshUser_pollsUntilTourResolves` fail under the parallel
-  tier and pass in isolation. `OrderHandoffTests`' helper is `waitFor(timeout: .seconds(3))` against
-  a `@MainActor` poll with a 5 ms interval and a 60 ms deadline, which starves under load. It is not
-  this lane's doing — this lane's edits to those features are colour literals — and the isolation
-  evidence is in the lane report.
+### A pre-existing flake, so merge 2 does not meet it cold
+
+**`ios-gate.sh unit` is RED on this branch, and not for anything this lane did.** Three full-tier
+runs, same commit, same clone:
+
+| run | result | failing suites |
+|---|---|---|
+| 1 | 1606 tests, 12 issues | `OrderHandoffTests` ×6 · `RoomBudgetTests` ×3 · `MoneyAndStudioCopyTests` ×2 · `SelectedStateTests` ×1 |
+| 2 | 1606 tests, **2** issues | `OrderHandoffTests` only, 2 tests |
+| 3 | 1606 tests, **6** issues | `OrderHandoffTests` only, **4** tests |
+
+Runs 2 and 3 are the same code. The nine non-`OrderHandoff` issues in run 1 were real and are fixed
+(three suites were pinning the behaviour `C5-14` and `A-73` exist to change; one was this lane's own
+source pin false-positiving on a progress bar). `OrderHandoffTests` is the residue, and it is a
+flake:
+
+```
+$ xcodebuild test … -only-testing:PatinaTests/OrderHandoffTests
+✔ Test run with 15 tests in 1 suite passed after 0.090 seconds.
+** TEST SUCCEEDED **
+```
+
+**0.090 s alone; a 3 s timeout expires under the 180-suite parallel tier.** The helper is
+`waitFor(timeout: .seconds(3))` polling a `@MainActor` condition every 5 ms
+(`OrderHandoffTests.swift:337-347`); under load the cooperative pool starves both the poll and the
+code under test.
+
+It is not this lane's doing, measured rather than asserted:
+
+```
+$ git diff --name-only main...HEAD -- \
+    apps/mobile/Patina/PatinaTests/OrderHandoffTests.swift \
+    apps/mobile/Patina/Patina/Features/Purchase/OrderHandoff.swift \
+    apps/mobile/Patina/Patina/Services/Analytics
+(no output)
+```
+
+This lane's only edits anywhere near it are two colour literals and a button outline in
+`Features/Purchase/**`.
+
+**L1-D is deliberately not fixing it.** `Features/Purchase/**` is "no lane, no W1 work" in §3's
+residue table, and a lane widening another area's timeout to turn its own gate green is the sort of
+thing that should be a decision rather than a side effect. The one-line change, if the steward wants
+the wave's gate green, is `OrderHandoffTests.swift:338`:
+
+```swift
+        timeout: Duration = .seconds(10),
+```
+
+The assertion still fails if the condition never becomes true — only the patience changes.
 - **`C-01` and `C-02` are fixed but not reachable by a round-one tester on the default root.** On
   the four-tab root that D1 makes the shipped product, the floating Companion retires. The fixes are
   correct and they matter on the kill-switch fallback root; nobody should count them as a
