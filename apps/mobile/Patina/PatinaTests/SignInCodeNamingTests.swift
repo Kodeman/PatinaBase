@@ -15,6 +15,7 @@
 //
 
 import Foundation
+import SwiftUI
 import Testing
 @testable import Patina
 
@@ -158,11 +159,53 @@ struct SignInCodeNamingTests {
     func theEmptyFieldAnnouncesNoCode() throws {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView+Panels.swift")
         #expect(!source.contains("TextField(\"000000\""))
-        #expect(source.contains("prompt: Text(\"Enter the 6-digit code\")"))
+        #expect(source.contains("prompt: Text(\"\u{2013} \u{2013} \u{2013} \u{2013} \u{2013} \u{2013}\")"))
         #expect(source.contains(".accessibilityLabel(\"Sign-in code\")"))
         #expect(source.contains("? \"Empty\""))
         #expect(source.contains("of 6 digits entered"))
         // Filled differs by more than opacity: the outline changes with it.
         #expect(source.contains("lineWidth: viewModel.otpToken.isEmpty ? 1 : 1.5"))
+    }
+
+    /// RL2A-03 — the round-one prompt was a 21-character sentence set in
+    /// `.title2` monospaced with `.tracking(8)`, in a 339 pt field. It rendered
+    /// "E n t e r   t h e   6 – d …" — an unreadable placeholder on the screen
+    /// every tester walks. Measured, not asserted about the string.
+    @Test("the empty field's prompt fits inside the field")
+    @MainActor
+    func theEmptyFieldsPromptIsNotClipped() throws {
+        // The observed field is 339 pt wide (AXFrame, iPhone 16 Pro sheet);
+        // `.padding(PatinaSpacing.md)` — 16 pt — takes that off each side.
+        let available: CGFloat = 339 - 32
+
+        func idealWidth(_ string: String) -> CGFloat {
+            let text = Text(string)
+                .font(.system(.title2, design: .monospaced))
+                .tracking(8)
+                .fixedSize()
+            return UIHostingController(rootView: text).sizeThatFits(
+                in: CGSize(width: CGFloat.greatestFiniteMagnitude,
+                           height: CGFloat.greatestFiniteMagnitude)
+            ).width
+        }
+
+        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView+Panels.swift")
+        let start = try #require(source.range(of: "prompt: Text(\""))
+        let rest = source[start.upperBound...]
+        let end = try #require(rest.range(of: "\""))
+        let prompt = String(rest[..<end.lowerBound])
+
+        let needed = idealWidth(prompt)
+        #expect(needed <= available, "prompt \"\(prompt)\" needs \(needed) pt of \(available) pt")
+        // And the sentence it replaces is proven to be what could not fit.
+        #expect(idealWidth("Enter the 6-digit code") > available)
+    }
+
+    /// The sentence still exists — two rows above the field, at full size,
+    /// where it has the width to be read.
+    @Test("the instruction is still on the screen, just not inside the field")
+    func theInstructionSentenceSurvives() throws {
+        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView+Panels.swift")
+        #expect(source.contains("Text(\"Enter the 6-digit code from your email\")"))
     }
 }

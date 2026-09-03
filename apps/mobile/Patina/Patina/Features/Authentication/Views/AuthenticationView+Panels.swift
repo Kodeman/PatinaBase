@@ -125,7 +125,11 @@ extension AuthenticationView {
             // differed only in text opacity. A prompt, a spoken value that
             // counts what is actually there, and an outline that changes with
             // content.
-            TextField("", text: $viewModel.otpToken, prompt: Text("Enter the 6-digit code"))
+            // RL2A-03: the prompt is a mask, not a sentence. A 21-character
+            // instruction set in this face — `.title2` monospaced, tracking 8
+            // — cannot fit 307 pt and rendered "E n t e r   t h e   6 – d …".
+            // The instruction itself is two rows above, at a readable size.
+            TextField("", text: $viewModel.otpToken, prompt: Text("– – – – – –"))
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
                 .font(.system(.title2, design: .monospaced))
