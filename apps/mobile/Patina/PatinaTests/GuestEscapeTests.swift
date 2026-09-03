@@ -55,14 +55,49 @@ struct GuestEscapeTests {
         let view = try SourcePin.read("Patina/Features/Onboarding/Views/OnboardingFlowView.swift")
         #expect(view.contains("I already have an account — Sign in"))
         #expect(view.contains("Onboarding.SignInButton"))
-        // Outside the per-page TabView, so it is on every page rather than one.
-        let start = try #require(view.range(of: "TabView(selection: $currentPage)"))
-        let signIn = try #require(view.range(of: "Onboarding.SignInButton"))
-        #expect(signIn.lowerBound > start.upperBound)
+        // In `pageContent`, which every page renders — so it is on every page
+        // rather than one. (It used to be in the pinned overlay, which is what
+        // RL3A-01 was about; `theSignInDoorScrollsWithThePage` pins the move.)
+        #expect(view.contains("signInDoor"))
 
         let host = try SourcePin.read("Patina/Features/FirstLaunch/Views/OnboardingFlowHost.swift")
         #expect(host.contains("onSignIn: { returnToSignIn() }"))
         #expect(host.contains("GuestSessionStore.returnToSignIn(coordinator)"))
+    }
+
+    /// RL3A-01 — the door shipped in the ZStack overlay's bottom slot, which
+    /// does not participate in the page's layout. At content_size
+    /// accessibility-extra-extra-extra-large its 92 pt frame sat INSIDE the
+    /// body paragraph (link y 740–832 against body y 450.67–885.33) and
+    /// `Onboarding.PrimaryButton.0` was not in the AX tree at all. It is the
+    /// app's first screen, and this branch introduced it: on `main` the
+    /// overlay is `HStack { Skip } + Spacer()` and nothing else.
+    ///
+    /// The fix is `StyleQuizView`'s own solved precedent pointed the other
+    /// way — rather than measure the floating thing and inset the column, put
+    /// the thing in the column.
+    @Test("nothing but Skip is pinned over the scrolling page content")
+    func theSignInDoorScrollsWithThePage() throws {
+        let view = try SourcePin.read("Patina/Features/Onboarding/Views/OnboardingFlowView.swift")
+
+        // The pinned overlay: from the TabView's style modifier to the end of
+        // `body`, which is where `onboardingScreen` begins.
+        let overlayStart = try #require(view.range(of: "tabViewStyle(.page(indexDisplayMode: .never))"))
+        let overlayEnd = try #require(view.range(of: "private func onboardingScreen("))
+        let overlay = String(view[overlayStart.upperBound..<overlayEnd.lowerBound])
+        #expect(overlay.contains("Onboarding.SkipButton"))
+        #expect(
+            !overlay.contains("Onboarding.SignInButton"),
+            "the sign-in door is pinned over the page body again"
+        )
+
+        // And it is in the scrolling column, after the CTA.
+        let contentStart = try #require(view.range(of: "private func pageContent("))
+        let contentEnd = try #require(view.range(of: "private func pageDots("))
+        let content = String(view[contentStart.lowerBound..<contentEnd.lowerBound])
+        let cta = try #require(content.range(of: "primaryButton(page, index: index)"))
+        let door = try #require(content.range(of: "signInDoor"))
+        #expect(door.lowerBound > cta.lowerBound)
     }
 
     @Test("every quiz step offers the same door")

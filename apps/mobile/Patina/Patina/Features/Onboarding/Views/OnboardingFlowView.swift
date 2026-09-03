@@ -98,15 +98,6 @@ struct OnboardingFlowView: View {
                     .accessibilityIdentifier("Onboarding.SkipButton")
                 }
                 Spacer()
-                if let onSignIn {
-                    Button("I already have an account — Sign in", action: onSignIn)
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.Text.interactive)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                        .padding(.bottom, 8)
-                        .accessibilityIdentifier("Onboarding.SignInButton")
-                }
             }
         }
     }
@@ -176,6 +167,7 @@ struct OnboardingFlowView: View {
             pageDots(index: index)
             Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 28 : 40)
             primaryButton(page, index: index)
+            signInDoor
         }
         .padding(.horizontal, 28)
         .padding(.top, dynamicTypeSize.isAccessibilitySize ? 24 : 32)
@@ -185,6 +177,27 @@ struct OnboardingFlowView: View {
                 ? 0
                 : max(300, viewportHeight * 0.50)
         )
+    }
+
+    /// P-18's door, in the scrolling column rather than pinned over it.
+    ///
+    /// RL3A-01: as a bottom-pinned overlay it did not participate in the
+    /// page's layout, so at accessibility-XXXL its frame was drawn straight
+    /// through the body paragraph and the CTA went off-screen entirely.
+    /// `pageContent` is rendered by every page, so it is still on all three.
+    @ViewBuilder
+    private var signInDoor: some View {
+        if let onSignIn {
+            Button("I already have an account — Sign in", action: onSignIn)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.interactive)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .padding(.top, 16)
+                .accessibilityIdentifier("Onboarding.SignInButton")
+        }
     }
 
     private func pageDots(index: Int) -> some View {
