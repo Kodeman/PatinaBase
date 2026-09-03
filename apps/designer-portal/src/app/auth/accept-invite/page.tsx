@@ -27,6 +27,7 @@ import { createBrowserClient, useAcceptInvitation } from '@patina/supabase';
 import { PortalAuthSuccess } from '@patina/design-system';
 import { StrataSweep } from '@/components/ui/strata-sweep';
 import { studioEvents } from '@/lib/analytics/studio-events';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DesignerAuthShell } from '../auth-shell';
 
 type Status = 'polling' | 'accepting' | 'success' | 'error';
@@ -63,6 +64,12 @@ function AcceptInviteContent() {
   const [studioName, setStudioName] = useState<string | null>(null);
 
   const acceptInvitation = useAcceptInvitation();
+  // L8: the teammate-persona flag. Off (or still loading) reproduces today's
+  // heading exactly — "Welcome to {studio}." — never the new
+  // "You're in — {studio}." copy.
+  const { value: teammatePersonaEnabled } = useFeatureFlag(
+    'onboarding-teammate-persona',
+  );
 
   useEffect(() => {
     if (status !== 'success') return;
@@ -152,7 +159,13 @@ function AcceptInviteContent() {
     return (
       <DesignerAuthShell>
         <PortalAuthSuccess
-          title={studioName ? `Welcome to ${studioName}.` : 'Your studio is ready.'}
+          title={
+            studioName
+              ? teammatePersonaEnabled
+                ? `You're in — ${studioName}.`
+                : `Welcome to ${studioName}.`
+              : 'Your studio is ready.'
+          }
           description="Your invitation is accepted. We’re taking you to your desk now."
           destinationLabel="Continue to your desk"
           destinationHref="/desk"
