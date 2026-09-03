@@ -147,7 +147,9 @@ struct BrandVoiceLintTests {
             guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
             let range = NSRange(source.startIndex..., in: source)
             for match in regex.matches(in: source, range: range) {
-                if let r = Range(match.range(at: 1), in: source) { out.insert(String(source[r])) }
+                if let value = Range(match.range(at: 1), in: source) {
+                    out.insert(String(source[value]))
+                }
             }
         }
         return out

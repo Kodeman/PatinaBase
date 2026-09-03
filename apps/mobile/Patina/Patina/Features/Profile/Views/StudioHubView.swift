@@ -29,11 +29,7 @@ struct StudioHubView: View {
                     partialLoadNotice(loadMessage)
                 }
                 if let stalenessLine = viewModel.stalenessLine {
-                    Text(stalenessLine)
-                        .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.Text.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("StudioHub.StalenessLine")
+                    StudioHubStalenessLine(text: stalenessLine)
                 }
 
                 ForEach(StudioQueueSectionKind.allCases) { kind in
@@ -359,5 +355,21 @@ struct StudioHubView: View {
             ]
         )
         coordinator.navigate(to: row.route)
+    }
+}
+
+/// `L07-05` (note O12): what the reader is looking at, while the notice above
+/// says what went wrong. A sentence by ruling — never a dot, never a badge.
+/// It sits outside `StudioHubView` so the view's body stays inside SwiftLint's
+/// `type_body_length` ceiling.
+private struct StudioHubStalenessLine: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(PatinaTypography.bodySmall)
+            .foregroundStyle(PatinaColors.Text.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("StudioHub.StalenessLine")
     }
 }
