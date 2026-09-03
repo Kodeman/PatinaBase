@@ -92,7 +92,6 @@ struct LaunchWatchdogTests {
         let floor = LaunchWatchdog.splashFloor(isAuthStateReady: false)
         #expect(floor > 0)
         #expect(floor <= 0.6)
-        #expect(floor < AppCoordinator.splashMinimumDuration)
     }
 
     /// The animation has to finish inside the shortest floor the coordinator

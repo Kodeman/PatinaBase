@@ -61,7 +61,7 @@ struct CrossRoomView: View {
         HStack(alignment: .bottom) {
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text("All Items")
+                Text("All pieces")
                     .font(PatinaTypography.h4)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Text(summary)
@@ -78,7 +78,7 @@ struct CrossRoomView: View {
 
     private var tabs: some View {
         HStack(spacing: 0) {
-            tabButton("All Items", .all)
+            tabButton("All pieces", .all)
             tabButton("By Category", .category)
             tabButton("By Maker", .maker)
         }

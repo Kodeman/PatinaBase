@@ -209,7 +209,7 @@ struct RoomProjectView: View {
     private func itemsSection(for room: RoomModel) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Your Items")
+                Text("Your pieces")
                     .font(PatinaTypography.eyebrow)
                     .tracking(1.0)
                     .textCase(.uppercase)
