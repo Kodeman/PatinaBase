@@ -31,14 +31,14 @@
  * See: docs/prds/Guide/patina-help-guidance-engineering-handoff.md
  */
 
-export const HELP_SYSTEM_VERSION = "0.1.0";
+export const HELP_SYSTEM_VERSION = '0.1.0';
 
-export { SurfaceKeys, SURFACE_KEY_REGEX, isSurfaceKey } from "./surfaceKeys";
-export type { SurfaceKey } from "./surfaceKeys";
+export { SurfaceKeys, SURFACE_KEY_REGEX, isSurfaceKey } from './surfaceKeys';
+export type { SurfaceKey } from './surfaceKeys';
 
 // ─── Analytics — the taxonomy of record (HELP_EVENTS) + shared safeCapture ────
-export { HELP_EVENTS, safeCapture } from "./analytics";
-export type { HelpEventName } from "./analytics";
+export { HELP_EVENTS, safeCapture } from './analytics';
+export type { HelpEventName } from './analytics';
 
 // ─── Content types ────────────────────────────────────────────────────────────
 export type {
@@ -54,83 +54,76 @@ export type {
   WelcomeModalContent,
   VideoContent,
   ContentTypeMap,
-} from "./contentTypes";
+} from './contentTypes';
 
 // ─── Sanity client (exported so portals can swap it out in A6) ────────────────
-export { getSanityClient } from "./sanityClient";
+export { getSanityClient } from './sanityClient';
 
 // ─── Data hooks ───────────────────────────────────────────────────────────────
-export { useHelpContent } from "./hooks/useHelpContent";
+export { useHelpContent } from './hooks/useHelpContent';
 
 // ─── Placeholder-content guard (filters seed/stub CMS copy) ──────────────────
-export { isPlaceholderContent } from "./isPlaceholderContent";
+export { isPlaceholderContent } from './isPlaceholderContent';
 
 // ─── Providers ────────────────────────────────────────────────────────────────
-export {
-  SurfaceKeyProvider,
-  useSurfaceKey,
-  useSetSurfaceKey,
-} from "./providers";
-export type { SurfaceKeyProviderProps } from "./providers";
+export { SurfaceKeyProvider, useSurfaceKey, useSetSurfaceKey } from './providers';
+export type { SurfaceKeyProviderProps } from './providers';
 
 // ─── Layer 1 · Ambient components ─────────────────────────────────────────────
-export { FieldLabel } from "./ambient/FieldLabel";
-export type { FieldLabelProps } from "./ambient/FieldLabel";
-export { FieldHelper } from "./ambient/FieldHelper";
-export type { FieldHelperProps } from "./ambient/FieldHelper";
-export { EmptyState } from "./ambient/EmptyState";
-export type { EmptyStateProps, EmptyStateSize } from "./ambient/EmptyState";
-export { SmartDefault } from "./ambient/SmartDefault";
-export type {
-  SmartDefaultAPI,
-  SmartDefaultProps,
-} from "./ambient/SmartDefault";
-export { SectionIntro } from "./ambient/SectionIntro";
-export type { SectionIntroProps } from "./ambient/SectionIntro";
+export { FieldLabel } from './ambient/FieldLabel';
+export type { FieldLabelProps } from './ambient/FieldLabel';
+export { FieldHelper } from './ambient/FieldHelper';
+export type { FieldHelperProps } from './ambient/FieldHelper';
+export { EmptyState } from './ambient/EmptyState';
+export type { EmptyStateProps, EmptyStateSize } from './ambient/EmptyState';
+export { SmartDefault } from './ambient/SmartDefault';
+export type { SmartDefaultAPI, SmartDefaultProps } from './ambient/SmartDefault';
+export { SectionIntro } from './ambient/SectionIntro';
+export type { SectionIntroProps } from './ambient/SectionIntro';
 
 // ─── Layer 2 · Reactive components ────────────────────────────────────────────
-export { Tooltip } from "./reactive/Tooltip";
-export type { TooltipProps } from "./reactive/Tooltip";
-export { InfoIcon } from "./reactive/InfoIcon";
-export type { InfoIconProps } from "./reactive/InfoIcon";
-export { StrataInfoIcon } from "./reactive/StrataInfoIcon";
-export type { StrataInfoIconProps } from "./reactive/StrataInfoIcon";
-export { LearnMore } from "./reactive/LearnMore";
-export type { LearnMoreProps } from "./reactive/LearnMore";
-export { ContextualHelpPanel } from "./reactive/ContextualHelpPanel";
-export type { ContextualHelpPanelProps } from "./reactive/ContextualHelpPanel";
+export { Tooltip } from './reactive/Tooltip';
+export type { TooltipProps } from './reactive/Tooltip';
+export { InfoIcon } from './reactive/InfoIcon';
+export type { InfoIconProps } from './reactive/InfoIcon';
+export { StrataInfoIcon } from './reactive/StrataInfoIcon';
+export type { StrataInfoIconProps } from './reactive/StrataInfoIcon';
+export { LearnMore } from './reactive/LearnMore';
+export type { LearnMoreProps } from './reactive/LearnMore';
+export { ContextualHelpPanel } from './reactive/ContextualHelpPanel';
+export type { ContextualHelpPanelProps } from './reactive/ContextualHelpPanel';
 
 // ─── Layer 3 · Proactive components ──────────────────────────────────────────
-export { Coachmark } from "./proactive/Coachmark";
-export type { CoachmarkProps } from "./proactive/Coachmark";
-export { WelcomeModal } from "./proactive/WelcomeModal";
-export type { WelcomeModalProps } from "./proactive/WelcomeModal";
-export { TourController } from "./proactive/TourController";
+export { Coachmark } from './proactive/Coachmark';
+export type { CoachmarkProps } from './proactive/Coachmark';
+export { WelcomeModal } from './proactive/WelcomeModal';
+export type { WelcomeModalProps } from './proactive/WelcomeModal';
+export { TourController } from './proactive/TourController';
 export type {
   TourControllerProps,
   TourControllerAPI,
   CoachmarkStep,
-} from "./proactive/TourController";
+} from './proactive/TourController';
 export {
   getTourState,
   setTourState,
   clearTourState,
   setTourStateBackend,
   TOUR_STATE_STORAGE_PREFIX,
-} from "./proactive/TourController";
-export type { TourState, TourStateBackend } from "./proactive/TourController";
-export { FeatureAnnouncementCoachmark } from "./proactive/FeatureAnnouncementCoachmark";
-export type { FeatureAnnouncementCoachmarkProps } from "./proactive/FeatureAnnouncementCoachmark";
+} from './proactive/TourController';
+export type { TourState, TourStateBackend } from './proactive/TourController';
+export { FeatureAnnouncementCoachmark } from './proactive/FeatureAnnouncementCoachmark';
+export type { FeatureAnnouncementCoachmarkProps } from './proactive/FeatureAnnouncementCoachmark';
 export {
   getFeatureAnnouncementState,
   setFeatureAnnouncementState,
   clearFeatureAnnouncementState,
   setFeatureAnnouncementStateBackend,
-} from "./proactive/FeatureAnnouncementCoachmark";
+} from './proactive/FeatureAnnouncementCoachmark';
 export type {
   FeatureAnnouncementState,
   FeatureAnnouncementStateBackend,
-} from "./proactive/FeatureAnnouncementCoachmark";
+} from './proactive/FeatureAnnouncementCoachmark';
 
 // ─── Persistence — Supabase adapter for cross-device help state (S4-1) ───────
 export {
@@ -141,7 +134,7 @@ export {
   createSupabaseMarginNoteBackend,
   createSupabaseHelpStateBackends,
   migrateLocalToSupabase,
-} from "./persistence";
+} from './persistence';
 export type {
   CreateSupabaseBackendsResult,
   CreateSupabaseMarginNoteBackendResult,
@@ -149,17 +142,14 @@ export type {
   HelpStateBlob,
   MarginNoteStateBackend,
   HelpStateSupabaseClient,
-} from "./persistence";
+} from './persistence';
 
 // ─── Layer 4 · Reference components ──────────────────────────────────────────
-export { HelpArticle, portableTextComponents } from "./reference/HelpArticle";
-export type {
-  HelpArticleProps,
-  RelatedArticleId,
-} from "./reference/HelpArticle";
-export { HelpSearch } from "./reference/HelpSearch";
-export type { HelpSearchProps, HelpSearchResult } from "./reference/HelpSearch";
-export { VideoPlayer } from "./reference/VideoPlayer";
-export type { VideoPlayerProps } from "./reference/VideoPlayer";
-export { RelatedArticles } from "./reference/RelatedArticles";
-export type { RelatedArticlesProps } from "./reference/RelatedArticles";
+export { HelpArticle, portableTextComponents } from './reference/HelpArticle';
+export type { HelpArticleProps, RelatedArticleId } from './reference/HelpArticle';
+export { HelpSearch } from './reference/HelpSearch';
+export type { HelpSearchProps, HelpSearchResult } from './reference/HelpSearch';
+export { VideoPlayer } from './reference/VideoPlayer';
+export type { VideoPlayerProps } from './reference/VideoPlayer';
+export { RelatedArticles } from './reference/RelatedArticles';
+export type { RelatedArticlesProps } from './reference/RelatedArticles';

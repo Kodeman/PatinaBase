@@ -13,21 +13,21 @@
  *   - GROQ is parameterized.
  *   - `max` is respected.
  */
-import React from "react";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RelatedArticles } from "./RelatedArticles";
+import React from 'react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { RelatedArticles } from './RelatedArticles'
 
 // ─── Mock the Sanity client module ────────────────────────────────────────────
 
-const mockFetch = vi.fn();
+const mockFetch = vi.fn()
 
-vi.mock("../../sanityClient", () => ({
+vi.mock('../../sanityClient', () => ({
   getSanityClient: () => ({ fetch: mockFetch }),
   _resetSanityClient: vi.fn(),
-}));
+}))
 
 // ─── Test wrapper (fresh QueryClient per test for isolation) ──────────────────
 
@@ -39,565 +39,533 @@ function makeWrapper() {
         gcTime: 0,
       },
     },
-  });
+  })
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
-  return Wrapper;
+  )
+  return Wrapper
 }
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const SAMPLE_ARTICLES = [
   {
-    _id: "article-1",
-    surfaceKey: "designer-portal/pipeline/project-list",
+    _id: 'article-1',
+    surfaceKey: 'designer-portal/pipeline/project-list',
     helpArticleContent: {
-      title: "How the Pipeline works",
+      title: 'How the Pipeline works',
       oneSentenceAnswer:
-        "The Pipeline view tracks every project across the four stages.",
+        'The Pipeline view tracks every project across the four stages.',
     },
   },
   {
-    _id: "article-2",
-    surfaceKey: "designer-portal/pipeline",
+    _id: 'article-2',
+    surfaceKey: 'designer-portal/pipeline',
     helpArticleContent: {
-      title: "Pipeline stages explained",
+      title: 'Pipeline stages explained',
       oneSentenceAnswer:
-        "Each stage represents a clear handoff point between you and the client.",
+        'Each stage represents a clear handoff point between you and the client.',
     },
   },
   {
-    _id: "article-3",
-    surfaceKey: "designer-portal",
+    _id: 'article-3',
+    surfaceKey: 'designer-portal',
     helpArticleContent: {
-      title: "Welcome to Patina",
-      oneSentenceAnswer: "A brief overview of the Designer Portal.",
+      title: 'Welcome to Patina',
+      oneSentenceAnswer: 'A brief overview of the Designer Portal.',
     },
   },
-];
+]
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe("RelatedArticles", () => {
-  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
-  let posthogCaptureSpy: ReturnType<typeof vi.fn>;
+describe('RelatedArticles', () => {
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+  let posthogCaptureSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    consoleWarnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => undefined);
+    vi.clearAllMocks()
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    posthogCaptureSpy = vi.fn();
-    (
-      window as unknown as { posthog: { capture: typeof posthogCaptureSpy } }
-    ).posthog = {
+    posthogCaptureSpy = vi.fn()
+    ;(window as unknown as { posthog: { capture: typeof posthogCaptureSpy } }).posthog = {
       capture: posthogCaptureSpy,
-    };
-  });
+    }
+  })
 
   afterEach(() => {
-    consoleWarnSpy.mockRestore();
-    delete (window as unknown as { posthog?: unknown }).posthog;
-  });
+    consoleWarnSpy.mockRestore()
+    delete (window as unknown as { posthog?: unknown }).posthog
+  })
 
   // ── Renders heading + items when articleIds passed ─────────────────────────
 
-  it("renders heading and items when articleIds are provided", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES);
+  it('renders heading and items when articleIds are provided', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
 
     render(
-      <RelatedArticles articleIds={["article-1", "article-2", "article-3"]} />,
+      <RelatedArticles articleIds={['article-1', 'article-2', 'article-3']} />,
       { wrapper: makeWrapper() },
-    );
+    )
 
     expect(
-      await screen.findByRole("heading", { name: /related articles/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("How the Pipeline works")).toBeInTheDocument();
-    expect(screen.getByText("Pipeline stages explained")).toBeInTheDocument();
-    expect(screen.getByText("Welcome to Patina")).toBeInTheDocument();
-  });
+      await screen.findByRole('heading', { name: /related articles/i }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('How the Pipeline works')).toBeInTheDocument()
+    expect(screen.getByText('Pipeline stages explained')).toBeInTheDocument()
+    expect(screen.getByText('Welcome to Patina')).toBeInTheDocument()
+  })
 
   // ── articleIds mode queries with the right GROQ shape + params ─────────────
 
-  it("queries Sanity by IDs when articleIds is provided", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 2));
+  it('queries Sanity by IDs when articleIds is provided', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 2))
 
-    render(<RelatedArticles articleIds={["article-1", "article-2"]} />, {
-      wrapper: makeWrapper(),
-    });
+    render(
+      <RelatedArticles articleIds={['article-1', 'article-2']} />,
+      { wrapper: makeWrapper() },
+    )
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    const [query, params] = mockFetch.mock.calls[0] as [
-      string,
-      Record<string, unknown>,
-    ];
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    const [query, params] = mockFetch.mock.calls[0] as [string, Record<string, unknown>]
 
     // ID-mode query references $ids and the helpArticle contentType
-    expect(query).toMatch(/\$ids/);
-    expect(query).toMatch(/_type\s*==\s*"helpContent"/);
-    expect(query).toMatch(/contentType\s*==\s*"helpArticle"/);
+    expect(query).toMatch(/\$ids/)
+    expect(query).toMatch(/_type\s*==\s*"helpContent"/)
+    expect(query).toMatch(/contentType\s*==\s*"helpArticle"/)
 
     expect(params).toMatchObject({
-      ids: ["article-1", "article-2"],
+      ids: ['article-1', 'article-2'],
       max: expect.any(Number),
-    });
-  });
+    })
+  })
 
   // ── surfaceKeyPrefix mode queries with prefix + helpArticle ────────────────
 
-  it("queries Sanity by surface-key prefix when surfaceKeyPrefix is provided", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES);
+  it('queries Sanity by surface-key prefix when surfaceKeyPrefix is provided', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
 
-    render(<RelatedArticles surfaceKeyPrefix="designer-portal/pipeline" />, {
-      wrapper: makeWrapper(),
-    });
+    render(
+      <RelatedArticles surfaceKeyPrefix="designer-portal/pipeline" />,
+      { wrapper: makeWrapper() },
+    )
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    const [query, params] = mockFetch.mock.calls[0] as [
-      string,
-      Record<string, unknown>,
-    ];
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    const [query, params] = mockFetch.mock.calls[0] as [string, Record<string, unknown>]
 
     // Prefix-mode query references $prefix + helpArticle filter
-    expect(query).toMatch(/\$prefix/);
-    expect(query).toMatch(/contentType\s*==\s*"helpArticle"/);
+    expect(query).toMatch(/\$prefix/)
+    expect(query).toMatch(/contentType\s*==\s*"helpArticle"/)
     expect(params).toMatchObject({
-      prefix: expect.stringContaining("designer-portal/pipeline"),
+      prefix: expect.stringContaining('designer-portal/pipeline'),
       max: expect.any(Number),
-    });
-  });
+    })
+  })
 
   // ── articleIds wins over surfaceKeyPrefix when both are passed ─────────────
 
-  it("prefers articleIds over surfaceKeyPrefix when both are provided", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1));
+  it('prefers articleIds over surfaceKeyPrefix when both are provided', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1))
 
     render(
       <RelatedArticles
-        articleIds={["article-1"]}
+        articleIds={['article-1']}
         surfaceKeyPrefix="designer-portal/pipeline"
       />,
       { wrapper: makeWrapper() },
-    );
+    )
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    const [query] = mockFetch.mock.calls[0] as [
-      string,
-      Record<string, unknown>,
-    ];
-    expect(query).toMatch(/\$ids/);
-    expect(query).not.toMatch(/\$prefix/);
-  });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    const [query] = mockFetch.mock.calls[0] as [string, Record<string, unknown>]
+    expect(query).toMatch(/\$ids/)
+    expect(query).not.toMatch(/\$prefix/)
+  })
 
   // ── Empty state renders NOTHING when results are empty ─────────────────────
 
-  it("renders nothing when no results are returned", async () => {
-    mockFetch.mockResolvedValue([]);
+  it('renders nothing when no results are returned', async () => {
+    mockFetch.mockResolvedValue([])
 
     const { container } = render(
       <RelatedArticles surfaceKeyPrefix="designer-portal/unknown" />,
       { wrapper: makeWrapper() },
-    );
+    )
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
     // Allow microtasks to settle so the empty-state branch has rendered.
-    await waitFor(() => expect(container.firstChild).toBeNull());
-    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
-    expect(screen.queryByRole("list")).not.toBeInTheDocument();
-  });
+    await waitFor(() => expect(container.firstChild).toBeNull())
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  })
 
-  it("calls onEmpty once the query settles with zero results", async () => {
-    mockFetch.mockResolvedValue([]);
-    const onEmpty = vi.fn();
-
-    render(
-      <RelatedArticles
-        surfaceKeyPrefix="designer-portal/unknown"
-        onEmpty={onEmpty}
-      />,
-      { wrapper: makeWrapper() },
-    );
-
-    await waitFor(() => expect(onEmpty).toHaveBeenCalledTimes(1));
-  });
-
-  it("does not call onEmpty while loading or once results are found", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES);
-    const onEmpty = vi.fn();
+  it('calls onEmpty once the query settles with zero results', async () => {
+    mockFetch.mockResolvedValue([])
+    const onEmpty = vi.fn()
 
     render(
-      <RelatedArticles
-        surfaceKeyPrefix="designer-portal/pipeline"
-        onEmpty={onEmpty}
-      />,
+      <RelatedArticles surfaceKeyPrefix="designer-portal/unknown" onEmpty={onEmpty} />,
       { wrapper: makeWrapper() },
-    );
+    )
 
-    await waitFor(() => expect(screen.getByRole("list")).toBeInTheDocument());
-    expect(onEmpty).not.toHaveBeenCalled();
-  });
+    await waitFor(() => expect(onEmpty).toHaveBeenCalledTimes(1))
+  })
 
-  it("does not call onEmpty when there are no query inputs at all", () => {
-    const onEmpty = vi.fn();
-    render(<RelatedArticles onEmpty={onEmpty} />, { wrapper: makeWrapper() });
-    expect(onEmpty).not.toHaveBeenCalled();
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
+  it('does not call onEmpty while loading or once results are found', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
+    const onEmpty = vi.fn()
+
+    render(
+      <RelatedArticles surfaceKeyPrefix="designer-portal/pipeline" onEmpty={onEmpty} />,
+      { wrapper: makeWrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByRole('list')).toBeInTheDocument())
+    expect(onEmpty).not.toHaveBeenCalled()
+  })
+
+  it('does not call onEmpty when there are no query inputs at all', () => {
+    const onEmpty = vi.fn()
+    render(<RelatedArticles onEmpty={onEmpty} />, { wrapper: makeWrapper() })
+    expect(onEmpty).not.toHaveBeenCalled()
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
 
   // ── Renders nothing when neither articleIds nor surfaceKeyPrefix passed ────
 
-  it("renders nothing when neither articleIds nor surfaceKeyPrefix is provided", () => {
-    const { container } = render(<RelatedArticles />, {
-      wrapper: makeWrapper(),
-    });
-    expect(container.firstChild).toBeNull();
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
+  it('renders nothing when neither articleIds nor surfaceKeyPrefix is provided', () => {
+    const { container } = render(<RelatedArticles />, { wrapper: makeWrapper() })
+    expect(container.firstChild).toBeNull()
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
 
   // ── articleIds empty array → no fetch + nothing rendered ───────────────────
 
-  it("renders nothing when articleIds is an empty array", () => {
-    const { container } = render(<RelatedArticles articleIds={[]} />, {
-      wrapper: makeWrapper(),
-    });
-    expect(container.firstChild).toBeNull();
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
+  it('renders nothing when articleIds is an empty array', () => {
+    const { container } = render(
+      <RelatedArticles articleIds={[]} />,
+      { wrapper: makeWrapper() },
+    )
+    expect(container.firstChild).toBeNull()
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
 
   // ── Max is respected (passed to query + applied client-side as safety) ─────
 
-  it("respects the max prop and forwards it to the query", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES);
+  it('respects the max prop and forwards it to the query', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
 
     render(
       <RelatedArticles
-        articleIds={["article-1", "article-2", "article-3"]}
+        articleIds={['article-1', 'article-2', 'article-3']}
         max={2}
       />,
       { wrapper: makeWrapper() },
-    );
+    )
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    const [, params] = mockFetch.mock.calls[0] as [
-      string,
-      Record<string, unknown>,
-    ];
-    expect(params.max).toBe(2);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    const [, params] = mockFetch.mock.calls[0] as [string, Record<string, unknown>]
+    expect(params.max).toBe(2)
 
     // Even if Sanity returns more than max (defensive), only render up to max.
-    const list = await screen.findByRole("list");
-    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
-  });
+    const list = await screen.findByRole('list')
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+  })
 
   // ── Default max is 5 ───────────────────────────────────────────────────────
 
-  it("defaults max to 5 when not specified", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES);
+  it('defaults max to 5 when not specified', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
 
-    render(<RelatedArticles articleIds={["article-1"]} />, {
-      wrapper: makeWrapper(),
-    });
+    render(
+      <RelatedArticles articleIds={['article-1']} />,
+      { wrapper: makeWrapper() },
+    )
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    const [, params] = mockFetch.mock.calls[0] as [
-      string,
-      Record<string, unknown>,
-    ];
-    expect(params.max).toBe(5);
-  });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    const [, params] = mockFetch.mock.calls[0] as [string, Record<string, unknown>]
+    expect(params.max).toBe(5)
+  })
 
   // ── Click fires help.related_article.clicked with snake_case keys ──────────
 
-  it("fires help.related_article.clicked with snake_case keys on item click", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES);
-    const user = userEvent.setup();
+  it('fires help.related_article.clicked with snake_case keys on item click', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
+    const user = userEvent.setup()
 
-    render(<RelatedArticles surfaceKeyPrefix="designer-portal/pipeline" />, {
-      wrapper: makeWrapper(),
-    });
+    render(
+      <RelatedArticles surfaceKeyPrefix="designer-portal/pipeline" />,
+      { wrapper: makeWrapper() },
+    )
 
-    const item = await screen.findByRole("link", {
-      name: /how the pipeline works/i,
-    });
-    await user.click(item);
+    const item = await screen.findByRole('link', { name: /how the pipeline works/i })
+    await user.click(item)
 
     const call = posthogCaptureSpy.mock.calls.find(
-      ([evt]) => evt === "help.related_article.clicked",
-    );
-    expect(call).toBeTruthy();
-    const props = call![1] as Record<string, unknown>;
-    expect(props.from_surface_key).toBe("designer-portal/pipeline");
-    expect(props.to_surface_key).toBe("designer-portal/pipeline/project-list");
-    expect(props.to_article_id).toBe("article-1");
+      ([evt]) => evt === 'help.related_article.clicked',
+    )
+    expect(call).toBeTruthy()
+    const props = call![1] as Record<string, unknown>
+    expect(props.from_surface_key).toBe('designer-portal/pipeline')
+    expect(props.to_surface_key).toBe('designer-portal/pipeline/project-list')
+    expect(props.to_article_id).toBe('article-1')
 
     // No camelCase leaks
-    expect(Object.keys(props)).not.toContain("fromSurfaceKey");
-    expect(Object.keys(props)).not.toContain("toSurfaceKey");
-    expect(Object.keys(props)).not.toContain("toArticleId");
-  });
+    expect(Object.keys(props)).not.toContain('fromSurfaceKey')
+    expect(Object.keys(props)).not.toContain('toSurfaceKey')
+    expect(Object.keys(props)).not.toContain('toArticleId')
+  })
 
   // ── In articleIds mode, from_surface_key falls back to "unknown" ───────────
 
   it('uses "unknown" as from_surface_key when in articleIds mode without prefix', async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES);
-    const user = userEvent.setup();
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
+    const user = userEvent.setup()
 
-    render(<RelatedArticles articleIds={["article-1"]} />, {
-      wrapper: makeWrapper(),
-    });
+    render(
+      <RelatedArticles articleIds={['article-1']} />,
+      { wrapper: makeWrapper() },
+    )
 
-    const item = await screen.findByRole("link", {
-      name: /how the pipeline works/i,
-    });
-    await user.click(item);
+    const item = await screen.findByRole('link', { name: /how the pipeline works/i })
+    await user.click(item)
 
     const call = posthogCaptureSpy.mock.calls.find(
-      ([evt]) => evt === "help.related_article.clicked",
-    );
-    expect(call).toBeTruthy();
-    expect((call![1] as Record<string, unknown>).from_surface_key).toBe(
-      "unknown",
-    );
-  });
+      ([evt]) => evt === 'help.related_article.clicked',
+    )
+    expect(call).toBeTruthy()
+    expect((call![1] as Record<string, unknown>).from_surface_key).toBe('unknown')
+  })
 
   // ── onArticleClick callback invoked with (id, surfaceKey) ──────────────────
 
-  it("invokes onArticleClick with (articleId, surfaceKey)", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1));
-    const onArticleClick = vi.fn();
-    const user = userEvent.setup();
+  it('invokes onArticleClick with (articleId, surfaceKey)', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1))
+    const onArticleClick = vi.fn()
+    const user = userEvent.setup()
 
     render(
       <RelatedArticles
-        articleIds={["article-1"]}
+        articleIds={['article-1']}
         onArticleClick={onArticleClick}
       />,
       { wrapper: makeWrapper() },
-    );
+    )
 
-    const item = await screen.findByRole("link", {
-      name: /how the pipeline works/i,
-    });
-    await user.click(item);
+    const item = await screen.findByRole('link', { name: /how the pipeline works/i })
+    await user.click(item)
 
     expect(onArticleClick).toHaveBeenCalledWith(
-      "article-1",
-      "designer-portal/pipeline/project-list",
-    );
-  });
+      'article-1',
+      'designer-portal/pipeline/project-list',
+    )
+  })
 
   // ── Custom heading override ────────────────────────────────────────────────
 
-  it("renders a custom heading when the heading prop is provided", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1));
+  it('renders a custom heading when the heading prop is provided', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1))
 
     render(
       <RelatedArticles
-        articleIds={["article-1"]}
+        articleIds={['article-1']}
         heading="You might also like"
       />,
       { wrapper: makeWrapper() },
-    );
+    )
 
     expect(
-      await screen.findByRole("heading", { name: "You might also like" }),
-    ).toBeInTheDocument();
+      await screen.findByRole('heading', { name: 'You might also like' }),
+    ).toBeInTheDocument()
     expect(
-      screen.queryByRole("heading", { name: /related articles/i }),
-    ).not.toBeInTheDocument();
-  });
+      screen.queryByRole('heading', { name: /related articles/i }),
+    ).not.toBeInTheDocument()
+  })
 
   // ── className is forwarded to the outer container ──────────────────────────
 
-  it("forwards className to the outer container", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1));
+  it('forwards className to the outer container', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1))
 
     const { container } = render(
       <RelatedArticles
-        articleIds={["article-1"]}
+        articleIds={['article-1']}
         className="my-custom-class"
       />,
       { wrapper: makeWrapper() },
-    );
+    )
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
     // Find the outer container (the first child of the test root).
     await waitFor(() =>
-      expect((container.firstChild as HTMLElement)?.className).toMatch(
-        /my-custom-class/,
-      ),
-    );
-  });
+      expect((container.firstChild as HTMLElement)?.className).toMatch(/my-custom-class/),
+    )
+  })
 
   // ── Loading shows a single skeleton row ────────────────────────────────────
 
-  it("renders a skeleton row while loading", () => {
+  it('renders a skeleton row while loading', () => {
     // Never resolve — keep loading state stable.
-    mockFetch.mockImplementation(() => new Promise(() => undefined));
+    mockFetch.mockImplementation(() => new Promise(() => undefined))
 
-    render(<RelatedArticles articleIds={["article-1"]} />, {
-      wrapper: makeWrapper(),
-    });
+    render(
+      <RelatedArticles articleIds={['article-1']} />,
+      { wrapper: makeWrapper() },
+    )
 
-    expect(screen.getByTestId("related-articles-skeleton")).toBeInTheDocument();
-  });
+    expect(screen.getByTestId('related-articles-skeleton')).toBeInTheDocument()
+  })
 
   // ── ul has role="list" for explicit semantics ──────────────────────────────
 
   it('renders the list as a <ul role="list">', async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 2));
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 2))
 
-    render(<RelatedArticles articleIds={["article-1", "article-2"]} />, {
-      wrapper: makeWrapper(),
-    });
+    render(
+      <RelatedArticles articleIds={['article-1', 'article-2']} />,
+      { wrapper: makeWrapper() },
+    )
 
-    const list = await screen.findByRole("list");
-    expect(list.tagName).toBe("UL");
-    expect(list).toHaveAttribute("role", "list");
-  });
+    const list = await screen.findByRole('list')
+    expect(list.tagName).toBe('UL')
+    expect(list).toHaveAttribute('role', 'list')
+  })
 
   // ── Renders title + excerpt for each article ───────────────────────────────
 
-  it("renders the title and oneSentenceAnswer excerpt for each article", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 2));
+  it('renders the title and oneSentenceAnswer excerpt for each article', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 2))
 
-    render(<RelatedArticles articleIds={["article-1", "article-2"]} />, {
-      wrapper: makeWrapper(),
-    });
+    render(
+      <RelatedArticles articleIds={['article-1', 'article-2']} />,
+      { wrapper: makeWrapper() },
+    )
 
     expect(
-      await screen.findByText("How the Pipeline works"),
-    ).toBeInTheDocument();
+      await screen.findByText('How the Pipeline works'),
+    ).toBeInTheDocument()
     expect(
       screen.getByText(/tracks every project across the four stages/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Pipeline stages explained")).toBeInTheDocument();
-    expect(screen.getByText(/clear handoff point/i)).toBeInTheDocument();
-  });
+    ).toBeInTheDocument()
+    expect(screen.getByText('Pipeline stages explained')).toBeInTheDocument()
+    expect(
+      screen.getByText(/clear handoff point/i),
+    ).toBeInTheDocument()
+  })
 
   // ── Sanity downtime — fetch throws, component renders nothing ──────────────
 
-  it("renders nothing when the Sanity fetch throws", async () => {
-    mockFetch.mockRejectedValue(new Error("Sanity unreachable"));
+  it('renders nothing when the Sanity fetch throws', async () => {
+    mockFetch.mockRejectedValue(new Error('Sanity unreachable'))
 
     const { container } = render(
-      <RelatedArticles articleIds={["article-1"]} />,
+      <RelatedArticles articleIds={['article-1']} />,
       { wrapper: makeWrapper() },
-    );
+    )
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    await waitFor(() => expect(container.firstChild).toBeNull());
-  });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    await waitFor(() => expect(container.firstChild).toBeNull())
+  })
 
   // ── Exact-keys mode queries `surfaceKey in $keys` ──────────────────────────
 
-  it("queries Sanity by exact surface keys when surfaceKeys is provided", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES);
+  it('queries Sanity by exact surface keys when surfaceKeys is provided', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
 
     render(
       <RelatedArticles
         surfaceKeys={[
-          "designer-portal/pipeline/project-list",
-          "designer-portal/pipeline",
+          'designer-portal/pipeline/project-list',
+          'designer-portal/pipeline',
         ]}
       />,
       { wrapper: makeWrapper() },
-    );
+    )
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    const [query, params] = mockFetch.mock.calls[0] as [
-      string,
-      Record<string, unknown>,
-    ];
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    const [query, params] = mockFetch.mock.calls[0] as [string, Record<string, unknown>]
 
-    expect(query).toMatch(/surfaceKey\s+in\s+\$keys/);
-    expect(query).toMatch(/contentType\s*==\s*"helpArticle"/);
-    expect(query).not.toMatch(/\$prefix/);
+    expect(query).toMatch(/surfaceKey\s+in\s+\$keys/)
+    expect(query).toMatch(/contentType\s*==\s*"helpArticle"/)
+    expect(query).not.toMatch(/\$prefix/)
     expect(params.keys).toEqual([
-      "designer-portal/pipeline/project-list",
-      "designer-portal/pipeline",
-    ]);
-  });
+      'designer-portal/pipeline/project-list',
+      'designer-portal/pipeline',
+    ])
+  })
 
   // ── Exact-keys mode preserves the caller-supplied order client-side ────────
 
-  it("renders exact-keys results in the caller-supplied order (not Sanity order)", async () => {
+  it('renders exact-keys results in the caller-supplied order (not Sanity order)', async () => {
     // Sanity returns article-1, article-2, article-3 (arbitrary order).
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES);
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
 
     render(
       <RelatedArticles
         // Requested order: article-3, article-1, article-2.
         surfaceKeys={[
-          "designer-portal",
-          "designer-portal/pipeline/project-list",
-          "designer-portal/pipeline",
+          'designer-portal',
+          'designer-portal/pipeline/project-list',
+          'designer-portal/pipeline',
         ]}
       />,
       { wrapper: makeWrapper() },
-    );
+    )
 
-    const list = await screen.findByRole("list");
-    const links = within(list).getAllByRole("link");
+    const list = await screen.findByRole('list')
+    const links = within(list).getAllByRole('link')
     expect(links.map((el) => el.textContent)).toEqual([
-      expect.stringContaining("Welcome to Patina"),
-      expect.stringContaining("How the Pipeline works"),
-      expect.stringContaining("Pipeline stages explained"),
-    ]);
-  });
+      expect.stringContaining('Welcome to Patina'),
+      expect.stringContaining('How the Pipeline works'),
+      expect.stringContaining('Pipeline stages explained'),
+    ])
+  })
 
   // ── Precedence: articleIds > surfaceKeys > surfaceKeyPrefix ────────────────
 
-  it("prefers surfaceKeys over surfaceKeyPrefix, and articleIds over surfaceKeys", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1));
+  it('prefers surfaceKeys over surfaceKeyPrefix, and articleIds over surfaceKeys', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1))
 
     // surfaceKeys beats surfaceKeyPrefix.
     const { rerender } = render(
       <RelatedArticles
-        surfaceKeys={["designer-portal/pipeline/project-list"]}
+        surfaceKeys={['designer-portal/pipeline/project-list']}
         surfaceKeyPrefix="designer-portal/pipeline"
       />,
       { wrapper: makeWrapper() },
-    );
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    expect((mockFetch.mock.calls[0] as [string])[0]).toMatch(
-      /surfaceKey\s+in\s+\$keys/,
-    );
-    expect((mockFetch.mock.calls[0] as [string])[0]).not.toMatch(/\$prefix/);
+    )
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    expect((mockFetch.mock.calls[0] as [string])[0]).toMatch(/surfaceKey\s+in\s+\$keys/)
+    expect((mockFetch.mock.calls[0] as [string])[0]).not.toMatch(/\$prefix/)
 
-    vi.clearAllMocks();
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1));
+    vi.clearAllMocks()
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1))
 
     // articleIds beats surfaceKeys.
     rerender(
       <RelatedArticles
-        articleIds={["article-1"]}
-        surfaceKeys={["designer-portal/pipeline/project-list"]}
+        articleIds={['article-1']}
+        surfaceKeys={['designer-portal/pipeline/project-list']}
       />,
-    );
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    const [query] = mockFetch.mock.calls[0] as [string];
-    expect(query).toMatch(/\$ids/);
-    expect(query).not.toMatch(/surfaceKey\s+in\s+\$keys/);
-  });
+    )
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    const [query] = mockFetch.mock.calls[0] as [string]
+    expect(query).toMatch(/\$ids/)
+    expect(query).not.toMatch(/surfaceKey\s+in\s+\$keys/)
+  })
 
   // ── Does not crash when window.posthog is missing ──────────────────────────
 
-  it("does not crash when window.posthog is missing on click", async () => {
-    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1));
-    delete (window as unknown as { posthog?: unknown }).posthog;
-    const user = userEvent.setup();
+  it('does not crash when window.posthog is missing on click', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1))
+    delete (window as unknown as { posthog?: unknown }).posthog
+    const user = userEvent.setup()
 
-    render(<RelatedArticles articleIds={["article-1"]} />, {
-      wrapper: makeWrapper(),
-    });
+    render(
+      <RelatedArticles articleIds={['article-1']} />,
+      { wrapper: makeWrapper() },
+    )
 
-    const item = await screen.findByRole("link", {
-      name: /how the pipeline works/i,
-    });
-    expect(() => user.click(item)).not.toThrow();
-  });
-});
+    const item = await screen.findByRole('link', { name: /how the pipeline works/i })
+    expect(() => user.click(item)).not.toThrow()
+  })
+})

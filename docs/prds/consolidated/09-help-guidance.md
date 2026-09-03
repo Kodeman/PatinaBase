@@ -6,25 +6,24 @@
 
 **Status by sub-feature:**
 
-| Sub-feature                                                                                     | Status                                                                                                        |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Layer 1 · Ambient (FieldLabel, FieldHelper, EmptyState, SmartDefault, SectionIntro)             | Shipped                                                                                                       |
-| Layer 2 · Reactive (Tooltip, InfoIcon, StrataInfoIcon, LearnMore, ContextualHelpPanel)          | Shipped ⚠ (panel-open bug unconfirmed post-fix)                                                               |
-| Layer 3 · Proactive (Coachmark, WelcomeModal, TourController, FeatureAnnouncementCoachmark)     | Partial (Coachmark/WelcomeModal/TourController shipped + live; FeatureAnnouncementCoachmark built but unused) |
-| Layer 4 · Reference (HelpArticle, HelpSearch, VideoPlayer, RelatedArticles)                     | Partial (components + Help Center routes shipped; 10 videos not recorded)                                     |
-| Cross-device persistence (`profiles.help_state`)                                                | Shipped (designer portal only; admin/client not wired)                                                        |
-| Sanity CMS content authoring                                                                    | Planned / in progress (~142 of ~150 docs still placeholder)                                                   |
-| Designer Portal integration (utility bar, First Project Walkthrough, The Document, Help Center) | Shipped                                                                                                       |
-| Admin Portal integration                                                                        | Shipped (ambient/reactive only; no tours, no Supabase persistence)                                            |
-| Client Portal integration                                                                       | Shipped (ambient/reactive only; no tours, no Supabase persistence)                                            |
-| iOS native Help module                                                                          | Shipped (code-complete, parity-tested) but Deferred from pilot                                                |
-| Analytics (PostHog events)                                                                      | Shipped (direct `window.posthog` calls); typed `helpEvents` taxonomy unused                                   |
-| PostHog dashboards (5 content dashboards + quarterly audit)                                     | Planned (unverified / not built)                                                                              |
+| Sub-feature | Status |
+|---|---|
+| Layer 1 · Ambient (FieldLabel, FieldHelper, EmptyState, SmartDefault, SectionIntro) | Shipped |
+| Layer 2 · Reactive (Tooltip, InfoIcon, StrataInfoIcon, LearnMore, ContextualHelpPanel) | Shipped ⚠ (panel-open bug unconfirmed post-fix) |
+| Layer 3 · Proactive (Coachmark, WelcomeModal, TourController, FeatureAnnouncementCoachmark) | Partial (Coachmark/WelcomeModal/TourController shipped + live; FeatureAnnouncementCoachmark built but unused) |
+| Layer 4 · Reference (HelpArticle, HelpSearch, VideoPlayer, RelatedArticles) | Partial (components + Help Center routes shipped; 10 videos not recorded) |
+| Cross-device persistence (`profiles.help_state`) | Shipped (designer portal only; admin/client not wired) |
+| Sanity CMS content authoring | Planned / in progress (~142 of ~150 docs still placeholder) |
+| Designer Portal integration (utility bar, First Project Walkthrough, The Document, Help Center) | Shipped |
+| Admin Portal integration | Shipped (ambient/reactive only; no tours, no Supabase persistence) |
+| Client Portal integration | Shipped (ambient/reactive only; no tours, no Supabase persistence) |
+| iOS native Help module | Shipped (code-complete, parity-tested) but Deferred from pilot |
+| Analytics (PostHog events) | Shipped (direct `window.posthog` calls); typed `helpEvents` taxonomy unused |
+| PostHog dashboards (5 content dashboards + quarterly audit) | Planned (unverified / not built) |
 
 **Last reconciled:** 2026-07-06
 
 **Source docs:**
-
 - [Historical help guidance engineering handoff](../../_archive/prds/Guide/patina-help-guidance-engineering-handoff.md)
 - [Historical help guidance system](../../_archive/prds/Guide/patina-help-guidance-system.html)
 - [Historical Sprint 1 report](../../_archive/handoffs/help-system-sprint-1-report.md)
@@ -52,14 +51,12 @@
 **Purpose:** Make Patina approachable on the first click and reliable on the thousandth without interrupting the work (per `docs/prds/Guide/patina-help-guidance-engineering-handoff.md`). The Help & Guidance System is Patina's in-context guidance framework — a four-layer model (Ambient → Reactive → Proactive → Reference) that surfaces CMS-authored help copy, tooltips, empty-state nudges, onboarding tours, feature-announcement coachmarks, and a searchable Help Center, all keyed off a single `portal/section/component[/state]` **surface key** identifier.
 
 **Primary users:**
-
 - **Designers** — the deepest integration (39 files); utility-bar help panel, First Project Walkthrough tour, full Help Center.
 - **Admin operators** — utility-first voice help on Dashboard, Users, Applications, Communications, Audit (8 files).
 - **Homeowner/clients** — consumer-voice help on today/projects/scans/reviews/messages (10 files, `persona='consumer'`).
 - **iOS app users** — parallel native module, built and parity-tested but deferred from the web-first pilot.
 
 **Where it lives in the product:**
-
 - Shared package `@patina/help-system` (v0.1.0, `HELP_SYSTEM_VERSION` constant in `packages/help-system/src/index.ts`), consumed by all three Next.js portals (designer, admin, client) and by a native SwiftUI module on iOS (`apps/mobile/Patina/Patina/Features/Help/`).
 - Content is authored and stored in Sanity CMS (project `kv3qrinl`, dataset `production`, studio at `studios/help-system/`), fetched client-side by surface key.
 - Cross-device state (tour completions, feature-announcement dismissals) persists in `public.profiles.help_state` (designer portal only, at present).
@@ -208,16 +205,16 @@ Data flow is entirely client-side:
 
 ## 8. Forward Roadmap / Open Requirements
 
-| Item                                                                                                                                                                                           | Priority |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| Leah authors real CMS copy over the ~142 placeholder docs (H5); until then users see inline fallbacks, not the designed help.                                                                  | P0       |
-| Confirm/fix `ContextualHelpPanel` opening on the `?` click (open item from Round-2 prod verification); run the deferred §10 E2E acceptance suite with real pilot users.                        | P0       |
-| Refactor `TourController` to pass persona into per-step coachmark queries, retiring the `persona='all'` content-side workaround.                                                               | P1       |
-| Build dedicated Sanity schemas for `welcomeModalContent` and `videoContent`; resolve the video-hosting decision and record the 10 walkthroughs (H4).                                           | P1       |
-| Verify/rebuild the 5 PostHog content dashboards (I.2) and the quarterly content-audit dashboard (I3); reconcile the unused typed `helpEvents` taxonomy with the direct `window.posthog` calls. | P1       |
-| Wire the first real `FeatureAnnouncementCoachmark`, and add the `WelcomeModal` "Show me around again" replay affordance.                                                                       | P2       |
-| Wire admin-portal + client-portal Supabase help-state persistence when they ship their first tour.                                                                                             | P2       |
-| Un-defer iOS parity (native Help module is built and parity-tested, awaiting pilot go-ahead).                                                                                                  | P2       |
+| Item | Priority |
+|---|---|
+| Leah authors real CMS copy over the ~142 placeholder docs (H5); until then users see inline fallbacks, not the designed help. | P0 |
+| Confirm/fix `ContextualHelpPanel` opening on the `?` click (open item from Round-2 prod verification); run the deferred §10 E2E acceptance suite with real pilot users. | P0 |
+| Refactor `TourController` to pass persona into per-step coachmark queries, retiring the `persona='all'` content-side workaround. | P1 |
+| Build dedicated Sanity schemas for `welcomeModalContent` and `videoContent`; resolve the video-hosting decision and record the 10 walkthroughs (H4). | P1 |
+| Verify/rebuild the 5 PostHog content dashboards (I.2) and the quarterly content-audit dashboard (I3); reconcile the unused typed `helpEvents` taxonomy with the direct `window.posthog` calls. | P1 |
+| Wire the first real `FeatureAnnouncementCoachmark`, and add the `WelcomeModal` "Show me around again" replay affordance. | P2 |
+| Wire admin-portal + client-portal Supabase help-state persistence when they ship their first tour. | P2 |
+| Un-defer iOS parity (native Help module is built and parity-tested, awaiting pilot go-ahead). | P2 |
 
 ---
 
@@ -228,7 +225,6 @@ Data flow is entirely client-side:
 **On prod:** Deployed and verified 2026-05-19/20 across all three portal domains (`app`/`admin`/`client`.patina.cloud). Migration `00146_profiles_help_state` is on prod (the prod migration tip has since advanced well past it — currently in the 00250s after the 00230–00254 tier-1 deploy).
 
 **Two production-config fixes landed live** (config, not application code):
-
 1. Sanity CORS origins added for `https://{app,admin,client}.patina.cloud` (Sanity project settings) — before this, every help fetch failed CORS preflight and all copy silently fell back.
 2. CSP `connect-src` extended with `https://*.sanity.io wss://*.sanity.io` in `apps/{designer,admin,client}-portal/next.config.js` (commit `66543886`) — before this, the Sanity CDN was blocked client-side.
 

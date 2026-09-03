@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * Margin note (R94 — the first-touch primitive). A single pencil-idiom note in
@@ -32,12 +32,12 @@
  * the Supabase backend hydrates and for signed-out sessions.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
-import { documentEvents } from "@/lib/analytics/document-events";
-import type { MarginNoteStateBackend } from "@patina/help-system";
+import { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
+import { documentEvents } from '@/lib/analytics/document-events';
+import type { MarginNoteStateBackend } from '@patina/help-system';
 
-const STORAGE_PREFIX = "patina:margin-note:";
+const STORAGE_PREFIX = 'patina:margin-note:';
 
 function storageKeyFor(noteKey: string): string {
   return `${STORAGE_PREFIX}${noteKey}`;
@@ -64,7 +64,7 @@ export function setMarginNoteStateBackend(
 }
 
 function localHasSeen(noteKey: string): boolean {
-  if (typeof window === "undefined") return true;
+  if (typeof window === 'undefined') return true;
   try {
     return window.localStorage.getItem(storageKeyFor(noteKey)) !== null;
   } catch {
@@ -115,7 +115,7 @@ export function markMarginNoteSeen(noteKey: string): void {
       // Fall through to localStorage — same defensive posture as hasSeen.
     }
   }
-  if (typeof window === "undefined") return;
+  if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(storageKeyFor(noteKey), String(Date.now()));
   } catch {
@@ -155,7 +155,7 @@ export interface MarginNoteProps {
 export function MarginNote({
   noteKey,
   children,
-  caption = "Appears once · Recedes on use",
+  caption = 'Appears once · Recedes on use',
   actionEvents,
   commandBar = false,
   suppressed = false,
@@ -181,7 +181,7 @@ export function MarginNote({
     setVisible(true);
     if (!shownRef.current) {
       shownRef.current = true;
-      documentEvents.wayfinding.marginNote({ key: noteKey, action: "shown" });
+      documentEvents.wayfinding.marginNote({ key: noteKey, action: 'shown' });
     }
   }, [noteKey, suppressed, seen]);
 
@@ -194,7 +194,7 @@ export function MarginNote({
       if (seen === undefined) markMarginNoteSeen(noteKey);
       onSeen?.();
       setVisible(false);
-      documentEvents.wayfinding.marginNote({ key: noteKey, action: "acted" });
+      documentEvents.wayfinding.marginNote({ key: noteKey, action: 'acted' });
     };
     const cleanups: Array<() => void> = [];
     for (const name of actionEvents ?? []) {
@@ -203,15 +203,15 @@ export function MarginNote({
     }
     if (commandBar) {
       const onKey = (e: KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") recede();
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') recede();
       };
       // Capture-phase to observe the ⌘K before the command bar swallows it; we
       // never preventDefault, so the bar still opens.
-      window.addEventListener("keydown", onKey, { capture: true });
-      window.addEventListener("document:open-command-bar", recede);
+      window.addEventListener('keydown', onKey, { capture: true });
+      window.addEventListener('document:open-command-bar', recede);
       cleanups.push(() => {
-        window.removeEventListener("keydown", onKey, { capture: true });
-        window.removeEventListener("document:open-command-bar", recede);
+        window.removeEventListener('keydown', onKey, { capture: true });
+        window.removeEventListener('document:open-command-bar', recede);
       });
     }
     return () => cleanups.forEach((fn) => fn());
@@ -223,7 +223,7 @@ export function MarginNote({
     if (seen === undefined) markMarginNoteSeen(noteKey);
     onSeen?.();
     setVisible(false);
-    documentEvents.wayfinding.marginNote({ key: noteKey, action: "dismissed" });
+    documentEvents.wayfinding.marginNote({ key: noteKey, action: 'dismissed' });
   };
 
   // RF-03's cap, when the caller asks for it: two lines, with a focusable
@@ -233,21 +233,15 @@ export function MarginNote({
   const clamped = clamp && !expanded;
 
   return (
-    <aside
-      role="note"
-      className={`flex max-w-[34ch] items-start gap-2 ${className ?? ""}`}
-    >
+    <aside role="note" className={`flex max-w-[34ch] items-start gap-2 ${className ?? ''}`}>
       <p className="min-w-0 flex-1">
         <span
           id={clamp ? `margin-note-body-${noteKey}` : undefined}
           className={`font-heading text-[15px] italic leading-[1.55] text-[var(--text-body)] ${
-            clamped ? "line-clamp-2" : ""
+            clamped ? 'line-clamp-2' : ''
           }`}
         >
-          <span
-            aria-hidden
-            className="mr-1 not-italic text-[var(--text-muted)]"
-          >
+          <span aria-hidden className="mr-1 not-italic text-[var(--text-muted)]">
             –
           </span>
           {children}
