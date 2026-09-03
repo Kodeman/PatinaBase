@@ -74,11 +74,16 @@ public final class AppCoordinator: Coordinator {
     /// instantly-restored cached session, the splash plays for at least
     /// `splashMinimumDuration` so the auth-state flicker is hidden.
     /// Reset by `beginSplashTransition()` when, e.g., the user signs out.
-    public private(set) var splashMinimumDeadline: Date = Date().addingTimeInterval(1.5)
+    // C1-18: ~1 s of init plus an unconditional 1.5 s floor plus a 0.5 s
+    // crossfade is about three seconds to content, and the wordmark's own
+    // fade was cut short of full opacity every cold launch.
+    public private(set) var splashMinimumDeadline: Date =
+        Date().addingTimeInterval(LaunchWatchdog.splashFloor(isAuthStateReady: false))
 
     /// Minimum time the splash should play. Tuned to mask cached-session
     /// restore on cold launch.
-    public static let splashMinimumDuration: TimeInterval = 1.5
+    public static let splashMinimumDuration: TimeInterval =
+        LaunchWatchdog.splashFloor(isAuthStateReady: false)
 
     /// Set when the user taps "Continue as Guest" on the auth screen.
     /// Replaces today's implicit "skip auth, still let them onboard"
@@ -119,6 +124,19 @@ public final class AppCoordinator: Coordinator {
         deepLinkDrain = drain
     }
 
+    /// The other end of the same coupling: what a session ending does to the
+    /// links it never got to open.
+    ///
+    /// A queued link outlives the session that queued it — the FIFO is on disk
+    /// with a 15-minute life — so account A's tap could drain into account B's
+    /// first `.main`. This is the third door in the same family as `C2-06` and
+    /// `B-16`, closed on the same seam.
+    private var deepLinkClear: (() -> Void)?
+
+    public func attachDeepLinkClear(_ clear: @escaping () -> Void) {
+        deepLinkClear = clear
+    }
+
     /// Route preserved across a forced sign-out (token refresh failure
     /// mid-session). When re-auth succeeds, the phase observer can
     /// restore the user to where they were.
@@ -146,8 +164,19 @@ public final class AppCoordinator: Coordinator {
         self.init(houseFirstRoot: FeatureFlags.shared.isOn(.houseFirst))
     }
 
-    init(houseFirstRoot: Bool) {
+    /// - Parameter endSessionSideEffects: what a session ending does OUTSIDE
+    ///   this coordinator's own state. Injected because the production value
+    ///   rewrites the App Group container, and a unit tier that drove it would
+    ///   destroy whatever walk state is on the same simulator — and couple two
+    ///   suites through a file.
+    init(
+        houseFirstRoot: Bool,
+        endSessionSideEffects: @escaping @MainActor () -> Void = {
+            RecordSnapshotStore.shared.clearForSignedOut()
+        }
+    ) {
         self.isHouseFirstRoot = houseFirstRoot
+        self.endSessionSideEffects = endSessionSideEffects
 
         // Phase is now derived from `AuthService.session`, onboarding
         // completion, and guest opt-in by `recomputePhase()`. We start at
@@ -167,12 +196,40 @@ public final class AppCoordinator: Coordinator {
         // `Date()` isn't one, so without this tick we'd stay on
         // `.launching` forever when auth state lands during splash.
         scheduleSplashDeadlineRecompute()
+        // C1-19: and a second tick at the far end, for the launch that never
+        // resolves at all. Same reason the line above exists — nothing else
+        // wakes the observer, because `Date()` is not a tracked property.
+        scheduleLaunchWatchdog()
     }
 
     /// Wakes the phase observer when `splashMinimumDeadline` elapses.
     /// Re-issued by `beginSplashTransition()` so subsequent splash
     /// transitions (sign-out) get the same handling.
     private var splashDeadlineTask: Task<Void, Never>?
+
+    /// C1-19: the moment `.launching` stops being allowed to continue.
+    ///
+    /// `derivePhase()` returns `.launching` whenever `isAuthStateReady` is
+    /// false, and that flag is set only from inside the `for await` over
+    /// `supabase.auth.authStateChanges` (AuthService.swift:127-141). If the
+    /// stream never yields — a failing keychain read is the recorded
+    /// precedent — nothing else sets it and the splash is where the app ends.
+    /// A tester cannot describe that beyond "it never opened".
+    private var launchDeadline = Date().addingTimeInterval(LaunchWatchdog.stallDeadline)
+    private var launchWatchdogTask: Task<Void, Never>?
+
+    private func scheduleLaunchWatchdog() {
+        launchWatchdogTask?.cancel()
+        let deadline = launchDeadline
+        launchWatchdogTask = Task { @MainActor [weak self] in
+            let interval = deadline.timeIntervalSinceNow
+            if interval > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            }
+            guard !Task.isCancelled else { return }
+            self?.recomputePhase()
+        }
+    }
 
     private func scheduleSplashDeadlineRecompute() {
         splashDeadlineTask?.cancel()
@@ -307,6 +364,8 @@ public final class AppCoordinator: Coordinator {
     /// removes it — runs when a DIFFERENT account signs IN, never on sign-out.
     /// Left alone it keeps naming the previous client's designer on a Home
     /// Screen nobody is signed into (B-16).
+    private let endSessionSideEffects: @MainActor () -> Void
+
     private func clearNavigationForEndedSession() {
         screenStack = []
         navigationPath = NavigationPath()
@@ -315,7 +374,12 @@ public final class AppCoordinator: Coordinator {
         tabs.selected = .today
         currentScreen = .heroFrame
         updateContext(for: .heroFrame)
-        RecordSnapshotStore.shared.clearForSignedOut()
+        pendingLinkNotice = nil
+        // A queued link is a request the PREVIOUS account made. It survives the
+        // process (App Group defaults, 15-minute life), so without this it
+        // drains into whoever signs in next.
+        deepLinkClear?()
+        endSessionSideEffects()
     }
 
     #if DEBUG
@@ -333,10 +397,40 @@ public final class AppCoordinator: Coordinator {
     }
     #endif
 
-    private func derivePhase() -> AppPhase {
-        let splashStillPlaying = Date() < splashMinimumDeadline
-        if !AuthService.shared.isAuthStateReady || splashStillPlaying {
+    /// The two clock rules that decide whether the splash still holds, pure so
+    /// they can be proven: a unit run cannot stand up the auth stream
+    /// `isAuthStateReady` comes from, and in the test host it has already
+    /// resolved, which is the one state neither rule is about.
+    ///
+    /// Returns nil when the splash is done and the rest of `derivePhase()`'s
+    /// inputs decide.
+    static func launchGate(
+        isAuthStateReady: Bool,
+        now: Date,
+        launchDeadline: Date,
+        splashMinimumDeadline: Date
+    ) -> AppPhase? {
+        // C1-19: an unresolved launch may not hold the splash forever. Past
+        // the deadline the app falls through to `.auth`, where the person has
+        // something to tap; `SplashView` has been saying so since the same
+        // moment.
+        if !isAuthStateReady {
+            return now >= launchDeadline ? .auth : .launching
+        }
+        if now < splashMinimumDeadline {
             return .launching
+        }
+        return nil
+    }
+
+    private func derivePhase() -> AppPhase {
+        if let held = Self.launchGate(
+            isAuthStateReady: AuthService.shared.isAuthStateReady,
+            now: Date(),
+            launchDeadline: launchDeadline,
+            splashMinimumDeadline: splashMinimumDeadline
+        ) {
+            return held
         }
         let signedIn = AuthService.shared.isAuthenticated
         if !signedIn && !guestModeOptIn {
