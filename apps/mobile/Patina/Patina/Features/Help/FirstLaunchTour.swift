@@ -900,10 +900,13 @@ private struct FirstLaunchTourPopoverCard: View {
                 Button(action: onNext) {
                     Text(isFinalStep ? "Done" : (resolvedCtaLabel ?? "Next"))
                         .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.offWhite)
+                        // C3-05, at merge 6: a light label on the raw accent
+                        // measures 2.33:1. `Interactive.active` is the filled
+                        // control surface, and `Text.inverse` is its label.
+                        .foregroundStyle(PatinaColors.Text.inverse)
                         .padding(.horizontal, 20)
                         .frame(minHeight: 44)
-                        .background(PatinaColors.clay)
+                        .background(PatinaColors.Interactive.active)
                         .clipShape(Capsule())
                         .contentShape(Capsule())
                 }

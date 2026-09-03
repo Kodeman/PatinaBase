@@ -28,6 +28,13 @@ struct StudioHubView: View {
                 if let loadMessage = viewModel.loadMessage {
                     partialLoadNotice(loadMessage)
                 }
+                if let stalenessLine = viewModel.stalenessLine {
+                    Text(stalenessLine)
+                        .font(PatinaTypography.bodySmall)
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("StudioHub.StalenessLine")
+                }
 
                 ForEach(StudioQueueSectionKind.allCases) { kind in
                     sectionCard(viewModel.snapshot.section(kind))

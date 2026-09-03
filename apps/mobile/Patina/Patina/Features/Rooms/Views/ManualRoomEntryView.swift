@@ -68,6 +68,7 @@ struct ManualRoomEntryView: View {
                     HStack(spacing: 8) {
                         TextField("0", text: $windowCountRaw)
                             .keyboardType(.numberPad)
+                            .keyboardDoneToolbar()
                             .multilineTextAlignment(.center)
                             .font(PatinaTypography.bodySerif)
                             .foregroundStyle(PatinaColors.Text.primary)
@@ -110,6 +111,9 @@ struct ManualRoomEntryView: View {
             }
             .padding(20)
         }
+        // C9-08 (B-L1A-2): swiping the form puts the pad away, which is
+        // what the rest of iOS does.
+        .dismissKeyboardOnScroll()
         .background(PatinaColors.Background.primary.ignoresSafeArea())
         // U18: standard pushed-screen chrome — the header below carries
         // the title, so the chrome adds only the back chevron.
@@ -145,6 +149,7 @@ struct ManualRoomEntryView: View {
         VStack(spacing: 3) {
             TextField(label, text: value)
                 .keyboardType(.decimalPad)
+                .keyboardDoneToolbar()
                 .multilineTextAlignment(.center)
                 .font(PatinaTypography.bodySerif)
                 .foregroundStyle(PatinaColors.Text.primary)

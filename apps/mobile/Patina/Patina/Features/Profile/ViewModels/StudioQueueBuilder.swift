@@ -30,7 +30,9 @@ enum StudioQueueBuilder {
                     + context.pendingProposals.count
                     + context.payableInvoices.count,
                 unreadConversationCount: context.unreadThreads.count,
-                unreadUpdateCount: context.unreadNotifications.count,
+                // C2-07 / RL1F-25: one count of what needs you, from the one
+                // service every surface reads.
+                unreadUpdateCount: BadgeCountService.shared.unreadNotificationCount,
                 activeProjectCount: context.activeProjects.count
             )
         )
@@ -389,7 +391,11 @@ private extension StudioQueueBuilder {
     static func notificationRow(_ context: StudioQueueContext) -> StudioQueueRow? {
         let notifications = context.input.notifications
         guard !notifications.isEmpty else { return nil }
-        let unreadCount = context.unreadNotifications.count
+        // C2-07 / RL1F-25: one count of what needs you, from the one service
+        // every surface reads. `context.unreadNotifications` is the raw table,
+        // which 00534 writes two rows per event into — so this row said 6 while
+        // the feed said 0 and the bell said 3.
+        let unreadCount = BadgeCountService.shared.unreadNotificationCount
         let detail = unreadCount == 0
             ? "All updates read"
             : countLabel(

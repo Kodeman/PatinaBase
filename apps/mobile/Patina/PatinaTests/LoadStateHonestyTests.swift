@@ -453,16 +453,15 @@ extension LoadStateHonestyTests {
         }
     }
 
-    /// `L07-05`'s `stalenessLine` exists on the view model and is tested
-    /// there; nothing renders it until O12 lands, so the hub still draws stale
-    /// counts with full confidence.
+    /// `L07-05`. `stalenessLine` exists on the view model and is tested there;
+    /// O12 landed at merge 6, on the integration tip, so the hub now says when
+    /// its numbers are from instead of drawing stale counts with full
+    /// confidence. The known issue is gone and this is the bar.
     @Test
-    func theStudioHubStalenessLineIsStillOwed() throws {
+    func theStudioHubRendersItsStalenessLine() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Profile/Views/StudioHubView.swift")
         )
-        withKnownIssue("L07-05 owes StudioHubView its staleness line (l1b-notes-out.md O12)") {
-            #expect(code.contains("stalenessLine"))
-        }
+        #expect(code.contains("stalenessLine"))
     }
 }

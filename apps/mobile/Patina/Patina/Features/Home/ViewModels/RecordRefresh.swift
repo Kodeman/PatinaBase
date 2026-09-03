@@ -92,7 +92,7 @@ enum RecordRefresh {
         steps.append(.built)
         paint(record)
 
-        snapshots.save(record)
+        snapshots.save(record, owner: sessionUserId)
         steps.append(.saved)
 
         // Attributed before the visit is stamped: a crash between the two

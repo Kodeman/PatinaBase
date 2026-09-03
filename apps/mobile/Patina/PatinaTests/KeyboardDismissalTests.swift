@@ -88,14 +88,15 @@ struct KeyboardDismissalTests {
     /// it. And when L1-B's sites land at the X29 rebase it reds too — that is
     /// the signal that `C9-08` may finally read closed, and the list below
     /// comes out with the finding.
-    @Test("every bare numeric field in the app is one of B-L1A-2's five known-open sites")
+    ///
+    /// **X29 has run** (merge 5, on the integration tip): `B-L1A-2`'s five
+    /// sites in L1-B's four files all carry the Done bar, and the three whose
+    /// form is a `ScrollView` also carry `.dismissKeyboardOnScroll()`. The set
+    /// is now empty, so `C9-08` reads closed and this case guards the floor:
+    /// any new pad keyboard anywhere in the app reds it.
+    @Test("no numeric field in the app is left without a Done bar (C9-08 closed)")
     func everyBareNumericFieldIsOneOfTheFiveKnownOpenSites() {
-        let knownOpen: Set<String> = [
-            "RoomBudgetSheet.swift",
-            "ManualRoomEntryView.swift",
-            "RoomSettingsView.swift",
-            "ScanFallbackEntryView.swift"
-        ]
+        let knownOpen: Set<String> = []
 
         var bare: Set<String> = []
         for path in SourcePin.swiftFiles(under: "Patina") {

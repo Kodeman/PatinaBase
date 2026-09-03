@@ -65,11 +65,14 @@ struct NewRoomSheet: View {
             HStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(PatinaColors.clay)
+                        // C3-05, at merge 6: same pairing as every other
+                        // filled control — the raw accent under light ink is
+                        // 2.33:1.
+                        .fill(PatinaColors.Interactive.active)
                         .frame(width: 48, height: 48)
                     Image(systemName: icon)
                         .font(.system(size: 20, weight: .regular))
-                        .foregroundStyle(PatinaColors.offWhite)
+                        .foregroundStyle(PatinaColors.Text.inverse)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)

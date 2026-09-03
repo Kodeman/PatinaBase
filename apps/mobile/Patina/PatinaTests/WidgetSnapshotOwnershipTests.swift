@@ -277,19 +277,15 @@ struct WidgetSnapshotOwnershipTests {
     }
 
     /// The caller's half. `RecordRefresh.run` is `Features/Home/**` — L1-C's
-    /// glob — so it leaves as note `L1F→C-3`. Recorded as a known issue
-    /// WITHOUT `isIntermittent`, so this fails the moment the note lands and
-    /// the wave is told to delete the block.
+    /// glob — so it left as note `L1F→C-3` and the steward applied it at merge
+    /// 6, on the integration tip. The known-issue block is deleted, as the
+    /// note said it would be the moment the line landed.
     @Test("the record rebuild names the session it saves for")
     func theRebuildNamesItsSession() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Home/ViewModels/RecordRefresh.swift")
         )
-        withKnownIssue(
-            "RL1F-21 · note L1F→C-3 is owed by L1-C — DELETE this block when it stops recording"
-        ) {
-            #expect(code.contains("snapshots.save(record, owner: sessionUserId)"))
-        }
+        #expect(code.contains("snapshots.save(record, owner: sessionUserId)"))
     }
 
     // MARK: - RL1F-24 — what a sign-out actually leaves behind

@@ -279,7 +279,12 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     onHelpTap: nil,
                     onStudioTap: { coordinator.navigate(to: .profile) },
                     onBellTap: { coordinator.navigate(to: .notifications) },
-                    unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count,
+                    // C2-07: one count, from the one service every surface
+                    // reads. Today's private view model still drives the push
+                    // primer (`presentPushPrimerIfEarned`); it no longer drives
+                    // the badge, because marking a row read in the feed mutated
+                    // a different instance and the bell went on badging 3.
+                    unreadCount: BadgeCountService.shared.unreadNotificationCount,
                     // M1's header is date, greeting and a bell. The pill is
                     // B-1's fallback door for the root without a bar; where
                     // the bar draws, the Studio tab IS the door.

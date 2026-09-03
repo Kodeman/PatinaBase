@@ -144,12 +144,13 @@ struct BadgeFreshnessTests {
     /// wave is told to delete it — a bar, not a waiver. Round 2 wrote
     /// `isIntermittent: true`, which passes in both states and therefore could
     /// never report anything (`RL1F-19`).
-    private static let owed = [
-        "Patina/Features/Home/Views/DailyRoomView.swift":
-            "C2-07 · note L1F→C-1 is owed by L1-C — DELETE this block when it stops recording",
-        "Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift":
-            "RL1F-25 · note L1F→B-5 is owed by L1-B — DELETE this block when it stops recording"
-    ]
+    ///
+    /// **Empty at merge 6.** Both entries were applied by the steward on the
+    /// integration tip — `L1F→C-1` in `DailyRoomView.swift` and `L1F→B-5` in
+    /// `StudioQueueBuilder.swift` — so every file this walks is now held to
+    /// the bar rather than waived, which is what the blocks said would happen
+    /// the moment the notes landed.
+    private static let owed: [String: String] = [:]
 
     /// The bell reads the shared service. `DailyRoomView.swift` is L1-C's file
     /// and `StudioQueueBuilder.swift` is L1-B's (steward ruling S-3), so both

@@ -59,6 +59,7 @@ struct RoomBudgetSheet: View {
                     .foregroundStyle(PatinaColors.Text.muted)
                 TextField("9,000", text: $dollars)
                     .keyboardType(.numberPad)
+                    .keyboardDoneToolbar()
                     .font(PatinaTypography.h4)
                     .foregroundStyle(PatinaColors.Text.primary)
                     .accessibilityIdentifier("RoomBudgetSheet.Amount")

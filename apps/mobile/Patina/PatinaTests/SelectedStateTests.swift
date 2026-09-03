@@ -151,10 +151,16 @@ struct SelectedStateTests {
         //   RoomTypePillRow.swift     — L1-C's by name, and L1-C merges FIRST.
         //     Notes `D→C-6` and `D→C-7` carry the exact final lines; L1-C could
         //     not apply them because the tokens do not exist on its base.
+        // At merge 6 all three ceilings are **zero**, as the paragraph above
+        // promised: `w1-l1a` is on the tip (AuthenticationView's surviving
+        // `clay` is decorative `.opacity()`, and StyleQuizView's is a progress
+        // track), and L1-C's RoomTypePillRow carries D→C-6 / D→C-7. The rows
+        // stay as named ratchets rather than being deleted, so a site coming
+        // back in any of the three is a failure with its history attached.
         let deferred = [
-            ("AuthenticationView.swift", 2, "C3-06 ×2, closed on w1-l1a"),
-            ("StyleQuizView.swift", 2, "closed on w1-l1a, note D-L1A-5"),
-            ("RoomTypePillRow.swift", 1, "L1-C's file, notes D→C-6 / D→C-7")
+            ("AuthenticationView.swift", 0, "C3-06 ×2, closed on w1-l1a"),
+            ("StyleQuizView.swift", 0, "closed on w1-l1a, note D-L1A-5"),
+            ("RoomTypePillRow.swift", 0, "L1-C's file, notes D→C-6 / D→C-7")
         ]
         let deferredNames = deferred.map(\.0)
         let mine = offenders.filter { name in

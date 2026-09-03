@@ -83,6 +83,9 @@ struct ScanFallbackEntryView: View {
                 .padding(.bottom, 42)
             }
         }
+        // C9-08 (B-L1A-2): swiping the form puts the pad away, which is
+        // what the rest of iOS does.
+        .dismissKeyboardOnScroll()
         .background(PatinaColors.Background.primary.ignoresSafeArea())
         .onAppear {
             ScanAnalytics.shared.track(.manualEntryStarted)
@@ -183,6 +186,7 @@ struct ScanFallbackEntryView: View {
         VStack(alignment: .leading, spacing: 4) {
             TextField(title, text: text)
                 .keyboardType(.decimalPad)
+                .keyboardDoneToolbar()
                 .accessibilityLabel("\(title) in \(unit.label.lowercased())")
                 .accessibilityIdentifier("ScanFallbackEntry.\(title)")
                 .font(PatinaTypography.bodySmall)

@@ -59,6 +59,9 @@ struct RoomSettingsView: View {
             }
             .padding(20)
         }
+        // C9-08 (B-L1A-2): swiping the form puts the pad away, which is
+        // what the rest of iOS does.
+        .dismissKeyboardOnScroll()
         .background(PatinaColors.Background.primary.ignoresSafeArea())
         // U18: standard pushed-screen chrome — resolves the prior conflict
         // where ContentView styled this destination as a system bar while
@@ -196,6 +199,7 @@ struct RoomSettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             TextField("", text: text)
                 .keyboardType(.decimalPad)
+                .keyboardDoneToolbar()
                 .multilineTextAlignment(.center)
                 .font(Self.fieldFont)
                 .foregroundStyle(PatinaColors.Text.primary)
