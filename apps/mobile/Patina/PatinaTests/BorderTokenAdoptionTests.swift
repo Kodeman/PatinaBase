@@ -9,8 +9,8 @@
 //  brightest thing on the screen.
 //
 //  The semantic layer that replaces it is pinned by `DynamicTokenTests`. This
-//  suite pins the sweep: zero in the files this lane owns, and a ratchet on the
-//  rest, which reach four other lanes as integration notes.
+//  suite pins the sweep itself, at its exit criterion: zero call sites outside
+//  the token file, app-wide.
 //
 
 import Testing
@@ -19,45 +19,56 @@ import Foundation
 
 struct BorderTokenAdoptionTests {
 
-    private static let ownedFiles = [
-        "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaButton.swift",
-        "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaCard.swift",
-        "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaTextField.swift",
-        "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaAsyncImage.swift",
-        "Patina/Design/Components/TierPill.swift",
-        "Patina/Features/Shared/Views/ProductCard.swift",
-        "Patina/Features/StyleReveal/Views/RevealView.swift",
-        "Patina/Features/Authentication/Views/SignInWithAppleButton.swift"
-    ]
+    /// The one place outside the token file that may still name `pearl`.
+    ///
+    /// `PatinaGradients.earth` composes it as a **gradient stop** — a colour in
+    /// a decorative ramp, not a rule, not ink, and not a thing a contrast bar
+    /// applies to. Named here so "zero call sites" means what it says and the
+    /// exception is a decision rather than a leftover.
+    private static let gradientStopException =
+        "Tokens/PatinaGradients.swift"
 
-    /// `PatinaColors.pearl` references on this lane's base sha (`ba83aa67f`),
-    /// excluding the token file that defines it: 93.
-    private static let pearlCeiling = 93
-
-    @Test("no file this lane owns paints a border with the light-only literal")
-    func thisLaneUsesTheBorderTokens() throws {
-        for path in Self.ownedFiles {
-            let source = try SourcePin.read(path)
-            #expect(
-                !source.contains("PatinaColors.pearl"),
-                "\(path) still borders with PatinaColors.pearl — C3-01"
-            )
-        }
+    /// The field's resting outline, asserted by behaviour rather than by
+    /// grep: it never contained `pearl`, so the string check below passed
+    /// vacuously on it while the real border stayed `clay.opacity(0.2)`.
+    @Test("the text field's resting outline is a border token, not a tinted accent")
+    func theTextFieldOutlineIsABorderToken() throws {
+        let source = try SourcePin.read(
+            "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaTextField.swift"
+        )
+        #expect(
+            source.contains("PatinaColors.Border.strong"),
+            "PatinaTextField's outline does not use a Border token — a field's edge is the rule a tester is most meant to see"
+        )
+        #expect(
+            !source.contains("PatinaColors.clay.opacity"),
+            "PatinaTextField still outlines with a clay tint, which composites toward the light clay on the dark canvas"
+        )
     }
 
-    /// The app-wide ratchet. It may only fall.
-    @Test("the pearl call-site count never climbs")
-    func thePearlCountNeverClimbs() {
-        var total = 0
+    /// `C3-01`'s exit criterion, as an assertion: **zero**.
+    ///
+    /// The first round of this lane left 80 of the 93 and routed the rest to
+    /// four other lanes as integration notes. The lane that merges first
+    /// applied none of them, so the sweep happens here — which is what
+    /// PROGRAM.md §3's own merge-order rationale expects when it puts L1-D
+    /// second "because its token changes are the other whole-app sweep".
+    @Test("pearl has no call sites outside the token file")
+    func pearlHasNoCallSitesOutsideTheTokenFile() {
+        var offenders: [String] = []
         for path in SourcePin.swiftFiles(under: "Patina")
             + SourcePin.swiftFiles(under: "../PatinaDesignKit/Sources/PatinaDesignKit") {
             if path.hasSuffix("Tokens/PatinaColors.swift") { continue }
+            if path.hasSuffix(Self.gradientStopException) { continue }
             guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
-            total += source.components(separatedBy: "PatinaColors.pearl").count - 1
+            let count = source.components(separatedBy: "PatinaColors.pearl").count - 1
+            if count > 0 {
+                offenders.append("\((path as NSString).lastPathComponent) ×\(count)")
+            }
         }
         #expect(
-            total <= Self.pearlCeiling,
-            "PatinaColors.pearl call sites rose to \(total); the ceiling on this branch's base is \(Self.pearlCeiling)"
+            offenders.isEmpty,
+            "PatinaColors.pearl is still painted at: \(offenders.joined(separator: ", ")) — C3-01's exit criterion is zero"
         )
     }
 

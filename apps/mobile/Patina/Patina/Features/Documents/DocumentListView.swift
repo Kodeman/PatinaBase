@@ -122,7 +122,7 @@ private struct DocumentGroupSection: View {
                     .buttonStyle(.plain)
                     .disabled(viewModel.downloadingDocumentId != nil)
                     if index < group.documents.count - 1 {
-                        Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                        Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
                     }
                 }
             }

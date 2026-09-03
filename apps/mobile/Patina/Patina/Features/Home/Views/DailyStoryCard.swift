@@ -68,7 +68,7 @@ struct DailyStoryCard: View {
                     .lineLimit(2)
                 Text(story.subtitle)
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.pearl)
+                    .foregroundStyle(PatinaColors.OnDark.secondary)
                     .lineLimit(2)
             }
             .padding(.horizontal, PatinaSpacing.md)

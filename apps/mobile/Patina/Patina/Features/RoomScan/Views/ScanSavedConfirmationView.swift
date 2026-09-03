@@ -137,7 +137,7 @@ struct ScanSavedConfirmationView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(PatinaColors.pearl, lineWidth: 1)
+                .stroke(PatinaColors.Border.hairline, lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("Saved on this phone. Nothing is uploaded until you send it to a designer."))

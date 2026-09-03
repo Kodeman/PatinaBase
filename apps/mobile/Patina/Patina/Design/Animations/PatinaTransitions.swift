@@ -50,6 +50,6 @@ struct BackChevronButton: View {
         style == .light ? PatinaColors.offWhite.opacity(0.92) : PatinaColors.offWhite.opacity(0.12)
     }
     private var stroke: Color {
-        style == .light ? PatinaColors.pearl : .clear
+        style == .light ? PatinaColors.Border.hairline : .clear
     }
 }

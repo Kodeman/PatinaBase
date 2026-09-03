@@ -14,7 +14,7 @@ struct NewRoomSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
-                .fill(PatinaColors.pearl)
+                .fill(PatinaColors.Border.strong)
                 .frame(width: 36, height: 4)
                 .padding(.top, 10)
 

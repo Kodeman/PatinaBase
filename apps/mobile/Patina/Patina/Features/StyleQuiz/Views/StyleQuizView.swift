@@ -136,7 +136,7 @@ struct StyleQuizView: View {
                 .foregroundStyle(PatinaColors.Text.primary)
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(PatinaColors.Background.primary.opacity(0.92)))
-                .overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))
+                .overlay(Circle().stroke(PatinaColors.Border.hairline, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Exit quiz")

@@ -132,7 +132,7 @@ struct AskDesignerSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(failure.sentence)
                         .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.error)
+                        .foregroundStyle(PatinaColors.Text.error)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

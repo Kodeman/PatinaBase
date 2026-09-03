@@ -41,7 +41,7 @@ struct HeroPickerSheet: View {
                                             .stroke(
                                                 isEffectiveHero(photoId: photo.id)
                                                     ? PatinaColors.Interactive.active
-                                                    : PatinaColors.pearl,
+                                                    : PatinaColors.Border.strong,
                                                 lineWidth: isEffectiveHero(photoId: photo.id) ? 2 : 1
                                             )
                                     )

@@ -338,7 +338,7 @@ public struct ScanReviewView: View {
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .contentShape(Rectangle())
             }
@@ -362,7 +362,7 @@ public struct ScanReviewView: View {
                         .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Capsule().stroke(PatinaColors.pearl, lineWidth: 1))
+                        .background(Capsule().stroke(PatinaColors.Border.strong, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Reorder supporting photos")
@@ -446,7 +446,7 @@ public struct ScanReviewView: View {
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(PatinaColors.pearl, lineWidth: 1)
+                        .stroke(PatinaColors.Border.strong, lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -473,7 +473,7 @@ public struct ScanReviewView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(PatinaColors.Background.secondary)
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                    .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
 
                 if roomNotes.isEmpty {
                     Text("Anything worth remembering? (private to you for now)")

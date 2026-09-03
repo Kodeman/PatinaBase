@@ -101,8 +101,18 @@ struct RevealView: View {
                     // was not in the brand's typeface at all. The token also
                     // brings the Dynamic Type relationship the inline call
                     // omitted.
-                    .font(PatinaTypography.display2)
+                    .font(PatinaTypography.display2Regular)
                     .foregroundStyle(PatinaColors.OnDark.primary)
+                    // The inline call this replaced was a FIXED 42 pt, so
+                    // Dynamic Type never reached it. A token brings the
+                    // `relativeTo: .largeTitle` relationship with it, and one
+                    // `Text` per character inside `HStack(spacing: 0)` cannot
+                    // wrap: at AX3–AX5 each glyph grows past 80 pt and an
+                    // 11-character name ("Warm Modern") runs off-canvas.
+                    // `.fixedSize(horizontal: false, …)` does not catch a
+                    // horizontal overflow; a per-glyph scale floor does.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.4)
                     .opacity(reduceMotion ? 1 : (i < revealedLetters ? 1 : 0))
             }
         }

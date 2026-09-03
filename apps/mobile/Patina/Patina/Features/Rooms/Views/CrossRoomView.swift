@@ -85,7 +85,7 @@ struct CrossRoomView: View {
         .padding(.horizontal, 20)
         .overlay(
             Rectangle()
-                .fill(PatinaColors.pearl)
+                .fill(PatinaColors.Border.hairline)
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -119,7 +119,7 @@ struct CrossRoomView: View {
         .padding(.vertical, 12)
         .overlay(
             Rectangle()
-                .fill(PatinaColors.pearl.opacity(0.5))
+                .fill(PatinaColors.Border.hairline.opacity(0.5))
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -250,7 +250,7 @@ struct CrossRoomView: View {
     }
 
     private func roomColor(_ room: RoomModel?) -> Color {
-        guard let room else { return PatinaColors.pearl }
+        guard let room else { return PatinaColors.Border.strong }
         switch room.roomType.lowercased() {
         case "living", "living_room", "living room": return PatinaColors.clay
         case "bedroom":                               return PatinaColors.dustyBlue

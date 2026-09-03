@@ -18,7 +18,7 @@ struct ItemActionMenu: View {
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
-                .fill(PatinaColors.pearl)
+                .fill(PatinaColors.Border.strong)
                 .frame(width: 36, height: 4)
                 .padding(.top, 10)
 
@@ -33,7 +33,7 @@ struct ItemActionMenu: View {
                 row("plus.square.on.square", "Copy to Another Room", .copy)
                 row("xmark", "Remove from Room",                    .remove, destructive: true)
             }
-            .background(PatinaColors.pearl)
+            .background(PatinaColors.Border.hairline)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .padding(.horizontal, 20)
             .padding(.bottom, 36)

@@ -68,7 +68,7 @@ struct InvoiceDetailView: View {
                 .tracking(2)
             Text(statusHeadline(invoice))
                 .font(PatinaTypography.h2)
-                .foregroundStyle(isOverdue(invoice) ? PatinaColors.error : PatinaColors.Text.primary)
+                .foregroundStyle(isOverdue(invoice) ? PatinaColors.Text.error : PatinaColors.Text.primary)
             Text(invoice.invoice_number ?? "Invoice")
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.secondary)
@@ -167,7 +167,7 @@ struct InvoiceDetailView: View {
         if let due = DateDisplay.due(invoice.due_date), !invoice.isPaid, !invoice.isVoid {
             Text(due.text)
                 .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(due.isPastDue ? PatinaColors.error : PatinaColors.Text.secondary)
+                .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.secondary)
                 .padding(.horizontal, 24)
                 .accessibilityIdentifier("invoiceDetail.due")
         }

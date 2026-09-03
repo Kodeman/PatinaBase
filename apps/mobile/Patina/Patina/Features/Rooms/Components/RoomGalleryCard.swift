@@ -122,7 +122,7 @@ struct RoomGalleryCard: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(PatinaColors.pearl)
+            .fill(PatinaColors.Border.hairline)
             .frame(width: 1, height: 24)
     }
 

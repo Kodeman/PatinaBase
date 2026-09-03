@@ -634,7 +634,7 @@ struct ProductDetailView: View {
         .background(alignment: .top) {
             Rectangle()
                 .frame(height: 0.5)
-                .foregroundStyle(PatinaColors.pearl)
+                .foregroundStyle(PatinaColors.Border.hairline)
         }
         .modifier(GlassActionBarBackground())
     }

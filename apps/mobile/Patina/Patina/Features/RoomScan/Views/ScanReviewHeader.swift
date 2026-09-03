@@ -35,7 +35,7 @@ struct ScanReviewHeader: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .padding(.top, 8)
         }

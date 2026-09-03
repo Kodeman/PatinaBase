@@ -40,7 +40,7 @@ struct ManualRoomEntryView: View {
                     HStack(spacing: 8) {
                         dimensionField(value: $lengthFeet, label: "Length")
                         Text("×")
-                            .foregroundStyle(PatinaColors.pearl)
+                            .foregroundStyle(PatinaColors.Text.muted)
                             .padding(.bottom, 14)
                         dimensionField(value: $widthFeet, label: "Width")
                     }
@@ -150,7 +150,7 @@ struct ManualRoomEntryView: View {
             .fill(PatinaColors.Background.secondary)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                    .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
             )
     }
 

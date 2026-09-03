@@ -268,7 +268,7 @@ struct HouseRecordCard: View {
             let half: Half = record.hasMoreNeedsYou ? .needsYou : .moved
             VStack(alignment: .leading, spacing: 0) {
                 Rectangle()
-                    .fill(PatinaColors.pearl)
+                    .fill(PatinaColors.Border.hairline)
                     .frame(height: 1)
                     .padding(.top, PatinaSpacing.sm)
                     .accessibilityHidden(true)
@@ -299,7 +299,7 @@ struct HouseRecordCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 if !isFirst {
                     Rectangle()
-                        .fill(PatinaColors.pearl)
+                        .fill(PatinaColors.Border.hairline)
                         .frame(height: 1)
                         .padding(.top, PatinaSpacing.sm)
                         .accessibilityHidden(true)
@@ -326,7 +326,7 @@ struct HouseRecordCard: View {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         if index > 0 {
                             Rectangle()
-                                .fill(PatinaColors.pearl)
+                                .fill(PatinaColors.Border.hairline)
                                 .frame(height: 1)
                                 .accessibilityHidden(true)
                         }
@@ -407,7 +407,7 @@ struct HouseRecordRowView: View {
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.error)
+                    .foregroundStyle(PatinaColors.Text.error)
             }
             if shown.showsNewTick {
                 Text("· new")

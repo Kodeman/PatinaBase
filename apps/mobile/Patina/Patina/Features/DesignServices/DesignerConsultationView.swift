@@ -24,7 +24,7 @@ struct DesignerConsultationView: View {
 
                     Text("Send your room scans to a Patina designer. They'll reach out to help bring your space to life — and your scans stay on your phone until you choose to share them.")
                         .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.pearl)
+                        .foregroundStyle(PatinaColors.OnDark.secondary)
                         .lineSpacing(4)
                 }
                 .padding(24)

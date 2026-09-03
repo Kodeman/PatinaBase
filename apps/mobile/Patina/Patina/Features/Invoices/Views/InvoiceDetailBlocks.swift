@@ -94,7 +94,7 @@ struct InvoiceLineItemsBlock: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(PatinaColors.pearl)
+            .fill(PatinaColors.Border.hairline)
             .frame(height: 1)
     }
 }
@@ -130,7 +130,7 @@ struct InvoicePaymentsBlock: View {
                         row(payment)
                         if index < visible.count - 1 {
                             Rectangle()
-                                .fill(PatinaColors.pearl)
+                                .fill(PatinaColors.Border.hairline)
                                 .frame(height: 1)
                         }
                     }

@@ -104,7 +104,7 @@ struct AskAboutPieceSheet: View {
             if let failure {
                 Text(failure.sentence)
                     .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.error)
+                    .foregroundStyle(PatinaColors.Text.error)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("AskAboutPieceSheet.Failure")

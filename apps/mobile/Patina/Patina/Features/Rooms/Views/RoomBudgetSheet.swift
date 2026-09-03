@@ -71,7 +71,7 @@ struct RoomBudgetSheet: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                    .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
             )
 
             Button(action: save) {

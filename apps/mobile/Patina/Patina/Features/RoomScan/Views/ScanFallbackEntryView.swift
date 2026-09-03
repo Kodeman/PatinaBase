@@ -115,7 +115,7 @@ struct ScanFallbackEntryView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                selectedType == id ? PatinaColors.Interactive.active : PatinaColors.pearl,
+                                selectedType == id ? PatinaColors.Interactive.active : PatinaColors.Border.strong,
                                 lineWidth: 1.5
                             )
                     )
@@ -182,7 +182,7 @@ struct ScanFallbackEntryView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            Float(text.wrappedValue) != nil ? PatinaColors.clay : PatinaColors.pearl,
+                            Float(text.wrappedValue) != nil ? PatinaColors.clay : PatinaColors.Border.strong,
                             lineWidth: 1.5
                         )
                 )
@@ -256,7 +256,7 @@ struct ScanFallbackEntryView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
         )
     }
 

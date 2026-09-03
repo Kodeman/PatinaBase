@@ -68,7 +68,7 @@ struct PriorityView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(
-                        isSelected ? PatinaColors.Interactive.active : PatinaColors.pearl,
+                        isSelected ? PatinaColors.Interactive.active : PatinaColors.Border.strong,
                         lineWidth: 1.5
                     )
             )

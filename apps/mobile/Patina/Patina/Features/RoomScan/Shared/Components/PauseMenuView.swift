@@ -77,12 +77,12 @@ struct PauseMenuView: View {
             VStack(spacing: 4) {
                 Text("Finish With What We Have")
                     .font(PatinaTypography.body)
-                    .foregroundStyle(PatinaColors.pearl.opacity(0.35))
+                    .foregroundStyle(PatinaColors.OnDark.muted.opacity(0.5))
                 Text("Walk a little more first")
                     .font(PatinaTypography.monoSmall)
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.pearl.opacity(0.55))
+                    .foregroundStyle(PatinaColors.OnDark.muted)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.vertical, 14)
@@ -93,7 +93,7 @@ struct PauseMenuView: View {
 
     private func menuRow(
         label: String,
-        foreground: Color = PatinaColors.pearl,
+        foreground: Color = PatinaColors.OnDark.primary,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {

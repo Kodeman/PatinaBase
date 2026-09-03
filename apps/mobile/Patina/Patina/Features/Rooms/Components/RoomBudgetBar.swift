@@ -23,7 +23,7 @@ struct RoomBudgetBar: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Room investment")
                     .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.pearl)
+                    .foregroundStyle(PatinaColors.OnDark.secondary)
                 Spacer()
                 Text(Self.figure(totalCents: totalCents, budgetCents: budgetCents))
                     .font(.custom("PlayfairDisplay-Medium", size: 22, relativeTo: .title2))

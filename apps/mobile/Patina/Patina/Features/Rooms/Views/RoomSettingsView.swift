@@ -116,7 +116,7 @@ struct RoomSettingsView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .onSubmit { saveIfChanged() }
                 .onChange(of: name) { _, _ in
@@ -168,7 +168,7 @@ struct RoomSettingsView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
                     .background(Capsule().fill(PatinaColors.Background.primary))
-                    .overlay(Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5))
+                    .overlay(Capsule().stroke(PatinaColors.Border.strong, lineWidth: 1.5))
             }
             .buttonStyle(.plain)
             .disabled(!hasUsableDimensions)
@@ -202,7 +202,7 @@ struct RoomSettingsView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .accessibilityLabel("\(title) in \(unit.label.lowercased())")
             Text("\(title.uppercased()) (\(unit.rawValue))")
@@ -261,7 +261,7 @@ struct RoomSettingsView: View {
                         Capsule().fill(PatinaColors.Background.primary)
                     )
                     .overlay(
-                        Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        Capsule().stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                     )
             }
             .buttonStyle(.plain)

@@ -234,7 +234,7 @@ struct RoomProjectView: View {
                 )
                 if pair.offset < room.items.count - 1 {
                     Rectangle()
-                        .fill(PatinaColors.pearl)
+                        .fill(PatinaColors.Border.hairline)
                         .frame(height: 1)
                         .padding(.horizontal, 20)
                 }
@@ -304,7 +304,7 @@ struct RoomProjectView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .background(
-                    Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5)
+                    Capsule().stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .contentShape(Capsule())
         }
@@ -376,7 +376,7 @@ private extension RoomProjectView {
                         .foregroundStyle(PatinaColors.Text.primary)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(PatinaColors.Background.primary.opacity(0.92)))
-                        .overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))
+                        .overlay(Circle().stroke(PatinaColors.Border.hairline, lineWidth: 0.5))
                 }
                 .buttonStyle(.plain)
             }

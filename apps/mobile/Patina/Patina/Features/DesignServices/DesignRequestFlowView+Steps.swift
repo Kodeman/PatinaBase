@@ -69,7 +69,7 @@ extension DesignRequestFlowView {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                            .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                     )
                 }
             }
@@ -328,7 +328,7 @@ extension DesignRequestFlowView {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(PatinaColors.Background.secondary))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(PatinaColors.pearl, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(PatinaColors.Border.hairline, lineWidth: 1))
     }
 
     private func pickerSection<T: Hashable>(
@@ -381,7 +381,7 @@ extension DesignRequestFlowView {
                 .background(isSelected ? PatinaColors.clay : PatinaColors.Background.secondary)
                 .clipShape(Capsule())
                 .overlay(
-                    Capsule().stroke(isSelected ? PatinaColors.clay : PatinaColors.pearl, lineWidth: 1.5)
+                    Capsule().stroke(isSelected ? PatinaColors.clay : PatinaColors.Border.strong, lineWidth: 1.5)
                 )
         }
         .buttonStyle(.plain)

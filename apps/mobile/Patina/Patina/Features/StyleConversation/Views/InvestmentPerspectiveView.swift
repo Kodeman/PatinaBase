@@ -57,7 +57,7 @@ struct InvestmentPerspectiveView: View {
         .buttonStyle(.plain)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(PatinaColors.pearl)
+                .fill(PatinaColors.Border.hairline)
                 .frame(height: 1)
         }
         .accessibilityLabel(Text("\(tier.displayName), \(tier.rangeLabel)"))

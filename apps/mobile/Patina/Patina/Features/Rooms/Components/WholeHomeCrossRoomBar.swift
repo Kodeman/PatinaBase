@@ -31,7 +31,7 @@ struct WholeHomeCrossRoomBar: View {
                         .foregroundStyle(PatinaColors.offWhite)
                     Text(summary)
                         .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.pearl)
+                        .foregroundStyle(PatinaColors.OnDark.secondary)
                 }
                 Spacer(minLength: 0)
             }

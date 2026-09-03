@@ -37,7 +37,7 @@ struct CaptionEditorSheet: View {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(PatinaColors.Background.secondary)
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
 
                     if caption.isEmpty {
                         Text("What's worth noticing here?")

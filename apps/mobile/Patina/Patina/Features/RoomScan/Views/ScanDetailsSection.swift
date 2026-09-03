@@ -41,7 +41,7 @@ struct ScanDetailsSection: View {
                     .padding(.vertical, 12)
                     if idx < rows.count - 1 {
                         Rectangle()
-                            .fill(PatinaColors.pearl.opacity(0.6))
+                            .fill(PatinaColors.Border.hairline.opacity(0.6))
                             .frame(height: 1)
                             .padding(.horizontal, 14)
                     }
@@ -53,7 +53,7 @@ struct ScanDetailsSection: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(PatinaColors.pearl, lineWidth: 1)
+                    .stroke(PatinaColors.Border.hairline, lineWidth: 1)
             )
         }
     }

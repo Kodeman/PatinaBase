@@ -178,7 +178,7 @@ struct StudioHubView: View {
             sectionHeader(section)
 
             Divider()
-                .overlay(PatinaColors.pearl)
+                .overlay(PatinaColors.Border.hairline)
                 .accessibilityHidden(true)
 
             sectionContent(section)
@@ -187,7 +187,7 @@ struct StudioHubView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(PatinaColors.pearl, lineWidth: 1)
+                .stroke(PatinaColors.Border.hairline, lineWidth: 1)
         }
         .accessibilityIdentifier("StudioHub.Section.\(section.kind.rawValue)")
     }
@@ -251,7 +251,7 @@ struct StudioHubView: View {
                 if index < section.rows.count - 1 {
                     Divider()
                         .padding(.leading, 56)
-                        .overlay(PatinaColors.pearl)
+                        .overlay(PatinaColors.Border.hairline)
                         .accessibilityHidden(true)
                 }
             }

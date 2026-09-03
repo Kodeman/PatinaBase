@@ -38,7 +38,7 @@ struct RoomTypePillRow: View {
                         )
                         .overlay(
                             Capsule()
-                                .stroke(isSelected ? PatinaColors.clay : PatinaColors.pearl, lineWidth: 1.5)
+                                .stroke(isSelected ? PatinaColors.clay : PatinaColors.Border.strong, lineWidth: 1.5)
                         )
                 }
                 .buttonStyle(.plain)

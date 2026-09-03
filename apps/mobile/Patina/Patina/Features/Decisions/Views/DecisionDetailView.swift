@@ -122,7 +122,7 @@ struct DecisionDetailView: View {
             if !viewModel.isResolved, let due = DateDisplay.due(decision.due_date) {
                 Text(due.text)
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(due.isPastDue ? PatinaColors.error : PatinaColors.Text.secondary)
+                    .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.secondary)
                     .padding(.top, 2)
                     .accessibilityIdentifier("decisionDetail.due")
             }

@@ -742,7 +742,7 @@ public struct CompanionOverlay: View {
                 // PT-5-7: Liquid Glass minimal pill. A charcoal tint keeps
                 // the Strata mark legible while letting the glass pick up
                 // the camera / content behind it, replacing the prior
-                // charcoal-fill-over-`.ultraThinMaterial` stack.
+                // dark-fill-over-`.ultraThinMaterial` stack.
                 // `CompanionOverlay` is a `public` View, so the compiler
                 // infers the module's API availability floor here (below the
                 // iOS-26 `glassEffect`); the `#available` guard satisfies it
@@ -803,7 +803,7 @@ public struct CompanionOverlay: View {
                         .frame(width: 36, height: 36)
                     Image(systemName: icon)
                         .font(.system(size: 16))
-                        .foregroundStyle(isSuggested ? PatinaColors.offWhite : PatinaColors.pearl)
+                        .foregroundStyle(isSuggested ? PatinaColors.OnDark.primary : PatinaColors.OnDark.secondary)
                 }
 
                 // Text
@@ -1129,7 +1129,7 @@ private extension CompanionOverlay {
 // MARK: - Liquid Glass helper (PT-5-7)
 
 private extension View {
-    /// Applies the charcoal-tinted Liquid Glass circle used by the Companion
+    /// Applies the Liquid Glass circle used by the Companion
     /// minimal pill. Factored into a helper with an explicit `#available`
     /// guard because `CompanionOverlay` is a `public` View — the compiler
     /// infers the module API-availability floor on inline `glassEffect`
@@ -1139,9 +1139,9 @@ private extension View {
     @ViewBuilder
     func companionGlassCircle() -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular.tint(PatinaColors.charcoal.opacity(0.7)), in: .circle)
+            glassEffect(.regular.tint(PatinaColors.Background.dark.opacity(0.7)), in: .circle)
         } else {
-            background(PatinaColors.charcoal.opacity(0.7))
+            background(PatinaColors.Background.dark.opacity(0.7))
                 .background(.ultraThinMaterial)
                 .clipShape(Circle())
         }
