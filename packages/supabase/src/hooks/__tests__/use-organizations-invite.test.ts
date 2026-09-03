@@ -117,6 +117,41 @@ describe('useInviteMember — email_status contract', () => {
     );
   });
 
+  it('sends handoffNote as handoff_note on the invoke body when provided', async () => {
+    invoke.mockResolvedValue({
+      data: { email: 'jamie@example.com', status: 'invited' },
+      error: null,
+    });
+    const mutation = useInviteMember() as unknown as MutationConfig;
+
+    await mutation.mutationFn({
+      ...BASE_INPUT,
+      handoffNote: 'start with the Olsen lake house',
+    });
+
+    expect(invoke).toHaveBeenCalledWith(
+      'workspace-member-invite',
+      expect.objectContaining({
+        body: expect.objectContaining({
+          handoff_note: 'start with the Olsen lake house',
+        }),
+      }),
+    );
+  });
+
+  it('omits handoff_note from the invoke body when not provided', async () => {
+    invoke.mockResolvedValue({
+      data: { email: 'jamie@example.com', status: 'invited' },
+      error: null,
+    });
+    const mutation = useInviteMember() as unknown as MutationConfig;
+
+    await mutation.mutationFn(BASE_INPUT);
+
+    const call = invoke.mock.calls[0][1] as { body: Record<string, unknown> };
+    expect('handoff_note' in call.body).toBe(false);
+  });
+
   it('throws when the function returns 200 with its own error field', async () => {
     invoke.mockResolvedValue({
       data: { error: 'membership_upsert_failed' },

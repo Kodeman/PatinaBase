@@ -16,7 +16,7 @@
  */
 
 import { useState, type FormEvent } from 'react';
-import { Input, Select } from '@/components/ui/controls';
+import { Input, Select, Textarea } from '@/components/ui/controls';
 import {
   useInviteMember,
   type InviteMemberInput,
@@ -56,6 +56,12 @@ const TIER_OPTIONS: { value: InvitableTier; label: string }[] = [
 
 const LABEL = 'mb-1 block text-[12px] font-medium text-[var(--text-primary)]';
 const HELP = 'text-[12px] leading-relaxed text-[var(--color-aged-oak)]';
+const COUNTER =
+  'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
+
+// L8: the owner's optional handoff line — matches the 00561 CHECK on
+// organization_members.handoff_note.
+const HANDOFF_NOTE_MAX_LENGTH = 280;
 
 export function StudioInviteModal({
   open,
@@ -65,6 +71,7 @@ export function StudioInviteModal({
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [jobTitle, setJobTitle] = useState('');
+  const [handoffNote, setHandoffNote] = useState('');
   const [titleOpen, setTitleOpen] = useState(false);
   const [tier, setTier] = useState<InvitableTier>('member');
   const [teammateType, setTeammateType] = useState<TeammateType>('designer');
@@ -90,6 +97,7 @@ export function StudioInviteModal({
     setEmail('');
     setName('');
     setJobTitle('');
+    setHandoffNote('');
     setTitleOpen(false);
     setTier('member');
     setTeammateType('designer');
@@ -136,6 +144,7 @@ export function StudioInviteModal({
       name: name.trim() || undefined,
       jobTitle: trimmedTitle || undefined,
       staffRole: curatedRole,
+      handoffNote: handoffNote.trim() || undefined,
     };
 
     inviteMember.mutate(input, {
@@ -392,6 +401,28 @@ export function StudioInviteModal({
                   className="left-0 top-full mt-1 w-full"
                 />
               )}
+            </div>
+
+            <div>
+              <label htmlFor="studio-invite-handoff-note" className={LABEL}>
+                A line for her first day{' '}
+                <span className="font-normal text-[var(--text-muted)]">
+                  (optional)
+                </span>
+              </label>
+              <Textarea
+                id="studio-invite-handoff-note"
+                value={handoffNote}
+                onChange={(e) =>
+                  setHandoffNote(e.target.value.slice(0, HANDOFF_NOTE_MAX_LENGTH))
+                }
+                maxLength={HANDOFF_NOTE_MAX_LENGTH}
+                rows={3}
+                placeholder="Start with the Olsen lake house — the brief's written, it just needs the schedule built."
+              />
+              <p className={`${COUNTER} mt-1 text-right`}>
+                {handoffNote.length}/{HANDOFF_NOTE_MAX_LENGTH}
+              </p>
             </div>
 
             <div>

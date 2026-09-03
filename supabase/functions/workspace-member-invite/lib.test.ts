@@ -5,9 +5,11 @@
 
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  HANDOFF_NOTE_MAX_LENGTH,
   type InviteEmailOutcome,
   inviteEmailOutcome,
   isInvitableOrgStatus,
+  normalizeHandoffNote,
   resolveInviteActor,
   TEMPLATE_MISSING_OUTCOME,
 } from "./lib.ts";
@@ -118,6 +120,33 @@ Deno.test("neither membership nor admin role resolves to null (403)", () => {
     resolveInviteActor({ membership: null, isPlatformAdmin: false }),
     null,
   );
+});
+
+// ── Handoff note (L8) ────────────────────────────────────────────────────
+
+Deno.test("a trimmed handoff note within the cap is kept", () => {
+  assertEquals(
+    normalizeHandoffNote("  start with the Olsen lake house  "),
+    "start with the Olsen lake house",
+  );
+});
+
+Deno.test("empty or whitespace-only input normalizes to undefined, not a NULL-out write", () => {
+  assertEquals(normalizeHandoffNote(undefined), undefined);
+  assertEquals(normalizeHandoffNote(""), undefined);
+  assertEquals(normalizeHandoffNote("   "), undefined);
+});
+
+Deno.test("a note exactly at the cap is kept; one over is rejected", () => {
+  const atCap = "x".repeat(HANDOFF_NOTE_MAX_LENGTH);
+  const overCap = "x".repeat(HANDOFF_NOTE_MAX_LENGTH + 1);
+  assertEquals(normalizeHandoffNote(atCap), atCap);
+  assertEquals(normalizeHandoffNote(overCap), null);
+});
+
+Deno.test("leading/trailing whitespace doesn't count toward the cap", () => {
+  const padded = `  ${"x".repeat(HANDOFF_NOTE_MAX_LENGTH)}  `;
+  assertEquals(normalizeHandoffNote(padded), "x".repeat(HANDOFF_NOTE_MAX_LENGTH));
 });
 
 Deno.test("only an active organization is invitable", () => {

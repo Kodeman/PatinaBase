@@ -33,6 +33,7 @@ import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reac
 import { MarginNote } from '@/components/document/margin-note';
 import { StudioSetupWhisper } from '@/components/document/account/studio-setup-whisper';
 import { deriveSetupSteps } from '@/lib/document/studio-setup';
+import { firstNameOf } from '@/lib/document/account-identity';
 import {
   START_DESK_WALKTHROUGH_EVENT,
   clearDeskWalkthroughLater,
@@ -79,6 +80,11 @@ export default function DeskPage() {
   // permanently open here and the whisper's openCount ran one ahead of the
   // checklist the whisper sends you to.
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
+  // L8 — the owner's handoff-note margin note, behind the teammate-persona
+  // flag (W2). Flag off (or loading) never renders it.
+  const { value: teammatePersonaEnabled } = useFeatureFlag(
+    'onboarding-teammate-persona',
+  );
   const { data: orgs } = useOrganizations();
   const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
   const { data: studioMembers } = useOrganizationMembers(studio?.id ?? '');
@@ -92,6 +98,18 @@ export default function DeskPage() {
   // sends you to.
   const otherActiveStudioMembers = (studioMembers ?? []).filter(
     (m) => m.user_id !== user?.id && m.status === 'active',
+  );
+
+  // L8 — the hire-handoff margin note. Reads the signed-in member's OWN
+  // organization_members row for a note the owner wrote on the invite; the
+  // owner's first name comes from that row's `invited_by`, resolved against
+  // this same studioMembers list (the inviter is a member of the same org).
+  const myMembership = studioMembers?.find((m) => m.user_id === user?.id) ?? null;
+  const handoffOwner = myMembership?.invited_by
+    ? (studioMembers?.find((m) => m.user_id === myMembership.invited_by) ?? null)
+    : null;
+  const handoffOwnerFirstName = firstNameOf(
+    handoffOwner?.profiles.full_name || handoffOwner?.profiles.display_name,
   );
   const { openCount: studioSetupOpenCount } = deriveSetupSteps({
     orgCreatedAt: studio?.created_at ?? null,
@@ -373,6 +391,15 @@ export default function DeskPage() {
                 The walkthrough is six quick stops
               </button>{' '}
               if you&apos;d like the lay of it.
+            </MarginNote>
+          )}
+
+          {/* L8 — the owner's handoff note, once, on the new hire's first
+              Desk. Behind `onboarding-teammate-persona`; renders only for a
+              member whose own membership row carries a written note. */}
+          {teammatePersonaEnabled && myMembership?.handoff_note && (
+            <MarginNote noteKey="hire-handoff" className="mb-10">
+              From {handoffOwnerFirstName}: {myMembership.handoff_note}
             </MarginNote>
           )}
 

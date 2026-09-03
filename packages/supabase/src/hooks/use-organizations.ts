@@ -63,6 +63,8 @@ export interface OrganizationMember {
   staff_role: string | null;
   /** Onboarding checklist row 6 (L3, 00559): stamped once by `mark_first_document_opened`, the first time this member opens a Document. NULL = not yet. */
   first_document_opened_at: string | null;
+  /** L8 (00561): the owner's optional handoff line, carried on the invite. NULL = none written. */
+  handoff_note: string | null;
 }
 
 export interface OrganizationWithMembership extends Organization {
@@ -78,6 +80,7 @@ export interface OrganizationMemberWithProfile extends OrganizationMember {
   profiles: {
     id: string;
     email: string | null;
+    full_name: string | null;
     display_name: string | null;
     avatar_url: string | null;
   };
@@ -97,6 +100,9 @@ export interface InviteMemberInput {
   jobTitle?: string;
   /** Call Sheet: staff-role tier (StaffRole vocab), written at invite-insert time when provided. */
   staffRole?: string;
+  /** L8: the owner's optional handoff line ("A line for her first day"), carried
+   *  on the invite and rendered once on the invitee's Desk. Trimmed, ≤280 chars. */
+  handoffNote?: string;
 }
 
 /** Row shape returned by `accept_workspace_invitation` (00295). */
@@ -210,7 +216,7 @@ export function useOrganizationMembers(organizationId: string) {
         .from('organization_members')
         .select(`
           *,
-          profiles!organization_members_user_id_fkey (id, email, display_name, avatar_url)
+          profiles!organization_members_user_id_fkey (id, email, full_name, display_name, avatar_url)
         `)
         .eq('organization_id', organizationId)
         .in('status', ['active', 'invited']);
@@ -336,6 +342,9 @@ export function useInviteMember() {
           name: input.name,
           ...(input.jobTitle !== undefined ? { job_title: input.jobTitle } : {}),
           ...(input.staffRole !== undefined ? { staff_role: input.staffRole } : {}),
+          ...(input.handoffNote !== undefined
+            ? { handoff_note: input.handoffNote }
+            : {}),
         },
       });
 

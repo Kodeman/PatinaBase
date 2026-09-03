@@ -215,6 +215,54 @@ describe('StudioInviteModal — submit payload', () => {
     expect(payload.staffRole).toBeUndefined();
   });
 
+  it('omits handoffNote when the textarea is left blank', async () => {
+    const mutate = setMutateState();
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    const payload = mutate.mock.calls[0][0];
+    expect(payload.handoffNote).toBeUndefined();
+  });
+
+  it('carries a trimmed handoffNote when written', async () => {
+    const mutate = setMutateState();
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    await fillEmail();
+    fireEvent.change(
+      screen.getByLabelText(/A line for her first day/),
+      { target: { value: '  start with the Olsen lake house  ' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    const payload = mutate.mock.calls[0][0];
+    expect(payload.handoffNote).toBe('start with the Olsen lake house');
+  });
+
+  it('shows a DM Mono character counter that tracks the handoff note, capped at 280', () => {
+    setMutateState();
+    render(
+      <StudioInviteModal open onOpenChange={jest.fn()} organizationId="org-1" />,
+    );
+
+    expect(screen.getByText('0/280')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/A line for her first day/), {
+      target: { value: 'a'.repeat(300) },
+    });
+
+    expect(screen.getByLabelText(/A line for her first day/)).toHaveValue(
+      'a'.repeat(280),
+    );
+    expect(screen.getByText('280/280')).toBeInTheDocument();
+  });
+
   it('sends a guest invite payload with role=guest (wire member_role=guest)', async () => {
     const mutate = setMutateState();
     render(

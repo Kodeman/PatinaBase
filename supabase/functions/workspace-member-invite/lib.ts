@@ -67,3 +67,23 @@ export function resolveInviteActor(
 export function isInvitableOrgStatus(status: string | null | undefined): boolean {
   return status === "active";
 }
+
+// ── Handoff note (L8: owner's line for the new hire's first day) ───────────
+
+/** Matches the 00561 CHECK on organization_members.handoff_note. */
+export const HANDOFF_NOTE_MAX_LENGTH = 280;
+
+/**
+ * Trim a raw handoff-note input and validate its length. Returns `undefined`
+ * for empty/whitespace-only input (nothing to write — an unconditional write
+ * would NULL out an existing note on the re-invite refresh path), or `null`
+ * when the trimmed note exceeds the 280-char cap (caller responds 400).
+ */
+export function normalizeHandoffNote(
+  raw: string | undefined,
+): string | undefined | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > HANDOFF_NOTE_MAX_LENGTH) return null;
+  return trimmed;
+}
