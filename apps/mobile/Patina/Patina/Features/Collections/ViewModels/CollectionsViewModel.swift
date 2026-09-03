@@ -20,7 +20,7 @@ final class CollectionsViewModel {
     var newBoardName = ""
 
     static let boardsTab = "Boards"
-    static let allItemsTab = "All items"
+    static let allItemsTab = "All pieces"
 
     let tabs = [CollectionsViewModel.boardsTab, CollectionsViewModel.allItemsTab]
 

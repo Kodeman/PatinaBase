@@ -648,7 +648,7 @@ struct CompanionTierAndFreshnessTests {
     /// over under `All items`.
     @Test
     func savedDefaultsToTheTabHoldingThePieces() {
-        #expect(CollectionsViewModel.defaultTab(boardCount: 0) == "All items")
+        #expect(CollectionsViewModel.defaultTab(boardCount: 0) == "All pieces")
         #expect(CollectionsViewModel.defaultTab(boardCount: 2) == "Boards")
     }
 }
