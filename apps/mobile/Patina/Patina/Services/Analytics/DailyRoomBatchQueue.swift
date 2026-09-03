@@ -75,6 +75,13 @@ actor DailyRoomBatchQueue {
         Task { await self.startFlushTimer() }
     }
 
+    // MARK: - Test seams (DEBUG only)
+
+    // `C7-13` needed an injectable poster and a way to observe the cap and the
+    // backoff; a shipping build needs neither, and least of all a second
+    // initialiser on a singleton actor plus a counter that increments for the
+    // life of the process (review `RL1B3-12`). The tests build Debug.
+    #if DEBUG
     /// A detached queue for tests: its own file, its own poster, and no
     /// flush timer.
     init(queueFileURL: URL, post: @escaping Poster) {
@@ -82,13 +89,12 @@ actor DailyRoomBatchQueue {
         self.post = post
     }
 
-    // MARK: - Test inspection
-
     var pendingCount: Int { pending.count }
     var failureCount: Int { consecutiveFailures }
     var isBackingOff: Bool { Date() < nextAttemptAt }
     var diskWriteCount: Int { writes }
     private var writes = 0
+    #endif
 
     // MARK: - Public API
 
@@ -181,7 +187,9 @@ actor DailyRoomBatchQueue {
             let data = try JSONEncoder.telemetryEncoder.encode(pending)
             try data.write(to: queueFileURL, options: Data.WritingOptions.atomic)
             persistedRevision = revision
+            #if DEBUG
             writes += 1
+            #endif
         } catch {
             PatinaLog.ui.error("[DailyRoomBatchQueue] persist failed: \(error)")
         }

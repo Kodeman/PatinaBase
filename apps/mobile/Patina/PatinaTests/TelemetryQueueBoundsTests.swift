@@ -186,6 +186,48 @@ struct TelemetryQueueBoundsTests {
         #expect(await queue.pendingCount == 0)
         #expect(await sent.all.sorted() == ["p0", "p1", "p2", "p3"])
     }
+
+    /// `C7-13` needed an injectable poster and a way to observe the cap and
+    /// the backoff, and every test above uses them. What a shipping build has
+    /// no use for is a second initialiser on a singleton actor and a disk-write
+    /// counter that increments for the life of the process (review
+    /// `RL1B3-12`). The tests build Debug, so nothing is lost by fencing them.
+    @Test
+    func theTestSeamsAreDebugOnly() throws {
+        let source = try SourcePin.read("Patina/Services/Analytics/DailyRoomBatchQueue.swift")
+        let seam = try #require(
+            source.components(separatedBy: "// MARK: - Test seams (DEBUG only)").last?
+                .components(separatedBy: "// MARK: - Public API").first
+        )
+        // The fence opens before anything in the seam, comments aside.
+        let firstCodeLine = SourceScan.code(in: seam)
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty }
+        #expect(firstCodeLine == "#if DEBUG")
+        #expect(seam.contains("#endif"))
+        for symbol in [
+            "init(queueFileURL: URL, post: @escaping Poster)",
+            "var pendingCount: Int", "var failureCount: Int",
+            "var isBackingOff: Bool", "var diskWriteCount: Int",
+            "private var writes = 0"
+        ] {
+            #expect(seam.contains(symbol), "\(symbol) escaped the DEBUG fence")
+            #expect(
+                source.components(separatedBy: symbol).count == 2,
+                "\(symbol) is declared more than once"
+            )
+        }
+        // The counter's one increment is fenced too, or Release does not build.
+        let persist = try #require(
+            source.components(separatedBy: "private func persistIfChanged() async {").last?
+                .components(separatedBy: "\n    }").first
+        )
+        let increment = try #require(persist.range(of: "writes += 1"))
+        let fence = try #require(persist.range(of: "#if DEBUG"))
+        #expect(fence.upperBound < increment.lowerBound)
+        #expect(persist.contains("#endif"))
+    }
 }
 
 // MARK: - Helpers
