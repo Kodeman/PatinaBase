@@ -8,6 +8,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// 00562 — split out so `evaluateCondition`/`advanceEnrollmentSkippingNext`
+// are `deno test`able without booting this file's top-level `Deno.serve`.
+import { advanceEnrollmentSkippingNext, evaluateCondition } from "./logic.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -26,6 +30,11 @@ interface StepHistoryEntry {
   type: string;
   completed_at: string;
   result: string;
+  // Set on a condition-gated email advanced past without sending (00562 —
+  // config.condition.negate + config.on_false:'skip'). Absent on every
+  // other history entry.
+  skipped?: boolean;
+  reason?: string;
 }
 
 interface Enrollment {
@@ -56,7 +65,10 @@ interface ProcessResult {
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function calculateNextStepAt(step: SequenceStep, fromDate: Date = new Date()): string {
+function calculateNextStepAt(
+  step: SequenceStep,
+  fromDate: Date = new Date(),
+): string {
   const config = step.config;
   const delayMs =
     ((config.delay_days as number) || 0) * 86400000 +
@@ -84,9 +96,13 @@ const SEND_WINDOW_OPEN_HOUR = 8; // 08:00
 const SEND_WINDOW_CLOSE_HOUR = 17; // 17:00
 
 /** Chicago wall-clock Y/M/D + H/M for an instant (Intl, no dependencies). */
-function chicagoParts(
-  date: Date,
-): { year: number; month: number; day: number; hour: number; minute: number } {
+function chicagoParts(date: Date): {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+} {
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone: SEND_WINDOW_TZ,
     year: "numeric",
@@ -101,7 +117,13 @@ function chicagoParts(
     if (part.type !== "literal") map[part.type] = parseInt(part.value, 10);
   }
   const hour = map.hour === 24 ? 0 : map.hour;
-  return { year: map.year, month: map.month, day: map.day, hour, minute: map.minute };
+  return {
+    year: map.year,
+    month: map.month,
+    day: map.day,
+    hour,
+    minute: map.minute,
+  };
 }
 
 /** Milliseconds Chicago wall-clock is ahead of UTC at `date` (negative). */
@@ -121,7 +143,14 @@ function chicagoOffsetMs(date: Date): number {
     if (part.type !== "literal") map[part.type] = parseInt(part.value, 10);
   }
   const hour = map.hour === 24 ? 0 : map.hour;
-  const asUtc = Date.UTC(map.year, map.month - 1, map.day, hour, map.minute, map.second);
+  const asUtc = Date.UTC(
+    map.year,
+    map.month - 1,
+    map.day,
+    hour,
+    map.minute,
+    map.second,
+  );
   return asUtc - date.getTime();
 }
 
@@ -146,7 +175,11 @@ function isWithinSendWindow(now: Date): boolean {
   const p = chicagoParts(now);
   const weekday = new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay(); // 0=Sun..6=Sat
   const isWeekday = weekday >= 1 && weekday <= 5;
-  return isWeekday && p.hour >= SEND_WINDOW_OPEN_HOUR && p.hour < SEND_WINDOW_CLOSE_HOUR;
+  return (
+    isWeekday &&
+    p.hour >= SEND_WINDOW_OPEN_HOUR &&
+    p.hour < SEND_WINDOW_CLOSE_HOUR
+  );
 }
 
 /** ISO of the next Mon–Fri 08:00 America/Chicago opening strictly after `now`. */
@@ -218,7 +251,8 @@ async function findRecentSequenceSend(
   if (error || !data || !Array.isArray(data)) return null;
   for (const row of data as Array<Record<string, unknown>>) {
     const meta = (row.metadata ?? {}) as Record<string, unknown>;
-    const isSequence = meta.sequence_id != null || meta.category === "engagement";
+    const isSequence =
+      meta.sequence_id != null || meta.category === "engagement";
     if (isSequence) {
       return (row.sent_at as string) || (row.created_at as string) || null;
     }
@@ -368,7 +402,7 @@ async function buildFirstsSummary(
   }
 
   const phrases = selected.map(({ event, createdAt }) =>
-    FIRSTS_PHRASES[event](humanizeFirstsDate(createdAt))
+    FIRSTS_PHRASES[event](humanizeFirstsDate(createdAt)),
   );
   let sentence = phrases.join("; ");
   sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1);
@@ -436,102 +470,6 @@ async function sendInAppNudge(
   }
 }
 
-// ─── Condition Evaluator ────────────────────────────────────────────────
-
-async function evaluateCondition(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  condition: Record<string, unknown>,
-): Promise<boolean> {
-  const conditionType = condition.type as string;
-
-  switch (conditionType) {
-    case "user_property": {
-      const field = condition.field as string;
-      const operator = (condition.operator as string) || "eq";
-      const value = condition.value;
-
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select(field)
-        .eq("id", userId)
-        .single();
-
-      if (error || !profile) return false;
-
-      const fieldValue = profile[field];
-
-      switch (operator) {
-        case "eq":
-          return fieldValue === value;
-        case "neq":
-          return fieldValue !== value;
-        case "gt":
-          return typeof fieldValue === "number" && fieldValue > (value as number);
-        case "gte":
-          return typeof fieldValue === "number" && fieldValue >= (value as number);
-        case "lt":
-          return typeof fieldValue === "number" && fieldValue < (value as number);
-        case "lte":
-          return typeof fieldValue === "number" && fieldValue <= (value as number);
-        default:
-          return fieldValue === value;
-      }
-    }
-
-    case "event_occurred": {
-      const eventName = condition.event as string;
-
-      const { data: events, error } = await supabase
-        .from("engagement_events")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("event_name", eventName)
-        .limit(1);
-
-      if (error) return false;
-      return events !== null && events.length > 0;
-    }
-
-    case "time_elapsed": {
-      const days = condition.days as number;
-      const sinceField = (condition.since as string) || "enrolled_at";
-
-      const { data: enrollment, error } = await supabase
-        .from("sequence_enrollments")
-        .select(sinceField)
-        .eq("user_id", userId)
-        .eq("status", "active")
-        .order("enrolled_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (error || !enrollment) return false;
-
-      const referenceDate = new Date(enrollment[sinceField] as string);
-      const elapsedDays = (Date.now() - referenceDate.getTime()) / 86400000;
-      return elapsedDays >= days;
-    }
-
-    case "engagement_check": {
-      const expectedTier = condition.tier as string | string[];
-      const tiers = Array.isArray(expectedTier) ? expectedTier : [expectedTier];
-
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("engagement_tier")
-        .eq("id", userId)
-        .single();
-
-      if (error || !profile) return false;
-      return tiers.includes(profile.engagement_tier as string);
-    }
-
-    default:
-      return false;
-  }
-}
-
 // ─── Step Processors ────────────────────────────────────────────────────
 
 async function processEmailStep(
@@ -563,9 +501,14 @@ async function processEmailStep(
   }
 
   // 3. 24h spacing guard — defer if we already emailed this user < 24h ago.
-  const recentSendAt = await findRecentSequenceSend(supabase, enrollment.user_id);
+  const recentSendAt = await findRecentSequenceSend(
+    supabase,
+    enrollment.user_id,
+  );
   if (recentSendAt) {
-    const deferUntil = new Date(new Date(recentSendAt).getTime() + DAY_MS).toISOString();
+    const deferUntil = new Date(
+      new Date(recentSendAt).getTime() + DAY_MS,
+    ).toISOString();
     await supabase
       .from("sequence_enrollments")
       .update({ next_step_at: deferUntil })
@@ -584,34 +527,40 @@ async function processEmailStep(
 
   // Wave 3b — the six-weeks retrospective. Only an include_firsts_summary step
   // pays for the engagement_events query.
-  const firstsSummary = step.config.include_firsts_summary === true
-    ? await buildFirstsSummary(supabase, enrollment.user_id)
-    : undefined;
+  const firstsSummary =
+    step.config.include_firsts_summary === true
+      ? await buildFirstsSummary(supabase, enrollment.user_id)
+      : undefined;
 
   // Invoke the notification-dispatch Edge Function
-  const { data, error } = await supabase.functions.invoke("notification-dispatch", {
-    body: {
-      user_id: enrollment.user_id,
-      type: "welcome_series",
-      channel: "email",
-      template_id: templateId,
-      data: {
-        subject,
-        sequence_name: sequence.name,
-        // Send-tagging (Wave 3b #4): sequence_id + step_index ride the payload
-        // → notification-dispatch forwards data verbatim into the
-        // notification_log metadata (sendCompliantEmail metadata param), so the
-        // Resend webhook can segment opens/clicks by drip step.
-        sequence_id: sequence.id,
-        enrollment_id: enrollment.id,
-        step_index: enrollment.current_step,
-        app_url: appUrl,
-        first_name: firstName,
-        ...(firstsSummary !== undefined ? { firsts_summary: firstsSummary } : {}),
-        ...((step.config.data as Record<string, unknown>) || {}),
+  const { data, error } = await supabase.functions.invoke(
+    "notification-dispatch",
+    {
+      body: {
+        user_id: enrollment.user_id,
+        type: "welcome_series",
+        channel: "email",
+        template_id: templateId,
+        data: {
+          subject,
+          sequence_name: sequence.name,
+          // Send-tagging (Wave 3b #4): sequence_id + step_index ride the payload
+          // → notification-dispatch forwards data verbatim into the
+          // notification_log metadata (sendCompliantEmail metadata param), so the
+          // Resend webhook can segment opens/clicks by drip step.
+          sequence_id: sequence.id,
+          enrollment_id: enrollment.id,
+          step_index: enrollment.current_step,
+          app_url: appUrl,
+          first_name: firstName,
+          ...(firstsSummary !== undefined
+            ? { firsts_summary: firstsSummary }
+            : {}),
+          ...((step.config.data as Record<string, unknown>) || {}),
+        },
       },
     },
-  });
+  );
 
   if (error) {
     throw new Error(`Failed to send email: ${error.message}`);
@@ -620,7 +569,8 @@ async function processEmailStep(
   // Dispatch skipped (suppressed / rate-capped / prefs): count as step-completed
   // and advance — do NOT credit total_emails_sent (nothing was sent). No paired
   // in-app nudge either: the email never went out.
-  const skipped = (data as { skipped?: boolean; reason?: string } | null)?.skipped === true;
+  const skipped =
+    (data as { skipped?: boolean; reason?: string } | null)?.skipped === true;
   if (skipped) {
     const reason = (data as { reason?: string }).reason || "unknown";
     return { action: "advance", result: `skipped:${reason}` };
@@ -693,7 +643,8 @@ async function advanceEnrollment(
       await supabase
         .from("automated_sequences")
         .update({
-          total_completed: ((seq as { total_completed: number }).total_completed || 0) + 1,
+          total_completed:
+            ((seq as { total_completed: number }).total_completed || 0) + 1,
         })
         .eq("id", enrollment.sequence_id);
     }
@@ -765,7 +716,10 @@ async function processEnrollments(
     .limit(100);
 
   if (queryError) {
-    console.error("[automation-processor] Failed to query enrollments:", queryError);
+    console.error(
+      "[automation-processor] Failed to query enrollments:",
+      queryError,
+    );
     return result;
   }
 
@@ -812,10 +766,18 @@ async function processEnrollments(
 
       switch (step.type) {
         case "email": {
-          const outcome = await processEmailStep(supabase, enrollment, step, seq);
+          const outcome = await processEmailStep(
+            supabase,
+            enrollment,
+            step,
+            seq,
+          );
           // Unsubscribe ends the enrollment; deferral just reschedules
           // next_step_at — both are terminal for this run (no advance).
-          if (outcome.action === "unsubscribed" || outcome.action === "deferred") {
+          if (
+            outcome.action === "unsubscribed" ||
+            outcome.action === "deferred"
+          ) {
             result.processed++;
             continue;
           }
@@ -829,10 +791,20 @@ async function processEnrollments(
         }
 
         case "condition": {
+          // 00562 — a condition step may nest its payload under
+          // `config.condition` (the shape written by 0056N_onboarding_drip_
+          // state_triggers.sql: {condition:{type,event,negate}, on_false}).
+          // The legacy flat shape (type/event/yes_step directly on config,
+          // e.g. the 'Founding Invite' sequence) is unaffected — fall back
+          // to `step.config` itself when no nested `condition` is present.
+          const conditionPayload =
+            (step.config.condition as Record<string, unknown> | undefined) ??
+            step.config;
+
           const condResult = await evaluateCondition(
             supabase,
             enrollment.user_id,
-            step.config,
+            conditionPayload,
           );
 
           stepResult = condResult ? "condition_true" : "condition_false";
@@ -856,6 +828,18 @@ async function processEnrollments(
               step,
               stepResult,
               step.config.no_step as number,
+            );
+            result.processed++;
+            continue;
+          } else if (!condResult && step.config.on_false === "skip") {
+            const eventName = (conditionPayload.event as string) || "unknown";
+            await advanceEnrollmentSkippingNext(
+              supabase,
+              enrollment,
+              steps,
+              step,
+              currentStepIndex,
+              `event_occurred:${eventName}`,
             );
             result.processed++;
             continue;
@@ -926,12 +910,9 @@ Deno.serve(async (req) => {
     );
   } catch (error) {
     console.error("[automation-processor] Fatal error:", error);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
