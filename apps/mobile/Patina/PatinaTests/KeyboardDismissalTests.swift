@@ -77,4 +77,39 @@ struct KeyboardDismissalTests {
             )
         }
     }
+
+    /// RL2A-05's bar, and RL3A-03's replacement for a checklist a test read
+    /// out of a plan file in another checkout. A walk of the WHOLE app target:
+    /// the set of files with a pad keyboard and no `.keyboardDoneToolbar()`
+    /// must be exactly the four files `B-L1A-2` names (five sites —
+    /// `ManualRoomEntryView` has two), no more and no fewer.
+    ///
+    /// It reds two ways, which is the point. A sixth bare field anywhere reds
+    /// it. And when L1-B's sites land at the X29 rebase it reds too — that is
+    /// the signal that `C9-08` may finally read closed, and the list below
+    /// comes out with the finding.
+    @Test("every bare numeric field in the app is one of B-L1A-2's five known-open sites")
+    func everyBareNumericFieldIsOneOfTheFiveKnownOpenSites() {
+        let knownOpen: Set<String> = [
+            "RoomBudgetSheet.swift",
+            "ManualRoomEntryView.swift",
+            "RoomSettingsView.swift",
+            "ScanFallbackEntryView.swift"
+        ]
+
+        var bare: Set<String> = []
+        for path in SourcePin.swiftFiles(under: "Patina") {
+            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            // The modifier's own file names both keyboards in its doc comment.
+            guard !path.hasSuffix("KeyboardDismissal.swift") else { continue }
+            guard source.contains(".numberPad") || source.contains(".decimalPad") else { continue }
+            guard !source.contains(".keyboardDoneToolbar()") else { continue }
+            bare.insert((path as NSString).lastPathComponent)
+        }
+
+        #expect(
+            bare == knownOpen,
+            "C9-08's open set moved — expected \(knownOpen.sorted()), found \(bare.sorted())"
+        )
+    }
 }

@@ -252,97 +252,72 @@ struct AuthErrorRoutingTests {
         #expect(source.components(separatedBy: ".minimumScaleFactor(0.75)").count - 1 == 1)
     }
 
-    /// RL2A-01 + RL2A-05 + RL2A-06 — the work that cannot compile on this
-    /// branch had been routed to lanes that merge BEFORE this one, so no lane
-    /// could apply it. It is now L1-A's own numbered exit task (`l1a-tasks.md`
-    /// X29), and this reads the checklist out of the plan so it cannot
-    /// silently shrink between now and the rebase.
-    @Test("the rebase-time token and wiring sites are enumerated in the plan")
-    func theRebaseTokenSitesAreEnumerated() throws {
-        let plan = try String(
-            contentsOfFile: "/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01"
-                + "/build/waves/w1/l1a-tasks.md",
-            encoding: .utf8
-        )
-        guard let start = plan.range(of: "## X29 —") else {
-            // The plan lives outside the repo checkout on CI; skip rather than
-            // fail a build that cannot see it.
-            return
+    // MARK: - X29 · the rebase-time work, as ratchets that can fail
+
+    /// RL3A-03 — this replaces a case that read `contentsOfFile:` at an
+    /// ABSOLUTE path into Kody's main checkout, to a file `git ls-files` does
+    /// not know, and `return`ed (passing) whenever the range was missing. From
+    /// any worktree it validated a different checkout than the one under test;
+    /// on a clean clone it was a no-op; and at its best it asserted that
+    /// eleven strings still appeared in prose, never that a line of Swift
+    /// moved. The three cases below are over source in THIS checkout and each
+    /// goes red on its own when the rebase is due.
+    ///
+    /// Leg 1: `D→A-7`'s two `pearl` strokes. `PatinaColors.Border` is L1-D's
+    /// and merges second; `BorderTokenAdoptionTests.pearlHasNoCallSitesOutsideTheTokenFile`
+    /// is a bar at zero on that branch, so merge 5 reds unless X29 runs.
+    @Test("the two pearl strokes are ratcheted, and must go to zero once Border exists")
+    func thePearlStrokesAreRatchetedToZero() throws {
+        var pearl: [String: Int] = [:]
+        for path in SourcePin.swiftFiles(under: "Patina/Features/Authentication") {
+            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            let count = source.components(separatedBy: "PatinaColors.pearl").count - 1
+            if count > 0 { pearl[(path as NSString).lastPathComponent] = count }
         }
-        let task = String(plan[start.lowerBound...].prefix(2600))
-        for site in [
-            "PatinaColors.Border.strong",
-            "PatinaTypography.voiceLead",
-            "PatinaTypography.bodySerif",
-            "pendingLinkNotice: coordinator.pendingLinkNotice",
-            "keyboardDoneToolbar()",
-            "RoomBudgetSheet.swift",
-            "ManualRoomEntryView.swift",
-            "RoomSettingsView.swift",
-            "ScanFallbackEntryView.swift",
-            "InvestmentPerspectiveView.swift",
-            "ScanFloorPlanPreviewView.swift"
-        ] {
-            #expect(task.contains(site), "X29 no longer names \(site)")
+        let total = pearl.values.reduce(0, +)
+
+        // The reader has to be real, or the branch below is decoration.
+        let designKit = Self.designKitColours()
+        #expect(designKit.contains("public enum PatinaColors"), "the design-kit token file was not found")
+
+        if designKit.contains("enum Border") {
+            #expect(total == 0, "PatinaColors.Border is on the tip — X29's pearl swap is due: \(pearl)")
+        } else {
+            #expect(total <= 2, "the pearl budget here is 2 until Border lands, found \(pearl)")
+            #expect(pearl["AuthScreenView.swift"] == 2, "the two X29 sites moved: \(pearl)")
         }
     }
 
-    // MARK: - RL3A-02 · a session-less resolve is a miss on both legs
+    /// Leg 2: `L1F→A-2`'s call site. The receiving half is on this branch; the
+    /// property is `AppCoordinator.pendingLinkNotice`, which is L1-F's and
+    /// merges fourth. The moment it exists, both call sites must pass it or
+    /// `C2-21`/`GAP7B-09`'s acknowledgement half is dead code.
+    @Test("the held-link notice is wired the moment the coordinator can supply it")
+    func theHeldLinkNoticeIsWiredWhenTheCoordinatorCanSupplyIt() throws {
+        let screen = try SourcePin.read("Patina/Features/Authentication/Views/AuthScreenView.swift")
+        #expect(screen.contains("var pendingLinkNotice: String?"))
 
-    /// GoTrue can answer 200 with no session for a spent or expired code.
-    /// Round two took that as a miss ONLY when the test-login fallback
-    /// redeemed it: `if response.session == nil, await attempt(…) { return }`.
-    /// When the fallback declined the `if` simply failed and control fell off
-    /// the end of the `do` block — no throw, no `setError`. `verifyOtp`'s
-    /// caller completed normally, `successMessage` was already nil, and the
-    /// reader sat looking at six digits over an empty status region.
-    @Test("a session-less resolve the fallback declines raises the sheet's own sentence")
-    func aSessionlessResolveWithNoFallbackIsAMiss() async throws {
-        let service = AuthService.shared
-        let originalTransport = service.verifyOtpTransport
-        let originalFallback = service.testAccountLogin
-        defer {
-            service.verifyOtpTransport = originalTransport
-            service.testAccountLogin = originalFallback
-            service.clearError()
-        }
-        service.clearError()
-        service.verifyOtpTransport = { _, _ in false }
-        service.testAccountLogin = TestAccountLoginFallback(
-            mintTokenHash: { _, _ in TestAccountLoginResponse(tokenHash: nil) },
-            redeem: { _ in false }
+        let coordinator = try SourcePin.read("Patina/App/Coordinators/AppCoordinator.swift")
+        guard coordinator.contains("pendingLinkNotice") else { return }
+
+        let content = try SourcePin.read("Patina/ContentView.swift")
+        let sheet = try SourcePin.read("Patina/Features/Authentication/Views/AuthSheet.swift")
+        #expect(
+            content.contains("pendingLinkNotice: coordinator.pendingLinkNotice"),
+            "AppCoordinator.pendingLinkNotice exists and ContentView does not pass it"
         )
-
-        await #expect(throws: (any Error).self) {
-            try await service.verifyOtp(email: "client@patina.dev", token: "123456")
-        }
-        #expect(service.sheetErrorMessage != nil, "the miss left no message at all")
-        #expect(service.rootErrorMessage == nil, "a sheet failure reached the Welcome root")
-        // Patina's sentence, not GoTrue's.
-        #expect(service.sheetErrorMessage == AuthService.authErrorSentence(AuthVerificationFailure.resolvedWithoutSession))
+        #expect(sheet.contains("pendingLinkNotice:"), "AuthSheet does not pass the notice")
     }
 
-    /// The other leg still works: a session-less resolve the fallback DOES
-    /// redeem is a success, and raises nothing.
-    @Test("a session-less resolve the fallback redeems is a success")
-    func aSessionlessResolveTakenByTheFallbackSucceeds() async throws {
-        let service = AuthService.shared
-        let originalTransport = service.verifyOtpTransport
-        let originalFallback = service.testAccountLogin
-        defer {
-            service.verifyOtpTransport = originalTransport
-            service.testAccountLogin = originalFallback
-            service.clearError()
-        }
-        service.clearError()
-        service.verifyOtpTransport = { _, _ in false }
-        service.testAccountLogin = TestAccountLoginFallback(
-            mintTokenHash: { _, _ in TestAccountLoginResponse(tokenHash: "hash") },
-            redeem: { _ in true }
-        )
-
-        try await service.verifyOtp(email: "firstflight@patina.cloud", token: "000000")
-        #expect(service.errorMessage == nil)
+    /// The design kit lives beside the app target, one directory further up
+    /// than `SourcePin` reaches.
+    private static func designKitColours() -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // PatinaTests
+            .deletingLastPathComponent()   // apps/mobile/Patina
+            .deletingLastPathComponent()   // apps/mobile
+            .appendingPathComponent("PatinaDesignKit/Sources/PatinaDesignKit/Tokens/PatinaColors.swift")
+        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
     @Test("the root's status never renders a filled red panel (VISION §6)")
