@@ -7,6 +7,13 @@
 
 import SwiftUI
 
+// C-06 split `expandedHeader` into a stacked and a compact arm and gave the
+// panel a ceiling, which carries this file past the 500-line rule. The same
+// scoped disable, for the same reason, that `DailyRoomView` and `SettingsView`
+// already carry: the split into separate files belongs to W2's hygiene pass,
+// not to a Dynamic Type fix that merges first into every other lane.
+// swiftlint:disable file_length
+
 /// The panel's own inset. Applied to the column rather than around it, so
 /// that when the column scrolls the inset scrolls with it — see
 /// `expandedColumn`. File scope: a generic type may not hold a static stored
@@ -575,3 +582,5 @@ private extension View {
         }
     }
 }
+
+// swiftlint:enable file_length

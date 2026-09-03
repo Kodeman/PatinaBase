@@ -17,11 +17,11 @@ struct YourSpacesView: View {
     @Environment(\.isTabRoot) private var isTabRoot
     @Query(sort: \RoomModel.createdAt, order: .reverse) private var rooms: [RoomModel]
     /// Drives the contextual help-panel sheet attached to the Rooms surface.
-    /// Toggled by the `?` button in the header.
-    // C5-02: nothing sets this in round one — the `?` triggers are removed
-    // because zero `ios-app/*` help articles exist in production Sanity, so
-    // every door opened on an empty panel. The sheet wiring stays as a seam
-    // W2 restores the buttons to; it is deliberately unreachable, not live.
+    ///
+    /// C5-02: nothing sets this in round one — the `?` triggers are removed
+    /// because zero `ios-app/*` help articles exist in production Sanity, so
+    /// every door opened on an empty panel. The sheet wiring stays as a seam
+    /// W2 restores the buttons to; it is deliberately unreachable, not live.
     @State private var isHelpPanelPresented: Bool = false
 
     /// R14: scan-upload sync state. `RoomScanSyncService` is `@Observable`,

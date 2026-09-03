@@ -18,11 +18,11 @@ struct ProfileView: View {
     @Environment(\.isTabRoot) private var isTabRoot
     @State private var viewModel = ProfileViewModel()
     /// Drives the contextual help-panel sheet attached to the Profile surface.
-    /// Toggled by the `?` button in the top-right corner of the header.
-    // C5-02: nothing sets this in round one — the `?` triggers are removed
-    // because zero `ios-app/*` help articles exist in production Sanity, so
-    // every door opened on an empty panel. The sheet wiring stays as a seam
-    // W2 restores the buttons to; it is deliberately unreachable, not live.
+    ///
+    /// C5-02: nothing sets this in round one — the `?` triggers are removed
+    /// because zero `ios-app/*` help articles exist in production Sanity, so
+    /// every door opened on an empty panel. The sheet wiring stays as a seam
+    /// W2 restores the buttons to; it is deliberately unreachable, not live.
     @State private var isHelpPanelPresented: Bool = false
 
     /// Shared formatter for room-card "Scanned" dates. `static let` so we
