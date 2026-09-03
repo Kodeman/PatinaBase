@@ -88,15 +88,6 @@ struct RefreshableSurfacesTests {
     /// The four tab roots — the whole of `C4-12`'s headline and all of
     /// `R-03`. Every one is L1-C's file this wave; the exact text is in
     /// `build/waves/w1/l1-c-notes.md` (Task C-L1B-1).
-    ///
-    /// A known issue, and deliberately NOT `isIntermittent`: an intermittent
-    /// one passes in both states, which made this ledger unfalsifiable — an
-    /// unapplied note looked exactly like an applied one (review RL1B-03).
-    /// Without it the run is green here, where the note is genuinely open,
-    /// and fails the moment L1-C's `.refreshable` lands — an unrecorded known
-    /// issue. That failure is the tripwire: the steward's checklist item in
-    /// `l1b-notes-out.md` §S1 replaces this block with a hard `#expect` at
-    /// the merge that makes it fire. It cannot be silently forgotten.
     @Test(
         "the four tab roots can be pulled to refresh",
         arguments: [
@@ -107,17 +98,11 @@ struct RefreshableSurfacesTests {
         ]
     )
     func theTabRootsRefresh(path: String) throws {
-        let present = try hasRefreshable(path)
-        withKnownIssue(
-            "a tab root owes .refreshable (l1b-notes-out.md O3, applied by L1-C)"
-        ) {
-            #expect(present)
-        }
+        #expect(try hasRefreshable(path), "\(path) owes .refreshable (l1b-notes-out.md O3)")
     }
 
     /// The two remaining Studio details, in other lanes' files: the decision
-    /// detail (L1-C, O4) and the thread detail (L1-F, O8). Same tripwire as
-    /// above — not `isIntermittent`, so the ledger can actually be wrong.
+    /// detail (L1-C, O4) and the thread detail (L1-F, O8).
     @Test(
         "the remaining Studio details can be pulled to refresh",
         arguments: [
@@ -126,11 +111,6 @@ struct RefreshableSurfacesTests {
         ]
     )
     func theRemainingDetailsRefresh(path: String) throws {
-        let present = try hasRefreshable(path)
-        withKnownIssue(
-            "a Studio detail owes .refreshable (l1b-notes-out.md O4 / O8)"
-        ) {
-            #expect(present)
-        }
+        #expect(try hasRefreshable(path), "\(path) owes .refreshable (l1b-notes-out.md O4 / O8)")
     }
 }

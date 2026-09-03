@@ -152,7 +152,7 @@ struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("ThreadDetailView.Header")
         .overlay(alignment: .bottom) {
-            Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+            Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
         }
     }
 

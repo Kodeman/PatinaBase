@@ -294,25 +294,12 @@ struct AccountIsolationTests {
     /// the forced-sign-out branch actually takes, and it clears the return
     /// route and the queued deep link as well. So this reads that function,
     /// not the one the note named (review `RL1B2-03`).
-    ///
-    /// A known issue, and deliberately NOT `isIntermittent`: an intermittent
-    /// one passes in both states, which made this row unfalsifiable — an
-    /// unapplied note looked exactly like an applied one (review `RL1B-03`,
-    /// still true at `RL1B2-02`, which found this the last of the three).
-    /// Green here, where `AppCoordinator.swift` is the base sha's; red the
-    /// moment L1-F's file arrives, as an unrecorded known issue. That red is
-    /// the tripwire, and `l1b-notes-out.md` §S1 carries the hard `#expect`
-    /// the steward pastes in its place at merge 4.
     @Test
     func theSignOutClearsThePreviousAccountsNavigationStack() throws {
         let source = try SourcePin.read("Patina/App/Coordinators/AppCoordinator.swift")
         let clears = Self.endedSessionBody(in: source)?
             .contains("navigationPath = NavigationPath()") ?? false
-        withKnownIssue(
-            "C2-06 owes AppCoordinator its ended-session stack clear (l1b-notes-out.md O2, applied by L1-F)"
-        ) {
-            #expect(clears)
-        }
+        #expect(clears, "C2-06 owes AppCoordinator its ended-session stack clear (l1b-notes-out.md O2)")
     }
 
     /// The body of `clearNavigationForEndedSession()`, brace-matched, or
