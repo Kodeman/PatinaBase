@@ -116,14 +116,17 @@ struct MoneyAndStudioCopyTests {
         )
         #expect(invoices.contains("DateDisplay.due(invoice.due_date)"))
         #expect(!invoices.contains("\"Due \\("))
-        #expect(invoices.contains("due.isPastDue ? PatinaColors.error"))
+        // A-73: the past-due ink moved from `PatinaColors.error` (3.03:1 on
+        // the light canvas) to `PatinaColors.Text.error`. The rule this test
+        // pins is unchanged — a list row colours on `isPastDue`.
+        #expect(invoices.contains("due.isPastDue ? PatinaColors.Text.error"))
 
         let proposals = try String(
             contentsOf: Self.sourceURL("Patina/Features/Proposals/Views/ProposalListView.swift"),
             encoding: .utf8
         )
         #expect(proposals.contains("DateDisplay.expiry(proposal.valid_until)"))
-        #expect(proposals.contains("expiry.isPastDue ? PatinaColors.error"))
+        #expect(proposals.contains("expiry.isPastDue ? PatinaColors.Text.error"))
     }
 
     @Test("every money detail carries the date its list already printed")
