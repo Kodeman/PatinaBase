@@ -109,6 +109,27 @@ public final class AuthService {
     /// A3-16 / D7 — the test-account-login fallback, injectable for tests.
     var testAccountLogin: TestAccountLoginFallback = .live
 
+    /// The GoTrue code exchange, as a seam. `true` when a session landed.
+    ///
+    /// RL3A-02: the session-less resolve is the branch the finding is about
+    /// and `supabase.auth.verifyOTP` cannot be driven from a test, so the one
+    /// line that talks to the network moves behind a closure — the shape
+    /// `relabelProfile` already uses.
+    @ObservationIgnored
+    var verifyOtpTransport: @Sendable (String, String) async throws -> Bool = AuthService.liveVerifyOtp
+
+    /// `EmailOTPType.email` matches the supabase-js `type: 'email'` used by
+    /// the web portals' verify-otp flow — GoTrue accepts this for codes
+    /// issued by `signInWithOTP(email:)`.
+    static let liveVerifyOtp: @Sendable (String, String) async throws -> Bool = { email, token in
+        let response = try await SupabaseClientManager.shared.client.auth.verifyOTP(
+            email: email,
+            token: token,
+            type: .email
+        )
+        return response.session != nil
+    }
+
     /// B-21 — onboarding is a fact about the account, resolved once per
     /// sign-in. Injectable for tests.
     var onboardingCompletion: OnboardingCompletion = .shared
@@ -394,7 +415,7 @@ public final class AuthService {
     public func signIn(email: String, password: String) async throws {
         lastAttemptedSignInMethod = "password"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
@@ -432,8 +453,16 @@ public final class AuthService {
     ///
     /// The five sentences are sent to L1-E as a deck addendum
     /// (`l1a-notes-out-round3.md`); L1-E merges last and owns the words.
-    static func authErrorSentence(_ error: any Error) -> String {
+    static func authErrorSentence(
+        _ error: any Error,
+        surface: AuthFailureSurface = .emailForm
+    ) -> String {
         PatinaLog.auth.debug("AuthService: \(error.localizedDescription)")
+        if error is AuthVerificationFailure {
+            // RL3A-02: a code GoTrue accepted but would not exchange is a
+            // spent or expired code, which is exactly `.otpExpired`'s sentence.
+            return "That sign-in code has expired. Send yourself a new one."
+        }
         guard let code = (error as? AuthError)?.errorCode else {
             return "Something went wrong on our side. Try again, or write to hello@patina.cloud."
         }
@@ -447,7 +476,16 @@ public final class AuthService {
         case .emailNotConfirmed:
             return "This email hasn’t been confirmed yet. Check your inbox for the code we sent."
         case .validationFailed:
-            return "Check the email address and try again."
+            // RL3A-17: GoTrue answers `validation_failed` for "Unsupported
+            // provider: provider is not enabled" as well as for a malformed
+            // address (PROGRAM.md §6 · D3), and the provider buttons have no
+            // email field on their screen.
+            switch surface {
+            case .emailForm:
+                return "Check the email address and try again."
+            case .provider:
+                return "That sign-in method isn’t available right now. Try Apple or a sign-in code instead."
+            }
         default:
             return "Something went wrong on our side. Try again, or write to hello@patina.cloud."
         }
@@ -482,7 +520,7 @@ public final class AuthService {
     ) async throws {
         lastAttemptedSignInMethod = "apple"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         guard let identityToken = credential.identityToken,
@@ -504,7 +542,7 @@ public final class AuthService {
             // B2 v3(c) / A3-07 — see `applyHomeownerRoleAfterOAuth`.
             await applyHomeownerRoleAfterOAuth(userId: session.user.id)
         } catch {
-            setError(Self.authErrorSentence(error), scope: scope)
+            setError(Self.authErrorSentence(error, surface: .provider), scope: scope)
             throw error
         }
     }
@@ -585,7 +623,7 @@ public final class AuthService {
     public func signInWithGoogle() async throws {
         lastAttemptedSignInMethod = "google"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
@@ -601,7 +639,7 @@ public final class AuthService {
             // screen's error banner stays silent instead of showing a raw
             // "WebAuthenticationSession error 1" string.
             if (error as? ASWebAuthenticationSessionError)?.code != .canceledLogin {
-                setError(Self.authErrorSentence(error), scope: .root)
+                setError(Self.authErrorSentence(error, surface: .provider), scope: .root)
             }
             throw error
         }
@@ -617,7 +655,7 @@ public final class AuthService {
     @MainActor
     public func signUp(email: String, password: String, displayName: String?) async throws {
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
@@ -668,7 +706,7 @@ public final class AuthService {
     @MainActor
     public func signOut() async throws {
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         // Push: delete this device's token row BEFORE the session dies —
@@ -699,7 +737,7 @@ public final class AuthService {
     @MainActor
     public func resendVerificationEmail(_ email: String) async throws {
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
@@ -720,7 +758,7 @@ public final class AuthService {
     @MainActor
     public func resetPassword(email: String) async throws {
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
@@ -744,7 +782,7 @@ public final class AuthService {
     public func sendMagicLink(email: String) async throws {
         lastAttemptedSignInMethod = "magic-link"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
@@ -775,23 +813,24 @@ public final class AuthService {
     public func verifyOtp(email: String, token: String) async throws {
         lastAttemptedSignInMethod = "otp"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         do {
-            // `EmailOTPType.email` matches the supabase-js `type: 'email'`
-            // used by the web portals' verify-otp flow — GoTrue accepts
-            // this for codes issued by `signInWithOTP(email:)`.
-            let response = try await supabase.auth.verifyOTP(
-                email: email,
-                token: token,
-                type: .email
-            )
+            let hasSession = try await verifyOtpTransport(email, token)
             // A3-16: GoTrue can resolve WITHOUT a session for a spent or
-            // expired code. The portal treats that as a miss too.
-            if response.session == nil,
-               await testAccountLogin.attempt(email: email, code: token) {
-                return
+            // expired code. The portal treats that as a miss too — and so
+            // does this, on BOTH legs (RL3A-02): the fallback gets its turn,
+            // and when it declines the reader gets the same sentence and the
+            // same throw the catch path below produces, rather than a cleared
+            // status region under six digits that did nothing.
+            if !hasSession {
+                if await testAccountLogin.attempt(email: email, code: token) {
+                    return
+                }
+                let failure = AuthVerificationFailure.resolvedWithoutSession
+                setError(Self.authErrorSentence(failure), scope: .sheet)
+                throw failure
             }
             // Session is set by the auth state change listener; nothing
             // else to do here.
@@ -821,7 +860,7 @@ public final class AuthService {
         // after an app relaunch, which loses the transient send-time stamp.
         lastAttemptedSignInMethod = "magic-link"
         isLoading = true
-        errorMessage = nil
+        clearError()
         defer { isLoading = false }
 
         // Try implicit-flow first: tokens live in the URL fragment.
@@ -910,6 +949,26 @@ public enum AuthErrorScope: Sendable, Equatable {
     case root
     /// Raised inside a presented sheet. Never rendered on the root.
     case sheet
+}
+
+/// Which surface raised the failure, for the one GoTrue code whose right
+/// sentence depends on it (`validation_failed`, RL3A-17). Threaded the way
+/// `AuthErrorScope` already is rather than inferred from the error.
+public enum AuthFailureSurface: Sendable, Equatable {
+    /// An email/password/code form — the address is on screen and editable.
+    case emailForm
+    /// A provider button (Apple, Google). There is no email field here.
+    case provider
+}
+
+/// RL3A-02 — GoTrue answers 200 with no session for a spent or expired code
+/// on the OTP path. Round two's `if response.session == nil, await
+/// fallback.attempt(…)` treated that as a miss only when the fallback took
+/// it; when the fallback declined, nothing was raised and nothing was thrown.
+/// This is what the nil-session branch throws now, so the sheet's status slot
+/// and `verifyOtp`'s caller both learn the code did not work.
+public enum AuthVerificationFailure: Error, Equatable {
+    case resolvedWithoutSession
 }
 
 /// Errors surfaced by `AuthService` that need distinct UI handling.

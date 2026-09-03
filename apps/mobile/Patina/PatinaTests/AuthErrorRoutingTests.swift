@@ -23,6 +23,12 @@ import SwiftUI
 import Testing
 @testable import Patina
 
+/// Serialized: every case below the source pins drives `AuthService.shared`'s
+/// error state, which is one object shared with every other suite in the tier.
+/// Two of these running at once — or one running beside the session-less
+/// verify cases moved in from `OtpVerifyCoalescingTests` — read each other's
+/// `clearError()`.
+@Suite(.serialized)
 struct AuthErrorRoutingTests {
 
     @Test("every sheet entry point stamps .sheet, every root entry point stamps .root")
@@ -58,6 +64,24 @@ struct AuthErrorRoutingTests {
         // unscoped assignment is exactly what leaked onto the root.
         #expect(!source.contains("errorMessage = error.localizedDescription"))
         #expect(!source.contains("errorMessage = \""))
+
+        // RL3A-16: `= nil` was not covered by the bar above, and ten methods
+        // opened with a bare `errorMessage = nil` that skipped `clearError()`
+        // — the only thing that also resets `errorScope`. `AuthService`'s own
+        // doc says a stale `.sheet` behind a nil message means "the next
+        // reader of errorScope was answering about an error that no longer
+        // existed"; this makes that unwritable. The ONLY two assignments in
+        // the file are the ones inside `setError` and `clearError`.
+        var assignments: [Int] = []
+        for (index, line) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("errorMessage = ") else { continue }
+            assignments.append(index + 1)
+        }
+        #expect(
+            assignments.count == 2,
+            "errorMessage is assigned at \(assignments) — only setError and clearError may"
+        )
     }
 
     @Test("the root reads rootErrorMessage, not errorMessage")
@@ -261,6 +285,64 @@ struct AuthErrorRoutingTests {
         ] {
             #expect(task.contains(site), "X29 no longer names \(site)")
         }
+    }
+
+    // MARK: - RL3A-02 · a session-less resolve is a miss on both legs
+
+    /// GoTrue can answer 200 with no session for a spent or expired code.
+    /// Round two took that as a miss ONLY when the test-login fallback
+    /// redeemed it: `if response.session == nil, await attempt(…) { return }`.
+    /// When the fallback declined the `if` simply failed and control fell off
+    /// the end of the `do` block — no throw, no `setError`. `verifyOtp`'s
+    /// caller completed normally, `successMessage` was already nil, and the
+    /// reader sat looking at six digits over an empty status region.
+    @Test("a session-less resolve the fallback declines raises the sheet's own sentence")
+    func aSessionlessResolveWithNoFallbackIsAMiss() async throws {
+        let service = AuthService.shared
+        let originalTransport = service.verifyOtpTransport
+        let originalFallback = service.testAccountLogin
+        defer {
+            service.verifyOtpTransport = originalTransport
+            service.testAccountLogin = originalFallback
+            service.clearError()
+        }
+        service.clearError()
+        service.verifyOtpTransport = { _, _ in false }
+        service.testAccountLogin = TestAccountLoginFallback(
+            mintTokenHash: { _, _ in TestAccountLoginResponse(tokenHash: nil) },
+            redeem: { _ in false }
+        )
+
+        await #expect(throws: (any Error).self) {
+            try await service.verifyOtp(email: "client@patina.dev", token: "123456")
+        }
+        #expect(service.sheetErrorMessage != nil, "the miss left no message at all")
+        #expect(service.rootErrorMessage == nil, "a sheet failure reached the Welcome root")
+        // Patina's sentence, not GoTrue's.
+        #expect(service.sheetErrorMessage == AuthService.authErrorSentence(AuthVerificationFailure.resolvedWithoutSession))
+    }
+
+    /// The other leg still works: a session-less resolve the fallback DOES
+    /// redeem is a success, and raises nothing.
+    @Test("a session-less resolve the fallback redeems is a success")
+    func aSessionlessResolveTakenByTheFallbackSucceeds() async throws {
+        let service = AuthService.shared
+        let originalTransport = service.verifyOtpTransport
+        let originalFallback = service.testAccountLogin
+        defer {
+            service.verifyOtpTransport = originalTransport
+            service.testAccountLogin = originalFallback
+            service.clearError()
+        }
+        service.clearError()
+        service.verifyOtpTransport = { _, _ in false }
+        service.testAccountLogin = TestAccountLoginFallback(
+            mintTokenHash: { _, _ in TestAccountLoginResponse(tokenHash: "hash") },
+            redeem: { _ in true }
+        )
+
+        try await service.verifyOtp(email: "firstflight@patina.cloud", token: "000000")
+        #expect(service.errorMessage == nil)
     }
 
     @Test("the root's status never renders a filled red panel (VISION §6)")

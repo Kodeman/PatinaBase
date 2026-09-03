@@ -19,7 +19,10 @@ import Testing
 
 struct AuthFailureCopyTests {
 
-    private func sentence(_ code: ErrorCode) -> String {
+    private func sentence(
+        _ code: ErrorCode,
+        surface: AuthFailureSurface = .emailForm
+    ) -> String {
         let response = HTTPURLResponse(
             url: URL(string: "https://example.invalid/auth/v1/token")!,
             statusCode: 400,
@@ -32,7 +35,8 @@ struct AuthFailureCopyTests {
                 errorCode: code,
                 underlyingData: Data(),
                 underlyingResponse: response
-            )
+            ),
+            surface: surface
         )
     }
 
@@ -65,6 +69,43 @@ struct AuthFailureCopyTests {
         let fallback = AuthService.authErrorSentence(Boom())
         #expect(!fallback.contains("PGRST301"))
         #expect(fallback.contains("hello@patina.cloud"))
+    }
+
+    // MARK: - RL3A-17 · validation_failed does not always mean the address
+
+    /// PROGRAM.md §6 · D3 records what Strata's GoTrue actually answers for a
+    /// provider it has not configured: `400 validation_failed — "Unsupported
+    /// provider: provider is not enabled"`. `signInWithGoogle` routes its
+    /// failures through the same mapper, so a reader who tapped a provider
+    /// button — a screen with no email field on it — was told to check their
+    /// email address. Dark today (`A3-06` removes the row unless GoTrue
+    /// enables it) and live again the moment `google: true` appears in
+    /// `/auth/v1/settings`.
+    @Test("a provider validation failure does not blame the email address")
+    func aProviderValidationFailureDoesNotBlameTheEmailAddress() {
+        let form = sentence(.validationFailed, surface: .emailForm)
+        #expect(form.contains("email address"))
+
+        let provider = sentence(.validationFailed, surface: .provider)
+        #expect(!provider.contains("email address"))
+        #expect(provider.contains("Apple"))
+        #expect(!provider.contains("Unsupported provider"))
+    }
+
+    /// And the two OAuth entry points ask for that surface.
+    @Test("the Apple and Google paths name themselves to the mapper")
+    func theOAuthPathsPassTheProviderSurface() throws {
+        let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
+        let calls = source.components(separatedBy: "surface: .provider").count - 1
+        #expect(calls >= 2, "expected the Apple and Google paths to name .provider, found \(calls)")
+    }
+
+    // MARK: - RL3A-02 · the session-less resolve
+
+    @Test("a code GoTrue accepts but will not exchange reads as expired")
+    func aSessionlessResolveReadsAsAnExpiredCode() {
+        let line = AuthService.authErrorSentence(AuthVerificationFailure.resolvedWithoutSession)
+        #expect(line == sentence(.otpExpired))
     }
 
     /// Brand voice: sentence case, one apostrophe glyph, none of the banned
