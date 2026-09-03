@@ -1,14 +1,14 @@
-'use client'
+"use client";
 
-import { useCallback, useRef, useState } from 'react'
-import { clsx, type ClassValue } from 'clsx'
-import { twMerge } from 'tailwind-merge'
-import { useHelpContent } from '../../hooks/useHelpContent'
-import type { VideoContent } from '../../contentTypes'
+import { useCallback, useRef, useState } from "react";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+import { useHelpContent } from "../../hooks/useHelpContent";
+import type { VideoContent } from "../../contentTypes";
 
 // Local cn() — mirrors @patina/design-system/utils/cn. clsx + tailwind-merge
 // are direct deps of @patina/help-system.
-const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs))
+const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
 
 // Spec §16 open question: hosting (Sanity CDN vs Mux vs YouTube) deferred.
 // For Sprint 3 we treat src as an opaque URL. Captions ride on a separate
@@ -20,58 +20,62 @@ const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs))
 // (started + completed). Significant pause / seek / progress percentile
 // instrumentation is deferred to Sprint 4 per task contract.
 
-type AspectRatio = '16:9' | '4:3' | '1:1'
+type AspectRatio = "16:9" | "4:3" | "1:1";
 
 const ASPECT_RATIO_CLASS: Record<AspectRatio, string> = {
-  '16:9': 'aspect-video',
-  '4:3': 'aspect-[4/3]',
-  '1:1': 'aspect-square',
-}
+  "16:9": "aspect-video",
+  "4:3": "aspect-[4/3]",
+  "1:1": "aspect-square",
+};
 
 export interface VideoPlayerProps {
   /** Direct asset URL (Sanity CDN URL, Mux playback URL, etc.). Takes precedence over CMS lookup. */
-  src?: string
+  src?: string;
   /**
    * Cloudflare Stream video id (decision 14, 2026-09-03). When set, renders
    * `https://iframe.videodelivery.net/<streamUid>` in an iframe instead of
    * the native `<video>` element — takes precedence over `src`. The `src`
    * path is otherwise unchanged.
    */
-  streamUid?: string
+  streamUid?: string;
   /** Surface key from the help-system registry — resolves to a videoContent doc in Sanity. */
-  surfaceKey?: string
+  surfaceKey?: string;
   /** Optional poster image URL. */
-  poster?: string
+  poster?: string;
   /** Optional WebVTT captions track URL. */
-  captionsUrl?: string
+  captionsUrl?: string;
   /** Optional transcript content. Rendered inside a collapsible reveal. */
-  transcript?: React.ReactNode
+  transcript?: React.ReactNode;
   /** Aspect ratio for the player frame. Defaults to '16:9'. */
-  aspectRatio?: AspectRatio
+  aspectRatio?: AspectRatio;
   /** a11y label for the <video> element. Defaults to "Help video". */
-  ariaLabel?: string
+  ariaLabel?: string;
   /** Additional Tailwind classes merged onto the outer container. */
-  className?: string
+  className?: string;
 }
 
 /** Resolve `window.posthog?.capture` without crashing in non-browser envs. */
 function captureEvent(event: string, props: Record<string, unknown>) {
-  if (typeof window === 'undefined') return
-  const ph = (window as unknown as {
-    posthog?: { capture?: (event: string, props?: Record<string, unknown>) => void }
-  }).posthog
-  ph?.capture?.(event, props)
+  if (typeof window === "undefined") return;
+  const ph = (
+    window as unknown as {
+      posthog?: {
+        capture?: (event: string, props?: Record<string, unknown>) => void;
+      };
+    }
+  ).posthog;
+  ph?.capture?.(event, props);
 }
 
 /** Type-guard for CMS docs that look like a VideoContent payload. */
 function isVideoShaped(content: unknown): content is VideoContent {
   return (
-    typeof content === 'object' &&
+    typeof content === "object" &&
     content !== null &&
-    'src' in content &&
-    typeof (content as { src: unknown }).src === 'string' &&
+    "src" in content &&
+    typeof (content as { src: unknown }).src === "string" &&
     (content as { src: string }).src.length > 0
-  )
+  );
 }
 
 /**
@@ -101,79 +105,90 @@ export function VideoPlayer({
   poster,
   captionsUrl,
   transcript,
-  aspectRatio = '16:9',
-  ariaLabel = 'Help video',
+  aspectRatio = "16:9",
+  ariaLabel = "Help video",
   className,
 }: VideoPlayerProps) {
-  const shouldFetchCms = !src && Boolean(surfaceKey)
+  const shouldFetchCms = !src && Boolean(surfaceKey);
   // `useHelpContent` short-circuits on a falsy surface key; we still call it
   // unconditionally to keep hook order stable and let the cache do its work.
-  const { data: cmsContent } = useHelpContent(surfaceKey ?? '', 'video')
+  const { data: cmsContent } = useHelpContent(surfaceKey ?? "", "video");
 
   // Resolve effective source values — explicit props always win.
-  const effectiveSrc = src ?? (shouldFetchCms && isVideoShaped(cmsContent) ? cmsContent.src : undefined)
+  const effectiveSrc =
+    src ??
+    (shouldFetchCms && isVideoShaped(cmsContent) ? cmsContent.src : undefined);
   const effectivePoster =
-    poster ?? (isVideoShaped(cmsContent) ? cmsContent.posterUrl : undefined)
+    poster ?? (isVideoShaped(cmsContent) ? cmsContent.posterUrl : undefined);
   const effectiveCaptionsUrl =
-    captionsUrl ?? (isVideoShaped(cmsContent) ? cmsContent.captionsUrl : undefined)
+    captionsUrl ??
+    (isVideoShaped(cmsContent) ? cmsContent.captionsUrl : undefined);
   const effectiveTranscript =
-    transcript ?? (isVideoShaped(cmsContent) ? cmsContent.transcript : undefined)
+    transcript ??
+    (isVideoShaped(cmsContent) ? cmsContent.transcript : undefined);
 
   // Transcript reveal state — collapsed by default.
-  const [transcriptOpen, setTranscriptOpen] = useState(false)
-  const toggleTranscript = useCallback(() => setTranscriptOpen((prev) => !prev), [])
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const toggleTranscript = useCallback(
+    () => setTranscriptOpen((prev) => !prev),
+    [],
+  );
 
   // Track first-play (de-dupe started event) and play-start wallclock for
   // completed.duration_ms.
-  const startedRef = useRef(false)
-  const playStartedAtRef = useRef<number | null>(null)
+  const startedRef = useRef(false);
+  const playStartedAtRef = useRef<number | null>(null);
 
   const handlePlay = useCallback(() => {
-    if (startedRef.current) return
-    startedRef.current = true
+    if (startedRef.current) return;
+    startedRef.current = true;
     playStartedAtRef.current =
-      typeof performance !== 'undefined' ? performance.now() : Date.now()
-    captureEvent('help.video.started', {
+      typeof performance !== "undefined" ? performance.now() : Date.now();
+    captureEvent("help.video.started", {
       surface_key: surfaceKey,
       src: effectiveSrc,
-    })
-  }, [surfaceKey, effectiveSrc])
+    });
+  }, [surfaceKey, effectiveSrc]);
 
   const handleEnded = useCallback(
     (event: React.SyntheticEvent<HTMLVideoElement>) => {
-      const video = event.currentTarget
-      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
-      const wall = playStartedAtRef.current
+      const video = event.currentTarget;
+      const now =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
+      const wall = playStartedAtRef.current;
       // Prefer the media's reported duration (seconds) when known; fall back
       // to wallclock measurement. Both bottom out at 0.
       const mediaDurationMs =
-        typeof video.duration === 'number' && Number.isFinite(video.duration) && video.duration > 0
+        typeof video.duration === "number" &&
+        Number.isFinite(video.duration) &&
+        video.duration > 0
           ? Math.round(video.duration * 1000)
-          : null
-      const wallDurationMs = wall !== null ? Math.max(0, Math.round(now - wall)) : 0
-      const duration_ms = mediaDurationMs ?? wallDurationMs
-      playStartedAtRef.current = null
-      captureEvent('help.video.completed', {
+          : null;
+      const wallDurationMs =
+        wall !== null ? Math.max(0, Math.round(now - wall)) : 0;
+      const duration_ms = mediaDurationMs ?? wallDurationMs;
+      playStartedAtRef.current = null;
+      captureEvent("help.video.completed", {
         surface_key: surfaceKey,
         src: effectiveSrc,
         duration_ms,
-      })
+      });
     },
     [surfaceKey, effectiveSrc],
-  )
+  );
 
-  const frameClass = ASPECT_RATIO_CLASS[aspectRatio]
+  const frameClass = ASPECT_RATIO_CLASS[aspectRatio];
 
   // Cloudflare Stream (decision 14, 2026-09-03) — streamUid takes precedence
   // over src, same as an explicit src takes precedence over the CMS lookup.
   // The existing src-based <video> path below is otherwise unchanged.
   if (streamUid) {
     return (
-      <div className={cn('w-full', className)}>
+      <div className={cn("w-full", className)}>
         <div
           data-help-video-frame
           className={cn(
-            'relative w-full overflow-hidden rounded-md bg-black',
+            "relative w-full overflow-hidden rounded-md bg-black",
             frameClass,
           )}
         >
@@ -186,19 +201,19 @@ export function VideoPlayer({
           />
         </div>
       </div>
-    )
+    );
   }
 
   // Silent absence: no usable source means we render nothing. Honor spec §13.4
   // — help-system surfaces should never block the UI when content is missing.
-  if (!effectiveSrc) return null
+  if (!effectiveSrc) return null;
 
   return (
-    <div className={cn('w-full', className)}>
+    <div className={cn("w-full", className)}>
       <div
         data-help-video-frame
         className={cn(
-          'relative w-full overflow-hidden rounded-md bg-black',
+          "relative w-full overflow-hidden rounded-md bg-black",
           frameClass,
         )}
       >
@@ -232,12 +247,12 @@ export function VideoPlayer({
             onClick={toggleTranscript}
             aria-expanded={transcriptOpen}
             className={cn(
-              'inline-flex items-center gap-1 rounded-sm text-sm font-medium',
-              'text-primary underline-offset-2 hover:underline',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              "inline-flex items-center gap-1 rounded-sm text-sm font-medium",
+              "text-primary underline-offset-2 hover:underline",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             )}
           >
-            {transcriptOpen ? 'Hide transcript' : 'Show transcript'}
+            {transcriptOpen ? "Hide transcript" : "Show transcript"}
           </button>
           {transcriptOpen ? (
             <div
@@ -250,5 +265,5 @@ export function VideoPlayer({
         </div>
       ) : null}
     </div>
-  )
+  );
 }
