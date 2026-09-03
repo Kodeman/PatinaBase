@@ -68,6 +68,68 @@ struct RoomLifecycleTests {
         #expect(viewModel.rooms.contains { $0.name == "Audit Room B" } == false)
     }
 
+    /// Studio's three derived reads all answer once the context arrives.
+    ///
+    /// They return their empty value while `context` is nil — the first body
+    /// pass, before `onAppear` — and nothing they read changes when it lands,
+    /// so the body never ran again and the screen kept the empty answer.
+    /// Observed on the clone as "Style Explorer" over a store holding
+    /// `["Warm Modern","new_space"]`; `loadData` now makes an observable write
+    /// so the pass happens.
+    @Test
+    func theDerivedReadsAnswerOnceTheContextArrives() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        _ = store.createRoom(name: "Living", roomType: "living", manualEntry: true)
+        StylePreferenceStore(context: context).upsert(
+            StylePreferenceSnapshot(
+                keywords: ["Warm Modern", "new_space"],
+                warmth: 0.75, formality: 0.5,
+                materials: ["weathered_oak"], eras: [],
+                confidence: 0.45, budgetRange: "500-2000"
+            )
+        )
+        context.insert(TableItemModel(name: "Oak Bench", productId: "p1", savedAt: Date()))
+        try context.save()
+
+        let viewModel = ProfileViewModel()
+        viewModel.accountRowsAreVisible = { true }
+
+        // Before the context: every read is empty, and nothing is cached.
+        #expect(viewModel.styleProfile == nil)
+        #expect(viewModel.savedItemCount == 0)
+        #expect(viewModel.rooms.isEmpty)
+
+        let before = viewModel.contextRevision
+        viewModel.loadData(context: context)
+        #expect(viewModel.contextRevision != before, "no observable write, so no second body pass")
+
+        #expect(viewModel.styleProfile?.keywords.first == "Warm Modern")
+        #expect(viewModel.savedItemCount == 1)
+        #expect(viewModel.rooms.count == 1)
+    }
+
+    /// …and the gate still hides an account's rows from a guest.
+    @Test
+    func aGuestReadsNeitherTheCountNorThePortrait() throws {
+        let context = try makeContext()
+        StylePreferenceStore(context: context).upsert(
+            StylePreferenceSnapshot(
+                keywords: ["Warm Modern"], warmth: 0.75, formality: 0.5,
+                materials: [], eras: [], confidence: 0.45, budgetRange: "500-2000"
+            )
+        )
+        context.insert(TableItemModel(name: "Oak Bench", productId: "p1", savedAt: Date()))
+        try context.save()
+
+        let viewModel = ProfileViewModel()
+        viewModel.accountRowsAreVisible = { false }
+        viewModel.loadData(context: context)
+
+        #expect(viewModel.styleProfile == nil)
+        #expect(viewModel.savedItemCount == 0)
+    }
+
     /// One fetch per revision, not one per read — `ProfileView` reads `rooms`
     /// three times and `roomCount` twice in a single body.
     @Test
@@ -187,11 +249,19 @@ struct RoomLifecycleTests {
     /// reconcile that may not run for thirty seconds.
     @Test
     func theConfirmedDeleteIsMirroredToTheServer() throws {
-        let source = try SourcePin.read("Patina/Features/Rooms/Views/RoomSettingsView.swift")
+        let view = try SourcePin.read("Patina/Features/Rooms/Views/RoomSettingsView.swift")
         let delete = try #require(
-            source.components(separatedBy: "private func deleteRoom() {").last?
+            view.components(separatedBy: "private func deleteRoom() {").last?
                 .components(separatedBy: "\n    }").first
         )
-        #expect(delete.contains("RoomsAPIClient.shared.deleteRoom(id:"))
+        #expect(delete.contains("RoomRemoteDelete.mirror(remoteId)"))
+
+        let store = try SourcePin.read("Patina/Core/Persistence/RoomTombstones.swift")
+        let mirror = try #require(
+            store.components(separatedBy: "static func mirror(_ remoteId: String) {").last?
+                .components(separatedBy: "\n    }").first
+        )
+        #expect(mirror.contains("RoomsAPIClient.shared.deleteRoom(id: remoteId)"))
+        #expect(mirror.contains("RoomTombstones.clear(remoteId)"))
     }
 }

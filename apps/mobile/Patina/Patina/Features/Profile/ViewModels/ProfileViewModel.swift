@@ -65,12 +65,30 @@ final class ProfileViewModel {
     @ObservationIgnored private var cachedStyleRevision: Int = -1
     @ObservationIgnored private var cachedStyleProfile: StylePreferenceModel?
 
+    /// Bumped by `loadData(context:)`, and deliberately NOT
+    /// `@ObservationIgnored`.
+    ///
+    /// The derived reads below all return their empty value while `context`
+    /// is still nil, which it is on the first body pass — `onAppear` has not
+    /// run yet. Nothing they read changes when the context finally arrives,
+    /// so without an observable write here the body never runs again and the
+    /// screen keeps the empty answer: sim-observed as "Style Explorer" over a
+    /// store holding `["Warm Modern", …]`. Every derived read below touches
+    /// this so that write re-runs the body.
+    private(set) var contextRevision = 0
+
+    /// GAP3-18/B-15's gate. Injectable so a test can read these without
+    /// constructing `AuthService.shared` — the same stall `RoomStore` had to
+    /// stop paying for (RL1B-01).
+    @ObservationIgnored
+    var accountRowsAreVisible: () -> Bool = { LocalStoreOwnership.accountRowsAreVisible }
+
     /// GAP3-18/B-15's gate, derived rather than snapshotted — see `rooms`.
     /// A stored count taken in one `loadData` stayed at `0` for the whole of
     /// a window `rooms` recovered from on the next signal bump.
     var savedItemCount: Int {
-        let revision = LocalRoomSignal.shared.revision
-        guard let context, LocalStoreOwnership.accountRowsAreVisible else { return 0 }
+        let revision = LocalRoomSignal.shared.revision &+ contextRevision
+        guard let context, accountRowsAreVisible() else { return 0 }
         if revision != cachedItemRevision {
             cachedItemCount = (try? context.fetchCount(FetchDescriptor<TableItemModel>())) ?? 0
             cachedItemRevision = revision
@@ -81,8 +99,8 @@ final class ProfileViewModel {
     /// The taste portrait is the account's, and a guest left behind by a
     /// sign-out is not it (B-15).
     var styleProfile: StylePreferenceModel? {
-        let revision = LocalRoomSignal.shared.revision
-        guard let context, LocalStoreOwnership.accountRowsAreVisible else { return nil }
+        let revision = LocalRoomSignal.shared.revision &+ contextRevision
+        guard let context, accountRowsAreVisible() else { return nil }
         if revision != cachedStyleRevision {
             let descriptor = FetchDescriptor<StylePreferenceModel>(
                 sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
@@ -103,7 +121,7 @@ final class ProfileViewModel {
     /// GAP3-18: the fetch runs through `RoomStore`, so the guest left behind
     /// by a sign-out no longer reads the account's rooms.
     var rooms: [RoomModel] {
-        let revision = LocalRoomSignal.shared.revision
+        let revision = LocalRoomSignal.shared.revision &+ contextRevision
         guard let context else { return [] }
         if revision != cachedRevision {
             cachedRooms = RoomStore(context: context).allRooms()
@@ -161,5 +179,7 @@ final class ProfileViewModel {
         cachedRevision = -1
         cachedItemRevision = -1
         cachedStyleRevision = -1
+        // …and make sure there IS a next pass. See `contextRevision`.
+        contextRevision &+= 1
     }
 }

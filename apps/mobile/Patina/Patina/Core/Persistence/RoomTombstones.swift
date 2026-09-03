@@ -55,3 +55,28 @@ enum RoomTombstones {
         UserDefaults.standard.removeObject(forKey: defaultsKey)
     }
 }
+
+/// The other half of a confirmed delete: the row on the server.
+///
+/// Fire-and-forget on purpose — the person has already been taken back to
+/// the list, and the tombstone above is what keeps the room off the screen
+/// whether or not this lands. A failure is retried from the next reconcile
+/// (`RoomSyncCoordinator.retryPendingDeletes`).
+@MainActor
+enum RoomRemoteDelete {
+
+    static func mirror(_ remoteId: String) {
+        Task {
+            do {
+                try await RoomsAPIClient.shared.deleteRoom(id: remoteId)
+                RoomTombstones.clear(remoteId)
+            } catch {
+                #if DEBUG
+                PatinaLog.sync.error(
+                    "[Rooms] remote delete failed: \(error.localizedDescription)"
+                )
+                #endif
+            }
+        }
+    }
+}

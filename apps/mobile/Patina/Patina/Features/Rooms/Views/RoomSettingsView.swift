@@ -335,20 +335,7 @@ struct RoomSettingsView: View {
         // here is retried from the next reconcile.
         let remoteId = room.remoteId
         RoomStore(context: modelContext).delete(room)
-        if let remoteId {
-            Task {
-                do {
-                    try await RoomsAPIClient.shared.deleteRoom(id: remoteId)
-                    RoomTombstones.clear(remoteId)
-                } catch {
-                    #if DEBUG
-                    PatinaLog.sync.error(
-                        "[Rooms] remote delete failed: \(error.localizedDescription)"
-                    )
-                    #endif
-                }
-            }
-        }
+        if let remoteId { RoomRemoteDelete.mirror(remoteId) }
         // B-04: one `goBack()` popped onto the room's own detail, whose
         // lookup now misses — so a second after confirming the delete the
         // person was told "This room isn't on this phone / It may have been
