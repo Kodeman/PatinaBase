@@ -24,6 +24,22 @@ public final class PersistenceController {
     /// over. `LocalStoreRecovery.shared.pending` carries the detail.
     public private(set) var didRecoverStore = false
 
+    /// The device-global main context, once something has actually built it.
+    ///
+    /// Read instead of `shared.container.mainContext` by anything that only
+    /// needs to *recognise* the shared store. Touching `shared` to answer that
+    /// question opens the real on-disk store — in the app that is free (it is
+    /// already open), in a test process it is a main-actor stall every suite
+    /// pays for (RL1B-01).
+    private(set) static var loadedSharedContext: ModelContext?
+
+    /// Whether this context is the one every screen reads. `false` for a
+    /// context a caller brought itself, and `false` before the app has opened
+    /// its store — which is the honest answer, not a reason to open it.
+    public static func isSharedContext(_ context: ModelContext) -> Bool {
+        context === loadedSharedContext
+    }
+
     // MARK: - Initialization
 
     private init() {
@@ -36,6 +52,7 @@ public final class PersistenceController {
 
         let opened = Self.open(schema: schema, configuration: configuration)
         container = opened.container
+        Self.loadedSharedContext = opened.container.mainContext
         didRecoverStore = opened.recovery != nil
         if let recovery = opened.recovery {
             LocalStoreRecovery.shared.record(recovery)

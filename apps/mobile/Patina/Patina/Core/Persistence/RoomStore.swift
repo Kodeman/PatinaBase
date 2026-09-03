@@ -26,7 +26,7 @@ public final class RoomStore {
 
     public init(context: ModelContext) {
         self.context = context
-        self.isSharedStore = context === PersistenceController.shared.container.mainContext
+        self.isSharedStore = PersistenceController.isSharedContext(context)
     }
 
     // MARK: - Reads
@@ -304,6 +304,10 @@ public final class RoomStore {
     }
 
     public func delete(_ room: RoomModel) {
+        // B-03: a synced room deleted here is still a row on the server, and
+        // the next reconcile re-created it. The tombstone is what the merge
+        // reads so a delete the server has not confirmed is still a delete.
+        if let remoteId = room.remoteId { RoomTombstones.record(remoteId) }
         context.delete(room)
         save()
         // B-03: Studio kept reporting "2 ROOMS" and kept rendering the card

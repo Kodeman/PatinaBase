@@ -163,4 +163,28 @@ struct PersistenceMigrationTests {
         let source = try SourcePin.read("Patina/PatinaApp.swift")
         #expect(source.contains(".localStoreRecoveryNotice()"))
     }
+
+    /// Building a `RoomStore` must not build the app's on-disk store.
+    ///
+    /// `RoomStore.init` resolved its ownership gate by comparing against
+    /// `PersistenceController.shared.container.mainContext`, which opens the
+    /// real store on the main actor inside the test process. Every suite that
+    /// builds a store paid for it, and `OrderHandoffTests.waitFor`'s 3 s
+    /// main-actor budget started losing the race (review RL1B-01/RL1B-21).
+    @Test
+    func aStoreOnItsOwnContextNeverTouchesTheSingleton() throws {
+        let source = try SourcePin.read("Patina/Core/Persistence/RoomStore.swift")
+        #expect(source.contains("PersistenceController.shared") == false)
+    }
+
+    /// The fact the gate needs, answered without opening anything: a context
+    /// nobody registered as the shared one is not the shared one.
+    @Test
+    func anUnregisteredContextIsNotTheSharedStore() throws {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: PatinaSchemaV1.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        #expect(PersistenceController.isSharedContext(ModelContext(container)) == false)
+    }
 }
