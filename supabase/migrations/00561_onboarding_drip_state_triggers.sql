@@ -89,25 +89,45 @@
 -- `wait` steps have their `delay_days` raised via GREATEST(existing, 7) —
 -- trivially idempotent.
 --
--- ─── ⚠ Known risk: in-flight enrollments ────────────────────────────────
+-- ─── Enrollment remap ────────────────────────────────────────────────────
 --
 -- `sequence_enrollments.current_step` (00292) is a positional INDEX into
 -- this row's steps_json array. Replacing 6 conditions in place is index-
 -- neutral, but INSERTING two new gate steps (before E4 and E9) shifts every
--- array position from that point on. Any designer already enrolled and
--- past the old index for E4/E9 (or beyond) at the moment this migration
--- applies will have a `current_step` that now points at the wrong step —
--- the array shifted out from under them. This migration does not attempt to
--- reconcile `sequence_enrollments` rows (out of L9's Files/Interfaces scope
--- and this migration touches automated_sequences only, per the plan's
--- constraint not to touch other tables/sequences). Flagging for the
--- deploy/integration steward: before `supabase db push` ships this to
--- Strata, check `SELECT count(*) FROM sequence_enrollments se JOIN
--- automated_sequences s ON s.id = se.sequence_id WHERE s.name = 'Designer
--- Onboarding' AND se.status = 'active'` — if nonzero, current_step values
--- for rows already past old index 8 (E4) need manual remapping to the new
--- array before/alongside this push, or those designers will silently skip
--- or repeat steps.
+-- array position from that point on, so this migration reconciles
+-- `sequence_enrollments` in the same transaction as the steps_json rewrite:
+--
+--   1. Every step in both the OLD (v_steps) and NEW (v_new_steps) arrays
+--      carries a stable `id` (00294's `donb_N` ids; this migration's own
+--      inserted gates use `donb_gate_<template_id>`). Two maps are built
+--      via jsonb_object_agg over `jsonb_array_elements(...) WITH
+--      ORDINALITY`: old array-index -> id, and new id -> new array-index.
+--   2. The six legacy `yes_step` condition steps this migration DROPS are
+--      recorded, at the moment each is dropped, into a third map: dropped
+--      step's old id -> the id of the new gate that replaced it (same
+--      email target, same event) — built inline in the loop below, right
+--      next to where the drop and the insert both happen.
+--   3. For every `sequence_enrollments` row on this sequence with
+--      status IN ('active','paused') (sequence_enrollments.status is plain
+--      TEXT — no enum/CHECK constrains it per 00044_campaigns.sql; the
+--      automation-processor only ever writes 'active'/'completed'/
+--      'unsubscribed' today, but 'paused' is included defensively since
+--      nothing rules it out), current_step's old id is looked up, routed
+--      through the dropped-step substitution map if the id no longer
+--      exists in the new array, and resolved to a new index. A changed
+--      index is written back along with a step_history entry
+--      `{migration:'00561', old_step, new_step, remapped_at}` so the
+--      remap is auditable per-enrollment. Rows already 'completed' are
+--      untouched — their current_step is a historical marker, not a live
+--      cursor the processor will read again.
+--   4. Idempotent by construction: the whole remap block (and the
+--      steps_json UPDATE itself) is skipped when `v_new_steps IS NOT
+--      DISTINCT FROM v_steps` — a second run has nothing left to change,
+--      so it remaps nothing and RAISEs NOTICE saying so.
+--
+-- (Fallback note: if any step here lacked an `id`, the map keys would need
+-- to be the tuple (type, template_id, position) instead — not needed for
+-- this row, since every donb_N / donb_gate_* step carries one.)
 --
 -- Per the task brief: who/when flipped 'Designer Onboarding' to status=
 -- 'active' is unknown to this migration's author — 00294 left it 'draft'
@@ -143,6 +163,16 @@ DECLARE
   v_len         int;
   v_new_cond    jsonb;
   i             int;
+  -- Enrollment remap working state
+  v_replaced_map    jsonb := '{}'::jsonb;   -- dropped legacy condition id -> replacement gate id
+  v_old_prev_step   jsonb;
+  v_old_id_by_idx   jsonb;                  -- old array index (text) -> step id
+  v_new_idx_by_id   jsonb;                  -- step id -> new array index
+  v_target_id       text;
+  v_old_id          text;
+  v_new_idx         int;
+  v_remap_count     int := 0;
+  r_enroll          record;
 BEGIN
   SELECT id, steps_json INTO v_id, v_steps
   FROM public.automated_sequences
@@ -198,6 +228,27 @@ BEGIN
           )
         );
         v_new_steps := v_new_steps || jsonb_build_array(v_new_cond);
+
+        -- If the step immediately preceding this email in the OLD array was
+        -- the legacy yes_step condition for this same event, it is the one
+        -- about to be dropped by the ELSIF branch below (it was already
+        -- visited, at i-1, in the previous loop iteration). Record its old
+        -- id -> this new gate's id so an enrollment currently sitting on
+        -- that dropped step remaps to its replacement, not to a gap.
+        IF i > 0 THEN
+          v_old_prev_step := v_steps -> (i - 1);
+          IF v_old_prev_step ->> 'type' = 'condition'
+             AND (v_old_prev_step -> 'config') ? 'yes_step'
+             AND (v_old_prev_step -> 'config' ->> 'event') = v_event
+             AND (v_old_prev_step ->> 'id') IS NOT NULL
+          THEN
+            v_replaced_map := jsonb_set(
+              v_replaced_map,
+              ARRAY[v_old_prev_step ->> 'id'],
+              to_jsonb(v_new_cond ->> 'id')
+            );
+          END IF;
+        END IF;
       END IF;
 
       v_new_steps := v_new_steps || jsonb_build_array(v_step);
@@ -216,10 +267,74 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- Idempotency guard: a second run over an already-migrated row produces
+  -- v_new_steps identical to v_steps — skip both the UPDATE and the
+  -- enrollment remap below (nothing changed, so nothing to remap).
+  IF v_new_steps IS NOT DISTINCT FROM v_steps THEN
+    RAISE NOTICE '00561: Designer Onboarding steps_json unchanged (already migrated) — skipping update and enrollment remap';
+    RETURN;
+  END IF;
+
   UPDATE public.automated_sequences
   SET steps_json = v_new_steps,
       updated_at = now()
   WHERE id = v_id;
+
+  -- ─── Remap in-flight enrollments' current_step ──────────────────────────
+  SELECT jsonb_object_agg((ord - 1)::text, elem ->> 'id')
+  INTO v_old_id_by_idx
+  FROM jsonb_array_elements(v_steps) WITH ORDINALITY AS a(elem, ord);
+
+  SELECT jsonb_object_agg(elem ->> 'id', (ord - 1))
+  INTO v_new_idx_by_id
+  FROM jsonb_array_elements(v_new_steps) WITH ORDINALITY AS a(elem, ord);
+
+  FOR r_enroll IN
+    SELECT id, current_step
+    FROM public.sequence_enrollments
+    WHERE sequence_id = v_id
+      AND status IN ('active', 'paused')
+    FOR UPDATE
+  LOOP
+    v_old_id := v_old_id_by_idx ->> r_enroll.current_step::text;
+
+    IF v_old_id IS NULL THEN
+      RAISE WARNING '00561: enrollment % has current_step % with no matching old step id — left untouched', r_enroll.id, r_enroll.current_step;
+      CONTINUE;
+    END IF;
+
+    v_target_id := v_old_id;
+    IF NOT (v_new_idx_by_id ? v_target_id) AND (v_replaced_map ? v_target_id) THEN
+      -- The step this enrollment was sitting on was one of the legacy
+      -- yes_step conditions this migration replaced — route to its
+      -- replacement gate (same email target, same event).
+      v_target_id := v_replaced_map ->> v_target_id;
+    END IF;
+
+    IF v_new_idx_by_id ? v_target_id THEN
+      v_new_idx := (v_new_idx_by_id ->> v_target_id)::int;
+
+      IF v_new_idx <> r_enroll.current_step THEN
+        UPDATE public.sequence_enrollments
+        SET current_step = v_new_idx,
+            step_history = step_history || jsonb_build_array(
+              jsonb_build_object(
+                'migration', '00561',
+                'old_step', r_enroll.current_step,
+                'new_step', v_new_idx,
+                'remapped_at', now()
+              )
+            )
+        WHERE id = r_enroll.id;
+
+        v_remap_count := v_remap_count + 1;
+      END IF;
+    ELSE
+      RAISE WARNING '00561: enrollment % old step id % has no home in the new steps_json — left untouched', r_enroll.id, v_old_id;
+    END IF;
+  END LOOP;
+
+  RAISE NOTICE '00561: remapped % in-flight Designer Onboarding enrollment(s)', v_remap_count;
 END $$;
 
 -- ─── Manual verification (Strata / any environment, no supabase CLI reset) ──
