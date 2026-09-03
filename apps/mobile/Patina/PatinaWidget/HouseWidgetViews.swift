@@ -143,7 +143,15 @@ private struct MediumHomeView: View {
                     .lineLimit(3)
             } else {
                 VStack(alignment: .leading, spacing: PatinaSpacing.sm) {
-                    ForEach(snapshot.drawableRows, id: \.title) { row in
+                    // Keyed on the whole row, not its title: two MOVED rows can
+                    // say the same sentence — "A new story from the workshop."
+                    // is a recurring line — and duplicate `ForEach` ids make
+                    // SwiftUI drop or mis-associate one of them, which on this
+                    // family means a row whose `Link` opens the other row's
+                    // destination. `id` alone is not enough either: it is
+                    // optional on the wire, for payloads written before it
+                    // existed.
+                    ForEach(snapshot.drawableRows, id: \.self) { row in
                         Link(destination: PatinaWidgetLinks.link(for: row)) {
                             MovedRowView(row: row)
                         }

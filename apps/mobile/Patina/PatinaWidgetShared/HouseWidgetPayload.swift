@@ -29,7 +29,7 @@
 import Foundation
 
 /// One thing that moved, as the app worded it.
-struct HouseWidgetPayloadRow: Codable, Equatable, Sendable {
+struct HouseWidgetPayloadRow: Codable, Hashable, Sendable {
 
     /// `HouseRecordRow.id`, verbatim, when the app sent one. It is the whole
     /// payload of `patina://record/<id>`: the app resolves it back to the row's

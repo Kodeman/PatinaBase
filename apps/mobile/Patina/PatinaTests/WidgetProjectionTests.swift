@@ -157,4 +157,30 @@ struct WidgetProjectionTests {
         ])
         #expect(projected.sinceDate == referenceDate.addingTimeInterval(-604_800))
     }
+
+    // MARK: - Rows are told apart by identity, not by what they say (round 2)
+
+    /// Two MOVED rows can carry the same sentence — "A new story from the
+    /// workshop." is a recurring line — and duplicate `ForEach` ids make
+    /// SwiftUI drop or mis-associate one of them. On the medium family that
+    /// means a row whose `Link` opens the other row's destination, which is
+    /// `GAP7B-04` again by a different door.
+    @Test("two rows that say the same thing are still two rows")
+    func rowsAreKeyedByIdentityNotTitle() throws {
+        let sameTitle = "A new story from the workshop."
+        let first = HouseWidgetPayloadRow(id: "story:1", title: sameTitle, date: referenceDate)
+        let second = HouseWidgetPayloadRow(
+            id: "story:2", title: sameTitle, date: referenceDate.addingTimeInterval(-3600)
+        )
+
+        #expect(first != second)
+        #expect(Set([first, second]).count == 2)
+    }
+
+    @Test("the widget does not key a row list on its title")
+    func theWidgetDoesNotKeyOnTitle() throws {
+        let code = SourceScan.code(in: try SourcePin.read("PatinaWidget/HouseWidgetViews.swift"))
+        #expect(code.contains("id: \\.title") == false)
+        #expect(code.contains("ForEach(snapshot.drawableRows, id: \\.self)"))
+    }
 }
