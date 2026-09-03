@@ -554,3 +554,151 @@ text, written to `build/waves/w1/l1e-notes-out.md` **and** appended to the targe
 - [ ] `apps/mobile/Patina/scripts/ios-gate.sh release`
 - [ ] `apps/mobile/Patina/scripts/ios-gate.sh unit`
 - [ ] `apps/mobile/Patina/scripts/ios-gate.sh lint-delta main`
+
+---
+
+# Fix round 3 (review `RL1E3-01` … `RL1E3-10`, 2026-09-03)
+
+`IOS_GATE_UDID=2AF6D0CA-91AB-446E-AFA3-4C126AD5827B`
+
+**The VISION check.** Ten findings, ten fixes. Nine are a test's scan rule, a deck record, or an
+apostrophe glyph. The tenth (`RL1E3-06`) rewrites one dead error string in
+`ARPlacementManager.swift`. None adds or entrenches a tab, a zone, a dashboard, a shadow, red/green
+status, a badge, an engagement mechanic, or the word "AI" — and `RL1E3-07`'s change makes the
+standalone-`AI` and `Portal` needles read *literals* instead of whole files, which narrows what the
+gate can be satisfied by rather than widening it. No exception is claimed.
+
+**The notes I must apply.** Three sections of `l1-e-notes.md` are new since fix round 2 read it
+(the file's mtime moved to 23:54, four minutes after this branch's last round-3 commit), and all
+three are addressed to L1-E by name. Read from the shared main checkout at
+`/Users/kody/Code/patina-merged/artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/l1-e-notes.md`.
+
+| # | note | task |
+|---|---|---|
+| 1 | **Note A→E-1** (`:292-333`, from L1-A, `RL2A-07`) — `AuthService.authErrorSentence(_:)` landed with six draft sentences; "the words are yours", and L1-A asks whether `C4-22` (the deep-link error redirect) inherits them at W2 | **H5** — ratified as written, as a deck row, with the one wording objection recorded; `C4-22` answered |
+| 2 | **Note A→E-2** (`:334-360`, from L1-A, `RL2A-08`) — L1-A **agrees** that `A-101`'s sentence names no retention period, and pins the exception in `DeleteAccountCopyTests.noFabricatedWindow` | **H5** — this is the referent `RL1E2-24` was left open for; recorded in the deck's exceptions table and **closed** |
+| 3 | **Note A→E-3** (`:361-410`, from L1-A) — what landed; `A-06`'s scope taken literally (nine strings, not five); two rows L1-A cannot reach; the pin-naming heads-up | **H5** — both unreachable rows already have deck rows (`QuizModels.swift:112` in revision 3, `StyleResponseModel.swift:97` likewise); `:99`'s `"Let's Discuss"` is the one byte with no row and gets one in **H6** |
+
+**The notes I will send.** Round-4 blocks to `l1-c-notes.md`, `l1-f-notes.md` and `l1-b-notes.md`,
+with the exact final text, written to `build/waves/w1/l1e-notes-out.md` **and** appended to the
+target lane's `<lane>-notes.md` in the shared main checkout (Task **H6**). This branch does not
+track those five inbox files — Task G1 dropped them on purpose — so the append is to the main
+checkout's working copy only, never committed here.
+
+| target | rows |
+|---|---|
+| `l1-c-notes.md` | `A-52` / `CompanionActionRows.swift:38` — `"See what's on Patina"` shipped with U+0027 (`RL1E3-01`) |
+| `l1-f-notes.md` | `A-06` / `MessagingViewModel.swift:413` — the send-failure sentence, U+0027 (`RL1E3-04`); `AppCoordinator.swift:109` named as **W2**, not W1, with the reason |
+| `l1-b-notes.md` | `A-06` / `StyleResponseModel.swift:99` — `"Let's Discuss"`, the one byte Note A→E-3 flags that had no row |
+
+---
+
+## Fix-round-3 coverage — every review finding to a task
+
+| id | sev | task | test that pins it |
+|---|---|---|---|
+| `RL1E3-01` | blocker | **H3**, **H6** | `BrandVoiceLintTests.companionActionRowsApostrophesAreCurly` (new pin) + `GuestPromiseTests.companionRowBuilderTakesAuthState` / `.companionHomeRowSpeaksToAGuest` (the split) |
+| `RL1E3-02` | major | **H5** | — (deck record; the branches are re-read and quoted) |
+| `RL1E3-03` | major | **H1**, **H2** | `BrandVoiceLintTests.ownedGlobsAreClean` + `.ownedGlobApostrophesAreCurly` — a **directory walk**, not a list |
+| `RL1E3-04` | major | **H3**, **H6** | `BrandVoiceLintTests.messagingViewModelApostrophesAreCurly` (new pin) |
+| `RL1E3-05` | major | **H7**, report | the unwrap task itself, with the expected count; the ordering constraint goes to the steward |
+| `RL1E3-06` | minor | **H1**, **H2** | `ownedGlobApostrophesAreCurly` + `ARPlacementFailureCopyTests.loadFailureMessageIsInTheAppVoice` |
+| `RL1E3-07` | minor | **H4** | the three needles now read `BrandVoiceLintTests.stringLiterals(in:)` |
+| `RL1E3-08` | minor | **H4** | `ARPlacementFailureCopyTests.saveFailureMessageIsFixed` matches `"be completed"`, glyph-agnostic |
+| `RL1E3-09` | minor | **H5**, **H6** | — (deck record + the corrected note to L1-C) |
+| `RL1E3-10` | minor | **H5**, report | — (ownership record; `git merge-tree` result quoted) |
+
+---
+
+## Task H1 — failing tests: the owned globs, walked (`RL1E3-03`, `RL1E3-06`)
+
+- [ ] In `PatinaTests/BrandVoiceLintTests.swift`, add `ownedDirectories = ["Patina/Features/ARPlacement",
+  "Patina/Services/DesignServices"]` and a walker built on the existing `SourcePin.swiftFiles(under:)`.
+- [ ] Add `@Test ownedGlobsAreClean` and `@Test ownedGlobApostrophesAreCurly` over the walk, each
+  asserting the walk found at least seven files first — a rename must be a hard failure, not an
+  empty-set pass.
+- [ ] Drop `ARPlacementView.swift`, `ARPlacementViewModel.swift` and `DesignServicesService.swift`
+  from `deckFiles`: the walk covers them, and a file in two lists is a file whose real coverage
+  nobody can read off the source.
+- [ ] Add `@Test loadFailureMessageIsInTheAppVoice` to `ARPlacementFailureCopyTests`, pinning the new
+  `ARPlacementManager` sentence.
+- [ ] Run `ios-gate.sh unit` → **RED**, naming `DesignRequestStatusService.swift`,
+  `DesignRequestCoordinator.swift` and `ARPlacementManager.swift`.
+- [ ] Commit `test(copy): walk L1-E's own globs instead of listing four of their seven files`.
+
+## Task H2 — implement: sweep the globs (`RL1E3-03`, `RL1E3-06`)
+
+- [ ] `Services/DesignServices/DesignRequestStatusService.swift` — eight reader-facing sentences to
+  U+2019 (`:123,138,146,148,150,173,180,182`). `:193`'s `"EEE, MMM d 'at' h:mm a"` is a
+  `DateFormatter` pattern: the quotes are its escape syntax and **must not** move.
+- [ ] `Services/DesignServices/DesignRequestCoordinator.swift` — `:315,337,364` to U+2019.
+- [ ] `Features/ARPlacement/Services/ARPlacementManager.swift:133` —
+  `"Couldn't load 3D model"` → `"We couldn’t load this piece. Try again."`
+- [ ] Run `ios-gate.sh unit` → **GREEN**.
+- [ ] Commit `fix(copy): the design-request status sentences, and one voice on an AR load failure`.
+
+## Task H3 — the two pins the lint could not see (`RL1E3-01`, `RL1E3-04`)
+
+- [ ] `BrandVoiceLintTests`: add `companionActionRowsApostrophesAreCurly` (`pinDirtyToday`,
+  `Features/Companion/Services/CompanionActionRows.swift`) and
+  `messagingViewModelApostrophesAreCurly` (`pinDirtyToday`,
+  `Features/Messaging/ViewModels/MessagingViewModel.swift`).
+- [ ] `GuestPromiseTests`: split `companionRowsBranchOnAuthState` into
+  `companionRowBuilderTakesAuthState` (the `isAuthenticated` mechanism) and
+  `companionHomeRowSpeaksToAGuest` (the exact sentence), so the mechanism landing while the string is
+  wrong is visible — the `RL1E2-05` shape, which this one wrapper still had.
+- [ ] Run → both new pins record a known issue; the split pair records two.
+- [ ] Commit `test(copy): pin the two cross-lane files the deck's own rows live in`.
+
+## Task H4 — needles that can only match what a reader sees (`RL1E3-07`, `RL1E3-08`)
+
+- [ ] `NounConsistencyTests`: `companionMenuPromisesNoPortal`, `profileHeaderIsRetired` and
+  `theQuizNudgeIsGone` scan `BrandVoiceLintTests.stringLiterals(in:)`, not the whole source — the
+  approach the sibling `roleWordsCollapseToOnePerKind` already takes in the same file.
+- [ ] `ARPlacementFailureCopyTests.saveFailureMessageIsFixed`: `"couldn't be completed"` →
+  `"be completed"`. `NSError.localizedDescription` renders that phrase with **U+2019** on current
+  iOS, so the straight-apostrophe needle could not match its own subject.
+- [ ] Run → green, same known-issue count.
+- [ ] Commit `test(copy): three needles that matched comments, and one that matched the wrong glyph`.
+
+## Task H5 — deck revision 4 (`RL1E3-02`, `-05`, `-09`, `-10`, and the three A→E notes)
+
+- [ ] Correct the status column: `StyleResultView.swift:54`, `CrossRoomView.swift:64,81`,
+  `RoomProjectView.swift:212` and **both** `CompanionActionRows.swift` `A-52` rows are applied on
+  their owning branches — quote the line as it stands there. `ProfileView.swift:222` and `:148`
+  are the only two rows still genuinely open.
+- [ ] `RL1E3-05`: record that `roomsAPIClientApostrophesAreCurly` is green here and goes **red the
+  moment L1-B merges**, and that the unwrap pass (Task H7) has an owner and a count.
+- [ ] `RL1E3-09`: the `C5-06` consequence row gains "at default Dynamic Type", and says the four-tab
+  root wraps at accessibility sizes too.
+- [ ] `RL1E3-10`: record that `CollectionsViewModel.swift` sits inside L1-B's glob and that
+  `git merge-tree` is clean — a ratification item, not a repair.
+- [ ] Note A→E-1: ratify the five auth sentences plus the catch-all; answer the `C4-22` question.
+- [ ] Note A→E-2: fold L1-A's agreement into the `A-101` exception row and mark `RL1E2-24` closed.
+- [ ] Commit `docs(first-flight): copy deck revision 4`.
+
+## Task H6 — notes out, round 4
+
+- [ ] Rewrite `l1e-notes-out.md` with the three round-4 blocks; append each to its target's
+  `<lane>-notes.md` in the shared main checkout.
+- [ ] Commit `docs(first-flight): round-4 notes to L1-B, L1-C and L1-F`.
+
+## Task H7 — the unwrap pass, scheduled (`RL1E3-05`)
+
+- [ ] Write it as a numbered task in this file with the expected count and the exact command that
+  produces it, so the "all seven suites green on the integration tip" exit criterion has a step
+  behind it instead of a hope. It runs **after** this lane rebases onto the integration tip, which
+  is after merge 5 (D14: L1-C → L1-D → L1-B → L1-F → L1-A → L1-E).
+- [ ] Commit with H5.
+
+## Task H8 — self-check on the clone
+
+- [ ] Launch with `-DeploymentTarget local`, no `-PatinaFlags`; screenshot the one screen whose
+  rendered copy this round changes into `shots/w1-l1e/`; one ledger line per shot.
+
+## Task H9 — gate
+
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh build`
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh release`
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh unit`
+- [ ] `apps/mobile/Patina/scripts/ios-gate.sh lint-delta main`
