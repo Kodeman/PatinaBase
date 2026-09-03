@@ -43,7 +43,7 @@ final class ARPlacementViewModel {
     /// Swift's own default description — module name and all — into a save
     /// toast. One fixed sentence instead; the thrown error is still logged,
     /// never shown.
-    static let saveFailureMessage = "We couldn't save this. Try again."
+    static let saveFailureMessage = "We couldn’t save this. Try again."
 
     // MARK: - Room mesh
 
@@ -90,9 +90,9 @@ final class ARPlacementViewModel {
             )
             await MainActor.run { self.saveState = .saved }
         } catch {
-            #if DEBUG
-            PatinaLog.ui.error("[ARPlacement] save failed: \(error.localizedDescription)")
-            #endif
+            // os.Logger error level survives into a Release archive, which
+            // is where a TestFlight tester’s failed save has to be readable.
+            PatinaLog.ui.error("[ARPlacement] save failed: \(error)")
             await MainActor.run {
                 self.saveState = .failed(Self.saveFailureMessage)
             }

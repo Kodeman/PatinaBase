@@ -13,7 +13,7 @@ import SwiftUI
 
 struct PatinaErrorState: View {
     let message: String
-    var retryLabel: String = "Let's try that again"
+    var retryLabel: String = "Let’s try that again"
     var action: (() -> Void)?
 
     var body: some View {

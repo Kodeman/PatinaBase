@@ -144,8 +144,8 @@ extension DesignRequestFlowView {
     private var offlineCard: some View {
         infoCard(
             icon: "wifi.slash",
-            title: "You're offline",
-            body: "We'll save your request. Reconnect and it will pick up right where you left off."
+            title: "You’re offline",
+            body: "We’ll save your request. Reconnect and it will pick up right where you left off."
         )
     }
 
@@ -198,14 +198,14 @@ extension DesignRequestFlowView {
                 // branch above; reaching here means we're idle — a fresh entry
                 // or a RESUMED draft (submit never auto-fires on resume). Always
                 // offer an explicit submit so a resumed roomless request can't
-                // strand on a dead spinner; "Let's try that again" once an
+                // strand on a dead spinner; "Let’s try that again" once an
                 // attempt failed.
-                PatinaButton(coordinator.lastError != nil ? "Let's try that again" : "Send request",
+                PatinaButton(coordinator.lastError != nil ? "Let’s try that again" : "Send request",
                              style: .primary) {
                     Task { await coordinator.submit() }
                 }
             } else if hasFailedUpload {
-                PatinaButton("Let's try that again", style: .primary) {
+                PatinaButton("Let’s try that again", style: .primary) {
                     Task { await coordinator.retryAllFailed(); await maybeSubmit() }
                 }
             } else if allUploaded {
@@ -264,12 +264,12 @@ extension DesignRequestFlowView {
         // Push (W3-push): pairs with the authorization prompt this screen
         // triggers — names what the notification is FOR, not that one
         // exists.
-        let pushNote = " We'll tell you the instant a designer takes this in hand."
+        let pushNote = " We’ll tell you the instant a designer takes this in hand."
         guard let result = coordinator?.result else {
             return "A designer will reach out soon." + followUp + pushNote
         }
         let lead = result.pooled
-            ? "We're matching you with a designer. You'll hear back soon."
+            ? "We’re matching you with a designer. You’ll hear back soon."
             : "Your designer has your request and will reach out soon."
         return lead + followUp + pushNote
     }
