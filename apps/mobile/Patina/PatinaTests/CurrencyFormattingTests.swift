@@ -132,8 +132,10 @@ struct CurrencyFormattingTests {
             var sawDigit = false
             while index < after.endIndex {
                 let character = after[index]
-                if character.isNumber { sawDigit = true }
-                else if character == "." || character == "," || character == "–" || character == "-" || character == "$" {
+                if character.isNumber {
+                    sawDigit = true
+                } else if character == "." || character == "," || character == "–"
+                            || character == "-" || character == "$" {
                     // still inside the figure
                 } else {
                     if character == "K" && sawDigit { count += 1 }

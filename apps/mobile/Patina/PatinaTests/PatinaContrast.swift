@@ -111,8 +111,8 @@ enum PatinaContrast {
     ) -> Color {
         let over = components(wash, style)
         let under = components(ground, style)
-        func blend(_ a: CGFloat, _ b: CGFloat) -> Double {
-            Double(a) * opacity + Double(b) * (1 - opacity)
+        func blend(_ front: CGFloat, _ back: CGFloat) -> Double {
+            Double(front) * opacity + Double(back) * (1 - opacity)
         }
         return Color(
             .sRGB,
