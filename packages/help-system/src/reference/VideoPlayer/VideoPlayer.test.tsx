@@ -449,6 +449,70 @@ describe('<VideoPlayer />', () => {
     expect(container.querySelector('video')?.getAttribute('src')).toBe(explicitSrc)
   })
 
+  // ── 10. streamUid — Cloudflare Stream iframe ────────────────────────────────
+
+  it('renders a Cloudflare Stream iframe when streamUid is provided', () => {
+    const { Wrapper } = makeWrapper()
+    const { container } = render(
+      <Wrapper>
+        <VideoPlayer streamUid="abc123def456" />
+      </Wrapper>,
+    )
+
+    const iframe = container.querySelector('iframe')
+    expect(iframe).not.toBeNull()
+    expect(iframe?.getAttribute('src')).toBe(
+      'https://iframe.videodelivery.net/abc123def456',
+    )
+  })
+
+  it('sets allowFullScreen on the Cloudflare Stream iframe', () => {
+    const { Wrapper } = makeWrapper()
+    const { container } = render(
+      <Wrapper>
+        <VideoPlayer streamUid="abc123def456" />
+      </Wrapper>,
+    )
+
+    const iframe = container.querySelector('iframe')
+    expect(iframe).toHaveAttribute('allowfullscreen')
+  })
+
+  it('does not render a native <video> element when streamUid is provided', () => {
+    const { Wrapper } = makeWrapper()
+    const { container } = render(
+      <Wrapper>
+        <VideoPlayer streamUid="abc123def456" />
+      </Wrapper>,
+    )
+
+    expect(container.querySelector('video')).toBeNull()
+  })
+
+  it('prefers streamUid over src when both are provided', () => {
+    const { Wrapper } = makeWrapper()
+    const { container } = render(
+      <Wrapper>
+        <VideoPlayer src={SAMPLE_SRC} streamUid="abc123def456" />
+      </Wrapper>,
+    )
+
+    expect(container.querySelector('iframe')).not.toBeNull()
+    expect(container.querySelector('video')).toBeNull()
+  })
+
+  it('leaves the existing src path unchanged when streamUid is absent', () => {
+    const { Wrapper } = makeWrapper()
+    const { container } = render(
+      <Wrapper>
+        <VideoPlayer src={SAMPLE_SRC} />
+      </Wrapper>,
+    )
+
+    expect(container.querySelector('iframe')).toBeNull()
+    expect(container.querySelector('video')?.getAttribute('src')).toBe(SAMPLE_SRC)
+  })
+
   // ── 9. className passthrough ────────────────────────────────────────────────
 
   it('merges a custom className onto the outer container', () => {
