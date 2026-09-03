@@ -51,6 +51,7 @@ actor DailyRoomBatchQueue {
     private var sessionId = UUID().uuidString
     private var flushTask: Task<Void, Never>?
     private var consecutiveFailures = 0
+    private var isFlushing = false
     /// The earliest a flush may be attempted. `distantPast` while healthy.
     private var nextAttemptAt = Date.distantPast
     /// Bumped on every change to `pending`, and compared against what disk
@@ -133,6 +134,14 @@ actor DailyRoomBatchQueue {
 
         guard !pending.isEmpty else { return }
         guard now >= nextAttemptAt else { return }
+        // The actor suspends across the POST while the rows stay in `pending`,
+        // so a second caller — the 30 s timer against a backgrounding flush —
+        // sent the same batch again and `removeFirst(batch.count)` then ran
+        // twice, deleting events that were never posted. Same shape as
+        // `RoomSyncCoordinator.inFlight`.
+        guard !isFlushing else { return }
+        isFlushing = true
+        defer { isFlushing = false }
 
         let batch = Array(pending.prefix(maxBatchSize))
         let ok = await post(sessionId, batch)

@@ -156,6 +156,36 @@ struct TelemetryQueueBoundsTests {
         #expect(await queue.failureCount == 0)
         #expect(await queue.isBackingOff == false)
     }
+
+    /// Two flushes in the same window post each event once and lose none.
+    ///
+    /// The actor suspends across the POST and the rows stay in `pending`
+    /// until it answers, so a second caller — the 30 s timer against a
+    /// backgrounding flush — sent the same batch again and then
+    /// `removeFirst(batch.count)` ran twice, deleting events that were never
+    /// posted (review RL1B-13).
+    @Test
+    func twoConcurrentFlushesPostEachEventExactlyOnce() async {
+        let file = tempFile()
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let sent = TelemetrySentIds()
+        let queue = DailyRoomBatchQueue(queueFileURL: file) { _, events in
+            // Long enough that the second caller lands inside the suspension.
+            try? await Task.sleep(nanoseconds: 40_000_000)
+            await sent.record(events.compactMap(\.productId))
+            return true
+        }
+        for index in 0..<4 { await queue.enqueue(event(index)) }
+
+        let now = Date()
+        async let first: Void = queue.flush(now: now)
+        async let second: Void = queue.flush(now: now)
+        _ = await (first, second)
+
+        #expect(await queue.pendingCount == 0)
+        #expect(await sent.all.sorted() == ["p0", "p1", "p2", "p3"])
+    }
 }
 
 // MARK: - Helpers
@@ -163,6 +193,11 @@ struct TelemetryQueueBoundsTests {
 private actor TelemetryAttemptCounter {
     private(set) var value = 0
     func increment() { value += 1 }
+}
+
+private actor TelemetrySentIds {
+    private(set) var all: [String] = []
+    func record(_ ids: [String]) { all.append(contentsOf: ids) }
 }
 
 private actor TelemetryFailureFlag {
