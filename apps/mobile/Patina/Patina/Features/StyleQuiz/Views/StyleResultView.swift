@@ -150,7 +150,7 @@ struct StyleResultView: View {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(PatinaColors.pearl)
+                            .fill(PatinaColors.Border.strong)
                             .frame(height: 5)
                         Capsule()
                             .fill(PatinaColors.clay)

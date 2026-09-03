@@ -76,11 +76,7 @@ public final class SavedItem {
     // MARK: - Computed
 
     public var formattedPrice: String {
-        let dollars = priceCents / 100
-        if dollars >= 1000 {
-            return "$\(String(format: "%.1f", Double(dollars) / 1000))K"
-        }
-        return "$\(dollars)"
+        PatinaCurrency.formatWholeDollars(cents: priceCents)
     }
 
     /// SP-14: the app's one currency formatter.

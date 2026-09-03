@@ -290,7 +290,7 @@ struct YourHouseRail: View {
                 .frame(maxWidth: wide ? .infinity : nil, minHeight: 150)
                 .background(
                     RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous)
-                        .strokeBorder(PatinaColors.pearl, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                        .strokeBorder(PatinaColors.Border.strong, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                 )
                 .contentShape(Rectangle())
         }

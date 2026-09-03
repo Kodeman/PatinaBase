@@ -17,12 +17,30 @@ public struct PatinaStatusBadge: View {
         case warning
         case error
 
-        var tint: Color {
+        /// The wash behind the badge, at 14 %. A background takes the 3:1
+        /// non-text bar, and these clear it.
+        public var tint: Color {
             switch self {
             case .info: return PatinaColors.dustyBlue
             case .success: return PatinaColors.success
             case .warning: return PatinaColors.warning
             case .error: return PatinaColors.error
+            }
+        }
+
+        /// The ink: a 12 pt uppercase label and its glyph, which take the 4.5:1
+        /// body bar. `A-73` — `error` painted the label as well as the wash, and
+        /// `PatinaColors.error` on its own 14 % wash is **2.65:1** on the light
+        /// canvas. `Text.error` is the value that carries a sentence: 4.89:1
+        /// light, 5.20:1 dark. The other three states resolve to their wash
+        /// value here because no W1 finding measured them; they are 1.82–2.55:1
+        /// on the light canvas and are reported as a gap, not silently fixed —
+        /// `theStatusBadgeInkClearsAAOnItsOwnWash` measures error alone and
+        /// says so.
+        public var inkTint: Color {
+            switch self {
+            case .error: return PatinaColors.Text.error
+            default: return tint
             }
         }
 
@@ -53,7 +71,7 @@ public struct PatinaStatusBadge: View {
                 .tracking(0.5)
                 .textCase(.uppercase)
         }
-        .foregroundStyle(state.tint)
+        .foregroundStyle(state.inkTint)
         .padding(.vertical, PatinaSpacing.xxs)
         .padding(.horizontal, PatinaSpacing.sm)
         .background(state.tint.opacity(0.14))

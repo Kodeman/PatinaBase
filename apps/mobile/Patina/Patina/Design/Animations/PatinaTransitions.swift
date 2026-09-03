@@ -76,6 +76,6 @@ struct BackChevronButton: View {
         }
     }
     private var stroke: Color {
-        style == .light ? PatinaColors.pearl : .clear
+        style == .light ? PatinaColors.Border.hairline : .clear
     }
 }

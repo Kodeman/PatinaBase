@@ -22,6 +22,13 @@ public struct PatinaSignInWithAppleButton: View {
     /// flow reference the same value. Rotated after each attempt.
     @State private var rawNonce: String = AppleSignInNonce.random()
 
+    /// P-35 / C3-03: the button was hard-coded `.black`. Against the warm
+    /// near-black canvas that is 1.27:1 — on the app's first screen, its first
+    /// tap target reads as a hole while the two outlined buttons beneath it
+    /// become the most visible things on the page. Apple's HIG asks for
+    /// `.white` on a dark ground.
+    @Environment(\.colorScheme) private var colorScheme
+
     public init(
         onCompletion: @escaping (Result<ASAuthorization, Error>, _ rawNonce: String) -> Void
     ) {
@@ -38,7 +45,13 @@ public struct PatinaSignInWithAppleButton: View {
             // fresh nonce.
             rawNonce = AppleSignInNonce.random()
         }
-        .signInWithAppleButtonStyle(.black)
+        .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+        // `SignInWithAppleButton` wraps `ASAuthorizationAppleIDButton`, whose
+        // style is fixed when the UIView is made. Sim-verified: a cold launch
+        // picks the right style, but flipping the system appearance while the
+        // screen is up left the old one. Changing the view's identity with the
+        // scheme is what rebuilds it.
+        .id(colorScheme)
         .frame(maxWidth: .infinity, minHeight: 50, maxHeight: 50)
         .fixedSize(horizontal: false, vertical: true)
         .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))

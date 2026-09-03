@@ -113,6 +113,9 @@ private extension CompanionHearthView {
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(PatinaColors.Background.dark)
+                    // C-01, the panel's half: the fill is 1.93:1 on the dark page.
+                    .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(PatinaColors.Border.onDark, lineWidth: 1))
                     .companionMorphMatched(
                         id: "companion.shell",
                         namespace: morphNamespace,
@@ -486,7 +489,7 @@ private extension CompanionHearthView {
             if let detail = content.detail, !detail.isEmpty {
                 Text(detail)
                     .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.Text.inverse.opacity(0.72))
+                    .foregroundStyle(PatinaColors.OnDark.secondary)
                     .minimumScaleFactor(0.7)
                     .allowsTightening(true)
                     .fixedSize(horizontal: false, vertical: true)
@@ -553,7 +556,7 @@ private extension CompanionHearthView {
                 .overlay {
                     Image(systemName: systemName)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(PatinaColors.pearl)
+                        .foregroundStyle(PatinaColors.OnDark.primary)
                 }
                 .frame(
                     minWidth: CompanionConstants.minimumTouchTarget,

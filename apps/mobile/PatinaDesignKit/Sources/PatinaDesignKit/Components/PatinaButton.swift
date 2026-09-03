@@ -8,12 +8,54 @@
 import SwiftUI
 
 /// Button styles available in Patina
-public enum PatinaButtonStyle {
-    case primary      // Charcoal bg, full-width, 52px height
-    case secondary    // Pearl border, transparent bg
+public enum PatinaButtonStyle: CaseIterable {
+    case primary      // The one filled commitment style
+    case secondary    // Hairline border, page-coloured fill
     case ghost        // No bg, text only
-    case clay         // Clay bg, for "Done" / confirm actions
+    case clay         // Kept as a name; renders `.primary` (C-41)
     case destructive  // Error-tinted bg, for irreversible actions
+
+    /// The styles that paint a fill behind their label, and therefore owe a
+    /// contrast ratio. `.ghost` has no fill and is excluded.
+    public static let filledCases: [PatinaButtonStyle] = [
+        .primary, .secondary, .clay, .destructive
+    ]
+
+    /// C-41: two primary treatments shipped at once — solid tan on
+    /// "Sign proposal" and "Pay $4,250.00", near-white on everything else —
+    /// while the same tan was the DISABLED fill on two auth buttons. There is
+    /// one filled commitment style now, and `.clay` is it; the case survives
+    /// so its five call sites keep compiling until their owning lanes rename
+    /// them.
+    public var patinaFillColor: Color {
+        switch self {
+        case .primary, .clay:
+            return PatinaColors.Interactive.active
+        case .secondary:
+            return PatinaColors.Background.primary
+        case .ghost:
+            return .clear
+        case .destructive:
+            return PatinaColors.errorDeep
+        }
+    }
+
+    public var patinaLabelColor: Color {
+        switch self {
+        case .primary, .clay:
+            return PatinaColors.Text.inverse
+        case .secondary:
+            return PatinaColors.Text.primary
+        case .ghost:
+            return PatinaColors.Text.interactive
+        case .destructive:
+            return PatinaColors.OnDark.primary
+        }
+    }
+
+    public var patinaBorderColor: Color {
+        self == .secondary ? PatinaColors.Border.strong : .clear
+    }
 }
 
 /// Patina Design System - Custom Button
@@ -68,10 +110,24 @@ public struct PatinaButton: View {
                 }
             }
             .foregroundStyle(foregroundColor)
+            // A-63 (L1-F's note L1F→D-1): the capsule had no horizontal padding
+            // at all — its width came only from `maxWidth: .infinity`. Under
+            // `.fixedSize()` (which `PatinaEmptyState` applies to every CTA)
+            // that collapses to exactly the label's width, and a 26 pt corner
+            // radius on a 50 pt box is a circle that cuts its own text. The
+            // padding is inside the frame, so an intrinsically-sized capsule is
+            // always wider than its label; an `.infinity`-width call site
+            // absorbs it and is unchanged.
+            .padding(.horizontal, PatinaSpacing.lg)
             .frame(maxWidth: style == .ghost ? nil : .infinity)
             .frame(height: 52)
             .background(backgroundColor)
             .clipShape(Capsule())
+            // GAP1B-07 (L1-C's note D-L1C-2): `.ghost` has a clear background,
+            // so its accessibility frame collapsed to the text's own bounds —
+            // 17.6 pt on both decision-sheet Cancels. The hit region is the
+            // 52 pt capsule for every style now, not just the filled ones.
+            .contentShape(Capsule())
             .overlay(
                 Capsule()
                     .stroke(borderColor, lineWidth: style == .secondary ? 1.5 : 0)
@@ -84,44 +140,11 @@ public struct PatinaButton: View {
         .animation(.easeInOut(duration: 0.15), value: isEnabled)
     }
 
-    private var foregroundColor: Color {
-        switch style {
-        case .primary:
-            return PatinaColors.Text.inverse
-        case .secondary:
-            return PatinaColors.Text.primary
-        case .ghost:
-            return PatinaColors.Text.interactive
-        case .clay:
-            return PatinaColors.offWhite
-        case .destructive:
-            return PatinaColors.offWhite
-        }
-    }
+    private var foregroundColor: Color { style.patinaLabelColor }
 
-    private var backgroundColor: Color {
-        switch style {
-        case .primary:
-            return PatinaColors.Interactive.active
-        case .secondary:
-            return PatinaColors.Background.primary
-        case .ghost:
-            return .clear
-        case .clay:
-            return PatinaColors.clay
-        case .destructive:
-            return PatinaColors.error
-        }
-    }
+    private var backgroundColor: Color { style.patinaFillColor }
 
-    private var borderColor: Color {
-        switch style {
-        case .secondary:
-            return PatinaColors.pearl
-        default:
-            return .clear
-        }
-    }
+    private var borderColor: Color { style.patinaBorderColor }
 }
 
 // MARK: - Auth Button (thin wrapper retained for the auth screens)
@@ -171,7 +194,7 @@ public struct AuthButton: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(PatinaColors.pearl, lineWidth: style == .apple ? 0 : 1.5)
+                    .stroke(PatinaColors.Border.strong, lineWidth: style == .apple ? 0 : 1.5)
             )
         }
         .buttonStyle(PressableButtonStyle())

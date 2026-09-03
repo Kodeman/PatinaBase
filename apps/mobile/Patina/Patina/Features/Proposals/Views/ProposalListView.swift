@@ -147,7 +147,7 @@ private struct ProposalRowCard: View {
                     if let expiry = expiryLine {
                         Text(expiry.text)
                             .font(PatinaTypography.captionSmall)
-                            .foregroundStyle(expiry.isPastDue ? PatinaColors.error : PatinaColors.Text.muted)
+                            .foregroundStyle(expiry.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.muted)
                     }
                 }
             }

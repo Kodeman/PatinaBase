@@ -179,7 +179,7 @@ private struct InvoiceRowCard: View {
                 } else if let due = dueLine {
                     Text(due.text)
                         .font(PatinaTypography.captionSmall)
-                        .foregroundStyle(due.isPastDue ? PatinaColors.error : PatinaColors.Text.muted)
+                        .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.muted)
                 }
             }
         }

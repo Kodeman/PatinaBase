@@ -126,7 +126,7 @@ struct ThreadListView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
-                .stroke(PatinaColors.pearl, lineWidth: 1)
+                .stroke(PatinaColors.Border.strong, lineWidth: 1)
         )
         .accessibilityLabel("Search conversations")
     }
@@ -172,7 +172,7 @@ struct ThreadListView: View {
         .padding(.horizontal, 16)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
-            Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+            Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(item.accessibilityLabel)

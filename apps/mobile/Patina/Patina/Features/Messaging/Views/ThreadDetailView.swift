@@ -288,7 +288,7 @@ struct ThreadDetailView: View {
         .padding(.vertical, 10)
         .background(PatinaColors.Background.primary.opacity(0.98))
         .overlay(alignment: .top) {
-            Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+            Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
         }
     }
 

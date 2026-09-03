@@ -733,7 +733,7 @@ public struct CompanionOverlay: View {
                     .foregroundStyle(PatinaColors.offWhite)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(PatinaColors.clay)
+                    .background(PatinaColors.clayInk)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -758,7 +758,7 @@ public struct CompanionOverlay: View {
                 // PT-5-7: Liquid Glass minimal pill. A charcoal tint keeps
                 // the Strata mark legible while letting the glass pick up
                 // the camera / content behind it, replacing the prior
-                // charcoal-fill-over-`.ultraThinMaterial` stack.
+                // dark-fill-over-`.ultraThinMaterial` stack.
                 // `CompanionOverlay` is a `public` View, so the compiler
                 // infers the module's API availability floor here (below the
                 // iOS-26 `glassEffect`); the `#available` guard satisfies it
@@ -852,11 +852,17 @@ public struct CompanionOverlay: View {
     private func actionIcon(_ icon: String, isSuggested: Bool) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10)
-                .fill(isSuggested ? PatinaColors.clay : Color.white.opacity(0.08))
+                // C3-05: the suggested action's glyph is
+                // `OnDark.primary` on a raw `clay` tile — 2.18:1. The
+                // panel is dark in both appearances, so the fill has to
+                // be the STATIC filled accent: `clayInk` reads 5.31:1
+                // under the same glyph. `Interactive.active` would flip
+                // to near-white here and lose the accent entirely.
+                .fill(isSuggested ? PatinaColors.clayInk : Color.white.opacity(0.08))
                 .frame(width: 36, height: 36)
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundStyle(isSuggested ? PatinaColors.offWhite : PatinaColors.pearl)
+                .foregroundStyle(isSuggested ? PatinaColors.OnDark.primary : PatinaColors.OnDark.secondary)
         }
     }
 
@@ -1189,7 +1195,7 @@ private extension CompanionOverlay {
 // MARK: - Liquid Glass helper (PT-5-7)
 
 private extension View {
-    /// Applies the charcoal-tinted Liquid Glass circle used by the Companion
+    /// Applies the Liquid Glass circle used by the Companion
     /// minimal pill. Factored into a helper with an explicit `#available`
     /// guard because `CompanionOverlay` is a `public` View — the compiler
     /// infers the module API-availability floor on inline `glassEffect`
@@ -1199,9 +1205,9 @@ private extension View {
     @ViewBuilder
     func companionGlassCircle() -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular.tint(PatinaColors.charcoal.opacity(0.7)), in: .circle)
+            glassEffect(.regular.tint(PatinaColors.Background.dark.opacity(0.7)), in: .circle)
         } else {
-            background(PatinaColors.charcoal.opacity(0.7))
+            background(PatinaColors.Background.dark.opacity(0.7))
                 .background(.ultraThinMaterial)
                 .clipShape(Circle())
         }

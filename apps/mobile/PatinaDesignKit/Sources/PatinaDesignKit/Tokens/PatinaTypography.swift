@@ -22,6 +22,14 @@ public enum PatinaTypography {
 
     public static let display2 = Font.custom(displayFont + "-Medium", size: 40, relativeTo: .largeTitle)
 
+    /// C3-15: the Reveal's aesthetic-name hero asked for `PlayfairDisplay-Light`
+    /// at 42 pt. That face is not vendored, so `Font.custom` fell back to San
+    /// Francisco silently. The finding's fix line offers two ways out —
+    /// "ship PlayfairDisplay-Light **or** change that call to -Regular" — and
+    /// this is the second. `display2` is Medium, a weight heavier than either
+    /// option, and this hero is the screen that names the tester's taste.
+    public static let display2Regular = Font.custom(displayFont + "-Regular", size: 40, relativeTo: .largeTitle)
+
     public static let displaySmall = Font.custom(displayFont + "-Medium", size: 28, relativeTo: .title2)
 
     public static let h1 = Font.custom(displayFont + "-Medium", size: 32, relativeTo: .title)
@@ -32,7 +40,25 @@ public enum PatinaTypography {
 
     public static let h4 = Font.custom(displayFont + "-Regular", size: 22, relativeTo: .title3)
 
+    /// C3-15: the ramp had `h4` in Regular and `h5` in Medium, so a 22 pt
+    /// Medium figure — the room-investment total — had nothing to promote to
+    /// without changing either its size or its weight.
+    public static let h4Medium = Font.custom(displayFont + "-Medium", size: 22, relativeTo: .title2)
+
     public static let h5 = Font.custom(displayFont + "-Medium", size: 18, relativeTo: .title3)
+
+    /// C3-15: `h5`'s Regular twin, for the 18 pt serif titles that are not
+    /// meant to carry Medium's weight — a room's empty-state line, and the
+    /// investment tier whose sibling row is set in the italic voice.
+    public static let h5Regular = Font.custom(displayFont + "-Regular", size: 18, relativeTo: .title3)
+
+    /// C3-15: the ramp had no serif body size, so four screens reached past it
+    /// for a raw 16 pt Playfair Regular.
+    public static let bodySerif = Font.custom(displayFont + "-Regular", size: 16, relativeTo: .body)
+
+    /// C3-15: a serif label size, for a toast headline and a card title that
+    /// were inline 15 pt Playfair Medium.
+    public static let h6 = Font.custom(displayFont + "-Medium", size: 15, relativeTo: .subheadline)
 
     // MARK: - Headlines
 
@@ -54,7 +80,19 @@ public enum PatinaTypography {
 
     public static let caption = Font.custom(bodyFont + "-Medium", size: 12, relativeTo: .caption)
 
+    /// C3-15: `caption` is Medium. Three scan surfaces set their supporting
+    /// line in Inter **Regular** at the same size, and promoting them to
+    /// `caption` would have bolded copy that is deliberately quiet.
+    public static let captionRegular = Font.custom(bodyFont + "-Regular", size: 12, relativeTo: .caption)
+
     public static let captionMedium = Font.custom(bodyFont + "-SemiBold", size: 12, relativeTo: .caption)
+
+    /// C3-15: a serif caption. The browse tile's price was an inline 11 pt
+    /// Playfair Medium; promoting it to `captionMedium` would have quietly
+    /// changed the price — the one thing a tester reads on a tile — from the
+    /// brand's serif to Inter. Promoting a call site to a token is not a
+    /// licence to restyle it.
+    public static let captionSerif = Font.custom(displayFont + "-Medium", size: 12, relativeTo: .caption)
 
     /// Smallest UI text — 10px Inter, dense metadata (room context bars,
     /// insight/pairing strips, badge numerals). R22: replaces the raw
@@ -80,6 +118,10 @@ public enum PatinaTypography {
     /// Medium weight mono — 10px, section titles in settings
     public static let monoMedium = Font.custom(monoFont + "-Medium", size: 10, relativeTo: .caption2)
 
+    /// C3-15: mono at reading size, for the fallback room-entry measurements —
+    /// the one inline mono site the 10 pt floor would have shrunk, not raised.
+    public static let monoLarge = Font.custom(monoFont + "-Regular", size: 14, relativeTo: .subheadline)
+
     // MARK: - Special Styles
 
     /// Uppercase tracking for labels
@@ -90,6 +132,17 @@ public enum PatinaTypography {
 
     /// Large italic — scan coaching text
     public static let patinaVoiceLarge = Font.custom(displayFont + "-Italic", size: 22, relativeTo: .title3)
+
+    /// C3-15: the voice ramp stopped at 22 pt and started again at 18 pt, so
+    /// the screens that open in Patina's voice — the conversation header, the
+    /// scan walk — reached past the ramp for a raw 26 pt italic.
+    public static let voiceLead = Font.custom(displayFont + "-Italic", size: 26, relativeTo: .title2)
+
+    /// C3-15: the voice at body size, for the Companion's bubble.
+    public static let voiceSmall = Font.custom(displayFont + "-Italic", size: 15, relativeTo: .body)
+
+    /// C3-15: the voice as a caption, for a room's italic sub-line.
+    public static let voiceCaption = Font.custom(displayFont + "-Italic", size: 13, relativeTo: .footnote)
 
     /// Wordmark style — splash screen
     public static let wordmark = Font.custom(displayFont + "-Medium", size: 38, relativeTo: .largeTitle)

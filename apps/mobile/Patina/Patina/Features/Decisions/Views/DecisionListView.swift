@@ -102,7 +102,7 @@ struct DecisionListView: View {
             if let due = DateDisplay.due(d.due_date) {
                 Text(due.text)
                     .font(PatinaTypography.captionSmall)
-                    .foregroundStyle(due.isPastDue ? PatinaColors.error : PatinaColors.Text.muted)
+                    .foregroundStyle(due.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.muted)
             }
         }
         .padding(16)

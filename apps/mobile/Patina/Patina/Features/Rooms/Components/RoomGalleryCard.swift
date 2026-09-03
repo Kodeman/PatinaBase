@@ -122,7 +122,7 @@ struct RoomGalleryCard: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(PatinaColors.pearl)
+            .fill(PatinaColors.Border.hairline)
             .frame(width: 1, height: 24)
     }
 
@@ -146,11 +146,7 @@ struct RoomGalleryCard: View {
     /// `budgetCents`, so the cell reads that, or the cell does not draw.
     static func budgetString(for room: RoomModel) -> String? {
         guard let cents = room.budgetCents else { return nil }
-        let dollars = cents / 100
-        if dollars >= 1000 {
-            return "$\(String(format: "%.1f", Double(dollars) / 1000))K"
-        }
-        return "$\(dollars)"
+        return PatinaCurrency.formatWholeDollars(cents: cents)
     }
 
     /// A score Patina has not computed gets no cell. The `—` under the word

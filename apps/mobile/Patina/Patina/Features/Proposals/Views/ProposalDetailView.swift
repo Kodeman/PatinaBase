@@ -129,7 +129,7 @@ struct ProposalDetailView: View {
             if !viewModel.isSigned, let expiry = DateDisplay.expiry(proposal.valid_until) {
                 Text(expiry.text)
                     .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(expiry.isPastDue ? PatinaColors.error : PatinaColors.Text.secondary)
+                    .foregroundStyle(expiry.isPastDue ? PatinaColors.Text.error : PatinaColors.Text.secondary)
                     .accessibilityIdentifier("proposalDetail.expiry")
             }
         }

@@ -34,8 +34,12 @@ struct DailyStoryDetailView: View {
         .task { StoryReadStore().markRead(storyId: story.id) }
         .scrollDisabled(dragOffset > 0)
         .background(
-            // Deliberately dark immersive reader — stays charcoal in both modes.
-            PatinaColors.Background.dark
+            // Deliberately dark immersive reader — stays charcoal in both
+            // modes. Not `Background.dark`: that token lifts to a warm grey in
+            // dark mode so an *object* drawn on the page can separate from it
+            // (C-01). This ground has nothing to separate from — it is the
+            // page — so it takes the literal, and its ink is `OnDark.*`.
+            PatinaColors.charcoal
                 .ignoresSafeArea()
                 .opacity(chromeVisible ? 1 - dismissProgress * 0.3 : 0)
         )
@@ -137,7 +141,7 @@ struct DailyStoryDetailView: View {
 
             Text(story.body)
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.pearl)
+                .foregroundStyle(PatinaColors.OnDark.secondary)
                 .lineSpacing(8)
                 .padding(.bottom, 18)
 
@@ -180,8 +184,12 @@ struct DailyStoryDetailView: View {
 
     private func productCard(_ product: Product) -> some View {
         VStack(spacing: 0) {
-            product.placeholderGradient
-                .frame(height: 160)
+            PatinaAsyncImage(
+                url: product.imageURL.flatMap(URL.init(string:)),
+                caption: product.name
+            )
+            .frame(height: 160)
+            .clipped()
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(product.name)
@@ -197,7 +205,7 @@ struct DailyStoryDetailView: View {
                     .foregroundStyle(PatinaColors.offWhite)
                     .padding(.vertical, 8)
                     .padding(.horizontal, 14)
-                    .background(Capsule().fill(PatinaColors.clay))
+                    .background(Capsule().fill(PatinaColors.clayInk))
             }
             .padding(12)
         }

@@ -67,11 +67,11 @@ public struct CompanionIntroBubble: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("I'm your Companion.")
-                    .font(.custom("PlayfairDisplay-Italic", size: 18, relativeTo: .headline))
+                    .font(PatinaTypography.patinaVoice)
                     .foregroundStyle(PatinaColors.Text.primary)
 
                 Text("Tap me any time, anywhere in Patina — I'll show you the way to what's next.")
-                    .font(.custom("PlayfairDisplay-Italic", size: 15, relativeTo: .body))
+                    .font(PatinaTypography.voiceSmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -87,7 +87,7 @@ public struct CompanionIntroBubble: View {
                         .foregroundStyle(PatinaColors.offWhite)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(PatinaColors.clay)
+                        .background(PatinaColors.clayInk)
                         .clipShape(Capsule())
                         // 44pt hit target without inflating the visual capsule.
                         .frame(minHeight: 44)
@@ -115,7 +115,7 @@ public struct CompanionIntroBubble: View {
 
     private func compactContent(text: String) -> some View {
         Text(text)
-            .font(.custom("PlayfairDisplay-Italic", size: 15, relativeTo: .body))
+            .font(PatinaTypography.voiceSmall)
             .foregroundStyle(PatinaColors.Text.primary)
             .fixedSize(horizontal: false, vertical: true)
     }

@@ -60,7 +60,7 @@ struct ProposalSignSheet: View {
                 if let errorMessage {
                     Text(errorMessage)
                         .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.error)
+                        .foregroundStyle(PatinaColors.Text.error)
                         .accessibilityIdentifier("proposalSign.error")
                 }
 

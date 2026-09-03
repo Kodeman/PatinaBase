@@ -30,18 +30,18 @@ struct ScanDetailsSection: View {
                     let row = rows[idx]
                     HStack {
                         Text(row.label)
-                            .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
+                            .font(PatinaTypography.bodySmall)
                             .foregroundStyle(PatinaColors.Text.muted)
                         Spacer()
                         Text(row.value)
-                            .font(.custom("DMMono-Regular", size: 12, relativeTo: .caption))
+                            .font(PatinaTypography.monoLabel)
                             .foregroundStyle(PatinaColors.Text.primary)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                     if idx < rows.count - 1 {
                         Rectangle()
-                            .fill(PatinaColors.pearl.opacity(0.6))
+                            .fill(PatinaColors.Border.hairline.opacity(0.6))
                             .frame(height: 1)
                             .padding(.horizontal, 14)
                     }
@@ -53,7 +53,7 @@ struct ScanDetailsSection: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(PatinaColors.pearl, lineWidth: 1)
+                    .stroke(PatinaColors.Border.hairline, lineWidth: 1)
             )
         }
     }

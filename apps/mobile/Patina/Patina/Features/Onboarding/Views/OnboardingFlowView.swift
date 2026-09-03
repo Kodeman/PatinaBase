@@ -227,7 +227,7 @@ struct OnboardingFlowView: View {
         ZStack {
             // Abstract room
             RoundedRectangle(cornerRadius: 12)
-                .fill(PatinaColors.pearl.opacity(0.6))
+                .fill(PatinaColors.Background.secondary)
                 .frame(width: 240, height: 160)
 
             // Furniture placeholder

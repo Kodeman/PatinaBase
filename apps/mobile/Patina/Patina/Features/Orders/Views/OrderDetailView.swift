@@ -223,7 +223,7 @@ struct OrderDetailView: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(PatinaColors.pearl)
+            .fill(PatinaColors.Border.hairline)
             .frame(height: 1)
     }
 

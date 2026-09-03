@@ -38,7 +38,12 @@ struct RoomSettingsView: View {
 
     /// The face both typed fields wear — the room's name and each dimension.
     /// One declaration so the two cannot drift apart.
-    private static let fieldFont = Font.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body)
+    ///
+    /// C3-15: this was `Font.custom("PlayfairDisplay-Regular", size: 16,
+    /// relativeTo: .body)` — an inline face declaration bound to a property,
+    /// which is the one spelling the sweep's `.font(.custom(` pattern could not
+    /// see. `bodySerif` is that expression, in the type system.
+    private static let fieldFont = PatinaTypography.bodySerif
 
     var body: some View {
         ScrollView {
@@ -116,7 +121,7 @@ struct RoomSettingsView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .onSubmit { saveIfChanged() }
                 .onChange(of: name) { _, _ in
@@ -168,7 +173,7 @@ struct RoomSettingsView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
                     .background(Capsule().fill(PatinaColors.Background.primary))
-                    .overlay(Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5))
+                    .overlay(Capsule().stroke(PatinaColors.Border.strong, lineWidth: 1.5))
             }
             .buttonStyle(.plain)
             .disabled(!hasUsableDimensions)
@@ -202,7 +207,7 @@ struct RoomSettingsView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .accessibilityLabel("\(title) in \(unit.label.lowercased())")
             Text("\(title.uppercased()) (\(unit.rawValue))")
@@ -240,7 +245,7 @@ struct RoomSettingsView: View {
                     .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 Text(scanDate(room))
-                    .font(.custom("DMMono-Regular", size: 8, relativeTo: .caption2))
+                    .font(PatinaTypography.monoLabel)
                     .tracking(0.3)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
@@ -261,7 +266,7 @@ struct RoomSettingsView: View {
                         Capsule().fill(PatinaColors.Background.primary)
                     )
                     .overlay(
-                        Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5)
+                        Capsule().stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                     )
             }
             .buttonStyle(.plain)
@@ -288,7 +293,7 @@ struct RoomSettingsView: View {
             .frame(height: 46)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(PatinaColors.clay)
+                    .fill(PatinaColors.clayInk)
             )
         }
         .buttonStyle(.plain)

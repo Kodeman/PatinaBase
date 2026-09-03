@@ -85,7 +85,7 @@ struct CrossRoomView: View {
         .padding(.horizontal, 20)
         .overlay(
             Rectangle()
-                .fill(PatinaColors.pearl)
+                .fill(PatinaColors.Border.hairline)
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -119,7 +119,7 @@ struct CrossRoomView: View {
         .padding(.vertical, 12)
         .overlay(
             Rectangle()
-                .fill(PatinaColors.pearl.opacity(0.5))
+                .fill(PatinaColors.Border.hairline.opacity(0.5))
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -236,8 +236,8 @@ struct CrossRoomView: View {
     // MARK: - Aggregates
 
     private var summary: String {
-        let total = items.reduce(0) { $0 + $1.priceCents } / 100
-        let dollarString = total >= 1000 ? String(format: "$%.1fK", Double(total) / 1000) : "$\(total)"
+        let totalCents = items.reduce(0) { $0 + $1.priceCents }
+        let dollarString = PatinaCurrency.formatWholeDollars(cents: totalCents)
         return "\(items.count) items · \(dollarString)"
     }
 
@@ -250,7 +250,7 @@ struct CrossRoomView: View {
     }
 
     private func roomColor(_ room: RoomModel?) -> Color {
-        guard let room else { return PatinaColors.pearl }
+        guard let room else { return PatinaColors.Border.strong }
         switch room.roomType.lowercased() {
         case "living", "living_room", "living room": return PatinaColors.clay
         case "bedroom":                               return PatinaColors.dustyBlue

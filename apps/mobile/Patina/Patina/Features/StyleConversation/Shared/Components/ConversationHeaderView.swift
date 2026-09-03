@@ -25,7 +25,7 @@ struct ConversationHeaderView: View {
             }
 
             Text(question)
-                .font(.custom("PlayfairDisplay-Italic", size: 26, relativeTo: .title2))
+                .font(PatinaTypography.voiceLead)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)

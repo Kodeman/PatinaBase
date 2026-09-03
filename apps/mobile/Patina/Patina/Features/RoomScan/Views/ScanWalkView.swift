@@ -197,7 +197,7 @@ struct ScanWalkView: View {
 
                 VStack(spacing: 12) {
                     Text("I lost my bearings for a moment.")
-                        .font(.custom("PlayfairDisplay-Italic", size: 26, relativeTo: .title2))
+                        .font(PatinaTypography.voiceLead)
                         .foregroundStyle(PatinaColors.offWhite)
                         .multilineTextAlignment(.center)
 

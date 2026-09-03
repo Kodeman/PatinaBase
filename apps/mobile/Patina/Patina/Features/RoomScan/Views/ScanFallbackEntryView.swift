@@ -115,7 +115,7 @@ struct ScanFallbackEntryView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                selectedType == id ? PatinaColors.Interactive.active : PatinaColors.pearl,
+                                selectedType == id ? PatinaColors.Interactive.active : PatinaColors.Border.strong,
                                 lineWidth: 1.5
                             )
                     )
@@ -171,7 +171,7 @@ struct ScanFallbackEntryView: View {
         VStack(alignment: .leading, spacing: 4) {
             TextField("", text: text)
                 .keyboardType(.decimalPad)
-                .font(.custom("Inter-Regular", size: 15, relativeTo: .subheadline))
+                .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.horizontal, 16)
                 .frame(height: 48)
@@ -182,7 +182,7 @@ struct ScanFallbackEntryView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            Float(text.wrappedValue) != nil ? PatinaColors.clay : PatinaColors.pearl,
+                            Float(text.wrappedValue) != nil ? PatinaColors.clay : PatinaColors.Border.strong,
                             lineWidth: 1.5
                         )
                 )
@@ -232,7 +232,7 @@ struct ScanFallbackEntryView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Remove one \(title.lowercased())")
             Text("\(value.wrappedValue)")
-                .font(.custom("DMMono-Regular", size: 14, relativeTo: .subheadline))
+                .font(PatinaTypography.monoLarge)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .frame(minWidth: 20)
             Button(action: { value.wrappedValue += 1 }) {
@@ -256,7 +256,7 @@ struct ScanFallbackEntryView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
         )
     }
 

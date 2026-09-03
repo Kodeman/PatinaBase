@@ -286,7 +286,7 @@ struct NotificationFeedView: View {
         .padding(.vertical, 16)
         .background(notification.isRead ? Color.clear : PatinaColors.Text.interactive.opacity(0.08))
         .overlay(alignment: .bottom) {
-            Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+            Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
                 .padding(.leading, 78)
         }
         .contentShape(Rectangle())

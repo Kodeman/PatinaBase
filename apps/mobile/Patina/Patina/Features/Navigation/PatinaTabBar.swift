@@ -65,7 +65,7 @@ public struct PatinaTabBar<Trailing: View>: View {
                 .ignoresSafeArea(edges: .bottom)
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(PatinaColors.pearl)
+                        .fill(PatinaColors.Border.hairline)
                         .frame(height: 1)
                 }
         }

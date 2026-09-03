@@ -190,7 +190,7 @@ struct RoomProjectView: View {
                     coordinator.presentDesignServices(roomId: room.id)
                 } label: {
                     Text(nudge)
-                        .font(.custom("PlayfairDisplay-Italic", size: 13, relativeTo: .footnote))
+                        .font(PatinaTypography.voiceCaption)
                         .foregroundStyle(PatinaColors.Text.interactive)
                 }
                 .buttonStyle(.plain)
@@ -198,7 +198,7 @@ struct RoomProjectView: View {
                 .padding(.top, 12)
             } else {
                 Text(nudge)
-                    .font(.custom("PlayfairDisplay-Italic", size: 13, relativeTo: .footnote))
+                    .font(PatinaTypography.voiceCaption)
                     .foregroundStyle(PatinaColors.Text.muted)
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
@@ -234,7 +234,7 @@ struct RoomProjectView: View {
                 )
                 if pair.offset < room.items.count - 1 {
                     Rectangle()
-                        .fill(PatinaColors.pearl)
+                        .fill(PatinaColors.Border.hairline)
                         .frame(height: 1)
                         .padding(.horizontal, 20)
                 }
@@ -249,7 +249,7 @@ struct RoomProjectView: View {
         VStack(spacing: 8) {
             Text("✦").font(.system(size: 40))
             Text("A blank canvas")
-                .font(.custom("PlayfairDisplay-Regular", size: 18, relativeTo: .title3))
+                .font(PatinaTypography.h5Regular)
                 .foregroundStyle(PatinaColors.Text.primary)
             cta(primary: "Browse pieces for this room") {
                 // U07: this used to root-reset to .heroFrame regardless of
@@ -304,7 +304,7 @@ struct RoomProjectView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .background(
-                    Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5)
+                    Capsule().stroke(PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .contentShape(Capsule())
         }
@@ -376,7 +376,7 @@ private extension RoomProjectView {
                         .foregroundStyle(PatinaColors.Text.primary)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(PatinaColors.Background.primary.opacity(0.92)))
-                        .overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))
+                        .overlay(Circle().stroke(PatinaColors.Border.hairline, lineWidth: 0.5))
                 }
                 .buttonStyle(.plain)
             }
@@ -450,10 +450,10 @@ private extension RoomProjectView {
     func statCell(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.custom("PlayfairDisplay-Medium", size: 20, relativeTo: .title3))
+                .font(PatinaTypography.h5)
                 .foregroundStyle(PatinaColors.Text.primary)
             Text(label)
-                .font(.custom("DMMono-Regular", size: 7, relativeTo: .caption2))
+                .font(PatinaTypography.monoLabel)
                 .tracking(0.6)
                 .textCase(.uppercase)
                 .foregroundStyle(PatinaColors.Text.muted)

@@ -72,17 +72,17 @@ struct RoomTypePillRow: View {
         } label: {
             Text(label)
                 .font(PatinaTypography.caption)
-                .foregroundStyle(isSelected ? PatinaColors.offWhite : PatinaColors.Text.secondary)
+                .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.secondary)
                 .lineLimit(1)
                 .padding(.horizontal, 14)
                 .frame(minHeight: Self.chipMinHeight)
                 .background(
                     Capsule()
-                        .fill(isSelected ? PatinaColors.clay : PatinaColors.Background.secondary)
+                        .fill(isSelected ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                 )
                 .overlay(
                     Capsule()
-                        .stroke(isSelected ? PatinaColors.clay : PatinaColors.pearl, lineWidth: 1.5)
+                        .stroke(isSelected ? PatinaColors.Interactive.active : PatinaColors.Border.strong, lineWidth: 1.5)
                 )
                 .contentShape(Capsule())
         }

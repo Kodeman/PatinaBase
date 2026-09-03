@@ -268,7 +268,7 @@ struct HouseRecordCard: View {
             let half: Half = record.hasMoreNeedsYou ? .needsYou : .moved
             VStack(alignment: .leading, spacing: 0) {
                 Rectangle()
-                    .fill(PatinaColors.pearl)
+                    .fill(PatinaColors.Border.hairline)
                     .frame(height: 1)
                     .padding(.top, PatinaSpacing.sm)
                     .accessibilityHidden(true)
@@ -299,7 +299,7 @@ struct HouseRecordCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 if !isFirst {
                     Rectangle()
-                        .fill(PatinaColors.pearl)
+                        .fill(PatinaColors.Border.hairline)
                         .frame(height: 1)
                         .padding(.top, PatinaSpacing.sm)
                         .accessibilityHidden(true)
@@ -326,7 +326,7 @@ struct HouseRecordCard: View {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         if index > 0 {
                             Rectangle()
-                                .fill(PatinaColors.pearl)
+                                .fill(PatinaColors.Border.hairline)
                                 .frame(height: 1)
                                 .accessibilityHidden(true)
                         }
@@ -352,26 +352,22 @@ struct HouseRecordRowView: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 4) {
-                        title
-                        state
-                    }
-                } else {
-                    HStack(alignment: .center, spacing: PatinaSpacing.lg) {
-                        title
-                        Spacer(minLength: PatinaSpacing.sm)
-                        state
-                    }
-                }
+        // C-20, the half a token could not reach. This was one `Button` with
+        // `.disabled(row.route == nil)`, and SwiftUI halves a disabled plain
+        // button's ink: `Text.primary` at 0.5 over the card is 4.27:1 — the
+        // finding's own rendered number — and the meta line 3.01:1, with light
+        // mode worse than dark at 2.96:1 and 1.86:1. Raising the ramp moved the
+        // meta by a third of a point and could not move the body at all,
+        // because the dim is a modifier. A row with nowhere to go is not a
+        // broken control; it is a sentence, and it is rendered as one.
+        Group {
+            if row.route == nil {
+                rowContent
+            } else {
+                Button(action: onTap) { rowContent }
+                    .buttonStyle(.plain)
             }
-            .frame(minHeight: 56)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         // C-20: a row with no route was a *disabled* Button, and SwiftUI dims a
         // disabled label to about half alpha — 12.42:1 became 4.27:1 on the
         // app's home screen in dark mode, which no token value can fix.
@@ -382,6 +378,26 @@ struct HouseRecordRowView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
         .accessibilityAddTraits(row.route == nil ? [] : .isButton)
+    }
+
+    private var rowContent: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    title
+                    state
+                }
+            } else {
+                HStack(alignment: .center, spacing: PatinaSpacing.lg) {
+                    title
+                    Spacer(minLength: PatinaSpacing.sm)
+                    state
+                }
+            }
+        }
+        .frame(minHeight: 56)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var title: some View {
@@ -413,7 +429,7 @@ struct HouseRecordRowView: View {
                     .font(PatinaTypography.monoLabel)
                     .tracking(0.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.error)
+                    .foregroundStyle(PatinaColors.Text.error)
             }
             if shown.showsNewTick {
                 Text("· new")

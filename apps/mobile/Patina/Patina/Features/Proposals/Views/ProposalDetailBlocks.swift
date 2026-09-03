@@ -37,7 +37,7 @@ private struct BlockDivider: View {
     var leadingInset: CGFloat = 16
     var body: some View {
         Rectangle()
-            .fill(PatinaColors.pearl)
+            .fill(PatinaColors.Border.hairline)
             .frame(height: 1)
             .padding(.leading, leadingInset)
     }

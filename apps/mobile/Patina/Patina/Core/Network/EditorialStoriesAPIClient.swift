@@ -46,6 +46,38 @@ public struct RemoteEditorialStory: Codable, Sendable {
     }
 }
 
+/// A3-17: all three published `editorial_stories` rows on Strata carry
+/// `read_minutes` of 5, 3 and 4 against bodies of 489, 386 and 387 characters.
+/// A story finished in fifteen seconds after being promised five minutes is the
+/// most damaging first impression the app can make — and with the catalogue
+/// empty (`A3-01`) that card is the only thing a round-one tester can open.
+///
+/// The editor keeps their claim; the app just refuses to repeat one the body
+/// cannot carry.
+public enum EditorialReadTime {
+
+    /// Adult reading speed for considered editorial prose. One minute is the
+    /// floor — "0 min read" is not an improvement on a lie.
+    private static let wordsPerMinute = 200
+
+    public static func minutes(forBody body: String) -> Int {
+        let words = body.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+        guard words > 0 else { return 1 }
+        return max(1, Int((Double(words) / Double(wordsPerMinute)).rounded(.up)))
+    }
+
+    /// The number the card is allowed to print, or **nil** when there is no
+    /// body to read. `A3-17` asks for the badge to be hidden below a
+    /// threshold, and a row whose `body_md` is empty or NULL is below every
+    /// threshold there is — clamping it to 1 would print "1 MIN READ" over
+    /// nothing, which is the same lie in a smaller font.
+    public static func claim(rowValue: Int, body: String) -> Int? {
+        let words = body.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+        guard words > 0 else { return nil }
+        return max(1, min(rowValue <= 0 ? 1 : rowValue, minutes(forBody: body)))
+    }
+}
+
 public actor EditorialStoriesAPIClient {
     public static let shared = EditorialStoriesAPIClient()
 
@@ -140,7 +172,11 @@ extension DailyStory {
             tag: remote.tag,
             title: remote.title,
             subtitle: remote.subtitle ?? "",
-            readMinutes: remote.readMinutes,
+            // A3-17: the row's claim, clamped to what its body can carry.
+            readMinutes: EditorialReadTime.claim(
+                rowValue: remote.readMinutes,
+                body: remote.bodyMarkdown ?? ""
+            ),
             heroGradient: hero,
             heroImageURL: remote.heroImageURL.flatMap(URL.init(string:)),
             isUnread: isUnread,

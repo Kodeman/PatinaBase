@@ -63,7 +63,7 @@ struct BudgetProposalCard: View {
     private var scheduleBlock: some View {
         VStack(alignment: .leading, spacing: 8) {
             Rectangle()
-                .fill(PatinaColors.pearl)
+                .fill(PatinaColors.Border.hairline)
                 .frame(height: 1)
             MonoLabel(text: "Payment schedule")
             if proposal.milestones.isEmpty {
@@ -133,7 +133,7 @@ struct BudgetInvoicesBlock: View {
                     }
                     .buttonStyle(.plain)
                     if index < section.invoices.count - 1 {
-                        Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                        Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
                     }
                 }
             }

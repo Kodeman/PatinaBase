@@ -108,7 +108,7 @@ struct CollectionsView: View {
             }
             .padding(.horizontal, 24)
             .overlay(alignment: .bottom) {
-                Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                Rectangle().fill(PatinaColors.Border.hairline).frame(height: 1)
             }
 
             // Content

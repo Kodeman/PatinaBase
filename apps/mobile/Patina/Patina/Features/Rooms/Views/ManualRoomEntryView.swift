@@ -30,7 +30,7 @@ struct ManualRoomEntryView: View {
                 }
                 group(title: "Room Name") {
                     TextField("e.g. Living Room", text: $name)
-                        .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                        .font(PatinaTypography.bodySerif)
                         .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.horizontal, 14)
                         .frame(height: 46)
@@ -40,7 +40,7 @@ struct ManualRoomEntryView: View {
                     HStack(spacing: 8) {
                         dimensionField(value: $lengthFeet, label: "Length")
                         Text("×")
-                            .foregroundStyle(PatinaColors.pearl)
+                            .foregroundStyle(PatinaColors.Text.muted)
                             .padding(.bottom, 14)
                         dimensionField(value: $widthFeet, label: "Width")
                     }
@@ -64,7 +64,7 @@ struct ManualRoomEntryView: View {
                         TextField("0", text: $windowCountRaw)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.center)
-                            .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                            .font(PatinaTypography.bodySerif)
                             .foregroundStyle(PatinaColors.Text.primary)
                             .frame(width: 60, height: 46)
                             .background(fieldBackground)
@@ -132,7 +132,7 @@ struct ManualRoomEntryView: View {
             TextField(label, text: value)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
-                .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                .font(PatinaTypography.bodySerif)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
@@ -150,7 +150,7 @@ struct ManualRoomEntryView: View {
             .fill(PatinaColors.Background.secondary)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                    .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
             )
     }
 

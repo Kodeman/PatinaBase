@@ -123,7 +123,7 @@ struct ProjectListView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: PatinaRadius.lg, style: .continuous)
-                .stroke(PatinaColors.pearl, lineWidth: 1)
+                .stroke(PatinaColors.Border.hairline, lineWidth: 1)
         )
         .accessibilityLabel("Search projects")
     }

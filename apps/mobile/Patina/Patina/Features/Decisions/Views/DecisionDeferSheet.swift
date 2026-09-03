@@ -50,7 +50,7 @@ struct DecisionDeferSheet: View {
                 if let failure {
                     Text(failure.sentence)
                         .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.error)
+                        .foregroundStyle(PatinaColors.Text.error)
                         .accessibilityIdentifier("decisionDefer.error")
                 }
 

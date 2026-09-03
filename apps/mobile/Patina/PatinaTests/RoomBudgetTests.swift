@@ -280,7 +280,9 @@ struct RoomBudgetTests {
         #expect(RoomGalleryCard.budgetString(for: space) == nil)
 
         space.budgetCents = 900_000
-        #expect(RoomGalleryCard.budgetString(for: space) == "$9.0K")
+        // C5-14: the compact "K" shape is gone from the app — one amount, one
+        // shape, and `PatinaCurrency` is the only place it is made.
+        #expect(RoomGalleryCard.budgetString(for: space) == "$9,000")
     }
 
     @Test("no budget on the Spaces card draws no Budget cell at all — never a dash")
@@ -295,7 +297,7 @@ struct RoomBudgetTests {
         space.budgetCents = 900_000
         let set = RoomGalleryCard.statCells(for: space)
         #expect(set.map(\.label) == ["Items", "Budget", "Match"])
-        #expect(set.first { $0.label == "Budget" }?.value == "$9.0K")
+        #expect(set.first { $0.label == "Budget" }?.value == "$9,000")
     }
 
     // MARK: - T8 · steward §4a — the saved row's note and its price at save
@@ -342,7 +344,7 @@ struct RoomBudgetTests {
 
     @Test("the bar prints both figures and no third")
     func theBarPrintsBothFigures() {
-        #expect(RoomBudgetBar.figure(totalCents: 240_000, budgetCents: 900_000) == "$2.4K of $9.0K")
+        #expect(RoomBudgetBar.figure(totalCents: 240_000, budgetCents: 900_000) == "$2,400 of $9,000")
         #expect(RoomBudgetBar.figure(totalCents: 0, budgetCents: 45_000) == "$0 of $450")
     }
 
