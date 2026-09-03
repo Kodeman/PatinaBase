@@ -30,6 +30,8 @@ import SwiftData
 public protocol RoomListRemote: Sendable {
     func resolveUserId() async throws -> String
     func listRooms(userId: String) async throws -> [RemoteRoom]
+    /// Retried from the reconcile for a room whose delete never landed.
+    func deleteRoom(id: String) async throws
 }
 
 extension RoomsAPIClient: RoomListRemote {}
@@ -63,9 +65,16 @@ public enum RoomMerge {
         public var keepLocal: [UUID] = []
         /// Rooms that never synced. Never merged into an account (SP-06).
         public var untouched: [UUID] = []
+        /// Server ids this phone deleted and the server still returns — the
+        /// delete never reached it, or failed. Not inserted; retried.
+        public var deleteRemotely: [String] = []
     }
 
-    public static func plan(server: [RemoteRoom], local: [LocalRoom]) -> Plan {
+    public static func plan(
+        server: [RemoteRoom],
+        local: [LocalRoom],
+        tombstoned: Set<String> = []
+    ) -> Plan {
         var plan = Plan()
 
         var mirrorByRemoteId: [String: LocalRoom] = [:]
@@ -81,6 +90,13 @@ public enum RoomMerge {
         }
 
         for row in server {
+            // B-03: a room the person deleted on this phone. Re-inserting it
+            // because the server still has the row is how a confirmed delete
+            // came back a second later.
+            if tombstoned.contains(row.id.lowercased()) {
+                plan.deleteRemotely.append(row.id)
+                continue
+            }
             guard let mirror = mirrorByRemoteId[row.id.lowercased()] else {
                 plan.insert.append(row.id)
                 continue
@@ -129,6 +145,24 @@ public final class RoomSyncCoordinator {
     private(set) var lastRunAt: Date?
     private var inFlight = false
 
+    /// C4-03: `listRooms` failing used to be a bare `return` with a DEBUG
+    /// log, and Spaces has no error branch — so a client whose rooms did not
+    /// load was told "No rooms yet" about rooms she has. This is the fact
+    /// that branch needs.
+    public private(set) var lastLoadFailed = false
+
+    /// When the rooms last came back. `nil` means this session has never had
+    /// a successful answer, which is a different thing from "you have none".
+    public private(set) var lastSuccessAt: Date?
+
+    /// True while a reconcile is in flight — the third state, so a screen can
+    /// draw waiting rather than choosing between empty and failed.
+    public var isLoading: Bool { inFlight }
+
+    /// Server ids the last merge found still standing behind a tombstone: a
+    /// delete this phone made and the server has not taken yet (B-03).
+    private(set) var pendingRemoteDeletes: [String] = []
+
     public init() {}
 
     /// Seeded, for the tests that need a coordinator with a history.
@@ -143,6 +177,8 @@ public final class RoomSyncCoordinator {
     public func forget() {
         lastOwner = nil
         lastRunAt = nil
+        lastLoadFailed = false
+        lastSuccessAt = nil
     }
 
     /// Pure, so the debounce is a fact rather than a hope. A change of owner
@@ -180,8 +216,16 @@ public final class RoomSyncCoordinator {
         defer { inFlight = false }
 
         await AuthService.shared.waitForAuthReady()
-        guard AuthService.shared.isAuthenticated,
-              let owner = try? await api.resolveUserId() else { return }
+        guard AuthService.shared.isAuthenticated else { return }
+        guard let owner = try? await api.resolveUserId() else {
+            // C4-03: `resolveUserId()` reads the session, which throws on an
+            // expired token with the backend down. Returning quietly here
+            // left `lastLoadFailed` false, so Spaces drew "No rooms yet" for
+            // a fetch that never happened (review RL1B-12). Not signed out —
+            // that guard is above — so this is a failure, and says so.
+            lastLoadFailed = true
+            return
+        }
         guard Self.isDue(owner: owner, lastOwner: lastOwner, lastRunAt: lastRunAt, now: now) else {
             return
         }
@@ -193,12 +237,41 @@ public final class RoomSyncCoordinator {
             #if DEBUG
             PatinaLog.sync.error("[RoomSync] listRooms failed: \(error.localizedDescription)")
             #endif
+            // C4-03: say so. `lastRunAt` is deliberately NOT stamped — a
+            // failed read must not start the thirty-second debounce, or the
+            // screen that draws the error cannot retry for half a minute.
+            lastLoadFailed = true
             return
         }
 
+        lastLoadFailed = false
+        lastSuccessAt = now
         apply(rows, in: store, owner: owner)
+        await retryPendingDeletes(api: api)
         lastOwner = owner
         lastRunAt = now
+    }
+
+    /// A delete the person confirmed here that the server still has not
+    /// taken — offline at the time, or the request failed. The tombstone kept
+    /// the room off the screen; this is what finally removes the row, and
+    /// clearing the tombstone on success keeps the list from growing.
+    private func retryPendingDeletes(api: RoomListRemote) async {
+        let pending = pendingRemoteDeletes
+        guard !pending.isEmpty else { return }
+        for remoteId in pending {
+            do {
+                try await api.deleteRoom(id: remoteId)
+                RoomTombstones.clear(remoteId)
+            } catch {
+                #if DEBUG
+                PatinaLog.sync.error(
+                    "[RoomSync] deleteRoom retry failed: \(error.localizedDescription)"
+                )
+                #endif
+            }
+        }
+        pendingRemoteDeletes = []
     }
 
     /// The same reconcile against the app's own store, for callers that hold
@@ -223,8 +296,10 @@ public final class RoomSyncCoordinator {
             server: rows,
             local: local.map {
                 RoomMerge.LocalRoom(id: $0.id, remoteId: $0.remoteId, updatedAt: $0.updatedAt)
-            }
+            },
+            tombstoned: Set(RoomTombstones.all)
         )
+        pendingRemoteDeletes = plan.deleteRemotely
 
         let rowById = Dictionary(rows.map { ($0.id.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
 
@@ -244,7 +319,38 @@ public final class RoomSyncCoordinator {
             changed = true
         }
 
-        if changed { revision += 1 }
+        retireSettledTombstones(against: rowById)
+
+        if changed {
+            revision += 1
+            // `RoomStore.create`/`.delete` bump this, which is what makes
+            // Studio's `Rooms:` stat and `YOUR ROOMS` rail follow a delete
+            // made here. Nothing bumped it for a reconcile, so a room added
+            // or removed on another device — or the first reconcile after
+            // sign-in — left Studio stale until the next `onAppear` (review
+            // `RL1B3-09`). `ProfileViewModel` reads the signal, not this
+            // `revision`.
+            LocalRoomSignal.shared.changed()
+        }
         return changed
+    }
+
+    /// A tombstone the server has stopped contradicting.
+    ///
+    /// `deleteRoom` throws on a DELETE that removed nothing (`RL1B2-09`),
+    /// which is right — but it makes the *already gone* case throw too: a
+    /// delete that landed before the process died, or a row removed from
+    /// another device. Such an id is not in the server rows, so it never
+    /// reaches `plan.deleteRemotely` and `retryPendingDeletes` never sees it;
+    /// the tombstone was immortal and 200 dead ones could evict a live one
+    /// (review `RL1B3-11`).
+    ///
+    /// Safe across accounts: `LocalStoreReset` clears the whole list on the
+    /// account-change wipe, before the next account's first reconcile, so
+    /// owner B's rows can never retire owner A's tombstones.
+    private func retireSettledTombstones(against rowById: [String: RemoteRoom]) {
+        for tombstone in RoomTombstones.all where rowById[tombstone] == nil {
+            RoomTombstones.clear(tombstone)
+        }
     }
 }

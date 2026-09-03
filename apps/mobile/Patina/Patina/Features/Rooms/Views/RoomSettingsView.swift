@@ -308,6 +308,11 @@ struct RoomSettingsView: View {
                 .foregroundStyle(PatinaColors.terracotta)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
+                // Review RL1B2-17: `describe_screen` measured this control's
+                // hit area at 100.7 × 14.7 pt — the glyph box, not the 46 pt
+                // row — on the one irreversible action on the screen. A tap
+                // at its visual centre selected the tab behind it.
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -333,7 +338,21 @@ struct RoomSettingsView: View {
 
     private func deleteRoom() {
         guard let room else { return }
+        // B-03: the delete was local only — `RoomsAPIClient.deleteRoom(id:)`
+        // had no callers at all — so the server row stayed and the next
+        // reconcile put the room back. `RoomStore.delete` writes the
+        // tombstone that keeps it off the screen until this lands; a failure
+        // here is retried from the next reconcile.
+        let remoteId = room.remoteId
         RoomStore(context: modelContext).delete(room)
+        if let remoteId { RoomRemoteDelete.mirror(remoteId) }
+        // B-04: one `goBack()` popped onto the room's own detail, whose
+        // lookup now misses — so a second after confirming the delete the
+        // person was told "This room isn't on this phone / It may have been
+        // removed." about a room they had just deliberately removed. The
+        // detail is the only screen that pushes this one, so leaving it
+        // behind too is what lands them back on the list they came from.
+        coordinator.goBack()
         coordinator.goBack()
     }
 

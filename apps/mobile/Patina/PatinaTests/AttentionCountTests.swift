@@ -259,6 +259,77 @@ struct AttentionCountTests {
         #expect(snapshot.attentionSummary.awaitingCount == badges.attentionCount)
     }
 
+    // MARK: - A-81: four numbers on one screen
+
+    /// The finding as filed: bell 3 · Studio 5 · "5 THINGS NEED YOUR EYE" ·
+    /// a NEEDS YOU section listing 3 rows. It is two counts each shown twice,
+    /// and the third number is the same count capped for drawing — so what it
+    /// takes to be honest is (a) one derivation for the attention count, and
+    /// (b) a card that says out loud when it is showing fewer rows than the
+    /// count it sits under.
+    @Test("the bell and the Studio pill count different things, and both say which")
+    func theTwoCountsAreDistinctAndBothAreNamed() throws {
+        let header = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
+        // The bell is unread notifications and names itself as such.
+        #expect(header.contains(#"accessibilityLabel("Notifications")"#))
+        #expect(header.contains(#"\(unreadCount) unread"#))
+        // The Studio control prints THE attention count and names it.
+        #expect(header.contains("StudioControlLabel.waitingValue(count: attentionCount)"))
+        // And it does not recompute either from a fetch of its own.
+        #expect(header.contains("BadgeCountService") == false)
+    }
+
+    /// (b): with five items awaiting and a three-row cap, the card must not
+    /// silently show three under a header that says five.
+    @Test("a capped NEEDS YOU section says there are more")
+    func aCappedSectionSaysThereAreMore() throws {
+        let rows = try fixtures()
+        let extraDecisions = try decode([RemoteClientDecision].self, """
+        [
+          { "id": "d3", "title": "Sconce height", "status": "pending",
+            "due_date": "2026-09-03", "created_at": "2026-08-15T12:00:00Z" },
+          { "id": "d4", "title": "Paint sheen", "status": "pending",
+            "due_date": "2026-09-04", "created_at": "2026-08-16T12:00:00Z" }
+        ]
+        """)
+        let badges = BadgeCountService.makeForTests()
+        badges.apply(
+            decisions: rows.decisions + extraDecisions, summaries: rows.summaries,
+            proposals: rows.proposals, invoices: rows.invoices,
+            projects: rows.projects, roster: []
+        )
+        #expect(badges.attentionCount == 6)
+
+        let record = HouseRecordBuilder.build(
+            from: badges, saved: [], products: [], story: nil,
+            liveLead: nil, lastSeen: nil,
+            now: try #require(ISO8601DateFormatter().date(from: "2026-09-05T16:00:00Z"))
+        )
+        #expect(record.needsYou.count <= HouseRecordBuilder.maxRowsPerEyebrow)
+        #expect(
+            record.hasMoreNeedsYou,
+            "the card draws three rows under a count of six and says nothing"
+        )
+    }
+
+    /// And with nothing hidden it must not offer a door to more.
+    @Test("an uncapped NEEDS YOU section offers no see-all")
+    func anUncappedSectionOffersNoSeeAll() throws {
+        let rows = try fixtures()
+        let badges = BadgeCountService.makeForTests()
+        badges.apply(
+            decisions: [], summaries: rows.summaries,
+            proposals: [], invoices: rows.invoices,
+            projects: rows.projects, roster: []
+        )
+        let record = HouseRecordBuilder.build(
+            from: badges, saved: [], products: [], story: nil,
+            liveLead: nil, lastSeen: nil,
+            now: try #require(ISO8601DateFormatter().date(from: "2026-09-05T16:00:00Z"))
+        )
+        #expect(record.hasMoreNeedsYou == false)
+    }
+
     /// The other half of M4: `listPending` returns rows the Studio treats as
     /// answered, so the header could outrun the rows by one.
     @Test("a pending row that has been responded to counts for neither surface")
@@ -301,5 +372,55 @@ struct AttentionCountTests {
         #expect(badges.pendingProposals.count == badges.proposalsAwaitingSignatureCount)
         #expect(badges.payableInvoices.count == badges.payableInvoiceCount)
         #expect(badges.projects.count == badges.projectCount)
+    }
+}
+
+@MainActor
+extension AttentionCountTests {
+
+    /// The third count `RL1F-25` found: after **Mark all read** the feed said
+    /// 0 unread, the bell said 3 and the Studio row said "6 unread updates",
+    /// because this builder counts the raw `notifications` table and 00534
+    /// writes two rows per event.
+    ///
+    /// `StudioQueueBuilder.swift` is this lane's file (steward ruling S-3) and
+    /// L1-F's note `L1F→B-5` carries the exact replacement —
+    /// `BadgeCountService.shared.unreadNotificationCount` at both sites. That
+    /// property exists only on `first-flight/w1-l1f`, which merges AFTER this
+    /// lane (D14), so the edit cannot compile here; it is scheduled as a
+    /// merge-4 apply in `l1b-notes-out.md` §S6 and answered as note **O15**.
+    ///
+    /// Not `isIntermittent`: green while the binding is owed, red the moment
+    /// it lands, which is the signal to delete this block — and it is the
+    /// mirror of `BadgeFreshnessTests.thereIsNoSecondCount` on L1-F's branch,
+    /// whose `owed` table names this same file.
+    @Test
+    func theStudioRowStillOwesTheSharedUnreadCount() throws {
+        let builder = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift")
+        )
+        let single = !builder.contains("unreadNotifications.count")
+        withKnownIssue(
+            "RL1F-25 · note L1F→B-5 needs BadgeCountService.unreadNotificationCount, which lands at merge 4"
+        ) {
+            #expect(single)
+        }
+    }
+
+    /// `A-81`/`R-02`'s remaining half is note **O7**: the bell asserts
+    /// "No unread notifications" over a count nobody fetched.
+    /// `DailyGreetingHeader.swift` is L1-C's file and L1-C merges first, so
+    /// there is no owner left to schedule it (review `RL1B3-03`); the steward
+    /// has routed it back to L1-B after merge as `C-L1B-4`.
+    ///
+    /// Not `isIntermittent`: green while the note is owed, red when it lands.
+    @Test
+    func theBellStillOwesItsKnownFlag() throws {
+        let header = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
+        )
+        withKnownIssue("A-81 owes the bell its unreadCountIsKnown guard (l1b-notes-out.md O7)") {
+            #expect(header.contains("unreadCountIsKnown"))
+        }
     }
 }

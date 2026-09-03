@@ -37,7 +37,7 @@ public enum NamedAesthetics {
             tags: ["Layered Textures", "Rich Colors", "Traditional", "Inviting"]
         ),
         NamedAesthetic(
-            name: "Curated Minimal",
+            name: "Considered Minimal",
             ideal: ImageAttributes(warmth: 0.1, complexity: -0.8, formality: 0.2, era: -0.3),
             tags: ["Intentional", "Restrained", "Negative Space", "Quiet"]
         ),
@@ -79,7 +79,7 @@ public enum NamedAesthetics {
         NamedAesthetic(
             name: "Bold Composition",
             ideal: ImageAttributes(warmth: 0.2, complexity: 0.7, formality: 0.1, era: -0.1),
-            tags: ["Strong Color", "Statement Pieces", "Confident", "Curated"]
+            tags: ["Strong Color", "Statement Pieces", "Confident", "Collected"]
         ),
         NamedAesthetic(
             name: "Pastoral Calm",

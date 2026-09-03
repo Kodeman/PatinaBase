@@ -14,8 +14,13 @@ struct ManualRoomEntryView: View {
 
     @State private var roomType: String = "living"
     @State private var name: String = ""
-    @State private var lengthFeet: String = "18"
-    @State private var widthFeet: String = "14"
+    // GAP4-03: these read "18" and "14" as if typed, and `save()` writes them
+    // through `measuredWithUnitControl: true` — a room nobody measured,
+    // recorded as measured fact. `ScanFallbackEntryView` is the other door
+    // onto the same sheet and was fixed first; this is the one Your Spaces →
+    // "Add a room" → "Enter manually" opens (review RL1B3-01).
+    @State private var lengthFeet: String = ""
+    @State private var widthFeet: String = ""
     @State private var ceilingHeightRaw: String = "standard" // 8 / 9 / 10 / vaulted
     @State private var windowCountRaw: String = "2"
     @State private var orientationRaw: String = "south"
@@ -89,9 +94,18 @@ struct ManualRoomEntryView: View {
                         .foregroundStyle(PatinaColors.Text.inverse)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Capsule().fill(PatinaColors.Interactive.active))
+                        // The same disabled fill `StyleContinueButton` uses,
+                        // so the two CTAs in this flow read alike.
+                        .background(
+                            Capsule().fill(
+                                isValid
+                                    ? PatinaColors.Interactive.active
+                                    : PatinaColors.Interactive.active.opacity(0.3)
+                            )
+                        )
                 }
                 .buttonStyle(.plain)
+                .disabled(!isValid)
                 .padding(.top, 8)
             }
             .padding(20)
@@ -152,6 +166,22 @@ struct ManualRoomEntryView: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
             )
+    }
+
+    // MARK: - Validation
+
+    private var isValid: Bool {
+        Self.dimensionsAreValid(length: lengthFeet, width: widthFeet)
+    }
+
+    /// The Save gate, pulled out so `ScanFallbackEntryTests` can call it.
+    /// With the fields no longer pre-seeded this is what stands between an
+    /// empty form and a room whose dimensions the person never gave —
+    /// `save()` passes them through `measuredWithUnitControl: true`.
+    static func dimensionsAreValid(length: String, width: String) -> Bool {
+        guard let lengthValue = Double(length), let widthValue = Double(width),
+              lengthValue > 0, widthValue > 0 else { return false }
+        return true
     }
 
     // MARK: - Save

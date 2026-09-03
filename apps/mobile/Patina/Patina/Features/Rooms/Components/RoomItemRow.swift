@@ -40,11 +40,14 @@ struct RoomItemRow: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.makerName)
-                            .font(PatinaTypography.bodySmall)
-                            .tracking(0.5)
-                            .textCase(.uppercase)
-                            .foregroundStyle(PatinaColors.Text.muted)
+                        // C5-16: no line at all beats `UNKNOWN MAKER`.
+                        if let maker = item.resolvedMakerName {
+                            Text(maker)
+                                .font(PatinaTypography.bodySmall)
+                                .tracking(0.5)
+                                .textCase(.uppercase)
+                                .foregroundStyle(PatinaColors.Text.muted)
+                        }
                         Text(item.productName)
                             .font(PatinaTypography.uiSmall)
                             .foregroundStyle(PatinaColors.Text.primary)
@@ -86,7 +89,9 @@ struct RoomItemRow: View {
     /// Aggregated VoiceOver label: maker + name + price, with AR state when present,
     /// so focus lands once on the whole row instead of stopping on each Text.
     private var rowAccessibilityLabel: String {
-        var parts: [String] = [item.productName, "by \(item.makerName)", item.fullFormattedPrice]
+        var parts: [String] = [item.productName]
+        if let maker = item.resolvedMakerName { parts.append("by \(maker)") }
+        parts.append(item.fullFormattedPrice)
         if item.hasAR { parts.append("AR ready") }
         return parts.joined(separator: ", ")
     }

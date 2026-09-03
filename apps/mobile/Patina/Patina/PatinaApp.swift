@@ -97,6 +97,9 @@ struct PatinaApp: App {
                 .environment(\.appCoordinator, coordinator)
                 .environment(\.scanEventChannel, scanEvents)
                 .modelContainer(PersistenceController.shared.container)
+                // C7-01: the launch after a store this app could not open.
+                // No-op on every other launch.
+                .localStoreRecoveryNotice()
                 .onOpenURL { url in
                     DeepLinkHandler.shared.handle(url)
                 }

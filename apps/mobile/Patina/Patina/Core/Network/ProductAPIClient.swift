@@ -64,9 +64,14 @@ actor ProductAPIClient {
             #endif
             throw ProductAPIError.http(status: http.statusCode)
         }
-        let items = ProductAPIClient.withholdingUnresolvedMakers(
+        let decoded = ProductAPIClient.withholdingUnresolvedMakers(
             try ProductAPIClient.decodeProducts(from: data)
         )
+        // C-11: the unscoped feed and the room-scoped feed are the same RPC
+        // with a different `p_room_id`, and they disagree about the same
+        // piece by 16 points. The first answer the session got is the one it
+        // keeps — the tester is not shown a number that moves under them.
+        let items = await MainActor.run { MatchScoreResolver.shared.reconciling(decoded) }
         return RecommendationsResponse(items: items, total: items.count, roomId: roomId, roomName: nil)
     }
 
@@ -112,6 +117,24 @@ actor ProductAPIClient {
 
     // MARK: - Single Product (PostgREST direct query)
 
+    /// The `products` columns `RawProductWithVendor` decodes, named one by
+    /// one. Kept beside the struct it mirrors, and pinned by
+    /// `ProductSelectShapeTests` so it cannot drift back to `*`.
+    ///
+    /// A3-18: this used to be `*`. `products` carries two 768-dimension
+    /// vectors — `embedding` and `aesthete_vector` — that nothing on the
+    /// phone decodes, and they are 90% of the row: one measured row is
+    /// 20,706 bytes, of which 9,459 is `embedding` and 9,462 is
+    /// `aesthete_vector`. Every saved piece and every piece opened paid for
+    /// them, before an image had started loading.
+    static let productColumns = [
+        "id", "name", "price_retail", "quality_score", "images", "materials",
+        "style_tags", "tags", "category", "status", "dimensions",
+        "lead_time_weeks", "brand", "description", "finish", "patina_managed",
+        "source_url", "published_at", "photo_verified_at",
+        "shipping_flat_cents", "deleted_at"
+    ]
+
     /// PostgREST `select` for the single-product direct fetch.
     ///
     /// `products` carries two foreign keys to `vendors` — `vendor_id`
@@ -119,7 +142,8 @@ actor ProductAPIClient {
     /// (00011_add_retailer_id.sql:6) — so a bare `vendors(...)` embed is
     /// ambiguous and PostgREST answers PGRST201 instead of the row. The
     /// constraint name disambiguates it.
-    static let productSelect = "*,vendors!products_vendor_id_fkey(name,made_in,brand_story)"
+    static let productSelect = productColumns.joined(separator: ",")
+        + ",vendors!products_vendor_id_fkey(name,made_in,brand_story)"
 
     /// Fetch a single product by ID
     func fetchProduct(id: String) async throws -> Product {
@@ -142,10 +166,21 @@ actor ProductAPIClient {
             #endif
             throw ProductAPIError.http(status: http.statusCode)
         }
-        // PostgREST returns an array; decode and map to Product
-        let rawProducts = try JSONDecoder().decode([RawProductWithVendor].self, from: data)
+        // PostgREST returns an array; decode and map to Product.
+        // C7-17: element-wise, exactly as `decodeProducts` already does — a
+        // single malformed column must read as "we couldn't show this piece",
+        // never as a decode that takes the whole response with it.
+        let rawProducts = try JSONDecoder()
+            .decode([FailableDecodable<RawProductWithVendor>].self, from: data)
+            .compactMap(\.value)
         guard let raw = rawProducts.first else { throw ProductAPIError.notFound }
-        return raw.toProduct()
+        // C-11: this read has no match score. It used to print
+        // `quality_score ?? 50` as one, which is how a piece the grid scored
+        // 73 read 50 on its own detail, one tap later.
+        let product = raw.toProduct()
+        return await MainActor.run {
+            MatchScoreResolver.shared.applyingKnownScores([product])
+        }[0]
     }
 
     /// The saved pieces' products, fetched **by id, withdrawn ones included**.
@@ -168,9 +203,21 @@ actor ProductAPIClient {
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw ProductAPIError.http(status: http.statusCode)
         }
-        return try JSONDecoder()
-            .decode([RawProductWithVendor].self, from: data)
-            .map { $0.toProduct() }
+        // C7-17: one malformed row used to throw and take the whole saved
+        // list with it — which the client reads as their saved pieces being
+        // gone, not as one piece we could not draw.
+        let wrapped = try JSONDecoder()
+            .decode([FailableDecodable<RawProductWithVendor>].self, from: data)
+        #if DEBUG
+        let dropped = wrapped.count - wrapped.compactMap(\.value).count
+        if dropped > 0 {
+            PatinaLog.ui.debug("[ProductAPI] Dropped \(dropped) malformed saved-piece row(s)")
+        }
+        #endif
+        let products = wrapped.compactMap(\.value).map { $0.toProduct() }
+        return await MainActor.run {
+            MatchScoreResolver.shared.applyingKnownScores(products)
+        }
     }
 
     // MARK: - Interactions
@@ -198,6 +245,11 @@ actor ProductAPIClient {
         var request = URLRequest(url: baseURL.appendingPathComponent("/rest/v1/rpc/process_style_quiz"))
         request.httpMethod = "POST"
         await applyHeaders(to: &request)
+        // C1-04: the quiz's own budget, not the app-wide 30 s. The locally
+        // computed profile is already the fallback, so waiting longer than
+        // this buys the person nothing and costs them the fifth question
+        // sitting under their finger.
+        request.timeoutInterval = APIConfiguration.quizSubmissionTimeout
 
         let params: [String: Any] = [
             "quiz_answers": [
@@ -257,7 +309,12 @@ private struct RawProductWithVendor: Decodable {
             id: id,
             name: name,
             priceCents: price_retail ?? 0,
-            matchScore: quality_score ?? 50,
+            // C-11: `quality_score` is not a match — it is the catalogue's
+            // own rating, and it is NULL on every row today, so this printed
+            // a flat 50% on a piece the grid had just scored 73. The by-id
+            // read carries no score; `MatchScoreResolver` supplies the
+            // session's, or the piece stays unscored and says so.
+            matchScore: 0,
             makerName: vendors?.name ?? "Unknown",
             makerLocation: vendors?.made_in,
             makerStory: vendors?.brand_story,

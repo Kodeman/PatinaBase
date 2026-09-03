@@ -19,6 +19,29 @@ final class CollectionsViewModel {
     var isCreatingBoard = false
     var newBoardName = ""
 
+    /// C4-03: the remote reconcile was `(try? …) ?? []` — a failure and an
+    /// empty answer were the same value — and the view has one branch for
+    /// both. A client whose saved pieces did not load was told "No saved
+    /// items yet" about pieces she has.
+    private(set) var lastLoadFailed = false
+
+    /// True while the remote reconcile is in flight: the third state, so an
+    /// empty local store during a first load is not published as emptiness.
+    private(set) var isLoading = false
+
+    /// What the Saved screen should draw. `loaded` carries whatever the local
+    /// store holds, empty or not — that IS the answer once a load has landed.
+    enum LoadState: Equatable {
+        case loading
+        case loaded
+        case failed
+    }
+
+    var loadState: LoadState {
+        if isLoading { return .loading }
+        return lastLoadFailed ? .failed : .loaded
+    }
+
     static let boardsTab = "Boards"
     static let allItemsTab = "All items"
 
@@ -66,12 +89,19 @@ final class CollectionsViewModel {
     /// `productId` as the dedupe key.
     @MainActor
     private func reconcileWithRemote(context: ModelContext) async {
+        isLoading = true
+        defer { isLoading = false }
         do {
             // Build the set of (room_id) values we know about.
             let store = RoomStore(context: context)
             let rooms = store.allRooms()
             let remoteIds = rooms.compactMap { $0.remoteId }
-            guard !remoteIds.isEmpty else { return }
+            guard !remoteIds.isEmpty else {
+                // No synced room to ask about is not a failure — there is
+                // nothing on the server that could be missing here.
+                lastLoadFailed = false
+                return
+            }
 
             // B §3: the row names the room it was saved into, so the pulled
             // row's `room_id` has to land on the local model. Without this the
@@ -83,10 +113,19 @@ final class CollectionsViewModel {
             )
 
             var pulled: [RemoteSavedItem] = []
+            var anyFailed = false
             for remoteId in remoteIds {
-                let rows = (try? await RoomsAPIClient.shared.listItems(forRoomId: remoteId)) ?? []
-                pulled.append(contentsOf: rows)
+                do {
+                    pulled.append(contentsOf: try await RoomsAPIClient.shared.listItems(forRoomId: remoteId))
+                } catch {
+                    // C4-03: one room's saves failing is not "no saved items".
+                    anyFailed = true
+                    #if DEBUG
+                    PatinaLog.ui.error("[Collections] listItems failed for \(remoteId): \(error.localizedDescription)")
+                    #endif
+                }
             }
+            lastLoadFailed = anyFailed
 
             let knownProductIds = Set(savedItems.compactMap { $0.productId })
             var didInsert = false

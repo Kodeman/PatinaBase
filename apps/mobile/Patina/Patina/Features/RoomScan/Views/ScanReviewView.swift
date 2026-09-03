@@ -125,7 +125,7 @@ public struct ScanReviewView: View {
     private var errorState: some View {
         VStack(spacing: 16) {
             Spacer()
-            Text("Something went wrong")
+            Text("Something went wrong.")
                 .font(PatinaTypography.patinaVoiceLarge)
                 .foregroundStyle(PatinaColors.Text.primary.opacity(0.8))
             if let loadError {
@@ -179,7 +179,7 @@ public struct ScanReviewView: View {
                 Button {
                     Task { await submit(skipping: lastSubmitSkipped) }
                 } label: {
-                    Text("Let's try that again")
+                    Text("Let’s try that again")
                         .font(PatinaTypography.bodySmallMedium)
                         .foregroundStyle(PatinaColors.Text.interactive)
                 }
@@ -567,7 +567,7 @@ public struct ScanReviewView: View {
             return
         }
         isLoading = false
-        loadError = "We couldn't find the scan file. If this keeps happening, please start a fresh scan."
+        loadError = "We couldn’t find the scan file. If this keeps happening, please start a fresh scan."
     }
 
     private func applyManifest(_ loaded: ScanManifest) {
@@ -699,7 +699,7 @@ public struct ScanReviewView: View {
             )
             onComplete()
         } catch {
-            saveError = "We couldn't save your changes. \(error.localizedDescription)"
+            saveError = "We couldn’t save your changes. \(error.localizedDescription)"
         }
     }
 }

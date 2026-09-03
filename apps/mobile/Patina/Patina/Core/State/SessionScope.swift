@@ -54,7 +54,9 @@ enum SessionScope {
             NotificationManager.shared,
             RoomSyncCoordinator.shared,
             CompanionService.shared,
-            PieceActChannel.shared
+            PieceActChannel.shared,
+            MatchScoreResolver.shared,
+            LocalRoomSignal.shared
         ]
     }
 
@@ -101,6 +103,16 @@ extension DesignRequestStatusService: SessionScoped {}
 extension OrdersService: SessionScoped {}
 extension StudioHubViewModel: SessionScoped {}
 extension SettingsService: SessionScoped {}
+
+/// The session's one answer per piece. It is scored against the account's
+/// taste portrait, so it is the previous account's opinion of the piece.
+extension MatchScoreResolver: SessionScoped {}
+
+/// Not data but a revision: which rooms exist has just changed, whether or
+/// not a wipe ran, so every reader keyed on it has to look again.
+extension LocalRoomSignal: SessionScoped {
+    @MainActor func resetForSessionChange() { changed() }
+}
 
 // The rest already had a clearing method, so the conformance is the whole edit.
 

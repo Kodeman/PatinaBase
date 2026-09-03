@@ -45,6 +45,7 @@ struct WholeHomeCrossRoomBar: View {
     }
 
     private var summary: String {
+        // C5-14
         let dollarString = PatinaCurrency.formatWholeDollars(cents: totalCents)
         let roomWord = roomCount == 1 ? "room" : "rooms"
         let itemWord = itemCount == 1 ? "item" : "items"

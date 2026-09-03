@@ -178,6 +178,8 @@ struct Product: Identifiable, Hashable, Codable {
 
     // MARK: - Computed
 
+    /// C5-14: `PatinaCurrency` publishes no compact form on purpose — the
+    /// same piece read `$4,200` on one screen and `$4.2K` on the next.
     var formattedPrice: String {
         PatinaCurrency.formatWholeDollars(cents: priceCents)
     }
@@ -187,9 +189,37 @@ struct Product: Identifiable, Hashable, Codable {
         PatinaCurrency.formatWholeDollars(cents: priceCents)
     }
 
+    /// A-34: after a five-question quiz every recommendation stamped 40–46%,
+    /// which a person reads as the quiz having failed — the app asked five
+    /// questions, promised to show them their home, then scored its own
+    /// answer at four out of ten. The number was never a percentage anybody
+    /// could act on; it is a rank. So the card says where the piece sits, not
+    /// a figure that invites arithmetic.
+    ///
+    /// `0` is "we have no score for this piece", not "a bad match": the
+    /// decoder's default, and what `MatchScoreResolver` hands back for a
+    /// piece opened by id in a session that never scored it (C-11).
     var matchLabel: String {
-        "\(matchScore)% match"
+        switch matchScore {
+        case 70...: return "Strong match"
+        case 50..<70: return "Good match"
+        case 1..<50: return "Worth a look"
+        default: return "Not scored yet"
+        }
     }
+
+    /// Whether `matchLabel` is describing a score the app actually has.
+    var hasMatchScore: Bool { matchScore > 0 }
+
+    /// The drawable half of `matchLabel`, and `nil` when there is no verdict.
+    ///
+    /// `matchLabel` is the right thing to *say* — VoiceOver reading "Not
+    /// scored yet" is honest. It is the wrong thing to *draw*: both render
+    /// sites put it in a capsule tinted `PatinaColors.success`, so a piece
+    /// opened by id in a session that never scored it drew a green verdict
+    /// badge announcing the absence of a verdict (review `RL1B3-04`). A call
+    /// site that reads this one draws nothing instead.
+    var matchVerdict: String? { hasMatchScore ? matchLabel : nil }
 
     var hasARModel: Bool {
         usdzURL != nil

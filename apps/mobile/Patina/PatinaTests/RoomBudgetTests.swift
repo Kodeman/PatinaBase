@@ -280,8 +280,9 @@ struct RoomBudgetTests {
         #expect(RoomGalleryCard.budgetString(for: space) == nil)
 
         space.budgetCents = 900_000
-        // C5-14: the compact "K" shape is gone from the app — one amount, one
-        // shape, and `PatinaCurrency` is the only place it is made.
+        // C5-14: the compact form is gone — `PatinaCurrency` publishes none,
+        // and the same figure read `$9,000` on the room screen and `$9.0K`
+        // on the card.
         #expect(RoomGalleryCard.budgetString(for: space) == "$9,000")
     }
 

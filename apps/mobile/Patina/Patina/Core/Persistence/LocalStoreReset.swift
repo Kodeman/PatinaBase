@@ -32,6 +32,10 @@ enum LocalStoreReset {
             try context.delete(model: DesignRequestDraft.self)
             try context.delete(model: SyncQueueItem.self)
             try context.delete(model: TableItemModel.self)
+            // C7-02: boards are in the container's schema now, so they are
+            // also in the wipe — a board named after the previous account's
+            // project was the one row this list had missed.
+            try context.delete(model: BoardModel.self)
             try context.save()
         } catch {
             PatinaLog.auth.error("[LocalStoreReset] SwiftData wipe failed: \(error.localizedDescription)")
@@ -65,6 +69,20 @@ enum LocalStoreReset {
         LastSeenStore.shared.clear()
         RecordOwnerStamp.shared.clear()
 
+        // A link account A tapped and never got to open is account A's
+        // request. It lives in the App Group suite with a 15-minute life, so
+        // without this it drains into account B's first `.main` — the A → B
+        // path with no sign-out in between (L1-F note L1F→B-3 / RL1F-07).
+        // The key is written as a literal because `PendingLinkQueue` is
+        // L1-F's file and does not exist on this branch; L1-F swaps it for
+        // `PendingLinkQueue.defaultsKey` at merge 4 (l1b-notes-out.md O10).
+        (UserDefaults(suiteName: LastSeenStore.appGroupIdentifier) ?? .standard)
+            .removeObject(forKey: "patina.deeplink.pending.v1")
+
+        // B-03: the tombstones describe rooms this account deleted. The next
+        // account's rooms are a different set entirely.
+        RoomTombstones.clearAll()
+
         // The rooms the sync debounce was protecting are gone; the next
         // screen must ask again rather than wait out the window.
         RoomSyncCoordinator.shared.forget()
@@ -94,11 +112,20 @@ enum LocalStoreReset {
             try context.delete(model: DesignRequestDraft.self)
             try context.delete(model: SyncQueueItem.self)
             try context.delete(model: TableItemModel.self)
+            try context.delete(model: BoardModel.self)
             try context.save()
         } catch {
             PatinaLog.auth.error("[LocalStoreReset] guest wipe failed: \(error.localizedDescription)")
         }
 
+        // `RoomTombstones` is deliberately NOT cleared here (review
+        // RL1B2-10). A tombstone is only ever written for a room that had a
+        // `remoteId`, and the loop above keeps every such room because it is
+        // the ACCOUNT's, not the guest's. So the ids in that list belong to
+        // the same account whose rooms this wipe is preserving; dropping them
+        // would let the next reconcile re-insert a room the person confirmed
+        // away. The account-change wipe above clears them, because there the
+        // rows really do belong to somebody else.
         RoomSelectionStore.shared.clear()
         deleteScanBundles()
         RoomSyncCoordinator.shared.forget()

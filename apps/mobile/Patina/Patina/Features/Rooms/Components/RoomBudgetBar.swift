@@ -64,6 +64,7 @@ struct RoomBudgetBar: View {
     }
 
     private static func money(_ cents: Int) -> String {
+        // C5-14
         PatinaCurrency.formatWholeDollars(cents: cents)
     }
 

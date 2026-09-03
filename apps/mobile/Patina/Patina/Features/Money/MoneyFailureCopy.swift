@@ -27,7 +27,7 @@ struct MoneyFailure: Equatable {
     /// client retrying is the whole of the answer.
     let offersDesignerMessage: Bool
 
-    static let retry = "Let's try that again"
+    static let retry = "Let’s try that again"
 
     init(_ sentence: String, offersDesignerMessage: Bool = true) {
         self.sentence = sentence
@@ -46,12 +46,12 @@ enum MoneyFailureCopy {
     /// raw error themselves.
     static func checkout(_ error: Error) -> MoneyFailure {
         guard let checkout = error as? CheckoutError else {
-            return MoneyFailure("We couldn't start this payment. Nothing has been charged.")
+            return MoneyFailure("We couldn’t start this payment. Nothing has been charged.")
         }
         switch checkout {
         case .notPayable:
             return MoneyFailure(
-                "This invoice can't be paid in the app right now. Your designer can tell you why."
+                "This invoice can’t be paid in the app right now. Your designer can tell you why."
             )
         case .paymentProcessing:
             // NOT "bank transfers take 3–5 business days". `payment_processing`
@@ -64,22 +64,22 @@ enum MoneyFailureCopy {
             // only by the settle banner on this same screen, and only when the
             // payment row itself says `ach_manual` or `wire`.
             return MoneyFailure(
-                "A payment on this invoice is already going through. We'll update this as soon as it clears.",
+                "A payment on this invoice is already going through. We’ll update this as soon as it clears.",
                 offersDesignerMessage: true
             )
         case .nothingDue:
             return MoneyFailure(
-                "There's nothing left owing on this invoice.",
+                "There’s nothing left owing on this invoice.",
                 offersDesignerMessage: false
             )
         case .notConfigured:
             return MoneyFailure(
-                "Online payment isn't set up for this invoice yet. Your designer can sort it out."
+                "Online payment isn’t set up for this invoice yet. Your designer can sort it out."
             )
         case .notFound:
-            return MoneyFailure("We couldn't find this invoice.")
+            return MoneyFailure("We couldn’t find this invoice.")
         case .unavailable:
-            return MoneyFailure("We couldn't start this payment. Nothing has been charged.")
+            return MoneyFailure("We couldn’t start this payment. Nothing has been charged.")
         }
     }
 
@@ -88,22 +88,22 @@ enum MoneyFailureCopy {
     /// Pure, for the same reason as `checkout(_:)`.
     static func sign(_ error: Error) -> MoneyFailure {
         guard let sign = error as? ProposalSignError else {
-            return MoneyFailure("We couldn't record your signature. Nothing has been signed.")
+            return MoneyFailure("We couldn’t record your signature. Nothing has been signed.")
         }
         switch sign {
         case .expired:
             return MoneyFailure("This proposal has expired. Your designer can send a fresh one.")
         case .notSignable:
-            return MoneyFailure("This proposal isn't ready to sign right now.")
+            return MoneyFailure("This proposal isn’t ready to sign right now.")
         case .nameTooShort:
             return MoneyFailure(
                 "Please type your full name to sign.",
                 offersDesignerMessage: false
             )
         case .notOwner:
-            return MoneyFailure("This proposal isn't yours to sign.")
+            return MoneyFailure("This proposal isn’t yours to sign.")
         case .unexpected:
-            return MoneyFailure("We couldn't record your signature. Nothing has been signed.")
+            return MoneyFailure("We couldn’t record your signature. Nothing has been signed.")
         }
     }
 
@@ -114,13 +114,13 @@ enum MoneyFailureCopy {
     /// connection are the same fact to a homeowner — and it takes no argument
     /// so it cannot look like it branches on one. Callers log the raw error.
     static let decision = MoneyFailure(
-        "We couldn't send your choice. Your designer hasn't seen it yet."
+        "We couldn’t send your choice. Your designer hasn’t seen it yet."
     )
 
     /// SP-17: a deferral is a message, not a choice. Reporting it as one told
     /// a client who tapped "Not yet" that her choice had not gone through.
     static let deferral = MoneyFailure(
-        "We couldn't send that note. Your designer hasn't seen it yet."
+        "We couldn’t send that note. Your designer hasn’t seen it yet."
     )
 
     /// The raw error, for the console only. Never reaches a screen.

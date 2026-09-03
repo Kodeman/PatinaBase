@@ -85,11 +85,48 @@ final class ProposalDetailViewModel {
         !isSigned && (proposal?.isSignable == true)
     }
 
-    func load(proposalId: String) async {
+    /// R-05: how long the detail may sit blank before it admits failure.
+    ///
+    /// The walk measured 65–185 seconds of "One moment…" on a screen that is
+    /// also the landing target for a proposal push. The SDK read now carries
+    /// a 30 s request budget (C4-16), which is still three times too long for
+    /// a screen with nothing on it.
+    static let fetchDeadline: TimeInterval = 10
+
+    /// The row this screen was opened from, if the app already holds it.
+    ///
+    /// `R-05`'s fix line asks the skeleton to render the proposal's title
+    /// "from the record row that launched it", and the navigation route
+    /// carries only an id (review `RL1B2-15`). `BadgeCountService` is where
+    /// Today and Studio already keep those rows, so the detail can name the
+    /// proposal a tester opened without waiting on a fetch that may be about
+    /// to time out. `nil` on a cold launch from a push, which is the case the
+    /// grey skeleton still covers.
+    static func knownRecord(for proposalId: String) -> RemoteProposal? {
+        BadgeCountService.shared.pendingProposals.first { $0.id == proposalId }
+    }
+
+    /// One load at a time. The ten-second cap and the `.refreshable` that
+    /// makes the retry reachable are what create the overlap: a pull-to-
+    /// refresh returning at t=3 s populates the bundle, then the original
+    /// `.task` hits its deadline at t=10 s and its catch clears every array
+    /// over the page the reader is looking at (review `RL1B3-05`). Same guard
+    /// as `RoomSyncCoordinator.inFlight` and `DailyRoomBatchQueue.isFlushing`.
+    private var isInFlight = false
+
+    func load(proposalId: String, deadline: TimeInterval = ProposalDetailViewModel.fetchDeadline) async {
+        // Claimed before the first `await`, or two callers in the same tick
+        // both pass it.
+        guard !isInFlight else { return }
+        isInFlight = true
+        defer { isInFlight = false }
+
         isLoading = true
         error = nil
         do {
-            let bundle = try await ProposalsAPIClient.shared.fetchProposalBundle(id: proposalId)
+            let bundle = try await Self.withDeadline(deadline) {
+                try await ProposalsAPIClient.shared.fetchProposalBundle(id: proposalId)
+            }
             self.proposal = bundle.proposal
             self.items = bundle.proposal.items ?? []
             self.sections = bundle.sections
@@ -107,13 +144,35 @@ final class ProposalDetailViewModel {
             self.exclusions = []
             self.scopeRooms = []
             self.boards = []
-            self.error = "Couldn't load this proposal"
+            self.error = "Couldn’t load this proposal"
             #if DEBUG
             PatinaLog.ui.error("[Proposals] detail failed: \(error.localizedDescription)")
             #endif
         }
         self.isLoading = false
     }
+
+    /// Run `work`, or give up at `deadline` — whichever comes first.
+    ///
+    /// A cancelled `URLSession` task throws, which lands in `load`'s existing
+    /// catch, so the timeout needs no branch of its own.
+    static func withDeadline<T: Sendable>(
+        _ deadline: TimeInterval,
+        _ work: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await work() }
+            group.addTask {
+                try await Task.sleep(for: .seconds(deadline))
+                throw ProposalLoadTimeout()
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else { throw ProposalLoadTimeout() }
+            return first
+        }
+    }
+
+    struct ProposalLoadTimeout: Error {}
 
     func beginSigning() {
         guard canSign, !isSigning else { return }

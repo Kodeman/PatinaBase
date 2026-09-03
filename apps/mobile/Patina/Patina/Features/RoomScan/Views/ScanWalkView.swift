@@ -201,7 +201,7 @@ struct ScanWalkView: View {
                         .foregroundStyle(PatinaColors.offWhite)
                         .multilineTextAlignment(.center)
 
-                    Text("Hold still and I'll try to find my way.")
+                    Text("Hold still and I’ll try to find my way.")
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.offWhite.opacity(0.75))
                         .multilineTextAlignment(.center)
@@ -212,7 +212,7 @@ struct ScanWalkView: View {
 
                 VStack(spacing: 12) {
                     Button(action: viewModel.didTapRetryAfterSessionLost) {
-                        Text("Let's try that again")
+                        Text("Let’s try that again")
                             .font(PatinaTypography.uiAction)
                             .foregroundStyle(PatinaColors.charcoal)
                             .frame(maxWidth: .infinity)

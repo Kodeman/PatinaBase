@@ -29,8 +29,7 @@ struct ProposalDetailView: View {
                 } else if let error = viewModel.error {
                     errorView(error)
                 } else {
-                    PatinaLoadingState()
-                        .padding(.top, 80)
+                    loadingSkeleton
                 }
             }
             .padding(.bottom, MoneyScreenMetrics.bottomClearance(houseFirst: coordinator.isHouseFirstRoot))
@@ -40,6 +39,10 @@ struct ProposalDetailView: View {
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
         .task { await viewModel.load(proposalId: proposalId) }
+        // C4-12: the same work the `.task` above does — and with R-05's
+        // ten-second cap, the retry a reader now reaches in ten seconds
+        // instead of three minutes.
+        .refreshable { await viewModel.load(proposalId: proposalId) }
         .sheet(isPresented: $viewModel.showSignSheet) {
             ProposalSignSheet(
                 proposalTitle: viewModel.proposal?.title ?? "this proposal",
@@ -56,6 +59,67 @@ struct ProposalDetailView: View {
             )
             .presentationDetents([.medium, .large])
         }
+    }
+
+    // MARK: - Loading
+
+    /// R-05: an entirely blank cream page with a spinner and the words "One
+    /// moment…", held for 65–185 seconds, on the screen a proposal push lands
+    /// on. The wait is capped at ten seconds now
+    /// (`ProposalDetailViewModel.fetchDeadline`); this is what it looks like
+    /// while it runs — the screen's own chrome, so the reader can see they
+    /// are on the right page and that something is coming.
+    private var loadingSkeleton: some View {
+        // Review RL1B2-15: a grey rectangle does not tell a reader which
+        // proposal they opened, which is what the finding's fix line asks
+        // for. When the app already holds the row — the Studio tap and the
+        // push-into-a-warm-app path both do — draw its own words instead.
+        let known = ProposalDetailViewModel.knownRecord(for: proposalId)
+        return VStack(alignment: .leading, spacing: 16) {
+            MonoLabel(text: "PROPOSAL")
+                .tracking(2)
+
+            if let title = known?.title, !title.isEmpty {
+                Text(title)
+                    .font(PatinaTypography.h2)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(PatinaColors.Background.secondary)
+                    .frame(height: 30)
+                    .frame(maxWidth: 260)
+            }
+
+            if let address = known?.project_address, !address.isEmpty {
+                Text(address)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(PatinaColors.Background.secondary)
+                    .frame(height: 14)
+                    .frame(maxWidth: 160)
+            }
+
+            HStack(spacing: 10) {
+                ProgressView()
+                    .tint(PatinaColors.Text.interactive)
+                Text("Opening your proposal…")
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+            }
+            .padding(.top, 12)
+        }
+        .padding(.top, 56)
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            (known?.title).flatMap { $0.isEmpty ? nil : "Opening \($0)" } ?? "Opening your proposal"
+        )
+        .accessibilityIdentifier("ProposalDetailView.LoadingSkeleton")
     }
 
     // MARK: - Header

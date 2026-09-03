@@ -146,6 +146,7 @@ struct RoomGalleryCard: View {
     /// `budgetCents`, so the cell reads that, or the cell does not draw.
     static func budgetString(for room: RoomModel) -> String? {
         guard let cents = room.budgetCents else { return nil }
+        // C5-14
         return PatinaCurrency.formatWholeDollars(cents: cents)
     }
 

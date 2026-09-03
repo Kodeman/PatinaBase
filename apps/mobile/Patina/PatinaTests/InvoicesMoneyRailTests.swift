@@ -152,8 +152,8 @@ struct InvoicesMoneyRailTests {
         let failure = MoneyFailureCopy.checkout(CheckoutError.from(code: nil, detail: vendor))
         #expect(!failure.sentence.contains("sk_test"))
         #expect(!failure.sentence.contains("API Key"))
-        #expect(failure.sentence == "We couldn't start this payment. Nothing has been charged.")
-        #expect(failure.retryLabel == "Let's try that again")
+        #expect(failure.sentence == "We couldn’t start this payment. Nothing has been charged.")
+        #expect(failure.retryLabel == "Let’s try that again")
         #expect(failure.offersDesignerMessage)
     }
 
@@ -177,21 +177,21 @@ struct InvoicesMoneyRailTests {
             #expect(!failure.sentence.lowercased().contains("stripe"))
             #expect(!failure.sentence.lowercased().contains("http"))
             #expect(failure.sentence.hasSuffix("."))
-            #expect(failure.retryLabel == "Let's try that again")
+            #expect(failure.retryLabel == "Let’s try that again")
         }
     }
 
     @Test("every checkout code has its own true sentence")
     func mappedCheckoutCodesKeepTheirOwnCopy() {
         #expect(MoneyFailureCopy.checkout(CheckoutError.notConfigured).sentence
-                == "Online payment isn't set up for this invoice yet. Your designer can sort it out.")
+                == "Online payment isn’t set up for this invoice yet. Your designer can sort it out.")
         #expect(MoneyFailureCopy.checkout(CheckoutError.nothingDue).offersDesignerMessage == false)
         // B-3: `payment_processing` covers a card in the webhook gap as well as
         // a settling ACH debit, so this branch must not name a bank transfer.
         // Only the settle banner, which reads the payment row's own method,
         // may print that sentence.
         #expect(MoneyFailureCopy.checkout(CheckoutError.paymentProcessing).sentence
-                == "A payment on this invoice is already going through. We'll update this as soon as it clears.")
+                == "A payment on this invoice is already going through. We’ll update this as soon as it clears.")
         #expect(!MoneyFailureCopy.checkout(CheckoutError.paymentProcessing).sentence
                 .contains("3–5 business days"))
         // No checkout branch may guess at the method behind a payment.
@@ -216,7 +216,7 @@ struct InvoicesMoneyRailTests {
         ))
         if case .unexpected = mapped {} else { Issue.record("expected .unexpected") }
         #expect(MoneyFailureCopy.sign(mapped).sentence
-                == "We couldn't record your signature. Nothing has been signed.")
+                == "We couldn’t record your signature. Nothing has been signed.")
     }
 
     // MARK: - SP-15 · the settle banner tells the truth

@@ -16,18 +16,13 @@ import SwiftData
 struct AccountIsolationTests {
 
     /// The app's own schema, so `delete(model:)` finds every type the wipe
-    /// names.
+    /// names. Read from `PatinaSchemaV1` rather than re-listed: a hand-copied
+    /// list went stale the moment `BoardModel` joined the container (C7-02),
+    /// and `wipeGuestWork` then threw `NSFetchRequest could not locate an
+    /// NSEntityDescription for entity name 'BoardModel'` — in a test, where
+    /// the app would have thrown it on a real store.
     private func makeContext() throws -> ModelContext {
-        let schema = Schema([
-            TableItemModel.self,
-            RoomModel.self,
-            SavedItem.self,
-            StylePreferenceModel.self,
-            SyncQueueItem.self,
-            RoomScanPackage.self,
-            DesignRequestDraft.self,
-            SubmittedDesignRequest.self
-        ])
+        let schema = Schema(versionedSchema: PatinaSchemaV1.self)
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return ModelContext(try ModelContainer(for: schema, configurations: [config]))
     }
@@ -142,5 +137,202 @@ struct AccountIsolationTests {
         let context = try makeContext()
         LocalStoreReset.wipeGuestWork(in: context)
         #expect(RoomSyncCoordinator.shared.isDue(owner: "userA", now: Date()))
+    }
+
+    // MARK: - GAP3-18 / B-15: the guest a sign-out leaves behind
+
+    /// The wipe runs on ONE seam — a different account signing in — and a
+    /// sign-out is not it, deliberately: the same account signing back in has
+    /// to find its rooms. Between the two there is a guest holding the phone,
+    /// and the guest was shown the account's rooms ("2 ROOMS", "Audit Room B
+    /// — SCANNED SEP 1") under a header reading "Guest".
+    @Test
+    func aGuestOnAnOwnedStoreSeesNoAccountRows() {
+        #expect(
+            LocalStoreOwnership.accountRowsAreVisible(isAuthenticated: false, owner: "userA") == false
+        )
+    }
+
+    /// SP-06's other half: a store no account has claimed holds the guest's
+    /// own work, and it stays theirs.
+    @Test
+    func aGuestOnAnUnclaimedStoreSeesTheirOwnWork() {
+        #expect(LocalStoreOwnership.accountRowsAreVisible(isAuthenticated: false, owner: nil))
+    }
+
+    @Test
+    func aSignedInReaderAlwaysSeesTheStore() {
+        #expect(LocalStoreOwnership.accountRowsAreVisible(isAuthenticated: true, owner: "userA"))
+        #expect(LocalStoreOwnership.accountRowsAreVisible(isAuthenticated: true, owner: nil))
+    }
+
+    /// An unresolved launch is not a guest.
+    ///
+    /// `isAuthenticated` is `session != nil`, and the session lands only from
+    /// inside the `authStateChanges` loop — so between launch and the first
+    /// event a returning signed-in owner reads as a guest and the gate hides
+    /// their own rows. The splash covers that window today; one phase-timing
+    /// change and it is a visible "your rooms vanished" (review RL1B-16).
+    @Test
+    func anUnresolvedLaunchIsNotTreatedAsAGuest() {
+        #expect(
+            LocalStoreOwnership.accountRowsAreVisible(
+                isAuthenticated: false,
+                owner: "userA",
+                isAuthStateReady: false
+            )
+        )
+        // …and once the answer is in, a real guest is still a guest.
+        #expect(
+            LocalStoreOwnership.accountRowsAreVisible(
+                isAuthenticated: false,
+                owner: "userA",
+                isAuthStateReady: true
+            ) == false
+        )
+    }
+
+    /// One key, spelled the same in both files — the gate reads what
+    /// `AuthService` writes.
+    @Test
+    func theOwnerKeyMatchesTheOneAuthServiceWrites() throws {
+        let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
+        #expect(source.contains("localStoreOwnerKey = \"\(LocalStoreOwnership.ownerKey)\""))
+    }
+
+    /// The room reads go through the gate, not around it.
+    @Test
+    func theRoomReadsAreScopedByOwnership() throws {
+        let source = try SourcePin.read("Patina/Core/Persistence/RoomStore.swift")
+        for reader in ["func allRooms()", "func room(id: UUID)", "func allItems()"] {
+            let body = try #require(
+                source.components(separatedBy: reader).last?
+                    .components(separatedBy: "\n    }").first
+            )
+            #expect(body.contains("guard accountRowsAreVisible"), "\(reader) is not scoped")
+        }
+        #expect(source.contains("!isSharedStore || LocalStoreOwnership.accountRowsAreVisible"))
+    }
+
+    /// Studio's three account-scoped numbers all recover together.
+    ///
+    /// `rooms` was revision-derived and the other two were stored snapshots
+    /// taken in one `loadData`, so a gate that flipped after the snapshot left
+    /// the saved count at `0` and the taste portrait at `nil` until the next
+    /// `onAppear` (review RL1B-16).
+    @Test
+    func theProfileCountsAreDerivedNotSnapshotted() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Profile/ViewModels/ProfileViewModel.swift"
+        )
+        for reader in [
+            "var rooms: [RoomModel]",
+            "var savedItemCount: Int",
+            "var styleProfile: StylePreferenceModel?"
+        ] {
+            let body = try #require(
+                source.components(separatedBy: reader).last?
+                    .components(separatedBy: "\n    }").first
+            )
+            #expect(
+                body.contains("LocalRoomSignal.shared.revision"),
+                "\(reader) is a snapshot, not a derivation"
+            )
+        }
+        #expect(source.contains("savedItemCount = ") == false)
+        #expect(source.contains("styleProfile = ") == false)
+    }
+
+    /// …and the scope reaches only the device-global store. A caller that
+    /// brought its own context — a test, a preview — is reading rows it
+    /// created, not an account's, and gating those was a different bug: it
+    /// answered `[]` in every suite that builds an in-memory container.
+    @Test
+    func aPrivateContextIsNotScoped() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        _ = store.createRoom(name: "Bench", roomType: "other", manualEntry: true)
+        #expect(store.allRooms().count == 1)
+    }
+
+    /// B-15's real half: the taste portrait's two `UserDefaults` keys carry
+    /// no account, so a sign-out left the next reader holding the previous
+    /// account's answers and `hasCompletedProfile`.
+    @Test
+    func theTastePortraitReadsAreScopedByOwnership() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/RoomScan/Shared/Services/StyleProfileStore.swift"
+        )
+        for reader in ["var hasCompletedProfile: Bool", "var currentProfile: StyleProfileResponse?"] {
+            let body = try #require(
+                source.components(separatedBy: reader).last?
+                    .components(separatedBy: "\n    }").first
+            )
+            #expect(
+                body.contains("LocalStoreOwnership.accountRowsAreVisible"),
+                "\(reader) is not scoped"
+            )
+        }
+    }
+
+    /// The profile stat and the rail read the same scoped source.
+    @Test
+    func theProfileStatsAreScopedByOwnership() throws {
+        let source = try SourcePin.read("Patina/Features/Profile/ViewModels/ProfileViewModel.swift")
+        #expect(source.contains("RoomStore(context: context).allRooms()"))
+        #expect(source.contains("LocalStoreOwnership.accountRowsAreVisible"))
+        // The old unscoped snapshot must not come back.
+        #expect(source.contains("FetchDescriptor<RoomModel>(sortBy:") == false)
+    }
+
+    // MARK: - C2-06: the navigation stack (L1-F applies the other half)
+
+    /// `AppCoordinator` is L1-F's file this wave, and the exact change went
+    /// out as `l1b-notes-out.md` → O2. L1-F applied it in
+    /// `clearNavigationForEndedSession()` rather than in
+    /// `beginSplashTransition()`, which is the better seam — it is the one
+    /// the forced-sign-out branch actually takes, and it clears the return
+    /// route and the queued deep link as well. So this reads that function,
+    /// not the one the note named (review `RL1B2-03`).
+    ///
+    /// A known issue, and deliberately NOT `isIntermittent`: an intermittent
+    /// one passes in both states, which made this row unfalsifiable — an
+    /// unapplied note looked exactly like an applied one (review `RL1B-03`,
+    /// still true at `RL1B2-02`, which found this the last of the three).
+    /// Green here, where `AppCoordinator.swift` is the base sha's; red the
+    /// moment L1-F's file arrives, as an unrecorded known issue. That red is
+    /// the tripwire, and `l1b-notes-out.md` §S1 carries the hard `#expect`
+    /// the steward pastes in its place at merge 4.
+    @Test
+    func theSignOutClearsThePreviousAccountsNavigationStack() throws {
+        let source = try SourcePin.read("Patina/App/Coordinators/AppCoordinator.swift")
+        let clears = Self.endedSessionBody(in: source)?
+            .contains("navigationPath = NavigationPath()") ?? false
+        withKnownIssue(
+            "C2-06 owes AppCoordinator its ended-session stack clear (l1b-notes-out.md O2, applied by L1-F)"
+        ) {
+            #expect(clears)
+        }
+    }
+
+    /// The body of `clearNavigationForEndedSession()`, brace-matched, or
+    /// `nil` when the function does not exist yet — which is the state on
+    /// this branch, and must be a recorded known issue rather than a hard
+    /// `#require` failure.
+    private static func endedSessionBody(in source: String) -> String? {
+        let marker = "func clearNavigationForEndedSession("
+        guard let start = source.range(of: marker),
+              let open = source[start.upperBound...].firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var body = ""
+        for character in source[open...] {
+            if character == "{" { depth += 1 }
+            if character == "}" {
+                depth -= 1
+                if depth == 0 { return body }
+            }
+            body.append(character)
+        }
+        return nil
     }
 }
