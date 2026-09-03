@@ -3,8 +3,9 @@ import { deriveSetupSteps, type StudioSetupInput } from '../studio-setup';
 const BASE: StudioSetupInput = {
   orgCreatedAt: '2026-01-01T00:00:00.000Z',
   myJobTitle: null,
-  memberCountBeyondSelf: 0,
+  activeMemberCountBeyondSelf: 0,
   projectsCount: 0,
+  hiresWithFirstDocument: 0,
 };
 
 const NOW = new Date('2026-08-04T12:00:00.000Z');
@@ -19,8 +20,9 @@ describe('deriveSetupSteps', () => {
       ['crew-invited', false],
       ['rolodex-seeded', false],
       ['first-project', false],
+      ['first-hire-opened', false],
     ]);
-    expect(openCount).toBe(4);
+    expect(openCount).toBe(5);
     expect(allDone).toBe(false);
   });
 
@@ -50,18 +52,21 @@ describe('deriveSetupSteps', () => {
     ).toBe(false);
   });
 
-  it('ticks crew-invited on any non-self member row, active or invited', () => {
+  it('ticks crew-invited only once a non-self member has ACCEPTED — invited-but-not-accepted stays open', () => {
+    // An invited-but-not-yet-accepted member contributes nothing to
+    // activeMemberCountBeyondSelf — the caller derives it from status
+    // === 'active' rows only (account-studio-page.tsx / desk/page.tsx).
     expect(
-      deriveSetupSteps({ ...BASE, memberCountBeyondSelf: 1 }, NOW).steps.find(
-        (s) => s.key === 'crew-invited',
-      )?.done,
-    ).toBe(true);
-
-    expect(
-      deriveSetupSteps({ ...BASE, memberCountBeyondSelf: 0 }, NOW).steps.find(
+      deriveSetupSteps({ ...BASE, activeMemberCountBeyondSelf: 0 }, NOW).steps.find(
         (s) => s.key === 'crew-invited',
       )?.done,
     ).toBe(false);
+
+    expect(
+      deriveSetupSteps({ ...BASE, activeMemberCountBeyondSelf: 1 }, NOW).steps.find(
+        (s) => s.key === 'crew-invited',
+      )?.done,
+    ).toBe(true);
   });
 
   it('ticks rolodex-seeded from contactsCount OR seedSkipped — Wave 2 inputs default to un-ticked', () => {
@@ -91,6 +96,20 @@ describe('deriveSetupSteps', () => {
     ).toBe(false);
   });
 
+  it('ticks first-hire-opened only once a hire has opened a document', () => {
+    expect(
+      deriveSetupSteps({ ...BASE, hiresWithFirstDocument: 0 }, NOW).steps.find(
+        (s) => s.key === 'first-hire-opened',
+      )?.done,
+    ).toBe(false);
+
+    expect(
+      deriveSetupSteps({ ...BASE, hiresWithFirstDocument: 1 }, NOW).steps.find(
+        (s) => s.key === 'first-hire-opened',
+      )?.done,
+    ).toBe(true);
+  });
+
   it('ticks first-project only once a project exists', () => {
     expect(
       deriveSetupSteps({ ...BASE, projectsCount: 0 }, NOW).steps.find(
@@ -110,10 +129,11 @@ describe('deriveSetupSteps', () => {
       {
         orgCreatedAt: BASE.orgCreatedAt,
         myJobTitle: 'Principal',
-        memberCountBeyondSelf: 2,
+        activeMemberCountBeyondSelf: 2,
         contactsCount: 5,
         seedSkipped: false,
         projectsCount: 3,
+        hiresWithFirstDocument: 1,
       },
       NOW,
     );
@@ -128,9 +148,10 @@ describe('deriveSetupSteps', () => {
       {
         orgCreatedAt: '2020-03-15T00:00:00.000Z',
         myJobTitle: 'Principal',
-        memberCountBeyondSelf: 1,
+        activeMemberCountBeyondSelf: 1,
         seedSkipped: true,
         projectsCount: 1,
+        hiresWithFirstDocument: 1,
       },
       new Date('2027-01-15T00:00:00.000Z'),
     );

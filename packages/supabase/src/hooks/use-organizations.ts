@@ -61,6 +61,8 @@ export interface OrganizationMember {
   job_title: string | null;
   /** Call Sheet: coarse staff-role tier (StaffRole vocab, packages/types/src/studio-config.ts). Admin-writable only. NULL = unset. */
   staff_role: string | null;
+  /** Onboarding checklist row 6 (L3, 00559): stamped once by `mark_first_document_opened`, the first time this member opens a Document. NULL = not yet. */
+  first_document_opened_at: string | null;
 }
 
 export interface OrganizationWithMembership extends Organization {
@@ -585,6 +587,33 @@ export function useSetMyMemberTitle() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: ['organization-members', variables.organizationId],
+      });
+    },
+  });
+}
+
+/**
+ * Mark the calling user's own membership row as having opened its first
+ * Document (L3, 00559) via the `mark_first_document_opened` RPC (SECURITY
+ * DEFINER — same own-row chicken-and-egg as `set_my_member_title` above).
+ * The RPC itself is idempotent (guarded by `first_document_opened_at IS
+ * NULL`), so callers can fire this on every doc-page mount without checking
+ * first; it only ever writes once.
+ */
+export function useMarkFirstDocumentOpened() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ organizationId }: { organizationId: string }) => {
+      const supabase = getSupabase();
+      const { error } = await supabase.rpc('mark_first_document_opened');
+
+      if (error) throw error;
+      return { organizationId };
+    },
+    onSuccess: ({ organizationId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ['organization-members', organizationId],
       });
     },
   });

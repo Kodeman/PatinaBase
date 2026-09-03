@@ -86,13 +86,23 @@ export default function DeskPage() {
   const { data: studioContacts } = useStudioContacts(
     callSheetOn ? (studio?.id ?? null) : null,
   );
+  // activeMemberCountBeyondSelf / hiresWithFirstDocument (L3, 00559): same
+  // active-only / first-document-opened derivation as account-studio-page.tsx,
+  // so this whisper's openCount never runs ahead or behind the checklist it
+  // sends you to.
+  const otherActiveStudioMembers = (studioMembers ?? []).filter(
+    (m) => m.user_id !== user?.id && m.status === 'active',
+  );
   const { openCount: studioSetupOpenCount } = deriveSetupSteps({
     orgCreatedAt: studio?.created_at ?? null,
     myJobTitle: studioMembers?.find((m) => m.user_id === user?.id)?.job_title ?? null,
-    memberCountBeyondSelf: (studioMembers ?? []).filter((m) => m.user_id !== user?.id).length,
+    activeMemberCountBeyondSelf: otherActiveStudioMembers.length,
     projectsCount: studioProjects?.length ?? 0,
     contactsCount: callSheetOn ? (studioContacts?.length ?? 0) : 0,
     seedSkipped: callSheetOn ? !!studio?.rolodex_seed_skipped_at : false,
+    hiresWithFirstDocument: otherActiveStudioMembers.filter(
+      (m) => m.first_document_opened_at != null,
+    ).length,
   });
 
   // A9: no mobile primary action is registered here — the header's
