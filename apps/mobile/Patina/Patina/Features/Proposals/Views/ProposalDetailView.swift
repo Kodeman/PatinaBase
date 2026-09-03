@@ -70,19 +70,38 @@ struct ProposalDetailView: View {
     /// while it runs — the screen's own chrome, so the reader can see they
     /// are on the right page and that something is coming.
     private var loadingSkeleton: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        // Review RL1B2-15: a grey rectangle does not tell a reader which
+        // proposal they opened, which is what the finding's fix line asks
+        // for. When the app already holds the row — the Studio tap and the
+        // push-into-a-warm-app path both do — draw its own words instead.
+        let known = ProposalDetailViewModel.knownRecord(for: proposalId)
+        return VStack(alignment: .leading, spacing: 16) {
             MonoLabel(text: "PROPOSAL")
                 .tracking(2)
 
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(PatinaColors.Background.secondary)
-                .frame(height: 30)
-                .frame(maxWidth: 260)
+            if let title = known?.title, !title.isEmpty {
+                Text(title)
+                    .font(PatinaTypography.h2)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(PatinaColors.Background.secondary)
+                    .frame(height: 30)
+                    .frame(maxWidth: 260)
+            }
 
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(PatinaColors.Background.secondary)
-                .frame(height: 14)
-                .frame(maxWidth: 160)
+            if let address = known?.project_address, !address.isEmpty {
+                Text(address)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(PatinaColors.Background.secondary)
+                    .frame(height: 14)
+                    .frame(maxWidth: 160)
+            }
 
             HStack(spacing: 10) {
                 ProgressView()
@@ -97,7 +116,9 @@ struct ProposalDetailView: View {
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Opening your proposal")
+        .accessibilityLabel(
+            (known?.title).flatMap { $0.isEmpty ? nil : "Opening \($0)" } ?? "Opening your proposal"
+        )
         .accessibilityIdentifier("ProposalDetailView.LoadingSkeleton")
     }
 

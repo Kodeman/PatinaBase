@@ -93,6 +93,19 @@ final class ProposalDetailViewModel {
     /// a screen with nothing on it.
     static let fetchDeadline: TimeInterval = 10
 
+    /// The row this screen was opened from, if the app already holds it.
+    ///
+    /// `R-05`'s fix line asks the skeleton to render the proposal's title
+    /// "from the record row that launched it", and the navigation route
+    /// carries only an id (review `RL1B2-15`). `BadgeCountService` is where
+    /// Today and Studio already keep those rows, so the detail can name the
+    /// proposal a tester opened without waiting on a fetch that may be about
+    /// to time out. `nil` on a cold launch from a push, which is the case the
+    /// grey skeleton still covers.
+    static func knownRecord(for proposalId: String) -> RemoteProposal? {
+        BadgeCountService.shared.pendingProposals.first { $0.id == proposalId }
+    }
+
     func load(proposalId: String, deadline: TimeInterval = ProposalDetailViewModel.fetchDeadline) async {
         isLoading = true
         error = nil
@@ -117,7 +130,7 @@ final class ProposalDetailViewModel {
             self.exclusions = []
             self.scopeRooms = []
             self.boards = []
-            self.error = "Couldn't load this proposal"
+            self.error = "Couldn’t load this proposal"
             #if DEBUG
             PatinaLog.ui.error("[Proposals] detail failed: \(error.localizedDescription)")
             #endif
