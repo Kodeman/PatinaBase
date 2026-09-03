@@ -416,8 +416,40 @@ public final class AuthService {
                 // red flash before the view model calls clearError().
                 throw AuthServiceError.emailNotConfirmed(email: email)
             }
-            setError(error.localizedDescription, scope: .sheet)
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
+        }
+    }
+
+    /// RL2A-07 — one voice on failure. Modelled on `MoneyFailureCopy` and
+    /// `OrderFailureCopy`: a typed error becomes a fixed, app-authored
+    /// sentence, and the server's own words are logged, never rendered.
+    ///
+    /// L1-A's W1 exit criterion is "no raw server string anywhere", and the
+    /// two paths every round-one tester walks broke it: the password sheet
+    /// rendered GoTrue's "Invalid login credentials", the code sheet its
+    /// "Token has expired or is invalid".
+    ///
+    /// The five sentences are sent to L1-E as a deck addendum
+    /// (`l1a-notes-out-round3.md`); L1-E merges last and owns the words.
+    static func authErrorSentence(_ error: any Error) -> String {
+        PatinaLog.auth.debug("AuthService: \(error.localizedDescription)")
+        guard let code = (error as? AuthError)?.errorCode else {
+            return "Something went wrong on our side. Try again, or write to hello@patina.cloud."
+        }
+        switch code {
+        case .invalidCredentials:
+            return "That email and password don’t match. Try again, or ask for a sign-in code instead."
+        case .otpExpired:
+            return "That sign-in code has expired. Send yourself a new one."
+        case .overEmailSendRateLimit, .overRequestRateLimit:
+            return "That’s a few tries in a row. Give it a minute, then try again."
+        case .emailNotConfirmed:
+            return "This email hasn’t been confirmed yet. Check your inbox for the code we sent."
+        case .validationFailed:
+            return "Check the email address and try again."
+        default:
+            return "Something went wrong on our side. Try again, or write to hello@patina.cloud."
         }
     }
 
@@ -470,9 +502,9 @@ public final class AuthService {
             await establishSession(session)
             await captureAppleName(from: credential)
             // B2 v3(c) / A3-07 — see `applyHomeownerRoleAfterOAuth`.
-            await applyHomeownerRoleAfterOAuth(session: session)
+            await applyHomeownerRoleAfterOAuth(userId: session.user.id)
         } catch {
-            setError(error.localizedDescription, scope: scope)
+            setError(Self.authErrorSentence(error), scope: scope)
             throw error
         }
     }
@@ -524,18 +556,28 @@ public final class AuthService {
     /// the trigger honours it. A second write there would make the app look
     /// like it writes its own role unconditionally.
     @MainActor
-    private func applyHomeownerRoleAfterOAuth(session: Session) async {
+    func applyHomeownerRoleAfterOAuth(userId: UUID) async {
         do {
-            try await supabase.database
-                .from("profiles")
-                .update(["role": "homeowner"])
-                .eq("id", value: session.user.id)
-                .execute()
+            try await relabelProfile(userId)
         } catch {
             PatinaLog.auth.debug(
                 "AuthService: homeowner relabel deferred — \(error.localizedDescription)"
             )
         }
+    }
+
+    /// RL2A-09 — the one-key PATCH, behind the same injectable-seam shape
+    /// `testAccountLogin` and `onboardingCompletion` already use, so the five
+    /// rules above are tested by driving them rather than by reading the file.
+    @ObservationIgnored
+    var relabelProfile: @Sendable (UUID) async throws -> Void = AuthService.liveRelabelProfile
+
+    static let liveRelabelProfile: @Sendable (UUID) async throws -> Void = { userId in
+        try await supabase.database
+            .from("profiles")
+            .update(["role": "homeowner"])
+            .eq("id", value: userId)
+            .execute()
     }
 
     /// Sign in with Google via OAuth (opens ASWebAuthenticationSession)
@@ -552,14 +594,14 @@ public final class AuthService {
                 redirectTo: URL(string: "\(APIConfiguration.appURLScheme)://auth/callback")
             )
             // B2 v3(c) / A3-07 — see `applyHomeownerRoleAfterOAuth`.
-            await applyHomeownerRoleAfterOAuth(session: session)
+            await applyHomeownerRoleAfterOAuth(userId: session.user.id)
         } catch {
             // Backing out of the OAuth web sheet is a user cancellation, not an
             // error — mirror the Apple `.canceled` filter so the welcome
             // screen's error banner stays silent instead of showing a raw
             // "WebAuthenticationSession error 1" string.
             if (error as? ASWebAuthenticationSessionError)?.code != .canceledLogin {
-                setError(error.localizedDescription, scope: .root)
+                setError(Self.authErrorSentence(error), scope: .root)
             }
             throw error
         }
@@ -603,7 +645,7 @@ public final class AuthService {
             // generic error banner (the view model routes it to the panel).
             throw error
         } catch {
-            setError(error.localizedDescription, scope: .sheet)
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
     }
@@ -641,7 +683,7 @@ public final class AuthService {
         } catch {
             // Root scope: a failed sign-out leaves the reader looking at the
             // Welcome screen, which is where this has to be readable.
-            setError(error.localizedDescription, scope: .root)
+            setError(Self.authErrorSentence(error), scope: .root)
             throw error
         }
     }
@@ -667,7 +709,7 @@ public final class AuthService {
                 emailRedirectTo: URL(string: "\(APIConfiguration.appURLScheme)://auth/callback")
             )
         } catch {
-            setError(error.localizedDescription, scope: .sheet)
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
     }
@@ -684,7 +726,7 @@ public final class AuthService {
         do {
             try await supabase.auth.resetPasswordForEmail(email)
         } catch {
-            setError(error.localizedDescription, scope: .sheet)
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
     }
@@ -713,7 +755,7 @@ public final class AuthService {
                 data: ["role": .string("homeowner")]
             )
         } catch {
-            setError(error.localizedDescription, scope: .sheet)
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
     }
@@ -761,7 +803,7 @@ public final class AuthService {
             if await testAccountLogin.attempt(email: email, code: token) {
                 return
             }
-            setError(error.localizedDescription, scope: .sheet)
+            setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
     }
@@ -797,7 +839,7 @@ public final class AuthService {
                 } catch {
                     // Root scope: the emailed link is opened against the auth
                     // root, often on a cold launch with no sheet in sight.
-                    setError(error.localizedDescription, scope: .root)
+                    setError(Self.authErrorSentence(error), scope: .root)
                     throw error
                 }
             }
@@ -808,7 +850,7 @@ public final class AuthService {
             let session = try await supabase.auth.session(from: url)
             await establishSession(session)
         } catch {
-            setError(error.localizedDescription, scope: .root)
+            setError(Self.authErrorSentence(error), scope: .root)
             throw error
         }
     }
