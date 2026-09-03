@@ -29,6 +29,10 @@ struct ScanFallbackEntryTests {
         try SourcePin.read("Patina/Features/RoomScan/Views/QuietConversationFlowHost.swift")
     }
 
+    private func manualEntrySource() throws -> String {
+        try SourcePin.read("Patina/Features/Rooms/Views/ManualRoomEntryView.swift")
+    }
+
     // MARK: - GAP4-03: no developer defaults in a person's room
 
     @Test
@@ -60,14 +64,79 @@ struct ScanFallbackEntryTests {
         #expect(source.contains(#"TextField("", text: text)"#) == false)
     }
 
-    // MARK: - GAP4-02: a way out of the fallback
+    // MARK: - GAP4-03, the second door: manual entry
+
+    /// `ScanFallbackEntryView` is one of two ways into a hand-entered room.
+    /// The other is Your Spaces → "Add a room" → "Enter manually", which is
+    /// the same sheet and carried the same two literals — 18 and 14, written
+    /// through `createManualRoom(…, measuredWithUnitControl: true)`, i.e. as
+    /// measured fact (review `RL1B3-01`).
+    @Test
+    func theManualEntryFieldsStartEmpty() throws {
+        let source = try manualEntrySource()
+        #expect(source.contains(#"@State private var lengthFeet: String = """#))
+        #expect(source.contains(#"@State private var widthFeet: String = """#))
+        #expect(source.contains(#"lengthFeet: String = "18""#) == false)
+        #expect(source.contains(#"widthFeet: String = "14""#) == false)
+    }
 
     @Test
-    func theHostShowsALeaveControlOnTheFallbackStep() throws {
+    func manualSaveIsDisabledUntilBothDimensionsAreEntered() {
+        #expect(ManualRoomEntryView.dimensionsAreValid(length: "", width: "") == false)
+        #expect(ManualRoomEntryView.dimensionsAreValid(length: "18", width: "") == false)
+        #expect(ManualRoomEntryView.dimensionsAreValid(length: "", width: "14") == false)
+        #expect(ManualRoomEntryView.dimensionsAreValid(length: "0", width: "14") == false)
+        #expect(ManualRoomEntryView.dimensionsAreValid(length: "abc", width: "14") == false)
+        #expect(ManualRoomEntryView.dimensionsAreValid(length: "18", width: "14"))
+    }
+
+    /// The gate has to be wired to the control, not merely available.
+    @Test
+    func theManualSaveButtonIsWiredToThatGate() throws {
+        let source = try manualEntrySource()
+        #expect(source.contains(".disabled(!isValid)"))
+        #expect(source.contains("Self.dimensionsAreValid(length: lengthFeet, width: widthFeet)"))
+    }
+
+    /// An empty box still has to say what it wants.
+    @Test
+    func theManualDimensionFieldsCarryAPlaceholder() throws {
+        let source = try manualEntrySource()
+        #expect(source.contains("TextField(label, text: value)"))
+    }
+
+    // MARK: - GAP4-02: a way out of the fallback
+
+    /// Round 3 gated the control on two of eight steps. On the shipped
+    /// four-tab root the tab bar is the escape from the other six, but D1
+    /// keeps the flags-off root as the kill switch and there it is not — so
+    /// the style, reveal, soft-landing, floor-plan and threshold steps were
+    /// the dead end GAP4-02 describes (review `RL1B3-10`).
+    ///
+    /// Written as an exclusion list on purpose: a step added later gets the
+    /// way out by default, which is the failure this finding is.
+    @Test
+    func theHostShowsALeaveControlOnEveryStepThatHasNoOtherWayOut() throws {
         let source = try hostSource()
         #expect(source.contains("QuietConversationFlowHost.LeaveButton"))
-        #expect(source.contains("step == .fallback || step == .initial"))
         #expect(source.contains(#"Button("Not now") { leaveFlow(landingOn: .heroFrame) }"#))
+        // The old two-step allow-list is gone.
+        #expect(source.contains("step == .fallback || step == .initial") == false)
+        // `.savedConfirmation` is the one step with its own exit, and it is
+        // named as the exception rather than the rest being enumerated.
+        #expect(source.contains("step != .savedConfirmation"))
+
+        // Every case in the step enum, so the exclusion cannot silently grow.
+        let steps = try #require(
+            source.components(separatedBy: "enum InternalFlowStep: Equatable {").last?
+                .components(separatedBy: "\n    }").first
+        )
+        for step in [
+            "initial", "threshold", "fallback", "savedConfirmation",
+            "softLanding", "conversation", "reveal", "floorPlan"
+        ] {
+            #expect(steps.contains("case \(step)"))
+        }
     }
 
     // MARK: - GAP4-25: Rescan re-enters the flow
