@@ -4,6 +4,7 @@ import { Inter, Playfair_Display, DM_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/providers/providers';
 import { DebugPanel } from '@/components/DebugPanel';
+import { TesterWidget } from '@/components/tester/tester-widget';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -75,6 +76,7 @@ export default function RootLayout({
         <Providers>
           {children}
           <DebugPanel />
+          <TesterWidget />
         </Providers>
       </body>
     </html>

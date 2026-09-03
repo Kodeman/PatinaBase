@@ -442,6 +442,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
       .poll(() => page.evaluate(() => document.body.style.overflow))
       .toBe("hidden");
     await expect(page.locator(".document-route-shell")).toHaveCount(0);
+    // Relies on `tester-notes` being off in e2e — the Tester widget's tree also wears [data-feedback-layer].
     await expect(page.locator("[data-feedback-layer]")).toHaveCount(0);
     await expect(
       page.getByRole("navigation", { name: "Studio drawer" }),

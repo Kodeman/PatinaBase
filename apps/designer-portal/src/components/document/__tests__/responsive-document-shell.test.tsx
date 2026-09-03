@@ -64,9 +64,6 @@ jest.mock('@/hooks/document-time-provider', () => ({
 }));
 
 jest.mock('../overlays/post-sheet', () => ({ openPost: jest.fn() }));
-jest.mock('../feedback/feedback-sheet', () => ({
-  openFeedbackSheet: jest.fn(),
-}));
 
 jest.mock('next/link', () => ({
   __esModule: true,

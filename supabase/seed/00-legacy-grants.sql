@@ -12817,3 +12817,9 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.increment_scan_upload_attempt(UUID) TO anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00558_feedback_bug_reports_github.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.notify_feedback_bug_report() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

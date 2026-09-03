@@ -93,10 +93,6 @@ jest.mock('../overlays/post-sheet', () => ({
   openPost: jest.fn(),
 }));
 
-jest.mock('../feedback/feedback-sheet', () => ({
-  openFeedbackSheet: jest.fn(),
-}));
-
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),

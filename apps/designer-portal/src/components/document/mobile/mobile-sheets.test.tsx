@@ -77,7 +77,6 @@ jest.mock('@/hooks/use-margin-items', () => ({
   useMarginItems: () => ({ data: mockItems }),
 }));
 jest.mock('../overlays/post-sheet', () => ({ openPost: jest.fn() }));
-jest.mock('../feedback/feedback-sheet', () => ({ openFeedbackSheet: jest.fn() }));
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
