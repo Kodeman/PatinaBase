@@ -78,7 +78,7 @@ enum OrderFailureCopy {
         MoneyFailureCopy.log("direct-order create", error)
         guard let typed = error as? DirectOrderError else {
             return MoneyFailure(
-                "We couldn't start this order. Nothing has been charged.",
+                "We couldn’t start this order. Nothing has been charged.",
                 offersDesignerMessage: false
             )
         }
@@ -95,7 +95,7 @@ enum OrderFailureCopy {
             )
         case .unavailable:
             return MoneyFailure(
-                "We couldn't start this order. Nothing has been charged.",
+                "We couldn’t start this order. Nothing has been charged.",
                 offersDesignerMessage: false
             )
         }
@@ -111,7 +111,7 @@ enum OrderFailureCopy {
         }
         guard let typed = error as? OrderCheckoutError else {
             return MoneyFailure(
-                "We couldn't start this payment. Nothing has been charged.",
+                "We couldn’t start this payment. Nothing has been charged.",
                 offersDesignerMessage: false
             )
         }
@@ -125,7 +125,7 @@ enum OrderFailureCopy {
         switch typed {
         case .orderNotFound:
             return MoneyFailure(
-                "We couldn't find this order. Nothing has been charged.",
+                "We couldn’t find this order. Nothing has been charged.",
                 offersDesignerMessage: false
             )
         case .alreadyPaid:
@@ -135,7 +135,7 @@ enum OrderFailureCopy {
             )
         case .canceled:
             return MoneyFailure(
-                "This order was cancelled. Start a new one when you're ready.",
+                "This order was cancelled. Start a new one when you’re ready.",
                 offersDesignerMessage: false
             )
         case .refunded:
@@ -145,12 +145,12 @@ enum OrderFailureCopy {
             )
         case .nothingDue:
             return MoneyFailure(
-                "There's nothing left owing on this order.",
+                "There’s nothing left owing on this order.",
                 offersDesignerMessage: false
             )
         case .notConfigured:
             return MoneyFailure(
-                "We can't take payment for this piece yet.",
+                "We can’t take payment for this piece yet.",
                 offersDesignerMessage: false
             )
         case .paymentProcessing:
@@ -161,12 +161,12 @@ enum OrderFailureCopy {
             // guard exists to prevent.
             return MoneyFailure(
                 "A payment on this order is already going through. "
-                    + "We'll update this as soon as it clears.",
+                    + "We’ll update this as soon as it clears.",
                 offersDesignerMessage: false
             )
         case .unavailable:
             return MoneyFailure(
-                "We couldn't start this payment. Nothing has been charged.",
+                "We couldn’t start this payment. Nothing has been charged.",
                 offersDesignerMessage: false
             )
         }
@@ -176,12 +176,12 @@ enum OrderFailureCopy {
     /// holds: this never claims a bank transfer, because the method is not
     /// knowable here.
     static let unconfirmed = MoneyFailure(
-        "We haven't seen this payment yet. We'll update this as soon as it clears.",
+        "We haven’t seen this payment yet. We’ll update this as soon as it clears.",
         offersDesignerMessage: false
     )
 
     /// The tax/delivery setting is off, so the total on the sheet is not the
     /// total a payment would take. Path A does not complete (critique M14).
     static let taxShippingDisabled =
-        "Delivery and tax are not included yet, so we can't take payment for this piece yet."
+        "Delivery and tax are not included yet, so we can’t take payment for this piece yet."
 }

@@ -222,7 +222,15 @@ nonisolated public enum DesignServicesError: Error, LocalizedError, Equatable, S
         if let pg = error as? PostgrestError {
             return map(message: pg.message, detail: pg.detail)
         }
-        return .networkError(error.localizedDescription)
+        // `RL1E2-12`: this arm is the catch-all for everything that is not a
+        // PostgREST error — a decoding failure, an expired `AuthError`, a
+        // keychain error — and `.networkError` now reads "Check your
+        // connection and try again.", which sends a tester with a working
+        // connection to fix their wifi. Only a real transport failure gets
+        // the connection sentence; everything else takes the same catch-all
+        // `map(message:detail:)` already uses for an unrecognised message.
+        if error is URLError { return .networkError(error.localizedDescription) }
+        return .submissionFailed
     }
 
     /// Map the raw Postgres error message (+ optional DETAIL carrying a scan

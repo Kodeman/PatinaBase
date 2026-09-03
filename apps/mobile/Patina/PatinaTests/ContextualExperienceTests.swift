@@ -209,8 +209,12 @@ struct ContextualExperienceTests {
         ))
     }
 
+    /// C-38 (`RL1E2-20`): a room scope is no longer a reason for a card to
+    /// say anything. This test used to assert the boilerplate sentence —
+    /// "Selected from Patina's room-aware edit for Library." — which is the
+    /// exact string the finding retires, defended by a test.
     @Test
-    func recommendationRationaleRequiresARealMatchOrRoomScope() throws {
+    func recommendationRationaleRequiresARealMatch() throws {
         let context = try makeStyleContext()
         let preference = StylePreferenceStore(context: context).upsert(
             StylePreferenceSnapshot(
@@ -241,7 +245,7 @@ struct ContextualExperienceTests {
             portrait.recommendationRationale(
                 for: product(materialTags: ["brass"]),
                 roomName: "Library"
-            ) == "Selected from Patina's room-aware edit for Library."
+            ) == nil
         )
     }
 

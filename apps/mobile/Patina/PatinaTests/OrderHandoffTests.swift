@@ -167,7 +167,7 @@ struct OrderHandoffTests {
         await machine.begin(productId: PurchaseFixture.productId)
 
         let sentence = try? #require(machine.failure?.sentence)
-        #expect(sentence == "We couldn't start this payment. Nothing has been charged.")
+        #expect(sentence == "We couldn’t start this payment. Nothing has been charged.")
         #expect(sentence?.contains("sk_test") == false)
         #expect(events.properties(of: "order_failed")?["reason"] == "checkout_unavailable")
     }
@@ -206,7 +206,7 @@ struct OrderHandoffTests {
 
         let sentence = try? #require(machine.failure?.sentence)
         #expect(sentence == "A payment on this order is already going through. "
-                + "We'll update this as soon as it clears.")
+                + "We’ll update this as soon as it clears.")
         #expect(sentence?.contains("Nothing has been charged") == false)
         #expect(sentence?.contains("bank transfer") == false)
         #expect(events.properties(of: "order_failed")?["reason"] == "payment_processing")
