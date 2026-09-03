@@ -86,6 +86,18 @@ private struct PatinaScreenChrome: ViewModifier {
                         .background(PatinaColors.Background.primary)
                 }
             }
+            // A-89: the 36 pt disc carries a material, and the walk still
+            // caught it sitting on the words. A disc blurs the 36 pt under
+            // ITSELF; the rest of the line — "Room Name" on Room Settings,
+            // "Timeline" on the proposal — kept travelling under the control
+            // row at full contrast, which is what made the chevron read as a
+            // sticker on live text. A scroll-edge bar fades the content out as
+            // it reaches the control; this is that fade, and it moves nothing.
+            //
+            // `.light` only: the `.dark` style is used where the content behind
+            // is dark in both appearances (a hero photo), and an off-white
+            // scrim there would be the RL1C-07 mistake in another form.
+            .overlay(alignment: .top) { scrollEdgeScrim }
             .overlay(alignment: .topLeading) {
                 // A pushed screen keeps the floating chevron: it is a 36 pt
                 // control in a corner over a hero, not a bar across the
@@ -111,6 +123,25 @@ private struct PatinaScreenChrome: ViewModifier {
                     .padding(.leading, 18)
                 }
             }
+    }
+
+    /// A-89's scroll-edge fade. See the call site for why the disc's own
+    /// material was not enough.
+    @ViewBuilder
+    private var scrollEdgeScrim: some View {
+        if !isTabRoot && style == .light {
+            LinearGradient(
+                colors: [
+                    PatinaColors.Background.primary,
+                    PatinaColors.Background.primary.opacity(0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 56)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 
     private var titleColor: Color {

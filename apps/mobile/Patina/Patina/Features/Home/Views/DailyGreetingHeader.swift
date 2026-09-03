@@ -126,6 +126,10 @@ struct DailyGreetingHeader: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .allowsTightening(true)
+                // C4's canonical name for the surface rides HERE, on the line
+                // that carries the least meaning of its own, rather than on the
+                // container — see the `.contain` note below.
+                .accessibilityLabel("Today. \(dateString)")
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(greeting)
                     .font(PatinaTypography.h4)
@@ -149,10 +153,14 @@ struct DailyGreetingHeader: View {
         // row of the greeting header. Wrapping the inner VStack rather
         // than the whole HStack so the popover arrow lands on the title.
         .firstLaunchTourAnchor(.homeGreeting)
-        // The surface keeps its canonical name for VoiceOver even though
-        // the greeting is what the screen prints (C4).
+        // C-18 / W1-B-05: `.contain` groups the column and leaves its children
+        // reachable — until a label is put on the container, at which point
+        // VoiceOver reads the container and stops. `describe_screen(nested:)`
+        // measured it: `AXGroup "Today"` with `children: []`, swallowing the
+        // "About Today" help door, while the identical component on Spaces was
+        // a reachable `AXButton "About Your Spaces"`. The surface still keeps
+        // its canonical name (C4) — the date line above carries it.
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Today")
     }
 
     private var controlCluster: some View {

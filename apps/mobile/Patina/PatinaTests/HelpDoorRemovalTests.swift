@@ -112,4 +112,25 @@ struct HelpDoorRemovalTests {
         )
         #expect(header.contains("HelpInfoIcon("))
     }
+
+    /// `C-18` / `W1-B-05` — mounted is not reachable. A label on an
+    /// `.accessibilityElement(children: .contain)` container makes VoiceOver
+    /// read the container and stop: `describe_screen(nested: true)` returned
+    /// `AXGroup "Today"` with `children: []`, so the "About Today" door was
+    /// invisible to VoiceOver while the identical component on Spaces was a
+    /// reachable `AXButton "About Your Spaces"`. The container keeps its
+    /// grouping; the surface's name moves onto the date line.
+    @Test("the Today help door is not swallowed by a labelled container")
+    func theTodayHelpDoorStaysInTheAccessibilityTree() throws {
+        let header = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
+        )
+        #expect(header.contains(".accessibilityElement(children: .contain)"))
+        #expect(!header.contains(".accessibilityLabel(\"Today\")"),
+                "the greeting container is labelled again and swallows its children (C-18)")
+        #expect(header.contains("accessibilityLabel: \"About Today\""))
+        // C4's name is still spoken — from the line that has the least of its
+        // own meaning to lose.
+        #expect(header.contains(".accessibilityLabel(\"Today. \\(dateString)\")"))
+    }
 }

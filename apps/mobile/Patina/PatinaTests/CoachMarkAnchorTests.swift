@@ -16,6 +16,7 @@
 //     is an `.onTapGesture`, which VoiceOver cannot activate.
 //
 
+import CoreGraphics
 import Foundation
 import Testing
 @testable import Patina
@@ -58,12 +59,19 @@ struct CoachMarkAnchorTests {
         // otherwise the bubble keeps the height the frame proposed and the
         // copy is clipped top and bottom.
         let fixedSize = code.range(of: "fixedSize(horizontal: false, vertical: true)")
-        let frame = code.range(of: "frame(maxWidth: maxWidth")
+        let frame = code.range(of: "frame(width: maxWidth")
         #expect(fixedSize != nil && frame != nil)
         if let fixedSize, let frame {
             #expect(fixedSize.lowerBound < frame.lowerBound,
                     "the frame still wins over the text's own height (B-07)")
         }
+        // …and the width has to be FIXED, not a maximum. A popover measures its
+        // content with a nil proposal; `maxWidth:` passes that nil straight
+        // through, so `Text` answered with its single-line ideal height and the
+        // bubble was built to it — which is why the walk still found the copy
+        // clipped top and bottom on Today AND on Spaces after the reorder.
+        #expect(!code.contains("frame(maxWidth: maxWidth"),
+                "the bubble's width is still only a maximum (B-07)")
         #expect(code.contains("padding(.vertical, 14)"),
                 "the bubble has no vertical breathing room (B-07)")
         #expect(code.contains("PatinaColors.Background.primary"),
@@ -87,6 +95,54 @@ struct CoachMarkAnchorTests {
             in: try SourcePin.read("Patina/Features/Help/Views/HelpInfoIcon.swift")
         )
         #expect(code.contains("accessibilityLabel: String"))
+    }
+
+    // MARK: - B-10's dim half
+
+    /// The card places correctly and the target stays visible — and the walk
+    /// still found step 1 drawn over two live record rows with no dim and no
+    /// cut-out, which is the other half of the prescribed fix. A reader told to
+    /// look at one thing, with three things under the card all looking equally
+    /// live, has been given a coach mark that explains nothing.
+    @Test("the tour dims what it is not naming, and punches out what it is")
+    @MainActor
+    func theTourScrimHighlightsItsSubject() {
+        let model = FirstLaunchTourModel()
+        // Nothing is showing, so nothing is dimmed.
+        #expect(model.highlightRect == nil)
+
+        model.startTour(triggerSource: "test")
+        // Still nothing: the anchor has not reported a frame yet, and a scrim
+        // with no cut-out would dim the subject along with everything else.
+        #expect(model.highlightRect == nil)
+
+        let subject = CGRect(x: 20, y: 118, width: 205, height: 59)
+        model.reportAnchorFrame(.homeGreeting, rect: subject)
+        #expect(model.highlightRect == subject)
+
+        // Another anchor's frame is not the current step's subject.
+        model.reportAnchorFrame(.profileMonogram, rect: CGRect(x: 0, y: 700, width: 40, height: 40))
+        #expect(model.highlightRect == subject)
+
+        // And a suspended tour dims nothing at all — the same rule the card
+        // follows when its surface leaves.
+        model.setSubjectOnScreen(false)
+        #expect(model.highlightRect == nil)
+    }
+
+    @Test("the scrim is drawn, is a cut-out, and never eats a tap")
+    func theScrimIsACutOutAndNotAControl() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
+        )
+        #expect(code.contains("FirstLaunchTourScrim"),
+                "the tour still draws its card over undimmed live content (B-10)")
+        #expect(code.contains(".blendMode(.destinationOut)"),
+                "the scrim dims the subject along with everything else (B-10)")
+        #expect(code.contains(".compositingGroup()"),
+                "a destination-out blend with no compositing group punches the whole window")
+        #expect(code.contains(".allowsHitTesting(false)"),
+                "the scrim would change what an outside tap does")
     }
 
     // MARK: - B-10's tab half (RL1C-16)

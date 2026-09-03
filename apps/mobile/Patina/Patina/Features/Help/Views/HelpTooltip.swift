@@ -121,12 +121,23 @@ public struct HelpTooltip<Trigger: View>: View {
                     // which let the frame's proposal win: 86.3 pt of copy in a
                     // ~75 pt bubble, clipped at the top AND the bottom, and
                     // translucent enough to read the greeting through it.
+                    //
+                    // Reordering was not enough, and the walk caught it still
+                    // clipped on Today and on Spaces. A popover measures its
+                    // content with a NIL proposal to get a preferred size, and
+                    // under a nil width `maxWidth:` proposes nil onward — so
+                    // `Text` returned its SINGLE-LINE ideal height, the bubble
+                    // was sized to that, and four lines were then laid out
+                    // inside it at 240 pt wide and centred, cut off top and
+                    // bottom. The width has to be FIXED, so the ideal height is
+                    // computed at the width the text will actually get.
                     Text(body)
                         .font(.body)
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: maxWidth, alignment: .leading)
+                        .frame(width: maxWidth, alignment: .leading)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 14)
+                        .fixedSize(horizontal: false, vertical: true)
                         .background(PatinaColors.Background.primary)
                         // `presentationCompactAdaptation` keeps the popover
                         // a true popover on iPhone (rather than auto-promoting

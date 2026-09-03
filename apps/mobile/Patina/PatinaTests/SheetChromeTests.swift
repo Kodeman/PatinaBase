@@ -88,6 +88,29 @@ struct SheetChromeTests {
                 "the back chevron still sits on live content with nothing behind it (A-89)")
     }
 
+    /// `A-89`, walked. The disc's material blurs the 36 pt under itself and
+    /// nothing else, so the rest of the line kept travelling under the control
+    /// row at full contrast — the walk caught it on both of the finding's own
+    /// screens, over "Room Name" on Room Settings and over "Timeline" on the
+    /// proposal detail. A scroll-edge bar fades the content out as it reaches
+    /// the control; a floating disc alone never did.
+    @Test("a pushed screen fades its content out under the back control")
+    func aPushedScreenHasAScrollEdgeScrim() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Design/Components/PatinaScreenChrome.swift")
+        )
+        #expect(code.contains("LinearGradient"),
+                "content still passes under the chevron at full contrast (A-89)")
+        // Drawn UNDER the chevron, or it would fade the control too. The two
+        // overlays' ORDER is what decides that, so it is the order that is
+        // pinned — not where the scrim's body happens to be written.
+        let scrim = try #require(code.range(of: ".overlay(alignment: .top) { scrollEdgeScrim }"))
+        let chevron = try #require(code.range(of: ".overlay(alignment: .topLeading) {"))
+        #expect(scrim.lowerBound < chevron.lowerBound)
+        // …and never over a dark hero, which is RL1C-07's mistake in reverse.
+        #expect(code.contains("!isTabRoot && style == .light"))
+    }
+
     // MARK: - Product detail (A-45)
 
     @Test("the product detail's top controls do not scroll away")
