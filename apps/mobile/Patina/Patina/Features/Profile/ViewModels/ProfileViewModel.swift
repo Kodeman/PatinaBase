@@ -60,8 +60,38 @@ final class ProfileViewModel {
     @ObservationIgnored private var cachedRevision: Int = -1
     @ObservationIgnored private var cachedRooms: [RoomModel] = []
 
-    var savedItemCount: Int = 0
-    var styleProfile: StylePreferenceModel?
+    @ObservationIgnored private var cachedItemRevision: Int = -1
+    @ObservationIgnored private var cachedItemCount: Int = 0
+    @ObservationIgnored private var cachedStyleRevision: Int = -1
+    @ObservationIgnored private var cachedStyleProfile: StylePreferenceModel?
+
+    /// GAP3-18/B-15's gate, derived rather than snapshotted — see `rooms`.
+    /// A stored count taken in one `loadData` stayed at `0` for the whole of
+    /// a window `rooms` recovered from on the next signal bump.
+    var savedItemCount: Int {
+        let revision = LocalRoomSignal.shared.revision
+        guard let context, LocalStoreOwnership.accountRowsAreVisible else { return 0 }
+        if revision != cachedItemRevision {
+            cachedItemCount = (try? context.fetchCount(FetchDescriptor<TableItemModel>())) ?? 0
+            cachedItemRevision = revision
+        }
+        return cachedItemCount
+    }
+
+    /// The taste portrait is the account's, and a guest left behind by a
+    /// sign-out is not it (B-15).
+    var styleProfile: StylePreferenceModel? {
+        let revision = LocalRoomSignal.shared.revision
+        guard let context, LocalStoreOwnership.accountRowsAreVisible else { return nil }
+        if revision != cachedStyleRevision {
+            let descriptor = FetchDescriptor<StylePreferenceModel>(
+                sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+            )
+            cachedStyleProfile = (try? context.fetch(descriptor))?.first
+            cachedStyleRevision = revision
+        }
+        return cachedStyleProfile
+    }
 
     /// B-03: this was a stored snapshot taken in `loadData(context:)`, which
     /// ProfileView calls from one `onAppear`. Deleting a room two screens away
@@ -126,21 +156,10 @@ final class ProfileViewModel {
 
     func loadData(context: ModelContext) {
         self.context = context
-        // Force the room read to refetch on the next pass: an appear is a
+        // Force the three reads to refetch on the next pass: an appear is a
         // reason to look again even where nothing local changed.
         cachedRevision = -1
-
-        // Saved items count
-        let itemDescriptor = FetchDescriptor<TableItemModel>()
-        savedItemCount = LocalStoreOwnership.accountRowsAreVisible
-            ? ((try? context.fetchCount(itemDescriptor)) ?? 0)
-            : 0
-
-        // Style profile (most recent). B-15: the taste portrait is the
-        // account's, and a guest left behind by a sign-out is not it.
-        let styleDescriptor = FetchDescriptor<StylePreferenceModel>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
-        styleProfile = LocalStoreOwnership.accountRowsAreVisible
-            ? (try? context.fetch(styleDescriptor))?.first
-            : nil
+        cachedItemRevision = -1
+        cachedStyleRevision = -1
     }
 }

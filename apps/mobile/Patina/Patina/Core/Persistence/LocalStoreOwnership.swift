@@ -40,12 +40,24 @@ enum LocalStoreOwnership {
     ///  · a guest on a store an account owns — a signed-out session looking
     ///    at somebody's rooms.
     static var accountRowsAreVisible: Bool {
-        if AuthService.shared.isAuthenticated { return true }
-        return ownerUserId == nil
+        accountRowsAreVisible(
+            isAuthenticated: AuthService.shared.isAuthenticated,
+            owner: ownerUserId,
+            isAuthStateReady: AuthService.shared.isAuthStateReady
+        )
     }
 
     /// The pure decision, so the rule is a fact rather than a hope.
-    static func accountRowsAreVisible(isAuthenticated: Bool, owner: String?) -> Bool {
-        isAuthenticated || owner == nil
+    ///
+    /// `isAuthStateReady` is the fourth case and it is not a guest: until the
+    /// `authStateChanges` stream has answered, `isAuthenticated` is false for
+    /// a returning owner as well as for a guest, and hiding the owner's own
+    /// rows on that evidence is a bug, not a scope.
+    static func accountRowsAreVisible(
+        isAuthenticated: Bool,
+        owner: String?,
+        isAuthStateReady: Bool = true
+    ) -> Bool {
+        !isAuthStateReady || isAuthenticated || owner == nil
     }
 }

@@ -166,6 +166,32 @@ struct AccountIsolationTests {
         #expect(LocalStoreOwnership.accountRowsAreVisible(isAuthenticated: true, owner: nil))
     }
 
+    /// An unresolved launch is not a guest.
+    ///
+    /// `isAuthenticated` is `session != nil`, and the session lands only from
+    /// inside the `authStateChanges` loop — so between launch and the first
+    /// event a returning signed-in owner reads as a guest and the gate hides
+    /// their own rows. The splash covers that window today; one phase-timing
+    /// change and it is a visible "your rooms vanished" (review RL1B-16).
+    @Test
+    func anUnresolvedLaunchIsNotTreatedAsAGuest() {
+        #expect(
+            LocalStoreOwnership.accountRowsAreVisible(
+                isAuthenticated: false,
+                owner: "userA",
+                isAuthStateReady: false
+            )
+        )
+        // …and once the answer is in, a real guest is still a guest.
+        #expect(
+            LocalStoreOwnership.accountRowsAreVisible(
+                isAuthenticated: false,
+                owner: "userA",
+                isAuthStateReady: true
+            ) == false
+        )
+    }
+
     /// One key, spelled the same in both files — the gate reads what
     /// `AuthService` writes.
     @Test
@@ -186,6 +212,35 @@ struct AccountIsolationTests {
             #expect(body.contains("guard accountRowsAreVisible"), "\(reader) is not scoped")
         }
         #expect(source.contains("!isSharedStore || LocalStoreOwnership.accountRowsAreVisible"))
+    }
+
+    /// Studio's three account-scoped numbers all recover together.
+    ///
+    /// `rooms` was revision-derived and the other two were stored snapshots
+    /// taken in one `loadData`, so a gate that flipped after the snapshot left
+    /// the saved count at `0` and the taste portrait at `nil` until the next
+    /// `onAppear` (review RL1B-16).
+    @Test
+    func theProfileCountsAreDerivedNotSnapshotted() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Profile/ViewModels/ProfileViewModel.swift"
+        )
+        for reader in [
+            "var rooms: [RoomModel]",
+            "var savedItemCount: Int",
+            "var styleProfile: StylePreferenceModel?"
+        ] {
+            let body = try #require(
+                source.components(separatedBy: reader).last?
+                    .components(separatedBy: "\n    }").first
+            )
+            #expect(
+                body.contains("LocalRoomSignal.shared.revision"),
+                "\(reader) is a snapshot, not a derivation"
+            )
+        }
+        #expect(source.contains("savedItemCount = ") == false)
+        #expect(source.contains("styleProfile = ") == false)
     }
 
     /// …and the scope reaches only the device-global store. A caller that
