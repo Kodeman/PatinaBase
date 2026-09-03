@@ -8,6 +8,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// 00562 — split out so `evaluateCondition`/`advanceEnrollmentSkippingNext`
+// are `deno test`able without booting this file's top-level `Deno.serve`.
+import { advanceEnrollmentSkippingNext, evaluateCondition } from "./logic.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -26,6 +30,11 @@ interface StepHistoryEntry {
   type: string;
   completed_at: string;
   result: string;
+  // Set on a condition-gated email advanced past without sending (00562 —
+  // config.condition.negate + config.on_false:'skip'). Absent on every
+  // other history entry.
+  skipped?: boolean;
+  reason?: string;
 }
 
 interface Enrollment {
@@ -436,102 +445,6 @@ async function sendInAppNudge(
   }
 }
 
-// ─── Condition Evaluator ────────────────────────────────────────────────
-
-async function evaluateCondition(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  condition: Record<string, unknown>,
-): Promise<boolean> {
-  const conditionType = condition.type as string;
-
-  switch (conditionType) {
-    case "user_property": {
-      const field = condition.field as string;
-      const operator = (condition.operator as string) || "eq";
-      const value = condition.value;
-
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select(field)
-        .eq("id", userId)
-        .single();
-
-      if (error || !profile) return false;
-
-      const fieldValue = profile[field];
-
-      switch (operator) {
-        case "eq":
-          return fieldValue === value;
-        case "neq":
-          return fieldValue !== value;
-        case "gt":
-          return typeof fieldValue === "number" && fieldValue > (value as number);
-        case "gte":
-          return typeof fieldValue === "number" && fieldValue >= (value as number);
-        case "lt":
-          return typeof fieldValue === "number" && fieldValue < (value as number);
-        case "lte":
-          return typeof fieldValue === "number" && fieldValue <= (value as number);
-        default:
-          return fieldValue === value;
-      }
-    }
-
-    case "event_occurred": {
-      const eventName = condition.event as string;
-
-      const { data: events, error } = await supabase
-        .from("engagement_events")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("event_name", eventName)
-        .limit(1);
-
-      if (error) return false;
-      return events !== null && events.length > 0;
-    }
-
-    case "time_elapsed": {
-      const days = condition.days as number;
-      const sinceField = (condition.since as string) || "enrolled_at";
-
-      const { data: enrollment, error } = await supabase
-        .from("sequence_enrollments")
-        .select(sinceField)
-        .eq("user_id", userId)
-        .eq("status", "active")
-        .order("enrolled_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (error || !enrollment) return false;
-
-      const referenceDate = new Date(enrollment[sinceField] as string);
-      const elapsedDays = (Date.now() - referenceDate.getTime()) / 86400000;
-      return elapsedDays >= days;
-    }
-
-    case "engagement_check": {
-      const expectedTier = condition.tier as string | string[];
-      const tiers = Array.isArray(expectedTier) ? expectedTier : [expectedTier];
-
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("engagement_tier")
-        .eq("id", userId)
-        .single();
-
-      if (error || !profile) return false;
-      return tiers.includes(profile.engagement_tier as string);
-    }
-
-    default:
-      return false;
-  }
-}
-
 // ─── Step Processors ────────────────────────────────────────────────────
 
 async function processEmailStep(
@@ -829,10 +742,20 @@ async function processEnrollments(
         }
 
         case "condition": {
+          // 00562 — a condition step may nest its payload under
+          // `config.condition` (the shape written by 0056N_onboarding_drip_
+          // state_triggers.sql: {condition:{type,event,negate}, on_false}).
+          // The legacy flat shape (type/event/yes_step directly on config,
+          // e.g. the 'Founding Invite' sequence) is unaffected — fall back
+          // to `step.config` itself when no nested `condition` is present.
+          const conditionPayload =
+            (step.config.condition as Record<string, unknown> | undefined) ??
+            step.config;
+
           const condResult = await evaluateCondition(
             supabase,
             enrollment.user_id,
-            step.config,
+            conditionPayload,
           );
 
           stepResult = condResult ? "condition_true" : "condition_false";
@@ -856,6 +779,18 @@ async function processEnrollments(
               step,
               stepResult,
               step.config.no_step as number,
+            );
+            result.processed++;
+            continue;
+          } else if (!condResult && step.config.on_false === "skip") {
+            const eventName = (conditionPayload.event as string) || "unknown";
+            await advanceEnrollmentSkippingNext(
+              supabase,
+              enrollment,
+              steps,
+              step,
+              currentStepIndex,
+              `event_occurred:${eventName}`,
             );
             result.processed++;
             continue;
