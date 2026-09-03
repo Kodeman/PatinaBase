@@ -119,17 +119,35 @@ extension AuthenticationView {
 
             // 6-digit code field. C9-08: a number pad has no Return key, so
             // it gets the shared Done bar.
-            TextField("000000", text: $viewModel.otpToken)
+            // P-25: the placeholder WAS a plausible six-digit code, so an
+            // empty field returned `AXValue: "000000"` and VoiceOver read a
+            // code back to someone who had typed nothing — and empty vs filled
+            // differed only in text opacity. A prompt, a spoken value that
+            // counts what is actually there, and an outline that changes with
+            // content.
+            TextField("", text: $viewModel.otpToken, prompt: Text("Enter the 6-digit code"))
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
                 .font(.system(.title2, design: .monospaced))
+                .tracking(8)
                 .multilineTextAlignment(.center)
+                .accessibilityLabel("Sign-in code")
+                .accessibilityValue(
+                    viewModel.otpToken.isEmpty
+                        ? "Empty"
+                        : "\(viewModel.otpToken.count) of 6 digits entered"
+                )
                 .padding(PatinaSpacing.md)
                 .background(PatinaColors.Background.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 .overlay(
                     RoundedRectangle(cornerRadius: PatinaRadius.lg)
-                        .stroke(PatinaColors.clay.opacity(0.2), lineWidth: 1)
+                        .stroke(
+                            viewModel.otpToken.isEmpty
+                                ? PatinaColors.clay.opacity(0.2)
+                                : PatinaColors.Text.interactive,
+                            lineWidth: viewModel.otpToken.isEmpty ? 1 : 1.5
+                        )
                 )
                 .keyboardDoneToolbar()
                 .onChange(of: viewModel.otpToken) { _, newValue in

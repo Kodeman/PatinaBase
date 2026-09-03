@@ -132,4 +132,37 @@ struct SignInCodeNamingTests {
             }
         }
     }
+
+    // MARK: - C5-10 · the header the casing sweep left behind
+
+    /// `headerTitle` returned `AuthMode.rawValue` — "Sign In" / "Sign Up" —
+    /// above a submit button reading "Sign in" and a switcher reading
+    /// "Sign up". The deck named the button and the switcher; this was the
+    /// residue.
+    @Test("the sheet's header is sentence case, like everything under it")
+    func everyHeaderIsSentenceCase() throws {
+        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
+        #expect(!source.contains("return viewModel.mode.rawValue"))
+        #expect(source.contains("return \"Sign in\""))
+        #expect(source.contains("return \"Create account\""))
+        #expect(source.contains("return \"Reset password\""))
+    }
+
+    // MARK: - P-25 · the field announces what is actually typed
+
+    /// `scan_ui` on the EMPTY field returned `AXValue: "000000"`, so VoiceOver
+    /// read a six-digit code back to someone who had typed nothing — and the
+    /// placeholder was itself a plausible code. Empty and filled also differed
+    /// only in text opacity.
+    @Test("the empty sign-in code field announces no code")
+    func theEmptyFieldAnnouncesNoCode() throws {
+        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView+Panels.swift")
+        #expect(!source.contains("TextField(\"000000\""))
+        #expect(source.contains("prompt: Text(\"Enter the 6-digit code\")"))
+        #expect(source.contains(".accessibilityLabel(\"Sign-in code\")"))
+        #expect(source.contains("? \"Empty\""))
+        #expect(source.contains("of 6 digits entered"))
+        // Filled differs by more than opacity: the outline changes with it.
+        #expect(source.contains("lineWidth: viewModel.otpToken.isEmpty ? 1 : 1.5"))
+    }
 }

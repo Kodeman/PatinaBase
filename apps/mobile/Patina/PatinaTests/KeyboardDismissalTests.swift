@@ -41,8 +41,8 @@ struct KeyboardDismissalTests {
     @Test("the six-digit code field has a way out")
     func otpFieldHasADoneBar() throws {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView+Panels.swift")
-        let start = try #require(source.range(of: "TextField(\"000000\", text: $viewModel.otpToken)"))
-        let block = String(source[start.lowerBound...].prefix(900))
+        let start = try #require(source.range(of: "TextField(\"\", text: $viewModel.otpToken, prompt:"))
+        let block = String(source[start.lowerBound...].prefix(1400))
         #expect(block.contains(".keyboardType(.numberPad)"))
         #expect(block.contains(".keyboardDoneToolbar()"))
     }
