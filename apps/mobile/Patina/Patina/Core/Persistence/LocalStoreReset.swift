@@ -69,6 +69,20 @@ enum LocalStoreReset {
         LastSeenStore.shared.clear()
         RecordOwnerStamp.shared.clear()
 
+        // A link account A tapped and never got to open is account A's
+        // request. It lives in the App Group suite with a 15-minute life, so
+        // without this it drains into account B's first `.main` — the A → B
+        // path with no sign-out in between (L1-F note L1F→B-3 / RL1F-07).
+        // The key is written as a literal because `PendingLinkQueue` is
+        // L1-F's file and does not exist on this branch; L1-F swaps it for
+        // `PendingLinkQueue.defaultsKey` at merge 4 (l1b-notes-out.md O10).
+        (UserDefaults(suiteName: LastSeenStore.appGroupIdentifier) ?? .standard)
+            .removeObject(forKey: "patina.deeplink.pending.v1")
+
+        // B-03: the tombstones describe rooms this account deleted. The next
+        // account's rooms are a different set entirely.
+        RoomTombstones.clearAll()
+
         // The rooms the sync debounce was protecting are gone; the next
         // screen must ask again rather than wait out the window.
         RoomSyncCoordinator.shared.forget()

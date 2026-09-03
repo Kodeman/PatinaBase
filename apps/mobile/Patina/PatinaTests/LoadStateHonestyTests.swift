@@ -98,6 +98,30 @@ struct LoadStateHonestyTests {
         #expect(catchBlock.contains("lastRunAt = now") == false)
     }
 
+    /// The other way the fetch never happens: a signed-in reader whose
+    /// `resolveUserId()` throws — an expired token with the backend down.
+    /// The early return left `lastLoadFailed` false, so Spaces' error branch
+    /// could not fire and it drew "No rooms yet" instead (review RL1B-12).
+    /// The two arms above it — already in flight, and not yet due — are not
+    /// failures and must not set it.
+    @Test
+    func aFailedOwnerLookupIsAlsoAFailure() throws {
+        let source = try SourcePin.read("Patina/Features/Rooms/RoomSyncCoordinator.swift")
+        let ownerGuard = try #require(
+            source.components(separatedBy: "guard let owner = try? await api.resolveUserId()").last?
+                .components(separatedBy: "\n        }").first
+        )
+        #expect(ownerGuard.contains("lastLoadFailed = true"))
+
+        for notAFailure in ["guard !inFlight else { return }", "guard Self.isDue("] {
+            let arm = try #require(
+                source.components(separatedBy: notAFailure).last?
+                    .components(separatedBy: "\n\n").first
+            )
+            #expect(arm.contains("lastLoadFailed = true") == false, "\(notAFailure) is not a failure")
+        }
+    }
+
     @Test
     func forgettingTheStoreClearsTheFailure() {
         let coordinator = RoomSyncCoordinator(lastOwner: "a", lastRunAt: Date())

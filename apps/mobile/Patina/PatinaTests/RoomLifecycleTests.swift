@@ -104,4 +104,94 @@ struct RoomLifecycleTests {
         let source = try SourcePin.read("Patina/Features/Rooms/Views/RoomProjectView.swift")
         #expect(source.contains("This room isn’t on this phone") || source.contains("This room isn't on this phone"))
     }
+
+    // MARK: - B-03's other half: a synced room does not come back
+
+    /// The delete was local only. `RoomsAPIClient.deleteRoom(id:)` had no
+    /// callers at all, so the row stayed on the server and the next
+    /// reconcile's `plan.insert` re-created the card the person had just
+    /// confirmed away (review RL1B-02).
+    @Test
+    func deletingASyncedRoomTombstonesItsRemoteId() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        let room = store.createRoom(name: "Audit Room B", roomType: "other", manualEntry: true)
+        room.remoteId = "C0000000-0000-4000-8000-000000000001"
+
+        RoomTombstones.clearAll()
+        store.delete(room)
+        #expect(RoomTombstones.contains("c0000000-0000-4000-8000-000000000001"))
+        RoomTombstones.clearAll()
+    }
+
+    /// A room that never synced leaves no tombstone — there is nothing on the
+    /// server to suppress, and an unbounded list of local ids is a leak.
+    @Test
+    func deletingAnUnsyncedRoomTombstonesNothing() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        let room = store.createRoom(name: "Bench", roomType: "other", manualEntry: true)
+
+        RoomTombstones.clearAll()
+        store.delete(room)
+        #expect(RoomTombstones.all.isEmpty)
+    }
+
+    /// The merge respects it: a server row the person deleted here is not
+    /// re-inserted, and it is named for a retry instead.
+    @Test
+    func theMergeDoesNotResurrectATombstonedRoom() {
+        let row = RemoteRoom(
+            id: "C0000000-0000-4000-8000-000000000001",
+            user_id: "userA",
+            name: "Audit Room B",
+            type: "other",
+            length_meters: nil, width_meters: nil, height_meters: nil,
+            floor_area_sqm: nil, volume_cbm: nil,
+            saved_item_count: 0, scan_count: 0, style_signals: nil,
+            created_at: "2026-09-01T00:00:00Z",
+            updated_at: "2026-09-01T00:00:00Z",
+            budget_cents: nil
+        )
+        let plan = RoomMerge.plan(
+            server: [row],
+            local: [],
+            tombstoned: ["c0000000-0000-4000-8000-000000000001"]
+        )
+        #expect(plan.insert.isEmpty, "the deleted room came back")
+        #expect(plan.deleteRemotely == ["C0000000-0000-4000-8000-000000000001"])
+    }
+
+    /// …and with no tombstone the same row still arrives, or the merge would
+    /// have stopped mirroring rooms altogether.
+    @Test
+    func theMergeStillInsertsAnUntombstonedRoom() {
+        let row = RemoteRoom(
+            id: "C0000000-0000-4000-8000-000000000002",
+            user_id: "userA",
+            name: "Guest Bedroom",
+            type: "bedroom",
+            length_meters: nil, width_meters: nil, height_meters: nil,
+            floor_area_sqm: nil, volume_cbm: nil,
+            saved_item_count: 0, scan_count: 0, style_signals: nil,
+            created_at: "2026-09-01T00:00:00Z",
+            updated_at: "2026-09-01T00:00:00Z",
+            budget_cents: nil
+        )
+        let plan = RoomMerge.plan(server: [row], local: [], tombstoned: [])
+        #expect(plan.insert.count == 1)
+        #expect(plan.deleteRemotely.isEmpty)
+    }
+
+    /// The delete is mirrored where the person confirms it, not left to a
+    /// reconcile that may not run for thirty seconds.
+    @Test
+    func theConfirmedDeleteIsMirroredToTheServer() throws {
+        let source = try SourcePin.read("Patina/Features/Rooms/Views/RoomSettingsView.swift")
+        let delete = try #require(
+            source.components(separatedBy: "private func deleteRoom() {").last?
+                .components(separatedBy: "\n    }").first
+        )
+        #expect(delete.contains("RoomsAPIClient.shared.deleteRoom(id:"))
+    }
 }
