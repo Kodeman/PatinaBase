@@ -27,11 +27,19 @@ struct RoomTypePillRow: View {
     var body: some View {
         // Six fixed chips in one HStack are wider than the screen at an
         // accessibility text size, so they compressed to unreadable slivers.
-        // The row fits where it fits and scrolls where it does not — the same
-        // answer `RecommendationsView`'s filter bar already takes (SP-02).
+        //
+        // The first answer here was one row or a horizontal scroll, and raising
+        // each chip to the 44 pt floor pushed the single row's ideal width past
+        // the screen — so `ViewThatFits` began picking the scroll at the
+        // DEFAULT text size, clipping "Kitchen" and putting "Other" off screen
+        // entirely, with `showsIndicators: false` removing the only sign the
+        // row moved (shots/w1-review-l1c/19-room-chips-large.png). C6-18 asks
+        // the row to *wrap*; a wrapped arm sits between the two, and the scroll
+        // is the last resort with its indicator showing.
         ViewThatFits(in: .horizontal) {
             chips
-            ScrollView(.horizontal, showsIndicators: false) { chips }
+            wrappedChips
+            ScrollView(.horizontal, showsIndicators: true) { chips }
         }
     }
 
@@ -39,6 +47,20 @@ struct RoomTypePillRow: View {
         HStack(spacing: 6) {
             ForEach(Self.allTypes, id: \.raw) { item in
                 chip(raw: item.raw, label: item.label)
+            }
+        }
+    }
+
+    /// Two rows of three. Every chip stays the size it is; only the line breaks.
+    private var wrappedChips: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach([Array(Self.allTypes.prefix(3)), Array(Self.allTypes.suffix(3))],
+                    id: \.first!.raw) { row in
+                HStack(spacing: 6) {
+                    ForEach(row, id: \.raw) { item in
+                        chip(raw: item.raw, label: item.label)
+                    }
+                }
             }
         }
     }

@@ -135,4 +135,44 @@ struct SheetChromeTests {
         #expect(reveal.contains("ground: .charcoal"),
                 "the Reveal still fills its only CTA with charcoal on charcoal (GAP4-16)")
     }
+
+    // MARK: - RL1C-02
+
+    @Test("the avatar monogram is centred in the disc it sits on")
+    func theAvatarInitialIsCentred() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
+        )
+        // `.overlay` centres inside the bounds it is applied to, so a
+        // `.padding(.top,)` BEFORE it draws the initial (padding / 2) above the
+        // circle's centre — 22 pt on the pushed screen
+        // (shots/w1-review-l1c/27-profile-pushed.png). The padding belongs to
+        // the header column, not to the disc.
+        let disc = try #require(code.range(of: "frame(width: 80, height: 80)")?.upperBound)
+        let overlay = try #require(code.range(of: ".overlay(", range: disc..<code.endIndex)?.lowerBound)
+        let between = String(code[disc..<overlay])
+        #expect(!between.contains(".padding("),
+                "the avatar pads before it overlays, so the initial is drawn off-centre")
+    }
+
+    // MARK: - RL1C-07
+
+    @Test("the dark back chevron is not a light glyph on a light disc")
+    func theDarkBackChevronHasItsOwnGround() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Design/Animations/PatinaTransitions.swift")
+        )
+        // A SwiftUI material resolves against the environment's colorScheme,
+        // not the backdrop. In light appearance `.regularMaterial` renders
+        // near-white, and the `.dark` style's 12%-opacity overlay left an
+        // `offWhite` chevron on a pale disc over a dark hero
+        // (shots/w1-review-l1c/29b-backchevron-crop.png). A-89's blur is right
+        // for `.light`, where appearance and intent agree; `.dark` needs an
+        // opaque ground of its own.
+        #expect(code.contains("style == .light ? AnyShapeStyle(.regularMaterial)")
+                || code.contains("case .light:"),
+                "the material is still applied to both styles (RL1C-07)")
+        #expect(code.contains("charcoal.opacity("),
+                "the .dark disc has no opaque ground to carry an offWhite chevron")
+    }
 }

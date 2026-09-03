@@ -372,7 +372,13 @@ struct HouseRecordRowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(row.route == nil)
+        // C-20: a row with no route was a *disabled* Button, and SwiftUI dims a
+        // disabled label to about half alpha — 12.42:1 became 4.27:1 on the
+        // app's home screen in dark mode, which no token value can fix.
+        // `.allowsHitTesting` withholds the tap without withholding the
+        // contrast; the trait line below still keeps VoiceOver from announcing
+        // it as a button.
+        .allowsHitTesting(row.route != nil)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
         .accessibilityAddTraits(row.route == nil ? [] : .isButton)

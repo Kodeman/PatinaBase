@@ -58,6 +58,39 @@ struct TapTargetTests {
                 "six chips still sit in a fixed row that cannot fit (C6-18)")
     }
 
+    @Test("the chip row wraps before it hides anything behind a silent scroll")
+    func roomTypeChipsWrapBeforeTheyScroll() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Rooms/Components/RoomTypePillRow.swift")
+        )
+        // Raising each chip to 44 pt pushed the single row's ideal width past
+        // the screen, so `ViewThatFits` began picking the horizontal ScrollView
+        // at the DEFAULT text size: "Kitchen" was clipped and "Other" was off
+        // screen, with `showsIndicators: false` removing the only sign the row
+        // moved (shots/w1-review-l1c/19-room-chips-large.png). The finding asks
+        // the row to *wrap*, so a wrapped arm has to be offered before a scroll.
+        let wrapped = try #require(code.range(of: "wrappedChips")?.lowerBound,
+                                   "the row offers no wrapped arm, only a hidden scroll (C6-18)")
+        let scrolled = try #require(code.range(of: "ScrollView(.horizontal")?.lowerBound)
+        #expect(wrapped < scrolled, "the scroll is offered before the wrap")
+
+        #expect(!code.contains("ScrollView(.horizontal, showsIndicators: false)"),
+                "the last-resort scroll still hides its own indicator")
+    }
+
+    // MARK: - RL1C-15
+
+    @Test("the Settings Done button clears 44 pt in both axes")
+    func settingsDoneIsAFullTapTarget() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
+        )
+        // Measured on the clone: AXFrame {{340, 118}, {38, 44}}. `minHeight`
+        // sets the height only; the width was the glyph's.
+        #expect(code.contains("frame(minWidth: 44, minHeight: 44)"),
+                "Done is 38 pt wide against the 44 pt floor this lane is enforcing")
+    }
+
     @Test("all six room types are still offered")
     func everyRoomTypeSurvivedTheReflow() {
         #expect(RoomTypePillRow.allTypes.count == 6)
@@ -76,6 +109,14 @@ struct TapTargetTests {
         // gone (C-05); the header keeps the one that explains the screen.
         #expect(!code.contains("YourSpacesView.HelpButton"))
         #expect(!code.contains("SurfaceKeys.IOSApp.Rooms.newRoom"))
+        // C-05's fix line is "collapse to ONE help affordance per screen", and
+        // this pin used to count only the header's — so it stayed green while a
+        // second `?` sat orphaned in the right gutter beside the Whole Home
+        // card, attached to nothing (shots/w1-review-l1c/18-add-room-sheet.png).
+        // Count every one in the file.
+        let icons = code.components(separatedBy: "HelpInfoIcon(").count - 1
+        #expect(icons == 1,
+                "\(icons) help affordances on one screen; C-05 asks for one")
         // And no two survivors share the default label.
         #expect(!code.contains("accessibilityLabel: \"More information\""))
         let defaultLabelled = code.components(separatedBy: "HelpInfoIcon(").dropFirst()

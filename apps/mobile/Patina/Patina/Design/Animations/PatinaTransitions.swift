@@ -43,11 +43,16 @@ struct BackChevronButton: View {
                 // words. A material blurs what passes under it, which is what
                 // a scroll-edge bar does and what the disc was pretending to
                 // be.
-                .background(
-                    Circle()
-                        .fill(.regularMaterial)
-                        .overlay(Circle().fill(background))
-                )
+                //
+                // The material is `.light`'s alone. A SwiftUI material resolves
+                // against the environment's colorScheme, not the backdrop, so
+                // in light appearance `.regularMaterial` renders near-white —
+                // and under the `.dark` style's 12 %-opacity overlay that left
+                // an offWhite chevron on a pale disc over a dark hero
+                // (shots/w1-review-l1c/29b-backchevron-crop.png). `.dark` is
+                // used where the content behind it is dark in BOTH
+                // appearances, so it carries its own opaque ground.
+                .background(disc.clipShape(Circle()))
                 .overlay(Circle().stroke(stroke, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
@@ -57,8 +62,18 @@ struct BackChevronButton: View {
     private var foreground: Color {
         style == .light ? PatinaColors.charcoal : PatinaColors.offWhite
     }
-    private var background: Color {
-        style == .light ? PatinaColors.offWhite.opacity(0.92) : PatinaColors.offWhite.opacity(0.12)
+    @ViewBuilder
+    private var disc: some View {
+        switch style {
+        case .light:
+            // A-89's blur: the control floats over a hidden-nav-bar ScrollView,
+            // and a flat disc read as a sticker on the words passing behind it.
+            Rectangle()
+                .fill(.regularMaterial)
+                .overlay(PatinaColors.offWhite.opacity(0.92))
+        case .dark:
+            PatinaColors.charcoal.opacity(0.72)
+        }
     }
     private var stroke: Color {
         style == .light ? PatinaColors.pearl : .clear

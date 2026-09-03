@@ -18,6 +18,10 @@ struct YourSpacesView: View {
     @Query(sort: \RoomModel.createdAt, order: .reverse) private var rooms: [RoomModel]
     /// Drives the contextual help-panel sheet attached to the Rooms surface.
     /// Toggled by the `?` button in the header.
+    // C5-02: nothing sets this in round one — the `?` triggers are removed
+    // because zero `ios-app/*` help articles exist in production Sanity, so
+    // every door opened on an empty panel. The sheet wiring stays as a seam
+    // W2 restores the buttons to; it is deliberately unreachable, not live.
     @State private var isHelpPanelPresented: Bool = false
 
     /// R14: scan-upload sync state. `RoomScanSyncService` is `@Observable`,
@@ -57,24 +61,18 @@ struct YourSpacesView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 20)
 
-                        // Whole Home bar with a sibling HelpInfoIcon — the
-                        // bar itself stays a tappable navigation target, the
-                        // info icon surfaces the Patina concept explanation
-                        // (one aggregate figure across every scanned room).
-                        HStack(spacing: 6) {
-                            WholeHomeCrossRoomBar(
-                                roomCount: rooms.count,
-                                itemCount: totalItemCount,
-                                totalCents: totalInvestmentCents,
-                                onTap: { coordinator.navigate(to: .crossRoom) }
-                            )
-                            HelpInfoIcon(
-                                surfaceKey: SurfaceKeys.IOSApp.Rooms.wholeHome,
-                                fallback: "Whole Home rolls every room into one figure — total items, total investment, and a jump-off into the cross-room view for decisions that span more than one room.",
-                                size: 12,
-                                accessibilityLabel: "About Whole Home"
-                            )
-                        }
+                        // C-05: this bar's sibling `?` was the last of four on
+                        // one screen, and it sat OUTSIDE the card in the right
+                        // gutter, attached to nothing a reader could see. The
+                        // header's icon is the one help affordance this screen
+                        // gets; the bar's own label already says what it rolls
+                        // up.
+                        WholeHomeCrossRoomBar(
+                            roomCount: rooms.count,
+                            itemCount: totalItemCount,
+                            totalCents: totalInvestmentCents,
+                            onTap: { coordinator.navigate(to: .crossRoom) }
+                        )
                         .padding(.horizontal, 20)
 
                         ForEach(rooms) { room in
@@ -173,20 +171,13 @@ struct YourSpacesView: View {
                     .frame(width: 80, height: 80)
                 Text("⌂").font(.system(size: 32))
             }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("No rooms yet")
-                    .font(PatinaTypography.h4)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                // Empty-state help: explains why scanning matters. The
-                // copy below is a CTA; this tooltip explains the *why*
-                // for a designer-curious user not ready to scan yet.
-                HelpInfoIcon(
-                    surfaceKey: SurfaceKeys.IOSApp.Rooms.emptyNoRooms,
-                    fallback: "Patina builds room-aware recommendations from a scan — the LiDAR camera captures shape, light, and existing items so every suggestion fits the actual space.",
-                    size: 13,
-                    accessibilityLabel: "About scanning a room"
-                )
-            }
+            // C-05: as the Spaces tab's root this state draws the header too,
+            // so its own `?` was a second affordance in one viewport. The
+            // sentence directly below already says why a scan matters, in
+            // plainer words than the tooltip did.
+            Text("No rooms yet")
+                .font(PatinaTypography.h4)
+                .foregroundStyle(PatinaColors.Text.primary)
             Text("Scan a room and Patina fills it with furniture that knows your space — your light, your walls, your style.")
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
