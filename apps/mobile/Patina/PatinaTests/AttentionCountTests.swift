@@ -406,4 +406,21 @@ extension AttentionCountTests {
             #expect(single)
         }
     }
+
+    /// `A-81`/`R-02`'s remaining half is note **O7**: the bell asserts
+    /// "No unread notifications" over a count nobody fetched.
+    /// `DailyGreetingHeader.swift` is L1-C's file and L1-C merges first, so
+    /// there is no owner left to schedule it (review `RL1B3-03`); the steward
+    /// has routed it back to L1-B after merge as `C-L1B-4`.
+    ///
+    /// Not `isIntermittent`: green while the note is owed, red when it lands.
+    @Test
+    func theBellStillOwesItsKnownFlag() throws {
+        let header = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
+        )
+        withKnownIssue("A-81 owes the bell its unreadCountIsKnown guard (l1b-notes-out.md O7)") {
+            #expect(header.contains("unreadCountIsKnown"))
+        }
+    }
 }

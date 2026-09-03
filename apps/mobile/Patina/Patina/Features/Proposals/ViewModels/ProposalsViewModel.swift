@@ -106,7 +106,21 @@ final class ProposalDetailViewModel {
         BadgeCountService.shared.pendingProposals.first { $0.id == proposalId }
     }
 
+    /// One load at a time. The ten-second cap and the `.refreshable` that
+    /// makes the retry reachable are what create the overlap: a pull-to-
+    /// refresh returning at t=3 s populates the bundle, then the original
+    /// `.task` hits its deadline at t=10 s and its catch clears every array
+    /// over the page the reader is looking at (review `RL1B3-05`). Same guard
+    /// as `RoomSyncCoordinator.inFlight` and `DailyRoomBatchQueue.isFlushing`.
+    private var isInFlight = false
+
     func load(proposalId: String, deadline: TimeInterval = ProposalDetailViewModel.fetchDeadline) async {
+        // Claimed before the first `await`, or two callers in the same tick
+        // both pass it.
+        guard !isInFlight else { return }
+        isInFlight = true
+        defer { isInFlight = false }
+
         isLoading = true
         error = nil
         do {

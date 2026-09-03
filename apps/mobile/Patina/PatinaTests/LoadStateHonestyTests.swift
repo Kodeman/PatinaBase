@@ -374,3 +374,95 @@ struct LoadStateHonestyTests {
         #expect(view.contains("We couldn’t find that order"))
     }
 }
+
+// MARK: - R-05, the second half of the deadline
+
+@MainActor
+extension LoadStateHonestyTests {
+
+    /// The ten-second cap and the `.refreshable` that makes the retry
+    /// reachable are what create the overlap: two `load(proposalId:)` calls
+    /// with no mutual exclusion. A pull-to-refresh that returns at t=3 s
+    /// populates the bundle; the original `.task` then times out at t=10 s and
+    /// its catch clears `proposal`, `items`, `sections`, `exclusions`,
+    /// `scopeRooms` and `boards` over the page the reader is looking at
+    /// (review `RL1B3-05`). Same guard as `RoomSyncCoordinator.inFlight` and
+    /// `DailyRoomBatchQueue.isFlushing`.
+    @Test
+    func aSlowLoadMayNotClearAFreshBundle() async {
+        let viewModel = ProposalDetailViewModel()
+
+        // The first load is still suspended when the second arrives — exactly
+        // the `.task` / `.refreshable` overlap. Both are capped at 50 ms, so
+        // this needs no reachable backend and cannot hang.
+        async let first: Void = viewModel.load(proposalId: "p1", deadline: 0.05)
+        try? await Task.sleep(for: .milliseconds(5))
+        await viewModel.load(proposalId: "p1", deadline: 0.05)
+        await first
+
+        // The second caller was refused entry rather than racing, so the view
+        // model lands in one consistent state instead of a torn one: nothing
+        // left mid-flight, and a failure reported once.
+        #expect(viewModel.isLoading == false)
+        #expect(viewModel.error != nil)
+        #expect(viewModel.proposal == nil)
+    }
+
+    /// The guard is claimed before the first `await`, or two callers in the
+    /// same tick both pass it.
+    @Test
+    func theProposalLoadClaimsItsGuardBeforeSuspending() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Proposals/ViewModels/ProposalsViewModel.swift"
+        )
+        let load = try #require(
+            source.components(separatedBy: "func load(proposalId: String, deadline:").last?
+                .components(separatedBy: "\n    }").first
+        )
+        let guardIndex = try #require(load.range(of: "guard !isInFlight else { return }")).lowerBound
+        let firstAwait = try #require(load.range(of: "try await Self.withDeadline")).lowerBound
+        #expect(guardIndex < firstAwait)
+        #expect(load.contains("isInFlight = true"))
+        #expect(load.contains("defer { isInFlight = false }"))
+    }
+}
+
+// MARK: - The cross-lane halves
+
+/// Two of this lane's findings close only in files L1-C owns, and L1-C merges
+/// first (D14) — so neither has an owner left to schedule it (review
+/// `RL1B3-03`). The steward has since routed both back to L1-B after merge
+/// (`steward.md`, "From L1-C — fix round", rows `C-L1B-3` and `C-L1B-1`); what
+/// these two pin is that the work is *not done yet*.
+///
+/// Known issues, deliberately **not** `isIntermittent`: green while the note is
+/// owed, red the moment it lands. `l1b-notes-out.md` §S6 carries the schedule.
+@MainActor
+extension LoadStateHonestyTests {
+
+    /// `C4-03`'s own `where` names Spaces first, and Spaces is the one surface
+    /// in the nine-row table with no error branch at all: `YourSpacesView`
+    /// draws a bare `Text("No rooms yet")` whatever `lastLoadFailed` says.
+    @Test
+    func theSpacesErrorBranchIsStillOwed() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Rooms/Views/YourSpacesView.swift")
+        )
+        withKnownIssue("C4-03 owes Your Spaces its error branch (l1b-notes-out.md O5)") {
+            #expect(code.contains("lastLoadFailed"))
+        }
+    }
+
+    /// `L07-05`'s `stalenessLine` exists on the view model and is tested
+    /// there; nothing renders it until O12 lands, so the hub still draws stale
+    /// counts with full confidence.
+    @Test
+    func theStudioHubStalenessLineIsStillOwed() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Profile/Views/StudioHubView.swift")
+        )
+        withKnownIssue("L07-05 owes StudioHubView its staleness line (l1b-notes-out.md O12)") {
+            #expect(code.contains("stalenessLine"))
+        }
+    }
+}

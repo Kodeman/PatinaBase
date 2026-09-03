@@ -319,7 +319,38 @@ public final class RoomSyncCoordinator {
             changed = true
         }
 
-        if changed { revision += 1 }
+        retireSettledTombstones(against: rowById)
+
+        if changed {
+            revision += 1
+            // `RoomStore.create`/`.delete` bump this, which is what makes
+            // Studio's `Rooms:` stat and `YOUR ROOMS` rail follow a delete
+            // made here. Nothing bumped it for a reconcile, so a room added
+            // or removed on another device — or the first reconcile after
+            // sign-in — left Studio stale until the next `onAppear` (review
+            // `RL1B3-09`). `ProfileViewModel` reads the signal, not this
+            // `revision`.
+            LocalRoomSignal.shared.changed()
+        }
         return changed
+    }
+
+    /// A tombstone the server has stopped contradicting.
+    ///
+    /// `deleteRoom` throws on a DELETE that removed nothing (`RL1B2-09`),
+    /// which is right — but it makes the *already gone* case throw too: a
+    /// delete that landed before the process died, or a row removed from
+    /// another device. Such an id is not in the server rows, so it never
+    /// reaches `plan.deleteRemotely` and `retryPendingDeletes` never sees it;
+    /// the tombstone was immortal and 200 dead ones could evict a live one
+    /// (review `RL1B3-11`).
+    ///
+    /// Safe across accounts: `LocalStoreReset` clears the whole list on the
+    /// account-change wipe, before the next account's first reconcile, so
+    /// owner B's rows can never retire owner A's tombstones.
+    private func retireSettledTombstones(against rowById: [String: RemoteRoom]) {
+        for tombstone in RoomTombstones.all where rowById[tombstone] == nil {
+            RoomTombstones.clear(tombstone)
+        }
     }
 }

@@ -312,3 +312,108 @@ struct RoomLifecycleTests {
         #expect(button.contains(".contentShape(Rectangle())"))
     }
 }
+
+// MARK: - B-03's remote half
+
+@MainActor
+extension RoomLifecycleTests {
+
+    private func row(_ id: String, owner: String = "userA", name: String) -> RemoteRoom {
+        RemoteRoom(
+            id: id, user_id: owner, name: name, type: "other",
+            length_meters: nil, width_meters: nil, height_meters: nil,
+            floor_area_sqm: nil, volume_cbm: nil,
+            saved_item_count: 0, scan_count: 0, style_signals: nil,
+            created_at: "2026-09-01T00:00:00Z",
+            updated_at: "2026-09-01T00:00:00Z",
+            budget_cents: nil
+        )
+    }
+
+    /// `RoomStore.create` and `.delete` bump `LocalRoomSignal`, which is what
+    /// makes Studio's `Rooms:` stat and `YOUR ROOMS` rail follow a delete made
+    /// on this phone. `apply` — the reconcile — bumped only its own
+    /// `revision`, which `ProfileViewModel` does not read, so a room added or
+    /// removed on another device (or the first reconcile after sign-in) left
+    /// Studio stale until the next `onAppear` (review `RL1B3-09`).
+    @Test
+    func aMirroredInsertBumpsTheLocalSignal() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        RoomTombstones.clearAll()
+
+        let coordinator = RoomSyncCoordinator()
+        let before = LocalRoomSignal.shared.revision
+        let changed = coordinator.apply(
+            [row("D0000000-0000-4000-8000-000000000001", name: "Mirrored Room")],
+            in: store, owner: "userA"
+        )
+        #expect(changed)
+        #expect(LocalRoomSignal.shared.revision != before, "Studio never heard about the reconcile")
+    }
+
+    /// A reconcile that changes nothing must not move the signal either, or
+    /// every thirty-second poll refetches all three of Studio's derived reads.
+    @Test
+    func aReconcileThatChangesNothingLeavesTheSignalAlone() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        RoomTombstones.clearAll()
+
+        let coordinator = RoomSyncCoordinator()
+        let before = LocalRoomSignal.shared.revision
+        #expect(coordinator.apply([], in: store, owner: "userA") == false)
+        #expect(LocalRoomSignal.shared.revision == before)
+    }
+
+    /// `deleteRoom` now throws on a DELETE that removed nothing (`RL1B2-09`),
+    /// which is right — but it means the already-gone case throws too. An id
+    /// the server no longer returns never reaches `plan.deleteRemotely`, so
+    /// `retryPendingDeletes` never sees it and its tombstone was immortal:
+    /// 200 dead entries could evict a live one (review `RL1B3-11`).
+    ///
+    /// The server not returning the row is exactly the condition
+    /// `RoomTombstones.clear` documents.
+    @Test
+    func aServerThatNoLongerHasTheRowRetiresTheTombstone() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        RoomTombstones.clearAll()
+        RoomTombstones.record("D0000000-0000-4000-8000-000000000002")
+
+        let coordinator = RoomSyncCoordinator()
+        coordinator.apply(
+            [row("D0000000-0000-4000-8000-000000000003", name: "Still There")],
+            in: store, owner: "userA"
+        )
+        #expect(RoomTombstones.contains("D0000000-0000-4000-8000-000000000002") == false)
+        RoomTombstones.clearAll()
+    }
+
+    /// …and a tombstone the server still contradicts is kept, because that is
+    /// the delete this phone has not managed to land yet.
+    @Test
+    func aTombstoneTheServerStillContradictsIsKept() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        RoomTombstones.clearAll()
+        RoomTombstones.record("D0000000-0000-4000-8000-000000000004")
+
+        let coordinator = RoomSyncCoordinator()
+        coordinator.apply(
+            [row("D0000000-0000-4000-8000-000000000004", name: "Deleted Here, Not There")],
+            in: store, owner: "userA"
+        )
+        #expect(RoomTombstones.contains("D0000000-0000-4000-8000-000000000004"))
+        RoomTombstones.clearAll()
+    }
+
+    /// The account-change path is what makes the sweep safe across accounts:
+    /// `LocalStoreReset` drops the whole list before the next account's first
+    /// reconcile, so owner B's rows can never retire owner A's tombstones.
+    @Test
+    func theAccountChangeWipeStillClearsEveryTombstone() throws {
+        let reset = try SourcePin.read("Patina/Core/Persistence/LocalStoreReset.swift")
+        #expect(reset.contains("RoomTombstones.clearAll()"))
+    }
+}
