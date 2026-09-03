@@ -25,21 +25,66 @@ struct CompanionOrbAppearanceTests {
 
     /// `C-01`. The disc has to be an object on the page in both appearances.
     /// 1.15:1 is not an object.
-    @Test("the companion surface is adaptive and reads against the page in both appearances")
+    ///
+    /// `RL1D-R3-05`: the first version of this test asserted `>= 1.8` where
+    /// PROGRAM.md §3 asks for **3:1**, and wrote the relaxation down nowhere —
+    /// a green suite over a bar someone had quietly halved. The bar is back at
+    /// 3.0 here, and it is measured on what actually carries it.
+    ///
+    /// The fill cannot. `surfaceDark` #524B44 on the dark page is **1.93:1** —
+    /// a real improvement on 1.15:1 and short of the bar — and lifting it until
+    /// the fill clears 3:1 needs a relative luminance of 0.140, at which
+    /// `OnDark.secondary` on the panel falls to 3.54:1 and breaks the 4.5:1 bar
+    /// `onDarkTokensDoNotFlip` holds for `C-02`. One finding cannot be paid for
+    /// with the other. `C-01`'s own fix line offers "adaptive fill **or**
+    /// border/shadow", VISION §6 refuses shadows, and `Border.onDark` #756B61
+    /// already existed for this shape with zero call sites: 3.18:1 against the
+    /// dark page, 4.87:1 against the light one. The edge is what makes it an
+    /// object, and the edge is what is measured.
+    @Test("the companion surface is adaptive and reads as an object on the page in both appearances")
     func theCompanionSurfaceIsAdaptive() {
         #expect(
             PatinaContrast.isAdaptive(PatinaColors.Background.dark),
             "Background.dark resolves identically in both appearances — this is C-01's root"
         )
         for style in PatinaContrast.appearances {
-            let measured = PatinaContrast.ratio(
+            let edge = PatinaContrast.ratio(
+                PatinaColors.Border.onDark,
+                on: PatinaColors.Background.primary,
+                style
+            )
+            #expect(
+                edge >= 3.0,
+                "the companion surface's edge on the page in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(edge)):1, below PROGRAM.md's 3:1; C-01 measured the fill at 1.15:1 in dark"
+            )
+
+            // The fill still has to move off 1.15:1 — the edge is the bar, not
+            // an excuse to put a static charcoal back.
+            let fill = PatinaContrast.ratio(
                 PatinaColors.Background.dark,
                 on: PatinaColors.Background.primary,
                 style
             )
             #expect(
-                measured >= 1.8,
-                "the companion surface on the page in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1; C-01 measured 1.15:1 in dark"
+                fill >= 1.8,
+                "the companion fill on the page in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(fill)):1; C-01 measured 1.15:1 in dark"
+            )
+        }
+    }
+
+    /// The edge has to be on the two surfaces, not merely in the palette. The
+    /// first round of this lane created `clayInk` and left it with zero call
+    /// sites; `Border.onDark` was in exactly that position until this round.
+    @Test("both companion surfaces actually draw the on-dark edge")
+    func theCompanionSurfacesDrawTheirEdge() throws {
+        for path in [
+            "Patina/Features/Companion/Components/CompanionMarkView.swift",
+            "Patina/Features/Companion/Components/CompanionHearthView.swift"
+        ] {
+            let source = try SourcePin.readCode(path)
+            #expect(
+                source.contains("PatinaColors.Border.onDark"),
+                "\(path) draws a Background.dark surface with no edge — the fill is 1.93:1 against the dark page and C-01 is open"
             )
         }
     }
@@ -115,7 +160,7 @@ struct CompanionOrbAppearanceTests {
     /// `C-02`. The panel's status line, by name.
     @Test("the companion panel's subtitle is painted with on-dark ink, not the flipping token")
     func thePanelSubtitleUsesOnDarkInk() throws {
-        let source = try SourcePin.read(
+        let source = try SourcePin.readCode(
             "Patina/Features/Companion/Components/CompanionHearthView.swift"
         )
         #expect(
@@ -134,9 +179,12 @@ struct CompanionOrbAppearanceTests {
             "Patina/Features/Companion/Components/CompanionHearthView.swift",
             "Patina/Features/Companion/Components/CompanionMarkView.swift"
         ] {
-            let source = try SourcePin.read(path)
+            let source = try SourcePin.readCode(path)
+            // `RL1D-R3-05`: this matched `PatinaColors.charcoal.opacity`, so a
+            // bare `PatinaColors.charcoal` disc — 1.15:1, the finding exactly —
+            // walked straight past it.
             #expect(
-                !source.contains("PatinaColors.charcoal.opacity"),
+                !source.contains("PatinaColors.charcoal"),
                 "\(path) tints a companion surface with a hard-coded charcoal — on the dark canvas that is C-01's 1.15:1 all over again"
             )
         }

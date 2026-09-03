@@ -100,6 +100,12 @@ private extension CompanionHearthView {
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(PatinaColors.Background.dark)
+                    // C-01, the panel's half: same edge as the disc, for the
+                    // same reason — the fill is 1.93:1 against the dark page.
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .strokeBorder(PatinaColors.Border.onDark, lineWidth: 1)
+                    )
                     .companionMorphMatched(
                         id: "companion.shell",
                         namespace: morphNamespace,
