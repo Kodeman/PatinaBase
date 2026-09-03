@@ -44,14 +44,32 @@ struct CompanionInsetTests {
     @Test("the modifier's two answers are the shared metric, not a third constant")
     func theModifierDerivesFromTheHearthMetric() {
         for houseFirst in [true, false] {
-            #expect(CompanionBottomClearance.height(houseFirst: houseFirst)
+            #expect(CompanionBottomClearance.height(houseFirst: houseFirst, rootReserves: false)
                     == CompanionHearthMetrics.pinnedFooterClearance(houseFirst: houseFirst))
         }
         // And the two answers really are different — a modifier that returned
         // one number for both roots would satisfy the line above and still be
         // the bug (`shots/w3-n1-07-money-footer-under-bar.png`).
-        #expect(CompanionBottomClearance.height(houseFirst: true)
-                < CompanionBottomClearance.height(houseFirst: false))
+        #expect(CompanionBottomClearance.height(houseFirst: true, rootReserves: false)
+                < CompanionBottomClearance.height(houseFirst: false, rootReserves: false))
+    }
+
+    @Test("the clearance does not stack on top of the root's own reservation")
+    func theClearanceKnowsWhenTheRootAlreadyReserved() {
+        // `pinnedFooterClearance` is documented as the figure a PUSHED screen
+        // needs, *because* a root `safeAreaInset` does not reach a
+        // NavigationStack's destinations. On a flag-off TAB ROOT the
+        // reservation is exactly what does reach the scroll view, so adding the
+        // pushed-screen figure on top of it is dead space, not clearance
+        // (`RL1C-19`).
+        #expect(CompanionBottomClearance.height(houseFirst: false, rootReserves: true)
+                < CompanionBottomClearance.height(houseFirst: false, rootReserves: false))
+        #expect(CompanionBottomClearance.height(houseFirst: false, rootReserves: true)
+                == CompanionHearthMetrics.clearanceAir)
+        // The house-first root reserves nothing at all (B-2: the bar is drawn
+        // over the screen), so nothing is subtracted there whatever is asked.
+        #expect(CompanionBottomClearance.height(houseFirst: true, rootReserves: false)
+                == CompanionHearthMetrics.pinnedFooterClearance(houseFirst: true))
     }
 
     // MARK: - The call sites
@@ -84,8 +102,7 @@ struct CompanionInsetTests {
             let source = try String(contentsOfFile: path, encoding: .utf8)
             let code = SourceScan.code(in: source)
 
-            for line in code.components(separatedBy: .newlines) {
-                guard let value = Self.hardCodedClearance(in: line) else { continue }
+            for value in Self.hardCodedClearances(in: code) {
                 offenders.append("\((path as NSString).lastPathComponent): \(value)")
             }
         }
@@ -98,17 +115,54 @@ struct CompanionInsetTests {
                 """)
     }
 
-    /// A `.padding(.bottom, N)` or `Spacer().frame(height: N)` with `N >= 90` —
-    /// large enough that it can only be there to clear the dock or the bar.
-    /// Anything smaller is ordinary spacing and is none of this pin's business.
-    private static func hardCodedClearance(in line: String) -> Int? {
-        for prefix in [".padding(.bottom, ", "Spacer().frame(height: "] {
-            guard let range = line.range(of: prefix) else { continue }
-            let tail = line[range.upperBound...]
-            let digits = tail.prefix { $0.isNumber }
-            guard !digits.isEmpty, let value = Int(digits), value >= 90 else { continue }
-            return value
+    /// Every `.padding(.bottom, N)` or `Spacer().frame(height: N)` in `code`
+    /// with `N >= 90` — large enough that it can only be there to clear the
+    /// dock or the bar. Anything smaller is ordinary spacing and is none of
+    /// this pin's business.
+    ///
+    /// **Whitespace is normalised over the whole file before the scan, and that
+    /// is the load-bearing part.** The first version read line by line, and
+    /// `ProductDetailView` writes the construct across two:
+    ///
+    /// ```swift
+    ///     Spacer()
+    ///         .frame(height: 120)
+    /// ```
+    ///
+    /// so the keystone assertion passed while a 120 pt clearance was still
+    /// shipped, in this lane's own glob (`RL1C-06`). A scan that a newline can
+    /// walk past is not a scan.
+    static func hardCodedClearances(in code: String) -> [Int] {
+        let flattened = code
+            .replacingOccurrences(of: "\\s*\\n\\s*", with: "", options: .regularExpression)
+        var found: [Int] = []
+        for prefix in [".padding(.bottom,", "Spacer().frame(height:"] {
+            var searchFrom = flattened.startIndex
+            while let range = flattened.range(of: prefix, range: searchFrom..<flattened.endIndex) {
+                searchFrom = range.upperBound
+                let digits = flattened[range.upperBound...]
+                    .drop { $0 == " " }
+                    .prefix { $0.isNumber }
+                if !digits.isEmpty, let value = Int(digits), value >= 90 {
+                    found.append(value)
+                }
+            }
         }
-        return nil
+        return found
+    }
+
+    @Test("the scan sees a clearance spelled across two lines")
+    func theScanIsNotFooledByANewline() {
+        // The exact shape `ProductDetailView` had, which the line-by-line scan
+        // walked straight past.
+        let twoLine = """
+                            Spacer()
+                                .frame(height: 120)
+            """
+        #expect(Self.hardCodedClearances(in: twoLine) == [120])
+        // And the one-line shapes still register…
+        #expect(Self.hardCodedClearances(in: ".padding(.bottom, 190)") == [190])
+        // …while ordinary spacing does not.
+        #expect(Self.hardCodedClearances(in: ".padding(.bottom, 24)").isEmpty)
     }
 }

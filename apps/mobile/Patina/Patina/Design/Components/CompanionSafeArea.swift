@@ -70,10 +70,15 @@ public enum CompanionHearthMetrics {
     ///  • house-first — the bar's 49 pt row (B-2: the bar replaces the dock).
     ///    Not zero: the bar is drawn over the screen, not reserved out of it.
     ///
-    /// Plus the same 8 pt of air in both cases.
+    /// Plus the same air in both cases.
     public static func pinnedFooterClearance(houseFirst: Bool) -> CGFloat {
-        houseFirst ? barRowHeight + 8 : dockHeight + 8
+        (houseFirst ? barRowHeight : dockHeight) + clearanceAir
     }
+
+    /// The breathing room a scroll container leaves under its last block, over
+    /// and above whatever chrome owns the bottom edge. It is the whole answer
+    /// where the root has already reserved that chrome as safe area.
+    public static let clearanceAir: CGFloat = 8
 
     /// Root overlay ownership policy. Scan and quiz render their own in-flow
     /// Companion, so reserving the root Hearth there would create dead space.
@@ -203,18 +208,39 @@ private struct CompanionHearthReservation: ViewModifier {
 /// no call site repeats `coordinator.isHouseFirstRoot` — one seam, read once,
 /// at the container that needs it.
 enum CompanionBottomClearance {
-    static func height(houseFirst: Bool) -> CGFloat {
-        CompanionHearthMetrics.pinnedFooterClearance(houseFirst: houseFirst)
+    /// `rootReserves` is the RL1C-19 half: `pinnedFooterClearance` is
+    /// documented as the figure a **pushed** screen needs, precisely because a
+    /// root `safeAreaInset` does not reach a `NavigationStack`'s destinations.
+    /// On the flag-off root with nothing pushed, the 120 pt Hearth reservation
+    /// IS in this scroll view's safe area, so adding the pushed-screen figure
+    /// on top of it is dead space rather than clearance. The house-first root
+    /// reserves nothing at all (B-2: the bar is drawn over the screen), so it
+    /// always takes the whole figure.
+    static func height(houseFirst: Bool, rootReserves: Bool) -> CGFloat {
+        rootReserves
+            ? CompanionHearthMetrics.clearanceAir
+            : CompanionHearthMetrics.pinnedFooterClearance(houseFirst: houseFirst)
     }
 }
 
 private struct CompanionBottomClearanceModifier: ViewModifier {
     @Environment(\.appCoordinator) private var coordinator
 
+    /// The root's own reservation is in this surface's safe area only on the
+    /// flag-off root, with nothing pushed, on a route that reserves at all.
+    private var rootReservationInForce: Bool {
+        !coordinator.isHouseFirstRoot
+            && coordinator.navigationPath.isEmpty
+            && CompanionHearthMetrics.reservesRootHearth(for: coordinator.currentScreen)
+    }
+
     func body(content: Content) -> some View {
         content.padding(
             .bottom,
-            CompanionBottomClearance.height(houseFirst: coordinator.isHouseFirstRoot)
+            CompanionBottomClearance.height(
+                houseFirst: coordinator.isHouseFirstRoot,
+                rootReserves: rootReservationInForce
+            )
         )
     }
 }
