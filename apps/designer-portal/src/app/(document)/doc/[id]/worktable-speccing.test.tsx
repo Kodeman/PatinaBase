@@ -417,6 +417,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
     historyToggled: jest.fn(),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
+    zoneFlight: jest.fn(),
     wayfinding: { marginNote: jest.fn() },
   },
 }));

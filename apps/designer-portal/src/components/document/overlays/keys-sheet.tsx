@@ -30,8 +30,16 @@ import { DocSheet } from './doc-sheet';
 
 export const KEYS_SHEET_EVENT = 'document:open-keys';
 
-/** Which rung of the shortcut ladder actually carried (proposal §10). */
-export type KeysOpenSource = 'key' | 'palette' | 'panel';
+/** Which rung of the shortcut ladder actually carried (proposal §10).
+ *  Matches the three doorways that actually fire `help.shortcuts.opened`:
+ *  the global `?` key, the ⌘K palette row (both via `openKeys()` below), and
+ *  the Help Center article page (`/help/article/the-keys`, which fires
+ *  `source: 'help_center'` directly — it's a route, not this overlay, so it
+ *  never calls `openKeys()`). The contextual panel's "The keys" link
+ *  (`PanelKeysBlock`) is a bare route link by design (it opens the article,
+ *  not this sheet) and so carries no source of its own — cross-lane review
+ *  2026-09-03, F2. */
+export type KeysOpenSource = 'key' | 'palette' | 'help_center';
 
 export interface OpenKeysEventDetail {
   source: KeysOpenSource;

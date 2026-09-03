@@ -298,6 +298,19 @@ export const documentEvents = {
     track('fresh_times_requested', props);
   },
 
+  /** Onboarding Wave 1 (L6) — this person's first successful write (a margin
+   *  note or a decision) into any document, ever. The handoff's activation
+   *  signal (synthesis §10) — fired once per person, guarded in
+   *  `profiles.help_state.firstAuthoredAt` by the caller so a second write,
+   *  on this document or another, never re-fires it. */
+  firstAuthored: (props: { doc_id: string }) => track('document_first_authored', props),
+
+  /** Onboarding Wave 1 (L6) — a document was put down (or navigated away
+   *  from) within 10 seconds of being picked up, with no write in between:
+   *  the "pick-up/put-down thrash" stuck signal (synthesis §10, R-b). */
+  zoneFlight: (props: { doc_id: string; held_ms: number }) =>
+    track('document_zone_flight', props),
+
   commandBar,
   wayfinding,
 };

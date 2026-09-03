@@ -17,9 +17,8 @@
  * │  • Supabase (S4-1 — authoritative for signed-in users)                   │
  * │    Lives under `profiles.help_state` JSONB, sub-key `tours`. Wired in    │
  * │    the portal layer via `setTourStateBackend(supabaseTourStateBackend)`. │
- * │    See `../../persistence/supabaseAdapter.ts` for the adapter, and       │
- * │    `apps/designer-portal/src/components/help/first-signin-tour.tsx` for  │
- * │    the wiring pattern.                                                   │
+ * │    See `../../persistence/supabaseAdapter.ts` for the adapter, and the   │
+ * │    designer-portal `help-state-provider.tsx` for the wiring pattern.     │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
  * Spec §4.7 rule 1 ("One-shot per user per surface") calls out: "State

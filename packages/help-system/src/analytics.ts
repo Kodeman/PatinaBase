@@ -60,7 +60,7 @@
  *     video.started                { surface_key }
  *     video.completed              { surface_key }
  *     help_center.viewed           { source }                                    ← /help shell (portal-fired)
- *     shortcuts.opened             { source: 'key'|'palette'|'panel'|'help_center' } ← "The keys" (sheet or page)
+ *     shortcuts.opened             { source: 'key'|'palette'|'help_center' } ← "The keys" (sheet or page)
  *     glossary.opened              { source: 'palette' | 'panel' }                ← "The words" (Ideas & vocabulary shelf)
  */
 

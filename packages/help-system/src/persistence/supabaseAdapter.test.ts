@@ -14,6 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  createSupabaseFirstAuthoredBackend,
   createSupabaseHelpStateBackends,
   createSupabaseMarginNoteBackend,
   loadHelpState,
@@ -286,6 +287,7 @@ describe('migrateLocalToSupabase', () => {
       toursMigrated: 0,
       featureAnnouncementsMigrated: 0,
       marginNotesMigrated: 0,
+      firstAuthoredMigrated: 0,
     })
   })
 
@@ -316,6 +318,42 @@ describe('migrateLocalToSupabase', () => {
     expect(
       window.localStorage.getItem('patina:margin-note:desk-first-touch'),
     ).toBeNull()
+  })
+
+  it('sweeps the patina:first-authored key into the first-authored backend and clears it', async () => {
+    window.localStorage.setItem('patina:first-authored', '1747699200000')
+    const { client } = makeStubClient({})
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    const firstAuthoredBackend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    await backends.hydrate()
+    await firstAuthoredBackend.hydrate()
+    const result = await migrateLocalToSupabase(backends, undefined, firstAuthoredBackend)
+    expect(result.firstAuthoredMigrated).toBe(1)
+    expect(firstAuthoredBackend.hasAuthored()).toBe(true)
+    expect(window.localStorage.getItem('patina:first-authored')).toBeNull()
+  })
+
+  it('does not double-count first-authored when the backend already has it, but still clears the local key', async () => {
+    window.localStorage.setItem('patina:first-authored', '1')
+    const { client } = makeStubClient({ firstAuthoredAt: '2026-01-01T00:00:00Z' })
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    const firstAuthoredBackend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    await backends.hydrate()
+    await firstAuthoredBackend.hydrate()
+    const result = await migrateLocalToSupabase(backends, undefined, firstAuthoredBackend)
+    expect(result.firstAuthoredMigrated).toBe(0)
+    expect(window.localStorage.getItem('patina:first-authored')).toBeNull()
+  })
+
+  it('leaves first-authored untouched when no local key exists', async () => {
+    const { client } = makeStubClient({})
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    const firstAuthoredBackend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    await backends.hydrate()
+    await firstAuthoredBackend.hydrate()
+    const result = await migrateLocalToSupabase(backends, undefined, firstAuthoredBackend)
+    expect(result.firstAuthoredMigrated).toBe(0)
+    expect(firstAuthoredBackend.hasAuthored()).toBe(false)
   })
 })
 
@@ -358,5 +396,42 @@ describe('createSupabaseMarginNoteBackend', () => {
     await backend.hydrate()
     expect(backend.hasSeen('desk-first-touch')).toBe(true)
     expect(backend.hasSeen('doc-first-touch')).toBe(true)
+  })
+})
+
+describe('createSupabaseFirstAuthoredBackend', () => {
+  it('hasAuthored is false before hydrate and before markAuthored', () => {
+    const { client } = makeStubClient({})
+    const backend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    expect(backend.hasAuthored()).toBe(false)
+  })
+
+  it('markAuthored then hasAuthored round-trips true and writes through', async () => {
+    const { client, lastWrite } = makeStubClient({})
+    const backend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    backend.markAuthored()
+    expect(backend.hasAuthored()).toBe(true)
+    await backend.flush()
+    expect(lastWrite.current?.firstAuthoredAt).toEqual(expect.any(String))
+  })
+
+  it('markAuthored is idempotent — a second call does not overwrite the first instant', async () => {
+    const { client, lastWrite } = makeStubClient({})
+    const backend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    backend.markAuthored()
+    await backend.flush()
+    const first = lastWrite.current?.firstAuthoredAt
+    backend.markAuthored()
+    await backend.flush()
+    expect(lastWrite.current?.firstAuthoredAt).toBe(first)
+  })
+
+  it('hydrate merges server state without clobbering an in-flight local write', async () => {
+    const { client } = makeStubClient({
+      firstAuthoredAt: '2026-01-01T00:00:00Z',
+    })
+    const backend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    await backend.hydrate()
+    expect(backend.hasAuthored()).toBe(true)
   })
 })

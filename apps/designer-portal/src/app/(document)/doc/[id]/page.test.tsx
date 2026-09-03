@@ -515,6 +515,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
       mockLensStandingSheetOpened(...args),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
+    zoneFlight: jest.fn(),
     // The real MarginRail leads with the R94 first-touch margin note.
     wayfinding: { marginNote: jest.fn() },
   },

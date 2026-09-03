@@ -17,13 +17,18 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { KeysReferenceList } from '@/components/document/overlays/keys-sheet';
+import {
+  KeysReferenceList,
+  type KeysOpenSource,
+} from '@/components/document/overlays/keys-sheet';
 import { HELP_EVENTS, safeCapture } from '@/lib/help-system/help-events';
 import { THE_WORDS_HREF } from '@/lib/help-system/keys-reference';
 
+const SOURCE: KeysOpenSource = 'help_center';
+
 export default function TheKeysPage() {
   useEffect(() => {
-    safeCapture(HELP_EVENTS.SHORTCUTS_OPENED, { source: 'help_center' });
+    safeCapture(HELP_EVENTS.SHORTCUTS_OPENED, { source: SOURCE });
   }, []);
 
   return (

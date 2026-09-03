@@ -11,12 +11,14 @@ export {
   createSupabaseTourStateBackend,
   createSupabaseFeatureAnnouncementBackend,
   createSupabaseMarginNoteBackend,
+  createSupabaseFirstAuthoredBackend,
   createSupabaseHelpStateBackends,
   migrateLocalToSupabase,
 } from './supabaseAdapter'
 export type {
   CreateSupabaseBackendsResult,
   CreateSupabaseMarginNoteBackendResult,
+  CreateSupabaseFirstAuthoredBackendResult,
   MigrationResult,
 } from './supabaseAdapter'
 export type {
@@ -24,5 +26,6 @@ export type {
   TourStateBackend,
   FeatureAnnouncementStateBackend,
   MarginNoteStateBackend,
+  FirstAuthoredStateBackend,
   HelpStateSupabaseClient,
 } from './types'
