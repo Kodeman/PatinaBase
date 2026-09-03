@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createSupabaseHelpStateBackends,
+  createSupabaseMarginNoteBackend,
   loadHelpState,
   migrateLocalToSupabase,
   saveHelpState,
@@ -281,6 +282,81 @@ describe('migrateLocalToSupabase', () => {
     const backends = createSupabaseHelpStateBackends(client, 'user-1')
     await backends.hydrate()
     const result = await migrateLocalToSupabase(backends)
-    expect(result).toEqual({ toursMigrated: 0, featureAnnouncementsMigrated: 0 })
+    expect(result).toEqual({
+      toursMigrated: 0,
+      featureAnnouncementsMigrated: 0,
+      marginNotesMigrated: 0,
+    })
+  })
+
+  it('sweeps patina:margin-note:* keys into the margin-note backend and clears them', async () => {
+    window.localStorage.setItem('patina:margin-note:doc-first-touch', '1747699200000')
+    const { client } = makeStubClient({})
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    const marginNoteBackend = createSupabaseMarginNoteBackend(client, 'user-1')
+    await backends.hydrate()
+    await marginNoteBackend.hydrate()
+    const result = await migrateLocalToSupabase(backends, marginNoteBackend)
+    expect(result.marginNotesMigrated).toBe(1)
+    expect(marginNoteBackend.hasSeen('doc-first-touch')).toBe(true)
+    expect(
+      window.localStorage.getItem('patina:margin-note:doc-first-touch'),
+    ).toBeNull()
+  })
+
+  it('does not double-count a margin note the backend already has', async () => {
+    window.localStorage.setItem('patina:margin-note:desk-first-touch', '1')
+    const { client } = makeStubClient({ marginNotes: { 'desk-first-touch': '2026-01-01T00:00:00Z' } })
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    const marginNoteBackend = createSupabaseMarginNoteBackend(client, 'user-1')
+    await backends.hydrate()
+    await marginNoteBackend.hydrate()
+    const result = await migrateLocalToSupabase(backends, marginNoteBackend)
+    expect(result.marginNotesMigrated).toBe(0)
+    expect(
+      window.localStorage.getItem('patina:margin-note:desk-first-touch'),
+    ).toBeNull()
+  })
+})
+
+describe('createSupabaseMarginNoteBackend', () => {
+  it('hasSeen is false before hydrate and before markSeen', () => {
+    const { client } = makeStubClient({})
+    const backend = createSupabaseMarginNoteBackend(client, 'user-1')
+    expect(backend.hasSeen('doc-first-touch')).toBe(false)
+  })
+
+  it('markSeen then hasSeen round-trips true and writes through', async () => {
+    const { client, lastWrite } = makeStubClient({})
+    const backend = createSupabaseMarginNoteBackend(client, 'user-1')
+    backend.markSeen('doc-first-touch')
+    expect(backend.hasSeen('doc-first-touch')).toBe(true)
+    await backend.flush()
+    expect(lastWrite.current?.marginNotes?.['doc-first-touch']).toEqual(
+      expect.any(String),
+    )
+  })
+
+  it('a version-suffixed key is unseen even when its unsuffixed sibling is seen (decision 5)', () => {
+    const { client } = makeStubClient({})
+    const backend = createSupabaseMarginNoteBackend(client, 'user-1')
+    backend.markSeen('doc-first-touch')
+    expect(backend.hasSeen('doc-first-touch')).toBe(true)
+    expect(backend.hasSeen('doc-first-touch@2')).toBe(false)
+    backend.markSeen('doc-first-touch@2')
+    expect(backend.hasSeen('doc-first-touch@2')).toBe(true)
+    // Original key is untouched by the re-arm.
+    expect(backend.hasSeen('doc-first-touch')).toBe(true)
+  })
+
+  it('hydrate merges server state without clobbering an in-flight local write', async () => {
+    const { client } = makeStubClient({
+      marginNotes: { 'desk-first-touch': '2026-01-01T00:00:00Z' },
+    })
+    const backend = createSupabaseMarginNoteBackend(client, 'user-1')
+    backend.markSeen('doc-first-touch')
+    await backend.hydrate()
+    expect(backend.hasSeen('desk-first-touch')).toBe(true)
+    expect(backend.hasSeen('doc-first-touch')).toBe(true)
   })
 })

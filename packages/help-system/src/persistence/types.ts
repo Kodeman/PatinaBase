@@ -11,6 +11,14 @@
  *     coachmark was dismissed so subsequent mounts render nothing. Owned by
  *     `FeatureAnnouncementCoachmark` (D4).
  *
+ *   • Margin-note seen state — keyed by `noteKey` (which may carry a
+ *     version suffix, e.g. `doc-first-touch@2`), records the ISO instant a
+ *     `MarginNote` (designer-portal) was dismissed or acted on so it never
+ *     renders again for that person, on any device. Decision 5 (2026-09-03)
+ *     amends R94 to let a note re-arm exactly once per version suffix — the
+ *     key is matched exactly, so `doc-first-touch@2` is unseen even when
+ *     `doc-first-touch` (or `@1`) was already seen.
+ *
  * Both surfaces previously wrote to browser `localStorage` (web) or
  * `UserDefaults` (iOS). Sprint 4 moves the authoritative store to the
  * Supabase `profiles.help_state` JSONB column so dismissals propagate across
@@ -36,6 +44,8 @@ import type { FeatureAnnouncementState } from '../proactive/FeatureAnnouncementC
 export interface HelpStateBlob {
   tours?: Record<string, TourState>
   featureAnnouncements?: Record<string, FeatureAnnouncementState>
+  /** `noteKey` → ISO instant seen (dismissed or acted). See decision 5. */
+  marginNotes?: Record<string, string>
 }
 
 /**
@@ -70,6 +80,18 @@ export interface FeatureAnnouncementStateBackend {
     featureKey: string,
     state: FeatureAnnouncementState,
   ) => void
+}
+
+/**
+ * Backend contract for margin-note seen state (R94, amended by decision 5).
+ * Reads are synchronous — the designer-portal `MarginNote` primitive checks
+ * `hasSeen` during its reveal effect. `noteKey` is matched exactly (no
+ * version-suffix stripping) so a `@N`-suffixed key is a distinct record from
+ * its unsuffixed or previous-version sibling.
+ */
+export interface MarginNoteStateBackend {
+  hasSeen: (noteKey: string) => boolean
+  markSeen: (noteKey: string) => void
 }
 
 /**

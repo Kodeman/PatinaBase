@@ -21,11 +21,21 @@
  * lists window CustomEvent names that count as use, and `commandBar` wires the
  * ⌘K gesture (the hotkey OR the "Find anything" affordance) as the action — the
  * one canonical "find anything by name" move the Desk note teaches.
+ *
+ * Cross-device persistence (decision 5, amending R94): the once-only marker
+ * lives in `profiles.help_state.marginNotes`, installed by `HelpStateProvider`
+ * via `setMarginNoteStateBackend`. `noteKey` is matched EXACTLY against that
+ * store — no version-suffix parsing — so a re-cut surface can re-arm its note
+ * exactly once by shipping a new key (`doc-first-touch` → `doc-first-touch@2`):
+ * the suffixed key has never been seen, the old key stays retired, and no
+ * calendar or counter is involved. localStorage remains the fallback before
+ * the Supabase backend hydrates and for signed-out sessions.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { documentEvents } from '@/lib/analytics/document-events';
+import type { MarginNoteStateBackend } from '@patina/help-system';
 
 const STORAGE_PREFIX = 'patina:margin-note:';
 
@@ -33,16 +43,50 @@ function storageKeyFor(noteKey: string): string {
   return `${STORAGE_PREFIX}${noteKey}`;
 }
 
-/** True when this note has already been seen (dismissed or acted). Treats the
- *  server + a disabled/blocked store as "seen" so nothing renders where we
- *  cannot honor the once-only contract. */
-function hasSeen(noteKey: string): boolean {
+// The installed cross-device backend + whether it has finished hydrating.
+// Module-level singleton, same pattern as TourController's tourState.ts —
+// there is exactly one margin-note backend per signed-in session.
+let backend: MarginNoteStateBackend | null = null;
+let backendHydrated = false;
+
+/**
+ * Install (or clear) the Supabase-backed margin-note backend. Called by
+ * `HelpStateProvider`: once, unhydrated, right after building the backend;
+ * again with `hydrated: true` once its `hydrate()` resolves; and with `null`
+ * on sign-out so a subsequent anonymous session falls back to localStorage.
+ */
+export function setMarginNoteStateBackend(
+  next: MarginNoteStateBackend | null,
+  hydrated = false,
+): void {
+  backend = next;
+  backendHydrated = next ? hydrated : false;
+}
+
+function localHasSeen(noteKey: string): boolean {
   if (typeof window === 'undefined') return true;
   try {
     return window.localStorage.getItem(storageKeyFor(noteKey)) !== null;
   } catch {
     return false;
   }
+}
+
+/** True when this note has already been seen (dismissed or acted). Reads
+ *  through the installed Supabase backend once it has hydrated; otherwise —
+ *  before hydration, or for a signed-out session with no backend installed —
+ *  falls back to localStorage. Treats a disabled/blocked store as "seen" so
+ *  nothing renders where we cannot honor the once-only contract. */
+function hasSeen(noteKey: string): boolean {
+  if (backend && backendHydrated) {
+    try {
+      return backend.hasSeen(noteKey);
+    } catch {
+      // Fall through to localStorage — a live backend that throws should not
+      // crash the surface it sits on.
+    }
+  }
+  return localHasSeen(noteKey);
 }
 
 /**
@@ -59,8 +103,18 @@ export function hasMarginNoteBeenSeen(noteKey: string): boolean {
 /** Retire a note permanently — writes the once-only marker so it never renders
  *  again on any surface. Exported so the Desk Walkthrough can mark the
  *  `desk-first-touch` note seen on tour completion (the tour taught ⌘K, so the
- *  note has nothing left to teach). Best-effort; never throws. */
+ *  note has nothing left to teach). Writes through the installed Supabase
+ *  backend once hydrated (cross-device); otherwise writes localStorage only.
+ *  Best-effort; never throws. */
 export function markMarginNoteSeen(noteKey: string): void {
+  if (backend && backendHydrated) {
+    try {
+      backend.markSeen(noteKey);
+      return;
+    } catch {
+      // Fall through to localStorage — same defensive posture as hasSeen.
+    }
+  }
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(storageKeyFor(noteKey), String(Date.now()));

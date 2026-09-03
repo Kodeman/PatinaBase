@@ -587,9 +587,9 @@ export function MarginRail({
           owns once-only + recede. */}
       {projectId && (
         <MarginNote noteKey="doc-first-touch" clamp className="mb-5">
-          The margin on the right is where decisions and money gather. Esc puts
-          the document down — and the hours log themselves while it&apos;s in
-          your hand.
+          One client, one paper. The rail on the left says where this stands;
+          the margin here is where decisions, messages, and money gather.
+          Nothing is a form — it fills as the work happens.
         </MarginNote>
       )}
       {fileChanges.map((change) => (
