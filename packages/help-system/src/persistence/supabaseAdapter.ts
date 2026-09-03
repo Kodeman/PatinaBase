@@ -30,7 +30,7 @@
  *        hydrate.
  *
  *  localStorage / UserDefaults sweep on first authenticated mount lives in
- *  the consumer (designer-portal `FirstSigninTour`, iOS `FirstLaunchTour`).
+ *  the consumer (designer-portal `HelpStateProvider`, iOS `FirstLaunchTour`).
  *  The adapter exposes `migrateLocalToSupabase(...)` to do the heavy lifting
  *  once the consumer knows it's safe to clear local state.
  */

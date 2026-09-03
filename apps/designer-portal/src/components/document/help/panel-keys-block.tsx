@@ -14,10 +14,7 @@
 
 import Link from 'next/link';
 import { shortcutsForSurface } from '@/lib/document/registry';
-
-/** The Ideas & vocabulary shelf's canonical prefix — the topic route takes the
- *  full surface-key prefix, encoded (see help/page.tsx's shelf links). */
-const GLOSSARY_HREF = `/help/topic/${encodeURIComponent('designer-portal/document/concept')}`;
+import { THE_KEYS_HREF, THE_WORDS_HREF } from '@/lib/help-system/keys-reference';
 
 export function PanelKeysBlock({ surfaceKey }: { surfaceKey?: string }) {
   const rows = surfaceKey ? shortcutsForSurface(surfaceKey) : [];
@@ -54,13 +51,13 @@ export function PanelKeysBlock({ surfaceKey }: { surfaceKey?: string }) {
 
       <div className={rows.length > 0 ? 'mt-3 flex gap-4' : 'flex gap-4'}>
         <Link
-          href={GLOSSARY_HREF}
+          href={THE_WORDS_HREF}
           className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
         >
           The words
         </Link>
         <Link
-          href="/help/article/the-keys"
+          href={THE_KEYS_HREF}
           className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
         >
           The keys
