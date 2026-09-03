@@ -153,8 +153,8 @@ struct DesignRequestStageTests {
 
     @Test
     func matchedCopyUsesNameWithFallback() {
-        #expect(DesignRequestStage.matched.subtitle(designerName: "Ada") == "You're working with Ada.")
-        #expect(DesignRequestStage.matched.subtitle(designerName: nil) == "You're working with your designer.")
+        #expect(DesignRequestStage.matched.subtitle(designerName: "Ada") == "You’re working with Ada.")
+        #expect(DesignRequestStage.matched.subtitle(designerName: nil) == "You’re working with your designer.")
     }
 
     @Test
@@ -166,7 +166,7 @@ struct DesignRequestStageTests {
                 == "Middle Studio has your request in hand")
 
         // Falls back to designer name, then the generic "Your designer".
-        #expect(DesignRequestStage.introduced.cardTitle(designerName: "Ada") == "You're matched — meet Ada")
+        #expect(DesignRequestStage.introduced.cardTitle(designerName: "Ada") == "You’re matched — meet Ada")
         #expect(DesignRequestStage.introduced.subtitle()
                 == "Your designer sent you an introduction and times for your first call.")
 
@@ -178,7 +178,7 @@ struct DesignRequestStageTests {
                 .hasPrefix("Discovery · "))
         #expect(DesignRequestStage.booked.cardTitle(studioName: "Cole & Co") == "Discovery call booked")
         #expect(DesignRequestStage.booked.subtitle(studioName: "Cole & Co")
-                == "You're set with Cole & Co. The call is on the calendar.")
+                == "You’re set with Cole & Co. The call is on the calendar.")
     }
 
     // MARK: - Promotion visibility

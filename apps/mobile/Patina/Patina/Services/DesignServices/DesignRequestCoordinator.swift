@@ -312,7 +312,7 @@ public final class DesignRequestCoordinator {
         guard let bundleURL = package.absoluteBundleURL,
               let manifest = try? ScanBundleWriter.readManifest(at: bundleURL) else {
             scanPhases[scanId] = .failed("Scan files are missing")
-            draft.lastError = "A scan's files are missing"
+            draft.lastError = "A scan’s files are missing"
             try? modelContext.save()
             return
         }
@@ -334,7 +334,7 @@ public final class DesignRequestCoordinator {
             if package.status == .synced {
                 scanPhases[scanId] = .uploaded
             } else {
-                scanPhases[scanId] = .failed(package.lastError ?? "Upload didn't finish")
+                scanPhases[scanId] = .failed(package.lastError ?? "Upload didn’t finish")
             }
         } catch {
             scanPhases[scanId] = .failed(error.localizedDescription)
@@ -361,7 +361,7 @@ public final class DesignRequestCoordinator {
         // An upload actively owned by this coordinator stays .uploading.
         if case .uploading = snapshot { return snapshot }
         if pkg?.status == .failed {
-            return .failed(pkg?.lastError ?? "Upload didn't finish")
+            return .failed(pkg?.lastError ?? "Upload didn’t finish")
         }
         return snapshot
     }
