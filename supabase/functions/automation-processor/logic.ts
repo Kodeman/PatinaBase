@@ -42,7 +42,10 @@ export interface Enrollment {
 // deno-lint-ignore no-explicit-any
 type SupabaseLike = any;
 
-export function calculateNextStepAt(step: SequenceStep, fromDate: Date = new Date()): string {
+export function calculateNextStepAt(
+  step: SequenceStep,
+  fromDate: Date = new Date(),
+): string {
   const config = step.config;
   const delayMs =
     ((config.delay_days as number) || 0) * 86400000 +
@@ -91,13 +94,21 @@ export async function evaluateCondition(
         case "neq":
           return fieldValue !== value;
         case "gt":
-          return typeof fieldValue === "number" && fieldValue > (value as number);
+          return (
+            typeof fieldValue === "number" && fieldValue > (value as number)
+          );
         case "gte":
-          return typeof fieldValue === "number" && fieldValue >= (value as number);
+          return (
+            typeof fieldValue === "number" && fieldValue >= (value as number)
+          );
         case "lt":
-          return typeof fieldValue === "number" && fieldValue < (value as number);
+          return (
+            typeof fieldValue === "number" && fieldValue < (value as number)
+          );
         case "lte":
-          return typeof fieldValue === "number" && fieldValue <= (value as number);
+          return (
+            typeof fieldValue === "number" && fieldValue <= (value as number)
+          );
         default:
           return fieldValue === value;
       }
@@ -231,7 +242,8 @@ export async function advanceEnrollmentSkippingNext(
       await supabase
         .from("automated_sequences")
         .update({
-          total_completed: ((seq as { total_completed: number }).total_completed || 0) + 1,
+          total_completed:
+            ((seq as { total_completed: number }).total_completed || 0) + 1,
         })
         .eq("id", enrollment.sequence_id);
     }
