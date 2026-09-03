@@ -334,8 +334,15 @@ struct OrderHandoffTests {
 
     // MARK: - Helpers
 
+    /// The budget is wall time on a machine running 180 other suites, not a
+    /// property of the code under test: the condition is `@MainActor`, so
+    /// every main-actor test elsewhere in the tier is time this poll cannot
+    /// use. Three seconds was already marginal and went red once the tier
+    /// grew (review `RL1B-01`); a settled condition still returns on the
+    /// first pass, so the only thing a longer ceiling costs is the wait
+    /// before a genuine failure is reported.
     private func waitFor(
-        timeout: Duration = .seconds(3),
+        timeout: Duration = .seconds(20),
         _ condition: @MainActor () -> Bool
     ) async throws {
         let start = ContinuousClock.now
