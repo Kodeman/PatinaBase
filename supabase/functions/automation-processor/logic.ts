@@ -21,7 +21,7 @@ export interface StepHistoryEntry {
   type: string;
   completed_at: string;
   result: string;
-  // Set on a condition-gated email advanced past without sending (00562 —
+  // Set on a condition-gated email advanced past without sending (00561 —
   // config.condition.negate + config.on_false:'skip'). Absent on every
   // other history entry.
   skipped?: boolean;
@@ -116,7 +116,7 @@ export async function evaluateCondition(
 
     case "event_occurred": {
       const eventName = condition.event as string;
-      // 00562 — condition.negate:true inverts the occurred check so a
+      // 00561 — condition.negate:true inverts the occurred check so a
       // gate reading `{event_occurred, negate:true}` evaluates true when
       // the event has NOT happened (the ordinary case — send the email)
       // and false once it HAS (skip it — the step runner's on_false:'skip'
@@ -174,7 +174,7 @@ export async function evaluateCondition(
   }
 }
 
-// 00562 — condition-gated skip. A condition step whose config reads
+// 00561 — condition-gated skip. A condition step whose config reads
 // `{condition: {type:'event_occurred', event, negate:true}, on_false:'skip'}`
 // evaluates false once the gated event HAS occurred (evaluateCondition
 // applies the negate); that false result routes here instead of the

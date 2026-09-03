@@ -8,7 +8,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// 00562 — split out so `evaluateCondition`/`advanceEnrollmentSkippingNext`
+// 00561 — split out so `evaluateCondition`/`advanceEnrollmentSkippingNext`
 // are `deno test`able without booting this file's top-level `Deno.serve`.
 import { advanceEnrollmentSkippingNext, evaluateCondition } from "./logic.ts";
 
@@ -30,7 +30,7 @@ interface StepHistoryEntry {
   type: string;
   completed_at: string;
   result: string;
-  // Set on a condition-gated email advanced past without sending (00562 —
+  // Set on a condition-gated email advanced past without sending (00561 —
   // config.condition.negate + config.on_false:'skip'). Absent on every
   // other history entry.
   skipped?: boolean;
@@ -791,7 +791,7 @@ async function processEnrollments(
         }
 
         case "condition": {
-          // 00562 — a condition step may nest its payload under
+          // 00561 — a condition step may nest its payload under
           // `config.condition` (the shape written by 0056N_onboarding_drip_
           // state_triggers.sql: {condition:{type,event,negate}, on_false}).
           // The legacy flat shape (type/event/yes_step directly on config,

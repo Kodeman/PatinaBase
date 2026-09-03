@@ -1,9 +1,9 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Designer Onboarding drip retiming tests (migration 00562)
+-- Designer Onboarding drip retiming tests (migration 00561)
 --
 -- Covers:
 --   1. steps_json parses as a jsonb array and contains EXACTLY 8 condition
---      steps (one gate per E2–E9 — 00562's SQL-assertion gate from the plan).
+--      steps (one gate per E2–E9 — 00561's SQL-assertion gate from the plan).
 --   2. Each of the 8 target emails is IMMEDIATELY preceded by a condition
 --      step in the new shape (config.condition.type='event_occurred',
 --      negate=true, config.on_false='skip') gated on the mapped event from
@@ -19,7 +19,7 @@
 --     -f supabase/tests/notifications/onboarding_drip_retiming_test.sql
 --
 -- Read-only against automated_sequences; single transaction, ROLLBACK at the
--- end. Rerunnable, no side effects. Requires 00562 to have been applied
+-- end. Rerunnable, no side effects. Requires 00561 to have been applied
 -- (i.e. run after `supabase db reset` / `supabase migration up`).
 -- ═══════════════════════════════════════════════════════════════════════════
 

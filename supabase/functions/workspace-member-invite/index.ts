@@ -179,7 +179,7 @@ async function handleInvite(req: Request): Promise<Response> {
   }
 
   // L8: the owner's optional handoff line. Trimmed, capped at 280 — matches
-  // the 00561 CHECK on organization_members.handoff_note.
+  // the 00560 CHECK on organization_members.handoff_note.
   const normalizedHandoffNote = normalizeHandoffNote(body.handoff_note);
   if (normalizedHandoffNote === null) {
     return json({ error: 'invalid_handoff_note' }, 400);

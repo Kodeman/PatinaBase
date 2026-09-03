@@ -70,7 +70,7 @@ export function isInvitableOrgStatus(status: string | null | undefined): boolean
 
 // ── Handoff note (L8: owner's line for the new hire's first day) ───────────
 
-/** Matches the 00561 CHECK on organization_members.handoff_note. */
+/** Matches the 00560 CHECK on organization_members.handoff_note. */
 export const HANDOFF_NOTE_MAX_LENGTH = 280;
 
 /**

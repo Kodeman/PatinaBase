@@ -63,7 +63,7 @@ export interface OrganizationMember {
   staff_role: string | null;
   /** Onboarding checklist row 6 (L3, 00559): stamped once by `mark_first_document_opened`, the first time this member opens a Document. NULL = not yet. */
   first_document_opened_at: string | null;
-  /** L8 (00561): the owner's optional handoff line, carried on the invite. NULL = none written. */
+  /** L8 (00560): the owner's optional handoff line, carried on the invite. NULL = none written. */
   handoff_note: string | null;
 }
 

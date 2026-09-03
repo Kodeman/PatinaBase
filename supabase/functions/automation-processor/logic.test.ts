@@ -1,5 +1,5 @@
 // Deno tests for the automation-processor negate/skip mechanics added in
-// migration 00562 (Task L9 — drip retiming E2-E9).
+// migration 00561 (Task L9 — drip retiming E2-E9).
 //
 // Tests ./logic.ts directly — importing ./index.ts would boot Deno.serve
 // (see supabase/functions/po-send/index.test.ts for the established
