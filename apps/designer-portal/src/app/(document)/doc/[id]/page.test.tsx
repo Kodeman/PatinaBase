@@ -42,6 +42,12 @@ let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, e
 let mockProposalData: Record<string, unknown> | undefined;
 let mockProposalError = false;
 let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
+// L3 (00559) — the first-hire-opened mount effect's own reads. Defaults keep
+// the effect a no-op (no studio) for every suite that doesn't touch them.
+let mockMyOrgs: Array<Record<string, unknown>> = [];
+let mockMyStudioMembers: Array<Record<string, unknown>> = [];
+const mockMarkFirstDocumentOpenedMutate = jest.fn();
+let mockAuthUser: { id: string } | null = { id: 'owner-user' };
 // W4: the recap line counts drafted-and-unsent client approvals off this read.
 let mockProjectApprovalsQuery: Record<string, unknown> = { data: [] };
 // R108: the letterhead vitals read the resolver, never a stored column.
@@ -159,19 +165,20 @@ jest.mock('@patina/supabase', () => ({
     isError: false,
   }),
   useResolvedSchedule: () => mockResolvedSchedule,
-  // L3 (00559) — the first-hire-opened marker's own reads. None of this
-  // suite's cases exercise the checklist; the fixed shape below (owner, no
-  // studio) keeps the mount effect a no-op everywhere except its own tests.
-  useOrganizations: () => ({ data: [] }),
-  useOrganizationMembers: () => ({ data: [] }),
-  useMarkFirstDocumentOpened: () => ({ mutate: jest.fn() }),
+  // L3 (00559) — the first-hire-opened marker's own reads. Most of this
+  // suite's cases don't exercise the checklist, so the default shapes below
+  // (no studio, empty roster) keep the mount effect a no-op — the mount
+  // effect's own describe block overrides them per test.
+  useOrganizations: () => ({ data: mockMyOrgs }),
+  useOrganizationMembers: () => ({ data: mockMyStudioMembers }),
+  useMarkFirstDocumentOpened: () => ({ mutate: mockMarkFirstDocumentOpenedMutate }),
 }));
 
 /* L3 (00559) — mirrors account-studio-page.test.tsx's own-module mock,
    rather than threading @patina/supabase's useSession/useProfile (what the
    real useAuth calls) through this suite's already-large mock surface. */
 jest.mock('@/hooks/use-auth', () => ({
-  useAuth: () => ({ user: { id: 'owner-user' } }),
+  useAuth: () => ({ user: mockAuthUser }),
 }));
 
 /* The money ladder under the ticket's Money row: four commercial reads that
@@ -545,6 +552,12 @@ beforeEach(() => {
   mockEnabledFlags = [];
   mockRouter.push.mockReset();
   mockRouter.replace.mockReset();
+  // L3 (00559) — reset to the no-op default; the mount effect's own describe
+  // block below sets these per test.
+  mockMyOrgs = [];
+  mockMyStudioMembers = [];
+  mockMarkFirstDocumentOpenedMutate.mockClear();
+  mockAuthUser = { id: 'owner-user' };
 });
 
 describe('DocumentPage hydration render behavior', () => {
@@ -2504,6 +2517,86 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+describe('DocumentPage — first-hire-opened mount effect (L3, 00559)', () => {
+  const rowFor = (engagementId: string) => ({
+    engagement_kind: 'lead', engagement_id: engagementId, project_id: null, proposal_id: null,
+    lead_id: engagementId, designer_id: 'designer-1', client_profile_id: null,
+    client_name: 'Avery Stone', title: 'Stone Residence', active_section: 'brief',
+    project_status: null, current_phase: null, is_paused: false, is_archived: false,
+    proposal_status: null, proposal_sent_at: null, proposal_viewed_at: null,
+    lead_response_deadline: null, lead_status: null, overdue_decision_count: 0,
+    earliest_overdue_due: null, awaiting_inspection_count: 0, blocked_item_count: 0,
+    in_flight_count: 0, installed_count: 0, item_count: 0,
+    updated_at: '2026-08-10T12:00:00Z', open_claim_count: 0, open_claim_po: null,
+    unsent_pulse_count: 0, pulse_week_of: null, draft_unsent_po_count: 0,
+    oldest_draft_po_created_at: null, draft_po_label: null, unacked_po_count: 0,
+    oldest_unacked_sent_at: null, unacked_po_label: null, due_task_count: 0,
+    earliest_task_due: null, due_task_title: null,
+  });
+
+  beforeEach(() => {
+    mockHydrated = true;
+    mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
+    mockDraftingState = { gaps: [], isLoading: false, error: null };
+    mockProposalData = undefined;
+    mockProposalError = false;
+    mockProjectQuery = { data: undefined, isLoading: false, isError: false };
+    mockResolvedSchedule = NO_RESOLVED_SCHEDULE;
+    mockContextualHandoffsQuery = { data: [], isError: false };
+    mockDeskData = { folders: [], chips: [], composed: {} };
+    mockDeskLoading = false;
+    mockDeskError = false;
+    mockRecentDocumentsInHand = [];
+    mockDocumentQuery = {
+      data: { kind: 'engagement', row: rowFor('lead-1') },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: mockRetryDocumentResolution,
+    };
+    mockMyOrgs = [{ id: 'studio-1', type: 'design_studio' }];
+  });
+
+  it('fires once for a non-owner active member whose own mark is unset', () => {
+    mockAuthUser = { id: 'hana' };
+    mockMyStudioMembers = [
+      { user_id: 'hana', role: 'member', status: 'active', first_document_opened_at: null },
+    ];
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockMarkFirstDocumentOpenedMutate).toHaveBeenCalledTimes(1);
+    expect(mockMarkFirstDocumentOpenedMutate).toHaveBeenCalledWith({ organizationId: 'studio-1' });
+  });
+
+  it('does not fire for the studio owner, even with the mark unset', () => {
+    mockAuthUser = { id: 'olive' };
+    mockMyStudioMembers = [
+      { user_id: 'olive', role: 'owner', status: 'active', first_document_opened_at: null },
+    ];
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockMarkFirstDocumentOpenedMutate).not.toHaveBeenCalled();
+  });
+
+  it('does not fire once this member is already marked', () => {
+    mockAuthUser = { id: 'hana' };
+    mockMyStudioMembers = [
+      {
+        user_id: 'hana',
+        role: 'member',
+        status: 'active',
+        first_document_opened_at: '2026-08-01T00:00:00Z',
+      },
+    ];
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockMarkFirstDocumentOpenedMutate).not.toHaveBeenCalled();
   });
 });
 
