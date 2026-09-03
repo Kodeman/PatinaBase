@@ -233,7 +233,13 @@ struct NotificationFeedView: View {
             PatinaEmptyState(
                 icon: "bell",
                 title: "Nothing yet",
-                message: "Updates from your designer will land here. Sign in to stay in the loop.",
+                // A-52, from L1-E's copy deck (`l1-e-copy-deck.md`, "L1-A
+                // applies"), handed here by `l1-f-notes.md` Task F-L1A-1
+                // because the file is this lane's: a guest has no designer, so
+                // the sentence says what signing in unlocks instead of
+                // asserting a relationship they do not have. The title is
+                // unchanged.
+                message: "Sign in to see updates on your projects and messages here.",
                 ctaTitle: "Sign in",
                 ctaAction: { coordinator.presentedSheet = .auth }
             )
@@ -312,7 +318,7 @@ struct NotificationFeedView: View {
 
                 if !notification.isStudioFallback {
                     Text(notification.timeAgo)
-                        .font(PatinaTypography.monoTiny)
+                        .font(PatinaTypography.monoLabel)
                         .foregroundStyle(PatinaColors.Text.muted)
                         .tracking(0.3)
                 }
