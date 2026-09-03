@@ -70,10 +70,13 @@ struct SettingsView: View {
                         .font(PatinaTypography.h3)
                         .foregroundStyle(PatinaColors.Text.primary)
                     Spacer()
+                    // `minHeight` alone left the width to the glyph: measured
+                    // 38 × 44 on the clone, in the lane that is enforcing the
+                    // 44 pt floor everywhere else.
                     Button("Done") { dismiss() }
                         .font(PatinaTypography.uiAction)
                         .foregroundStyle(PatinaColors.Text.interactive)
-                        .frame(minHeight: 44)
+                        .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
                         .accessibilityIdentifier("SettingsView.DoneButton")
                 }
@@ -83,6 +86,18 @@ struct SettingsView: View {
 
                 // Account group
                 settingsGroup(title: "Account") {
+                    // C1-14: a guest saw a QR row that cannot work without the
+                    // session they have not got, and no way to sign in at all.
+                    if !authService.isAuthenticated {
+                        settingsButtonRow(
+                            icon: "person.crop.circle.badge.plus",
+                            iconColor: PatinaColors.clay,
+                            label: "Sign in or create your account"
+                        ) {
+                            coordinator.presentedSheet = .auth
+                        }
+                        .accessibilityIdentifier("SettingsView.SignInButton")
+                    }
                     NavigationLink {
                         // AccountView is presentation-agnostic (no inner
                         // NavigationStack) so this push works inside the
@@ -92,13 +107,15 @@ struct SettingsView: View {
                         settingsRow(icon: "person.circle", iconColor: PatinaColors.clay, label: "Account")
                     }
                     .buttonStyle(.plain)
-                    settingsButtonRow(icon: "qrcode.viewfinder", iconColor: PatinaColors.dustyBlue, label: "Sign in on the web") {
-                        // Swap the active sheet from Settings → QR scanner.
-                        // `.sheet(item:)` in ContentView animates the change;
-                        // same pattern as AccountView's "Sign in to Web".
-                        coordinator.presentedSheet = .qr
-                    }
                     if authService.isAuthenticated {
+                        // C1-14: this approves a PORTAL sign-in with THIS
+                        // device's session, so it belongs inside the guard.
+                        settingsButtonRow(icon: "qrcode.viewfinder", iconColor: PatinaColors.dustyBlue, label: "Sign in on the web") {
+                            // Swap the active sheet from Settings → QR scanner.
+                            // `.sheet(item:)` in ContentView animates the change;
+                            // same pattern as AccountView's "Sign in to Web".
+                            coordinator.presentedSheet = .qr
+                        }
                         settingsButtonRow(
                             icon: "rectangle.portrait.and.arrow.right",
                             iconColor: PatinaColors.agedOak,

@@ -779,4 +779,39 @@ struct CompanionHomeMenuMatrixTests {
             #expect(suggested == 1, "\(suggested) suggested: \(Self.describe(ctx, signedIn, items))")
         }
     }
+
+    // MARK: - A-52 · the two rows that promised a guest something they had not got
+
+    @Test
+    func theHomeRowDoesNotPromiseAGuestASpaceTheyHaveNotMade() {
+        // "Back to your space" was drawn identically for a guest who has never
+        // scanned a room. It is true the moment there is local work, and only
+        // then.
+        #expect(CompanionActionProvider.homeRow(isAuthenticated: false, hasLocalWork: false).hint
+                == "See what's on Patina")
+        for (signedIn, local) in [(true, false), (true, true), (false, true)] {
+            #expect(CompanionActionProvider.homeRow(isAuthenticated: signedIn,
+                                                    hasLocalWork: local).hint
+                    == "Back to your space",
+                    "signedIn=\(signedIn) local=\(local)")
+        }
+    }
+
+    @Test
+    func theAskRowTellsAGuestWhatItActuallyTakes() {
+        // `PieceActResolver` auth-walls the tap; this is what the guest reads
+        // BEFORE the wall, and it used to assert a designer would come back to
+        // someone with no account for one to reach.
+        #expect(CompanionActionProvider.pieceActRow(.askAboutPiece(reason: nil),
+                                                    isAuthenticated: false).hint
+                == "Sign in and a designer will get back to you")
+        #expect(CompanionActionProvider.pieceActRow(.askAboutPiece(reason: nil),
+                                                    isAuthenticated: true).hint
+                == "A designer will get back to you")
+        // `.askDesigner` is only reachable on a live relationship, which a
+        // guest cannot have, so it reads the same either way.
+        let designer = PieceAct.askDesigner(firstName: "Leah")
+        #expect(CompanionActionProvider.pieceActRow(designer, isAuthenticated: true).hint
+                == CompanionActionProvider.pieceActRow(designer, isAuthenticated: false).hint)
+    }
 }

@@ -254,7 +254,7 @@ struct PieceActMatrixTests {
             .askAboutPiece(reason: "We don't have this piece's size yet.")
         ]
         for act in acts {
-            let row = CompanionActionProvider.pieceActRow(act)
+            let row = CompanionActionProvider.pieceActRow(act, isAuthenticated: true)
             #expect(row.label == act.primaryLabel)
             #expect(row.route == nil)
             if case .performPieceAct = row.specialAction {

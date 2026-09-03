@@ -128,15 +128,19 @@ struct StudioHubView: View {
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button("Open settings") {
-                coordinator.presentedSheet = .settings
+            // B-13: the card used to send a guest to Settings, which then held
+            // no sign-in row either — two dead ends pointing at each other.
+            // `.auth` presents `AuthSheet`, which dismisses itself the moment a
+            // session lands.
+            Button("Sign in") {
+                coordinator.presentedSheet = .auth
             }
             .font(PatinaTypography.bodySmallMedium)
             .foregroundStyle(PatinaColors.Text.interactive)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
-            .accessibilityHint("Opens account settings where you can sign in.")
-            .accessibilityIdentifier("StudioHub.GuestSettingsButton")
+            .accessibilityHint("Opens the sign-in screen.")
+            .accessibilityIdentifier("StudioHub.GuestSignInButton")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
