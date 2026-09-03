@@ -12,6 +12,7 @@
 //
 
 import Foundation
+import SwiftUI
 import Testing
 @testable import Patina
 
@@ -30,7 +31,7 @@ struct AuthProviderVisibilityTests {
 
     @Test("Strata renders Apple and email — never Google (A3-06, D3)")
     func strataShapeDropsGoogle() {
-        let providers = AuthProviderCatalog.providers(from: Self.strata)
+        let providers = AuthProviderCatalog.providers(from: Self.strata, target: .cloud)
         #expect(providers == [.apple, .email])
         #expect(!providers.contains(.google))
         #expect(providers.count == 2)
@@ -40,21 +41,21 @@ struct AuthProviderVisibilityTests {
     func googleShapeRendersThree() {
         var external = Self.strata
         external["google"] = true
-        let providers = AuthProviderCatalog.providers(from: external)
+        let providers = AuthProviderCatalog.providers(from: external, target: .cloud)
         #expect(providers == [.apple, .google, .email])
         #expect(providers.count == 3)
     }
 
     @Test("a provider GoTrue does not report is never rendered")
     func unreportedProvidersAreAbsent() {
-        #expect(AuthProviderCatalog.providers(from: ["email": true]) == [.email])
-        #expect(AuthProviderCatalog.providers(from: Self.localStack) == [.email])
+        #expect(AuthProviderCatalog.providers(from: ["email": true], target: .cloud) == [.email])
+        #expect(AuthProviderCatalog.providers(from: Self.localStack, target: .cloud) == [.email])
     }
 
     @Test("a settings map with nothing this app can drive falls back rather than emptying the screen")
     func emptyMapFallsBack() {
-        #expect(AuthProviderCatalog.providers(from: [:]) == AuthProviderCatalog.fallback)
-        #expect(AuthProviderCatalog.providers(from: ["github": true]) == [.apple, .email])
+        #expect(AuthProviderCatalog.providers(from: [:], target: .cloud) == AuthProviderCatalog.fallback)
+        #expect(AuthProviderCatalog.providers(from: ["github": true], target: .cloud) == [.apple, .email])
     }
 
     @Test("the fallback, before any answer and after any failure, is Apple + email")
@@ -116,7 +117,91 @@ struct AuthProviderVisibilityTests {
         #expect(source.contains(".disabled(isLoading)"))
         // Only the pressed row spins.
         #expect(source.contains("@State private var pressed: AuthProvider?"))
-        #expect(source.contains("isBusy: pressed == .email"))
+    }
+
+    /// The Apple button hands back a completion, not a tap, so a cancelled
+    /// sheet arrives as `.failure` with nothing in flight. Round one marked
+    /// the row busy on every completion and `AuthService.isLoading` never
+    /// moved for a cancel — so there was no falling edge to clear it, and the
+    /// hero button sat at `opacity(0.35)` under a spinner for the rest of the
+    /// screen's life.
+    @Test("a cancelled Apple result leaves no row busy (C1-05)")
+    func aCancelledAppleResultLeavesNoRowBusy() {
+        #expect(AuthScreenView.inFlightProvider(forAppleSucceeded: true) == .apple)
+        #expect(AuthScreenView.inFlightProvider(forAppleSucceeded: false) == nil)
+    }
+
+    /// `isBusy` is a rendered difference, not a string in a file. The email
+    /// row does not take it at all: its door opens a sheet synchronously, so
+    /// a busy branch there would be a parameter nothing could ever set.
+    @Test("a busy row renders differently from an idle one (C1-05)")
+    @MainActor
+    func aBusyRowRendersDifferently() {
+        func png(isBusy: Bool) -> Data? {
+            let renderer = ImageRenderer(
+                content: AuthProviderRow(
+                    title: "Continue with Google",
+                    systemImage: nil,
+                    isBusy: isBusy
+                ) {}
+                .frame(width: 337)
+            )
+            renderer.scale = 1
+            return renderer.uiImage?.pngData()
+        }
+        let idle = try? #require(png(isBusy: false))
+        let busy = try? #require(png(isBusy: true))
+        #expect(idle != busy)
+    }
+
+    /// A3-06's rule is the app's, not one screen's.
+    @Test("both auth surfaces gate the Apple button on the catalog")
+    func bothSurfacesGateOnTheCatalog() throws {
+        let root = try SourcePin.read("Patina/Features/Authentication/Views/AuthScreenView.swift")
+        #expect(root.contains("ForEach(catalog.providers, id: \\.self)"))
+
+        let sheet = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
+        #expect(sheet.contains("catalog.providers.contains(.apple)"))
+        #expect(sheet.contains("await catalog.resolveIfNeeded()"))
+    }
+
+    /// The local CLI stack answers `apple: false` — it has no Apple client id
+    /// and needs none — and every W1 walker, the R1 acceptance script and
+    /// L1-D's dark-mode check launch `-DeploymentTarget local`. Under the rule
+    /// alone the Apple row vanished from the wave's own walks, taking C1-05's
+    /// in-flight state and C3-03's white-on-dark style with it.
+    @Test("Apple is still offered on the local stack, and still asked for on Strata")
+    func appleIsOfferedOnTheLocalStack() {
+        #expect(AuthProviderCatalog.providers(from: Self.localStack, target: .local) == [.apple, .email])
+        #expect(AuthProviderCatalog.providers(from: Self.localStack, target: .cloud) == [.email])
+        // The exception never invents a provider Strata has not enabled.
+        var strataWithoutApple = Self.strata
+        strataWithoutApple["apple"] = false
+        #expect(AuthProviderCatalog.providers(from: strataWithoutApple, target: .cloud) == [.email])
+    }
+
+    /// "Once per process" is right for an answer, not for a miss. A first-ever
+    /// install with no network has no cache to fall back to, so one blink
+    /// would otherwise hide a provider for the whole session.
+    @Test("a failed resolve is retried; a successful one is not")
+    @MainActor
+    func aFailedResolveIsRetried() async {
+        let suite = "AuthProviderVisibilityTests.retry"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let catalog = AuthProviderCatalog(defaults: defaults)
+        await catalog.resolveIfNeeded(fetch: { throw NetworkError.networkUnavailable })
+        #expect(catalog.providers == AuthProviderCatalog.fallback)
+
+        // The network came back.
+        await catalog.resolveIfNeeded(fetch: { ["email": true] })
+        #expect(catalog.providers == [.email])
+
+        // And now it is settled: a later failure cannot un-answer it.
+        await catalog.resolveIfNeeded(fetch: { throw NetworkError.networkUnavailable })
+        #expect(catalog.providers == [.email])
     }
 
     @Test("both auth surfaces thread the service's loading state in (C1-05)")

@@ -65,7 +65,27 @@ public final class AuthProviderCatalog {
     /// nothing this app can drive falls back rather than rendering an empty
     /// screen.
     static func providers(from external: [String: Bool]) -> [AuthProvider] {
-        let enabled = AuthProvider.allCases.filter { external[$0.settingsKey] == true }
+        providers(from: external, target: DeploymentTarget.current)
+    }
+
+    /// `target` is a parameter so the local-stack exception below is a fact a
+    /// test can state, not something only a `-DeploymentTarget local` launch
+    /// can exercise.
+    ///
+    /// The local CLI stack answers `apple: false` — it has no Apple client id
+    /// and does not need one — and every W1 walker, the R1 acceptance script
+    /// and L1-D's dark-mode check all launch `-DeploymentTarget local`. Under
+    /// the rule alone the Apple row disappeared from the wave's own walks, so
+    /// `C1-05`'s in-flight state and `C3-03`'s white-on-dark style became
+    /// unobservable outside production. Offered locally, asked for on Strata.
+    static func providers(
+        from external: [String: Bool],
+        target: DeploymentTarget
+    ) -> [AuthProvider] {
+        let enabled = AuthProvider.allCases.filter {
+            external[$0.settingsKey] == true
+                || (target == .local && $0 == .apple)
+        }
         return enabled.isEmpty ? fallback : enabled
     }
 
@@ -92,6 +112,13 @@ public final class AuthProviderCatalog {
                 // The cached or fallback list stands. A welcome screen that
                 // renders nothing because the network blinked is the worse
                 // failure.
+                //
+                // And the task is released, so the next `.task` asks again:
+                // "once per process" is right for an answer, not for a miss.
+                // On a first-ever install there is no cache to fall back to,
+                // so one offline launch would otherwise hide a provider Strata
+                // has enabled for the whole session.
+                self.resolveTask = nil
                 PatinaLog.auth.debug(
                     "AuthProviderCatalog: settings unavailable — \(error.localizedDescription)"
                 )

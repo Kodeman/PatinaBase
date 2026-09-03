@@ -41,12 +41,14 @@ struct AuthScreenView: View {
     var errorMessage: String? = nil
     /// Whether a sign-in this screen started is in flight (C1-05).
     var isLoading: Bool = false
+    /// C2-21 / GAP7B-09 — a link tapped while signed out is held, and this
+    /// says so. Second in the slot's precedence: an error wins (L1F→A-2).
+    var pendingLinkNotice: String? = nil
 
     /// The catalog resolves once per process; every auth surface may ask.
     @State private var catalog = AuthProviderCatalog.shared
     /// Which row the reader pressed, so only that row spins (C1-05).
     @State private var pressed: AuthProvider?
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// P-29: the status slot is always in the layout at this height, so
     /// showing or clearing a message cannot move the buttons underneath it.
@@ -56,11 +58,21 @@ struct AuthScreenView: View {
     var body: some View {
         // P-34 (L1-C's row, this lane's file): above `.accessibility1` the
         // fixed stack cannot fit, so it scrolls instead of truncating.
-        ScrollView(showsIndicators: false) {
-            content
-                .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 0 : nil)
+        //
+        // The content is given the viewport's own height as a MINIMUM. Round
+        // one shipped a bare `ScrollView`, and inside one a `Spacer` takes its
+        // ideal length rather than expanding: the legal footer rose from y≈771
+        // to y≈607 and the screen ended in ~200 pt of dead space at the default
+        // text size. With the floor in place the Spacers expand again below
+        // `.accessibility1`, and above it the content exceeds the floor and
+        // scrolls.
+        GeometryReader { proxy in
+            ScrollView(showsIndicators: false) {
+                content
+                    .frame(minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(PatinaColors.Background.primary)
         .task { await catalog.resolveIfNeeded() }
@@ -107,7 +119,7 @@ struct AuthScreenView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 28)
 
-            statusSlot
+            AuthStatusSlot(errorMessage: errorMessage, pendingLinkNotice: pendingLinkNotice)
 
             providerStack
                 .padding(.horizontal, 28)
@@ -126,30 +138,6 @@ struct AuthScreenView: View {
         }
     }
 
-    // MARK: - Status slot (P-29)
-
-    /// Always in the layout, always this tall. The message inside it changes;
-    /// the geometry never does.
-    private var statusSlot: some View {
-        Group {
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.terracotta)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-                    .padding(.horizontal, 28)
-                    .accessibilityIdentifier("auth.welcome.errorBanner")
-            } else {
-                Color.clear
-            }
-        }
-        .frame(height: Self.statusSlotHeight)
-        .frame(maxWidth: .infinity)
-        .accessibilityHidden(errorMessage == nil)
-    }
-
     // MARK: - Providers (A3-06 / D3, A-03, P-02, C1-05)
 
     private var providerStack: some View {
@@ -166,7 +154,9 @@ struct AuthScreenView: View {
         case .apple:
             ZStack {
                 PatinaSignInWithAppleButton { result, rawNonce in
-                    pressed = .apple
+                    pressed = Self.inFlightProvider(
+                        forAppleSucceeded: (try? result.get()) != nil
+                    )
                     onSignInWithApple(result, rawNonce)
                 }
                 .opacity(pressed == .apple ? 0.35 : 1)
@@ -194,15 +184,30 @@ struct AuthScreenView: View {
         case .email:
             // A-03 / P-02: an SF Symbol envelope in the ink token, not the
             // full-colour U+2709 emoji, and no glyph in the AX label.
+            //
+            // No `isBusy`: this door opens a sheet synchronously and has
+            // nothing to wait for, so a busy branch here would be a parameter
+            // nothing could ever set.
             AuthProviderRow(
                 title: "Continue with email",
-                systemImage: "envelope",
-                isBusy: pressed == .email
+                systemImage: "envelope"
             ) {
                 onContinueWithEmail()
             }
             .accessibilityIdentifier("auth.welcome.emailButton")
         }
+    }
+
+    /// C1-05 — which row may spin after an Apple result.
+    ///
+    /// `PatinaSignInWithAppleButton` hands back a completion, not a tap, so
+    /// "in flight" starts at the token exchange. A cancelled Apple sheet comes
+    /// back as `.failure` with nothing running: round one marked the row busy
+    /// anyway, and because `AuthService.isLoading` never moved there was no
+    /// falling edge to clear it — the hero button held `opacity(0.35)` under a
+    /// spinner for the rest of the screen's life.
+    static func inFlightProvider(forAppleSucceeded succeeded: Bool) -> AuthProvider? {
+        succeeded ? .apple : nil
     }
 
     // MARK: - Guest
@@ -321,6 +326,55 @@ struct AuthScreenView: View {
     /// `<title>Privacy Policy | Patina</title>`.
     static let termsURL = URL(string: "https://patina.cloud/terms")!
     static let privacyURL = URL(string: "https://patina.cloud/privacy")!
+}
+
+// MARK: - Status slot (P-29, C2-21)
+//
+// Always in the layout, always `AuthScreenView.statusSlotHeight` tall. The
+// message inside it changes; the geometry never does. Its own type so a test
+// can measure the thing that used to move the stack, rather than compare a
+// constant to itself.
+
+struct AuthStatusSlot: View {
+    let errorMessage: String?
+    var pendingLinkNotice: String?
+
+    /// L1F→A-2's precedence: something went wrong and they must act beats a
+    /// promise being kept. A person who just failed to sign in does not need
+    /// to be told their link is safe in the same 52 pt.
+    var message: (text: String, isError: Bool)? {
+        if let errorMessage { return (errorMessage, true) }
+        if let pendingLinkNotice { return (pendingLinkNotice, false) }
+        return nil
+    }
+
+    var body: some View {
+        Group {
+            if let message {
+                Text(message.text)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(
+                        message.isError
+                            ? PatinaColors.terracotta
+                            : PatinaColors.Text.muted
+                    )
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .padding(.horizontal, 28)
+                    .accessibilityIdentifier(
+                        message.isError
+                            ? "auth.welcome.errorBanner"
+                            : "auth.welcome.linkNotice"
+                    )
+            } else {
+                Color.clear
+            }
+        }
+        .frame(height: AuthScreenView.statusSlotHeight)
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(message == nil)
+    }
 }
 
 // MARK: - Provider row

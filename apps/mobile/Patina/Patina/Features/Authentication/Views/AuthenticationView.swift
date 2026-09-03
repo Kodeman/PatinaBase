@@ -14,6 +14,9 @@ public struct AuthenticationView: View {
     /// `AuthenticationView+Panels.swift`.
     @State var viewModel: AuthViewModel
     @State private var didBootstrapUITestAuth = false
+    /// A3-06 — the same catalog the Welcome root reads. Resolved once per
+    /// process, so this surface joins the answer rather than asking again.
+    @State private var catalog = AuthProviderCatalog.shared
 
     public init(initialMode: AuthMode = .signIn) {
         _viewModel = State(wrappedValue: AuthViewModel(initialMode: initialMode))
@@ -29,9 +32,12 @@ public struct AuthenticationView: View {
                     // Form
                     formContent
 
-                    // Sign in with Apple
+                    // Sign in with Apple. A3-06's rule is the app's, not one
+                    // screen's: a provider GoTrue does not report is never
+                    // rendered, on this surface as much as on the Welcome root.
                     if viewModel.mode != .resetPassword
-                        && viewModel.emailAwaitingVerification == nil {
+                        && viewModel.emailAwaitingVerification == nil
+                        && catalog.providers.contains(.apple) {
                         divider
                         appleSignIn
                     }
@@ -62,6 +68,7 @@ public struct AuthenticationView: View {
                 }
             }
             .task {
+                await catalog.resolveIfNeeded()
                 await runUITestAuthBootstrapIfNeeded()
             }
             .onDisappear {
@@ -128,10 +135,19 @@ public struct AuthenticationView: View {
         if viewModel.emailAwaitingVerification != nil {
             return "Verify your email"
         }
-        if viewModel.mode == .magicLink {
+        // C5-10 — its own strings, not `AuthMode.rawValue`. The raw values are
+        // Title Case ("Sign In"), which left the header disagreeing with the
+        // submit button ("Sign in") two controls below it.
+        switch viewModel.mode {
+        case .signIn:
+            return "Sign in"
+        case .signUp:
+            return "Create account"
+        case .magicLink:
             return "Continue with email"
+        case .resetPassword:
+            return "Reset password"
         }
-        return viewModel.mode.rawValue
     }
 
     private var headerSubtitle: String {
@@ -324,7 +340,13 @@ public struct AuthenticationView: View {
     private var appleSignIn: some View {
         PatinaSignInWithAppleButton { result, rawNonce in
             Task {
-                await viewModel.handleAppleSignIn(result: result, rawNonce: rawNonce)
+                // This button is inside the sheet, so its failure is the
+                // sheet's — it must not survive onto the Welcome root.
+                await viewModel.handleAppleSignIn(
+                    result: result,
+                    rawNonce: rawNonce,
+                    scope: .sheet
+                )
             }
         }
     }
