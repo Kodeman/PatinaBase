@@ -1,5 +1,32 @@
 # W1 · L1-E — copy deck
 
+**Revision 5, 2026-09-03** — the fourth adversarial review (`RL1E4-01`…`RL1E4-03`). Revision 4 is in
+this branch's history at `5b4a83064`. What changed:
+
+- **The owned-glob walk was still a subset of the ownership set** (`RL1E4-01`, blocker).
+  `ownedDirectories` held only the two directories PROGRAM.md §3 spells as globs. The ownership
+  rule's *second* clause — "any file **no other W1 lane owns**" — is the clause this deck has been
+  editing under all wave (`Services/Companion/**`, `Features/Collections/Views/**`,
+  `Features/Conversation/**`, `App/Coordinators/Coordinator.swift`), and not one of those was
+  walked, so "L1-E's files are swept" meant a subset of the set nobody could read off the source.
+  Four directories added, L1-C's `DesignerConsultationView.swift` excluded **by name** (it sits
+  inside one of them), `Coordinator.swift` pinned, and the asserted file floor raised **7 → 31**.
+  The widened walk went red on **18 lines in 6 files** — including `MatchIntroductionView.swift:93`'s
+  `"You're matched."`, the headline of the Match Ceremony — every one of them swept here.
+- **The inventory the charter names had never been read** (`RL1E4-02`). PROGRAM.md §3 · L1-E ends
+  "Inventory: `research/C5-strings.txt` (303 KB)"; six revisions of this deck were built from live
+  greps instead. It is reconciled lane by lane below — **106 files, 259 lines** — and the
+  substitution the suites make (a live `SourcePin` scan instead of the frozen snapshot) is recorded
+  as an explicit exception rather than left silent.
+- **`DesignRequestCoordinator.swift:340` still put a thrown error into a payload a view reads**
+  (`RL1E4-03`). One fixed line now, the cause logged at a level a Release archive keeps.
+- **One cross-lane row falls out of the widened walk**, sent rather than applied:
+  `DesignerConsultationView.swift:25`'s `They'll` (`E5-L1C-1` → L1-C).
+- A structural repair the widening forced: the new pin took `BrandVoiceLintTests` past SwiftLint's
+  300-line `type_body_length` (`ios-gate.sh lint-delta main` went red, `0 → 1`). The cross-lane pin
+  half of the file moved into an `extension BrandVoiceLintTests` — same suite, same 1,639 tests and
+  106 known issues before and after, `lint-delta` back to green. No rule was suppressed.
+
 **Revision 4, 2026-09-03** — the third adversarial review (`RL1E3-01`…`RL1E3-10`) and the three
 `l1-e-notes.md` sections that arrived four minutes after revision 3 was committed. Revision 3 is in
 this branch's history at `c6afb5c22`. What changed:
@@ -77,10 +104,14 @@ rule). Ownership is resolved against **`build/waves/w1/steward.md` §5**, not ag
 finding was filed under — revision 1 got three rows wrong that way.
 
 L1-E applies only the rows marked **L1-E** below, in the three files it owns outright plus
-`ARPlacement/**`, `Services/DesignServices/**`, `DesignRequestFlowView+Steps.swift`, and — under the
-ownership rule's second clause, *"any file no other W1 lane owns"* — `Services/Companion/**`,
-`App/Coordinators/Coordinator.swift` and `Features/Collections/Views/**`. See
-`build/waves/w1/l1e-tasks.md`.
+`ARPlacement/**` and `Services/DesignServices/**`, and — under the ownership rule's second clause,
+*"any file no other W1 lane owns"* — `Features/DesignServices/**` (which contains
+`DesignRequestFlowView+Steps.swift`, named outright, and **excludes**
+`DesignerConsultationView.swift`, which `steward.md` §5.4 gives L1-C), `Services/Companion/**`,
+`Features/Collections/Views/**`, `Features/Conversation/**` and
+`App/Coordinators/Coordinator.swift`. `RL1E4-01`: those last four were being edited under that
+clause while the lane's lint walked neither, so the set below is now exactly the set
+`BrandVoiceLintTests.ownedDirectories` walks. See `build/waves/w1/l1e-tasks.md`.
 
 Covers all 18 W1 findings in L1-E's table (`build/findings-by-lane.md`), the five copy halves other
 lanes flagged, and the four sites the fix round found on the built branch.
@@ -196,6 +227,13 @@ lanes flagged, and the four sites the fix round found on the built branch.
 | **`A-52`** | `Features/Companion/Services/CompanionActionRows.swift:38` (`homeRow`, the guest leg) | `: "See what's on Patina"` — **U+0027**, confirmed with `cat -v` | `: "See what’s on Patina"` | `RL1E3-01`, a blocker, and it is this deck's own sentence. The mechanism half of the row landed correctly (`homeRow(isAuthenticated:hasLocalWork:)`) and the string half did not; both were inside one `withKnownIssue`, so the pin recorded an issue either way and reported the row as simply "not applied". Split into `GuestPromiseTests.companionRowBuilderTakesAuthState` and `.companionHomeRowSpeaksToAGuest`, and the file now has an apostrophe pin of its own (`BrandVoiceLintTests.companionActionRowsApostrophesAreCurly`). Sent as `E4-L1C-1`. |
 | **`A-06`** | `CompanionActionRows.swift:67,82` | `"What's been billed"` · `"What's due"` | `"What’s been billed"` · `"What’s due"` | Found by the new pin. Two reader-facing hints under the money rows, no finding id, in a file this deck names — so inside `A-06`'s ruled scope ("every user-facing string in a file this deck names"), not a W2 carry-forward. Sent as `E4-L1C-2`. |
 
+**Revision 5 rows — L1-C**
+
+| id | file:line | today (on `first-flight/w1-l1c`) | final | note |
+|---|---|---|---|---|
+| **`A-06`** | `Features/DesignServices/DesignerConsultationView.swift:25` (the hero paragraph) | `Text("Send your room scans to a Patina designer. They'll reach out to help bring your space to life — and your scans stay on your phone until you choose to share them.")` — **U+0027**, confirmed with `cat -v` on `git show first-flight/w1-l1c:…` | the same sentence with `They’ll` | `RL1E4-01`. The file sits **inside** `Features/DesignServices/**`, which this round adds to the walk, but `steward.md` §5.4 gives it to **L1-C** by name — so it is excluded from the walk (`ownedGlobExclusions`) and sent as a row rather than edited here, exactly as the ownership rule requires. Pinned by `BrandVoiceLintTests.designerConsultationApostrophesAreCurly` — new this round, `withKnownIssue` today, unwraps when the row lands. Sent as `E5-L1C-1`. |
+| — | `DesignerConsultationView.swift:68` (`designerCard`) | `Text("We'll pair you with a designer who understands your aesthetic")` — **U+0027** on `main` | **No row needed — the line is already gone on L1-C's branch.** | Recorded so the sweep is legible, not as an ask. `A1-14` deletes `designerCard` whole (`git diff main first-flight/w1-l1c` on this file: 5 insertions, 29 deletions), taking the string with it. This lane's own pin will therefore go from two recorded issues to one at the rebase, then to zero when `:25` lands. |
+
 **Revision 4 rows — L1-B**
 
 | id | file:line | today (on `first-flight/w1-l1b`) | final | note |
@@ -275,6 +313,25 @@ own glob went unswept. The lint walks the two directories now
 | **`A-06`** | `Services/DesignServices/DesignRequestCoordinator.swift:315,337,364` | `draft.lastError = "A scan's files are missing"` · `.failed(package.lastError ?? "Upload didn't finish")` ×2 | the same three with **U+2019** | Honest scope: these three are **not rendered today**. `ScanUploadProgressView` maps `.failed` to its own fixed `"Upload failed — will retry"` (`:100`) and never prints the payload, and `draft.lastError` (the `String` column) has no reader outside this file — `DesignRequestFlowView+Steps.swift:169`'s `coordinator?.lastError` is the `DesignServicesError?`, a different property. Swept because the file is inside this lane's glob and the walk now reads it, not because a tester sees it. **Applied.** |
 | **`RL1E3-06`** | `Features/ARPlacement/Services/ARPlacementManager.swift:133` | `self.errorMessage = "Couldn't load 3D model"` | `self.errorMessage = "We couldn’t load this piece. Try again."` | Also not rendered today — `errorMessage` is declared at `:22`, cleared at `:85`, set here, and read by no view in the target (`grep -rn "errorMessage" Patina/` across the app). It is one `Text(manager.errorMessage ?? "")` away from being `C4-08` again, in the file `C4-08` is filed about, so it gets the voice rather than sitting as a landmine. The alternative — deleting `errorMessage` outright — would be a behaviour change in an L1-B-adjacent AR seam, which is not this lane's to make. Pinned by `ARPlacementFailureCopyTests.loadFailureMessageIsInTheAppVoice`. **Applied.** |
 
+
+**Revision 5 rows — L1-E** *(applied in this worktree)*
+
+`RL1E4-01`: revision 4 walked the two directories PROGRAM.md spells as globs and left the four this
+deck had been editing under the ownership rule's second clause outside the walk —
+`Features/DesignServices/**`, `Services/Companion/**`, `Features/Collections/Views/**` and
+`Features/Conversation/**`, plus the `Coordinator.swift` pin. `ownedDirectories` holds all six now,
+`ownedGlobExclusions` holds L1-C's one file inside them, and `ownedGlobFileCount` asserts **31**
+(3 `Features/ARPlacement` + 4 `Services/DesignServices` + 14−1 `Features/DesignServices` +
+4 `Services/Companion` + 4 `Features/Collections/Views` + 3 `Features/Conversation`), so a moved or
+renamed directory is a hard failure rather than an empty set that passes.
+
+| id | file:line | today | final | note |
+|---|---|---|---|---|
+| **`A-06`** | `Services/Companion/CompanionService.swift:282,286,290,293,332,334,336,338,340,342,351,354` | twelve lines with **U+0027** — `"Hello! I'm so glad you're here."`, `"Wood has such a grounding quality, doesn't it?"`, `"I'd love to help… let's discover what truly speaks to you. What's the feeling…"`, `"That's a beautiful way to think about it."`, and all six `getNewUserGreeting` sentences plus both `getReturningUserGreeting` ones | the same twelve lines with **U+2019** | The largest single block the widened walk found. `Services/Companion/**` has no other W1 lane (L1-C owns `Features/Companion/**`, not this) and this deck has edited `Models/CompanionAPIModels.swift` in it since revision 1 — the directory was simply never walked. These are the **offline fallback** voice (`generateResponse`, the two greeting builders), reached whenever the Companion API is unavailable, so they are legible copy, not dead strings. **Applied.** |
+| **`A-06`** | `Features/DesignServices/MatchIntroductionView.swift:93,269` | `Text("You're matched.")` — the Match Ceremony headline — and `Text("That didn't go through. Tap a time to try again.")` | the same two with **U+2019** | `:93` is the sentence a round-one tester reads the moment a designer accepts, rendered on `DesignRequestStatusView`'s body swap. `:269`'s retry notice is the pick-failure line beneath the slot picker. Both were outside every scan until this round. **Applied.** |
+| **`A-06`** | `Features/DesignServices/DesignRequestAuthCopy.swift:23` · `DesignRequestFlowView.swift:298` · `MatchCeremonyPreviewFixtures.swift:34` · `Features/Collections/Views/SavedNoteSheet.swift:55` | `"You'll sign in to send this."` · `"Some scans didn't upload"` · the preview fixture's `"Let's talk about how the room actually lives."` · the note placeholder `"Why you saved it, what it's for, what to check."` | the same four with **U+2019** | Three are rendered (the guest review hint, the sending-step headline, the Saved-note placeholder); the fixture is `#Preview` data and is swept for the same reason `PatinaErrorState`'s preview was — it is the example the next author copies. **One pin moved with the strings, in the same commit**: `AuthSheetPresentationTests.swift:53`. **Applied.** |
+| **`RL1E4-03`** | `Services/DesignServices/DesignRequestCoordinator.swift:346-358` (`:59` for the constant) | `catch { scanPhases[scanId] = .failed(error.localizedDescription); draft.lastError = error.localizedDescription }` | `PatinaLog.sync.error("[DesignServices] scan upload failed: \(error)")`, then `.failed(Self.uploadFailureLine)` and `draft.lastError = Self.uploadFailureLine`, with `static let uploadFailureLine = "Upload didn’t finish"` | Revision 4 swept this file's apostrophes and left its **one raw-interpolation arm** standing. `.failed`'s payload is read by `livePhase(for:)` and handed to `ScanUploadProgressView` — one `Text(err)` away from putting `"The operation couldn't be completed. (Patina.RoomsAPIError error 2.)"` in front of a homeowner, which is `C4-08` on a second surface — and `draft.lastError` is a **persisted** column that outlives the process. One constant now serves the catch arm and the two `??` fallbacks (`:344`, `:380`), and the cause goes to `PatinaLog.sync.error`, unconditionally, the same level `C4-08`'s log uses so a TestFlight failure is readable in a Release archive. Pinned by `ErrorVoiceTests.scanUploadCoordinatorNeverStoresRawErrorText` and `.failedUploadPhaseIsOneFixedLine`. **Applied.** |
+
 ---
 
 ### `C5-16` — `SavedItem.resolvedMakerName`
@@ -298,6 +355,47 @@ has no `brand` field, unlike `ProductModel` — so the guard is the vendor-strin
 
 ---
 
+## The string inventory, reconciled lane by lane (`RL1E4-02`)
+
+PROGRAM.md §3 · L1-E ends with one line this deck had never used: **"Inventory:
+`research/C5-strings.txt` (303 KB)."** It is the extracted user-facing string set, frozen
+2026-09-01 — 3,486 lines of `path:line: string`. Revisions 1–4 were built from live `grep`s over the
+working tree instead, which is why `A-06`'s scope kept moving: each round found a directory the last
+one had not thought to grep. The charter's own command, run verbatim:
+
+```bash
+grep "[A-Za-z]'[A-Za-z]" research/C5-strings.txt | sed 's/:[0-9]*:.*//' | sort | uniq -c | sort -rn
+```
+
+**106 files, 259 lines** carry a straight apostrophe in a user-facing string as of the snapshot.
+Every one is routed below against `steward.md` §5 (the ownership map, including the §5.9 rulings and
+the §5.1 residue), not against the lane its finding was filed under.
+
+| owner | files | lines | where this deck puts them |
+|---|---|---|---|
+| **L1-E** (this lane's W1 ownership set) | 14 | 49 | **All 14 are inside the walk `RL1E4-01` widened**, and all 49 lines are U+2019 on this branch. `BrandVoiceLintTests.ownedGlobApostrophesAreCurly` (31 files) plus `.apostrophesAreCurly` (`deckFiles`) cover every one; the two suites are green. |
+| **L1-A** | 12 | 23 | 5 files have deck rows (`OnboardingFlowView`, `AuthenticationView`, `AuthScreenView`, `QuizModels`, `AccountDeletionService`). The other 7 — `AuthViewModel`, `QRAuthModels`, `QRApprovalView`, the three `StyleConversation/**` files, `ScanFloorPlanPreviewView` — are **W2 · L1-E's sweep**: no W1 finding names them, and a lane cannot be handed 10 unreviewed lines mid-wave. |
+| **L1-B** | 32 | 71 | 6 files have deck rows (`MoneyFailureCopy`, `ScanReviewView`, `ScanWalkView`, `StyleResponseModel`, `RoomsAPIClient`, `ScanUploadProgressView`), each with an apostrophe pin in `BrandVoiceLintTests`. The other 26 — `WhisperState` (6), the two `Walk/Services` analyzers (10), `EdgeToastView`, `SoftLandingView`, the `Proposals`/`Documents`/`Projects` view models, and the rest — are **W2 · L1-E's sweep**. |
+| **L1-C** | 28 | 76 | 4 files have deck rows (`CompanionActionRows`, `HomeStoryRetryRow`, `ProfileView`, `FirstLaunchTour`). The remaining 24 are dominated by `Features/Companion/Services/**` — `CompanionVoice` (11), `IntentDetector` (11), `CompanionIntroBubble` (6), `CompanionContextProvider` (4) — which is the **Companion's whole scripted voice**, 32 lines in four files. That is a copy rewrite, not an apostrophe sweep, and it is **W2 · L1-E's** largest single block. Recorded here so the steward does not read its absence as an oversight. |
+| **L1-D** | 2 | 2 | `EditorialStoriesAPIClient`, `PatinaTextField`. Neither has a W1 finding; **W2 · L1-E's sweep**. |
+| **L1-F** | 7 | 11 | 1 file has a deck row (`MessagingViewModel:413`, `RL1E3-04`). The other 6 — `AppNotification`, `InvoiceReminder`, `InvoiceReminderService`, `ThreadListView`, `NotificationsViewModel`, `PushPrimerView` — are **W2 · L1-E's sweep**; `AppCoordinator.swift:109` was already filed W2 in revision 4 on the same reasoning. |
+| **— (no W1 lane)** | 11 | 27 | `Features/Purchase/**` beyond `OrderFailureCopy` (5 files, 19 lines), `Features/Orders/**` beyond `OrderDetailView` (3), `Features/Budget/**` (1), `Services/API/DocumentsAPIClient.swift` (3), `Features/Recommendations/ViewModels/**` (1). By the ownership rule's second clause these are **editable** by L1-E — and they are deliberately **not swept this wave**. `direct-orders` is OFF for round one (**D1**), so the whole Purchase/Orders path is dark to a tester; `steward.md` §5.9 · **S-3** rules them "no lane, no W1 work" outright. Sweeping 27 lines a tester cannot reach, in files no W1 lane will merge, buys nothing and widens this lane's diff against five branches it has to rebase onto. **W2 · L1-E's sweep**, with the flag state as the reason. |
+
+**The split, stated once:** L1-E's **W1** ownership set is the 31 files
+`BrandVoiceLintTests.ownedDirectories` walks plus the five named `deckFiles` — of which 14 appear in
+the inventory, all swept. Everything else in the inventory is either **an applied deck row in
+another lane** (16 files, each carrying an apostrophe pin in `BrandVoiceLintTests` or
+`ErrorVoiceTests`) or **W2 · L1-E's 48-row sweep** (76 files, 162 lines). No inventory row is
+unaccounted for.
+
+**One correction the inventory forced:** the deck's covering paragraph has said since revision 1 that
+`Features/Collections/Views/**` and `Services/Companion/**` are edited "under the second clause".
+The inventory shows `Features/DesignServices/**` and `Features/Conversation/**` were being edited
+under it too (`StyleProfile.swift`, `RL1E2-20`), never named. Both are in the covering paragraph and
+in `ownedDirectories` now.
+
+---
+
 ## Recorded consequences and exceptions
 
 | id | what is recorded |
@@ -314,6 +412,9 @@ has no `brand` field, unlike `ProductModel` — so the guard is the vendor-strin
 | **the unwrap pass / `RL1E3-05`** | PROGRAM.md §3 · L1-E's exit criterion is "all seven suites green on the integration tip". That is unreachable until (a) the round-4 apostrophe rows above land in L1-B, L1-C and L1-F, and (b) every `withKnownIssue` whose row **has** landed is unwrapped — after the rebase each of those fails with "Known issue was expected but was not recorded", which is the designed signal and also a large mechanical commit nothing scheduled. **It is scheduled now**, as Task H7 in `l1e-tasks.md`, with the count: 48 wrappers across six suites today (`NounConsistencyTests` 15 · `SentenceCaseTests` 11 · `BrandVoiceLintTests` 10 · `GuestPromiseTests` 6 · `ErrorVoiceTests` 5 · `PluralisationTests` 1), produced by `grep -rc "withKnownIssue" PatinaTests/*.swift`. The gate's "known issues" number (104 on the last run) counts *recorded issues*, not wrappers, and includes pre-existing ones in other suites — the wrapper count is the one that maps to unwrap edits. |
 | **`Features/Collections/ViewModels/CollectionsViewModel.swift` / `RL1E3-10`** | A record item for the steward, not a repair. `steward.md` §5.3 gives L1-B `Features/Collections/**  (schema side)` and §5.1's residue row carves out `Features/Collections/Views/**` — **`Views/`, not `ViewModels/`**. This lane edited `ViewModels/CollectionsViewModel.swift:23` under the "no W1 lane owns it" clause (`RL1E2-09`), which is a stretch for that one file, and L1-B has its own hunk in it at `:19-42`. **In fact harmless:** `git merge-tree --write-tree first-flight/w1-l1b first-flight/w1-l1e` is clean, and the merged tree carries `allItemsTab = "All pieces"`, L1-B's `lastLoadFailed`/`isLoading`/`LoadState`, and `"No saved pieces yet"` inside L1-B's new three-state branch. Needs ratification, not a change. |
 | **the pairwise merges / `RL1E3-10` corrected** | The review's claim that "all six pairwise merges against the other lanes are clean" is **wrong for one**: `git merge-tree --write-tree first-flight/w1-l1d first-flight/w1-l1e` (2026-09-03) reports `CONFLICT (add/add)` on `build/waves/w1/l1-e-copy-deck.md`. L1-D's `771016eaf` commits a 153-line snapshot of **revision 1** of this deck plus five other lanes' inbox files — the same mistake this lane corrected for itself in `034a6bb22` (`RL1E2-06`). The app-code half merges clean. Sent to L1-D as `E4-L1D-1`; if L1-D would rather not amend, the steward takes **this branch's** deck wholesale at merge, since it is strictly newer. |
+| **the inventory substitution / `RL1E4-02`** | **An explicit exception, not an oversight: no suite in `PatinaTests/` reads `research/C5-strings.txt`, and none will.** The charter names it as this lane's inventory and the reconciliation above now uses it as one — for *scoping*, which is what a frozen snapshot is good for. It is the wrong input for a **gate**: it was cut 2026-09-01, before this wave's six branches existed, so a suite asserting against it would go red on strings five other lanes have since fixed and green on strings they have since added; it lives outside `apps/mobile/Patina/`, which `SourcePin` deliberately does not reach past; and it carries no line for a file created after the cut (`ScanUploadFailureCopy.swift`, `LocalStoreRecoveryNotice.swift` — both of which `BrandVoiceLintTests` already pins by name). `ErrorVoiceTests` and `BrandVoiceLintTests` therefore scan the **live tree** through `SourcePin`, and the inventory's job is to prove the walk is wide enough — which is exactly the check that caught `RL1E4-01`. **For Fable to ratify.** The reconciliation is re-runnable: the one `grep`/`sed`/`sort` line above, against a file in the repo. |
+| **the no-lane residue left unswept / `RL1E4-02`** | `Features/Purchase/**` (beyond `OrderFailureCopy.swift`), `Features/Orders/**` (beyond `OrderDetailView.swift`), `Features/Budget/**`, `Services/API/DocumentsAPIClient.swift` and `Features/Recommendations/ViewModels/**` — **11 files, 27 lines** — are editable by this lane under the ownership rule's second clause and are **deliberately not swept**. `steward.md` §5.9 · **S-3** rules them "no lane, no W1 work"; **D1** turns `direct-orders` off, so nothing in Purchase or Orders is reachable by a round-one tester. Recorded rather than silently skipped, because "any file no other W1 lane owns" is a licence this deck has invoked six times and the boundary of what it declined should be readable. |
+| **`draft.lastError` loses its raw text / `RL1E4-03`** | The fix writes `Self.uploadFailureLine` to the persisted `DesignRequestDraft.lastError` column as well as to the phase payload, so the column no longer carries the thrown error. That is a **deliberate narrowing of a diagnostic**, and it is safe on two counts: the column has no reader outside `DesignRequestCoordinator.swift` (`DesignRequestFlowView+Steps.swift:169`'s `coordinator?.lastError` is the `DesignServicesError?`, a different property), and the cause it used to hold now goes to `PatinaLog.sync.error` unconditionally, which a Release archive keeps and a SwiftData column on a tester's phone does not surface to anyone. The deck's separate ruling that `RoomScanPackage.lastError` **stays** a raw on-disk diagnostic (L1-B's `C4-09` row) is unchanged — that column has a mapping layer arriving with `ScanUploadFailureCopy`; this one has no reader at all. |
 | **L1-A's five auth failure sentences / Note A→E-1** | **Ratified as written**, with one objection and one answer. `AuthService.authErrorSentence(_:)` is the right shape — the `MoneyFailureCopy` / `OrderFailureCopy` contract this deck already sets — and all six sentences pass this deck's rules (sentence case, U+2019, no interpolation, no banned lexicon, a recovery in every one). **The one objection:** `email_not_confirmed`'s `"This email hasn't been confirmed yet. Check your inbox for the code we sent."` promises a code the app may not have sent on that path — a tester who signed up with a password and never asked for a code is told to look for one. Suggested instead: `"This email hasn't been confirmed yet. Ask for a sign-in code and we'll send one now."` — same fact, and the recovery is a thing the reader can do rather than a claim about the past. Everything else stands. **`C4-22` at W2: yes, the same sentences.** The deep-link redirect carries GoTrue's own `error_description` in the fragment; mapping it through the same `authErrorSentence` table is the whole point of having one table, and a second vocabulary for the same six failures would be `C5-11` on a new surface. |
 
 ## Not applied this wave, with reasons
@@ -361,7 +462,7 @@ assertion, not by reading this table.
 |---|---|
 | `ErrorVoiceTests` | `C4-08`, `C4-09`, `C5-11`, `RL1E-08`'s one-punctuation-rule / one-network-sentence assertions, and `RL1E-13`'s "the raw detail is still logged" — pinned to the exact `PatinaLog.sync.error("[DesignServices] submit_design_request failed:` call since `RL1E2-16` |
 | `NounConsistencyTests` | `C5-09` (all eight sites, plus `RL1E2-09`'s tab), `A-60`, `C-22`, `C5-16` (one `@Test` per file since `RL1E2-05`), `A3-28` (`roleWordsCollapseToOnePerKind`), **`C-38` both halves** and **`A-13`** (`RL1E2-08`) |
-| `BrandVoiceLintTests` | `C5-20`, `A-06` — its own-files half **and, since `RL1E2-01`, its cross-lane half: one `@Test` per file for eight files another lane owns** — the style quiz's whole literal set (`RL1E2-02`), the wire keys that must survive the rename, and `RL1E2-19`'s two display-name tables |
+| `BrandVoiceLintTests` | `C5-20`, `A-06` — its own-files half, which since `RL1E4-01` **walks all six directories the ownership rule gives this lane** (`ownedGlobsAreClean` / `ownedGlobApostrophesAreCurly`, 31 files asserted as a floor, L1-C's `DesignerConsultationView.swift` excluded by name) rather than the two PROGRAM.md spells as globs — **and, since `RL1E2-01`, its cross-lane half: one `@Test` per file for eight files another lane owns** — the style quiz's whole literal set (`RL1E2-02`), the wire keys that must survive the rename, and `RL1E2-19`'s two display-name tables |
 | `GreetingWindowTests` | `C5-06` — the three greetings **and** the six hour bands; `throws` throughout since `RL1E2-17` |
 | `PluralisationTests` | `C-30`, at both `ProfileView` call sites **and at the board row `RL1E2-10` found** |
 | `SentenceCaseTests` | `C5-10`, per site, including the two fix round 1 found; **`B-20`** (`RL1E2-08`) and **the Saved screen's three casings** (`RL1E2-13`) |
@@ -384,22 +485,30 @@ so is the proof the row landed. A wrapper that *keeps passing* after the rebase 
 applied — the fix round PROGRAM.md §3 · L1-E describes.
 
 **The gate tail, quoted honestly** (`RL1E2-23` — revision 2 quoted a green run that does not
-reproduce):
+reproduce). Revision 5's run, 2026-09-03, on clone `2AF6D0CA-91AB-446E-AFA3-4C126AD5827B`:
 
 ```
 apps/mobile/Patina/scripts/ios-gate.sh unit
-  ✘ Test run with 1630 tests in 178 suites failed after 6.942 seconds
-      with 105 issues (including 99 known issues)
+  ━ Test run with 1639 tests in 178 suites passed after 5.152 seconds
+      with 106 known issues.
+  ** TEST SUCCEEDED **
 ```
 
-The six non-known issues are **entirely** `OrderHandoffTests` — `:346` (`Issue.record("condition never
-became true within \(timeout)")`, the suite's own polling helper), `:135` and `:247`. Steward note
-**S-L1A-1** records exactly this: red under a full parallel run, green in isolation, not that lane's
-regression, scored to **L2-G**. Proven again here in isolation:
+**Green, with no unknown issues** — the six that were red in revision 3's tail were entirely
+`OrderHandoffTests`'s polling helper (`:346`, `:135`, `:247`), the load-sensitive suite steward note
+**S-L1A-1** scores to **L2-G**: red under a full parallel run, green in isolation, and green here.
+The number to read is **106 known issues**, not zero: every one is a `withKnownIssue` wrapper holding
+a row whose owning lane has not merged yet, which is the designed pre-merge state described below.
+The focused pair, run separately for the two suites `RL1E4-01`/`RL1E4-03` change:
 
 ```
-xcodebuild test … -only-testing:PatinaTests/OrderHandoffTests
-  ✔ Suite OrderHandoffTests passed …   ** TEST SUCCEEDED **
+xcodebuild test … -only-testing:PatinaTests/BrandVoiceLintTests -only-testing:PatinaTests/ErrorVoiceTests
+  ✔ Test "every file in L1-E's own globs types its apostrophes as U+2019 (A-06)" passed
+  ✔ Test "the scan-upload coordinator never stores a thrown error's text" passed
+  ✔ Test "every file in L1-E's own globs carries no brand-voice violation" passed
+  ━ Test "L1-C · the consultation hero types its apostrophes as U+2019" passed with 2 known issues
+  ━ Test run with 40 tests in 2 suites passed after 0.077 seconds with 56 known issues.
+  ** TEST SUCCEEDED **
 ```
 
 ⚠ This branch **does** now touch `OrderHandoffTests.swift` — two `OrderFailureCopy` string pins moved

@@ -713,3 +713,50 @@ paperwork merge. The app-code half of your branch merges clean and needs no chan
 If you would rather not amend, the alternative is that the steward resolves the deck file at merge by
 taking **this branch's** version wholesale — it is strictly newer. Either is fine; what is not fine is
 discovering it at merge time.
+
+---
+
+# Round 5 — after the fourth adversarial review (`RL1E4-01` … `RL1E4-03`, 2026-09-03)
+
+**One lane gets a note, and it is one character.** `RL1E4-01` widened this lane's brand-voice walk
+from the two directories PROGRAM.md §3 spells as globs to all six the ownership rule actually gives
+it — `Features/DesignServices/**`, `Services/Companion/**`, `Features/Collections/Views/**` and
+`Features/Conversation/**` were being *edited* under the rule's second clause ("any file no other W1
+lane owns") while the lint walked neither. The widened walk found **18 straight apostrophes in six
+files**; seventeen of them are this lane's own and are swept on `first-flight/w1-l1e`. The
+eighteenth is in a file `steward.md` §5.4 gives to **L1-C**, so it comes to you as a row instead.
+
+Every byte below was read off `first-flight/w1-l1c` on 2026-09-03 with
+`git show first-flight/w1-l1c:<path>`, and the glyphs were confirmed with `cat -v` — a straight
+apostrophe prints as `'`, a curly one as `M-bM-^@M-^Y`.
+
+## Round 5 → L1-C
+
+### Note E5-L1C-1 — `A-06` · one apostrophe in the consultation hero
+
+**File:** `apps/mobile/Patina/Patina/Features/DesignServices/DesignerConsultationView.swift:25` —
+the paragraph under the screen's heading, the first thing a reader sees on the design-services door.
+
+| today, on `first-flight/w1-l1c` | final |
+|---|---|
+| `They'll reach out to help bring your space to life` | `They’ll reach out to help bring your space to life` |
+
+One character: `'` (U+0027) → `’` (U+2019). Nothing else in the sentence changes — the em dash later
+in the line is already U+2014 and is correct.
+
+**Why this is a row and not an edit.** The file sits inside `Features/DesignServices/**`, which this
+round adds to this lane's own walk, but `steward.md` §5.4 lists
+`Features/DesignServices/DesignerConsultationView.swift` in **your** globs by name. It is therefore
+excluded from the walk by name (`BrandVoiceLintTests.ownedGlobExclusions`) rather than swept here.
+
+**Pinned by:** `PatinaTests/BrandVoiceLintTests.designerConsultationApostrophesAreCurly` — new this
+round, `withKnownIssue` today, and it unwraps when this row lands.
+
+**The file's other straight apostrophe needs nothing from you.** `:68`'s
+`"We'll pair you with a designer who understands your aesthetic"` is inside `designerCard`, which
+your `A1-14` commit deletes whole (`git diff main first-flight/w1-l1c` on this file: 5 insertions,
+29 deletions). It is already gone on your branch. Recorded so you do not go looking for a second byte
+that is not there — and so the pin's issue count dropping from two to one at the rebase reads as
+expected rather than as a half-applied row.
+
+**No other lane has a round-5 note.** The widened walk touched no file L1-A, L1-B, L1-D or L1-F owns.
