@@ -32,7 +32,23 @@ struct YourSpacesView: View {
         ZStack {
             PatinaColors.Background.primary.ignoresSafeArea()
 
-            if rooms.isEmpty {
+            if rooms.isEmpty && RoomSyncCoordinator.shared.lastLoadFailed {
+                // C4-03 (note O5): an empty list meant both "you have no
+                // rooms" and "we could not read your rooms", and the copy
+                // asserted the first to a client who has them. This branch
+                // sits BEFORE the empty one, not beside it.
+                PatinaErrorState(
+                    message: "We couldn’t reach your rooms. Check your connection and try again.",
+                    action: {
+                        Task {
+                            await RoomSyncCoordinator.shared.reconcile(
+                                store: RoomStore(context: modelContext)
+                            )
+                        }
+                    }
+                )
+                .accessibilityIdentifier("YourSpacesView.ErrorState")
+            } else if rooms.isEmpty {
                 // The populated branch draws "Your Spaces" in its own header;
                 // the empty one never did, which was invisible under a back
                 // chevron and is not invisible as a tab root — the canonical

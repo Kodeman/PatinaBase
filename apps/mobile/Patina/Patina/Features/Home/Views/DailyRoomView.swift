@@ -285,6 +285,9 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     // the badge, because marking a row read in the feed mutated
                     // a different instance and the bell went on badging 3.
                     unreadCount: BadgeCountService.shared.unreadNotificationCount,
+                    // R-02: the same service says whether that zero is a fact
+                    // or an unanswered query.
+                    unreadCountIsKnown: BadgeCountService.shared.hasLoaded,
                     // M1's header is date, greeting and a bell. The pill is
                     // B-1's fallback door for the root without a bar; where
                     // the bar draws, the Studio tab IS the door.

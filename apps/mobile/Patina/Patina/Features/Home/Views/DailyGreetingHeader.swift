@@ -46,6 +46,10 @@ struct DailyGreetingHeader: View {
     /// PT-3-7: unread-notification count rendered as a badge over the bell.
     /// 0 hides the badge.
     var unreadCount: Int = 0
+    /// R-02 (note O7 / task C-L1B-4): `false` until a notifications fetch has
+    /// answered. A count of zero that nobody fetched is not "none", and
+    /// VoiceOver was being told it was.
+    var unreadCountIsKnown: Bool = true
     /// Whether this header draws the Studio pill at all.
     ///
     /// B-1 makes the pill the fallback door "if the flag never flips", and M1
@@ -168,7 +172,11 @@ struct DailyGreetingHeader: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Notifications")
-                .accessibilityValue(unreadCount > 0 ? "\(unreadCount) unread" : "No unread notifications")
+                .accessibilityValue(
+                    unreadCount > 0
+                        ? "\(unreadCount) unread"
+                        : (unreadCountIsKnown ? "No unread notifications" : "")
+                )
                 .accessibilityHint("Opens your notifications.")
                 .accessibilityIdentifier("DailyRoomView.BellButton")
             }

@@ -440,17 +440,17 @@ extension LoadStateHonestyTests {
 @MainActor
 extension LoadStateHonestyTests {
 
-    /// `C4-03`'s own `where` names Spaces first, and Spaces is the one surface
+    /// `C4-03`'s own `where` names Spaces first, and Spaces was the one surface
     /// in the nine-row table with no error branch at all: `YourSpacesView`
-    /// draws a bare `Text("No rooms yet")` whatever `lastLoadFailed` says.
+    /// drew a bare `Text("No rooms yet")` whatever `lastLoadFailed` said. Note
+    /// O5 landed at merge 6, on the integration tip, so this is the bar.
     @Test
-    func theSpacesErrorBranchIsStillOwed() throws {
+    func theSpacesErrorBranchIsDrawn() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Rooms/Views/YourSpacesView.swift")
         )
-        withKnownIssue("C4-03 owes Your Spaces its error branch (l1b-notes-out.md O5)") {
-            #expect(code.contains("lastLoadFailed"))
-        }
+        #expect(code.contains("lastLoadFailed"))
+        #expect(code.contains("YourSpacesView.ErrorState"))
     }
 
     /// `L07-05`. `stalenessLine` exists on the view model and is tested there;

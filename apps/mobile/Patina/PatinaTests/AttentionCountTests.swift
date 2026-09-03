@@ -390,21 +390,16 @@ extension AttentionCountTests {
     /// lane (D14), so the edit cannot compile here; it is scheduled as a
     /// merge-4 apply in `l1b-notes-out.md` §S6 and answered as note **O15**.
     ///
-    /// Not `isIntermittent`: green while the binding is owed, red the moment
-    /// it lands, which is the signal to delete this block — and it is the
-    /// mirror of `BadgeFreshnessTests.thereIsNoSecondCount` on L1-F's branch,
-    /// whose `owed` table names this same file.
+    /// The steward applied `L1F→B-5` at merge 6, on the integration tip, so
+    /// the known issue is gone and this is the bar: both sites in the builder
+    /// read the shared count, and neither counts the raw table again.
     @Test
-    func theStudioRowStillOwesTheSharedUnreadCount() throws {
+    func theStudioRowReadsTheSharedUnreadCount() throws {
         let builder = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift")
         )
-        let single = !builder.contains("unreadNotifications.count")
-        withKnownIssue(
-            "RL1F-25 · note L1F→B-5 needs BadgeCountService.unreadNotificationCount, which lands at merge 4"
-        ) {
-            #expect(single)
-        }
+        #expect(!builder.contains("unreadNotifications.count"))
+        #expect(builder.contains("BadgeCountService.shared.unreadNotificationCount"))
     }
 
     /// `A-81`/`R-02`'s remaining half is note **O7**: the bell asserts
@@ -413,14 +408,14 @@ extension AttentionCountTests {
     /// there is no owner left to schedule it (review `RL1B3-03`); the steward
     /// has routed it back to L1-B after merge as `C-L1B-4`.
     ///
-    /// Not `isIntermittent`: green while the note is owed, red when it lands.
+    /// Note O7 / task `C-L1B-4` landed at merge 6, on the integration tip: the
+    /// bell takes `unreadCountIsKnown` from `BadgeCountService.hasLoaded` and
+    /// says nothing rather than asserting an absence nobody checked.
     @Test
-    func theBellStillOwesItsKnownFlag() throws {
+    func theBellNamesWhatItKnows() throws {
         let header = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
         )
-        withKnownIssue("A-81 owes the bell its unreadCountIsKnown guard (l1b-notes-out.md O7)") {
-            #expect(header.contains("unreadCountIsKnown"))
-        }
+        #expect(header.contains("unreadCountIsKnown"))
     }
 }
