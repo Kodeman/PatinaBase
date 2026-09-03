@@ -28,11 +28,11 @@ mirrored in `build/waves/w1/l1e-notes-out.md`.
 | `A-60` | 11 (note → L1-C) | `PatinaTests/NounConsistencyTests.swift` |
 | `A-79` | 9 (note → L1-A) | `PatinaTests/GuestPromiseTests.swift` |
 | `A3-28` | — not applied, reason recorded in the deck | — |
-| `B-20` | 11 (note → L1-C) | `PatinaTests/SentenceCaseTests.swift` (grammar assertion) |
+| `B-20` | 11 (note → L1-C) | `SentenceCaseTests.roomCTAIsAFixedLabel` — **added in round 3** (`RL1E2-08`); this row named a suite that carried no such assertion |
 | `B-23` | already true, no L1-E row needed (verified below) | — |
 | `C-22` | 11 (note → L1-C) | `PatinaTests/NounConsistencyTests.swift` |
 | `C-30` | 11 (note → L1-C) | `PatinaTests/PluralisationTests.swift` |
-| `C-38` | 11 (note → L1-C) | `PatinaTests/NounConsistencyTests.swift` (jargon sweep) |
+| `C-38` | 11 (note → L1-C) + **G4** (its live half in `StyleProfile`) | `NounConsistencyTests.recommendationCardsCarryNoBoilerplate` + `.stylePortraitCarriesNoBoilerplate` — **added in round 3** (`RL1E2-08`, `RL1E2-20`); this row named a suite that carried no such assertion |
 | `C4-08` | 3, 4 (own files) + 9b (note → L1-B) | `PatinaTests/ErrorVoiceTests.swift` |
 | `C4-09` | 5, 6 (own files) + 10 (note → L1-B) | `PatinaTests/ErrorVoiceTests.swift` |
 | `C5-06` | 1, 2 (own file) | `PatinaTests/GreetingWindowTests.swift` |
@@ -287,7 +287,7 @@ file, written to `build/waves/w1/l1e-notes-out.md` **and** appended to the targe
 | `RL1E-17` | minor | F2 | assertions rewritten |
 | `RL1E-18` | minor | F2 | lint scans string literals only |
 | `RL1E-19` | minor | F10 | fenced block under `### C5-16` |
-| `RL1E-20` | minor | F4 | `NounConsistencyTests.noRoleWordIsRendered` |
+| `RL1E-20` | minor | F4 | `NounConsistencyTests.roleWordsCollapseToOnePerKind` — **name corrected in round 3** (`RL1E2-22`); `noRoleWordIsRendered` never existed |
 | `RL1E-21` | minor | F10 | recorded consequence, declined with a reason |
 | `RL1E-22` | minor | F10 + report | deck records the no-id `.badRequest` fix |
 
