@@ -52,10 +52,37 @@ final class ProfileViewModel {
 
     // MARK: - State
 
-    var roomCount: Int = 0
+    /// The context `loadData(context:)` was handed, kept so the reads below
+    /// can re-run when the store changes under them.
+    @ObservationIgnored private var context: ModelContext?
+    /// The revision `rooms` was last computed at, so a body that reads
+    /// `rooms`, `roomCount` and the rail does one fetch rather than four.
+    @ObservationIgnored private var cachedRevision: Int = -1
+    @ObservationIgnored private var cachedRooms: [RoomModel] = []
+
     var savedItemCount: Int = 0
     var styleProfile: StylePreferenceModel?
-    var rooms: [RoomModel] = []
+
+    /// B-03: this was a stored snapshot taken in `loadData(context:)`, which
+    /// ProfileView calls from one `onAppear`. Deleting a room two screens away
+    /// changed the store and left the snapshot describing a room that no
+    /// longer exists — Studio kept reporting "2 ROOMS" and kept rendering the
+    /// deleted card. Reading `LocalRoomSignal.revision` here is what makes the
+    /// next body pass refetch.
+    ///
+    /// GAP3-18: the fetch runs through `RoomStore`, so the guest left behind
+    /// by a sign-out no longer reads the account's rooms.
+    var rooms: [RoomModel] {
+        let revision = LocalRoomSignal.shared.revision
+        guard let context else { return [] }
+        if revision != cachedRevision {
+            cachedRooms = RoomStore(context: context).allRooms()
+            cachedRevision = revision
+        }
+        return cachedRooms
+    }
+
+    var roomCount: Int { rooms.count }
 
     // MARK: - Computed
 
@@ -98,17 +125,22 @@ final class ProfileViewModel {
     // MARK: - Loading
 
     func loadData(context: ModelContext) {
-        // Rooms
-        let roomDescriptor = FetchDescriptor<RoomModel>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
-        rooms = (try? context.fetch(roomDescriptor)) ?? []
-        roomCount = rooms.count
+        self.context = context
+        // Force the room read to refetch on the next pass: an appear is a
+        // reason to look again even where nothing local changed.
+        cachedRevision = -1
 
         // Saved items count
         let itemDescriptor = FetchDescriptor<TableItemModel>()
-        savedItemCount = (try? context.fetchCount(itemDescriptor)) ?? 0
+        savedItemCount = LocalStoreOwnership.accountRowsAreVisible
+            ? ((try? context.fetchCount(itemDescriptor)) ?? 0)
+            : 0
 
-        // Style profile (most recent)
+        // Style profile (most recent). B-15: the taste portrait is the
+        // account's, and a guest left behind by a sign-out is not it.
         let styleDescriptor = FetchDescriptor<StylePreferenceModel>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
-        styleProfile = (try? context.fetch(styleDescriptor))?.first
+        styleProfile = LocalStoreOwnership.accountRowsAreVisible
+            ? (try? context.fetch(styleDescriptor))?.first
+            : nil
     }
 }

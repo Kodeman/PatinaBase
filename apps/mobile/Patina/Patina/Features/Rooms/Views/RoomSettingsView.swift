@@ -329,6 +329,13 @@ struct RoomSettingsView: View {
     private func deleteRoom() {
         guard let room else { return }
         RoomStore(context: modelContext).delete(room)
+        // B-04: one `goBack()` popped onto the room's own detail, whose
+        // lookup now misses — so a second after confirming the delete the
+        // person was told "This room isn't on this phone / It may have been
+        // removed." about a room they had just deliberately removed. The
+        // detail is the only screen that pushes this one, so leaving it
+        // behind too is what lands them back on the list they came from.
+        coordinator.goBack()
         coordinator.goBack()
     }
 

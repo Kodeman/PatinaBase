@@ -22,6 +22,11 @@ public final class RoomStore {
     // MARK: - Reads
 
     public func allRooms() -> [RoomModel] {
+        // GAP3-18: after a sign-out the store still holds the account's rooms
+        // — it must, or the same account signing back in loses them — but the
+        // guest now holding the phone is not their owner. The rows stay; the
+        // read is scoped.
+        guard LocalStoreOwnership.accountRowsAreVisible else { return [] }
         let descriptor = FetchDescriptor<RoomModel>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
@@ -29,6 +34,7 @@ public final class RoomStore {
     }
 
     public func room(id: UUID) -> RoomModel? {
+        guard LocalStoreOwnership.accountRowsAreVisible else { return nil }
         let descriptor = FetchDescriptor<RoomModel>(
             predicate: #Predicate { $0.id == id }
         )
@@ -43,6 +49,7 @@ public final class RoomStore {
     }
 
     public func allItems() -> [SavedItem] {
+        guard LocalStoreOwnership.accountRowsAreVisible else { return [] }
         let descriptor = FetchDescriptor<SavedItem>(
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
         )
@@ -107,6 +114,7 @@ public final class RoomStore {
         room.measuredWithUnitControl = measuredWithUnitControl
         context.insert(room)
         save()
+        LocalRoomSignal.shared.changed()
         return room
     }
 
@@ -283,6 +291,10 @@ public final class RoomStore {
     public func delete(_ room: RoomModel) {
         context.delete(room)
         save()
+        // B-03: Studio kept reporting "2 ROOMS" and kept rendering the card
+        // for a room the person had just deleted, because its view model
+        // snapshots rooms in one `onAppear` and nothing told the snapshot.
+        LocalRoomSignal.shared.changed()
     }
 
     // MARK: - Items

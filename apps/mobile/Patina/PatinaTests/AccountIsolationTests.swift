@@ -16,18 +16,13 @@ import SwiftData
 struct AccountIsolationTests {
 
     /// The app's own schema, so `delete(model:)` finds every type the wipe
-    /// names.
+    /// names. Read from `PatinaSchemaV1` rather than re-listed: a hand-copied
+    /// list went stale the moment `BoardModel` joined the container (C7-02),
+    /// and `wipeGuestWork` then threw `NSFetchRequest could not locate an
+    /// NSEntityDescription for entity name 'BoardModel'` — in a test, where
+    /// the app would have thrown it on a real store.
     private func makeContext() throws -> ModelContext {
-        let schema = Schema([
-            TableItemModel.self,
-            RoomModel.self,
-            SavedItem.self,
-            StylePreferenceModel.self,
-            SyncQueueItem.self,
-            RoomScanPackage.self,
-            DesignRequestDraft.self,
-            SubmittedDesignRequest.self
-        ])
+        let schema = Schema(versionedSchema: PatinaSchemaV1.self)
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return ModelContext(try ModelContainer(for: schema, configurations: [config]))
     }
@@ -142,5 +137,106 @@ struct AccountIsolationTests {
         let context = try makeContext()
         LocalStoreReset.wipeGuestWork(in: context)
         #expect(RoomSyncCoordinator.shared.isDue(owner: "userA", now: Date()))
+    }
+
+    // MARK: - GAP3-18 / B-15: the guest a sign-out leaves behind
+
+    /// The wipe runs on ONE seam — a different account signing in — and a
+    /// sign-out is not it, deliberately: the same account signing back in has
+    /// to find its rooms. Between the two there is a guest holding the phone,
+    /// and the guest was shown the account's rooms ("2 ROOMS", "Audit Room B
+    /// — SCANNED SEP 1") under a header reading "Guest".
+    @Test
+    func aGuestOnAnOwnedStoreSeesNoAccountRows() {
+        #expect(
+            LocalStoreOwnership.accountRowsAreVisible(isAuthenticated: false, owner: "userA") == false
+        )
+    }
+
+    /// SP-06's other half: a store no account has claimed holds the guest's
+    /// own work, and it stays theirs.
+    @Test
+    func aGuestOnAnUnclaimedStoreSeesTheirOwnWork() {
+        #expect(LocalStoreOwnership.accountRowsAreVisible(isAuthenticated: false, owner: nil))
+    }
+
+    @Test
+    func aSignedInReaderAlwaysSeesTheStore() {
+        #expect(LocalStoreOwnership.accountRowsAreVisible(isAuthenticated: true, owner: "userA"))
+        #expect(LocalStoreOwnership.accountRowsAreVisible(isAuthenticated: true, owner: nil))
+    }
+
+    /// One key, spelled the same in both files — the gate reads what
+    /// `AuthService` writes.
+    @Test
+    func theOwnerKeyMatchesTheOneAuthServiceWrites() throws {
+        let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
+        #expect(source.contains("localStoreOwnerKey = \"\(LocalStoreOwnership.ownerKey)\""))
+    }
+
+    /// The room reads go through the gate, not around it.
+    @Test
+    func theRoomReadsAreScopedByOwnership() throws {
+        let source = try SourcePin.read("Patina/Core/Persistence/RoomStore.swift")
+        for reader in ["func allRooms()", "func room(id: UUID)", "func allItems()"] {
+            let body = try #require(
+                source.components(separatedBy: reader).last?
+                    .components(separatedBy: "\n    }").first
+            )
+            #expect(
+                body.contains("LocalStoreOwnership.accountRowsAreVisible"),
+                "\(reader) is not scoped"
+            )
+        }
+    }
+
+    /// B-15's real half: the taste portrait's two `UserDefaults` keys carry
+    /// no account, so a sign-out left the next reader holding the previous
+    /// account's answers and `hasCompletedProfile`.
+    @Test
+    func theTastePortraitReadsAreScopedByOwnership() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/RoomScan/Shared/Services/StyleProfileStore.swift"
+        )
+        for reader in ["var hasCompletedProfile: Bool", "var currentProfile: StyleProfileResponse?"] {
+            let body = try #require(
+                source.components(separatedBy: reader).last?
+                    .components(separatedBy: "\n    }").first
+            )
+            #expect(
+                body.contains("LocalStoreOwnership.accountRowsAreVisible"),
+                "\(reader) is not scoped"
+            )
+        }
+    }
+
+    /// The profile stat and the rail read the same scoped source.
+    @Test
+    func theProfileStatsAreScopedByOwnership() throws {
+        let source = try SourcePin.read("Patina/Features/Profile/ViewModels/ProfileViewModel.swift")
+        #expect(source.contains("RoomStore(context: context).allRooms()"))
+        #expect(source.contains("LocalStoreOwnership.accountRowsAreVisible"))
+        // The old unscoped snapshot must not come back.
+        #expect(source.contains("FetchDescriptor<RoomModel>(sortBy:") == false)
+    }
+
+    // MARK: - C2-06: the navigation stack (L1-F applies the other half)
+
+    /// Recorded here rather than asserted: `AppCoordinator` is L1-F's file
+    /// this wave, and the exact change is in `l1b-notes-out.md` → O2. This
+    /// pin fails the day it lands, and is the reminder to turn it into an
+    /// assertion.
+    @Test
+    func theSignOutStackClearIsStillOwedByL1F() throws {
+        let source = try SourcePin.read("Patina/App/Coordinators/AppCoordinator.swift")
+        let transition = try #require(
+            source.components(separatedBy: "public func beginSplashTransition(").last?
+                .components(separatedBy: "\n    }").first
+        )
+        let clears = transition.contains("navigationPath = NavigationPath()")
+        #expect(
+            clears == false,
+            "L1-F applied O2 — turn this into the positive assertion and close C2-06"
+        )
     }
 }

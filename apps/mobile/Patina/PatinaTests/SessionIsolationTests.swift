@@ -100,7 +100,7 @@ struct SessionIsolationTests {
     @Test("the participant list is not empty and holds no duplicates")
     func theParticipantsAreDistinct() {
         let participants = SessionScope.participants()
-        #expect(participants.count == 12)
+        #expect(participants.count == 13)
         let identities = Set(participants.map { ObjectIdentifier($0) })
         #expect(identities.count == participants.count)
     }
@@ -234,7 +234,8 @@ struct SessionIsolationTests {
         "RoomSyncCoordinator.swift",
         "CompanionService.swift",
         "PieceActChannel.swift",
-        "MatchScoreResolver.swift"
+        "MatchScoreResolver.swift",
+        "LocalRoomSignal.swift"
     ]
 
     /// Every other `static let shared` in the app, and why it is not one.

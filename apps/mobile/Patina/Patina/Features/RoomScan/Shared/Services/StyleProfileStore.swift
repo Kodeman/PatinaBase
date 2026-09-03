@@ -27,12 +27,26 @@ public final class StyleProfileStore {
     }
 
     /// Whether the user has completed any full style profile.
+    ///
+    /// B-15: the two keys below carry no account, and the wipe that clears
+    /// them runs only when a DIFFERENT account signs in — so between a
+    /// sign-out and the next sign-in the guest holding the phone inherited
+    /// the previous account's portrait, and `CompanionOverlay` read it
+    /// straight into the Companion's context. The rows stay (the same account
+    /// signing back in must find them); the read is scoped.
+    ///
+    /// The trade, stated: a guest who signs out and then takes the quiz will
+    /// be offered it again after signing in, because a store an account owns
+    /// stays that account's until the account signs in again. Being asked a
+    /// question twice is the smaller failure.
     public var hasCompletedProfile: Bool {
-        defaults.bool(forKey: completedKey)
+        guard LocalStoreOwnership.accountRowsAreVisible else { return false }
+        return defaults.bool(forKey: completedKey)
     }
 
     /// The user's most-recent StyleProfileResponse, if any.
     public var currentProfile: StyleProfileResponse? {
+        guard LocalStoreOwnership.accountRowsAreVisible else { return nil }
         guard let data = defaults.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(StyleProfileResponse.self, from: data)
     }
