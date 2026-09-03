@@ -4,12 +4,21 @@ Every change L1-E wants in another lane's file, with the exact final text. Each 
 appended verbatim to the target lane's `build/waves/w1/<lane>-notes.md`, in both the shared main
 checkout and this lane's worktree.
 
-**Round 1** (2026-09-02, deck revision 1) sent rows to L1-A, L1-B, L1-C and L1-D. **Round 2** (this
-file, after the adversarial review `RL1E-01`…`RL1E-22`) corrects three mis-addressed rows, adds the
-sites the fix round found on the built branch, and answers the three open questions L1-E's inbox
-(`l1-e-notes.md`) carries. Rows already applied are marked so no lane touches the same line twice.
+**Round 1** (2026-09-02, deck revision 1) sent rows to L1-A, L1-B, L1-C and L1-D. **Round 2** (after
+the first adversarial review `RL1E-01`…`RL1E-22`) corrects three mis-addressed rows, adds the sites
+that round found on the built branch, and answers the three open questions L1-E's inbox
+(`l1-e-notes.md`) carried. **Round 3** (the sections marked *Round 3* below, after `RL1E2-01`…`-24`)
+carries the apostrophe corrections the deck's own lint could not see, the quiz's `"journey"` title,
+the four surviving `"Curated"` display names, `C-38`'s live half, and the answer to L1-B's **O13**.
+Rows already applied are marked so no lane touches the same line twice.
 
-Deck: `build/waves/w1/l1-e-copy-deck.md` **revision 2**.
+Deck: `build/waves/w1/l1-e-copy-deck.md` **revision 3**.
+
+> **One thing every lane should know.** Until this round, `BrandVoiceLintTests.apostrophesAreCurly`
+> read only the nine files L1-E owns. Every deck row another lane applied was therefore **unchecked**
+> for `A-06`'s glyph — and five had already landed with the straight `'` (U+0027). There is now one
+> apostrophe pin per cross-lane file. If you are applying a deck row that contains an apostrophe,
+> the byte is **U+2019 `’`**, not `'`.
 
 ---
 
@@ -300,3 +309,260 @@ message: "Sign in to see updates on your projects and messages here.",
 which is the deck's exact final text. **No action.** The routing is corrected in deck revision 2 and
 the string is pinned by `GuestPromiseTests.notificationsGuestStateMakesNoPromise`. Recorded here so
 the wave record shows the row had an owner who was told, rather than an owner who guessed.
+
+---
+
+# Round 3 — after the second adversarial review (`RL1E2-01` … `RL1E2-24`)
+
+The three blocks below were appended verbatim to `l1-a-notes.md`, `l1-b-notes.md` and `l1-c-notes.md`
+in the shared main checkout. Nothing new goes to L1-D or L1-F this round.
+
+---
+
+## Round 3 → L1-A
+
+### Note E3-L1A-1 — three rows landed with the wrong apostrophe, and here are the bytes
+
+`RL1E2-01` (blocker). Deck revision 2 marked two `A-101` sentences **Applied** and added "with
+U+0027; see the apostrophe row below" — and that apostrophe row was never sent as its own note, so
+the wrong glyph is on `first-flight/w1-l1a` today. The lane's lint could not catch it: until this
+round `BrandVoiceLintTests.apostrophesAreCurly` read only the nine files L1-E owns.
+
+| file:line | today (on your branch) | final |
+|---|---|---|
+| `Features/Account/AccountDeletionService.swift:39` | `"We couldn't delete your account just now. Try again, or write to hello@patina.cloud."` | `"We couldn’t delete your account just now. Try again, or write to hello@patina.cloud."` |
+| `AccountDeletionService.swift:58` | `+ "for our legal and accounting obligations. This can't be undone."` | `+ "for our legal and accounting obligations. This can’t be undone."` |
+
+The byte is `U+2019` (`’`). **Apply the matching pin in the same commit** —
+`PatinaTests/AccountActionsTests.deletionConfirmationCopyIsHonest` asserts
+`confirmationBody.contains("can't be undone")` with the straight glyph, so the string edit alone
+turns that test red. Pinned by `BrandVoiceLintTests.accountDeletionApostrophesAreCurly`, which is
+`withKnownIssue`-wrapped today and unwraps when this lands.
+
+### Note E3-L1A-2 — `"journey"` is live on question 5 of 5 of the first-run quiz
+
+`RL1E2-02` (blocker). `Features/StyleQuiz/Models/QuizModels.swift:112`:
+
+```swift
+title: "What's driving your design journey?",
+```
+
+"journey" is the exact word `C5-20` is filed about and `BrandVoiceLintTests` bans it — and it went
+unseen because `styleQuizIsClean` hand-wrote six `contains` assertions instead of linting the file.
+The file is linted in full now.
+
+**Final:**
+
+```swift
+title: "What’s bringing you here?",
+```
+
+That is what the four options answer — "Fresh start, new space" · "Finally making it mine" · "Life
+change, design change" · "Ready to invest in quality" — which is *why now*, not *how far along*.
+Curly apostrophe. A question title carries no wire key, so nothing else changes on this line.
+
+While you are in the file, the two `"Curated"` label rows from deck revision 2 are still open on your
+branch (`:73` → `label: "Collected Eclectic"`, `:105` → `label: "Considered Comfort"`) — and **the
+`key:` values on both lines must not change** (`StyleQuizViewModel.swift:221,242,296` match on them).
+`BrandVoiceLintTests.styleQuizWireKeysAreUnchanged` pins the keys **unwrapped**, so a rename that
+takes them with it fails immediately.
+
+Also: `QuizModels.swift` carries three straight apostrophes in literals (`:107` `"Let's Discuss"`,
+`:107` `"I'd like designer guidance"`, and `:112`'s title). Same sweep, same byte.
+
+### Note E3-L1A-3 — `A-101`'s retention exception is still unratified
+
+`RL1E2-24`. PROGRAM.md §3 · L1-E's exit criteria requires the delete-account sentence to name what is
+retained **"and for how long, agreed with L1-A"**. The deck's sentence names what is retained and
+**states no period, deliberately**: no purge window exists in `purge_client_account` (00538) or
+`supabase/functions/delete-account/index.ts`, so any number would be a false claim on the one screen
+App Review reads under 5.1.1(v).
+
+Round 2 asked for L1-A's acknowledgement so "agreed with L1-A" has a referent, and `l1-a-notes.md`
+carries the request with no answer. **This is a one-line reply, not work**: either "agreed — no
+period, because none exists in the code", or a period you can point at in a migration. L1-E's report
+carries it as an open item for Fable either way.
+
+---
+
+## Round 3 → L1-B
+
+### Note E3-L1B-1 — three rows landed with the wrong apostrophe
+
+`RL1E2-01` (blocker). Same cause as L1-A's: the deck's lint read only L1-E's own nine files, so every
+row you applied was unchecked for `A-06`'s glyph.
+
+| file:line | today (on your branch) | final |
+|---|---|---|
+| `Core/Network/RoomsAPIClient.swift:430` | `case .emptyResponse: return "We didn't get a response. Try again."` | `"We didn’t get a response. Try again."` |
+| `Features/RoomScan/Shared/Components/ScanUploadFailureCopy.swift:25` | `"Upload paused — check your connection. It'll pick up automatically."` | `"Upload paused — check your connection. It’ll pick up automatically."` |
+| `ScanUploadFailureCopy.swift:26` | `"We couldn't finish uploading your scan. Try again from here."` | `"We couldn’t finish uploading your scan. Try again from here."` |
+
+`RoomsAPIClient.swift` is pinned **unwrapped** (`BrandVoiceLintTests.roomsAPIClientApostrophesAreCurly`)
+because its literals are clean on `main` — that pin is green today and goes red the moment this row
+lands with the straight glyph. `ScanUploadFailureCopy.swift` is pinned wrapped, because the file
+arrives with the row.
+
+### Note E3-L1B-2 — one phrase, two spellings, and it is L1-E's fault
+
+`RL1E2-04` (major). L1-E changed `Design/Components/PatinaErrorState.swift:16` to
+`retryLabel = "Let’s try that again"` and left four other spellings of the same phrase straight —
+three of them in your globs. That is `A-06`'s own defect class, manufactured by the lane that owns
+`A-06`, so the correction comes with the apology.
+
+| file:line | today | final |
+|---|---|---|
+| `Features/Money/MoneyFailureCopy.swift:30` | `static let retry = "Let's try that again"` | `"Let’s try that again"` |
+| `Features/RoomScan/Views/ScanReviewView.swift:182` | `Text("Let's try that again")` | `Text("Let’s try that again")` |
+| `Features/RoomScan/Views/ScanWalkView.swift:215` | `Text("Let's try that again")` | `Text("Let’s try that again")` |
+
+And, in the same sweep, the rest of the literals in those files — this is `A-06`'s "sweep every
+user-facing string" half, scoped to files the deck names:
+
+- `MoneyFailureCopy.swift` — **fourteen** sentences at `:49,54,67,72,80,82,91,106,117,123`. This file
+  is the deck's own model for error voice (PROGRAM.md §1 calls it "the model for every error sentence
+  L1-E writes"); it should be the model for the glyph too. It is also the **invoice rail**, which D10
+  makes live for round one.
+- `ScanReviewView.swift:570` — `"We couldn't find the scan file. If this keeps happening, please start a fresh scan."`
+- `ScanReviewView.swift:702` — `"We couldn't save your changes. \(error.localizedDescription)"`
+- `ScanWalkView.swift:204` — `"Hold still and I'll try to find my way."`
+
+Every one is `'` → `’`, nothing else. Pinned per file:
+`moneyFailureCopyApostrophesAreCurly`, `scanReviewApostrophesAreCurly`, `scanWalkApostrophesAreCurly`.
+
+### Note E3-L1B-3 — answering **O13**: your seven new strings, reviewed
+
+`RL1E2-07`. Your note asked L1-E to say before the rebase whether the deck rewrites them. Four are
+ratified as written; three need one glyph each.
+
+**Ratified, no change —** `Core/Models/ProductModel.swift` · `matchLabel`:
+`"Strong match"` · `"Good match"` · `"Worth a look"` · `"Not scored yet"`. All four are sentence
+case, plain, and claim nothing the score cannot support. "Worth a look" is the right register for the
+common 40–46 band — it invites without overselling — and "Not scored yet" says *not yet* rather than
+*badly*, which is exactly `C-11`'s point. Nothing for the deck to add.
+
+**Ratified, no change —** the `.failed` sentence you added at
+`Features/Collections/Views/CollectionsView.swift` for `C4-03`:
+`"We couldn’t reach your saved pieces. Check your connection and try again."` Curly already, one
+voice with the rest of the app, and the noun is right.
+
+**Two glyphs —** `Core/Persistence/LocalStoreRecoveryNotice.swift`:
+
+| line | today | final |
+|---|---|---|
+| `:19` | `static let title = "We had to start this phone's copy over"` | `"We had to start this phone’s copy over"` |
+| `:20-25` | body: `"Something on this phone became unreadable, so we started fresh. Your account's rooms and saved pieces come back the next time you're online."` | `"Something on this phone became unreadable, so we started fresh. Your account’s rooms and saved pieces come back the next time you’re online."` |
+
+Both sentences are ratified as written otherwise — the body names what happened, what was lost and
+what comes back, in that order, which is the honest shape. Pinned by
+`localStoreRecoveryNoticeApostrophesAreCurly` (wrapped; the file arrives with the row).
+
+Your W2 ask — the room-average vocabulary at `RoomProjectView.swift:442` /
+`RoomGalleryCard.swift:158`, decided with L1-C on the cell's shape — is **accepted as a W2 · L1-E deck
+row**, for the reasons you give. Leaving it numeric this wave is right.
+
+### Note E3-L1B-4 — `CollectionsView`'s empty state, because your hunk rewrites the block
+
+`RL1E2-11`. L1-E applied `C5-09` at `Features/Collections/Views/CollectionsView.swift:151` under the
+"no lane owns it" clause:
+
+```swift
+Text("No saved pieces yet")     // was "No saved items yet"
+```
+
+`first-flight/w1-l1b` rewrites that exact `if scopedSavedItems.isEmpty` block for `C4-03` (three
+states, not two) and its version still carries the retired noun. Sent as a row so whichever hunk
+survives the merge carries the right word. **No action needed if your rebase takes L1-E's line;** if
+it takes yours, change the one string.
+
+The steward has both this overlap and its mirror (`DesignRequestFlowView+Steps.swift`, which
+PROGRAM.md gives L1-E outright and L1-D has edited) in L1-E's report.
+
+### Note E3-L1B-5 — four surviving `"Curated"` display names
+
+`RL1E2-19`. `C5-20` retires "curated" from consumer copy, and the deck renames the quiz's two labels —
+but two more display-name tables in your globs still ship the word, and one of them names the **same
+budget band** as the quiz label, so applying one without the other makes the app say both.
+
+| file:line | today | final |
+|---|---|---|
+| `Features/RoomScan/Shared/Models/StyleResponseModel.swift:97` | `case .budgetMid: return "Curated Comfort"` | `return "Considered Comfort"` |
+| `StyleResponseModel.swift:23` | `case .curatedMix: return "Curated Mix"` | `return "Collected Mix"` |
+| `Features/RoomScan/Shared/Models/NamedAesthetic.swift:40` | `name: "Curated Minimal"` | `name: "Considered Minimal"` |
+| `NamedAesthetic.swift:82` | `tags: [… , "Curated"]` | `tags: [… , "Collected"]` |
+
+**Do not rename the enum cases** (`curatedMix`, `budgetMid`) — only the returned strings.
+`StyleResponseModel.swift` also carries two straight apostrophes in literals (`:99` `"Let's Discuss"`,
+`:107` `"Pieces you'll pass down"`) — same sweep.
+
+These four are `displayName`/`name`/`tags` values, i.e. reader-facing by construction, but L1-E did
+**not** establish that any renders on the round-one path. If your read says they are dead code, reply
+saying so and they become a W2 deletion instead of a W1 rename — that answer is as useful as the edit.
+
+---
+
+## Round 3 → L1-C
+
+### Note E3-L1C-1 — one apostrophe, and it is L1-E's fault
+
+`RL1E2-04` (major). L1-E changed `PatinaErrorState.retryLabel` to `"Let’s try that again"` and left
+four other spellings straight; one is yours.
+
+| file:line | today | final |
+|---|---|---|
+| `Features/Home/Views/HomeStoryRetryRow.swift:24` | `Text("Today's story couldn't load")` | `Text("Today’s story couldn’t load")` |
+| `HomeStoryRetryRow.swift:31` | `Text("Let's try that again")` | `Text("Let’s try that again")` |
+
+Byte is U+2019. Pinned by `BrandVoiceLintTests.homeStoryRetryRowApostrophesAreCurly`.
+
+### Note E3-L1C-2 — `C-38` is not closed by your edit; the live half was in `StyleProfile`
+
+`RL1E2-20` (minor by severity, load-bearing by consequence). Your
+`RecommendationsView.recommendationRationale` now returns `nil` — but only in the branch a reader
+**without** a taste portrait sees. The branch above it still returns:
+
+```swift
+if let tastePortrait {
+    return tastePortrait.recommendationRationale(for: product, roomName: scopedRoomName)
+}
+```
+
+and `StyleProfile.recommendationRationale` (`Features/Conversation/Models/StyleProfile.swift:375-377`)
+returned `"Selected from Patina's room-aware edit for \(roomName)."` for every card in a room-scoped
+grid — the exact truncated boilerplate `C-38` is filed about, on the signed-in path the finding was
+observed on. There was even a test defending the string
+(`ContextualExperienceTests.recommendationRationaleRequiresARealMatchOrRoomScope:244`).
+
+`Features/Conversation/**` is "no lane, no W1 work" (steward.md §5.1), so **L1-E has fixed it** in its
+own worktree: the room-scope fallback returns `nil`, the test is renamed
+`recommendationRationaleRequiresARealMatch` and re-pointed, and the `roomName` parameter stays on the
+signature so `RecommendationsView.swift` needs no edit.
+
+**No action.** This is here so your task list does not read as closing `C-38` alone, and so the
+fallback is not reintroduced when someone next opens that function. Pinned by
+`NounConsistencyTests.stylePortraitCarriesNoBoilerplate` (unwrapped) and
+`.recommendationCardsCarryNoBoilerplate` (wrapped, your half).
+
+### Note E3-L1C-3 — the greeting wrap, filed properly this time
+
+`RL1E2-14`. Round 2 sent this as a heads-up, which put it in no task list and under no exit criterion.
+It is a **deck row** now, with no final text, the same shape `GAP1B-01` takes.
+
+**What:** `C5-06` replaces `"Good night."` (9 characters) with `"Good evening"` (12) and `"Good day."`
+(9) with `"Good afternoon"` (14). On the **flags-off** root, whose header carries the Studio pill, the
+bell and the `?` beside the greeting, the longer strings wrap to two lines — "Good / evening" —
+where the old one fitted. The four-tab root has the width and renders one line.
+
+**Owner:** L1-C (`Features/Home/Views/DailyRoomView.swift`, `DailyGreetingHeader`).
+**Final text:** none — the greeting is ruled by `C5-06`; the fix, if any, is layout, and that is
+yours to decide. Accepting the wrap is a legitimate answer; D1 makes this root a kill-switch fallback.
+Evidence: `shots/w1-review-l1e/12-flags-off-root.png`, `r2-07-flags-off-root.png`.
+
+### Note E3-L1C-4 — a W2 observation, not a W1 ask
+
+`Features/Companion/Models/CompanionContext.swift` · `contextSummary` ships both retired nouns into
+the Companion's prompt context, where the model can echo them back to the reader:
+`:181-184` `"Saved items in \(room.name)"` / `"Saved items"`, `:192` `"Your profile"`, `:210`
+`"All items across your home"`. Neither `C5-09`'s nor `A-60`'s `where` cites this file and neither fix
+line reaches prompt context, so opening it in W1 would be scope this deck did not earn. Recorded with
+exact sites for W2 · L1-E's 48-row table. **No action this wave.**
