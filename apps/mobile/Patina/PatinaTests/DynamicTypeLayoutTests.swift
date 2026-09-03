@@ -109,9 +109,14 @@ struct DynamicTypeLayoutTests {
         // A ScrollView with no height of its own takes its column's, and
         // `shell` is a `.background` — so the rows drew straight out through
         // the panel's rounded bottom and over the tab bar, overlapping each
-        // other (shots/w1-l1c/fx-06-companion-ax3xl-before.png).
-        #expect(code.contains("containerRelativeFrame(.vertical"),
-                "the panel has no height to scroll inside, so it overflows instead")
+        // other (shots/w1-l1c/fx-06-companion-ax3xl-before.png). Two things fix
+        // that and both are load-bearing: a ceiling gives the ScrollView
+        // something to scroll inside, and a clip stops the overflow PAINTING —
+        // `.frame(maxHeight:)` bounds layout, not drawing.
+        #expect(code.contains("companionAccessibilityPanelCeiling"),
+                "the panel has no ceiling, so it grows to its column instead of scrolling")
+        #expect(code.contains(".clipShape(") && code.contains("maxHeight: dynamicTypeSize"),
+                "the panel is bounded but not clipped, so its rows still paint through the shell")
     }
 
     @Test("the Companion panel's own header scales too")
@@ -120,15 +125,21 @@ struct DynamicTypeLayoutTests {
             in: try SourcePin.read("Patina/Features/Companion/Components/CompanionHearthView.swift")
         )
         // "A considere / d next move" — the panel's detail line, on the app's
-        // signature voice moment. Scoped to `expandedHeader`, which is the two
-        // lines the finding's screenshots caught; `Text(detail)` alone is
-        // ambiguous (the collapsed progress view has one too, and it is
-        // `lineLimit`-ed rather than scaled).
-        let start = try #require(code.range(of: "private func expandedHeader")?.upperBound)
-        let header = String(code[start...].prefix(1400))
+        // signature voice moment. Scoped to `headerText`, which is the two lines
+        // the finding's screenshots caught; `Text(detail)` alone is ambiguous
+        // (the collapsed progress view has one too, and it is `lineLimit`-ed
+        // rather than scaled).
+        //
+        // The modifiers are half the fix: `expandedHeader` also has to give the
+        // words the panel's width above `.accessibility1`, because a word wider
+        // than its line breaks inside itself at any scale floor.
+        let start = try #require(code.range(of: "private func headerText")?.upperBound)
+        let header = String(code[start...].prefix(900))
         #expect(header.components(separatedBy: "minimumScaleFactor(").count - 1 >= 2,
                 "the panel's title and detail still break inside a word (C-06)")
         #expect(header.components(separatedBy: "allowsTightening(true)").count - 1 >= 2)
+        #expect(code.contains("if dynamicTypeSize.isAccessibilitySize {"),
+                "the header never stacks, so its words keep a ~230 pt column (C-06)")
     }
 
     @Test("the unread badge does not outgrow the bell it marks")
