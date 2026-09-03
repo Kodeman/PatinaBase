@@ -245,12 +245,15 @@ private struct UnreadBadge: View {
                 // The bell glyph is a fixed 17 pt inside a 36 pt frame, so an
                 // uncapped badge outgrows the control it marks: at
                 // accessibility-XXXL the "3" was a ~40 pt disc with the bell
-                // nowhere on screen behind it (shots/w1-l1c/05-today-ax3xl-light.png,
-                // taken before this cap). A badge is a mark on a control, not
-                // body copy — it scales to the top of the standard ramp and
-                // stops. Its count is announced by the button's
-                // accessibilityValue, so nothing is lost by not growing it.
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                // nowhere on screen behind it (shots/w1-l1c/05-today-ax3xl-light.png).
+                // A first cap at `xxxLarge` was still a ~24 pt disc occluding
+                // most of a 17 pt glyph — a clay circle with one sliver of bell
+                // outline (shots/w1-review-l1c/10b-bell-badge-crop.png). A badge
+                // is a mark ON a control, not body copy: it scales to the top of
+                // the standard ramp's usable band for a 17 pt glyph and stops.
+                // Its count is announced by the button's accessibilityValue, so
+                // nothing is lost by not growing it.
+                .dynamicTypeSize(...DynamicTypeSize.large)
                 .accessibilityHidden(true)
         }
     }

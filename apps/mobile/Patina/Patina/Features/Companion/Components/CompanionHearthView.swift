@@ -13,6 +13,12 @@ import SwiftUI
 /// property.
 private let companionPanelPadding: CGFloat = 20
 
+/// The tallest the expanded panel may draw at an accessibility text size, above
+/// the bottom safe area and the Hearth's own lift. Everything past it scrolls.
+/// File scope for the same reason as the padding above: a generic type may not
+/// hold a static stored property.
+private let companionAccessibilityPanelCeiling: CGFloat = 620
+
 public struct CompanionHearthView<ExpandedContent: View>: View {
     public let presentation: CompanionPresentationState
 
@@ -320,7 +326,29 @@ private extension CompanionHearthView {
                     .frame(
                         maxWidth: .infinity,
                         minHeight: presentation.usesFullSheet ? 360 : 0,
+                        // `shell` is a `.background`, so it takes the content's
+                        // size, and an unbounded ScrollView takes its column's:
+                        // at an accessibility size the rows drew straight out
+                        // through the panel's rounded bottom and over the tab
+                        // bar, one overlapping the next
+                        // (shots/w1-l1c/fx-06-companion-ax3xl-before.png). A
+                        // ceiling here is what gives the ScrollView inside
+                        // something to scroll within, and it leaves the page
+                        // visible above the panel — which is what tells a reader
+                        // the panel is a panel.
+                        maxHeight: dynamicTypeSize.isAccessibilitySize
+                            ? companionAccessibilityPanelCeiling
+                            : nil,
                         alignment: .topLeading
+                    )
+                    // A `.frame(maxHeight:)` bounds LAYOUT, not drawing: the
+                    // shell sized to the ceiling above while its rows carried on
+                    // painting through the rounded bottom and over the tab bar.
+                    .clipShape(
+                        RoundedRectangle(
+                            cornerRadius: presentation.usesFullSheet ? 30 : 26,
+                            style: .continuous
+                        )
                     )
             }
             .frame(maxWidth: presentation.usesFullSheet ? .infinity : 380)
@@ -375,56 +403,110 @@ private extension CompanionHearthView {
         }
         .padding(companionPanelPadding)
 
-        ViewThatFits(in: .vertical) {
-            column
-
+        // Above `.accessibility1` the answer is not a guess. `ViewThatFits`
+        // picks the scrolling arm only when the proposal it is handed is
+        // smaller than the column, and the proposal this view receives is the
+        // overlay's frame, not the panel's drawn height — so at
+        // accessibility-extra-large the panel clipped its last row
+        // ("BASED ON YOUR ROOMS") against its own bottom edge with no scroll at
+        // all (shots/w1-review-l1c/11-companion-axxl.png). At those sizes the
+        // column cannot fit on any iPhone, so it always scrolls.
+        if dynamicTypeSize.isAccessibilitySize {
             ScrollView(.vertical, showsIndicators: true) {
                 column
             }
             .scrollBounceBehavior(.basedOnSize)
+        } else {
+            ViewThatFits(in: .vertical) {
+                column
+
+                ScrollView(.vertical, showsIndicators: true) {
+                    column
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            }
         }
     }
 
+    /// At an accessibility text size the mark, the text column and up to two
+    /// 32 pt buttons leave the title about 230 pt — narrower than the single
+    /// word "considered" sets at 41 pt, so the line broke inside it: "A
+    /// considere / d next move" on the app's signature voice moment (`C-06`,
+    /// `shots/C/36-ax3xl-companion.png`). `minimumScaleFactor` cannot fix this
+    /// — with no `lineLimit` SwiftUI wraps rather than shrinks — so the answer
+    /// is the same one the Today header takes for `GAP1B-03`: the controls get
+    /// their own row and the words get the width.
+    @ViewBuilder
     private func expandedHeader(_ content: CompanionExpandedPresentation) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    mark(surface: .embedded)
+                        .frame(width: 44, height: 44)
+                    Spacer(minLength: 4)
+                    headerControls
+                }
+                headerText(content)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            compactHeader(content)
+        }
+    }
+
+    private func compactHeader(_ content: CompanionExpandedPresentation) -> some View {
         HStack(alignment: .top, spacing: 12) {
             mark(surface: .embedded)
                 .frame(width: 44, height: 44)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(content.title)
-                    .font(PatinaTypography.patinaVoice)
-                    .foregroundStyle(PatinaColors.offWhite)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let detail = content.detail, !detail.isEmpty {
-                    Text(detail)
-                        .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.Text.inverse.opacity(0.72))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            headerText(content)
 
             Spacer(minLength: 4)
 
-            if onHelp != nil {
-                headerButton(
-                    systemName: "questionmark",
-                    label: "Help",
-                    hint: "Opens help for the Companion.",
-                    identifier: "companion.help",
-                    action: { onHelp?() }
-                )
-            }
+            headerControls
+        }
+    }
 
-            if onDismiss != nil {
-                headerButton(
-                    systemName: "xmark",
-                    label: "Close",
-                    hint: "Collapses the Companion.",
-                    identifier: "companion.close",
-                    action: { onDismiss?() }
-                )
+    private func headerText(_ content: CompanionExpandedPresentation) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(content.title)
+                .font(PatinaTypography.patinaVoice)
+                .foregroundStyle(PatinaColors.offWhite)
+                .minimumScaleFactor(0.7)
+                .allowsTightening(true)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let detail = content.detail, !detail.isEmpty {
+                Text(detail)
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.inverse.opacity(0.72))
+                    .minimumScaleFactor(0.7)
+                    .allowsTightening(true)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var headerControls: some View {
+        if onHelp != nil {
+            headerButton(
+                systemName: "questionmark",
+                label: "Help",
+                hint: "Opens help for the Companion.",
+                identifier: "companion.help",
+                action: { onHelp?() }
+            )
+        }
+
+        if onDismiss != nil {
+            headerButton(
+                systemName: "xmark",
+                label: "Close",
+                hint: "Collapses the Companion.",
+                identifier: "companion.close",
+                action: { onDismiss?() }
+            )
         }
     }
 
