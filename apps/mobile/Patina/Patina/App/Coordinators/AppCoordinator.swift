@@ -74,9 +74,10 @@ public final class AppCoordinator: Coordinator {
     /// instantly-restored cached session, the splash plays for at least
     /// `splashMinimumDuration` so the auth-state flicker is hidden.
     /// Reset by `beginSplashTransition()` when, e.g., the user signs out.
-    // C1-18: ~1 s of init plus an unconditional 1.5 s floor plus a 0.5 s
-    // crossfade is about three seconds to content, and the wordmark's own
-    // fade was cut short of full opacity every cold launch.
+    ///
+    /// C1-18: ~1 s of init plus an unconditional 1.5 s floor plus a 0.5 s
+    /// crossfade is about three seconds to content, and the wordmark's own
+    /// fade was cut short of full opacity every cold launch.
     public private(set) var splashMinimumDeadline: Date =
         Date().addingTimeInterval(LaunchWatchdog.splashFloor(isAuthStateReady: false))
 
