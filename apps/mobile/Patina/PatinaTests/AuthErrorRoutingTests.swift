@@ -348,4 +348,103 @@ struct AuthErrorRoutingTests {
         #expect(!source.contains(".foregroundStyle(.red)"))
         #expect(source.contains("PatinaColors.terracotta"))
     }
+
+    // MARK: - 5. The session-less resolve, driven (RL4A-02, RL4A-03)
+
+    /// Round three's coverage table named these two cases as `RL3A-02`'s pins
+    /// and neither was ever written — the branch was only ever asserted about
+    /// as source text (`RL4A-03`).
+    ///
+    /// The count is the finding (`RL4A-02`). The session-less branch used to
+    /// throw from inside the `do`, that throw landed in the general `catch`,
+    /// and one tap on one code asked the fallback **twice**: two POSTs of a
+    /// live address and code to a pre-auth endpoint, and two hits on 00551's
+    /// rate limiter.
+    @Test("a session-less resolve the fallback declines is a miss, and it is asked once")
+    @MainActor
+    func aSessionlessResolveWithNoFallbackIsAMiss() async {
+        let asks = VerifyFallbackAsks()
+        await withVerifySeams(
+            resolvesWithSession: false,
+            fallback: TestAccountLoginFallback(
+                mintTokenHash: { _, _ in asks.record(); return .init(tokenHash: nil) },
+                redeem: { _ in true }
+            )
+        ) {
+            do {
+                try await AuthService.shared.verifyOtp(email: "firstflight@patina.cloud", token: "000000")
+                Issue.record("a resolve with no session and no fallback returned as a success")
+            } catch {
+                #expect(error as? AuthVerificationFailure == .resolvedWithoutSession)
+            }
+            #expect(asks.count == 1, "the fallback was asked \(asks.count) times for one code")
+            #expect(
+                AuthService.shared.sheetErrorMessage == "That sign-in code has expired. Send yourself a new one."
+            )
+        }
+    }
+
+    /// The other half: the fallback takes it. `verifyOtp` returns, the fallback
+    /// is still asked exactly once, and nothing is left standing in the status
+    /// slot behind a sign-in that worked.
+    @Test("a session-less resolve the fallback redeems signs in, asked once, with no error left standing")
+    @MainActor
+    func aSessionlessResolveTakenByTheFallbackSucceeds() async {
+        let asks = VerifyFallbackAsks()
+        await withVerifySeams(
+            resolvesWithSession: false,
+            fallback: TestAccountLoginFallback(
+                mintTokenHash: { _, _ in asks.record(); return .init(tokenHash: "hashed-token-abc") },
+                redeem: { _ in true }
+            )
+        ) {
+            do {
+                try await AuthService.shared.verifyOtp(email: "firstflight@patina.cloud", token: "000000")
+            } catch {
+                Issue.record("the fallback redeemed and verifyOtp threw anyway: \(error)")
+            }
+            #expect(asks.count == 1, "the fallback was asked \(asks.count) times for one code")
+            #expect(AuthService.shared.errorMessage == nil)
+        }
+    }
+
+    /// Both seams restored on the way out, and the error with them:
+    /// `AuthService.shared` is one object shared with every other suite.
+    @MainActor
+    private func withVerifySeams(
+        resolvesWithSession: Bool,
+        fallback: TestAccountLoginFallback,
+        _ body: () async -> Void
+    ) async {
+        let service = AuthService.shared
+        let savedTransport = service.verifyOtpTransport
+        let savedFallback = service.testAccountLogin
+        defer {
+            service.verifyOtpTransport = savedTransport
+            service.testAccountLogin = savedFallback
+            service.clearError()
+        }
+        service.verifyOtpTransport = { _, _ in resolvesWithSession }
+        service.testAccountLogin = fallback
+        await body()
+    }
+}
+
+/// How many times the injected fallback was asked. The seams are `@Sendable`,
+/// so the counter has to be too.
+private final class VerifyFallbackAsks: @unchecked Sendable {
+    private var asks = 0
+    private let lock = NSLock()
+
+    func record() {
+        lock.lock()
+        defer { lock.unlock() }
+        asks += 1
+    }
+
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return asks
+    }
 }

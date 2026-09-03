@@ -48,27 +48,60 @@ struct AuthAndQuizCopyTests {
         #expect(!source.contains("View Recommendations"))
     }
 
-    // MARK: - A-L1E-9 · C5-20
+    // MARK: - A-L1E-9 · C5-20 · RL4A-01
 
-    /// "Curated" is on the deck's banned lexicon, and the app shipped it twice
-    /// on the mandatory first-run quiz. The `key:` values are spectrum-mapping
-    /// and budget-lookup inputs (`StyleQuizViewModel` matches on them) and must
-    /// survive the relabel untouched.
-    @Test("the quiz says nothing is curated, and both lookup keys survive")
+    /// The deck's banned lexicon, over every string the quiz renders.
+    ///
+    /// Round two asserted six hand-written `contains` clauses about the two
+    /// "Curated" labels it already knew about — and "journey" sat on question
+    /// five of five (`QuizModels.swift:112`, "What's driving your design
+    /// journey?") through three review rounds because no assertion ever read
+    /// the rest of the file. This lints the whole file instead.
+    ///
+    /// `key:` values are excluded from the lint and pinned separately:
+    /// `eclectic_curated` and `curated_comfort` both contain "curated", they
+    /// are the wire values `StyleQuizViewModel` matches on (`:221`, `:242`,
+    /// `:296`), and they must survive every relabel untouched.
+    @Test("nothing the quiz says is on the banned lexicon, and both lookup keys survive")
     func styleQuizIsClean() throws {
-        let source = try SourcePin.read("Patina/Features/StyleQuiz/Models/QuizModels.swift")
-        #expect(!source.lowercased().contains("label: \"eclectic curated\""))
-        #expect(!source.lowercased().contains("label: \"curated comfort\""))
-        #expect(source.contains("label: \"Collected Eclectic\""))
-        #expect(source.contains("label: \"Considered Comfort\""))
-        // The two keys the view model matches on.
-        #expect(source.contains("key: \"eclectic_curated\""))
-        #expect(source.contains("key: \"curated_comfort\""))
+        let path = "Patina/Features/StyleQuiz/Models/QuizModels.swift"
+        let source = try SourcePin.read(path)
+        var wireKeys: Set<String> = []
+
+        for (index, line) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            guard !line.trimmingCharacters(in: .whitespaces).hasPrefix("//") else { continue }
+            for literal in Self.labelledStringLiterals(in: String(line)) {
+                guard literal.argument != "key" else {
+                    wireKeys.insert(literal.value)
+                    continue
+                }
+                for banned in Self.bannedLexicon {
+                    #expect(
+                        !literal.value.lowercased().contains(banned),
+                        "\"\(banned)\" at \(path):\(index + 1) — \"\(literal.value)\""
+                    )
+                }
+            }
+        }
+
+        #expect(wireKeys.contains("eclectic_curated"), "the spectrum key was renamed: \(wireKeys.sorted())")
+        #expect(wireKeys.contains("curated_comfort"), "the budget key was renamed: \(wireKeys.sorted())")
 
         let viewModel = try SourcePin.read("Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift")
         #expect(viewModel.contains("eclectic_curated"))
         #expect(viewModel.contains("curated_comfort"))
     }
+
+    /// `l1-e-copy-deck.md`'s header list, matched case-insensitively.
+    ///
+    /// Not "AI": as a bare substring it fires on "chair", "detail" and
+    /// "available". `AuthFailureCopyTests.everySentenceIsInVoice` can afford
+    /// the case-sensitive check because it runs over seven known sentences; a
+    /// whole-file lint cannot.
+    private static let bannedLexicon = [
+        "curated", "journey", "elevated", "disrupt", "revolutionize",
+        "artificial intelligence", "machine learning"
+    ]
 
     // MARK: - A-L1E-10 · A-06
 
@@ -94,21 +127,45 @@ struct AuthAndQuizCopyTests {
 
     /// Every double-quoted literal on one line, escapes respected.
     private static func stringLiterals(in line: String) -> [String] {
-        var results: [String] = []
+        labelledStringLiterals(in: line).map(\.value)
+    }
+
+    /// The same scan, keeping the argument label that introduces each literal:
+    /// `key: "eclectic_curated"` → `("key", "eclectic_curated")`. A literal
+    /// that is not an argument's value carries an empty label.
+    private static func labelledStringLiterals(in line: String) -> [(argument: String, value: String)] {
+        var results: [(argument: String, value: String)] = []
+        var outside = ""
         var current = ""
+        var argument = ""
         var inside = false
         var escaped = false
         for character in line {
             if escaped { if inside { current.append(character) }; escaped = false; continue }
             if character == "\\" { escaped = true; continue }
             if character == "\"" {
-                if inside { results.append(current); current = "" }
+                if inside {
+                    results.append((argument, current))
+                    current = ""
+                } else {
+                    argument = trailingArgumentLabel(of: outside)
+                    outside = ""
+                }
                 inside.toggle()
                 continue
             }
-            if inside { current.append(character) }
+            if inside { current.append(character) } else { outside.append(character) }
         }
         return results
+    }
+
+    /// `", gradient: PatinaGradients.rattan, key: "` → `"key"`. Anything that
+    /// does not end in an argument colon has no label.
+    private static func trailingArgumentLabel(of prefix: String) -> String {
+        let trimmed = prefix.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasSuffix(":") else { return "" }
+        let token = trimmed.dropLast().split { !$0.isLetter && !$0.isNumber && $0 != "_" }.last
+        return token.map(String.init) ?? ""
     }
 
     // MARK: - A-L1E-11 · C5-10

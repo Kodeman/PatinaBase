@@ -816,35 +816,46 @@ public final class AuthService {
         clearError()
         defer { isLoading = false }
 
+        // RL4A-02: the `do` covers the network call and nothing else. When the
+        // session-less branch below lived inside it, its own throw fell into
+        // the general `catch`, which asked the fallback a SECOND time — a
+        // second burn of 00551's rate limiter on one tap — and, if that second
+        // ask happened to land, returned success with the "expired code"
+        // sentence still standing in the sheet's status slot. Each leg now
+        // gets exactly one turn at the fallback.
+        let hasSession: Bool
         do {
-            let hasSession = try await verifyOtpTransport(email, token)
-            // A3-16: GoTrue can resolve WITHOUT a session for a spent or
-            // expired code. The portal treats that as a miss too — and so
-            // does this, on BOTH legs (RL3A-02): the fallback gets its turn,
-            // and when it declines the reader gets the same sentence and the
-            // same throw the catch path below produces, rather than a cleared
-            // status region under six digits that did nothing.
-            if !hasSession {
-                if await testAccountLogin.attempt(email: email, code: token) {
-                    return
-                }
-                let failure = AuthVerificationFailure.resolvedWithoutSession
-                setError(Self.authErrorSentence(failure), scope: .sheet)
-                throw failure
-            }
-            // Session is set by the auth state change listener; nothing
-            // else to do here.
+            hasSession = try await verifyOtpTransport(email, token)
         } catch {
             // A3-16 / ruling D7 — the advertised tester credential. Tried
             // ONLY from here, after the ordinary path has already failed, so
             // it can never intercept a real sign-in. Fails closed: anything
             // other than a redeemed session falls through to the error below.
             if await testAccountLogin.attempt(email: email, code: token) {
+                clearError()
                 return
             }
             setError(Self.authErrorSentence(error), scope: .sheet)
             throw error
         }
+
+        // A3-16: GoTrue can resolve WITHOUT a session for a spent or
+        // expired code. The portal treats that as a miss too — and so
+        // does this, on BOTH legs (RL3A-02): the fallback gets its turn,
+        // and when it declines the reader gets the same sentence and the
+        // same throw the catch path above produces, rather than a cleared
+        // status region under six digits that did nothing.
+        if !hasSession {
+            if await testAccountLogin.attempt(email: email, code: token) {
+                clearError()
+                return
+            }
+            let failure = AuthVerificationFailure.resolvedWithoutSession
+            setError(Self.authErrorSentence(failure), scope: .sheet)
+            throw failure
+        }
+        // Session is set by the auth state change listener; nothing
+        // else to do here.
     }
 
     /// Handle magic link URL callback. GoTrue's `/verify` endpoint

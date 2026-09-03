@@ -109,7 +109,7 @@ enum QuizContent {
         ),
         QuizQuestion(
             id: 4,
-            title: "What’s driving your design journey?",
+            title: "What’s bringing you here?",
             type: .iconList([
                 QuizOption(label: "Fresh start, new space", subtitle: "Moving in or starting over", icon: "house", key: "new_space"),
                 QuizOption(label: "Finally making it mine", subtitle: "Ready to invest in this space", icon: "sparkles", key: "making_it_mine"),
