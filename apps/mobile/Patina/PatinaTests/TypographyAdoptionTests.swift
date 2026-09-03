@@ -36,10 +36,21 @@ struct TypographyAdoptionTests {
     /// the SwiftLint half of the same bar.
     private static let inlineFontCeiling = 0
 
+    /// The file that *declares* the faces, by concatenation. It is the one
+    /// place `Font.custom(` is the right call, and it is pinned by name in
+    /// `theKitShipsWhatItNames` instead.
+    private static let faceDeclarationFile = "PatinaTypography.swift"
+
+    /// `RL1D-R3-14`. Both helpers matched `.font(.custom(` — the *modifier*
+    /// spelling — so a face bound to a property
+    /// (`private static let fieldFont = Font.custom("PlayfairDisplay-Regular", …)`,
+    /// which is what `RoomSettingsView` had) was invisible to the count and,
+    /// worse, to `everyNamedFaceIsRegistered`, whose whole purpose is to catch
+    /// an unshipped PostScript name. The pattern is the constructor.
     private static func postScriptNames(in source: String) -> [String] {
         var names: [String] = []
         var rest = Substring(source)
-        while let marker = rest.range(of: ".font(.custom(\"") {
+        while let marker = rest.range(of: "Font.custom(\"") {
             rest = rest[marker.upperBound...]
             guard let close = rest.firstIndex(of: "\"") else { break }
             names.append(String(rest[rest.startIndex..<close]))
@@ -55,7 +66,8 @@ struct TypographyAdoptionTests {
     private static func everyRequestedFace() -> Set<String> {
         var names: Set<String> = []
         for path in SourcePin.swiftFiles(under: "Patina") {
-            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            let source = SourcePin.code(raw)
             for name in postScriptNames(in: source) { names.insert(name) }
         }
         return names
@@ -94,28 +106,31 @@ struct TypographyAdoptionTests {
     @Test("no file this lane owns reaches past the type system")
     func thisLaneUsesTokensOnly() throws {
         for path in Self.ownedFiles {
-            let source = try SourcePin.read(path)
+            let source = try SourcePin.readCode(path)
             #expect(
-                !source.contains(".font(.custom("),
-                "\(path) still carries an inline .font(.custom( — C3-15"
+                !source.contains("Font.custom("),
+                "\(path) still builds a Font from a literal face name — C3-15"
             )
         }
     }
 
-    /// The app-wide bar, at zero.
-    @Test("no inline .font(.custom( survives anywhere in the app")
+    /// The app-wide bar, at zero. The count is of `Font.custom(` — the
+    /// constructor — not of the `.font(.custom(` modifier: those are the same
+    /// declaration written two ways, and only one of them was being counted.
+    @Test("no inline face declaration survives anywhere in the app")
     func zeroInlineFontCustom() {
         var offenders: [String] = []
         for path in SourcePin.swiftFiles(under: "Patina") {
-            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
-            let count = source.components(separatedBy: ".font(.custom(").count - 1
-            if count > 0 {
-                offenders.append("\((path as NSString).lastPathComponent) ×\(count)")
-            }
+            let name = (path as NSString).lastPathComponent
+            guard name != Self.faceDeclarationFile else { continue }
+            guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            let source = SourcePin.code(raw)
+            let count = source.components(separatedBy: "Font.custom(").count - 1
+            if count > 0 { offenders.append("\(name) ×\(count)") }
         }
         #expect(
             offenders.count <= Self.inlineFontCeiling,
-            "inline .font(.custom( survives at: \(offenders.joined(separator: ", ")) — C3-15's exit criterion is zero"
+            "an inline face declaration survives at: \(offenders.joined(separator: ", ")) — C3-15's exit criterion is zero"
         )
     }
 
@@ -130,7 +145,7 @@ struct TypographyAdoptionTests {
     /// had — does nothing for a horizontal overflow.
     @Test("the reveal's per-character hero can shrink instead of running off-canvas")
     func theRevealHeroSurvivesAccessibilitySizes() throws {
-        let source = try SourcePin.read("Patina/Features/StyleReveal/Views/RevealView.swift")
+        let source = try SourcePin.readCode("Patina/Features/StyleReveal/Views/RevealView.swift")
         #expect(
             source.contains("minimumScaleFactor"),
             "RevealView's hero has no scale floor — at AX sizes an 11-character aesthetic name leaves the screen"

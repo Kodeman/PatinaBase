@@ -38,7 +38,12 @@ struct RoomSettingsView: View {
 
     /// The face both typed fields wear — the room's name and each dimension.
     /// One declaration so the two cannot drift apart.
-    private static let fieldFont = Font.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body)
+    ///
+    /// C3-15: this was `Font.custom("PlayfairDisplay-Regular", size: 16,
+    /// relativeTo: .body)` — an inline face declaration bound to a property,
+    /// which is the one spelling the sweep's `.font(.custom(` pattern could not
+    /// see. `bodySerif` is that expression, in the type system.
+    private static let fieldFont = PatinaTypography.bodySerif
 
     var body: some View {
         ScrollView {

@@ -33,7 +33,7 @@ struct BorderTokenAdoptionTests {
     /// vacuously on it while the real border stayed `clay.opacity(0.2)`.
     @Test("the text field's resting outline is a border token, not a tinted accent")
     func theTextFieldOutlineIsABorderToken() throws {
-        let source = try SourcePin.read(
+        let source = try SourcePin.readCode(
             "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaTextField.swift"
         )
         #expect(
@@ -60,7 +60,8 @@ struct BorderTokenAdoptionTests {
             + SourcePin.swiftFiles(under: "../PatinaDesignKit/Sources/PatinaDesignKit") {
             if path.hasSuffix("Tokens/PatinaColors.swift") { continue }
             if path.hasSuffix(Self.gradientStopException) { continue }
-            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            let source = SourcePin.code(raw)
             let count = source.components(separatedBy: "PatinaColors.pearl").count - 1
             if count > 0 {
                 offenders.append("\((path as NSString).lastPathComponent) ×\(count)")

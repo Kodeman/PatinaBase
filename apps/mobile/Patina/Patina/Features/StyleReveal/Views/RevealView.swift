@@ -37,6 +37,15 @@ struct RevealView: View {
             // the subtree it is a dark surface resolves the whole token set on
             // the side that matches the ground, which is what "paint the Reveal
             // with the semantic inverse-surface tokens" means in one line.
+            //
+            // Two things the override does NOT cover. Every token added to this
+            // screen from here on resolves on its dark side whether or not its
+            // author meant it to. And the status bar is outside the environment:
+            // the Reveal hides the nav bar but not the status bar, so on a light
+            // system appearance the clock stays dark-on-light over a charcoal
+            // ground. That is a device-pass item, not something this line can
+            // reach — it needs `preferredColorScheme` or a status-bar style, and
+            // both are decisions about the whole flow rather than this view.
             .environment(\.colorScheme, .dark)
     }
 

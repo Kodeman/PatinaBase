@@ -57,7 +57,7 @@ struct CurrencyFormattingTests {
     /// "and keep both shapes".
     @Test("PatinaCurrency does not hand-roll, and does not scale")
     func patinaCurrencyNeitherHandRollsNorScales() throws {
-        let source = try SourcePin.read("Patina/Features/Shared/CurrencyFormatting.swift")
+        let source = try SourcePin.readCode("Patina/Features/Shared/CurrencyFormatting.swift")
         #expect(
             !source.contains("String(format:"),
             "PatinaCurrency hand-rolls a money string — the one rule has to be the NumberFormatter"
@@ -71,24 +71,78 @@ struct CurrencyFormattingTests {
     @Test("no file this lane owns hand-rolls a money string")
     func thisLaneRoutesThroughPatinaCurrency() throws {
         for path in Self.ownedFiles {
-            let source = try SourcePin.read(path)
+            let source = try SourcePin.readCode(path)
             #expect(!source.contains("))K\""), "\(path) hand-rolls a compact money string")
             #expect(!source.contains("$%.1fK"), "\(path) hand-rolls a compact money string")
         }
     }
 
+    /// `RL1D-R3-12`. The quiz's three budget **bands** are literals —
+    /// `"$500–$2K"`, `"$2K–$5K"`, `"$2–5K"` — and are named here rather than
+    /// matched, the way `BorderTokenAdoptionTests` names `PatinaGradients`.
+    ///
+    /// A band is not a piece's price. `C5-14` is "the same piece prints $4,200
+    /// on Today and $4.2K one tap later": one *amount*, two shapes. A range the
+    /// tester picks from a quiz has no amount behind it and no second rendering
+    /// to disagree with. They are also in `Features/StyleQuiz/**`, which is
+    /// L1-A's. The exemption is by file, so a compact string appearing anywhere
+    /// else — including a fourth band added to one of these files — is caught.
+    private static let bandLiteralExemptions = [
+        "StyleQuizViewModel.swift",
+        "StyleResultView.swift"
+    ]
+
     /// The app-wide bar, at zero.
-    @Test("no file in the app hand-rolls a compact money string")
+    ///
+    /// The first version of this counted only `))K"` and `$%.1fK`, i.e. only a
+    /// formatter that *computes* a compact string. Its own name is "no amount
+    /// ever renders as a compact K string", and a literal renders one without
+    /// computing it — so the assertion was narrower than the sentence it made.
+    @Test("no file in the app hand-rolls or hard-codes a compact money string")
     func theCompactFormatterCountNeverClimbs() {
-        var total = 0
+        var offenders: [String] = []
         for path in SourcePin.swiftFiles(under: "Patina") {
-            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
-            total += source.components(separatedBy: "))K\"").count - 1
-            total += source.components(separatedBy: "$%.1fK").count - 1
+            let name = (path as NSString).lastPathComponent
+            guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            let source = SourcePin.code(raw)
+
+            var hits = source.components(separatedBy: "))K\"").count - 1
+            hits += source.components(separatedBy: "$%.1fK").count - 1
+            if !Self.bandLiteralExemptions.contains(name) {
+                hits += Self.compactLiteralCount(in: source)
+            }
+            if hits > 0 { offenders.append("\(name) ×\(hits)") }
         }
         #expect(
-            total <= Self.compactFormatterCeiling,
-            "hand-rolled compact money formatters rose to \(total); the ceiling on this branch's base is \(Self.compactFormatterCeiling)"
+            offenders.count <= Self.compactFormatterCeiling,
+            "compact money strings survive at: \(offenders.joined(separator: ", ")); C5-14's exit criterion is one money format"
         )
+    }
+
+    /// A `$` followed by digits and then a `K`, inside a string literal —
+    /// `"$2K"`, `"$4.2K"`, `"$2–5K"`. Deliberately does not fire on `$` alone
+    /// or on a `K` alone, and does not try to parse Swift: it looks at what a
+    /// reader would see on the screen.
+    private static func compactLiteralCount(in source: String) -> Int {
+        var count = 0
+        var rest = Substring(source)
+        while let dollar = rest.firstIndex(of: "$") {
+            let after = rest[rest.index(after: dollar)...]
+            var index = after.startIndex
+            var sawDigit = false
+            while index < after.endIndex {
+                let character = after[index]
+                if character.isNumber { sawDigit = true }
+                else if character == "." || character == "," || character == "–" || character == "-" || character == "$" {
+                    // still inside the figure
+                } else {
+                    if character == "K" && sawDigit { count += 1 }
+                    break
+                }
+                index = after.index(after: index)
+            }
+            rest = after
+        }
+        return count
     }
 }
