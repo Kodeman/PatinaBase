@@ -37,7 +37,45 @@ on the kill-switch root) was measured by the reviewer, whose shot is
 rule 11 forbids, so the note to L1-C cites the reviewer's evidence rather than a launch this lane was
 told not to make.
 
-**Not captured, and why.** `C4-08` (AR save-toast), `C4-09`/`C5-11` (design-request send-screen error
+## Fix round 2 — 2026-09-02, after the second adversarial review (`RL1E2-01`…`RL1E2-24`)
+
+Same clone `ff-w1-l1e` (`2AF6D0CA-91AB-446E-AFA3-4C126AD5827B`). **Signed** Debug build to
+`.build/DerivedDataWalk` (a separate `xcodebuild build`, never the `CODE_SIGNING_ALLOWED=NO` gate
+product), reinstalled over a clean `simctl uninstall`, launched `-DeploymentTarget local` with **no**
+`-PatinaFlags`. HID preflight: `describe_screen` returned the full 7-element Onboarding tree before any
+tap was trusted; the first Skip tap did not land and was re-issued, which is why the second describe
+shows the quiz. Guest path (no sign-in needed — every screen this round changed is reachable before
+the account wall).
+
+| # | file | screen | what it shows |
+|---|---|---|---|
+| 08 | `08-r3-quiz-q4-curated-comfort.png` | Style quiz, question **4 of 5** | Evidence for two L1-A rows still open on their branch: the budget option reads **"Curated Comfort"** (`C5-20`, deck revision 2's row) and the fourth reads **"Let's Discuss" / "I'd like designer guidance"** — two straight apostrophes (`A-06`, sent this round as `E3-L1A-2`). Not this lane's file. |
+| 09 | `09-r3-quiz-q5-journey-before.png` | Style quiz, question **5 of 5**, progress "100 percent" | **`RL1E2-02` confirmed live.** `AXLabel "What's driving your design journey?"` — the banned word `C5-20` is filed about, on the last question of the **mandatory first-run quiz**, with no deck row until this round and a straight apostrophe as well. This is the "today" column of the new L1-A row; the final text is `"What’s bringing you here?"`. |
+| 10 | `10-r3-browse-no-rationale-c38.png` | Browse pieces (16 pieces), taste portrait present, tab bar visible | The browse grid after the `C-38` fix. Cards announce maker · price · match and **no rationale line**. Honest limit: this grid is **not room-scoped** (`roomRemoteId == nil`, so `scopedRoomName` is `nil`), which is the branch the boilerplate fired on — so this shot shows the screen is intact, not that the room-scoped branch is fixed. That half is pinned by `NounConsistencyTests.stylePortraitCarriesNoBoilerplate`, which reads the source. |
+| 11 | `11-r3-saved-all-pieces-after.png` | Pieces → **Saved** → All pieces (empty) | **`RL1E2-09` confirmed live, this lane's own fix.** The segment now reads **"All pieces"** directly above **"No saved pieces yet"** — shot `07` from the previous round is the same screen reading **"All items"** over "No saved pieces yet", which is the defect the review found. The header button announces **"New board"**. |
+| 12 | `12-r3-saved-boards-create-board-after.png` | Pieces → Saved → **Boards** (empty) | **`RL1E2-13` confirmed live.** The empty state's CTA reads **"Create board"** (was `"Create Board"`), beside a header button announcing "New board" and a tab reading "All pieces" — one casing on one screen, which is `C5-10`'s ask. |
+| 13 | `13-r3-new-board-alert-after.png` | The board-creation alert | **`RL1E2-13`'s third spelling closed.** The alert titles **"New board"** (was `"New Board"`). Cancel / Create unchanged. |
+
+**Not captured this round, and why.**
+
+- **`RL1E2-10` (the board row's `"1 items"`)** — the local fixture seeds **no boards**, so the row does
+  not draw. Shot `12` is that empty state. Closed by
+  `PluralisationTests.boardRowInflectsItsVisibleCount`, a source pin, exactly as the reviewer's own
+  finding said ("Not observable on the seeded fixture (no boards); the source is unambiguous").
+- **`RL1E2-03` (OrderFailureCopy)** — the purchase path is dark for round one (`direct-orders` OFF,
+  D1), so none of the eleven sentences can be reached in the app at all. Closed by
+  `BrandVoiceLintTests.apostrophesAreCurly` with the file added to `deckFiles`, plus the four moved
+  pins in `OrderHandoffTests` / `DirectOrderContractTests`.
+- **`RL1E2-12` (the DesignServices catch-all)** — needs a forced non-PostgREST throw (a decode failure
+  or an expired token) inside `submitDesignRequest`. Closed by
+  `DesignServicesErrorMappingTests.mapErrorOnlyClaimsAConnectionForARealOne`, which constructs the
+  error directly.
+- **`RL1E2-01`/`-04`/`-19` (the cross-lane rows)** — they are in other lanes' branches by definition
+  and cannot be observed on this one. Closed as notes with exact final text, plus one `@Test` per file.
+
+`PLAUSIBLE`, not `CONFIRMED` on a device, for those four; `CONFIRMED` for shots 09, 11, 12, 13.
+
+**Not captured, and why (round 1).** `C4-08` (AR save-toast), `C4-09`/`C5-11` (design-request send-screen error
 line) need a forced failure (no scans, a network cut, or a request that violates the RPC's guards) to
 reach the code paths this lane changed; time budget did not extend to staging that failure live. Closed
 instead by `PatinaTests/ARPlacementFailureCopyTests.swift` and `PatinaTests/ErrorVoiceTests.swift`
