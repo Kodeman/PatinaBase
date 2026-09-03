@@ -43,16 +43,16 @@ extension StyleQuizView {
                             .frame(minHeight: 120)
                         Text(option.label)
                             .font(PatinaTypography.uiSmall)
-                            .foregroundStyle(selections.contains(index) ? .white : PatinaColors.Text.primary)
+                            .foregroundStyle(selections.contains(index) ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
                             .frame(maxWidth: .infinity)
-                            .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.Background.secondary)
+                            .background(selections.contains(index) ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .stroke(selections.contains(index) ? PatinaColors.clay : Color.clear, lineWidth: 2.5)
+                            .stroke(selections.contains(index) ? PatinaColors.Interactive.active : Color.clear, lineWidth: 2.5)
                     )
                     .scaleEffect(selections.contains(index) ? 0.97 : 1.0)
                     .animation(reduceMotion ? nil : .spring(response: 0.3), value: selections.contains(index))
@@ -73,17 +73,33 @@ extension StyleQuizView {
                         selectOption(question: questionId, option: index)
                     } label: {
                         HStack(spacing: 14) {
+                            // A-11: SF Symbols, one weight and one colour, so
+                            // the icon never carries state and VoiceOver reads
+                            // the sentence alone rather than "wineglass, Love
+                            // having people over".
                             if let icon = option.icon {
                                 if isBudget {
-                                    Text(icon)
-                                        .font(.system(size: 20))
+                                    Image(systemName: icon)
+                                        .font(.system(size: 22, weight: .light))
+                                        .foregroundStyle(
+                                            selections.contains(index)
+                                                ? PatinaColors.Text.inverse
+                                                : PatinaColors.Text.secondary
+                                        )
                                         .frame(width: 44, height: 44)
-                                        .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.Background.secondary)
+                                        .background(selections.contains(index) ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                                         .clipShape(RoundedRectangle(cornerRadius: 11))
+                                        .accessibilityHidden(true)
                                 } else {
-                                    Text(icon)
-                                        .font(.system(size: 24))
-                                        .frame(width: 56)
+                                    Image(systemName: icon)
+                                        .font(.system(size: 22, weight: .light))
+                                        .foregroundStyle(
+                                            selections.contains(index)
+                                                ? PatinaColors.Text.inverse
+                                                : PatinaColors.Text.secondary
+                                        )
+                                        .frame(width: 56, height: 28)
+                                        .accessibilityHidden(true)
                                 }
                             }
                             VStack(alignment: .leading, spacing: 2) {
@@ -129,17 +145,17 @@ extension StyleQuizView {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(option.label)
                                     .font(PatinaTypography.uiAction)
-                                    .foregroundStyle(selections.contains(index) ? .white : PatinaColors.Text.primary)
+                                    .foregroundStyle(selections.contains(index) ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                                 if let subtitle = option.subtitle {
                                     Text(subtitle)
                                         .font(PatinaTypography.caption)
-                                        .foregroundStyle(selections.contains(index) ? .white.opacity(0.8) : PatinaColors.Text.muted)
+                                        .foregroundStyle(selections.contains(index) ? PatinaColors.Text.inverse.opacity(0.8) : PatinaColors.Text.muted)
                                 }
                             }
                             Spacer()
                         }
                         .padding(14)
-                        .background(selections.contains(index) ? PatinaColors.clay : PatinaColors.Background.secondary)
+                        .background(selections.contains(index) ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .scaleEffect(selections.contains(index) ? 0.97 : 1.0)
                         .animation(reduceMotion ? nil : .spring(response: 0.3), value: selections.contains(index))

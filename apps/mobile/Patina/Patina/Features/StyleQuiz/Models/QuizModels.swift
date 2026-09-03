@@ -77,11 +77,11 @@ enum QuizContent {
             id: 1,
             title: "How do you actually live in your space?",
             type: .iconList([
-                QuizOption(label: "Love having people over", subtitle: "Entertaining & gathering", icon: "🍷", key: "entertaining"),
-                QuizOption(label: "My quiet sanctuary", subtitle: "Rest & recharge", icon: "🧘", key: "sanctuary"),
-                QuizOption(label: "Work from this room", subtitle: "Productivity & focus", icon: "💻", key: "work_from_home"),
-                QuizOption(label: "Family central", subtitle: "Activity & play", icon: "👨‍👩‍👧", key: "family"),
-                QuizOption(label: "Personal retreat", subtitle: "Reading & reflection", icon: "📚", key: "retreat"),
+                QuizOption(label: "Love having people over", subtitle: "Entertaining & gathering", icon: "wineglass", key: "entertaining"),
+                QuizOption(label: "My quiet sanctuary", subtitle: "Rest & recharge", icon: "moon.stars", key: "sanctuary"),
+                QuizOption(label: "Work from this room", subtitle: "Productivity & focus", icon: "laptopcomputer", key: "work_from_home"),
+                QuizOption(label: "Family central", subtitle: "Activity & play", icon: "figure.2.and.child.holdinghands", key: "family"),
+                QuizOption(label: "Personal retreat", subtitle: "Reading & reflection", icon: "books.vertical", key: "retreat"),
             ])
         ),
         QuizQuestion(
@@ -101,20 +101,20 @@ enum QuizContent {
             id: 3,
             title: "Let's talk about investment",
             type: .budgetTiers([
-                QuizOption(label: "Thoughtful Starter", subtitle: "$500 – $2,000 per room", icon: "🌱", key: "starter"),
-                QuizOption(label: "Curated Comfort", subtitle: "$2,000 – $5,000 per room", icon: "✦", key: "curated_comfort"),
-                QuizOption(label: "Heirloom Investment", subtitle: "$5,000+ per room", icon: "◆", key: "heirloom"),
-                QuizOption(label: "Let's Discuss", subtitle: "I'd like designer guidance", icon: "💬", key: "discuss"),
+                QuizOption(label: "Thoughtful Starter", subtitle: "$500 – $2,000 per room", icon: "leaf", key: "starter"),
+                QuizOption(label: "Curated Comfort", subtitle: "$2,000 – $5,000 per room", icon: "sparkle", key: "curated_comfort"),
+                QuizOption(label: "Heirloom Investment", subtitle: "$5,000+ per room", icon: "diamond", key: "heirloom"),
+                QuizOption(label: "Let's Discuss", subtitle: "I'd like designer guidance", icon: "bubble.left.and.bubble.right", key: "discuss"),
             ])
         ),
         QuizQuestion(
             id: 4,
             title: "What's driving your design journey?",
             type: .iconList([
-                QuizOption(label: "Fresh start, new space", subtitle: "Moving in or starting over", icon: "🏠", key: "new_space"),
-                QuizOption(label: "Finally making it mine", subtitle: "Ready to invest in this space", icon: "✨", key: "making_it_mine"),
-                QuizOption(label: "Life change, design change", subtitle: "New chapter, new environment", icon: "🔄", key: "life_change"),
-                QuizOption(label: "Ready to invest in quality", subtitle: "Upgrading to pieces that last", icon: "💎", key: "invest_quality"),
+                QuizOption(label: "Fresh start, new space", subtitle: "Moving in or starting over", icon: "house", key: "new_space"),
+                QuizOption(label: "Finally making it mine", subtitle: "Ready to invest in this space", icon: "sparkles", key: "making_it_mine"),
+                QuizOption(label: "Life change, design change", subtitle: "New chapter, new environment", icon: "arrow.triangle.2.circlepath", key: "life_change"),
+                QuizOption(label: "Ready to invest in quality", subtitle: "Upgrading to pieces that last", icon: "diamond.inset.filled", key: "invest_quality"),
             ])
         ),
     ]
