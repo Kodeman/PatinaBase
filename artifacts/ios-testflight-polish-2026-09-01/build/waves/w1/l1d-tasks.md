@@ -80,8 +80,8 @@ two could only ask for, so the only notes left are the ones this lane genuinely 
 
 | id | to | subject | why it cannot land here |
 |---|---|---|---|
-| `D→A-4` | L1-A | `P-25`: the OTP field's `000000` placeholder and its AXValue | L1-A **restructured the file**. The field moved from `AuthenticationView.swift` to `AuthenticationView+Panels.swift:122` and still reads `TextField("000000", text: $viewModel.otpToken)`. Round two's note named the old path; this one names the new one. Editing it here would conflict with a file split. |
-| `D→A-5` | L1-A | `A-11`: 13 emoji → SF Symbols in the style quiz | Same restructure — the question bodies moved to `StyleQuizView+Questions.swift`. |
+| ~~`D→A-4`~~ | — | ~~`P-25`~~ | **WITHDRAWN 2026-09-03** (`RL1D-R3-10`). Closed on `first-flight/w1-l1a`: `AuthenticationView+Panels.swift:127-139` is `TextField("", …, prompt: Text("Enter the 6-digit code"))` with `accessibilityLabel("Sign-in code")` and a digit-counting `accessibilityValue`. This row asserted a defect that no longer exists. |
+| ~~`D→A-5`~~ | — | ~~`A-11`~~ | **WITHDRAWN 2026-09-03** (`RL1D-R3-10`). Closed on `first-flight/w1-l1a`: `StyleQuizView+Questions.swift:73` is `Image(systemName: icon)`, pinned by `QuizIconographyTests.everyIconIsARegisteredSymbol` (note `D-L1A-5`). |
 | `D→A-6` | L1-A | `C3-06` / `A-73` auth half: the inverted enabled/disabled affordance on the submit button | Same restructure — `AuthenticationView.swift:519` no longer exists at that line. |
 | `D→F-3` | L1-F | the fifth `pearl` divider, the one `C-13` adds | The line does not exist on this branch. |
 | `D→C-11` | L1-C | four `pearl` sites in files L1-C rewrites, which T6 deliberately did **not** touch | Conflict avoidance — see T6's "held back" table. |
@@ -100,7 +100,7 @@ is stale per §11.6).
 | id | closed by | pinned by |
 |---|---|---|
 | `A3-01` | T12 (the call site, not just the component) | `EmptyStateCallSiteTests.browseRendersTheHonestEmptyState` |
-| `A-11` | — **OPEN**, note `D→A-5` | — |
+| `A-11` | — **closed by L1-A at merge 5** (`RL1D-R3-17`); note `D→A-5` withdrawn | `QuizIconographyTests` on `w1-l1a` |
 | `A-36` | T11 | `ImagePlaceholderTests.everyProductSurfaceRoutesThroughTheComponent` |
 | `A-73` | T1 (`Text.error`) + r1 (`clayInk`, filled buttons) · **auth half OPEN**, note `D→A-6` | `ContrastTests` |
 | `A-90` | r1 | `PrimaryButtonStyleTests` |
@@ -115,7 +115,7 @@ is stale per §11.6).
 | `C3-05` | T15 | `ContrastTests` + `SelectedStateTests` |
 | `C3-15` | **T7 — 44 → 0** | `TypographyAdoptionTests.zeroInlineFontCustom` |
 | `C5-14` | **T8 — the ratchet reaches 0** | `CurrencyFormattingTests.compactFormatterCeiling` |
-| `P-25` | — **OPEN**, note `D→A-4` | — |
+| `P-25` | — **closed by L1-A at merge 5** (`RL1D-R3-17`); note `D→A-4` withdrawn | `w1-l1a`'s own auth suite |
 | `P-35` | r1 | `ContrastTests` + sim shot |
 
 ---
