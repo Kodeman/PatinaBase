@@ -372,9 +372,12 @@ public struct TastePortrait: Equatable {
             return "Its style tags connect to your \(title) portrait."
         }
 
-        if let roomName, !roomName.isEmpty {
-            return "Selected from Patina's room-aware edit for \(roomName)."
-        }
+        // C-38: the room-scoped fallback printed one identical, truncated
+        // sentence under every card in the grid. `RecommendationsView` drops
+        // its own copy of that sentence, but reaches this one first whenever
+        // the reader has a taste portrait — which is the signed-in path the
+        // finding was observed on. A room scope is not a reason for a card
+        // to say anything.
         return nil
     }
 

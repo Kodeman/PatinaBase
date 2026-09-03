@@ -84,7 +84,7 @@ struct PiecesTabTests {
     /// All items tabs are untouched by this lane.
     @Test
     func savedIsStillTheBoardsAndAllItemsSurface() throws {
-        #expect(CollectionsViewModel().tabs == ["Boards", "All items"])
+        #expect(CollectionsViewModel().tabs == ["Boards", "All pieces"])
 
         for path in [
             "Patina/Features/Navigation/HouseFirstRoot.swift",

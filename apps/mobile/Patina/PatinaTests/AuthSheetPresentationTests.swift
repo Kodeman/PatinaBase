@@ -50,7 +50,7 @@ struct AuthSheetPresentationTests {
     @Test("the soft wall names what it is gating and can be cancelled")
     func softWallCarriesTitleAndCancel() throws {
         #expect(DesignRequestAuthCopy.wallTitle == "Sign in to send your request")
-        #expect(DesignRequestAuthCopy.reviewHint == "You'll sign in to send this.")
+        #expect(DesignRequestAuthCopy.reviewHint == "You’ll sign in to send this.")
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthSheet.swift")
         #expect(source.contains("ToolbarItem(placement: .cancellationAction)"))
         #expect(source.contains("Button(\"Cancel\")"))

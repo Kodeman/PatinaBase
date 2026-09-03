@@ -38,6 +38,13 @@ final class ARPlacementViewModel {
         case failed(String)
     }
 
+    /// C4-08: `RoomsAPIClient.createItem` throws a plain `RoomsAPIError`
+    /// (no `LocalizedError`), so `error.localizedDescription` used to print
+    /// Swift's own default description — module name and all — into a save
+    /// toast. One fixed sentence instead; the thrown error is still logged,
+    /// never shown.
+    static let saveFailureMessage = "We couldn’t save this. Try again."
+
     // MARK: - Room mesh
 
     /// Attach a room before the AR session begins. Kicks off async mesh
@@ -83,8 +90,11 @@ final class ARPlacementViewModel {
             )
             await MainActor.run { self.saveState = .saved }
         } catch {
+            // os.Logger error level survives into a Release archive, which
+            // is where a TestFlight tester’s failed save has to be readable.
+            PatinaLog.ui.error("[ARPlacement] save failed: \(error)")
             await MainActor.run {
-                self.saveState = .failed(error.localizedDescription)
+                self.saveState = .failed(Self.saveFailureMessage)
             }
         }
     }

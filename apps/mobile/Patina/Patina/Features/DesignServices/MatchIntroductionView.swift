@@ -90,7 +90,7 @@ struct MatchIntroductionView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             MonoLabel(text: "Your designer")
-            Text("You're matched.")
+            Text("You’re matched.")
                 .font(PatinaTypography.h2)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -266,7 +266,7 @@ struct MatchIntroductionView: View {
     private var retryNotice: some View {
         HStack(spacing: PatinaSpacing.xs) {
             Image(systemName: "exclamationmark.circle")
-            Text("That didn't go through. Tap a time to try again.")
+            Text("That didn’t go through. Tap a time to try again.")
                 .fixedSize(horizontal: false, vertical: true)
         }
         .font(PatinaTypography.caption)

@@ -1,0 +1,126 @@
+# W1 · L1-E — self-check shot ledger
+
+Clone `ff-w1-l1e` (`2AF6D0CA-91AB-446E-AFA3-4C126AD5827B`), signed Debug build (not the
+`CODE_SIGNING_ALLOWED=NO` gate product — a separate `xcodebuild build` to
+`.build/DerivedDataWalk`), launched `-DeploymentTarget local`, no `-PatinaFlags` (D1a default).
+Signed in `client@patina.dev` / `password123`. HID preflight: `describe_screen` returned the full
+14-element Welcome tree before any tap was trusted.
+
+| # | file | screen | what it shows |
+|---|---|---|---|
+| 01 | `01-today-cold-launch.png` | Welcome (cold launch, fresh install) | Baseline — confirms a clean launch before any of this lane's fixes are exercised. |
+| 02 | `02-signed-in-today.png` | Post sign-in, mid-onboarding, system "Save Password?" sheet | Confirms `client@patina.dev`/`password123` signs in; onboarding page 1 visible behind the sheet with the pre-fix `"Start Your Journey"` CTA (`C5-20` — L1-A's row, not yet applied in this worktree, as expected). |
+| 03 | `03-onboarding-page1-before.png` | Onboarding page 1 | `A-06`/`C5-20` evidence, live: "Let's discover yours..." (straight apostrophe) and "Start Your Journey" — matches the deck's "today" column exactly. Not this lane's file to edit; sent to L1-A. |
+| 04 | `04-style-result-before-b23.png` | Style quiz result (`StyleResultView`) | `B-23` evidence, live: "Your portrait stays on this device and can be reset in Settings." — matches the finding's evidence verbatim. Not this lane's file; sent to L1-A as a one-line note (Task A-L1E-7) with the fix's own exact replacement text. |
+| 05 | `05-today-after-c5-06.png` | Today (four-tab `house-first` root, no `-PatinaFlags`) | **`C5-06`, this lane's own fix, confirmed live.** Headline reads **"Good evening"** — no terminal period, correct window for the real device clock (~18:47 local, inside the 18:00–20:59 evening band) — exactly `TimeOfDay.swift`'s new `.evening` case. The four-tab bar (Today · Spaces · Pieces · Studio) is present with no `-PatinaFlags` argument, confirming D1a's fresh-install default independently of this lane's own work. No crash, no layout regression from the `TimeOfDay.swift` change. |
+
+## Fix round — 2026-09-02, after the adversarial review (`RL1E-01`…`RL1E-22`)
+
+Same clone, same launch line (`-DeploymentTarget local`, **no** `-PatinaFlags`), guest path
+("Look around first" → tour skipped). HID preflight: `describe_screen` returned the full element tree
+at every step before a tap was trusted; two taps were re-issued after the first landed on the tour
+overlay.
+
+| # | file | screen | what it shows |
+|---|---|---|---|
+| 06 | `06-fixround-today-launch.png` | Welcome (cold launch, this branch) | Baseline for the fix round. The Google row is still present — `D3`/`A3-06` removes it, and that is L1-A's branch, not merged here. Confirms the fix-round build launches clean. |
+| 07 | `07-fixround-saved-pieces-empty-after-c5-09.png` | Pieces → **Saved** → All items (empty) | **`C5-09`, this lane's own fix-round row, confirmed live.** The empty state reads **"No saved pieces yet"** — `CollectionsView.swift:151`, the site the deck's revision 1 missed. The tab above it already reads "All items" (sentence case), so `CollectionsView`'s own tab needed nothing; `CrossRoomView`'s two `"All Items"` are a different screen and are L1-B's row. |
+
+Also visible in shot 06's follow-on tour capture: the Today headline reads **"Good evening"** at 22:06
+local — inside the new `.night → "Good evening"` band, which is `RL1E-21`'s recorded consequence
+observed rather than reasoned about. The four-tab bar (Today · Spaces · Pieces · Studio) is present
+with no `-PatinaFlags`, confirming D1a again.
+
+**`RL1E-15` is cited, not re-observed.** The flags-off greeting wrap ("Good / evening" over two lines
+on the kill-switch root) was measured by the reviewer, whose shot is
+`shots/w1-review-l1e/12-flags-off-root.png`. Re-observing it needs `-PatinaFlags ""`, which W1's hard
+rule 11 forbids, so the note to L1-C cites the reviewer's evidence rather than a launch this lane was
+told not to make.
+
+## Fix round 2 — 2026-09-02, after the second adversarial review (`RL1E2-01`…`RL1E2-24`)
+
+Same clone `ff-w1-l1e` (`2AF6D0CA-91AB-446E-AFA3-4C126AD5827B`). **Signed** Debug build to
+`.build/DerivedDataWalk` (a separate `xcodebuild build`, never the `CODE_SIGNING_ALLOWED=NO` gate
+product), reinstalled over a clean `simctl uninstall`, launched `-DeploymentTarget local` with **no**
+`-PatinaFlags`. HID preflight: `describe_screen` returned the full 7-element Onboarding tree before any
+tap was trusted; the first Skip tap did not land and was re-issued, which is why the second describe
+shows the quiz. Guest path (no sign-in needed — every screen this round changed is reachable before
+the account wall).
+
+| # | file | screen | what it shows |
+|---|---|---|---|
+| 08 | `08-r3-quiz-q4-curated-comfort.png` | Style quiz, question **4 of 5** | Evidence for two L1-A rows still open on their branch: the budget option reads **"Curated Comfort"** (`C5-20`, deck revision 2's row) and the fourth reads **"Let's Discuss" / "I'd like designer guidance"** — two straight apostrophes (`A-06`, sent this round as `E3-L1A-2`). Not this lane's file. |
+| 09 | `09-r3-quiz-q5-journey-before.png` | Style quiz, question **5 of 5**, progress "100 percent" | **`RL1E2-02` confirmed live.** `AXLabel "What's driving your design journey?"` — the banned word `C5-20` is filed about, on the last question of the **mandatory first-run quiz**, with no deck row until this round and a straight apostrophe as well. This is the "today" column of the new L1-A row; the final text is `"What’s bringing you here?"`. |
+| 10 | `10-r3-browse-no-rationale-c38.png` | Browse pieces (16 pieces), taste portrait present, tab bar visible | The browse grid after the `C-38` fix. Cards announce maker · price · match and **no rationale line**. Honest limit: this grid is **not room-scoped** (`roomRemoteId == nil`, so `scopedRoomName` is `nil`), which is the branch the boilerplate fired on — so this shot shows the screen is intact, not that the room-scoped branch is fixed. That half is pinned by `NounConsistencyTests.stylePortraitCarriesNoBoilerplate`, which reads the source. |
+| 11 | `11-r3-saved-all-pieces-after.png` | Pieces → **Saved** → All pieces (empty) | **`RL1E2-09` confirmed live, this lane's own fix.** The segment now reads **"All pieces"** directly above **"No saved pieces yet"** — shot `07` from the previous round is the same screen reading **"All items"** over "No saved pieces yet", which is the defect the review found. The header button announces **"New board"**. |
+| 12 | `12-r3-saved-boards-create-board-after.png` | Pieces → Saved → **Boards** (empty) | **`RL1E2-13` confirmed live.** The empty state's CTA reads **"Create board"** (was `"Create Board"`), beside a header button announcing "New board" and a tab reading "All pieces" — one casing on one screen, which is `C5-10`'s ask. |
+| 13 | `13-r3-new-board-alert-after.png` | The board-creation alert | **`RL1E2-13`'s third spelling closed.** The alert titles **"New board"** (was `"New Board"`). Cancel / Create unchanged. |
+
+**Not captured this round, and why.**
+
+- **`RL1E2-10` (the board row's `"1 items"`)** — the local fixture seeds **no boards**, so the row does
+  not draw. Shot `12` is that empty state. Closed by
+  `PluralisationTests.boardRowInflectsItsVisibleCount`, a source pin, exactly as the reviewer's own
+  finding said ("Not observable on the seeded fixture (no boards); the source is unambiguous").
+- **`RL1E2-03` (OrderFailureCopy)** — the purchase path is dark for round one (`direct-orders` OFF,
+  D1), so none of the eleven sentences can be reached in the app at all. Closed by
+  `BrandVoiceLintTests.apostrophesAreCurly` with the file added to `deckFiles`, plus the four moved
+  pins in `OrderHandoffTests` / `DirectOrderContractTests`.
+- **`RL1E2-12` (the DesignServices catch-all)** — needs a forced non-PostgREST throw (a decode failure
+  or an expired token) inside `submitDesignRequest`. Closed by
+  `DesignServicesErrorMappingTests.mapErrorOnlyClaimsAConnectionForARealOne`, which constructs the
+  error directly.
+- **`RL1E2-01`/`-04`/`-19` (the cross-lane rows)** — they are in other lanes' branches by definition
+  and cannot be observed on this one. Closed as notes with exact final text, plus one `@Test` per file.
+
+`PLAUSIBLE`, not `CONFIRMED` on a device, for those four; `CONFIRMED` for shots 09, 11, 12, 13.
+
+**Not captured, and why (round 1).** `C4-08` (AR save-toast), `C4-09`/`C5-11` (design-request send-screen error
+line) need a forced failure (no scans, a network cut, or a request that violates the RPC's guards) to
+reach the code paths this lane changed; time budget did not extend to staging that failure live. Closed
+instead by `PatinaTests/ARPlacementFailureCopyTests.swift` and `PatinaTests/ErrorVoiceTests.swift`
+(construct the typed errors directly and assert the rendered sentence — see the gate run) and by
+reading the call sites: `ARPlacementView.swift`'s toast and `DesignRequestFlowView+Steps.swift`'s error
+line both render exactly the string the view model/service now produces, with no other transform in
+between. `PLAUSIBLE`, not `CONFIRMED` on a device, for these two rows specifically.
+
+---
+
+## Round 4 (fix round 3, `RL1E3-01` … `RL1E3-10`) — 2026-09-03
+
+Same clone, same rules. The gate-built Debug product (`.build/DerivedData/Build/Products/
+Debug-iphonesimulator/Patina.app`, from `ios-gate.sh build`) installed with `xcrun simctl install`,
+launched `-DeploymentTarget local`, no `-PatinaFlags`. HID preflight: `describe_screen` returned the
+14-element Welcome tree before the first tap.
+
+| # | file | screen | what it shows |
+|---|---|---|---|
+| 14 | `14-r4-welcome-cold-launch.png` | Welcome (cold launch after reinstall) | The launch this round's captures start from. Google is still on the sheet — D3 is L1-A's row and this branch is `main`-based, so its absence is not expected here. |
+| 15 | `15-r4-today-signed-in.png` | Today, four-tab root, signed in `client@patina.dev` | Greeting reads **"Good evening"** at 01:03 local — the `C5-06` band this lane shipped, and `RL1E-21`'s recorded consequence observed a second time. Four-tab bar present with no `-PatinaFlags` (D1a). **No designer seat and no request card.** |
+| 16 | `16-r4-studio-no-design-request.png` | Studio tab | **0 ROOMS · 0 SAVED**, "Nothing needs your attention right now.", "Awaiting you 0" — the fixture carries no design request for this account. This is the shot that makes the "not captured" note below a fact rather than an excuse. |
+
+**The one screen this round's source changes would render, and why it is not captured.**
+`DesignRequestStatusService`'s eight swept sentences (`badgeTitle` / `subtitle` / `cardTitle`) draw
+only when the signed-in client has a `design_requests` row — through `YourDesignerSeat.swift:83,108`
+and `DailyRoomView.swift:469,551` on Today, on `DesignRequestStatusView.swift:139-148`, on
+`MatchBookedHero.swift:44-55,120-124`, and in `CompanionOverlay.swift:231`. Shot 16 shows the seeded
+`client@patina.dev` has none, and creating one means writing rows to the local stack through a
+design-request submit round trip, which this lane's brief does not own. So the row is **`PLAUSIBLE`
+on the simulator, `CONFIRMED` at the source**: closed by `PatinaTests/DesignRequestStageTests` and
+`PatinaTests/DesignerSeatTests`, which construct each `DesignRequestStage` directly and assert the
+exact rendered sentence — six of those assertions moved with the strings in commit `1ff936a6d` — plus
+reading the five call sites, each of which renders the service's return value with no transform in
+between.
+
+**The other two source changes render nothing today — by inspection, not by assumption.**
+`DesignRequestCoordinator`'s three strings: `ScanUploadProgressView.swift:100` maps `.failed` to its
+own fixed `"Upload failed — will retry"` and never prints the payload, and `draft.lastError` has no
+reader outside the coordinator (`DesignRequestFlowView+Steps.swift:169`'s `coordinator?.lastError` is
+the `DesignServicesError?`, a different property). `ARPlacementManager.errorMessage` is set at `:133`
+and read by no view (`grep -rn "errorMessage" apps/mobile/Patina/Patina/`). Both are swept because the
+lint walks this lane's globs now, not because a tester sees them — and the deck's revision-4 L1-E
+table says so in those words rather than claiming a user-visible fix.
+
+**Not re-observed, and cited instead.** `RL1E3-09`'s accessibility-size greeting wrap on the four-tab
+root is the reviewer's capture (`shots/w1-review-l1e/r3-09-today-dark-axxxl.png`); the correction to
+L1-C (`E4-L1C-3`) cites it rather than restaging the Dynamic Type change here.

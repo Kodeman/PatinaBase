@@ -268,7 +268,7 @@ struct DesignerSeatTests {
         let seat = DesignerSeat.make(
             liveLead: matched, projects: [], nextMoveDetail: nextMoveDetail
         )
-        #expect(nextMoveDetail == "You're matched with Leah Hartwell")
+        #expect(nextMoveDetail == "You’re matched with Leah Hartwell")
         #expect(seat?.meta == "Hartwell Studio · Designer matched")
     }
 
@@ -288,6 +288,6 @@ struct DesignerSeatTests {
             liveLead: lead(status: "accepted"), projects: [],
             nextMoveDetail: "There is an update waiting for you."
         )
-        #expect(seat?.meta == "You're matched with Leah Hartwell")
+        #expect(seat?.meta == "You’re matched with Leah Hartwell")
     }
 }

@@ -132,7 +132,7 @@ struct CollectionsView: View {
         .onAppear {
             viewModel.loadData(context: modelContext)
         }
-        .alert("New Board", isPresented: $viewModel.isCreatingBoard) {
+        .alert("New board", isPresented: $viewModel.isCreatingBoard) {
             TextField("Board name", text: $viewModel.newBoardName)
             Button("Create") { viewModel.createBoard(context: modelContext) }
             Button("Cancel", role: .cancel) { viewModel.newBoardName = "" }
@@ -326,7 +326,7 @@ private extension CollectionsView {
             Button {
                 viewModel.isCreatingBoard = true
             } label: {
-                Text("Create Board")
+                Text("Create board")
                     .font(PatinaTypography.uiAction)
                     .foregroundStyle(PatinaColors.Text.inverse)
                     .padding(.horizontal, 24)
@@ -346,10 +346,10 @@ private extension CollectionsView {
                     .font(PatinaTypography.h5)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
-                MonoLabel(text: "\(board.itemCount) items")
+                MonoLabel(text: "\(board.itemCount) piece\(board.itemCount == 1 ? "" : "s")")
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(board.name), \(board.itemCount) item\(board.itemCount == 1 ? "" : "s")")
+            .accessibilityLabel("\(board.name), \(board.itemCount) piece\(board.itemCount == 1 ? "" : "s")")
 
             // Grid placeholder (items would show product thumbnails)
             let columns = [

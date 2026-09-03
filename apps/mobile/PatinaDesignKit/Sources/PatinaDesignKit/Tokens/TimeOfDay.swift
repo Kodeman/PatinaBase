@@ -23,21 +23,28 @@ public enum TimeOfDay: String, Codable, CaseIterable {
 
     // MARK: - Greeting
 
-    /// Greeting text for the time of day
+    /// Greeting text for the time of day.
+    ///
+    /// C5-06: collapsed from six windows to the three greetings people
+    /// actually say. "Good night" is a farewell, not a greeting, and it owned
+    /// 21:00–04:59 — the likeliest first-look hour of the day; "Early
+    /// morning" and "Good day" are not this register's speech. Dawn folds
+    /// into morning, day into afternoon, night into evening. No terminal
+    /// period — matches the app's other short headline copy.
     public var greeting: String {
         switch self {
         case .dawn:
-            return "Early morning."
+            return "Good morning"
         case .morning:
-            return "Good morning."
+            return "Good morning"
         case .day:
-            return "Good day."
+            return "Good afternoon"
         case .afternoon:
-            return "Good afternoon."
+            return "Good afternoon"
         case .evening:
-            return "Good evening."
+            return "Good evening"
         case .night:
-            return "Good night."
+            return "Good evening"
         }
     }
 

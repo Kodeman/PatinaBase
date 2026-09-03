@@ -152,7 +152,7 @@ struct DirectOrderContractTests {
         )
         #expect(error == .unavailable)
         let sentence = OrderFailureCopy.checkout(error).sentence
-        #expect(sentence == "We couldn't start this payment. Nothing has been charged.")
+        #expect(sentence == "We couldn’t start this payment. Nothing has been charged.")
         #expect(!sentence.contains("sk_test"))
         #expect(!sentence.contains("API Key"))
     }
@@ -169,7 +169,7 @@ struct DirectOrderContractTests {
     @Test("the poll timeout never claims a bank transfer")
     func unconfirmedCopyDoesNotGuessTheMethod() {
         let sentence = OrderFailureCopy.unconfirmed.sentence
-        #expect(sentence == "We haven't seen this payment yet. We'll update this as soon as it clears.")
+        #expect(sentence == "We haven’t seen this payment yet. We’ll update this as soon as it clears.")
         #expect(!sentence.lowercased().contains("bank"))
         #expect(!sentence.contains("3–5"))
     }
