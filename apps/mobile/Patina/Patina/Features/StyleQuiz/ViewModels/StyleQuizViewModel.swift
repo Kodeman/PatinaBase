@@ -81,7 +81,11 @@ final class StyleQuizViewModel {
         currentQuestion > 0 || selections.contains { !$0.value.isEmpty }
     }
 
-    private static let savedProgressKey = "styleQuiz.savedProgress.v1"
+    static let savedProgressKey = "styleQuiz.savedProgress.v1"
+
+    /// This run reached an end that supersedes any partial snapshot — either
+    /// "Discard & exit" or a submission. Nothing may write one after that.
+    private(set) var runHasEnded = false
 
     /// Snapshot persisted to UserDefaults on "Save progress & exit" so a
     /// later quiz entry resumes at the same question with the same
@@ -106,8 +110,21 @@ final class StyleQuizViewModel {
         }
     }
 
+    /// Save only if there is in-flight work and the run has not already ended.
+    ///
+    /// RL2A-02: `C1-28` put an unconditional `saveProgress()` on the view's
+    /// `.onDisappear`, which runs AFTER both callers that deliberately clear
+    /// the snapshot — "Discard & exit" and `submitQuiz()`. So a discard wrote
+    /// the answers straight back, and a completed run re-persisted all five,
+    /// leaving the next entry sitting on a fully-answered Q5.
+    func saveProgressIfInFlight() {
+        guard !runHasEnded, hasAnyAnswers else { return }
+        saveProgress()
+    }
+
     /// Drop any persisted snapshot ("Discard & exit", or quiz submitted).
     func discardSavedProgress() {
+        runHasEnded = true
         defaults.removeObject(forKey: Self.savedProgressKey)
     }
 

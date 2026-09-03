@@ -172,7 +172,7 @@ struct QuizProgressTests {
     func deferControlSavesFirst() throws {
         let source = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleQuizView.swift")
         #expect(source.contains("StyleQuiz.DeferButton"))
-        let start = try #require(source.range(of: "Button(\"I'll do this later\") {"))
+        let start = try #require(source.range(of: "Button(\"I’ll do this later\") {"))
         let block = String(source[start.lowerBound...].prefix(200))
         let save = try #require(block.range(of: "viewModel.saveProgress()"))
         let leave = try #require(block.range(of: "onDefer()"))
@@ -184,5 +184,76 @@ struct QuizProgressTests {
         let host = try SourcePin.read("Patina/Features/FirstLaunch/Views/OnboardingFlowHost.swift")
         #expect(host.contains("onDefer: { skipToBrowsing() }"))
         #expect(host.contains("onSignIn: { returnToSignIn() }"))
+    }
+
+    // MARK: - RL2A-02 · a discarded or submitted run stays gone
+
+    /// `.onDisappear { saveProgress() }` (C1-28) ran AFTER both callers that
+    /// deliberately clear the snapshot, so "Discard & exit" wrote the answers
+    /// straight back and a submitted run re-persisted a full five answers.
+    /// The next mount then opened on Q5 with everything pre-selected.
+    @Test("discard, then leave: nothing is left behind")
+    func discardThenLeaveLeavesNoSnapshot() {
+        let suite = "QuizProgressTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let viewModel = StyleQuizViewModel(defaults: defaults)
+
+        viewModel.toggleSelection(question: 0, option: 0)
+        viewModel.saveProgress()
+        #expect(defaults.data(forKey: StyleQuizViewModel.savedProgressKey) != nil)
+
+        viewModel.discardSavedProgress()
+        // What the view does on the way out.
+        viewModel.saveProgressIfInFlight()
+        #expect(defaults.data(forKey: StyleQuizViewModel.savedProgressKey) == nil)
+    }
+
+    @Test("submit, then leave: a completed run does not come back as a partial one")
+    func submitThenLeaveLeavesNoSnapshot() {
+        let suite = "QuizProgressTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let viewModel = StyleQuizViewModel(defaults: defaults)
+
+        for question in 0..<5 {
+            viewModel.toggleSelection(question: question, option: 0)
+            viewModel.saveProgress()
+        }
+        // The real submit seam: `advance()` on the last question.
+        viewModel.currentQuestion = 4
+        viewModel.advance()
+        viewModel.saveProgressIfInFlight()
+        #expect(defaults.data(forKey: StyleQuizViewModel.savedProgressKey) == nil)
+
+        // And the next entry starts at Q1, not on a fully-answered Q5.
+        let next = StyleQuizViewModel(defaults: defaults)
+        #expect(next.currentQuestion == 0)
+        #expect(next.answeredCount == 0)
+    }
+
+    /// The C1-28 case the guard must not break: mid-quiz, nothing ended.
+    @Test("leaving mid-quiz still saves — C1-28 is intact")
+    func leavingMidQuizStillSaves() {
+        let suite = "QuizProgressTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let viewModel = StyleQuizViewModel(defaults: defaults)
+
+        viewModel.toggleSelection(question: 0, option: 0)
+        viewModel.saveProgressIfInFlight()
+        #expect(defaults.data(forKey: StyleQuizViewModel.savedProgressKey) != nil)
+    }
+
+    /// An untouched quiz writes nothing at all — there is no work to keep.
+    @Test("an untouched quiz leaves no snapshot on the way out")
+    func untouchedQuizWritesNothing() {
+        let suite = "QuizProgressTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let viewModel = StyleQuizViewModel(defaults: defaults)
+
+        viewModel.saveProgressIfInFlight()
+        #expect(defaults.data(forKey: StyleQuizViewModel.savedProgressKey) == nil)
     }
 }

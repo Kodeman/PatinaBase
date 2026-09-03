@@ -123,8 +123,8 @@ struct GuestEscapeTests {
     @Test("progress is saved on disappear and on backgrounding, not only on an explicit exit")
     func quizProgressPersistsWithoutTheDialog() throws {
         let quiz = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleQuizView.swift")
-        #expect(quiz.contains(".onDisappear {\n            viewModel.saveProgress()"))
-        #expect(quiz.contains("if phase != .active { viewModel.saveProgress() }"))
+        #expect(quiz.contains(".onDisappear {\n            viewModel.saveProgressIfInFlight()"))
+        #expect(quiz.contains("if phase != .active { viewModel.saveProgressIfInFlight() }"))
         #expect(quiz.contains("@Environment(\\.scenePhase) private var scenePhase"))
     }
 

@@ -132,11 +132,12 @@ struct StyleQuizView: View {
             presentQuizCompanionIfNeeded()
         }
         // C1-28: the answers survive a call, a home swipe or a kill.
+        // RL2A-02: and only then — a discarded or submitted run stays gone.
         .onDisappear {
-            viewModel.saveProgress()
+            viewModel.saveProgressIfInFlight()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { viewModel.saveProgress() }
+            if phase != .active { viewModel.saveProgressIfInFlight() }
         }
         .onChange(of: viewModel.currentQuestion) { _, _ in
             updateQuizCompanion()
@@ -219,7 +220,7 @@ struct StyleQuizView: View {
             Spacer()
 
             if let onDefer {
-                Button("I'll do this later") {
+                Button("I’ll do this later") {
                     viewModel.saveProgress()
                     onDefer()
                 }
