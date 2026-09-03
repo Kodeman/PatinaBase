@@ -32,13 +32,29 @@ struct LaunchWatchdogTests {
         #expect(LaunchWatchdog.stallDeadline <= 8)
     }
 
+    /// The one that matters, and the one round 3 got wrong (review
+    /// `RL1B3-02`). `AppCoordinator`'s launch deadline starts at property
+    /// initialisation inside `PatinaApp.init()` — strictly before this view's
+    /// body mounts and its `.task` begins sleeping. Sharing one constant meant
+    /// the coordinator forced `.auth`, tore the splash down and cancelled the
+    /// `.task` before `hasStalled` was ever set: the sentence C1-19 asks for
+    /// was unreachable UI. The splash has to speak first, by a margin wider
+    /// than the gap between `PatinaApp.init()` and the first frame.
+    @Test
+    func theSplashSpeaksBeforeTheCoordinatorForcesAuth() {
+        #expect(LaunchWatchdog.splashSurfaceDeadline < LaunchWatchdog.stallDeadline)
+        #expect(LaunchWatchdog.stallDeadline - LaunchWatchdog.splashSurfaceDeadline >= 1)
+        // Still late enough not to cry wolf on a slow but working launch.
+        #expect(LaunchWatchdog.splashSurfaceDeadline >= 5)
+    }
+
     @Test
     func nothingIsSurfacedBeforeTheDeadline() {
         #expect(LaunchWatchdog.shouldSurfaceStall(elapsed: 0, isAuthStateReady: false) == false)
         #expect(LaunchWatchdog.shouldSurfaceStall(elapsed: 4.9, isAuthStateReady: false) == false)
         #expect(
             LaunchWatchdog.shouldSurfaceStall(
-                elapsed: LaunchWatchdog.stallDeadline - 0.1, isAuthStateReady: false
+                elapsed: LaunchWatchdog.splashSurfaceDeadline - 0.1, isAuthStateReady: false
             ) == false
         )
     }
@@ -47,7 +63,7 @@ struct LaunchWatchdogTests {
     func theStallIsSurfacedOnceTheDeadlinePassesWithNoReadiness() {
         #expect(
             LaunchWatchdog.shouldSurfaceStall(
-                elapsed: LaunchWatchdog.stallDeadline, isAuthStateReady: false
+                elapsed: LaunchWatchdog.splashSurfaceDeadline, isAuthStateReady: false
             )
         )
         #expect(LaunchWatchdog.shouldSurfaceStall(elapsed: 600, isAuthStateReady: false))
@@ -78,6 +94,11 @@ struct LaunchWatchdogTests {
         #expect(source.contains("SplashView.StallMessage"))
         #expect(source.contains("LaunchWatchdog.shouldSurfaceStall("))
         #expect(source.contains("LaunchWatchdog.stallMessage"))
+        // The sleep and the predicate must read the same constant, or the
+        // `.task` wakes at one deadline and is judged against another.
+        #expect(source.contains("Task.sleep(for: .seconds(LaunchWatchdog.splashSurfaceDeadline))"))
+        #expect(source.contains("elapsed: LaunchWatchdog.splashSurfaceDeadline"))
+        #expect(source.contains("Task.sleep(for: .seconds(LaunchWatchdog.stallDeadline))") == false)
     }
 
     // MARK: - C1-18

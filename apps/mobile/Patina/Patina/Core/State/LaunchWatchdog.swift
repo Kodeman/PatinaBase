@@ -25,13 +25,28 @@ enum LaunchWatchdog {
     /// teaches people to distrust the message.
     static let stallDeadline: TimeInterval = 8
 
+    /// When the *splash* says it — strictly before the coordinator acts.
+    ///
+    /// Both halves used `stallDeadline`, and the two clocks do not start
+    /// together: `AppCoordinator.launchDeadline` is a stored property
+    /// initialised inside `PatinaApp.init()`, before `SplashView`'s body
+    /// mounts and its `.task` begins sleeping. So at T+8 s the coordinator
+    /// recomputed first, forced `.auth`, tore the splash down and cancelled
+    /// the `.task` — and the sentence below was unreachable UI in every
+    /// launch it exists for (review `RL1B3-02`).
+    ///
+    /// A second and a half is wider than the gap between `init()` and the
+    /// first frame by a large margin, and still late enough that a slow but
+    /// working launch never sees it.
+    static let splashSurfaceDeadline: TimeInterval = stallDeadline - 1.5
+
     /// One line, in the app's voice, naming no vendor and no server.
     static let stallMessage = "We couldn’t reach Patina — try again."
 
     /// Whether the splash should surface the stall.
     static func shouldSurfaceStall(elapsed: TimeInterval, isAuthStateReady: Bool) -> Bool {
         guard !isAuthStateReady else { return false }
-        return elapsed >= stallDeadline
+        return elapsed >= splashSurfaceDeadline
     }
 
     /// How long the splash is held once auth readiness has landed.

@@ -77,10 +77,14 @@ struct SplashView: View {
             // is intentionally not invoked here.
         }
         .task {
-            try? await Task.sleep(for: .seconds(LaunchWatchdog.stallDeadline))
+            // Not `stallDeadline`: the coordinator forces `.auth` at that
+            // value from a clock that started in `PatinaApp.init()`, so a
+            // splash waking at the same number is torn down first and this
+            // task is cancelled before it can set anything (RL1B3-02).
+            try? await Task.sleep(for: .seconds(LaunchWatchdog.splashSurfaceDeadline))
             guard !Task.isCancelled else { return }
             guard LaunchWatchdog.shouldSurfaceStall(
-                elapsed: LaunchWatchdog.stallDeadline,
+                elapsed: LaunchWatchdog.splashSurfaceDeadline,
                 isAuthStateReady: AuthService.shared.isAuthStateReady
             ) else { return }
             withAnimation { hasStalled = true }
