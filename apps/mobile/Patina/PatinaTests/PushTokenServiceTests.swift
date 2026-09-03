@@ -189,11 +189,22 @@ struct PushTokenServiceTests {
     /// in exchange for the permission, and it names exactly three things.
     @Test
     func primerCopyIsVerbatim() {
-        // Character-for-character against source/rulings-2026-08-27.md Q7:
-        // a STRAIGHT apostrophe (U+0027) and an em dash (U+2014). "Verbatim"
-        // is taken literally here — the glyphs are the ruling's, not the
-        // app's usual typographic apostrophe.
-        #expect(PushPrimerView.sentence == "We'll tell you when your designer sends something that needs you \u{2014} a decision, a proposal, or an invoice. Nothing else.")
+        // Word-for-word against source/rulings-2026-08-27.md Q7, with an em
+        // dash (U+2014) and — `W1-A-01` — the app's apostrophe (U+2019).
+        // Q7 was transcribed with a straight U+0027 and this test pinned that
+        // byte, which put it in direct conflict with `A-06`'s rule and with
+        // every other sentence the app prints. The words are the ruling's; the
+        // glyph is the app's, and Q7's U+0027 is superseded.
+        #expect(PushPrimerView.sentence == "We\u{2019}ll tell you when your designer sends something that needs you \u{2014} a decision, a proposal, or an invoice. Nothing else.")
+    }
+
+    /// The straight apostrophe cannot come back by a copy-paste from the
+    /// ruling file: it is the one byte `A-06` bans and this sentence is where
+    /// the two rules collided.
+    @Test
+    func primerUsesTheAppsApostrophe() {
+        #expect(PushPrimerView.sentence.contains("\u{2019}"))
+        #expect(!PushPrimerView.sentence.contains("'"))
     }
 
     /// The trigger is money-shaped or it does not fire: a scan-complete row is

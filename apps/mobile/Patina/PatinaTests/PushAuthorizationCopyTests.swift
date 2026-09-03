@@ -152,10 +152,12 @@ struct PushAuthorizationCopyTests {
         #expect(screen.contains("if outcome == .denied {"))
     }
 
-    /// Q7's sentence is ruled verbatim and this lane does not touch it.
+    /// Q7's words are ruled verbatim and this lane does not touch them.
+    /// `W1-A-01` supersedes one glyph: the apostrophe is the app's U+2019, not
+    /// the ruling file's U+0027, so `A-06` and Q7 stop contradicting each other.
     @Test("the promise the ask is made on is unchanged")
     func theRuledSentenceIsUntouched() {
-        #expect(PushPrimerView.sentence == "We'll tell you when your designer sends something that needs you — a decision, a proposal, or an invoice. Nothing else.")
+        #expect(PushPrimerView.sentence == "We\u{2019}ll tell you when your designer sends something that needs you — a decision, a proposal, or an invoice. Nothing else.")
         #expect(PushPrimerView.title == "Before we interrupt you")
     }
 }

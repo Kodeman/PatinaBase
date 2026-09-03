@@ -53,9 +53,9 @@ struct AuthFailureCopyTests {
         #expect(invalid.contains("don’t match"))
         #expect(!invalid.contains("Invalid login credentials"))
 
-        let expired = sentence(.otpExpired)
-        #expect(expired.contains("expired"))
-        #expect(!expired.lowercased().contains("token"))
+        let badCode = sentence(.otpExpired)
+        #expect(badCode.contains("didn’t work"))
+        #expect(!badCode.lowercased().contains("token"))
 
         #expect(sentence(.overEmailSendRateLimit).contains("a minute"))
         #expect(sentence(.emailNotConfirmed).contains("confirmed"))
@@ -100,10 +100,27 @@ struct AuthFailureCopyTests {
         #expect(calls >= 2, "expected the Apple and Google paths to name .provider, found \(calls)")
     }
 
+    // MARK: - W1-A-06 · wrong and expired arrive as one error
+
+    /// GoTrue answers `otp_expired` for a code that is simply WRONG as well as
+    /// for one that is spent — the walk typed `999999` seconds after a real
+    /// code was issued and read "That sign-in code has expired. Send yourself
+    /// a new one." The sentence asserted a fact the wire does not carry and
+    /// sent the reader to Resend instead of back to the code in their inbox.
+    @Test("a bad code is not reported as an expired one")
+    func aBadCodeDoesNotAssertExpiry() {
+        let line = sentence(.otpExpired)
+        #expect(!line.lowercased().contains("expire"))
+        // It still offers the resend, because the code may in fact be spent.
+        #expect(line.lowercased().contains("send yourself a new one"))
+        // And it still points at the code itself, which is the likelier fault.
+        #expect(line.contains("Check it"))
+    }
+
     // MARK: - RL3A-02 · the session-less resolve
 
-    @Test("a code GoTrue accepts but will not exchange reads as expired")
-    func aSessionlessResolveReadsAsAnExpiredCode() {
+    @Test("a code GoTrue accepts but will not exchange reads the same way")
+    func aSessionlessResolveReadsAsABadCode() {
         let line = AuthService.authErrorSentence(AuthVerificationFailure.resolvedWithoutSession)
         #expect(line == sentence(.otpExpired))
     }

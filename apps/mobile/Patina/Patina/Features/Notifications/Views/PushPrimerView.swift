@@ -20,9 +20,15 @@ import UserNotifications
 
 struct PushPrimerView: View {
 
-    /// Ruling Q7, verbatim. Do not reword: it is the promise the app makes in
+    /// Ruling Q7's sentence. Do not reword: it is the promise the app makes in
     /// exchange for the permission, and it names exactly three things.
-    static let sentence = "We'll tell you when your designer sends something that needs you — a decision, a proposal, or an invoice. Nothing else."
+    ///
+    /// `W1-A-01` — Q7 was transcribed with a straight apostrophe (U+0027) and
+    /// a test pinned that byte, while `A-06` rules the app's apostrophe as
+    /// U+2019 and every other sentence on screen types it. Two rules, one
+    /// glyph, and the primer was the only place they met. The WORDS are Q7's
+    /// and unchanged; the glyph is the app's. Q7's U+0027 is superseded.
+    static let sentence = "We’ll tell you when your designer sends something that needs you — a decision, a proposal, or an invoice. Nothing else."
 
     static let title = "Before we interrupt you"
 

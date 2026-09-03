@@ -34,10 +34,27 @@ struct LegalLinkTests {
     @Test("both links are rendered, each with its own identifier")
     func bothLinksAreOnTheScreen() throws {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthScreenView.swift")
-        #expect(source.contains("Link(\"Terms of Service\", destination: Self.termsURL)"))
-        #expect(source.contains("Link(\"Privacy Policy\", destination: Self.privacyURL)"))
+        #expect(source.contains("Button(\"Terms of Service\")"))
+        #expect(source.contains("Button(\"Privacy Policy\")"))
+        #expect(source.contains("IdentifiableURL(url: Self.termsURL)"))
+        #expect(source.contains("IdentifiableURL(url: Self.privacyURL)"))
         #expect(source.contains("auth.welcome.termsLink"))
         #expect(source.contains("auth.welcome.privacyLink"))
+    }
+
+    /// `W1-A-04` — both links were `Link(destination:)`, which on iOS opens the
+    /// SYSTEM Safari app: tapping Privacy Policy on the Welcome screen replaced
+    /// Patina with Safari and left a "◀ Patina" breadcrumb, mid-sign-up. The
+    /// reader who checks the terms before creating an account must not have to
+    /// leave the screen they are reading to do it.
+    @Test("neither legal link ejects the reader into the system browser")
+    func theLegalPagesOpenInApp() throws {
+        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthScreenView.swift")
+        #expect(!source.contains("Link(\"Terms of Service\""))
+        #expect(!source.contains("Link(\"Privacy Policy\""))
+        #expect(source.contains("SafariView(url: page.url)"),
+                "the legal pages no longer open in an in-app browser (W1-A-04)")
+        #expect(source.contains(".sheet(item: $legalPage)"))
     }
 
     /// GAP1B-08 (L1-C's row, landing on this lane's file — note A-L1C-1). All

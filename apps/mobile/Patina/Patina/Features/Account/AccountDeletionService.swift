@@ -51,11 +51,17 @@ final class AccountDeletionService {
     /// `designer_clients` — those survive indefinitely against a tombstoned
     /// profile. There is no purge window in the code, so the sentence does not
     /// invent one.
+    ///
+    /// `W1-A-07` — A-101's fix line asked for the duration as well as the
+    /// scope, and the sentence named only the scope. The duration the code
+    /// actually implements is **no purge at all**, so the honest word is
+    /// "indefinitely": it answers "for how long" without inventing the
+    /// 30/90-day window `DeleteAccountCopyTests.noFabricatedWindow` bans.
     static let confirmationTitle = "Delete account"
     static let confirmationBody = "This deletes your Patina account, including your saved "
         + "rooms, pieces, and messages. Any project you completed with a designer stays in "
-        + "our records \u{2014} with your name and contact details removed \u{2014} as required "
-        + "for our legal and accounting obligations. This can’t be undone."
+        + "our records indefinitely \u{2014} with your name and contact details removed \u{2014} "
+        + "as required for our legal and accounting obligations. This can’t be undone."
 
     /// Delete the signed-in account and wipe the device-local store.
     ///

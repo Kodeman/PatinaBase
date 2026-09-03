@@ -125,4 +125,28 @@ struct PrimaryButtonStyleTests {
             "the Apple button does not switch its style with the scheme"
         )
     }
+
+    /// `W1-A-05` / `D-L1A-1`. `ASAuthorizationAppleIDButton` takes its title
+    /// size from its frame height, and the frame was `minHeight: 50,
+    /// maxHeight: 50`. At `accessibility-extra-large` the whole Welcome screen
+    /// scaled around it — "Continue with email" wrapped to two lines inside its
+    /// own button — and "Sign in with Apple" became the smallest text on the
+    /// screen, sitting on top of them.
+    @Test("Sign in with Apple grows with the reader's text size")
+    func appleButtonHeightScalesWithDynamicType() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Authentication/Views/SignInWithAppleButton.swift"
+        )
+        #expect(
+            !source.contains("minHeight: 50, maxHeight: 50"),
+            "the Apple button still holds a fixed 50 pt height (W1-A-05)"
+        )
+        #expect(
+            source.contains("@ScaledMetric(relativeTo: .body)"),
+            "the Apple button's height is not tied to the text size"
+        )
+        // …and it is capped, or at accessibility5 it would be taller than the
+        // two buttons under it put together.
+        #expect(source.contains("maximumHeight"))
+    }
 }

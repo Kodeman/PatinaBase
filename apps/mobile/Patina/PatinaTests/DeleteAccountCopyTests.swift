@@ -55,6 +55,16 @@ struct DeleteAccountCopyTests {
         #expect(body.contains("legal and accounting obligations"))
     }
 
+    /// `W1-A-07` — A-101's fix line asked for the scope AND the duration; the
+    /// shipped sentence closed the scope and left "for how long" unanswered.
+    /// 00538 has no purge window, so the only true duration is "indefinitely",
+    /// which is what the sentence now says — and `noFabricatedWindow` below
+    /// still stops it from being replaced by an invented one.
+    @Test("it says for how long the retained records are kept")
+    func retentionDurationIsNamed() {
+        #expect(AccountDeletionService.confirmationBody.contains("indefinitely"))
+    }
+
     /// 00538 keeps `proposals`, `projects`, `invoices`, `client_decisions` and
     /// `designer_clients` indefinitely against a tombstoned profile. There is
     /// no purge window anywhere in the code, so the copy must not claim one.

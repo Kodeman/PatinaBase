@@ -453,6 +453,15 @@ public final class AuthService {
     ///
     /// The five sentences are sent to L1-E as a deck addendum
     /// (`l1a-notes-out-round3.md`); L1-E merges last and owns the words.
+    /// `W1-A-06` — GoTrue answers `otp_expired` for a code that is WRONG as
+    /// well as for one that is spent, and the app took the expiry branch for
+    /// both: `999999`, typed seconds after a real code was issued, was
+    /// reported as "That sign-in code has expired. Send yourself a new one."
+    /// That asserts something false about a mistyped code and sends the reader
+    /// to Resend instead of back to the code they already have. Nothing on the
+    /// wire distinguishes the two, so the sentence must not claim to.
+    static let badSignInCodeSentence = "That code didn’t work. Check it, or send yourself a new one."
+
     static func authErrorSentence(
         _ error: any Error,
         surface: AuthFailureSurface = .emailForm
@@ -461,7 +470,7 @@ public final class AuthService {
         if error is AuthVerificationFailure {
             // RL3A-02: a code GoTrue accepted but would not exchange is a
             // spent or expired code, which is exactly `.otpExpired`'s sentence.
-            return "That sign-in code has expired. Send yourself a new one."
+            return Self.badSignInCodeSentence
         }
         guard let code = (error as? AuthError)?.errorCode else {
             return "Something went wrong on our side. Try again, or write to hello@patina.cloud."
@@ -470,7 +479,7 @@ public final class AuthService {
         case .invalidCredentials:
             return "That email and password don’t match. Try again, or ask for a sign-in code instead."
         case .otpExpired:
-            return "That sign-in code has expired. Send yourself a new one."
+            return Self.badSignInCodeSentence
         case .overEmailSendRateLimit, .overRequestRateLimit:
             return "That’s a few tries in a row. Give it a minute, then try again."
         case .emailNotConfirmed:

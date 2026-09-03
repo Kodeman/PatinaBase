@@ -49,6 +49,9 @@ struct AuthScreenView: View {
     @State private var catalog = AuthProviderCatalog.shared
     /// Which row the reader pressed, so only that row spins (C1-05).
     @State private var pressed: AuthProvider?
+    /// W1-A-04 — the legal page being read, in an in-app Safari sheet rather
+    /// than in the system browser. Nil whenever neither link is open.
+    @State private var legalPage: IdentifiableURL?
 
     /// P-29: the status slot is always in the layout at this height, so
     /// showing or clearing a message cannot move the buttons underneath it.
@@ -75,6 +78,15 @@ struct AuthScreenView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(PatinaColors.Background.primary)
+        // W1-A-04: the consent line's two links used to be `Link`s, and a
+        // `Link` on iOS launches the SYSTEM Safari app — the reader who checks
+        // the terms before creating an account is thrown out of Patina
+        // mid-sign-up and comes back through a "◀ Patina" breadcrumb. In-app
+        // Safari keeps them on the screen they were reading.
+        .sheet(item: $legalPage) { page in
+            SafariView(url: page.url) { legalPage = nil }
+                .ignoresSafeArea()
+        }
         .task { await catalog.resolveIfNeeded() }
         .onChange(of: isLoading) { _, loading in
             if !loading { pressed = nil }
@@ -311,15 +323,19 @@ struct AuthScreenView: View {
     }
 
     // GAP1B-08: 14.67 pt tall links were the first controls a tester met.
+    // W1-A-04: a Button opening `legalPage`, not a `Link` — a `Link` hands the
+    // URL to the system browser and ejects the reader from the sign-up.
     private var termsLink: some View {
-        Link("Terms of Service", destination: Self.termsURL)
+        Button("Terms of Service") { legalPage = IdentifiableURL(url: Self.termsURL) }
+            .buttonStyle(.plain)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
             .accessibilityIdentifier("auth.welcome.termsLink")
     }
 
     private var privacyLink: some View {
-        Link("Privacy Policy", destination: Self.privacyURL)
+        Button("Privacy Policy") { legalPage = IdentifiableURL(url: Self.privacyURL) }
+            .buttonStyle(.plain)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
             .accessibilityIdentifier("auth.welcome.privacyLink")

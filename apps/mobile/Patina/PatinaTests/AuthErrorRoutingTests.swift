@@ -379,7 +379,7 @@ struct AuthErrorRoutingTests {
             }
             #expect(asks.count == 1, "the fallback was asked \(asks.count) times for one code")
             #expect(
-                AuthService.shared.sheetErrorMessage == "That sign-in code has expired. Send yourself a new one."
+                AuthService.shared.sheetErrorMessage == AuthService.badSignInCodeSentence
             )
         }
     }
