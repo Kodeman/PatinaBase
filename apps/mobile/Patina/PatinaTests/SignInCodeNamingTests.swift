@@ -91,7 +91,8 @@ struct SignInCodeNamingTests {
     @Test("the mechanism has one name on every surface that names it")
     func oneNameEverywhere() throws {
         let view = try sheetSource()
-        #expect(view.contains("We'll email you a sign-in code"))
+        // RL3A-11 — U+2019 now, like every other sentence on this sheet.
+        #expect(view.contains("We’ll email you a sign-in code"))
         #expect(view.contains("Enter your sign-in code"))
         // L1-E's copy deck keeps the submit button at "Email me a code" — the
         // short form of the same name, after the subtitle has said it in full.

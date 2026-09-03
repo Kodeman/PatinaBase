@@ -140,13 +140,17 @@ struct TestAccountLoginFallbackTests {
         let end = try #require(source.range(of: "/// Handle magic link URL callback"))
         let body = String(source[start.lowerBound..<end.lowerBound])
 
-        // The plain GoTrue verify runs first, unconditionally.
-        let plain = try #require(body.range(of: "supabase.auth.verifyOTP("))
+        // The plain GoTrue verify runs first, unconditionally. RL3A-02 moved
+        // the one network line behind `verifyOtpTransport` so the session-less
+        // branch can be driven; `liveVerifyOtp` is still `supabase.auth.verifyOTP`.
+        let plain = try #require(body.range(of: "try await verifyOtpTransport(email, token)"))
         let firstAttempt = try #require(body.range(of: "testAccountLogin.attempt"))
         #expect(plain.lowerBound < firstAttempt.lowerBound)
+        #expect(source.contains("static let liveVerifyOtp"))
+        #expect(source.contains("client.auth.verifyOTP("))
 
         // Both miss shapes are covered: a throw, and a resolve with no session.
-        #expect(body.contains("response.session == nil"))
+        #expect(body.contains("if !hasSession {"))
         #expect(body.components(separatedBy: "testAccountLogin.attempt").count - 1 == 2)
 
         // It never intercepts a real sign-in: no other method calls it.
