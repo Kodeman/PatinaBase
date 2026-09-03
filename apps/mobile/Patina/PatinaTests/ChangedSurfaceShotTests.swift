@@ -76,71 +76,75 @@ struct ChangedSurfaceShotTests {
     @Test("every surface this round changed renders, in both appearances")
     func theChangedSurfacesRender() {
         for style in PatinaContrast.appearances {
-            var tones: [String: Int] = [:]
-
-            // C-20 — the Record's two rows, one tappable and one not.
-            tones["record-rows"] = Self.write(
-                Self.card {
-                    VStack(alignment: .leading, spacing: 0) {
-                        HouseRecordRowView(row: Self.row(route: .threadList))
-                        HouseRecordRowView(row: Self.row(route: nil))
-                    }
-                },
-                "10-record-rows", size: CGSize(width: 360, height: 130), style
-            )
-
-            // A-73 — the status badge's four states, ink on its own wash.
-            tones["status-badges"] = Self.write(
-                Self.card {
-                    HStack(spacing: 8) {
-                        PatinaStatusBadge(state: .error, text: "Declined")
-                        PatinaStatusBadge(state: .warning, text: "Pending")
-                        PatinaStatusBadge(state: .success, text: "Approved")
-                        PatinaStatusBadge(state: .info, text: "Draft")
-                    }
-                },
-                "11-status-badges", size: CGSize(width: 400, height: 60), style
-            )
-
-            // C-01 — the Companion disc, fill plus its new edge, on the page.
-            tones["companion-orb"] = Self.write(
-                CompanionMarkView(attention: .calm, wakePhase: .awake, surface: .disc)
-                    .frame(width: 96, height: 96)
-                    .background(PatinaColors.Background.primary),
-                "12-companion-orb", size: CGSize(width: 96, height: 96), style
-            )
-
-            // C-27 — piece detail's floating chrome, on the scrim.
-            tones["hero-chrome"] = Self.write(
-                HStack(spacing: 8) {
-                    ProductDetailChromeProbe(icon: "chevron.left")
-                    ProductDetailChromeProbe(icon: "questionmark")
-                    ProductDetailChromeProbe(icon: "square.and.arrow.up")
-                    ProductDetailChromeProbe(icon: "heart")
-                }
-                .padding(12)
-                .background(PatinaColors.Background.tertiary),
-                "13-hero-chrome", size: CGSize(width: 220, height: 60), style
-            )
-
-            // A3-01 / RL1D-R3-11 — the two empty-state sentences, side by side.
-            tones["empty-states"] = Self.write(
-                VStack(spacing: 24) {
-                    PatinaEmptyState(PatinaEmptyStateContent.stillChoosingPieces)
-                    PatinaEmptyState(PatinaEmptyStateContent.noPiecesInThisCategory)
-                }
-                .padding(20)
-                .background(PatinaColors.Background.primary),
-                "14-empty-states", size: CGSize(width: 360, height: 420), style
-            )
-
-            for (name, count) in tones {
+            for (name, count) in Self.shoot(style) {
                 #expect(
                     count > 4,
                     "\(name) rasterised to \(count) tone(s) in \(PatinaContrast.name(style)) — it drew nothing, and the shot is evidence of nothing"
                 )
             }
         }
+    }
+
+    private static func shoot(_ style: UIUserInterfaceStyle) -> [String: Int] {
+        var tones: [String: Int] = [:]
+
+        // C-20 — the Record's two rows, one tappable and one not.
+        tones["record-rows"] = Self.write(
+            Self.card {
+                VStack(alignment: .leading, spacing: 0) {
+                    HouseRecordRowView(row: Self.row(route: .threadList))
+                    HouseRecordRowView(row: Self.row(route: nil))
+                }
+            },
+            "10-record-rows", size: CGSize(width: 360, height: 130), style
+        )
+
+        // A-73 — the status badge's four states, ink on its own wash.
+        tones["status-badges"] = Self.write(
+            Self.card {
+                HStack(spacing: 8) {
+                    PatinaStatusBadge(state: .error, text: "Declined")
+                    PatinaStatusBadge(state: .warning, text: "Pending")
+                    PatinaStatusBadge(state: .success, text: "Approved")
+                    PatinaStatusBadge(state: .info, text: "Draft")
+                }
+            },
+            "11-status-badges", size: CGSize(width: 400, height: 60), style
+        )
+
+        // C-01 — the Companion disc, fill plus its new edge, on the page.
+        tones["companion-orb"] = Self.write(
+            CompanionMarkView(attention: .calm, wakePhase: .awake, surface: .disc)
+                .frame(width: 96, height: 96)
+                .background(PatinaColors.Background.primary),
+            "12-companion-orb", size: CGSize(width: 96, height: 96), style
+        )
+
+        // C-27 — piece detail's floating chrome, on the scrim.
+        tones["hero-chrome"] = Self.write(
+            HStack(spacing: 8) {
+                ProductDetailChromeProbe(icon: "chevron.left")
+                ProductDetailChromeProbe(icon: "questionmark")
+                ProductDetailChromeProbe(icon: "square.and.arrow.up")
+                ProductDetailChromeProbe(icon: "heart")
+            }
+            .padding(12)
+            .background(PatinaColors.Background.tertiary),
+            "13-hero-chrome", size: CGSize(width: 220, height: 60), style
+        )
+
+        // A3-01 / RL1D-R3-11 — the two empty-state sentences, side by side.
+        tones["empty-states"] = Self.write(
+            VStack(spacing: 24) {
+                PatinaEmptyState(PatinaEmptyStateContent.stillChoosingPieces)
+                PatinaEmptyState(PatinaEmptyStateContent.noPiecesInThisCategory)
+            }
+            .padding(20)
+            .background(PatinaColors.Background.primary),
+            "14-empty-states", size: CGSize(width: 360, height: 420), style
+        )
+
+        return tones
     }
 
     private static func row(route: AppRoute?) -> HouseRecordRow {
