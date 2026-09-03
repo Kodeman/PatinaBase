@@ -65,6 +65,15 @@ final class RecordSnapshotStore: Sendable {
     /// draws its no-data card for that one cycle. Every later save — every
     /// Today open, every foreground — carries it.
     private let ownerId: @Sendable () -> String?
+    /// Retire that stamp with the session.
+    ///
+    /// `RecordOwnerStamp` is cleared only by `LocalStoreReset`, which runs when
+    /// a DIFFERENT account signs IN. So between a sign-out and the next
+    /// account's first stamp, `ownerId()` still answered with the PREVIOUS
+    /// account's id — and any save in that window wrote it onto the new
+    /// session's rows. Clearing it here means an unstamped save carries no
+    /// owner, which the widget already draws as its no-data card.
+    private let clearOwner: @Sendable () -> Void
 
     init(
         appGroupIdentifier: String = "group.cloud.patina.app",
@@ -74,12 +83,14 @@ final class RecordSnapshotStore: Sendable {
             WidgetCenter.shared.reloadTimelines(ofKind: kind)
         },
         flagIsOn: @escaping @Sendable () -> Bool = { FeatureFlagMirror.isOn(.houseWidget) },
-        ownerId: @escaping @Sendable () -> String? = { RecordOwnerStamp.shared.ownerId }
+        ownerId: @escaping @Sendable () -> String? = { RecordOwnerStamp.shared.ownerId },
+        clearOwner: @escaping @Sendable () -> Void = { RecordOwnerStamp.shared.clear() }
     ) {
         self.fileManager = fileManager
         self.reloadWidgets = reloadWidgets
         self.flagIsOn = flagIsOn
         self.ownerId = ownerId
+        self.clearOwner = clearOwner
 
         let groupDirectory = fileManager
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
@@ -151,6 +162,7 @@ final class RecordSnapshotStore: Sendable {
     /// when a DIFFERENT account signs IN, and `AuthService.signOut()` calls
     /// neither.
     func clearForSignedOut(now: Date = Date()) {
+        clearOwner()
         locked {
             try? fileManager.removeItem(at: fileURL)
             notedHouseLine = nil

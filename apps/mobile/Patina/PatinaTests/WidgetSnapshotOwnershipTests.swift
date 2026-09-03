@@ -40,6 +40,9 @@ struct WidgetSnapshotOwnershipTests {
         }
     }
 
+    /// `clearOwner` defaults to a no-op here on purpose: the production value
+    /// clears the real `RecordOwnerStamp`, which is process-global, and this
+    /// suite is about the two FILES. The stamp's own half has its own test.
     private func store(
         reloads: ReloadCounter,
         ownerId: String? = WidgetSnapshotOwnershipTests.owner
@@ -51,7 +54,8 @@ struct WidgetSnapshotOwnershipTests {
             fallbackDirectory: directory,
             reloadWidgets: { reloads.record($0) },
             flagIsOn: { true },
-            ownerId: { ownerId }
+            ownerId: { ownerId },
+            clearOwner: {}
         )
     }
 
@@ -163,5 +167,48 @@ struct WidgetSnapshotOwnershipTests {
         let source = try SourcePin.read("Patina/App/Coordinators/AppCoordinator.swift")
         let code = SourceScan.code(in: source)
         #expect(code.contains("RecordSnapshotStore.shared.clearForSignedOut()"))
+    }
+
+    // MARK: - The stamp itself (round 2)
+
+    /// `RecordOwnerStamp` is cleared only by `LocalStoreReset`, which runs when
+    /// a DIFFERENT account signs IN. So between a sign-out and the next
+    /// account's first stamp, the stamp still answered with the PREVIOUS
+    /// account's id — and a save in that window wrote it onto the new session's
+    /// rows, which is the thing `ownerId` exists to make impossible.
+    @Test("signing out retires the owner stamp, not just the files")
+    func theOwnerStampIsClearedOnSignOut() {
+        let reloads = ReloadCounter()
+        let cleared = ReloadCounter()
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("patina.tests.owner.\(UUID().uuidString)")
+        let store = RecordSnapshotStore(
+            appGroupIdentifier: "group.does.not.exist.\(UUID().uuidString)",
+            fallbackDirectory: directory,
+            reloadWidgets: { reloads.record($0) },
+            flagIsOn: { true },
+            ownerId: { Self.owner },
+            clearOwner: { cleared.record("stamp") }
+        )
+
+        store.save(record(), houseLine: "Aspen Loft", now: referenceDate)
+        #expect(cleared.count == 0)
+
+        store.clearForSignedOut(now: referenceDate)
+
+        #expect(cleared.count == 1)
+    }
+
+    /// And the production default is the stamp's own `clear()` — not a
+    /// look-alike that clears something else.
+    @Test("the default clear is the stamp's own")
+    func theDefaultClearIsTheStamps() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Core/Persistence/RecordSnapshotStore.swift")
+        )
+        #expect(code.contains("clearOwner: @escaping @Sendable () -> Void = { RecordOwnerStamp.shared.clear() }"))
+        let signOut = try #require(code.range(of: "func clearForSignedOut("))
+        let call = try #require(code.range(of: "clearOwner()"))
+        #expect(call.lowerBound > signOut.lowerBound)
     }
 }

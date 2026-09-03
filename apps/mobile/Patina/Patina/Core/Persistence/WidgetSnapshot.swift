@@ -26,9 +26,17 @@
 //     account signs IN. Sign-out itself calls neither, so a signed-out phone
 //     kept a named designer and "Leah Hartwell picked up your request." on its
 //     Home Screen. Two things close it: the sign-out seam writes a placeholder
-//     (`clearForSignedOut()`), and the payload says whose it is so a file that
-//     survives some path nobody has thought of can still be judged. A widget
-//     process cannot ask who is signed in — but the app can, and does.
+//     (`clearForSignedOut()`), and that placeholder is recognisable BECAUSE it
+//     carries no owner.
+//
+//     What `ownerId` buys is exactly that, and no more: **nil is the
+//     placeholder**. Nothing compares a non-nil owner against the live session,
+//     and nothing here can — the widget process cannot ask who is signed in,
+//     and by the time the app writes the file it has already decided. The stamp
+//     is retired on the same seam that writes the placeholder
+//     (`RecordSnapshotStore.clearForSignedOut()` clears `RecordOwnerStamp`), so
+//     a save between a sign-out and the next account's first stamp carries no
+//     owner rather than the previous account's.
 //
 //  The contract with W6's X1 lane is the JSON on disk, published in
 //  `waves/w6/x2-tasks.md` §0: the keys below are the property names verbatim,
