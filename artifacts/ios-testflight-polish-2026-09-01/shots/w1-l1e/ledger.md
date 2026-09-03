@@ -83,3 +83,44 @@ instead by `PatinaTests/ARPlacementFailureCopyTests.swift` and `PatinaTests/Erro
 reading the call sites: `ARPlacementView.swift`'s toast and `DesignRequestFlowView+Steps.swift`'s error
 line both render exactly the string the view model/service now produces, with no other transform in
 between. `PLAUSIBLE`, not `CONFIRMED` on a device, for these two rows specifically.
+
+---
+
+## Round 4 (fix round 3, `RL1E3-01` … `RL1E3-10`) — 2026-09-03
+
+Same clone, same rules. The gate-built Debug product (`.build/DerivedData/Build/Products/
+Debug-iphonesimulator/Patina.app`, from `ios-gate.sh build`) installed with `xcrun simctl install`,
+launched `-DeploymentTarget local`, no `-PatinaFlags`. HID preflight: `describe_screen` returned the
+14-element Welcome tree before the first tap.
+
+| # | file | screen | what it shows |
+|---|---|---|---|
+| 14 | `14-r4-welcome-cold-launch.png` | Welcome (cold launch after reinstall) | The launch this round's captures start from. Google is still on the sheet — D3 is L1-A's row and this branch is `main`-based, so its absence is not expected here. |
+| 15 | `15-r4-today-signed-in.png` | Today, four-tab root, signed in `client@patina.dev` | Greeting reads **"Good evening"** at 01:03 local — the `C5-06` band this lane shipped, and `RL1E-21`'s recorded consequence observed a second time. Four-tab bar present with no `-PatinaFlags` (D1a). **No designer seat and no request card.** |
+| 16 | `16-r4-studio-no-design-request.png` | Studio tab | **0 ROOMS · 0 SAVED**, "Nothing needs your attention right now.", "Awaiting you 0" — the fixture carries no design request for this account. This is the shot that makes the "not captured" note below a fact rather than an excuse. |
+
+**The one screen this round's source changes would render, and why it is not captured.**
+`DesignRequestStatusService`'s eight swept sentences (`badgeTitle` / `subtitle` / `cardTitle`) draw
+only when the signed-in client has a `design_requests` row — through `YourDesignerSeat.swift:83,108`
+and `DailyRoomView.swift:469,551` on Today, on `DesignRequestStatusView.swift:139-148`, on
+`MatchBookedHero.swift:44-55,120-124`, and in `CompanionOverlay.swift:231`. Shot 16 shows the seeded
+`client@patina.dev` has none, and creating one means writing rows to the local stack through a
+design-request submit round trip, which this lane's brief does not own. So the row is **`PLAUSIBLE`
+on the simulator, `CONFIRMED` at the source**: closed by `PatinaTests/DesignRequestStageTests` and
+`PatinaTests/DesignerSeatTests`, which construct each `DesignRequestStage` directly and assert the
+exact rendered sentence — six of those assertions moved with the strings in commit `1ff936a6d` — plus
+reading the five call sites, each of which renders the service's return value with no transform in
+between.
+
+**The other two source changes render nothing today — by inspection, not by assumption.**
+`DesignRequestCoordinator`'s three strings: `ScanUploadProgressView.swift:100` maps `.failed` to its
+own fixed `"Upload failed — will retry"` and never prints the payload, and `draft.lastError` has no
+reader outside the coordinator (`DesignRequestFlowView+Steps.swift:169`'s `coordinator?.lastError` is
+the `DesignServicesError?`, a different property). `ARPlacementManager.errorMessage` is set at `:133`
+and read by no view (`grep -rn "errorMessage" apps/mobile/Patina/Patina/`). Both are swept because the
+lint walks this lane's globs now, not because a tester sees them — and the deck's revision-4 L1-E
+table says so in those words rather than claiming a user-visible fix.
+
+**Not re-observed, and cited instead.** `RL1E3-09`'s accessibility-size greeting wrap on the four-tab
+root is the reviewer's capture (`shots/w1-review-l1e/r3-09-today-dark-axxxl.png`); the correction to
+L1-C (`E4-L1C-3`) cites it rather than restaging the Dynamic Type change here.
