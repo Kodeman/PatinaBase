@@ -76,8 +76,13 @@ struct RoomLifecycleTests {
     /// Observed on the clone as "Style Explorer" over a store holding
     /// `["Warm Modern","new_space"]`; `loadData` now makes an observable write
     /// so the pass happens.
+    ///
+    /// `async` with yields on purpose: a `@MainActor` test with no suspension
+    /// point holds the main actor for its whole body, and the tier's other
+    /// main-actor pollers — `OrderHandoffTests.waitFor` runs on a 3 s budget —
+    /// starve behind it. One container, three phases, a yield between each.
     @Test
-    func theDerivedReadsAnswerOnceTheContextArrives() throws {
+    func theDerivedReadsAnswerOnceTheContextArrives() async throws {
         let context = try makeContext()
         let store = RoomStore(context: context)
         _ = store.createRoom(name: "Living", roomType: "living", manualEntry: true)
@@ -91,6 +96,7 @@ struct RoomLifecycleTests {
         )
         context.insert(TableItemModel(name: "Oak Bench", productId: "p1", savedAt: Date()))
         try context.save()
+        await Task.yield()
 
         let viewModel = ProfileViewModel()
         viewModel.accountRowsAreVisible = { true }
@@ -107,27 +113,15 @@ struct RoomLifecycleTests {
         #expect(viewModel.styleProfile?.keywords.first == "Warm Modern")
         #expect(viewModel.savedItemCount == 1)
         #expect(viewModel.rooms.count == 1)
-    }
+        await Task.yield()
 
-    /// …and the gate still hides an account's rows from a guest.
-    @Test
-    func aGuestReadsNeitherTheCountNorThePortrait() throws {
-        let context = try makeContext()
-        StylePreferenceStore(context: context).upsert(
-            StylePreferenceSnapshot(
-                keywords: ["Warm Modern"], warmth: 0.75, formality: 0.5,
-                materials: [], eras: [], confidence: 0.45, budgetRange: "500-2000"
-            )
-        )
-        context.insert(TableItemModel(name: "Oak Bench", productId: "p1", savedAt: Date()))
-        try context.save()
-
-        let viewModel = ProfileViewModel()
-        viewModel.accountRowsAreVisible = { false }
-        viewModel.loadData(context: context)
-
-        #expect(viewModel.styleProfile == nil)
-        #expect(viewModel.savedItemCount == 0)
+        // …and the gate still hides an account's rows from a guest, on the
+        // same store, so this costs no second container.
+        let guest = ProfileViewModel()
+        guest.accountRowsAreVisible = { false }
+        guest.loadData(context: context)
+        #expect(guest.styleProfile == nil)
+        #expect(guest.savedItemCount == 0)
     }
 
     /// One fetch per revision, not one per read — `ProfileView` reads `rooms`
