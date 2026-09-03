@@ -165,15 +165,79 @@ final class BadgeCountService {
     /// refresh could reintroduce it.
     private var refreshToken = 0
 
+    /// R-02: what the last successful refresh knew, kept across launches.
+    ///
+    /// Without it a cold launch on a dead network does not degrade, it
+    /// DELETES: the counts start at zero, the pill loses its number and the
+    /// bell tells VoiceOver "No unread notifications" — all of it asserted,
+    /// none of it fetched.
+    private struct PersistedCounts: Codable {
+        let pendingDecisionCount: Int
+        let unreadMessageCount: Int
+        let proposalsAwaitingSignatureCount: Int
+        let payableInvoiceCount: Int
+        let projectCount: Int
+        let storedAt: Date
+    }
+
+    private static let persistedCountsKey = "patina.badge_counts.last_successful.v1"
+
+    private let defaults: UserDefaults
+
     /// Private on purpose: this service exists because two surfaces read two
     /// different objects and printed two different numbers. A second instance
     /// reproduces that by accident.
-    private init() {}
+    private init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        restorePersistedCounts()
+    }
 
     #if DEBUG
     /// A detached instance for tests, which need to `apply(…)` fixtures
     /// without touching the singleton every other surface reads.
-    static func makeForTests() -> BadgeCountService { BadgeCountService() }
+    static func makeForTests(defaults: UserDefaults = .standard) -> BadgeCountService {
+        BadgeCountService(defaults: defaults)
+    }
+    #endif
+
+    /// Draw the last numbers that answered, with `hasLoaded` and
+    /// `projectsLoaded` left **false**: they are a floor to draw, not a claim
+    /// that a fetch answered. `unreadNotificationCount` is deliberately not
+    /// among them — the bell's count is the feed's own rows, and a restored
+    /// number would badge updates this process has never seen.
+    private func restorePersistedCounts() {
+        guard let data = defaults.data(forKey: Self.persistedCountsKey) else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let stored = try? decoder.decode(PersistedCounts.self, from: data) else { return }
+        pendingDecisionCount = stored.pendingDecisionCount
+        unreadMessageCount = stored.unreadMessageCount
+        proposalsAwaitingSignatureCount = stored.proposalsAwaitingSignatureCount
+        payableInvoiceCount = stored.payableInvoiceCount
+        projectCount = stored.projectCount
+    }
+
+    private func persistCounts(now: Date = Date()) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let stored = PersistedCounts(
+            pendingDecisionCount: pendingDecisionCount,
+            unreadMessageCount: unreadMessageCount,
+            proposalsAwaitingSignatureCount: proposalsAwaitingSignatureCount,
+            payableInvoiceCount: payableInvoiceCount,
+            projectCount: projectCount,
+            storedAt: now
+        )
+        guard let data = try? encoder.encode(stored) else { return }
+        defaults.set(data, forKey: Self.persistedCountsKey)
+    }
+
+    #if DEBUG
+    /// The R-02 write, reachable without the six network round trips
+    /// `performRefresh(token:)` takes to get to it. Production calls it from
+    /// that method's `hasLoaded = true` branch and nowhere else — which
+    /// `BadgeCountPersistenceTests` pins in source.
+    func persistCountsForTesting() { persistCounts() }
     #endif
 
     /// Fetch both counts. Guests resolve to zero without a network round
@@ -238,6 +302,10 @@ final class BadgeCountService {
             || invoices != nil || fetchedProjects != nil {
             hasLoaded = true
             lastRefreshFailed = false
+            // R-02: only a refresh that answered leaves a floor behind. A run
+            // where every fetch failed must not overwrite the last numbers
+            // that were true with the zeros it did not learn.
+            persistCounts()
         } else {
             lastRefreshFailed = true
         }
@@ -327,6 +395,9 @@ final class BadgeCountService {
         hasLoaded = false
         projectsLoaded = false
         lastRefreshFailed = false
+        // R-02: the floor is the PREVIOUS account's. Without this, account B's
+        // first launch paints account A's numbers.
+        defaults.removeObject(forKey: Self.persistedCountsKey)
     }
 
     /// Debounced refresh for bursty triggers (push receipt can deliver a
