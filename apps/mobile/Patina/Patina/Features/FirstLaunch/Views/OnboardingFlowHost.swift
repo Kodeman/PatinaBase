@@ -81,7 +81,11 @@ struct OnboardingFlowHost: View {
             OnboardingFlowView(
                 isWalkFirst: isWalkFirst ?? false,
                 onComplete: { advanceToQuiz() },
-                onSkip: { advanceToQuiz() }
+                // A-05: Skip skips. The quiz is reachable later from the
+                // Studio; being made to answer five questions before seeing
+                // anything is what the label promised to avoid.
+                onSkip: { skipToBrowsing() },
+                onSignIn: { returnToSignIn() }
             )
 
         case .walkPermission:
@@ -100,11 +104,18 @@ struct OnboardingFlowHost: View {
             })
 
         case .styleQuiz:
-            StyleQuizView(onComplete: { result in
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) {
-                    step = .styleResult(result)
-                }
-            })
+            StyleQuizView(
+                onComplete: { result in
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) {
+                        step = .styleResult(result)
+                    }
+                },
+                // B-21 / P-18: an exit and a sign-in door on every quiz step.
+                // The quiz used to be mandatory with no back, skip or close —
+                // including for an account that had already done it.
+                onDefer: { skipToBrowsing() },
+                onSignIn: { returnToSignIn() }
+            )
 
         case .styleResult(let result):
             StyleResultView(result: result, onViewRecommendations: {
@@ -112,6 +123,16 @@ struct OnboardingFlowHost: View {
                 coordinator.navigate(to: .emergence(pieceId: nil))
             })
         }
+    }
+
+    /// A-05 / B-21 — finish onboarding without the quiz and land in the app.
+    private func skipToBrowsing() {
+        completeOnboarding()
+    }
+
+    /// P-18 — leave the guest flow for the Welcome screen.
+    private func returnToSignIn() {
+        GuestSessionStore.returnToSignIn(coordinator)
     }
 
     private func advanceToQuiz() {
@@ -128,6 +149,9 @@ struct OnboardingFlowHost: View {
     private func enterWalkFirstScan() {
         AppSettings.shared.hasCompletedOnboarding = true
         AppSettings.shared.hasSeenThreshold = true
+        // B-21: and against the account, so signing in on a second device
+        // (or after a reinstall) does not start the intro over.
+        OnboardingCompletion.shared.markCompleted(userId: AuthService.shared.currentUserId)
         HapticManager.shared.thresholdCrossed()
         OnboardingFunnel.shared.markWalkFirstScanEntered()
         coordinator.navigate(to: .scanFlow(reason: .fresh))
@@ -139,6 +163,9 @@ struct OnboardingFlowHost: View {
     private func enterManualRoom() {
         AppSettings.shared.hasCompletedOnboarding = true
         AppSettings.shared.hasSeenThreshold = true
+        // B-21: and against the account, so signing in on a second device
+        // (or after a reinstall) does not start the intro over.
+        OnboardingCompletion.shared.markCompleted(userId: AuthService.shared.currentUserId)
         HapticManager.shared.thresholdCrossed()
         coordinator.navigate(to: .manualRoomEntry)
     }
@@ -148,6 +175,9 @@ struct OnboardingFlowHost: View {
     private func completeOnboarding() {
         AppSettings.shared.hasCompletedOnboarding = true
         AppSettings.shared.hasSeenThreshold = true
+        // B-21: and against the account, so signing in on a second device
+        // (or after a reinstall) does not start the intro over.
+        OnboardingCompletion.shared.markCompleted(userId: AuthService.shared.currentUserId)
         HapticManager.shared.thresholdCrossed()
     }
 

@@ -22,14 +22,21 @@ struct OnboardingFlowView: View {
     /// style quiz.
     var isWalkFirst: Bool = false
     var onComplete: () -> Void
+    /// A-05: Skip skips. It used to be byte-identical to `onComplete` — both
+    /// landed in the same mandatory five-question quiz — while the visible
+    /// label promised otherwise.
     var onSkip: () -> Void
+    /// P-18: the guest flow's door back to the Welcome screen. Present on
+    /// every page, because one tap on "Look around first" was otherwise
+    /// permanent.
+    var onSignIn: (() -> Void)?
 
     private var pages: [OnboardingPage] {
         [
             OnboardingPage(
                 title: "Every room tells a story",
-                body: "Let's discover yours. Walk your space, uncover your style, and find pieces that grow more beautiful with time.",
-                ctaText: "Start Your Journey",
+                body: "Let’s discover yours. Walk your space, uncover your style, and find pieces that grow more beautiful with time.",
+                ctaText: "Let’s begin",
                 gradient: PatinaGradients.warm
             ),
             OnboardingPage(
@@ -54,8 +61,8 @@ struct OnboardingFlowView: View {
     /// is named only as a later, opt-in step, which is what actually happens.
     private static let quizPage = OnboardingPage(
         title: "Find your style first",
-        body: "Five quick questions, then we'll show you pieces that fit. Your camera comes later — only when you choose to scan a room.",
-        ctaText: "Let's begin",
+        body: "Five quick questions, then we’ll show you pieces that fit. Your camera comes later — only when you choose to scan a room.",
+        ctaText: "Let’s begin",
         gradient: PatinaGradients.linen
     )
 
@@ -73,25 +80,24 @@ struct OnboardingFlowView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: currentPage)
 
-            // Skip button (not on last page)
-            if currentPage < pages.count - 1 {
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button("Skip") {
-                            onSkip()
-                        }
-                        .font(PatinaTypography.uiSmall)
-                        .foregroundStyle(PatinaColors.Text.muted)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                        .padding(.top, 58)
-                        .padding(.trailing, 24)
-                        .accessibilityHint("Skips the introduction and continues to style questions.")
-                        .accessibilityIdentifier("Onboarding.SkipButton")
-                    }
+            // A-05: on every page, including the last, and it now reaches
+            // browsable content instead of the quiz it claimed to skip.
+            VStack {
+                HStack {
                     Spacer()
+                    Button("Skip") {
+                        onSkip()
+                    }
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+                    .padding(.top, 58)
+                    .padding(.trailing, 24)
+                    .accessibilityHint("Skips the introduction and the style questions.")
+                    .accessibilityIdentifier("Onboarding.SkipButton")
                 }
+                Spacer()
             }
         }
     }
@@ -161,6 +167,7 @@ struct OnboardingFlowView: View {
             pageDots(index: index)
             Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 28 : 40)
             primaryButton(page, index: index)
+            signInDoor
         }
         .padding(.horizontal, 28)
         .padding(.top, dynamicTypeSize.isAccessibilitySize ? 24 : 32)
@@ -170,6 +177,27 @@ struct OnboardingFlowView: View {
                 ? 0
                 : max(300, viewportHeight * 0.50)
         )
+    }
+
+    /// P-18's door, in the scrolling column rather than pinned over it.
+    ///
+    /// RL3A-01: as a bottom-pinned overlay it did not participate in the
+    /// page's layout, so at accessibility-XXXL its frame was drawn straight
+    /// through the body paragraph and the CTA went off-screen entirely.
+    /// `pageContent` is rendered by every page, so it is still on all three.
+    @ViewBuilder
+    private var signInDoor: some View {
+        if let onSignIn {
+            Button("I already have an account — Sign in", action: onSignIn)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.interactive)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .padding(.top, 16)
+                .accessibilityIdentifier("Onboarding.SignInButton")
+        }
     }
 
     private func pageDots(index: Int) -> some View {

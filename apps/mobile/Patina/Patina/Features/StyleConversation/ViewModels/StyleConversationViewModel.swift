@@ -55,8 +55,8 @@ public final class StyleConversationViewModel {
 
     public var whisperTop: String {
         switch currentQuestion {
-        case 1: return "Your room is captured · Let's discover your style"
-        case 2: return "Keep going — you're doing great"
+        case 1: return "Your room is captured · Let’s discover your style"
+        case 2: return "Keep going — you’re doing great"
         case 3: return "Almost there"
         case 4: return "One more thought"
         case 5: return "Last one"

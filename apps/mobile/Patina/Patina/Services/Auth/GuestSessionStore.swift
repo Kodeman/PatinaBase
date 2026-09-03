@@ -43,4 +43,18 @@ struct GuestSessionStore: Sendable {
     func clear() {
         defaults.removeObject(forKey: Self.key)
     }
+
+    /// P-18 — the guest flow has a door back to the Welcome screen.
+    ///
+    /// One tap on "Look around first" was permanent: `guestModeOptIn` is
+    /// persisted, `derivePhase` returns `.auth` only when it is false, and no
+    /// onboarding or quiz screen offered a way to unset it — so the sign-in
+    /// chooser was unreachable on every later launch. Clearing the store and
+    /// the coordinator's copy puts the reader back on Welcome; nothing else
+    /// about the install is touched.
+    @MainActor
+    static func returnToSignIn(_ coordinator: AppCoordinator) {
+        shared.clear()
+        coordinator.guestModeOptIn = false
+    }
 }

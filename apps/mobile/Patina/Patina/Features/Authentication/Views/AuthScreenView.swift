@@ -7,6 +7,16 @@
 //  prominent "Look around first" fully defers the account (soft wall). Password
 //  is a de-emphasized fallback for returning users.
 //
+//  A3-06 / D3 — the provider stack is rendered from `AuthProviderCatalog`,
+//  which asks GoTrue what is actually enabled. Google has never been
+//  configured on Strata, so it does not render.
+//
+//  P-29 — the status slot below the subtitle has a FIXED height and is always
+//  present. A failed sign-in used to appear here and push the whole stack down
+//  33 pt, so a second tap at the remembered position landed on "Look around
+//  first" and dropped the tester into the guest flow. Nothing moves now, and
+//  only errors raised BY THIS SCREEN reach it (`AuthService.rootErrorMessage`).
+//
 
 import SwiftUI
 import AuthenticationServices
@@ -26,10 +36,52 @@ struct AuthScreenView: View {
     /// the screen is used as a hard gate (e.g. the design-request upload step),
     /// where browsing without an account isn't a meaningful action.
     var showGuest: Bool = true
-    /// Latest auth error (Apple/Google/service). Rendered as a small banner.
+    /// Latest auth error raised BY THIS SCREEN (C1-05's Apple/Google paths).
+    /// Sheet failures never arrive here — see `AuthService.rootErrorMessage`.
     var errorMessage: String? = nil
+    /// Whether a sign-in this screen started is in flight (C1-05).
+    var isLoading: Bool = false
+    /// C2-21 / GAP7B-09 — a link tapped while signed out is held, and this
+    /// says so. Second in the slot's precedence: an error wins (L1F→A-2).
+    var pendingLinkNotice: String?
+
+    /// The catalog resolves once per process; every auth surface may ask.
+    @State private var catalog = AuthProviderCatalog.shared
+    /// Which row the reader pressed, so only that row spins (C1-05).
+    @State private var pressed: AuthProvider?
+
+    /// P-29: the status slot is always in the layout at this height, so
+    /// showing or clearing a message cannot move the buttons underneath it.
+    /// Two lines of `bodySmall` plus the 16 pt gap the banner used to add.
+    static let statusSlotHeight: CGFloat = 52
 
     var body: some View {
+        // P-34 (L1-C's row, this lane's file): above `.accessibility1` the
+        // fixed stack cannot fit, so it scrolls instead of truncating.
+        //
+        // The content is given the viewport's own height as a MINIMUM. Round
+        // one shipped a bare `ScrollView`, and inside one a `Spacer` takes its
+        // ideal length rather than expanding: the legal footer rose from y≈771
+        // to y≈607 and the screen ended in ~200 pt of dead space at the default
+        // text size. With the floor in place the Spacers expand again below
+        // `.accessibility1`, and above it the content exceeds the floor and
+        // scrolls.
+        GeometryReader { proxy in
+            ScrollView(showsIndicators: false) {
+                content
+                    .frame(minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(PatinaColors.Background.primary)
+        .task { await catalog.resolveIfNeeded() }
+        .onChange(of: isLoading) { _, loading in
+            if !loading { pressed = nil }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             Spacer()
                 .frame(height: 80)
@@ -39,6 +91,8 @@ struct AuthScreenView: View {
                 .font(PatinaTypography.authLogo)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .tracking(6)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
 
             // Strata mini mark
             VStack(spacing: 3) {
@@ -53,127 +107,342 @@ struct AuthScreenView: View {
             Text("Welcome home")
                 .font(PatinaTypography.h3)
                 .foregroundStyle(PatinaColors.Text.primary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 28)
                 .padding(.bottom, 6)
 
             Text("Start with a piece you love")
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
-                .padding(.bottom, 24)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 28)
 
-            // Error banner — surfaces Apple/Google/service failures that the
-            // welcome screen previously swallowed. User-cancellation is silent.
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 16)
-                    .accessibilityIdentifier("auth.welcome.errorBanner")
-            }
+            AuthStatusSlot(errorMessage: errorMessage, pendingLinkNotice: pendingLinkNotice)
 
-            // Primary auth methods — Apple hero, then Google, then email code.
-            VStack(spacing: 12) {
-                PatinaSignInWithAppleButton { result, rawNonce in
-                    onSignInWithApple(result, rawNonce)
-                }
-                .accessibilityIdentifier("auth.welcome.appleButton")
-
-                AuthButton(title: "Continue with Google", icon: "G", style: .google, action: onSignInWithGoogle)
-                    .accessibilityIdentifier("auth.welcome.googleButton")
-
-                AuthButton(title: "Continue with email", icon: "✉", style: .email, action: onContinueWithEmail)
-                    .accessibilityIdentifier("auth.welcome.emailButton")
-            }
-            .padding(.horizontal, 28)
+            providerStack
+                .padding(.horizontal, 28)
+                .disabled(isLoading)
 
             if showGuest {
-                // Divider
-                HStack(spacing: 16) {
-                    Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
-                    Text("or")
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.Text.muted)
-                    Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
-                }
-                .padding(.horizontal, 28)
-                .padding(.vertical, 20)
-
-                // Soft wall — prominent "look around" that fully works without
-                // an account (browse + save via the marketplace home).
-                Button {
-                    // W3 ruling 9: the choice is recorded where the reader
-                    // makes it, so the next launch honours it instead of
-                    // putting the same wall back.
-                    GuestSessionStore.shared.optIn()
-                    onBrowseAsGuest()
-                } label: {
-                    HStack(spacing: 8) {
-                        Text("Look around first")
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(PatinaColors.Background.secondary)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
-                    )
-                }
-                .buttonStyle(PressableButtonStyle())
-                .padding(.horizontal, 28)
-                .accessibilityIdentifier("auth.welcome.guestButton")
+                divider
+                guestButton
             }
 
-            // Password fallback — de-emphasized, for returning password users.
-            Button(action: onUsePassword) {
-                (Text("Have a password? ")
-                    .foregroundStyle(PatinaColors.Text.muted)
-                 + Text("Sign in")
-                    .foregroundStyle(PatinaColors.Text.interactive))
-                    .font(PatinaTypography.caption)
-            }
-            .padding(.top, 16)
-            .accessibilityIdentifier("auth.welcome.passwordButton")
+            passwordFallback
 
-            Spacer()
+            Spacer(minLength: 40)
 
-            // Footer — U05: these read as links, so they behave as links. Both
-            // resolve to the combined Terms & Privacy page, the same URL the
-            // Settings Support group opens; the app knows no separate privacy
-            // route, and a link to a page that exists beats one that doesn't.
-            VStack(spacing: 2) {
-                Text("By continuing, you agree to our")
-                    .foregroundStyle(PatinaColors.Text.muted)
-
-                HStack(spacing: 4) {
-                    Link("Terms of Service", destination: Self.termsURL)
-                        .accessibilityIdentifier("auth.welcome.termsLink")
-                    Text("and")
-                        .foregroundStyle(PatinaColors.Text.muted)
-                    Link("Privacy Policy", destination: Self.privacyURL)
-                        .accessibilityIdentifier("auth.welcome.privacyLink")
-                }
-                .foregroundStyle(PatinaColors.Text.interactive)
-            }
-            .font(PatinaTypography.caption)
-            .multilineTextAlignment(.center)
-            .lineSpacing(2)
-            .padding(.horizontal, 28)
-            .padding(.bottom, 40)
+            legalFooter
         }
-        .frame(maxWidth: .infinity)
-        .background(PatinaColors.Background.primary)
     }
 
-    /// Combined Terms & Privacy page — mirrors the URL behind SettingsView's
-    /// "Terms & Privacy" Support row.
-    private static let termsURL = URL(string: "https://patina.cloud/terms")!
-    private static let privacyURL = URL(string: "https://patina.cloud/terms")!
+    // MARK: - Providers (A3-06 / D3, A-03, P-02, C1-05)
+
+    private var providerStack: some View {
+        VStack(spacing: 12) {
+            ForEach(catalog.providers, id: \.self) { provider in
+                providerRow(provider)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func providerRow(_ provider: AuthProvider) -> some View {
+        switch provider {
+        case .apple:
+            ZStack {
+                PatinaSignInWithAppleButton { result, rawNonce in
+                    pressed = Self.inFlightProvider(
+                        forAppleSucceeded: (try? result.get()) != nil
+                    )
+                    onSignInWithApple(result, rawNonce)
+                }
+                .opacity(pressed == .apple ? 0.35 : 1)
+                if pressed == .apple {
+                    ProgressView().tint(PatinaColors.Text.inverse)
+                }
+            }
+            .accessibilityIdentifier("auth.welcome.appleButton")
+
+        case .google:
+            // The letter "G" set in the UI font is not Google's mark, and
+            // shipping the wrong one breaks their branding terms — so the row
+            // is label-only until L1-D lands the asset. Dark for round one
+            // either way (D3): this branch renders only if GoTrue enables it.
+            AuthProviderRow(
+                title: "Continue with Google",
+                systemImage: nil,
+                isBusy: pressed == .google
+            ) {
+                pressed = .google
+                onSignInWithGoogle()
+            }
+            .accessibilityIdentifier("auth.welcome.googleButton")
+
+        case .email:
+            // A-03 / P-02: an SF Symbol envelope in the ink token, not the
+            // full-colour U+2709 emoji, and no glyph in the AX label.
+            //
+            // No `isBusy`: this door opens a sheet synchronously and has
+            // nothing to wait for, so a busy branch here would be a parameter
+            // nothing could ever set.
+            AuthProviderRow(
+                title: "Continue with email",
+                systemImage: "envelope"
+            ) {
+                onContinueWithEmail()
+            }
+            .accessibilityIdentifier("auth.welcome.emailButton")
+        }
+    }
+
+    /// C1-05 — which row may spin after an Apple result.
+    ///
+    /// `PatinaSignInWithAppleButton` hands back a completion, not a tap, so
+    /// "in flight" starts at the token exchange. A cancelled Apple sheet comes
+    /// back as `.failure` with nothing running: round one marked the row busy
+    /// anyway, and because `AuthService.isLoading` never moved there was no
+    /// falling edge to clear it — the hero button held `opacity(0.35)` under a
+    /// spinner for the rest of the screen's life.
+    static func inFlightProvider(forAppleSucceeded succeeded: Bool) -> AuthProvider? {
+        succeeded ? .apple : nil
+    }
+
+    // MARK: - Guest
+
+    private var divider: some View {
+        HStack(spacing: 16) {
+            Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
+            Text("or")
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
+            Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
+        }
+        .padding(.horizontal, 28)
+        .padding(.vertical, 20)
+    }
+
+    private var guestButton: some View {
+        // Soft wall — prominent "look around" that fully works without
+        // an account (browse + save via the marketplace home).
+        Button {
+            // W3 ruling 9: the choice is recorded where the reader
+            // makes it, so the next launch honours it instead of
+            // putting the same wall back.
+            GuestSessionStore.shared.optIn()
+            onBrowseAsGuest()
+        } label: {
+            HStack(spacing: 8) {
+                Text("Look around first")
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .font(PatinaTypography.uiAction)
+            .foregroundStyle(PatinaColors.Text.primary)
+            // A-L1C-2 item 2, verbatim (RL2A-13): the row grows to a second
+            // line rather than shrinking the label to 75%.
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .minimumScaleFactor(0.8)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 50)
+            .background(PatinaColors.Background.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(PressableButtonStyle())
+        .padding(.horizontal, 28)
+        .accessibilityIdentifier("auth.welcome.guestButton")
+    }
+
+    private var passwordFallback: some View {
+        // Password fallback — de-emphasized, for returning password users.
+        // GAP1B-08: 44 pt, like every other control on the screen.
+        Button(action: onUsePassword) {
+            (Text("Have a password? ")
+                .foregroundStyle(PatinaColors.Text.muted)
+             + Text("Sign in")
+                .foregroundStyle(PatinaColors.Text.interactive))
+                .font(PatinaTypography.caption)
+                .multilineTextAlignment(.center)
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .padding(.top, 16)
+        .padding(.horizontal, 28)
+        .accessibilityIdentifier("auth.welcome.passwordButton")
+    }
+
+    // MARK: - Legal (C1-30, C5-04)
+
+    private var legalFooter: some View {
+        // U05: these read as links, so they behave as links. C1-30 / C5-04:
+        // they now resolve to two different pages, because /privacy exists
+        // and the consent line makes two promises.
+        VStack(spacing: 2) {
+            Text("By continuing, you agree to our")
+                .foregroundStyle(PatinaColors.Text.muted)
+
+            // P-34: stacked at accessibility sizes so neither link truncates.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 4) {
+                    termsLink
+                    Text("and").foregroundStyle(PatinaColors.Text.muted)
+                    privacyLink
+                }
+                VStack(spacing: 2) {
+                    termsLink
+                    privacyLink
+                }
+            }
+            .foregroundStyle(PatinaColors.Text.interactive)
+        }
+        .font(PatinaTypography.caption)
+        .multilineTextAlignment(.center)
+        .lineSpacing(2)
+        .padding(.horizontal, 28)
+        .padding(.bottom, 40)
+    }
+
+    // GAP1B-08: 14.67 pt tall links were the first controls a tester met.
+    private var termsLink: some View {
+        Link("Terms of Service", destination: Self.termsURL)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .accessibilityIdentifier("auth.welcome.termsLink")
+    }
+
+    private var privacyLink: some View {
+        Link("Privacy Policy", destination: Self.privacyURL)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .accessibilityIdentifier("auth.welcome.privacyLink")
+    }
+
+    /// C1-30 / C5-04: two promises, two pages. Both were
+    /// `https://patina.cloud/terms`; `/privacy` exists and returns
+    /// `<title>Privacy Policy | Patina</title>`.
+    static let termsURL = URL(string: "https://patina.cloud/terms")!
+    static let privacyURL = URL(string: "https://patina.cloud/privacy")!
+}
+
+// MARK: - Status slot (P-29, C2-21)
+//
+// Always in the layout, and always the same height for a given reader. The
+// message inside it changes; the geometry never does. Its own type so a test
+// can measure the thing that used to move the stack, rather than compare a
+// constant to itself.
+//
+// RL3A-08: the height was a hard 52 at every type size, while the two lines
+// it reserves for are `bodySmall` — `relativeTo: .subheadline` — so at
+// accessibility sizes the message overflowed onto the provider stack.
+// `.minimumScaleFactor` resolves width pressure, not height, and
+// `.frame(height:)` does not clip. `@ScaledMetric` grows the reservation on
+// the same ramp as the text it reserves for, so P-29's "nothing moves" holds
+// for a reader at any size rather than only at the default one.
+
+struct AuthStatusSlot: View {
+    let errorMessage: String?
+    var pendingLinkNotice: String?
+
+    @ScaledMetric(relativeTo: .subheadline)
+    private var slotHeight: CGFloat = AuthScreenView.statusSlotHeight
+
+    /// L1F→A-2's precedence: something went wrong and they must act beats a
+    /// promise being kept. A person who just failed to sign in does not need
+    /// to be told their link is safe in the same slot.
+    var message: (text: String, isError: Bool)? {
+        if let errorMessage { return (errorMessage, true) }
+        if let pendingLinkNotice { return (pendingLinkNotice, false) }
+        return nil
+    }
+
+    var body: some View {
+        Group {
+            if let message {
+                Text(message.text)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(
+                        message.isError
+                            ? PatinaColors.terracotta
+                            : PatinaColors.Text.muted
+                    )
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .padding(.horizontal, 28)
+                    .accessibilityIdentifier(
+                        message.isError
+                            ? "auth.welcome.errorBanner"
+                            : "auth.welcome.linkNotice"
+                    )
+            } else {
+                Color.clear
+            }
+        }
+        .frame(height: slotHeight)
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(message == nil)
+    }
+}
+
+// MARK: - Provider row
+//
+// The design-kit `AuthButton` renders its icon as `Text(icon)` — a string —
+// which is why the first screen shipped a full-colour U+2709 emoji and the
+// letter "G" (A-03, P-02). This row is the same chrome with a real SF Symbol
+// slot, an accessibility label that carries no glyph, and the in-flight state
+// C1-05 asks for. `AuthButton` itself is L1-D's file.
+
+struct AuthProviderRow: View {
+    let title: String
+    let systemImage: String?
+    var isBusy: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                if isBusy {
+                    ProgressView()
+                        .tint(PatinaColors.Text.primary)
+                } else if let systemImage {
+                    // RL3A-07: a fixed 16 pt did not scale, and the `Text(icon)`
+                    // it replaced did — at accessibility-XXXL a small envelope
+                    // sat beside a two-line ~40 pt label. The symbol takes the
+                    // title's own ramp instead.
+                    Image(systemName: systemImage)
+                        .font(PatinaTypography.uiAction)
+                        .imageScale(.medium)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                }
+                Text(title)
+                    .font(PatinaTypography.uiAction)
+                    // A-L1C-2 item 2, verbatim (RL2A-13).
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(PatinaColors.Text.primary)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 50)
+            .background(PatinaColors.Background.primary)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(PatinaColors.Border.strong, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(PressableButtonStyle())
+        .accessibilityLabel(title)
+    }
 }
 
 #Preview {

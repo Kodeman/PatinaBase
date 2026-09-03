@@ -46,7 +46,10 @@ struct SessionIsolationTests {
     @Test("the reset runs before anything fetches for the new account")
     func theResetPrecedesTheFirstFetch() throws {
         let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
-        let apply = try #require(source.range(of: "self.applySession(session)"))
+        // `establishSession` resolves B-21 and then calls `applySession`, so
+        // it is the listener's one install point and the reset happens inside
+        // it.
+        let apply = try #require(source.range(of: "await self.establishSession(session)"))
         let settle = try #require(source.range(of: "Self.settleLocalStore(for:"))
         let hydrate = try #require(source.range(of: "await ProfileService.shared.fetchProfile"))
         let refresh = try #require(source.range(of: "SessionScope.refresh()"))
@@ -286,6 +289,23 @@ struct SessionIsolationTests {
         // by the person reading the notice — resetting it on an account
         // change would swallow the one sentence that explains the loss.
         out["LocalStoreRecovery.swift"] = "a device fact about this launch, acknowledged by the reader"
+
+        // W1 · L1-A. Neither holds a row belonging to an account.
+        //
+        // `AuthProviderCatalog` (A3-06 / D3) holds the answer to "which sign-in
+        // providers does THIS GoTrue deployment have enabled" — a fact about
+        // the server, identical for everybody, and only ever read while signed
+        // OUT. Resetting it on a session change would re-fetch the same list.
+        out["AuthProviderCatalog.swift"] = "server configuration, not session state — same list for everyone"
+
+        // `OnboardingCompletion` (B-21) is deliberately account-keyed and
+        // deliberately survives a sign-out: its whole job is to remember that
+        // account A finished onboarding on this phone, so A does not meet the
+        // intro again on the next sign-in. Clearing it on the SessionScope seam
+        // would re-create the finding it closes. Nothing in it is readable as
+        // another account's data — the record is a set of user ids, and every
+        // read is `hasCompleted(userId:)` against the id that just signed in.
+        out["OnboardingCompletion.swift"] = "account-keyed by design; surviving sign-out is the fix (B-21)"
 
         // Scan pipeline. Its rows are SwiftData, wiped by `LocalStoreReset`;
         // the in-memory parts are queue mechanics and file bookkeeping.

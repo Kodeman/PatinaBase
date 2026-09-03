@@ -44,13 +44,42 @@ public final class AuthViewModel {
         authService.isLoading
     }
 
-    /// Error message
+    /// Error message.
+    ///
+    /// P-29, the other direction: this view model only ever drives a presented
+    /// sheet, so it reads the sheet-scoped message. A root-scoped failure —
+    /// the Welcome screen's own Apple button, raised behind this sheet —
+    /// belongs to the screen underneath, not here.
     public var errorMessage: String? {
-        authService.errorMessage
+        authService.sheetErrorMessage
     }
 
     /// Success message (e.g., for password reset)
     public var successMessage: String?
+
+    /// P-22 — the ONE thing the form's status region says right now.
+    ///
+    /// A failed code used to leave the green "We emailed you a 6-digit code"
+    /// banner on screen directly above the red "Token has expired or is
+    /// invalid" — two banners, different widths, both pushing Verify off the
+    /// bottom of the sheet. An error replaces the success; there is never
+    /// more than one.
+    public var status: AuthFormStatus? {
+        if let errorMessage { return .failure(errorMessage) }
+        if let successMessage { return .success(successMessage) }
+        return nil
+    }
+
+    /// P-20 — why the button is inert, said under the field.
+    ///
+    /// `tester@@patina.` produced no message at all: the submit button simply
+    /// stayed disabled and the sheet was pixel-identical to the empty state.
+    /// Silent until the reader has typed something, so an untouched field is
+    /// never scolded.
+    public var emailValidationMessage: String? {
+        guard !email.isEmpty, !isValidEmail else { return nil }
+        return "That doesn’t look like an email address yet."
+    }
 
     /// Whether password reset was successful
     public var showResetSuccess: Bool = false
@@ -100,6 +129,13 @@ public final class AuthViewModel {
     // MARK: - Private
 
     private let authService = AuthService.shared
+
+    /// RL2A-12 — the verify call, injectable so the coalescing is a measured
+    /// fact rather than something only a live GoTrue can exercise.
+    @ObservationIgnored
+    var verifyOtpHandler: @MainActor @Sendable (String, String) async throws -> Void = { email, token in
+        try await AuthService.shared.verifyOtp(email: email, token: token)
+    }
     private var cooldownTask: Task<Void, Never>?
     private var verificationCooldownTask: Task<Void, Never>?
 
@@ -191,7 +227,7 @@ public final class AuthViewModel {
             magicLinkCooldown = 60
             showOtpEntry = true
             otpToken = ""
-            successMessage = "We emailed you a 6-digit code"
+            successMessage = "We emailed you a 6-digit sign-in code"
             startCooldownTimer()
         } catch {
             // Error is already set in authService
@@ -210,6 +246,22 @@ public final class AuthViewModel {
         authService.clearError()
     }
 
+    /// C1-37 — six digits entered is the submit.
+    ///
+    /// The field caps at six and Verify enables at six, but nothing submitted:
+    /// the reader had to dismiss the number pad (which was covering the
+    /// button) and tap. Called from the field's `onChange`.
+    @MainActor
+    public func otpTokenChanged(_ newValue: String) async {
+        let digits = newValue.filter(\.isNumber)
+        let trimmed = String(digits.prefix(6))
+        if trimmed != otpToken {
+            otpToken = trimmed
+        }
+        guard trimmed.count == 6, !isVerifyingOtp else { return }
+        await verifyOtp()
+    }
+
     /// Verify the 6-digit OTP code the user pasted from their email.
     ///
     /// Coalesces rapid taps via a stored task handle (Task 1.5 pattern):
@@ -224,14 +276,24 @@ public final class AuthViewModel {
         guard otpToken.count == 6 else { return }
         verifyOtpTask?.cancel()
 
+        // RL2A-12: the guard above is only a guard if the flag is raised on
+        // THIS synchronous pass. Raised inside the Task instead, two callers
+        // both passed it — and `otpTokenChanged` is two callers whenever the
+        // pasted value needs trimming, because writing the trimmed string back
+        // re-fires the field's `onChange`. With a single-use code the second
+        // POST returns "Token has expired or is invalid", so an error banner
+        // could land after a successful sign-in.
+        isVerifyingOtp = true
         let email = magicLinkEmail
         let token = otpToken
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            self.isVerifyingOtp = true
+            // P-22: the send's success line has done its job. Whatever this
+            // attempt lands on replaces it — it never sits above a failure.
+            self.successMessage = nil
             defer { self.isVerifyingOtp = false }
             do {
-                try await self.authService.verifyOtp(email: email, token: token)
+                try await self.verifyOtpHandler(email, token)
             } catch {
                 // authService.errorMessage is already set; clear the
                 // entered token so the user can retype without backspacing
@@ -243,13 +305,14 @@ public final class AuthViewModel {
         await task.value
     }
 
-    /// Resend magic link
+    /// Resend the sign-in code.
     @MainActor
     public func resendMagicLink() async {
         guard magicLinkCooldown == 0 else { return }
         do {
             try await authService.sendMagicLink(email: magicLinkEmail)
             magicLinkCooldown = 60
+            successMessage = "We emailed you a new sign-in code"
             startCooldownTimer()
         } catch {
             // Error is already set in authService
@@ -324,13 +387,18 @@ public final class AuthViewModel {
     @MainActor
     public func handleAppleSignIn(
         result: Result<ASAuthorization, Error>,
-        rawNonce: String?
+        rawNonce: String?,
+        scope: AuthErrorScope = .root
     ) async {
         switch result {
         case .success(let authorization):
             if let credential = authorization.credential as? ASAuthorizationAppleIDCredential {
                 do {
-                    try await authService.signInWithApple(credential: credential, rawNonce: rawNonce)
+                    try await authService.signInWithApple(
+                        credential: credential,
+                        rawNonce: rawNonce,
+                        scope: scope
+                    )
                 } catch {
                     // Error is already set in authService
                 }
@@ -341,7 +409,8 @@ public final class AuthViewModel {
             // screen no longer swallows Apple failures.
             if (error as? ASAuthorizationError)?.code != .canceled {
                 authService.reportExternalError(
-                    "Apple Sign In couldn't be completed. Please try again."
+                    "Apple Sign In couldn’t be completed. Please try again.",
+                    scope: scope
                 )
             }
             PatinaLog.auth.error("Apple Sign In failed: \(error.localizedDescription)")
@@ -371,11 +440,36 @@ public final class AuthViewModel {
     }
 }
 
+// MARK: - Form status (P-22)
+
+/// One region, one message. The view renders whichever case is present and
+/// never stacks them.
+public enum AuthFormStatus: Equatable, Sendable {
+    case success(String)
+    case failure(String)
+
+    public var message: String {
+        switch self {
+        case .success(let message), .failure(let message): return message
+        }
+    }
+
+    public var isFailure: Bool {
+        if case .failure = self { return true }
+        return false
+    }
+}
+
 // MARK: - Auth Mode
 
 public enum AuthMode: String, CaseIterable {
     case signIn = "Sign In"
     case signUp = "Sign Up"
-    case magicLink = "Magic Link"
+    // P-30: the raw value is rendered as a header by `AuthenticationView`
+    // (`viewModel.mode.rawValue`), so "Magic Link" was a fifth name for the
+    // one mechanism sitting a special case away from a reader's eyes. The
+    // header special-cases this mode to "Continue with email"; the raw value
+    // now says the same thing the rest of the sheet says if it ever renders.
+    case magicLink = "Sign-in code"
     case resetPassword = "Reset Password"
 }

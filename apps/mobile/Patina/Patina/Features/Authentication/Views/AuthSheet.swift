@@ -68,7 +68,13 @@ struct AuthSheet: View {
             },
             // Upload requires a real account, so hide the guest affordance.
             showGuest: false,
-            errorMessage: AuthService.shared.errorMessage
+            // P-29: same rule as the root — a nested sheet's failure belongs
+            // to the nested sheet.
+            errorMessage: AuthService.shared.rootErrorMessage,
+            isLoading: AuthService.shared.isLoading,
+            // L1F→A-2: a link held while this modal is up is acknowledged by
+            // the sheet dismissing into the destination, not by this slot.
+            pendingLinkNotice: nil
         )
         .sheet(isPresented: $showingEmailCode) {
             AuthenticationView(initialMode: .magicLink)
