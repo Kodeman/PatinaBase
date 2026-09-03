@@ -40,6 +40,7 @@ import type {
   HelpStateSupabaseClient,
   TourStateBackend,
   FeatureAnnouncementStateBackend,
+  MarginNoteStateBackend,
 } from './types'
 import type { TourState } from '../proactive/TourController/tourState'
 import {
@@ -230,6 +231,65 @@ export function createSupabaseFeatureAnnouncementBackend(
 }
 
 /**
+ * Return shape for `createSupabaseMarginNoteBackend` — the two synchronous
+ * accessors that satisfy `MarginNoteStateBackend`, plus a `hydrate()` the
+ * caller awaits before installing the backend as "ready" (margin-note.tsx
+ * falls back to localStorage until then, and for signed-out sessions — see
+ * that file's `hasSeen`).
+ */
+export interface CreateSupabaseMarginNoteBackendResult extends MarginNoteStateBackend {
+  hydrate: () => Promise<Record<string, string>>
+  /** Flushes any pending write — `migrateLocalToSupabase` awaits this before
+   *  it returns so a caller can trust localStorage is safe to have cleared. */
+  flush: () => Promise<void>
+}
+
+/**
+ * Build a standalone margin-note backend for `userId`. Unlike the tour /
+ * feature-announcement pair above, this does not share a cache with
+ * `createSupabaseHelpStateBackends` — it keeps its own cache of the FULL
+ * `help_state` blob (hydrated once) so its write-through never clobbers
+ * sibling sub-keys it never touches, at the cost of not seeing a concurrent
+ * write to `tours`/`featureAnnouncements` made through the other cache after
+ * this one hydrated. Acceptable for margin notes: they are dismissed by user
+ * action, rarely in the same instant as a tour transition, and the adapter's
+ * whole design already accepts eventual consistency over strict locking.
+ */
+export function createSupabaseMarginNoteBackend(
+  client: HelpStateSupabaseClient,
+  userId: string,
+): CreateSupabaseMarginNoteBackendResult {
+  const cache = createCache()
+  return {
+    hasSeen(noteKey: string): boolean {
+      return Object.prototype.hasOwnProperty.call(cache.blob.marginNotes ?? {}, noteKey)
+    },
+    markSeen(noteKey: string): void {
+      const prev = cache.blob.marginNotes ?? {}
+      if (Object.prototype.hasOwnProperty.call(prev, noteKey)) return
+      cache.blob = {
+        ...cache.blob,
+        marginNotes: { ...prev, [noteKey]: new Date().toISOString() },
+      }
+      scheduleWrite(cache, client, userId)
+    },
+    async hydrate(): Promise<Record<string, string>> {
+      const blob = await loadHelpState(client, userId)
+      cache.blob = {
+        ...blob,
+        ...cache.blob,
+        marginNotes: { ...(blob.marginNotes ?? {}), ...(cache.blob.marginNotes ?? {}) },
+      }
+      cache.hydrated = true
+      return cache.blob.marginNotes ?? {}
+    },
+    async flush(): Promise<void> {
+      await cache.pendingWrite
+    },
+  }
+}
+
+/**
  * Convenience: build both backends + the cache and hydrate from Supabase in
  * the background. Consumers typically call this once per signed-in mount and
  * pass the backends straight to `setTourStateBackend(...)` /
@@ -303,19 +363,30 @@ export function createSupabaseHelpStateBackends(
  *
  * Resolves with the count of (tour, featureAnnouncement) entries migrated.
  */
+/**
+ * Local-storage prefix the designer-portal `MarginNote` primitive
+ * (`apps/designer-portal/src/components/document/margin-note.tsx`) writes
+ * under. Duplicated here (rather than imported) because the help-system
+ * package must not depend on a portal app — keep the two literals in sync.
+ */
+const MARGIN_NOTE_STORAGE_PREFIX = 'patina:margin-note:'
+
 export interface MigrationResult {
   toursMigrated: number
   featureAnnouncementsMigrated: number
+  marginNotesMigrated: number
 }
 
 export async function migrateLocalToSupabase(
   backends: CreateSupabaseBackendsResult,
+  marginNoteBackend?: CreateSupabaseMarginNoteBackendResult,
 ): Promise<MigrationResult> {
   if (typeof window === 'undefined') {
-    return { toursMigrated: 0, featureAnnouncementsMigrated: 0 }
+    return { toursMigrated: 0, featureAnnouncementsMigrated: 0, marginNotesMigrated: 0 }
   }
   let toursMigrated = 0
   let featureAnnouncementsMigrated = 0
+  let marginNotesMigrated = 0
 
   // ── Tours: scan all "help-system.tour.*" keys.
   const localTourKeys: { storageKey: string; tourId: string }[] = []
@@ -330,7 +401,7 @@ export async function migrateLocalToSupabase(
     }
   } catch {
     // localStorage walk failed (private mode / quota probe) — give up.
-    return { toursMigrated, featureAnnouncementsMigrated }
+    return { toursMigrated, featureAnnouncementsMigrated, marginNotesMigrated }
   }
 
   for (const { storageKey, tourId } of localTourKeys) {
@@ -389,8 +460,43 @@ export async function migrateLocalToSupabase(
     // Same defensive posture — the migration must never crash the host.
   }
 
+  // ── Margin notes: scan all "patina:margin-note:*" keys. Independent
+  // try/catch so a failure here never aborts the tour/feature-announcement
+  // sweeps above. Only runs when the caller passes a margin-note backend
+  // (installed once it has hydrated — see help-state-provider.tsx).
+  if (marginNoteBackend) {
+    try {
+      const localNoteKeys: { storageKey: string; noteKey: string }[] = []
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i)
+        if (!key) continue
+        if (!key.startsWith(MARGIN_NOTE_STORAGE_PREFIX)) continue
+        const noteKey = key.slice(MARGIN_NOTE_STORAGE_PREFIX.length)
+        if (!noteKey) continue
+        localNoteKeys.push({ storageKey: key, noteKey })
+      }
+      for (const { storageKey, noteKey } of localNoteKeys) {
+        if (!marginNoteBackend.hasSeen(noteKey)) {
+          marginNoteBackend.markSeen(noteKey)
+          marginNotesMigrated += 1
+        }
+        try {
+          window.localStorage.removeItem(storageKey)
+        } catch {
+          // best-effort — leave the local key rather than crash the sweep.
+        }
+      }
+    } catch {
+      // localStorage walk failed (private mode / quota probe) — give up on
+      // this sweep only; tours/featureAnnouncements results still return.
+    }
+  }
+
   // Wait for the writes to land before we tell the caller it's safe to declare
   // localStorage authoritative-as-cleared.
   await backends.flush()
-  return { toursMigrated, featureAnnouncementsMigrated }
+  if (marginNoteBackend) {
+    await marginNoteBackend.flush()
+  }
+  return { toursMigrated, featureAnnouncementsMigrated, marginNotesMigrated }
 }

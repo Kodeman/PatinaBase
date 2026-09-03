@@ -131,13 +131,16 @@ export {
   saveHelpState,
   createSupabaseTourStateBackend,
   createSupabaseFeatureAnnouncementBackend,
+  createSupabaseMarginNoteBackend,
   createSupabaseHelpStateBackends,
   migrateLocalToSupabase,
 } from './persistence';
 export type {
   CreateSupabaseBackendsResult,
+  CreateSupabaseMarginNoteBackendResult,
   MigrationResult,
   HelpStateBlob,
+  MarginNoteStateBackend,
   HelpStateSupabaseClient,
 } from './persistence';
 

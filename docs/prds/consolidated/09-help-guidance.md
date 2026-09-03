@@ -37,7 +37,6 @@
 - `packages/help-system/src/isPlaceholderContent.ts`
 - `packages/help-system/src/persistence/supabaseAdapter.ts`
 - `packages/help-system/src/reactive/ContextualHelpPanel/ContextualHelpPanel.tsx`
-- `apps/designer-portal/src/components/help/first-signin-tour.tsx`
 - `apps/designer-portal/src/components/document/help/document-help.tsx`
 - `apps/designer-portal/src/components/portal/utility-bar.tsx`
 - `apps/designer-portal/src/app/(portal)/portal/help/page.tsx`
@@ -89,7 +88,7 @@ All exported from `packages/help-system/src/index.ts`. Built with tsup, Storyboo
 ### Designer-portal integration (the deepest surface)
 
 - **Utility bar `?`** — `apps/designer-portal/src/components/portal/utility-bar.tsx` renders a `HelpCircle` IconButton (`aria-haspopup="dialog"`) that opens `ContextualHelpPanel`; surface key derived via `lib/help-system/pathname-to-surface-key.ts`.
-- **First Project Walkthrough** — `apps/designer-portal/src/components/help/first-signin-tour.tsx`, mounted once in `app/(portal)/portal/layout.tsx`. Shows `WelcomeModal` on first sign-in (`created_at` within a 60-second window, gated on Supabase hydration), then `TourController` runs a **5-step** tour anchored on `[data-tour-anchor="today|pipeline|aesthete|products|profile"]` nav links.
+- **First Project Walkthrough** — **retired** (decision 4, 2026-09-03). `apps/designer-portal/src/components/help/first-signin-tour.tsx` was deleted with the R21 dissolve of `app/(portal)/`: zero imports, dead `help-system.welcome-shown.*` localStorage key. The Desk world's own onboarding is the Desk Walkthrough (`components/document/help/desk-walkthrough.tsx`), installed via `HelpStateProvider` (`components/document/help/help-state-provider.tsx`).
 - **The Document** (`(document)` route group) has no utility bar, so `apps/designer-portal/src/components/document/help/document-help.tsx` wraps the shell in `SurfaceKeyProvider` (seeded from pathname) and mounts `ContextualHelpPanel` once; opened by the ⌘K "Help…" row via `openHelp()` custom event (`lib/help-system/open-help.ts`). Document surfaces refine the key via `lib/help-system/use-document-surface.ts`, `document-pathname-to-surface-key.ts`, and `document-surface-keys.ts`.
 - **Help Center (Layer 4)** — routes `apps/designer-portal/src/app/(portal)/portal/help/{page.tsx, [surfaceKey]/page.tsx, topic/[prefix]/page.tsx}` (HelpSearch + featured RelatedArticles + topic browse), mirrored under the document shell at `app/(document-help)/help/{page.tsx, [surfaceKey]/page.tsx, topic/[prefix]/page.tsx}`.
 
