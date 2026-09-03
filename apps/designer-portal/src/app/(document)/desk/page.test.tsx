@@ -79,6 +79,7 @@ jest.mock('@/components/document/desk-contents', () => ({ DeskContents: () => nu
 jest.mock('@/components/document/margin-note', () => ({ MarginNote: () => null }));
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
   START_DESK_WALKTHROUGH_EVENT: 'document:start-desk-walkthrough',
+  clearDeskWalkthroughLater: jest.fn(),
   useDeskWalkthroughOffer: () => false,
   useSuppressDeskFirstTouch: () => false,
 }));
