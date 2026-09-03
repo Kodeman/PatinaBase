@@ -25,6 +25,7 @@ import {
 } from '@patina/supabase';
 import { studioEvents } from '@/lib/analytics/studio-events';
 import { friendlyInviteError } from '@/lib/document/invite-status';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DocSheet } from '../overlays/doc-sheet';
 import {
@@ -92,6 +93,14 @@ export function StudioInviteModal({
   const [resendError, setResendError] = useState<string | null>(null);
 
   const inviteMember = useInviteMember();
+  // L8: the handoff-note field is scoped to the teammate-persona work —
+  // decisions.md row 9 puts it "behind the one flag from #6". Flag
+  // off/loading must reproduce pre-L8 behavior exactly: field hidden, and
+  // handoffNote never reaches the submit payload even if state somehow held
+  // a stale value (e.g. the flag flips off mid-session).
+  const { value: teammatePersonaEnabled } = useFeatureFlag(
+    'onboarding-teammate-persona',
+  );
 
   const resetForm = () => {
     setEmail('');
@@ -144,7 +153,9 @@ export function StudioInviteModal({
       name: name.trim() || undefined,
       jobTitle: trimmedTitle || undefined,
       staffRole: curatedRole,
-      handoffNote: handoffNote.trim() || undefined,
+      handoffNote: teammatePersonaEnabled
+        ? handoffNote.trim() || undefined
+        : undefined,
     };
 
     inviteMember.mutate(input, {
@@ -403,27 +414,31 @@ export function StudioInviteModal({
               )}
             </div>
 
-            <div>
-              <label htmlFor="studio-invite-handoff-note" className={LABEL}>
-                A line for her first day{' '}
-                <span className="font-normal text-[var(--text-muted)]">
-                  (optional)
-                </span>
-              </label>
-              <Textarea
-                id="studio-invite-handoff-note"
-                value={handoffNote}
-                onChange={(e) =>
-                  setHandoffNote(e.target.value.slice(0, HANDOFF_NOTE_MAX_LENGTH))
-                }
-                maxLength={HANDOFF_NOTE_MAX_LENGTH}
-                rows={3}
-                placeholder="Start with the Olsen lake house — the brief's written, it just needs the schedule built."
-              />
-              <p className={`${COUNTER} mt-1 text-right`}>
-                {handoffNote.length}/{HANDOFF_NOTE_MAX_LENGTH}
-              </p>
-            </div>
+            {teammatePersonaEnabled && (
+              <div>
+                <label htmlFor="studio-invite-handoff-note" className={LABEL}>
+                  A line for her first day{' '}
+                  <span className="font-normal text-[var(--text-muted)]">
+                    (optional)
+                  </span>
+                </label>
+                <Textarea
+                  id="studio-invite-handoff-note"
+                  value={handoffNote}
+                  onChange={(e) =>
+                    setHandoffNote(
+                      e.target.value.slice(0, HANDOFF_NOTE_MAX_LENGTH),
+                    )
+                  }
+                  maxLength={HANDOFF_NOTE_MAX_LENGTH}
+                  rows={3}
+                  placeholder="Start with the Olsen lake house — the brief's written, it just needs the schedule built."
+                />
+                <p className={`${COUNTER} mt-1 text-right`}>
+                  {handoffNote.length}/{HANDOFF_NOTE_MAX_LENGTH}
+                </p>
+              </div>
+            )}
 
             <div>
               <span className={LABEL}>Permission tier</span>
