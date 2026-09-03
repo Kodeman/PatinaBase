@@ -85,8 +85,11 @@ struct AuthFormAffordanceTests {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
         #expect(!source.contains("viewModel.isFormValid ? PatinaColors.Interactive.active : PatinaColors.clay"))
         #expect(!source.contains(": PatinaColors.clay\n                )"))
-        // Both controls now go through the one style.
-        let uses = source.components(separatedBy: ".buttonStyle(AuthFilledButtonStyle(").count - 1
+        // Both controls go through the one style — the submit here, Verify in
+        // the panels file.
+        let panels = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView+Panels.swift")
+        let uses = (source + panels)
+            .components(separatedBy: ".buttonStyle(AuthFilledButtonStyle(").count - 1
         #expect(uses == 2, "expected the submit and Verify to share one style, found \(uses)")
     }
 

@@ -163,7 +163,9 @@ struct OnboardingResumptionTests {
                 return true
             }
         )
-        #expect(ContinuousClock.now - started < .seconds(5))
+        // Generous on purpose: the claim is "it did not wait for the 30 s
+        // read", and this suite runs in parallel with 1600 others.
+        #expect(ContinuousClock.now - started < .seconds(20))
         #expect(!AppSettings.shared.hasCompletedOnboarding)
     }
 

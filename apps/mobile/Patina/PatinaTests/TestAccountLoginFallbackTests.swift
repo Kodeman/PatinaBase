@@ -22,7 +22,7 @@ import Testing
 struct TestAccountLoginFallbackTests {
 
     private func fallback(
-        mint: @escaping @Sendable (String, String) async throws -> TestAccountLoginFallback.Response,
+        mint: @escaping @Sendable (String, String) async throws -> TestAccountLoginResponse,
         redeem: @escaping @Sendable (String) async throws -> Bool = { _ in true }
     ) -> TestAccountLoginFallback {
         TestAccountLoginFallback(mintTokenHash: mint, redeem: redeem)

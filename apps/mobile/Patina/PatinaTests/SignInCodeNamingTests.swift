@@ -23,8 +23,16 @@ struct SignInCodeNamingTests {
     private static let authFiles = [
         "Patina/Features/Authentication/Views/AuthScreenView.swift",
         "Patina/Features/Authentication/Views/AuthenticationView.swift",
+        "Patina/Features/Authentication/Views/AuthenticationView+Panels.swift",
         "Patina/Features/Authentication/ViewModels/AuthViewModel.swift"
     ]
+
+    /// The sign-in sheet is two files: the form and the three post-send panels.
+    /// Every naming pin reads both, so a split cannot hide a name from it.
+    private func sheetSource() throws -> String {
+        try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
+            + SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView+Panels.swift")
+    }
 
     /// Reader-facing string literals: everything inside double quotes that is
     /// not an accessibility identifier, an SF Symbol, a URL or a storage key.
@@ -73,7 +81,7 @@ struct SignInCodeNamingTests {
 
     @Test("nothing tells the reader to click a link the app never sends")
     func noClickTheLink() throws {
-        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
+        let source = try sheetSource()
         #expect(!source.contains("Click the link in the email"))
         #expect(!source.contains("We sent a magic link to"))
         #expect(source.contains("We sent a sign-in code to"))
@@ -81,7 +89,7 @@ struct SignInCodeNamingTests {
 
     @Test("the mechanism has one name on every surface that names it")
     func oneNameEverywhere() throws {
-        let view = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
+        let view = try sheetSource()
         #expect(view.contains("We'll email you a sign-in code"))
         #expect(view.contains("Enter your sign-in code"))
         // L1-E's copy deck keeps the submit button at "Email me a code" — the
@@ -99,7 +107,7 @@ struct SignInCodeNamingTests {
     func theDoorKeepsItsName() throws {
         let welcome = try SourcePin.read("Patina/Features/Authentication/Views/AuthScreenView.swift")
         #expect(welcome.contains("title: \"Continue with email\""))
-        let sheet = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
+        let sheet = try sheetSource()
         #expect(sheet.contains("return \"Continue with email\""))
     }
 

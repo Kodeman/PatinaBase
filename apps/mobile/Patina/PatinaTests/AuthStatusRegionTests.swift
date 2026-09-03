@@ -19,6 +19,12 @@ import Testing
 @MainActor
 struct AuthStatusRegionTests {
 
+    /// The sign-in sheet is two files: the form and the three post-send panels.
+    private func sheetSource() throws -> String {
+        try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
+            + SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView+Panels.swift")
+    }
+
     // MARK: - P-22 · one region, one message
 
     @Test("an error replaces the success line rather than stacking under it")
@@ -50,11 +56,13 @@ struct AuthStatusRegionTests {
         #expect(source.contains("if let status = viewModel.status {"))
         // The two stacked banners are gone, and with them every filled
         // colour-coded panel on the sheet (VISION §6) — including the third,
-        // the verification-resend confirmation, which was the same shape.
-        #expect(!source.contains("if let success = viewModel.successMessage {"))
-        #expect(!source.contains("Color.green.opacity"))
-        #expect(!source.contains("Color.red.opacity"))
-        #expect(!source.contains(".foregroundStyle(.green)"))
+        // the verification-resend confirmation, which was the same shape and
+        // now lives in the panels file.
+        let sheet = try sheetSource()
+        #expect(!sheet.contains("if let success = viewModel.successMessage {"))
+        #expect(!sheet.contains("Color.green.opacity"))
+        #expect(!sheet.contains("Color.red.opacity"))
+        #expect(!sheet.contains(".foregroundStyle(.green)"))
         // And the region is declared once and drawn once, above the form.
         let code = source
             .split(separator: "\n", omittingEmptySubsequences: false)
@@ -75,7 +83,7 @@ struct AuthStatusRegionTests {
     func statusIsNotAColourCode() throws {
         let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
         let start = try #require(source.range(of: "private var statusRegion: some View {"))
-        let end = try #require(source.range(of: "// MARK: - Sign-in code sent"))
+        let end = try #require(source.range(of: "private var submitButton: some View {"))
         let region = String(source[start.lowerBound..<end.lowerBound])
         #expect(!region.contains(".green"))
         #expect(!region.contains(".red"))
@@ -92,7 +100,7 @@ struct AuthStatusRegionTests {
         #expect(block.contains("guard trimmed.count == 6"))
         #expect(block.contains("await verifyOtp()"))
 
-        let view = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
+        let view = try sheetSource()
         #expect(view.contains("Task { await viewModel.otpTokenChanged(newValue) }"))
     }
 
@@ -114,7 +122,7 @@ struct AuthStatusRegionTests {
 
     @Test("Verify sits directly under the field, not below the resend and the back link")
     func verifyIsPinnedUnderTheField() throws {
-        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
+        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView+Panels.swift")
         let field = try #require(source.range(of: "auth.otp.tokenField"))
         let verify = try #require(source.range(of: "auth.otp.verifyButton"))
         let resend = try #require(source.range(of: "auth.otp.resendButton"))

@@ -67,10 +67,14 @@ struct GuestEscapeTests {
         let quiz = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleQuizView.swift")
         #expect(quiz.contains("I already have an account — Sign in"))
         #expect(quiz.contains("StyleQuiz.SignInButton"))
-        // In the step-agnostic column, not inside `questionContent`.
+        // In the step-agnostic column, not inside a per-question layout —
+        // those live in `StyleQuizView+Questions.swift` and this file has no
+        // question-specific view at all.
+        let questions = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleQuizView+Questions.swift")
+        #expect(!questions.contains("StyleQuiz.SignInButton"))
         let signIn = try #require(quiz.range(of: "StyleQuiz.SignInButton"))
-        let content = try #require(quiz.range(of: "private func questionContent("))
-        #expect(signIn.lowerBound < content.lowerBound)
+        let pill = try #require(quiz.range(of: "quizProgressPill"))
+        #expect(signIn.lowerBound < pill.lowerBound)
     }
 
     // MARK: - A-05 · Skip skips
