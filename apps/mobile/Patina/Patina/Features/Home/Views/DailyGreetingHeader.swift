@@ -242,6 +242,15 @@ private struct UnreadBadge: View {
                 .padding(.horizontal, PatinaSpacing.xs)
                 .frame(minWidth: 14, minHeight: 14)
                 .background(Capsule().fill(PatinaColors.clay))
+                // The bell glyph is a fixed 17 pt inside a 36 pt frame, so an
+                // uncapped badge outgrows the control it marks: at
+                // accessibility-XXXL the "3" was a ~40 pt disc with the bell
+                // nowhere on screen behind it (shots/w1-l1c/05-today-ax3xl-light.png,
+                // taken before this cap). A badge is a mark on a control, not
+                // body copy — it scales to the top of the standard ramp and
+                // stops. Its count is announced by the button's
+                // accessibilityValue, so nothing is lost by not growing it.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .accessibilityHidden(true)
         }
     }
