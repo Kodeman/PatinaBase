@@ -143,6 +143,20 @@ public final class AppCoordinator: Coordinator {
     /// restore the user to where they were.
     public var pendingReturnRoute: AppRoute?
 
+    /// Who that route belongs to. A forced sign-out routes `.main → .auth`
+    /// directly, so the route was captured from the previous account's
+    /// `currentScreen` and replayed on the NEXT arrival at `.main` — whoever
+    /// that turned out to be. Re-authenticating as somebody else therefore
+    /// landed account B on account A's invoice, the same shape
+    /// `clearNavigationForEndedSession()` exists to close. The route is
+    /// restored only for the account it was taken from.
+    private var pendingReturnOwner: String?
+
+    /// The last account this coordinator saw signed in. By the time the phase
+    /// flips to `.auth` the session is already nil — that IS the flip — so the
+    /// id has to be remembered while it is still there.
+    private var lastKnownUserId: String?
+
     // MARK: - The house-first root (B-1, R2)
 
     /// Whether this session runs the four-tab root. Read ONCE, here, from the
@@ -275,6 +289,9 @@ public final class AppCoordinator: Coordinator {
     /// splash deadline). Called by the observation loop above and
     /// directly from `beginSplashTransition()` to force `.launching`.
     public func recomputePhase() {
+        if let userId = AuthService.shared.currentUserId, !userId.isEmpty {
+            lastKnownUserId = userId
+        }
         let newPhase = derivePhase()
 
         #if DEBUG
@@ -310,10 +327,12 @@ public final class AppCoordinator: Coordinator {
         // which puts us in `.launching` first, so this branch only
         // fires for token-refresh failures and similar interruptions.
         // Save the current screen so re-auth can drop the user back
-        // where they were.
-        if oldPhase == .main, newPhase == .auth, pendingReturnRoute == nil {
-            pendingReturnRoute = currentScreen
-        }
+        // where they were — captured here, applied AFTER the reset below,
+        // which now clears it (a stale route replayed for the next account is
+        // the leak `clearNavigationForEndedSession()` closes everywhere else).
+        let forcedSignOut = oldPhase == .main && newPhase == .auth
+        let endingScreen = currentScreen
+        let endingOwner = lastKnownUserId
 
         // PT-3-9: tear down any open modal sheet when we leave `.main`
         // for `.auth` / `.launching`. Otherwise an open sheet (e.g. the
@@ -333,6 +352,14 @@ public final class AppCoordinator: Coordinator {
         if oldPhase == .main, newPhase == .auth || newPhase == .launching {
             clearNavigationForEndedSession()
         }
+
+        // Only now, and only stamped. A voluntary sign-out routes through
+        // `.launching` and keeps nothing; a forced one keeps its screen for the
+        // account it belonged to and for nobody else.
+        if forcedSignOut, let endingOwner {
+            pendingReturnRoute = endingScreen
+            pendingReturnOwner = endingOwner
+        }
     }
 
     /// The side effects of arriving at a phase.
@@ -347,12 +374,19 @@ public final class AppCoordinator: Coordinator {
         deepLinkDrain?()
 
         // Restore the user's pre-sign-out screen after a forced sign-out
-        // is resolved by re-auth. Drained on entry to `.main`.
+        // is resolved by re-auth. Drained on entry to `.main`, and only for
+        // the account it was taken from — whoever arrives here is not
+        // necessarily whoever left.
         if let route = pendingReturnRoute {
+            let owner = pendingReturnOwner
             pendingReturnRoute = nil
-            // A restore is an outside entry: the person did not walk here, so
-            // it lands on the route's own tab (no-op on the flag-off root).
-            openExternal(route)
+            pendingReturnOwner = nil
+            if let owner, owner == AuthService.shared.currentUserId {
+                // A restore is an outside entry: the person did not walk here,
+                // so it lands on the route's own tab (no-op on the flag-off
+                // root).
+                openExternal(route)
+            }
         }
     }
 
@@ -376,6 +410,16 @@ public final class AppCoordinator: Coordinator {
         currentScreen = .heroFrame
         updateContext(for: .heroFrame)
         pendingLinkNotice = nil
+        // The return route was captured from the PREVIOUS account's
+        // `currentScreen` two frames ago, on the forced-sign-out branch above,
+        // and is replayed on the NEXT arrival at `.main` — whoever that is. So
+        // a token-refresh failure followed by a re-auth as somebody else
+        // restored account A's invoice for account B, which is the same shape
+        // this method exists to close (C2-06). Losing the route on a forced
+        // sign-out is the correct trade: it is a convenience, and the person is
+        // one tap from the screen either way.
+        pendingReturnRoute = nil
+        pendingReturnOwner = nil
         // A queued link is a request the PREVIOUS account made. It survives the
         // process (App Group defaults, 15-minute life), so without this it
         // drains into whoever signs in next.
@@ -388,6 +432,15 @@ public final class AppCoordinator: Coordinator {
     /// which a unit test cannot stand up, so a suite that needs to prove what
     /// happens ACROSS a transition drives it here — through the same two
     /// side-effect methods `recomputePhase()` uses, never around them.
+    /// Test seam. `lastKnownUserId` is filled by `recomputePhase()` from
+    /// `AuthService`, whose auth-state stream a unit test cannot stand up.
+    func noteSignedInUserForTesting(_ userId: String?) {
+        lastKnownUserId = userId
+    }
+
+    /// Test seam: what the return route is stamped with.
+    var pendingReturnOwnerForTesting: String? { pendingReturnOwner }
+
     func forcePhaseForTesting(_ newPhase: AppPhase) {
         let oldPhase = phase
         if newPhase != oldPhase {

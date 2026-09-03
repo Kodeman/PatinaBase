@@ -166,4 +166,57 @@ struct SignOutResetTests {
 
         #expect(coordinator.pendingLinkNotice == nil)
     }
+
+    // MARK: - RL1F-29 — the return route belongs to one account
+
+    /// A forced sign-out (token-refresh failure) routes `.main → .auth`
+    /// directly, and captured the screen it left so re-auth could restore it.
+    /// It was replayed on the NEXT arrival at `.main` — whoever that was — so
+    /// signing back in as somebody else landed account B on account A's
+    /// invoice, the same shape `clearNavigationForEndedSession()` exists to
+    /// close. It is stamped now, and the reset clears it.
+    @Test("the return route is stamped with the account it was taken from")
+    func theReturnRouteIsStamped() {
+        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        coordinator.noteSignedInUserForTesting("a0000000-0000-0000-0000-000000000005")
+        coordinator.forcePhaseForTesting(.main)
+        coordinator.navigate(to: .invoiceDetail(invoiceId: "i1"))
+
+        coordinator.forcePhaseForTesting(.auth)
+
+        #expect(coordinator.pendingReturnRoute != nil, "a forced sign-out still keeps the screen")
+        #expect(coordinator.pendingReturnOwnerForTesting == "a0000000-0000-0000-0000-000000000005")
+    }
+
+    /// And the guard: a different account arriving at `.main` does not get it.
+    /// This suite has no live session, so `AuthService.currentUserId` is nil —
+    /// which is exactly "not the account that left".
+    @Test("a different account does not inherit the return route")
+    func aDifferentAccountDoesNotInheritIt() {
+        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        coordinator.noteSignedInUserForTesting("a0000000-0000-0000-0000-000000000005")
+        coordinator.forcePhaseForTesting(.main)
+        coordinator.navigate(to: .invoiceDetail(invoiceId: "i1"))
+        coordinator.forcePhaseForTesting(.auth)
+
+        coordinator.forcePhaseForTesting(.main)
+
+        #expect(coordinator.pendingReturnRoute == nil, "the route is drained either way")
+        #expect(coordinator.currentScreen == .heroFrame, "…but it is not opened for someone else")
+    }
+
+    /// The voluntary path keeps nothing at all: it routes through `.launching`,
+    /// where the capture never fires and the reset still runs.
+    @Test("a voluntary sign-out keeps no return route")
+    func aVoluntarySignOutKeepsNothing() {
+        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        coordinator.noteSignedInUserForTesting("a0000000-0000-0000-0000-000000000005")
+        coordinator.forcePhaseForTesting(.main)
+        coordinator.navigate(to: .invoiceDetail(invoiceId: "i1"))
+
+        coordinator.forcePhaseForTesting(.launching)
+
+        #expect(coordinator.pendingReturnRoute == nil)
+        #expect(coordinator.pendingReturnOwnerForTesting == nil)
+    }
 }
