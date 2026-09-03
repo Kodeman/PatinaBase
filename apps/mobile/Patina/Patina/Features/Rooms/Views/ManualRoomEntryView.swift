@@ -179,7 +179,8 @@ struct ManualRoomEntryView: View {
     /// empty form and a room whose dimensions the person never gave —
     /// `save()` passes them through `measuredWithUnitControl: true`.
     static func dimensionsAreValid(length: String, width: String) -> Bool {
-        guard let l = Double(length), let w = Double(width), l > 0, w > 0 else { return false }
+        guard let lengthValue = Double(length), let widthValue = Double(width),
+              lengthValue > 0, widthValue > 0 else { return false }
         return true
     }
 
