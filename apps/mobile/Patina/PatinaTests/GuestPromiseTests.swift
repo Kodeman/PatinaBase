@@ -25,11 +25,23 @@ struct GuestPromiseTests {
     /// first fix round from L1-A to **L1-C**, which owns
     /// `Features/Companion/**` (steward.md §5.4). L1-A recorded the re-route
     /// as task `C-L1A-3`.
+    /// `RL1E3-01`: these two assertions used to share one wrapper, so the
+    /// mechanism landing while the sentence was wrong recorded a known issue
+    /// either way — which is exactly what happened: L1-C threaded
+    /// `isAuthenticated` through and typed the hint with U+0027. One `@Test`
+    /// per fact now, the `RL1E2-05` shape this wrapper still had.
     @Test("the Companion's row builder takes the guest's auth state")
-    func companionRowsBranchOnAuthState() throws {
+    func companionRowBuilderTakesAuthState() throws {
         let source = try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
         withKnownIssue("deck row A-52 / CompanionActionRows.swift:32-34 is L1-C's (task C-L1A-3)") {
             #expect(source.contains("isAuthenticated"), "no row builder takes the guest's state")
+        }
+    }
+
+    @Test("the Companion's home row says what a guest would find, in the deck's own bytes")
+    func companionHomeRowSpeaksToAGuest() throws {
+        let source = try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
+        withKnownIssue("deck row A-52 / CompanionActionRows.swift:38's hint is L1-C's (task C-L1A-3)") {
             #expect(source.contains("\"See what’s on Patina\""))
         }
     }

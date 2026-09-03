@@ -157,15 +157,35 @@ struct BrandVoiceLintTests {
         }
     }
 
+    /// The two directories PROGRAM.md §3 and `steward.md` §5.6 give this lane
+    /// as **globs**, not as named files. Walked rather than listed:
+    /// `RL1E3-03` found `DesignRequestStatusService.swift` and
+    /// `DesignRequestCoordinator.swift` unswept — eleven straight apostrophes,
+    /// eight of them on sentences Today renders — because `deckFiles` named
+    /// one file of `Services/DesignServices/`'s four.
+    private static let ownedDirectories = [
+        "Patina/Features/ARPlacement",
+        "Patina/Services/DesignServices"
+    ]
+
+    /// Every `.swift` file under `ownedDirectories`, as (readable path, source).
+    private static func ownedGlobSources() throws -> [(path: String, source: String)] {
+        try ownedDirectories.flatMap { directory in
+            try SourcePin.swiftFiles(under: directory).map { absolute in
+                (absolute.components(separatedBy: "/apps/mobile/Patina/").last ?? absolute,
+                 try String(contentsOfFile: absolute, encoding: .utf8))
+            }
+        }
+    }
+
     /// The files whose copy this wave's deck rewrites, and which this lane
     /// owns outright. `PatinaDesignKit` sits beside the app target, hence the
-    /// `../` prefix `SourcePin` resolves.
+    /// `../` prefix `SourcePin` resolves. Files inside `ownedDirectories` are
+    /// deliberately absent — the walk above covers them, and a file in two
+    /// lists is a file whose real coverage nobody can read off the source.
     private static let deckFiles = [
         "Patina/Design/Components/PatinaErrorState.swift",
         "../PatinaDesignKit/Sources/PatinaDesignKit/Tokens/TimeOfDay.swift",
-        "Patina/Features/ARPlacement/Views/ARPlacementView.swift",
-        "Patina/Features/ARPlacement/ViewModels/ARPlacementViewModel.swift",
-        "Patina/Services/DesignServices/DesignServicesService.swift",
         "Patina/Features/DesignServices/DesignRequestFlowView+Steps.swift",
         "Patina/Services/Companion/Models/CompanionAPIModels.swift",
         // `RL1E2-21`: this lane added two `PatinaLog.companion.error` lines
@@ -192,6 +212,37 @@ struct BrandVoiceLintTests {
     func apostrophesAreCurly() throws {
         for path in Self.deckFiles {
             Self.lintApostrophes(try SourcePin.read(path), file: path)
+        }
+    }
+
+    // MARK: - The globs this lane owns outright (`RL1E3-03`)
+
+    /// Seven files today: three under `ARPlacement`, four under
+    /// `DesignServices`. The count is asserted so a moved or renamed
+    /// directory is a hard failure rather than an empty set that passes.
+    private static let ownedGlobFileCount = 7
+
+    @Test("every file in L1-E's own globs carries no brand-voice violation")
+    func ownedGlobsAreClean() throws {
+        let files = try Self.ownedGlobSources()
+        #expect(
+            files.count >= Self.ownedGlobFileCount,
+            "the owned-glob walk found \(files.count) files, not \(Self.ownedGlobFileCount)"
+        )
+        for file in files {
+            Self.lint(file.source, file: file.path)
+        }
+    }
+
+    @Test("every file in L1-E's own globs types its apostrophes as U+2019 (A-06)")
+    func ownedGlobApostrophesAreCurly() throws {
+        let files = try Self.ownedGlobSources()
+        #expect(
+            files.count >= Self.ownedGlobFileCount,
+            "the owned-glob walk found \(files.count) files, not \(Self.ownedGlobFileCount)"
+        )
+        for file in files {
+            Self.lintApostrophes(file.source, file: file.path)
         }
     }
 
@@ -273,6 +324,28 @@ struct BrandVoiceLintTests {
         try Self.pinDirtyToday(
             "Patina/Features/Home/Views/HomeStoryRetryRow.swift",
             row: "deck row A-06 / HomeStoryRetryRow.swift is L1-C's; unwrap after L1-C merges"
+        )
+    }
+
+    /// `RL1E3-01`: the one file carrying a sentence *this deck wrote*
+    /// (`A-52`'s `"See what’s on Patina"`) had no apostrophe pin at all, and
+    /// L1-C landed it with U+0027. Round 4's note to L1-C carries the byte.
+    @Test("L1-C · the Companion's action rows type their apostrophes as U+2019")
+    func companionActionRowsApostrophesAreCurly() throws {
+        try Self.pinDirtyToday(
+            "Patina/Features/Companion/Services/CompanionActionRows.swift",
+            row: "deck row A-52 / CompanionActionRows.swift:38 is L1-C's; unwrap after L1-C merges"
+        )
+    }
+
+    /// `RL1E3-04`: L1-F is the one lane the round-3 sweep skipped entirely,
+    /// and its new send-failure sentence (`:413`, rendered at
+    /// `ThreadDetailView.swift:198`) ships with U+0027 and had no deck row.
+    @Test("L1-F · the message send-failure sentence types its apostrophes as U+2019")
+    func messagingViewModelApostrophesAreCurly() throws {
+        try Self.pinDirtyToday(
+            "Patina/Features/Messaging/ViewModels/MessagingViewModel.swift",
+            row: "deck row A-06 / MessagingViewModel.swift:413 is L1-F's; unwrap after L1-F merges"
         )
     }
 

@@ -21,7 +21,21 @@ struct ARPlacementFailureCopyTests {
         #expect(!message.isEmpty)
         #expect(!message.contains("RoomsAPIError"))
         #expect(!message.contains("Patina."))
-        #expect(!message.contains("couldn't be completed"))
+        // `RL1E3-08`: `NSError.localizedDescription` renders "The operation
+        // couldn’t be completed." with U+2019 on current iOS, so a needle
+        // carrying the straight glyph could never match its own subject.
+        #expect(!message.contains("be completed"))
+    }
+
+    /// `RL1E3-06`: `ARPlacementManager.errorMessage` is set at `:133` and read
+    /// by no view in the target, so this is a landmine rather than a live
+    /// defect — one `Text(manager.errorMessage ?? "")` away from being `C4-08`
+    /// again, in the file `C4-08` is filed about.
+    @Test("the AR load failure speaks in the app's voice, not the SDK's")
+    func loadFailureMessageIsInTheAppVoice() throws {
+        let source = try SourcePin.read("Patina/Features/ARPlacement/Services/ARPlacementManager.swift")
+        #expect(!source.contains("\"Couldn't load 3D model\""))
+        #expect(source.contains("\"We couldn’t load this piece. Try again.\""))
     }
 
     @Test("the toast renders the failure message with no additional prefix")
