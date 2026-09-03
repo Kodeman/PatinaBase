@@ -51,6 +51,10 @@ public final class DeepLinkHandler {
         // The coordinator is the only object that knows when the app can show
         // a route, so it owns the trigger; this owns what is replayed.
         coordinator.attachDeepLinkDrain { [weak self] in self?.drainIfPossible() }
+        // …and when it ends. The queue is on disk with a 15-minute life, so a
+        // link account A tapped at the auth wall would otherwise drain into
+        // account B's first `.main`.
+        coordinator.attachDeepLinkClear { [weak self] in self?.queue.clear() }
         drainIfPossible()
     }
 
