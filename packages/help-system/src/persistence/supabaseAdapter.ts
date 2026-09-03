@@ -41,17 +41,17 @@ import type {
   TourStateBackend,
   FeatureAnnouncementStateBackend,
   MarginNoteStateBackend,
-} from './types'
-import type { TourState } from '../proactive/TourController/tourState'
+} from "./types";
+import type { TourState } from "../proactive/TourController/tourState";
 import {
   TOUR_STATE_STORAGE_PREFIX,
   clearLocalTourState,
-} from '../proactive/TourController/tourState'
-import type { FeatureAnnouncementState } from '../proactive/FeatureAnnouncementCoachmark/featureAnnouncementState'
-import { _clearAllFeatureAnnouncementState } from '../proactive/FeatureAnnouncementCoachmark/featureAnnouncementState'
+} from "../proactive/TourController/tourState";
+import type { FeatureAnnouncementState } from "../proactive/FeatureAnnouncementCoachmark/featureAnnouncementState";
+import { _clearAllFeatureAnnouncementState } from "../proactive/FeatureAnnouncementCoachmark/featureAnnouncementState";
 
-const PROFILES_TABLE = 'profiles'
-const HELP_STATE_COLUMN = 'help_state'
+const PROFILES_TABLE = "profiles";
+const HELP_STATE_COLUMN = "help_state";
 
 /**
  * Load the entire `profiles.help_state` blob for `userId`. Returns `{}` when
@@ -66,29 +66,29 @@ export async function loadHelpState(
     const { data, error } = await client
       .from(PROFILES_TABLE)
       .select(HELP_STATE_COLUMN)
-      .eq('id', userId)
-      .single()
+      .eq("id", userId)
+      .single();
     if (error) {
       // Treat any error (missing row, RLS rejection, network) as fresh user.
-      if (typeof console !== 'undefined') {
+      if (typeof console !== "undefined") {
         console.warn(
           `[help-system] loadHelpState: Supabase returned error — falling back to empty state.`,
           error.message,
-        )
+        );
       }
-      return {}
+      return {};
     }
-    const blob = data?.help_state
-    if (!blob || typeof blob !== 'object') return {}
-    return blob
+    const blob = data?.help_state;
+    if (!blob || typeof blob !== "object") return {};
+    return blob;
   } catch (err) {
-    if (typeof console !== 'undefined') {
+    if (typeof console !== "undefined") {
       console.warn(
         `[help-system] loadHelpState: unexpected throw — falling back to empty state.`,
         err,
-      )
+      );
     }
-    return {}
+    return {};
   }
 }
 
@@ -106,19 +106,19 @@ export async function saveHelpState(
     const { error } = await client
       .from(PROFILES_TABLE)
       .update({ [HELP_STATE_COLUMN]: blob })
-      .eq('id', userId)
-    if (error && typeof console !== 'undefined') {
+      .eq("id", userId);
+    if (error && typeof console !== "undefined") {
       console.warn(
         `[help-system] saveHelpState: Supabase update failed — write dropped.`,
         error.message,
-      )
+      );
     }
   } catch (err) {
-    if (typeof console !== 'undefined') {
+    if (typeof console !== "undefined") {
       console.warn(
         `[help-system] saveHelpState: unexpected throw — write dropped.`,
         err,
-      )
+      );
     }
   }
 }
@@ -129,9 +129,9 @@ export async function saveHelpState(
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface BackendCache {
-  blob: HelpStateBlob
-  hydrated: boolean
-  pendingWrite: Promise<void>
+  blob: HelpStateBlob;
+  hydrated: boolean;
+  pendingWrite: Promise<void>;
 }
 
 function createCache(): BackendCache {
@@ -139,7 +139,7 @@ function createCache(): BackendCache {
     blob: {},
     hydrated: false,
     pendingWrite: Promise.resolve(),
-  }
+  };
 }
 
 /**
@@ -155,7 +155,7 @@ function scheduleWrite(
 ): void {
   cache.pendingWrite = cache.pendingWrite
     .catch(() => undefined)
-    .then(() => saveHelpState(client, userId, cache.blob))
+    .then(() => saveHelpState(client, userId, cache.blob));
 }
 
 /**
@@ -170,31 +170,31 @@ export function createSupabaseTourStateBackend(
 ): TourStateBackend {
   return {
     getTourState(tourId: string): TourState {
-      return cache.blob.tours?.[tourId] ?? {}
+      return cache.blob.tours?.[tourId] ?? {};
     },
     setTourState(tourId: string, patch: TourState): void {
-      const prevTours = cache.blob.tours ?? {}
-      const prev = prevTours[tourId] ?? {}
-      const next: TourState = { ...prev, ...patch }
+      const prevTours = cache.blob.tours ?? {};
+      const prev = prevTours[tourId] ?? {};
+      const next: TourState = { ...prev, ...patch };
       cache.blob = {
         ...cache.blob,
         tours: { ...prevTours, [tourId]: next },
-      }
-      scheduleWrite(cache, client, userId)
+      };
+      scheduleWrite(cache, client, userId);
     },
     clearTourState(tourId: string): void {
-      const prevTours = cache.blob.tours
+      const prevTours = cache.blob.tours;
       // No record → nothing to clear (avoid a needless write-through).
-      if (!prevTours || !(tourId in prevTours)) return
-      const nextTours = { ...prevTours }
-      delete nextTours[tourId]
+      if (!prevTours || !(tourId in prevTours)) return;
+      const nextTours = { ...prevTours };
+      delete nextTours[tourId];
       cache.blob = {
         ...cache.blob,
         tours: nextTours,
-      }
-      scheduleWrite(cache, client, userId)
+      };
+      scheduleWrite(cache, client, userId);
     },
-  }
+  };
 }
 
 /**
@@ -207,27 +207,29 @@ export function createSupabaseFeatureAnnouncementBackend(
   cache: BackendCache,
 ): FeatureAnnouncementStateBackend {
   return {
-    getFeatureAnnouncementState(featureKey: string): FeatureAnnouncementState | null {
-      const entry = cache.blob.featureAnnouncements?.[featureKey]
-      if (!entry) return null
-      if (typeof entry.dismissedAt !== 'string') return null
-      return { dismissedAt: entry.dismissedAt }
+    getFeatureAnnouncementState(
+      featureKey: string,
+    ): FeatureAnnouncementState | null {
+      const entry = cache.blob.featureAnnouncements?.[featureKey];
+      if (!entry) return null;
+      if (typeof entry.dismissedAt !== "string") return null;
+      return { dismissedAt: entry.dismissedAt };
     },
     setFeatureAnnouncementState(
       featureKey: string,
       state: FeatureAnnouncementState,
     ): void {
-      const prevAnnouncements = cache.blob.featureAnnouncements ?? {}
+      const prevAnnouncements = cache.blob.featureAnnouncements ?? {};
       cache.blob = {
         ...cache.blob,
         featureAnnouncements: {
           ...prevAnnouncements,
           [featureKey]: { dismissedAt: state.dismissedAt },
         },
-      }
-      scheduleWrite(cache, client, userId)
+      };
+      scheduleWrite(cache, client, userId);
     },
-  }
+  };
 }
 
 /**
@@ -238,10 +240,10 @@ export function createSupabaseFeatureAnnouncementBackend(
  * that file's `hasSeen`).
  */
 export interface CreateSupabaseMarginNoteBackendResult extends MarginNoteStateBackend {
-  hydrate: () => Promise<Record<string, string>>
+  hydrate: () => Promise<Record<string, string>>;
   /** Flushes any pending write — `migrateLocalToSupabase` awaits this before
    *  it returns so a caller can trust localStorage is safe to have cleared. */
-  flush: () => Promise<void>
+  flush: () => Promise<void>;
 }
 
 /**
@@ -259,34 +261,40 @@ export function createSupabaseMarginNoteBackend(
   client: HelpStateSupabaseClient,
   userId: string,
 ): CreateSupabaseMarginNoteBackendResult {
-  const cache = createCache()
+  const cache = createCache();
   return {
     hasSeen(noteKey: string): boolean {
-      return Object.prototype.hasOwnProperty.call(cache.blob.marginNotes ?? {}, noteKey)
+      return Object.prototype.hasOwnProperty.call(
+        cache.blob.marginNotes ?? {},
+        noteKey,
+      );
     },
     markSeen(noteKey: string): void {
-      const prev = cache.blob.marginNotes ?? {}
-      if (Object.prototype.hasOwnProperty.call(prev, noteKey)) return
+      const prev = cache.blob.marginNotes ?? {};
+      if (Object.prototype.hasOwnProperty.call(prev, noteKey)) return;
       cache.blob = {
         ...cache.blob,
         marginNotes: { ...prev, [noteKey]: new Date().toISOString() },
-      }
-      scheduleWrite(cache, client, userId)
+      };
+      scheduleWrite(cache, client, userId);
     },
     async hydrate(): Promise<Record<string, string>> {
-      const blob = await loadHelpState(client, userId)
+      const blob = await loadHelpState(client, userId);
       cache.blob = {
         ...blob,
         ...cache.blob,
-        marginNotes: { ...(blob.marginNotes ?? {}), ...(cache.blob.marginNotes ?? {}) },
-      }
-      cache.hydrated = true
-      return cache.blob.marginNotes ?? {}
+        marginNotes: {
+          ...(blob.marginNotes ?? {}),
+          ...(cache.blob.marginNotes ?? {}),
+        },
+      };
+      cache.hydrated = true;
+      return cache.blob.marginNotes ?? {};
     },
     async flush(): Promise<void> {
-      await cache.pendingWrite
+      await cache.pendingWrite;
     },
-  }
+  };
 }
 
 /**
@@ -301,21 +309,21 @@ export function createSupabaseMarginNoteBackend(
  * state until the hydrate resolves.)
  */
 export interface CreateSupabaseBackendsResult {
-  tourBackend: TourStateBackend
-  featureBackend: FeatureAnnouncementStateBackend
+  tourBackend: TourStateBackend;
+  featureBackend: FeatureAnnouncementStateBackend;
   /** Returns the current in-memory blob — useful for tests + migration. */
-  getBlob: () => HelpStateBlob
+  getBlob: () => HelpStateBlob;
   /** Hydrates the cache from Supabase. Safe to call multiple times. */
-  hydrate: () => Promise<HelpStateBlob>
+  hydrate: () => Promise<HelpStateBlob>;
   /** Flushes any pending write. Useful when the user is about to sign out. */
-  flush: () => Promise<void>
+  flush: () => Promise<void>;
 }
 
 export function createSupabaseHelpStateBackends(
   client: HelpStateSupabaseClient,
   userId: string,
 ): CreateSupabaseBackendsResult {
-  const cache = createCache()
+  const cache = createCache();
   return {
     tourBackend: createSupabaseTourStateBackend(client, userId, cache),
     featureBackend: createSupabaseFeatureAnnouncementBackend(
@@ -325,7 +333,7 @@ export function createSupabaseHelpStateBackends(
     ),
     getBlob: () => cache.blob,
     async hydrate(): Promise<HelpStateBlob> {
-      const blob = await loadHelpState(client, userId)
+      const blob = await loadHelpState(client, userId);
       // Only overwrite if the in-memory cache is still empty — a write that
       // landed during hydration takes precedence (the user already saw the
       // updated state once we wrote it). Conservative merge so we don't lose
@@ -337,14 +345,14 @@ export function createSupabaseHelpStateBackends(
           ...(blob.featureAnnouncements ?? {}),
           ...(cache.blob.featureAnnouncements ?? {}),
         },
-      }
-      cache.hydrated = true
-      return cache.blob
+      };
+      cache.hydrated = true;
+      return cache.blob;
     },
     async flush(): Promise<void> {
-      await cache.pendingWrite
+      await cache.pendingWrite;
     },
-  }
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -369,64 +377,69 @@ export function createSupabaseHelpStateBackends(
  * under. Duplicated here (rather than imported) because the help-system
  * package must not depend on a portal app — keep the two literals in sync.
  */
-const MARGIN_NOTE_STORAGE_PREFIX = 'patina:margin-note:'
+const MARGIN_NOTE_STORAGE_PREFIX = "patina:margin-note:";
 
 export interface MigrationResult {
-  toursMigrated: number
-  featureAnnouncementsMigrated: number
-  marginNotesMigrated: number
+  toursMigrated: number;
+  featureAnnouncementsMigrated: number;
+  marginNotesMigrated: number;
 }
 
 export async function migrateLocalToSupabase(
   backends: CreateSupabaseBackendsResult,
   marginNoteBackend?: CreateSupabaseMarginNoteBackendResult,
 ): Promise<MigrationResult> {
-  if (typeof window === 'undefined') {
-    return { toursMigrated: 0, featureAnnouncementsMigrated: 0, marginNotesMigrated: 0 }
+  if (typeof window === "undefined") {
+    return {
+      toursMigrated: 0,
+      featureAnnouncementsMigrated: 0,
+      marginNotesMigrated: 0,
+    };
   }
-  let toursMigrated = 0
-  let featureAnnouncementsMigrated = 0
-  let marginNotesMigrated = 0
+  let toursMigrated = 0;
+  let featureAnnouncementsMigrated = 0;
+  let marginNotesMigrated = 0;
 
   // ── Tours: scan all "help-system.tour.*" keys.
-  const localTourKeys: { storageKey: string; tourId: string }[] = []
+  const localTourKeys: { storageKey: string; tourId: string }[] = [];
   try {
     for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i)
-      if (!key) continue
-      if (!key.startsWith(TOUR_STATE_STORAGE_PREFIX)) continue
-      const tourId = key.slice(TOUR_STATE_STORAGE_PREFIX.length)
-      if (!tourId) continue
-      localTourKeys.push({ storageKey: key, tourId })
+      const key = window.localStorage.key(i);
+      if (!key) continue;
+      if (!key.startsWith(TOUR_STATE_STORAGE_PREFIX)) continue;
+      const tourId = key.slice(TOUR_STATE_STORAGE_PREFIX.length);
+      if (!tourId) continue;
+      localTourKeys.push({ storageKey: key, tourId });
     }
   } catch {
     // localStorage walk failed (private mode / quota probe) — give up.
-    return { toursMigrated, featureAnnouncementsMigrated, marginNotesMigrated }
+    return { toursMigrated, featureAnnouncementsMigrated, marginNotesMigrated };
   }
 
   for (const { storageKey, tourId } of localTourKeys) {
     try {
-      const raw = window.localStorage.getItem(storageKey)
-      if (!raw) continue
-      const parsed = JSON.parse(raw) as unknown
-      if (typeof parsed !== 'object' || parsed === null) continue
-      const local = parsed as TourState
-      const existing = backends.tourBackend.getTourState(tourId)
-      const alreadyResolved = existing.completed === true || existing.abandoned === true
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as unknown;
+      if (typeof parsed !== "object" || parsed === null) continue;
+      const local = parsed as TourState;
+      const existing = backends.tourBackend.getTourState(tourId);
+      const alreadyResolved =
+        existing.completed === true || existing.abandoned === true;
       if (alreadyResolved) {
         // Supabase already knows. Drop the local copy without merging. Use the
         // localStorage-only clear so we never touch the authoritative Supabase
         // record we're migrating INTO.
-        clearLocalTourState(tourId)
-        continue
+        clearLocalTourState(tourId);
+        continue;
       }
       // Merge local on top of existing so any field present locally wins —
       // this is the "promote local to Supabase" direction.
-      backends.tourBackend.setTourState(tourId, { ...existing, ...local })
-      toursMigrated += 1
+      backends.tourBackend.setTourState(tourId, { ...existing, ...local });
+      toursMigrated += 1;
       // localStorage-only clear: dropping the migrated source must NOT clear
       // the Supabase entry we just wrote via setTourState above.
-      clearLocalTourState(tourId)
+      clearLocalTourState(tourId);
     } catch {
       // One bad entry shouldn't abort the sweep.
     }
@@ -435,26 +448,29 @@ export async function migrateLocalToSupabase(
   // ── Feature announcements: read the storage map directly so we can mirror
   // every key into Supabase, then clear via the package's internal helper.
   try {
-    const raw = window.localStorage.getItem('patina.help.feature_announcement.v1')
+    const raw = window.localStorage.getItem(
+      "patina.help.feature_announcement.v1",
+    );
     if (raw) {
-      const parsed = JSON.parse(raw) as unknown
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const map = parsed as Record<string, FeatureAnnouncementState>
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const map = parsed as Record<string, FeatureAnnouncementState>;
         for (const [featureKey, state] of Object.entries(map)) {
-          if (!state || typeof state.dismissedAt !== 'string') continue
-          const existing = backends.featureBackend.getFeatureAnnouncementState(featureKey)
+          if (!state || typeof state.dismissedAt !== "string") continue;
+          const existing =
+            backends.featureBackend.getFeatureAnnouncementState(featureKey);
           if (existing) {
             // Supabase already has a dismissedAt — keep the earlier one (the
             // user's "first" dismiss). String compare on ISO-8601 is safe.
-            continue
+            continue;
           }
           backends.featureBackend.setFeatureAnnouncementState(featureKey, {
             dismissedAt: state.dismissedAt,
-          })
-          featureAnnouncementsMigrated += 1
+          });
+          featureAnnouncementsMigrated += 1;
         }
       }
-      _clearAllFeatureAnnouncementState()
+      _clearAllFeatureAnnouncementState();
     }
   } catch {
     // Same defensive posture — the migration must never crash the host.
@@ -466,22 +482,22 @@ export async function migrateLocalToSupabase(
   // (installed once it has hydrated — see help-state-provider.tsx).
   if (marginNoteBackend) {
     try {
-      const localNoteKeys: { storageKey: string; noteKey: string }[] = []
+      const localNoteKeys: { storageKey: string; noteKey: string }[] = [];
       for (let i = 0; i < window.localStorage.length; i++) {
-        const key = window.localStorage.key(i)
-        if (!key) continue
-        if (!key.startsWith(MARGIN_NOTE_STORAGE_PREFIX)) continue
-        const noteKey = key.slice(MARGIN_NOTE_STORAGE_PREFIX.length)
-        if (!noteKey) continue
-        localNoteKeys.push({ storageKey: key, noteKey })
+        const key = window.localStorage.key(i);
+        if (!key) continue;
+        if (!key.startsWith(MARGIN_NOTE_STORAGE_PREFIX)) continue;
+        const noteKey = key.slice(MARGIN_NOTE_STORAGE_PREFIX.length);
+        if (!noteKey) continue;
+        localNoteKeys.push({ storageKey: key, noteKey });
       }
       for (const { storageKey, noteKey } of localNoteKeys) {
         if (!marginNoteBackend.hasSeen(noteKey)) {
-          marginNoteBackend.markSeen(noteKey)
-          marginNotesMigrated += 1
+          marginNoteBackend.markSeen(noteKey);
+          marginNotesMigrated += 1;
         }
         try {
-          window.localStorage.removeItem(storageKey)
+          window.localStorage.removeItem(storageKey);
         } catch {
           // best-effort — leave the local key rather than crash the sweep.
         }
@@ -494,9 +510,9 @@ export async function migrateLocalToSupabase(
 
   // Wait for the writes to land before we tell the caller it's safe to declare
   // localStorage authoritative-as-cleared.
-  await backends.flush()
+  await backends.flush();
   if (marginNoteBackend) {
-    await marginNoteBackend.flush()
+    await marginNoteBackend.flush();
   }
-  return { toursMigrated, featureAnnouncementsMigrated, marginNotesMigrated }
+  return { toursMigrated, featureAnnouncementsMigrated, marginNotesMigrated };
 }

@@ -33,8 +33,8 @@
  * (and similarly for feature announcements).
  */
 
-import type { TourState } from '../proactive/TourController/tourState'
-import type { FeatureAnnouncementState } from '../proactive/FeatureAnnouncementCoachmark/featureAnnouncementState'
+import type { TourState } from "../proactive/TourController/tourState";
+import type { FeatureAnnouncementState } from "../proactive/FeatureAnnouncementCoachmark/featureAnnouncementState";
 
 /**
  * Combined JSONB shape stored at `profiles.help_state`. Both subkeys are
@@ -42,10 +42,10 @@ import type { FeatureAnnouncementState } from '../proactive/FeatureAnnouncementC
  * adapter never has to write a stub before the first real entry.
  */
 export interface HelpStateBlob {
-  tours?: Record<string, TourState>
-  featureAnnouncements?: Record<string, FeatureAnnouncementState>
+  tours?: Record<string, TourState>;
+  featureAnnouncements?: Record<string, FeatureAnnouncementState>;
   /** `noteKey` → ISO instant seen (dismissed or acted). See decision 5. */
-  marginNotes?: Record<string, string>
+  marginNotes?: Record<string, string>;
 }
 
 /**
@@ -58,8 +58,8 @@ export interface HelpStateBlob {
  * immediately so the next render sees the new state.
  */
 export interface TourStateBackend {
-  getTourState: (tourId: string) => TourState
-  setTourState: (tourId: string, patch: TourState) => void
+  getTourState: (tourId: string) => TourState;
+  setTourState: (tourId: string, patch: TourState) => void;
   /**
    * Hard-clear this backend's record for `tourId`. OPTIONAL — only
    * network-backed backends (Supabase) implement it; the localStorage default
@@ -67,7 +67,7 @@ export interface TourStateBackend {
    * `TourController` replay path dispatches here so a completed/abandoned
    * record is dropped from the authoritative store, not just localStorage.
    */
-  clearTourState?: (tourId: string) => void
+  clearTourState?: (tourId: string) => void;
 }
 
 /**
@@ -75,11 +75,13 @@ export interface TourStateBackend {
  * write-through-cache requirements as `TourStateBackend`.
  */
 export interface FeatureAnnouncementStateBackend {
-  getFeatureAnnouncementState: (featureKey: string) => FeatureAnnouncementState | null
+  getFeatureAnnouncementState: (
+    featureKey: string,
+  ) => FeatureAnnouncementState | null;
   setFeatureAnnouncementState: (
     featureKey: string,
     state: FeatureAnnouncementState,
-  ) => void
+  ) => void;
 }
 
 /**
@@ -90,8 +92,8 @@ export interface FeatureAnnouncementStateBackend {
  * its unsuffixed or previous-version sibling.
  */
 export interface MarginNoteStateBackend {
-  hasSeen: (noteKey: string) => boolean
-  markSeen: (noteKey: string) => void
+  hasSeen: (noteKey: string) => boolean;
+  markSeen: (noteKey: string) => void;
 }
 
 /**
@@ -113,4 +115,4 @@ export interface MarginNoteStateBackend {
  * land from a generic helper.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type HelpStateSupabaseClient = any
+export type HelpStateSupabaseClient = any;

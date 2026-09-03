@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * HelpStateProvider — the (document)-era home for the Supabase help-state
@@ -20,16 +20,22 @@
  * on the safe empty default (spec §13.4).
  */
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { createBrowserClient, useSession } from '@patina/supabase';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { createBrowserClient, useSession } from "@patina/supabase";
 import {
   createSupabaseHelpStateBackends,
   createSupabaseMarginNoteBackend,
   migrateLocalToSupabase,
   setFeatureAnnouncementStateBackend,
   setTourStateBackend,
-} from '@patina/help-system';
-import { setMarginNoteStateBackend } from '../margin-note';
+} from "@patina/help-system";
+import { setMarginNoteStateBackend } from "../margin-note";
 
 interface HelpStateContextValue {
   /** True once the Supabase help-state cache has hydrated (or failed and fallen
@@ -38,7 +44,9 @@ interface HelpStateContextValue {
   helpStateReady: boolean;
 }
 
-const HelpStateContext = createContext<HelpStateContextValue>({ helpStateReady: false });
+const HelpStateContext = createContext<HelpStateContextValue>({
+  helpStateReady: false,
+});
 
 /** Read whether the cross-device help state is known yet. */
 export function useHelpState(): HelpStateContextValue {
@@ -56,8 +64,14 @@ export function HelpStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!supabaseUser?.id) return;
     const supabaseClient = createBrowserClient();
-    const backends = createSupabaseHelpStateBackends(supabaseClient, supabaseUser.id);
-    const marginNoteBackend = createSupabaseMarginNoteBackend(supabaseClient, supabaseUser.id);
+    const backends = createSupabaseHelpStateBackends(
+      supabaseClient,
+      supabaseUser.id,
+    );
+    const marginNoteBackend = createSupabaseMarginNoteBackend(
+      supabaseClient,
+      supabaseUser.id,
+    );
     setTourStateBackend(backends.tourBackend);
     setFeatureAnnouncementStateBackend(backends.featureBackend);
     // Installed but not yet hydrated — margin-note.tsx falls back to
@@ -76,9 +90,9 @@ export function HelpStateProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         // Hydration failure must not crash the host — the backends fall back to
         // empty in-memory state and the next mount retries. Log only.
-        if (typeof console !== 'undefined') {
+        if (typeof console !== "undefined") {
           console.warn(
-            '[help-system] HelpStateProvider: Supabase help-state hydration failed',
+            "[help-system] HelpStateProvider: Supabase help-state hydration failed",
             err,
           );
         }
@@ -102,6 +116,8 @@ export function HelpStateProvider({ children }: { children: ReactNode }) {
   }, [supabaseUser?.id]);
 
   return (
-    <HelpStateContext.Provider value={{ helpStateReady }}>{children}</HelpStateContext.Provider>
+    <HelpStateContext.Provider value={{ helpStateReady }}>
+      {children}
+    </HelpStateContext.Provider>
   );
 }

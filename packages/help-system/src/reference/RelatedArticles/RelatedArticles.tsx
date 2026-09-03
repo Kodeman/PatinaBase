@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 /**
  * <RelatedArticles /> — Layer 4 · Reference (Sprint 3 · Stream E · Task E4)
@@ -22,22 +22,22 @@
  * GROQ queries are parameterized; no string interpolation in the query body.
  */
 
-import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { clsx, type ClassValue } from 'clsx'
-import { twMerge } from 'tailwind-merge'
-import { getSanityClient } from '../../sanityClient'
-import { HELP_EVENTS, safeCapture } from '../../analytics'
+import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+import { getSanityClient } from "../../sanityClient";
+import { HELP_EVENTS, safeCapture } from "../../analytics";
 
 // Local cn — same convention as sibling components, keeps the package
 // self-contained for test runs without depending on @patina/design-system.
-const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs))
+const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface RelatedArticlesProps {
   /** Article IDs to query directly. Highest precedence. */
-  articleIds?: string[]
+  articleIds?: string[];
   /**
    * Exact surface keys to query (`surfaceKey in $keys`), rendered in the order
    * given (preserved client-side, since GROQ's `in` does not guarantee order).
@@ -45,9 +45,9 @@ export interface RelatedArticlesProps {
    * "everything under a parent" mode. Wins over `surfaceKeyPrefix`; loses to
    * `articleIds`.
    */
-  surfaceKeys?: string[]
+  surfaceKeys?: string[];
   /** Surface-key prefix to query siblings under the same parent surface. */
-  surfaceKeyPrefix?: string
+  surfaceKeyPrefix?: string;
   /**
    * The surface the user is clicking FROM, for the `from_surface_key` on the
    * `help.related_article.clicked` event. Prefix mode derives this from
@@ -55,15 +55,15 @@ export interface RelatedArticlesProps {
    * no prefix — pass this so the click-through funnel isn't logged as
    * 'unknown' (e.g. the Help Center front page passing its own surface key).
    */
-  fromSurfaceKey?: string
+  fromSurfaceKey?: string;
   /** Maximum number of articles to render. Defaults to 5. */
-  max?: number
+  max?: number;
   /** Optional click handler — fires alongside the analytics event. */
-  onArticleClick?: (articleId: string, surfaceKey: string) => void
+  onArticleClick?: (articleId: string, surfaceKey: string) => void;
   /** Heading override. Defaults to "Related articles". */
-  heading?: string
+  heading?: string;
   /** Additional Tailwind classes merged onto the outer container. */
-  className?: string
+  className?: string;
   /**
    * Called once the query has settled with zero results (never while loading,
    * and never when the component has no query inputs at all). Lets a host —
@@ -71,16 +71,16 @@ export interface RelatedArticlesProps {
    * in place of this component's intentional "render nothing", without a
    * `:has()` CSS hack watching the DOM.
    */
-  onEmpty?: () => void
+  onEmpty?: () => void;
 }
 
 // ─── Internal article shape (returned by the GROQ queries below) ──────────────
 
 interface RelatedArticleRow {
-  _id: string
-  surfaceKey: string
-  title: string
-  excerpt: string
+  _id: string;
+  surfaceKey: string;
+  title: string;
+  excerpt: string;
 }
 
 // Analytics route through the shared `safeCapture` + `HELP_EVENTS` taxonomy of
@@ -94,7 +94,7 @@ interface RelatedArticleRow {
  * convention used elsewhere in the package (ContextualHelpPanel).
  */
 const groq = (strings: TemplateStringsArray, ...values: unknown[]): string =>
-  String.raw({ raw: strings }, ...values)
+  String.raw({ raw: strings }, ...values);
 
 /**
  * IDs mode — fetch up to $max articles whose _id is in $ids.
@@ -118,7 +118,7 @@ const QUERY_BY_IDS = groq`
     title,
     oneSentenceAnswer
   }
-`
+`;
 
 /**
  * Exact-keys mode — fetch articles whose `surfaceKey` is one of $keys. GROQ's
@@ -140,7 +140,7 @@ const QUERY_BY_KEYS = groq`
     title,
     oneSentenceAnswer
   }
-`
+`;
 
 /**
  * Prefix mode — fetch up to $max articles whose `surfaceKey` is a child
@@ -163,106 +163,125 @@ const QUERY_BY_PREFIX = groq`
     title,
     oneSentenceAnswer
   }
-`
+`;
 
-const RELATED_STALE_MS = 5 * 60 * 1000 // 5 min, mirrors useHelpContent
+const RELATED_STALE_MS = 5 * 60 * 1000; // 5 min, mirrors useHelpContent
 
 // ─── Row normaliser ───────────────────────────────────────────────────────────
 
 interface RawRow {
-  _id?: unknown
-  surfaceKey?: unknown
-  helpArticleContent?: { title?: unknown; oneSentenceAnswer?: unknown } | null
-  title?: unknown
-  oneSentenceAnswer?: unknown
+  _id?: unknown;
+  surfaceKey?: unknown;
+  helpArticleContent?: { title?: unknown; oneSentenceAnswer?: unknown } | null;
+  title?: unknown;
+  oneSentenceAnswer?: unknown;
 }
 
 function normaliseRow(row: unknown): RelatedArticleRow | null {
-  if (typeof row !== 'object' || row === null) return null
-  const r = row as RawRow
-  if (typeof r._id !== 'string' || r._id.length === 0) return null
-  if (typeof r.surfaceKey !== 'string' || r.surfaceKey.length === 0) return null
+  if (typeof row !== "object" || row === null) return null;
+  const r = row as RawRow;
+  if (typeof r._id !== "string" || r._id.length === 0) return null;
+  if (typeof r.surfaceKey !== "string" || r.surfaceKey.length === 0)
+    return null;
 
   const innerTitle =
-    typeof r.helpArticleContent?.title === 'string' ? r.helpArticleContent.title : ''
+    typeof r.helpArticleContent?.title === "string"
+      ? r.helpArticleContent.title
+      : "";
   const innerAnswer =
-    typeof r.helpArticleContent?.oneSentenceAnswer === 'string'
+    typeof r.helpArticleContent?.oneSentenceAnswer === "string"
       ? r.helpArticleContent.oneSentenceAnswer
-      : ''
-  const topTitle = typeof r.title === 'string' ? r.title : ''
-  const topAnswer = typeof r.oneSentenceAnswer === 'string' ? r.oneSentenceAnswer : ''
+      : "";
+  const topTitle = typeof r.title === "string" ? r.title : "";
+  const topAnswer =
+    typeof r.oneSentenceAnswer === "string" ? r.oneSentenceAnswer : "";
 
-  const title = innerTitle || topTitle || 'Untitled article'
-  const excerpt = innerAnswer || topAnswer || ''
+  const title = innerTitle || topTitle || "Untitled article";
+  const excerpt = innerAnswer || topAnswer || "";
 
-  return { _id: r._id, surfaceKey: r.surfaceKey, title, excerpt }
+  return { _id: r._id, surfaceKey: r.surfaceKey, title, excerpt };
 }
 
 // ─── Fetchers ─────────────────────────────────────────────────────────────────
 
-async function fetchByIds(ids: string[], max: number): Promise<RelatedArticleRow[]> {
-  if (ids.length === 0) return []
+async function fetchByIds(
+  ids: string[],
+  max: number,
+): Promise<RelatedArticleRow[]> {
+  if (ids.length === 0) return [];
   try {
-    const client = getSanityClient()
-    const result = (await client.fetch(QUERY_BY_IDS, { ids, max })) as unknown
-    if (!Array.isArray(result)) return []
+    const client = getSanityClient();
+    const result = (await client.fetch(QUERY_BY_IDS, { ids, max })) as unknown;
+    if (!Array.isArray(result)) return [];
     return result
       .map(normaliseRow)
-      .filter((row): row is RelatedArticleRow => row !== null)
+      .filter((row): row is RelatedArticleRow => row !== null);
   } catch (err) {
-    if (typeof console !== 'undefined') {
-      console.warn('[help-system] RelatedArticles fetchByIds failed', err)
+    if (typeof console !== "undefined") {
+      console.warn("[help-system] RelatedArticles fetchByIds failed", err);
     }
-    return []
+    return [];
   }
 }
 
-async function fetchByKeys(keys: string[], max: number): Promise<RelatedArticleRow[]> {
-  if (keys.length === 0) return []
+async function fetchByKeys(
+  keys: string[],
+  max: number,
+): Promise<RelatedArticleRow[]> {
+  if (keys.length === 0) return [];
   try {
-    const client = getSanityClient()
-    const result = (await client.fetch(QUERY_BY_KEYS, { keys, max })) as unknown
-    if (!Array.isArray(result)) return []
+    const client = getSanityClient();
+    const result = (await client.fetch(QUERY_BY_KEYS, {
+      keys,
+      max,
+    })) as unknown;
+    if (!Array.isArray(result)) return [];
     const rows = result
       .map(normaliseRow)
-      .filter((row): row is RelatedArticleRow => row !== null)
+      .filter((row): row is RelatedArticleRow => row !== null);
     // Preserve the caller-supplied order; drop keys that returned no doc.
-    const orderOf = new Map(keys.map((key, index) => [key, index]))
+    const orderOf = new Map(keys.map((key, index) => [key, index]));
     return rows
       .slice()
       .sort(
         (a, b) =>
           (orderOf.get(a.surfaceKey) ?? Number.POSITIVE_INFINITY) -
           (orderOf.get(b.surfaceKey) ?? Number.POSITIVE_INFINITY),
-      )
+      );
   } catch (err) {
-    if (typeof console !== 'undefined') {
-      console.warn('[help-system] RelatedArticles fetchByKeys failed', err)
+    if (typeof console !== "undefined") {
+      console.warn("[help-system] RelatedArticles fetchByKeys failed", err);
     }
-    return []
+    return [];
   }
 }
 
-async function fetchByPrefix(prefix: string, max: number): Promise<RelatedArticleRow[]> {
-  if (!prefix) return []
+async function fetchByPrefix(
+  prefix: string,
+  max: number,
+): Promise<RelatedArticleRow[]> {
+  if (!prefix) return [];
   try {
-    const client = getSanityClient()
-    const result = (await client.fetch(QUERY_BY_PREFIX, { prefix, max })) as unknown
-    if (!Array.isArray(result)) return []
+    const client = getSanityClient();
+    const result = (await client.fetch(QUERY_BY_PREFIX, {
+      prefix,
+      max,
+    })) as unknown;
+    if (!Array.isArray(result)) return [];
     return result
       .map(normaliseRow)
-      .filter((row): row is RelatedArticleRow => row !== null)
+      .filter((row): row is RelatedArticleRow => row !== null);
   } catch (err) {
-    if (typeof console !== 'undefined') {
-      console.warn('[help-system] RelatedArticles fetchByPrefix failed', err)
+    if (typeof console !== "undefined") {
+      console.warn("[help-system] RelatedArticles fetchByPrefix failed", err);
     }
-    return []
+    return [];
   }
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const DEFAULT_MAX = 5
+const DEFAULT_MAX = 5;
 
 export function RelatedArticles({
   articleIds,
@@ -271,69 +290,73 @@ export function RelatedArticles({
   fromSurfaceKey: fromSurfaceKeyProp,
   max = DEFAULT_MAX,
   onArticleClick,
-  heading = 'Related articles',
+  heading = "Related articles",
   className,
   onEmpty,
 }: RelatedArticlesProps) {
   // Resolve mode by precedence: IDs > exact keys > prefix.
-  const idsMode = Array.isArray(articleIds) && articleIds.length > 0
-  const keysMode = !idsMode && Array.isArray(surfaceKeys) && surfaceKeys.length > 0
+  const idsMode = Array.isArray(articleIds) && articleIds.length > 0;
+  const keysMode =
+    !idsMode && Array.isArray(surfaceKeys) && surfaceKeys.length > 0;
   const prefixMode =
-    !idsMode && !keysMode && typeof surfaceKeyPrefix === 'string' && surfaceKeyPrefix.length > 0
-  const enabled = idsMode || keysMode || prefixMode
-  const mode = idsMode ? 'ids' : keysMode ? 'keys' : 'prefix'
+    !idsMode &&
+    !keysMode &&
+    typeof surfaceKeyPrefix === "string" &&
+    surfaceKeyPrefix.length > 0;
+  const enabled = idsMode || keysMode || prefixMode;
+  const mode = idsMode ? "ids" : keysMode ? "keys" : "prefix";
 
   // Stable query keys so React Query can cache across renders.
   const idsKey = React.useMemo(
-    () => (idsMode ? [...(articleIds ?? [])].sort().join(',') : ''),
+    () => (idsMode ? [...(articleIds ?? [])].sort().join(",") : ""),
     [idsMode, articleIds],
-  )
+  );
   // Exact-keys identity — order-sensitive (order is part of the output), so we
   // do NOT sort it into the cache key.
   const keysKey = React.useMemo(
-    () => (keysMode ? (surfaceKeys ?? []).join(',') : ''),
+    () => (keysMode ? (surfaceKeys ?? []).join(",") : ""),
     [keysMode, surfaceKeys],
-  )
+  );
 
   const query = useQuery({
     queryKey: [
-      'help-related-articles',
+      "help-related-articles",
       mode,
       idsKey,
       keysKey,
-      surfaceKeyPrefix ?? '',
+      surfaceKeyPrefix ?? "",
       max,
     ],
     queryFn: () => {
-      if (idsMode) return fetchByIds(articleIds!, max)
-      if (keysMode) return fetchByKeys(surfaceKeys!, max)
-      if (prefixMode) return fetchByPrefix(surfaceKeyPrefix!, max)
-      return Promise.resolve<RelatedArticleRow[]>([])
+      if (idsMode) return fetchByIds(articleIds!, max);
+      if (keysMode) return fetchByKeys(surfaceKeys!, max);
+      if (prefixMode) return fetchByPrefix(surfaceKeyPrefix!, max);
+      return Promise.resolve<RelatedArticleRow[]>([]);
     },
     enabled,
     staleTime: RELATED_STALE_MS,
     gcTime: RELATED_STALE_MS * 2,
     retry: 1,
-  })
+  });
 
-  const isLoading = query.isLoading && query.isFetching
-  const rawArticles = query.data ?? []
+  const isLoading = query.isLoading && query.isFetching;
+  const rawArticles = query.data ?? [];
   // Defensive client-side max — Sanity returns at most $max but we trim again
   // so swap-in mocks / consumers cannot exceed the cap.
-  const articles = rawArticles.slice(0, max)
+  const articles = rawArticles.slice(0, max);
   // Settled with zero results — never while loading, never with no inputs at
   // all (an un-enabled RelatedArticles has nothing to say is "empty").
-  const isEmpty = enabled && !isLoading && articles.length === 0
+  const isEmpty = enabled && !isLoading && articles.length === 0;
 
   // Fires the empty-state callback (Help Center FEATURED fallback, etc.) once
   // the query has settled. A plain effect, not a render-time call, so it
   // never fires during React's render pass.
   React.useEffect(() => {
-    if (isEmpty) onEmpty?.()
-  }, [isEmpty, onEmpty])
+    if (isEmpty) onEmpty?.();
+  }, [isEmpty, onEmpty]);
 
   // No inputs → render nothing.
-  if (!enabled) return null
+  if (!enabled) return null;
 
   // Loading → single skeleton row, no heading (never a noisy spinner — this
   // is a supplementary surface, and "Related articles" with no content
@@ -341,7 +364,7 @@ export function RelatedArticles({
   if (isLoading) {
     return (
       <div
-        className={cn('flex flex-col gap-2', className)}
+        className={cn("flex flex-col gap-2", className)}
         data-testid="related-articles-loading"
         role="status"
         aria-label={`Loading ${heading.toLowerCase()}`}
@@ -352,12 +375,12 @@ export function RelatedArticles({
           aria-hidden="true"
         />
       </div>
-    )
+    );
   }
 
   // Empty state → render NOTHING (spec §4 / task contract). `onEmpty` above
   // already told the host.
-  if (articles.length === 0) return null
+  if (articles.length === 0) return null;
 
   // from_surface_key precedence: explicit prop (the only signal FEATURED /
   // articleIds modes have) > prefix mode's own key > 'unknown'.
@@ -366,27 +389,30 @@ export function RelatedArticles({
       ? fromSurfaceKeyProp
       : surfaceKeyPrefix && surfaceKeyPrefix.length > 0
         ? surfaceKeyPrefix
-        : 'unknown'
+        : "unknown";
 
   const handleClick = (article: RelatedArticleRow) => {
     safeCapture(HELP_EVENTS.RELATED_ARTICLE_CLICKED, {
       from_surface_key: fromSurfaceKey,
       to_surface_key: article.surfaceKey,
       to_article_id: article._id,
-    })
-    onArticleClick?.(article._id, article.surfaceKey)
-  }
+    });
+    onArticleClick?.(article._id, article.surfaceKey);
+  };
 
   return (
     <section
       aria-label={heading}
-      className={cn('flex flex-col gap-2', className)}
+      className={cn("flex flex-col gap-2", className)}
       data-testid="related-articles"
     >
       <h3 className="text-sm font-semibold text-foreground">{heading}</h3>
       <ul role="list" className="flex flex-col gap-1">
         {articles.map((article) => (
-          <li key={article._id} className="border-b border-border/40 last:border-b-0">
+          <li
+            key={article._id}
+            className="border-b border-border/40 last:border-b-0"
+          >
             <a
               href={`#${article.surfaceKey}`}
               role="link"
@@ -395,24 +421,28 @@ export function RelatedArticles({
                 // Let the host app intercept navigation via onArticleClick.
                 // Default-prevent here so the anchor doesn't trigger a hash
                 // jump when the consumer is wiring its own router.
-                event.preventDefault()
-                handleClick(article)
+                event.preventDefault();
+                handleClick(article);
               }}
               className={cn(
-                'flex w-full flex-col gap-1 rounded-sm py-2 text-left transition-colors',
-                'hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                "flex w-full flex-col gap-1 rounded-sm py-2 text-left transition-colors",
+                "hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               )}
             >
-              <span className="text-sm font-medium text-foreground">{article.title}</span>
+              <span className="text-sm font-medium text-foreground">
+                {article.title}
+              </span>
               {article.excerpt.length > 0 ? (
-                <span className="text-xs text-muted-foreground">{article.excerpt}</span>
+                <span className="text-xs text-muted-foreground">
+                  {article.excerpt}
+                </span>
               ) : null}
             </a>
           </li>
         ))}
       </ul>
     </section>
-  )
+  );
 }
 
-RelatedArticles.displayName = 'PatinaRelatedArticles'
+RelatedArticles.displayName = "PatinaRelatedArticles";

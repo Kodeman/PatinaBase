@@ -13,16 +13,16 @@ export {
   createSupabaseMarginNoteBackend,
   createSupabaseHelpStateBackends,
   migrateLocalToSupabase,
-} from './supabaseAdapter'
+} from "./supabaseAdapter";
 export type {
   CreateSupabaseBackendsResult,
   CreateSupabaseMarginNoteBackendResult,
   MigrationResult,
-} from './supabaseAdapter'
+} from "./supabaseAdapter";
 export type {
   HelpStateBlob,
   TourStateBackend,
   FeatureAnnouncementStateBackend,
   MarginNoteStateBackend,
   HelpStateSupabaseClient,
-} from './types'
+} from "./types";

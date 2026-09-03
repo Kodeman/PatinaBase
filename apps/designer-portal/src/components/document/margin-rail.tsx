@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The margin rail (spec §5, D12): anchored items down the document's right
@@ -17,7 +17,7 @@ import {
   useRef,
   useState,
   type ReactNode,
-} from 'react';
+} from "react";
 import {
   useProjectFFEItems,
   useProjectParties,
@@ -25,67 +25,64 @@ import {
   useCoordinationItems,
   useDesignerClientForClientUser,
   type CoordinationItem,
-} from '@patina/supabase';
-import { useSectionTasks } from '@/hooks/use-section-work';
-import { useMarginItems } from '@/hooks/use-margin-items';
+} from "@patina/supabase";
+import { useSectionTasks } from "@/hooks/use-section-work";
+import { useMarginItems } from "@/hooks/use-margin-items";
 import {
   classifyMarginItems,
   legacyCoordinationDrafts,
   marginDecisionClassificationState,
   MarginDecisionClassificationNotice,
-} from '@/lib/document/stage2-approval-exclusions';
-import { useCreateMarginNote } from '@/hooks/use-margin-notes';
+} from "@/lib/document/stage2-approval-exclusions";
+import { useCreateMarginNote } from "@/hooks/use-margin-notes";
 import {
   useMarkProjectFileChangeRead,
   useProjectFileChangeNotifications,
-} from '@/hooks/use-project-file-change-notifications';
+} from "@/hooks/use-project-file-change-notifications";
 import {
   partitionMargin,
   type MarginItemRow,
-} from '@/lib/document/margin-derivation';
-import { todayYmd } from '@/lib/document/format';
+} from "@/lib/document/margin-derivation";
+import { todayYmd } from "@/lib/document/format";
 import {
   PROJECT_PAPER_ORDER,
   type DocumentIndexKey,
-} from '@/lib/document/document-index';
-import { DateTextInput } from './date-text-input';
+} from "@/lib/document/document-index";
+import { DateTextInput } from "./date-text-input";
 import {
   MarginItem,
   marginAnchorRegion,
   marginRegionName,
-} from './margin-item';
-import { MarginHandoffs, useHandoffGates } from './margin-handoff-item';
-import { MarginItemBody } from './margin-bodies';
-import { MarginNote } from './margin-note';
-import { DocSheet, DocSheetOriginProvider } from './overlays/doc-sheet';
-import { lockBodyScroll } from './overlays/body-scroll-lock';
+} from "./margin-item";
+import { MarginHandoffs, useHandoffGates } from "./margin-handoff-item";
+import { MarginItemBody } from "./margin-bodies";
+import { MarginNote } from "./margin-note";
+import { DocSheet, DocSheetOriginProvider } from "./overlays/doc-sheet";
+import { lockBodyScroll } from "./overlays/body-scroll-lock";
 import {
   registerManagedModalDialog,
   topActiveModalDialog,
   topDismissiblePopover,
-} from './overlays/active-dialog';
+} from "./overlays/active-dialog";
 import {
   ItemComposer,
   toComposerFfeItems,
   toComposerPhases,
-} from './coordination/item-composer';
-import { itemTypeToken } from './coordination/item-type';
+} from "./coordination/item-composer";
+import { itemTypeToken } from "./coordination/item-type";
 import {
   DocumentAction,
   DocumentActionGroup,
   DocumentActionRow,
-} from './document-action';
-import {
-  groupMarginRows,
-  marginListable,
-} from '@/lib/document/margin-groups';
+} from "./document-action";
+import { groupMarginRows, marginListable } from "@/lib/document/margin-groups";
 
 /**
  * Ask the margin to open. Between 1180px and 1440px the rail is a closed,
  * `inert` sheet, so an anchor inside it cannot be focused until it opens — a
  * guide action naming a margin control has to raise the drawer first.
  */
-export const OPEN_MARGIN_EVENT = 'document:open-margin' as const;
+export const OPEN_MARGIN_EVENT = "document:open-margin" as const;
 
 export function openMarginRail(): void {
   window.dispatchEvent(new CustomEvent(OPEN_MARGIN_EVENT));
@@ -111,12 +108,13 @@ const MarginSummaryContext = createContext<
 /** The worst standing kind in the margin, ranked as R12 ranks the float:
  *  an overdue decision, then a field text awaiting a read, then anything due. */
 export function worstMarginKind(rows: readonly MarginItemRow[]): string | null {
-  const count = (state: string) => rows.filter((row) => row.state === state).length;
-  const overdue = count('overdue');
+  const count = (state: string) =>
+    rows.filter((row) => row.state === state).length;
+  const overdue = count("overdue");
   if (overdue > 0) return `${overdue} OVERDUE`;
-  const review = count('needs_review');
+  const review = count("needs_review");
   if (review > 0) return `${review} NEEDS REVIEW`;
-  const due = count('due');
+  const due = count("due");
   if (due > 0) return `${due} DUE`;
   return null;
 }
@@ -125,21 +123,21 @@ export function worstMarginKind(rows: readonly MarginItemRow[]): string | null {
  *  has had it. A zero is never announced: with nothing raised the tab is the
  *  bare word it has always been. */
 export function marginTabLabel(summary: MarginTabSummary): string {
-  if (summary.count === 0) return 'Margin';
-  const worst = summary.worst ? ` · ${summary.worst}` : '';
+  if (summary.count === 0) return "Margin";
+  const worst = summary.worst ? ` · ${summary.worst}` : "";
   return `Margin · ${summary.count}${worst}`;
 }
 
-const COMPACT_MARGIN_QUERY = '(min-width: 1180px)';
-const FULL_MARGIN_QUERY = '(min-width: 1440px)';
+const COMPACT_MARGIN_QUERY = "(min-width: 1180px)";
+const FULL_MARGIN_QUERY = "(min-width: 1440px)";
 const FOCUSABLE_MARGIN_CONTROLS = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
   '[tabindex]:not([tabindex="-1"])',
-].join(',');
+].join(",");
 
 /**
  * The responsive edge around the margin's existing content.
@@ -176,17 +174,17 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
       setIsFullRail(fullMedia.matches);
       if (!compactMedia.matches || fullMedia.matches) {
         setOpen(false);
-      } else if (topActiveModalDialog()?.dataset.docSheetOrigin === 'margin') {
+      } else if (topActiveModalDialog()?.dataset.docSheetOrigin === "margin") {
         setOpen(true);
       }
     };
 
     syncMode();
-    compactMedia.addEventListener('change', syncMode);
-    fullMedia.addEventListener('change', syncMode);
+    compactMedia.addEventListener("change", syncMode);
+    fullMedia.addEventListener("change", syncMode);
     return () => {
-      compactMedia.removeEventListener('change', syncMode);
-      fullMedia.removeEventListener('change', syncMode);
+      compactMedia.removeEventListener("change", syncMode);
+      fullMedia.removeEventListener("change", syncMode);
     };
   }, []);
 
@@ -209,7 +207,7 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
       const topDialog = topActiveModalDialog();
       if (topDialog && topDialog !== panel) return;
 
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         // An open anchored popover (a Calendar Folio in a margin field) owns
         // this Esc. It cannot be seen through topActiveModalDialog() — it wears
         // no role="dialog" on purpose — and it cannot stop this listener, which
@@ -221,11 +219,11 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (event.key !== 'Tab' || !panel) return;
+      if (event.key !== "Tab" || !panel) return;
       const focusScope = panel;
       const controls = Array.from(
         focusScope.querySelectorAll<HTMLElement>(FOCUSABLE_MARGIN_CONTROLS),
-      ).filter((control) => !control.hasAttribute('disabled'));
+      ).filter((control) => !control.hasAttribute("disabled"));
       if (controls.length === 0) {
         event.preventDefault();
         focusScope.focus();
@@ -249,10 +247,10 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
       }
     };
 
-    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
       if (
         window.matchMedia(COMPACT_MARGIN_QUERY).matches &&
         !window.matchMedia(FULL_MARGIN_QUERY).matches
@@ -309,19 +307,19 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
       <aside
         ref={panelRef}
         id={`${titleId}-panel`}
-        role={openAsSheet ? 'dialog' : undefined}
+        role={openAsSheet ? "dialog" : undefined}
         aria-modal={openAsSheet && isTopModal ? true : undefined}
-        aria-label={isFullRail ? 'Margin' : undefined}
+        aria-label={isFullRail ? "Margin" : undefined}
         aria-labelledby={openAsSheet ? titleId : undefined}
         aria-hidden={!visible || (openAsSheet && !isTopModal)}
         inert={!visible || (openAsSheet && !isTopModal) ? true : undefined}
         tabIndex={openAsSheet ? -1 : undefined}
         data-margin-panel
-        data-margin-mode={isFullRail ? 'rail' : 'sheet'}
+        data-margin-mode={isFullRail ? "rail" : "sheet"}
         className={`z-[32] hidden border-[var(--color-pearl)] bg-[var(--doc-rail-stock)] motion-safe:transition-transform motion-safe:duration-200 motion-reduce:transition-none min-[1180px]:fixed min-[1180px]:inset-y-0 min-[1180px]:right-0 min-[1180px]:block min-[1180px]:h-screen min-[1180px]:w-[min(360px,calc(100vw-56px))] min-[1180px]:overflow-y-auto min-[1180px]:border-l min-[1440px]:sticky min-[1440px]:top-0 min-[1440px]:col-start-3 min-[1440px]:h-screen min-[1440px]:w-auto min-[1440px]:translate-x-0 min-[1440px]:overflow-y-auto ${
           openAsSheet
-            ? 'min-[1180px]:translate-x-0 min-[1180px]:pointer-events-auto'
-            : 'min-[1180px]:translate-x-full min-[1180px]:pointer-events-none min-[1440px]:pointer-events-auto'
+            ? "min-[1180px]:translate-x-0 min-[1180px]:pointer-events-auto"
+            : "min-[1180px]:translate-x-full min-[1180px]:pointer-events-none min-[1440px]:pointer-events-auto"
         }`}
       >
         <div className="sticky top-0 z-[1] flex min-h-14 items-center justify-between border-b border-[var(--color-pearl)] bg-[var(--doc-paper)] px-4 min-[1440px]:hidden">
@@ -427,7 +425,7 @@ export function MarginRail({
   // Line anchors rank by the document's rendered FF&E order (shared cache
   // with FFESection — same query key). The full rows also feed the R55
   // composer's FF&E-line gate picker.
-  const { data: ffeItems } = useProjectFFEItems(projectId ?? '');
+  const { data: ffeItems } = useProjectFFEItems(projectId ?? "");
   const { raised, settled } = useMemo(() => {
     const lineRank = new Map<string, number>();
     ((ffeItems ?? []) as Array<{ id: string }>).forEach((it, i) =>
@@ -459,7 +457,7 @@ export function MarginRail({
     // order beneath.
     const isSettled = new Set(settled);
     return groupMarginRows<MarginItemRow>([...raised, ...settled], {
-      order: 'regions-first',
+      order: "regions-first",
       decorate: (row) => row,
     }).map((group) => ({
       ...group,
@@ -479,14 +477,14 @@ export function MarginRail({
   // designer_clients.id resolution (the band's pattern) — the composer INSERT
   // needs the FK, not the raw client auth uid. null until the resolver lands.
   const { data: designerClient } = useDesignerClientForClientUser(
-    clientUserId ?? '',
+    clientUserId ?? "",
   );
   const designerClientId = designerClient?.id ?? null;
   const canCompose = Boolean(projectId && designerClientId);
 
-  const { data: parties } = useProjectParties(projectId ?? '');
-  const { data: phaseRows } = useProjectPhases(projectId ?? '');
-  const { data: tasks } = useSectionTasks(projectId ?? '');
+  const { data: parties } = useProjectParties(projectId ?? "");
+  const { data: phaseRows } = useProjectPhases(projectId ?? "");
+  const { data: tasks } = useSectionTasks(projectId ?? "");
 
   const composerFfe = useMemo(() => toComposerFfeItems(ffeItems), [ffeItems]);
   const composerPhases = useMemo(
@@ -500,14 +498,14 @@ export function MarginRail({
 
   // The composer sheet: a new decision, or re-opening an unsent draft (R55).
   const [composer, setComposer] = useState<
-    { mode: 'new' } | { mode: 'edit'; item: CoordinationItem } | null
+    { mode: "new" } | { mode: "edit"; item: CoordinationItem } | null
   >(null);
   const [draftsOpen, setDraftsOpen] = useState(false);
 
   // ── Note capture (R14: ≤5 seconds — one tap, type, save) ──
   const createNote = useCreateMarginNote();
   const [composing, setComposing] = useState(false);
-  const [noteBody, setNoteBody] = useState('');
+  const [noteBody, setNoteBody] = useState("");
   // Dates default to today (Kody, 2026-06-12). A kept default makes the
   // note dued-today — it joins needs-action at 5pm (R12/R14 interplay).
   const [noteDue, setNoteDue] = useState(todayYmd());
@@ -527,14 +525,14 @@ export function MarginRail({
         projectId,
         proposalId,
         body: noteBody.trim(),
-        anchorKind: noteAnchorLine ? 'line' : 'letterhead',
+        anchorKind: noteAnchorLine ? "line" : "letterhead",
         anchorId: noteAnchorLine,
         dueDate: noteDue ? new Date(`${noteDue}T17:00:00`).toISOString() : null,
       },
       {
         onSuccess: () => {
           setComposing(false);
-          setNoteBody('');
+          setNoteBody("");
           setNoteDue(todayYmd());
           setNoteAnchorLine(null);
         },
@@ -542,7 +540,7 @@ export function MarginRail({
     );
   };
 
-  const decisionRows = visibleItems.filter((i) => i.kind === 'decision');
+  const decisionRows = visibleItems.filter((i) => i.kind === "decision");
 
   const bodyFor = (row: MarginItemRow) => (
     <MarginItemBody
@@ -554,16 +552,16 @@ export function MarginRail({
   );
 
   const renderItem = (row: MarginItemRow) => {
-    const expandable = row.kind !== 'time';
+    const expandable = row.kind !== "time";
     return (
       <MarginItem
         key={`${row.kind}-${row.item_id}`}
         row={row}
         open={openId === row.item_id}
         targetId={
-          row.kind === 'pulse'
-            ? 'document-pulse-control-desktop'
-            : row.kind === 'note'
+          row.kind === "pulse"
+            ? "document-pulse-control-desktop"
+            : row.kind === "note"
               ? `margin-item-${row.item_id}`
               : undefined
         }
@@ -600,11 +598,13 @@ export function MarginRail({
           onSeen={() => {
             void markFileChangeRead(change.id).catch(() => undefined);
           }}
-          caption={`${change.projectName} · ${new Date(change.occurredAt).toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
+          caption={`${change.projectName} · ${new Date(
+            change.occurredAt,
+          ).toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
           })}`}
           className="mb-4"
         >
@@ -627,7 +627,7 @@ export function MarginRail({
             <DocumentAction
               actionKey="new-margin-decision"
               variant="secondary"
-              onClick={() => setComposer({ mode: 'new' })}
+              onClick={() => setComposer({ mode: "new" })}
             >
               + Decision
             </DocumentAction>
@@ -656,7 +656,7 @@ export function MarginRail({
             className="group mb-1 inline-flex min-h-11 min-w-11 items-center font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
           >
             <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
-              Drafts · {draftItems.length} {draftsOpen ? '↑' : '↓'}
+              Drafts · {draftItems.length} {draftsOpen ? "↑" : "↓"}
             </span>
           </button>
           {draftsOpen && (
@@ -665,17 +665,17 @@ export function MarginRail({
                 <button
                   key={d.id}
                   type="button"
-                  onClick={() => setComposer({ mode: 'edit', item: d })}
+                  onClick={() => setComposer({ mode: "edit", item: d })}
                   className="group flex min-h-11 min-w-11 items-center gap-2 px-2 py-1.5 text-left text-[14px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                 >
                   <span
                     className="inline-block rounded-[2px] border px-1 py-px font-mono text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--color-charcoal)]"
-                    style={{ borderColor: 'var(--color-pearl)' }}
+                    style={{ borderColor: "var(--color-pearl)" }}
                   >
                     {itemTypeToken(d.coordination_kind).label}
                   </span>
                   <span className="flex-1 truncate">
-                    {d.title || 'Untitled draft'}
+                    {d.title || "Untitled draft"}
                   </span>
                   <span className="da-score-hover font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--color-charcoal)] transition-colors group-hover:text-[var(--color-clay-ink)] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 motion-reduce:transition-none">
                     edit
@@ -690,20 +690,20 @@ export function MarginRail({
       {composing && (
         <div
           className="mb-2 rounded-[5px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] p-3"
-          style={{ borderLeft: '2.5px solid var(--color-aged-oak)' }}
+          style={{ borderLeft: "2.5px solid var(--color-aged-oak)" }}
         >
           <textarea
             rows={2}
             autoFocus
             placeholder={
-              noteAnchorLine ? 'Note on this line…' : 'Note to the margin…'
+              noteAnchorLine ? "Note on this line…" : "Note to the margin…"
             }
             aria-label="Note body"
             className="w-full resize-none rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-[16px] leading-relaxed text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
             value={noteBody}
             onChange={(e) => setNoteBody(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveNote();
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveNote();
             }}
           />
           <DocumentActionRow
@@ -716,7 +716,7 @@ export function MarginRail({
               ariaLabel="Note due date (optional)"
               className="rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1 text-[16px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
               value={noteDue || null}
-              onChange={(value) => setNoteDue(value ?? '')}
+              onChange={(value) => setNoteDue(value ?? "")}
             />
             <DocumentAction
               actionKey="save-margin-note"
@@ -764,17 +764,20 @@ export function MarginRail({
       {anchorGroups.map((group) => {
         const current = group.key !== null && group.key === currentStop;
         return (
-          <div key={group.key ?? 'whole-job'} data-margin-group={group.key ?? 'whole-job'}>
+          <div
+            key={group.key ?? "whole-job"}
+            data-margin-group={group.key ?? "whole-job"}
+          >
             <p
-              data-beside-current={current ? '' : undefined}
+              data-beside-current={current ? "" : undefined}
               className="mb-1.5 mt-3 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]"
             >
-              {group.heading}{' '}
+              {group.heading}{" "}
               <span
                 className={
                   current
-                    ? 'text-[var(--text-primary)]'
-                    : 'text-[var(--text-muted)]'
+                    ? "text-[var(--text-primary)]"
+                    : "text-[var(--text-muted)]"
                 }
               >
                 · {group.count}
@@ -787,21 +790,24 @@ export function MarginRail({
               <>
                 <button
                   type="button"
-                  aria-expanded={Boolean(settledOpenByGroup[group.key ?? 'whole-job'])}
+                  aria-expanded={Boolean(
+                    settledOpenByGroup[group.key ?? "whole-job"],
+                  )}
                   onClick={() =>
                     setSettledOpenByGroup((open) => ({
                       ...open,
-                      [group.key ?? 'whole-job']: !open[group.key ?? 'whole-job'],
+                      [group.key ?? "whole-job"]:
+                        !open[group.key ?? "whole-job"],
                     }))
                   }
                   className="group mb-1.5 inline-flex min-h-11 min-w-11 items-center font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
                 >
                   <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
-                    {group.settledRows.length} settled{' '}
-                    {settledOpenByGroup[group.key ?? 'whole-job'] ? '↑' : '↓'}
+                    {group.settledRows.length} settled{" "}
+                    {settledOpenByGroup[group.key ?? "whole-job"] ? "↑" : "↓"}
                   </span>
                 </button>
-                {settledOpenByGroup[group.key ?? 'whole-job'] &&
+                {settledOpenByGroup[group.key ?? "whole-job"] &&
                   group.settledRows.map(renderItem)}
               </>
             )}
@@ -814,18 +820,18 @@ export function MarginRail({
       <DocSheet
         open={Boolean(composer) && canCompose}
         onClose={() => setComposer(null)}
-        title={composer?.mode === 'edit' ? 'Edit draft' : 'New decision'}
+        title={composer?.mode === "edit" ? "Edit draft" : "New decision"}
       >
         {composer && projectId && designerClientId && (
           <ItemComposer
-            key={composer.mode === 'edit' ? composer.item.id : 'new'}
+            key={composer.mode === "edit" ? composer.item.id : "new"}
             projectId={projectId}
             designerClientId={designerClientId}
             tasks={tasks ?? []}
             ffeItems={composerFfe}
             phases={composerPhases}
             parties={parties ?? []}
-            editItem={composer.mode === 'edit' ? composer.item : null}
+            editItem={composer.mode === "edit" ? composer.item : null}
             onClose={() => setComposer(null)}
             onCreated={() => setComposer(null)}
           />
