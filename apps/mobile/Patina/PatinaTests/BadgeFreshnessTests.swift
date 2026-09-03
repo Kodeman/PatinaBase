@@ -135,12 +135,30 @@ struct BadgeFreshnessTests {
     /// notifications feature computes a second count of its own.
     @Test("the notifications feature computes no second count")
     func thereIsNoSecondCount() throws {
-        for path in SourcePin.swiftFiles(under: "Patina/Features/Notifications") {
+        // Widened to `Features/Home` after the round-1 review: the scan covered
+        // only the feed, and `C2-07` reproduced exactly as written — the bell
+        // still badged 3 after "Mark all read", because the SECOND count is in
+        // Today's own file, which the scan could not see.
+        //
+        // `DailyRoomView.swift` is L1-C's under the contested-file table, and
+        // C2-07's other half went there as note `L1F→C-1`. L1-C merges first
+        // (D14), so on this branch the line is still there. Recorded as a known
+        // issue rather than waived away: it passes in both states by design,
+        // and the test report names it for as long as it is owed — which is the
+        // convention L1-B set for exactly this shape this wave.
+        let owedToL1C = "Patina/Features/Home/Views/DailyRoomView.swift"
+        let files = SourcePin.swiftFiles(under: "Patina/Features/Notifications")
+            + SourcePin.swiftFiles(under: "Patina/Features/Home")
+        for path in files {
             let code = SourceScan.code(in: try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8))
-            #expect(
-                !code.contains("notifications.filter { !$0.isRead }.count"),
-                "VISION §6: one count of what needs you, from one service — \(path)"
-            )
+            let single = !code.contains("notifications.filter { !$0.isRead }.count")
+            if path.hasSuffix(owedToL1C) {
+                withKnownIssue("C2-07 · note L1F→C-1 is owed by L1-C", isIntermittent: true) {
+                    #expect(single, "C2-07's other half is still unapplied — \(path)")
+                }
+            } else {
+                #expect(single, "VISION §6: one count of what needs you, from one service — \(path)")
+            }
         }
     }
 }

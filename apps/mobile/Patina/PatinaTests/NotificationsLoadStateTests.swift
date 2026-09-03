@@ -96,11 +96,15 @@ struct NotificationsLoadStateTests {
     @Test("load resolves on every path, including the guest short-circuit")
     func loadAlwaysResolves() async {
         let viewModel = NotificationsViewModel()
-        // Unauthenticated in a unit run: the guest arm, which returns early.
         await viewModel.load()
+        // `hasResolved` only. The round-1 version also asserted `error == nil`
+        // and `notifications.isEmpty`, which are facts about the guest arm — and
+        // the clone's keychain survives an uninstall, so this lane's own walk
+        // signs the test host in and turns them into facts about the local
+        // stack. What this test is for is that the empty state becomes
+        // reachable exactly once, on every arm, and never before: that is this
+        // one flag.
         #expect(viewModel.hasResolved)
-        #expect(viewModel.notifications.isEmpty)
-        #expect(viewModel.error == nil)
     }
 
     // MARK: - A-63, the half this lane can hold
