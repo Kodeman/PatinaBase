@@ -1,15 +1,18 @@
 'use client';
 
 /**
- * Studio setup checklist (Day-1, U3) — five square-tick rows at the top of
+ * Studio setup checklist (Day-1, U3) — six square-tick rows at the top of
  * the Studio page. The tick visual mirrors work-block.tsx's stamp idiom (a
  * local ChecklistRow — WorkBlock itself is hook-bound to section tasks and
  * not reusable here); every tick renders straight from `deriveSetupSteps`
  * and is never itself clickable. Three rows carry a scored word instead of a
  * plain label: row 3 opens the invite sheet, row 4 (Call Sheet Wave 2) opens
  * the rolodex review and SKIPs the seed-review, row 5 opens the existing
- * open-project front door. Collapses to a single settled mono line once
- * every step is done.
+ * open-project front door. Row 6 ("Your first hire opened a document", L3,
+ * 00559) is plain text like row 1/2 — nothing the owner can click makes it
+ * tick, since the moment it marks belongs to the hire, not her — with a hint
+ * line while open. Collapses to a single settled mono line once every step
+ * is done.
  *
  * Row 4 stays dependency-free (no @patina/supabase import, mirroring
  * desk-derivation.ts) — the caller (account-studio-page.tsx) owns the
@@ -141,6 +144,7 @@ export function StudioSetupChecklist({
   const crewInvited = byKey['crew-invited'];
   const rolodexSeeded = byKey['rolodex-seeded'];
   const firstProject = byKey['first-project'];
+  const firstHireOpened = byKey['first-hire-opened'];
 
   return (
     <div className={className}>
@@ -231,6 +235,11 @@ export function StudioSetupChecklist({
             </button>
           )
         }
+      />
+      <ChecklistRow
+        done={firstHireOpened.done}
+        label={firstHireOpened.label}
+        hint={firstHireOpened.done ? undefined : 'The mark follows her, not you.'}
       />
 
       <p className="mt-2 font-heading text-[11px] italic text-[var(--color-aged-oak)]">

@@ -60,6 +60,8 @@
  *     video.started                { surface_key }
  *     video.completed              { surface_key }
  *     help_center.viewed           { source }                                    ← /help shell (portal-fired)
+ *     shortcuts.opened             { source: 'key'|'palette'|'help_center' } ← "The keys" (sheet or page)
+ *     glossary.opened              { source: 'palette' | 'panel' }                ← "The words" (Ideas & vocabulary shelf)
  */
 
 /**
@@ -111,6 +113,11 @@ export const HELP_EVENTS = {
   VIDEO_COMPLETED: 'help.video.completed',
   /** The /help Center shell mount (fired by the designer portal help pages). */
   HELP_CENTER_VIEWED: 'help.help_center.viewed',
+  /** New (onboarding Wave 1) — "The keys" opened, from the `?` key, the ⌘K row,
+   *  or the contextual panel's KEYS block. One reference, three doorways. */
+  SHORTCUTS_OPENED: 'help.shortcuts.opened',
+  /** New (onboarding Wave 1) — "The words" opened: the Ideas & vocabulary shelf. */
+  GLOSSARY_OPENED: 'help.glossary.opened',
 } as const
 
 /** A union of every event name in the taxonomy. */

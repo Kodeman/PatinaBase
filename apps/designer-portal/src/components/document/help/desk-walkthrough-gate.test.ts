@@ -100,6 +100,12 @@ describe('shouldAutoOpenDeskWalkthrough', () => {
   it('does not open below 980px (no modal on mobile)', () => {
     expect(shouldAutoOpenDeskWalkthrough(freshInput({ isDesktop: false }))).toBe(false);
   });
+
+  it('a "later" tour never auto-modals again, even for a fresh signup', () => {
+    expect(
+      shouldAutoOpenDeskWalkthrough(freshInput({ tourState: { later: true, atStep: 0 } })),
+    ).toBe(false);
+  });
 });
 
 describe('shouldOfferDeskWalkthrough', () => {
@@ -140,6 +146,18 @@ describe('shouldOfferDeskWalkthrough', () => {
 
   it('does not offer without a resolved profile', () => {
     expect(shouldOfferDeskWalkthrough(existingInput({ profileCreatedAt: null }))).toBe(false);
+  });
+
+  it('a "later" tour is not resolved and offers once, even for a fresh signup', () => {
+    const laterInput = freshInput({ tourState: { later: true, atStep: 0 } });
+    expect(shouldAutoOpenDeskWalkthrough(laterInput)).toBe(false);
+    expect(shouldOfferDeskWalkthrough(laterInput)).toBe(true);
+  });
+
+  it('a "later" existing-designer tour still offers (the ship-date bypass is additive)', () => {
+    expect(
+      shouldOfferDeskWalkthrough(existingInput({ tourState: { later: true, atStep: 0 } })),
+    ).toBe(true);
   });
 });
 

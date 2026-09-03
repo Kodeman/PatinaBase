@@ -38,6 +38,10 @@ export const DESK_WALKTHROUGH_SHIP_DATE = '2026-07-10T15:10:00Z';
 export interface DeskWalkthroughTourState {
   completed?: boolean;
   abandoned?: boolean;
+  atStep?: number;
+  /** "Show me later" — deferred, not resolved (decisions #2). See
+   *  `shouldAutoOpenDeskWalkthrough` / `shouldOfferDeskWalkthrough` below. */
+  later?: boolean;
 }
 
 export interface DeskWalkthroughGateInput {
@@ -82,6 +86,9 @@ export function shouldAutoOpenDeskWalkthrough(input: DeskWalkthroughGateInput): 
     input;
   if (!helpStateReady) return false;
   if (tourResolved(tourState)) return false;
+  // A deferred ("Show me later") tour never re-auto-modals — the offer note
+  // is the only path back in (decisions #2).
+  if (tourState.later === true) return false;
   const created = createdAtMs(profileCreatedAt);
   if (created === null) return false;
   if (created < Date.parse(DESK_WALKTHROUGH_SHIP_DATE)) return false; // existing → offer path
@@ -95,6 +102,12 @@ export function shouldAutoOpenDeskWalkthrough(input: DeskWalkthroughGateInput): 
  * Existing-designer offer gate. TRUE iff the designer predates the ship date,
  * has no tour record, is on `/desk`, on a desktop, and the help state is known.
  * (The MarginNote primitive additionally self-guards to once-only.)
+ *
+ * A deferred ("Show me later") tour is the one exception to the ship-date
+ * split: it re-offers once regardless of which cohort the designer is in —
+ * a fresh signup who deferred the auto-modal has no other way back to the
+ * tour, since the auto-modal itself never re-opens for a `later` record
+ * (decisions #2; narrow amendment to §4.7 rule 1).
  */
 export function shouldOfferDeskWalkthrough(input: DeskWalkthroughGateInput): boolean {
   const { helpStateReady, tourState, profileCreatedAt, pathname, isDesktop } = input;
@@ -102,7 +115,7 @@ export function shouldOfferDeskWalkthrough(input: DeskWalkthroughGateInput): boo
   if (tourResolved(tourState)) return false;
   const created = createdAtMs(profileCreatedAt);
   if (created === null) return false;
-  if (created >= Date.parse(DESK_WALKTHROUGH_SHIP_DATE)) return false; // new → auto-modal path
+  if (!tourState.later && created >= Date.parse(DESK_WALKTHROUGH_SHIP_DATE)) return false; // new → auto-modal path (unless deferred)
   if (pathname !== '/desk') return false;
   if (!isDesktop) return false;
   return true;

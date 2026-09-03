@@ -182,3 +182,53 @@ describe('DocumentHelpPanel (open with an explicit surface key)', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('DocumentHelpPanel (host surfaces answer, and the KEYS block)', () => {
+  beforeEach(() => {
+    mockSurfaceKey = DOCUMENT_SURFACE_KEYS.desk;
+  });
+
+  it('the Desk answers with its own host blurb', () => {
+    renderPanel();
+    act(() => {
+      openHelp();
+    });
+    expect(
+      screen.getByText('Every live job, one line each — the quiet ones are in motion.'),
+    ).toBeInTheDocument();
+  });
+
+  it('a document answers with its own host blurb', () => {
+    renderPanel();
+    act(() => {
+      openHelp({ source: 'sheet-head', surfaceKey: DOCUMENT_SURFACE_KEYS.doc });
+    });
+    expect(
+      screen.getByText(
+        'One client, one paper — Brief through Care. The rail says where it stands.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('the footer prints the KEYS block and both reference doorways', () => {
+    renderPanel();
+    act(() => {
+      openHelp();
+    });
+    expect(screen.getByText('KEYS')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /The keys/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /The words/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Browse all help/ })).toBeInTheDocument();
+  });
+
+  it('the KEYS block prints the chord for the surface in hand', () => {
+    renderPanel();
+    act(() => {
+      openHelp({ source: 'sheet-head', surfaceKey: DOCUMENT_SURFACE_KEYS.orders });
+    });
+    const keys = screen.getByTestId('panel-keys');
+    expect(keys).toHaveTextContent('Orders');
+    expect(keys).toHaveTextContent('G');
+    expect(keys).toHaveTextContent('O');
+  });
+});

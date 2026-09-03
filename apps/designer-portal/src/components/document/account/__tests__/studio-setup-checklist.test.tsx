@@ -10,16 +10,18 @@ jest.mock('../../command-bar', () => ({
 const INCOMPLETE: StudioSetupInput = {
   orgCreatedAt: '2026-01-01T00:00:00.000Z',
   myJobTitle: null,
-  memberCountBeyondSelf: 0,
+  activeMemberCountBeyondSelf: 0,
   projectsCount: 0,
+  hiresWithFirstDocument: 0,
 };
 
 const COMPLETE: StudioSetupInput = {
   orgCreatedAt: '2026-01-01T00:00:00.000Z',
   myJobTitle: 'Principal',
-  memberCountBeyondSelf: 2,
+  activeMemberCountBeyondSelf: 2,
   contactsCount: 4,
   projectsCount: 1,
+  hiresWithFirstDocument: 1,
 };
 
 beforeEach(() => {
@@ -41,8 +43,8 @@ describe('StudioSetupChecklist — ticks are derived, never clickable', () => {
 
   it('renders the still-open count from the derivation', () => {
     render(<StudioSetupChecklist {...INCOMPLETE} onInvite={jest.fn()} />);
-    // 4 of 5 steps open with the bare-minimum studio.
-    expect(screen.getByText('4')).toBeInTheDocument();
+    // 5 of 6 steps open with the bare-minimum studio.
+    expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.getByText('Still to do')).toBeInTheDocument();
   });
 });
@@ -56,18 +58,58 @@ describe('StudioSetupChecklist — row 3, invite your crew', () => {
     expect(onInvite).toHaveBeenCalledTimes(1);
   });
 
-  it('is plain text once a crew member exists', () => {
+  it('is plain text once a crew member has accepted', () => {
     const onInvite = jest.fn();
     render(
       <StudioSetupChecklist
         {...INCOMPLETE}
-        memberCountBeyondSelf={1}
+        activeMemberCountBeyondSelf={1}
         onInvite={onInvite}
       />,
     );
 
     const label = screen.getByText('Invite your crew');
     expect(label.closest('button')).toBeNull();
+  });
+
+  it('stays a scored word while a member is invited but has not yet accepted', () => {
+    const onInvite = jest.fn();
+    render(
+      <StudioSetupChecklist
+        {...INCOMPLETE}
+        activeMemberCountBeyondSelf={0}
+        onInvite={onInvite}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Invite your crew'));
+    expect(onInvite).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('StudioSetupChecklist — row 6, first hire opened a document', () => {
+  it('renders as plain text — never a button — whether open or done', () => {
+    render(<StudioSetupChecklist {...INCOMPLETE} onInvite={jest.fn()} />);
+    const label = screen.getByText('Your first hire opened a document');
+    expect(label.closest('button')).toBeNull();
+  });
+
+  it('shows the hint while open, and hides it once ticked', () => {
+    const { rerender } = render(
+      <StudioSetupChecklist {...INCOMPLETE} onInvite={jest.fn()} />,
+    );
+    expect(screen.getByText('The mark follows her, not you.')).toBeInTheDocument();
+
+    rerender(
+      <StudioSetupChecklist
+        {...INCOMPLETE}
+        hiresWithFirstDocument={1}
+        onInvite={jest.fn()}
+      />,
+    );
+    expect(
+      screen.queryByText('The mark follows her, not you.'),
+    ).not.toBeInTheDocument();
   });
 });
 

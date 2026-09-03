@@ -1023,6 +1023,43 @@ describe('<TourController />', () => {
     ).toBeInTheDocument()
   })
 
+  it('renders the per-step fallback CTA label when Sanity ctaLabel resolves null', async () => {
+    // Every fallback query in the chain misses — same as test 19 above.
+    mockFetch.mockResolvedValue(null)
+
+    const stepsWithFallback: CoachmarkStep[] = [
+      {
+        surfaceKey: 'desk-walkthrough/step-6',
+        fallbackHeading: 'Begin with a lead',
+        fallbackBody: 'Every project begins as a captured lead.',
+        fallbackCtaLabel: 'Capture a lead',
+      },
+    ]
+
+    const { Wrapper } = makeWrapper()
+    let api: TourControllerAPI | null = null
+    render(
+      <Wrapper>
+        <TourController tourId="fallback-cta-tour" steps={stepsWithFallback}>
+          {(a) => {
+            api = a
+            return <a.CoachmarkSlot />
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    act(() => api!.start())
+    await flushQueries()
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    // The CMS never resolved a ctaLabel, so the step's fallback wins over the
+    // package default ("Done") — the CTA is never invisible-but-generic.
+    expect(
+      screen.getByRole('button', { name: 'Capture a lead' }),
+    ).toBeInTheDocument()
+  })
+
   // ── 20. step_viewed fires per step, including step 0 ──────────────────────
 
   it('fires help.tour.step_viewed for step 0 and on forward advance', async () => {

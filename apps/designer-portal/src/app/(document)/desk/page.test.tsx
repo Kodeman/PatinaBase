@@ -79,6 +79,7 @@ jest.mock('@/components/document/desk-contents', () => ({ DeskContents: () => nu
 jest.mock('@/components/document/margin-note', () => ({ MarginNote: () => null }));
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
   START_DESK_WALKTHROUGH_EVENT: 'document:start-desk-walkthrough',
+  clearDeskWalkthroughLater: jest.fn(),
   useDeskWalkthroughOffer: () => false,
   useSuppressDeskFirstTouch: () => false,
 }));
@@ -128,14 +129,32 @@ beforeEach(() => {
   mockRecentBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
 });
 
+/** A crew member who has already accepted and opened a document — both the
+ *  crew-invited and first-hire-opened rows read done off this one row, so
+ *  the "falls silent" cases below isolate the rolodex step they're actually
+ *  testing. */
+const HIRE_ARRIVED = {
+  user_id: 'hire-1',
+  status: 'active',
+  first_document_opened_at: '2026-01-05T00:00:00Z',
+};
+
 describe('Desk — the studio setup whisper counts the rolodex', () => {
   it('falls silent once the rolodex is seeded and one step is left', () => {
+    mockMembers.mockReturnValue([
+      { user_id: 'me', job_title: 'Principal' },
+      HIRE_ARRIVED,
+    ]);
     mockContacts.mockReturnValue([{ id: 'c-1' }, { id: 'c-2' }]);
     render(<DeskPage />);
     expect(screen.queryByText(WHISPER)).not.toBeInTheDocument();
   });
 
   it('falls silent once the owner skipped the seed review', () => {
+    mockMembers.mockReturnValue([
+      { user_id: 'me', job_title: 'Principal' },
+      HIRE_ARRIVED,
+    ]);
     mockOrgs.mockReturnValue([
       studio({ rolodex_seed_skipped_at: '2026-08-01T00:00:00Z' }),
     ]);

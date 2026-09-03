@@ -38,8 +38,9 @@ import {
   type HelpOpenSource,
   type OpenHelpEventDetail,
 } from '@/lib/help-system/open-help';
-import { ALL_STUDIO_SURFACES } from '@/lib/document/registry';
+import { resolveIntroBlurb } from '@/lib/document/registry';
 import { documentEvents } from '@/lib/analytics/document-events';
+import { PanelKeysBlock } from './panel-keys-block';
 
 // Re-exported so ⌘K integration can import the opener from the help component
 // (parallel to openInvoiceComposer living in invoice-overlays.tsx).
@@ -130,20 +131,12 @@ function DocumentHelpPanel() {
   // own article-visibility rule, so a sub-page ('…/orders/receiving') still
   // frames itself with the Orders blurb. Verbs are excluded: they share the
   // Desk's key as a doorway scope, not as identity, so their blurbs describe
-  // the verb rather than the surface being looked at.
+  // the verb rather than the surface being looked at. Host surfaces (Desk,
+  // Document) exist only to answer the panel — they are not doorways.
+  // The match itself lives in registry.tsx (resolveIntroBlurb), so the
+  // glossary and "The keys" read the same resolution this panel does.
   const key = typeof surfaceKey === 'string' ? surfaceKey : undefined;
-  const introBlurb = useMemo(() => {
-    if (!key) return null;
-    const matches = ALL_STUDIO_SURFACES.filter(
-      (s) =>
-        s.kind !== 'verb' &&
-        s.help &&
-        (key === s.help.surfaceKey || key.startsWith(`${s.help.surfaceKey}/`)),
-    );
-    // Longest key wins — the most specific framing for the surface in view.
-    matches.sort((a, b) => (b.help?.surfaceKey.length ?? 0) - (a.help?.surfaceKey.length ?? 0));
-    return matches[0]?.help?.blurb ?? null;
-  }, [key]);
+  const introBlurb = useMemo(() => (key ? resolveIntroBlurb(key) : null), [key]);
 
   return (
     <ContextualHelpPanel
@@ -152,7 +145,12 @@ function DocumentHelpPanel() {
       surfaceKey={key}
       className="shadow-none"
       intro={introBlurb ? <SurfaceIntro blurb={introBlurb} /> : undefined}
-      footer={<BrowseAllHelpLink />}
+      footer={
+        <>
+          <PanelKeysBlock surfaceKey={key} />
+          <BrowseAllHelpLink />
+        </>
+      }
     />
   );
 }

@@ -10,12 +10,21 @@
  * Responsibilities:
  *   · Fresh signups (created_at ≥ ship date) get the auto-opening WelcomeModal
  *     the first time they land on a resolved desktop `/desk`.
- *   · Declining the modal (Explore / Skip / Esc / backdrop) writes the tour
- *     record as abandoned@0 — cross-device, so it never re-offers on any device.
- *   · Existing designers (created_at < ship date) never get the modal; the Desk
- *     shows them a quiet margin-note offer (rendered in desk/page.tsx, gated by
- *     `useDeskWalkthroughOffer`) whose action dispatches
- *     `document:start-desk-walkthrough`, which this component turns into a start.
+ *   · "Skip for now" declines outright — writes the tour record as
+ *     abandoned@0, cross-device, so it never re-offers on any device. A bare
+ *     dismiss (Esc / backdrop click) instead defers — writes `{later: true,
+ *     atStep: 0}`, NOT abandoned, so the existing-designer offer note gets one
+ *     re-offer even for a fresh signup (decisions #2). `later` clears once
+ *     that offer note is dismissed or acted on.
+ *   · Existing designers (created_at < ship date), and anyone with a `later`
+ *     record, never get the modal; the Desk shows them a quiet margin-note
+ *     offer (rendered in desk/page.tsx, gated by `useDeskWalkthroughOffer`)
+ *     whose action dispatches `document:start-desk-walkthrough`, which this
+ *     component turns into a start.
+ *   · Step 6 ends the tour by acting: its CTA marks the tour complete, then
+ *     opens the capture-lead sheet over the Desk (decisions #1) — never a
+ *     route into `/doc/[id]`, so the R4 timer only starts on a lead the
+ *     designer actually submits.
  *   · Replay: `/desk?tour=desk-walkthrough` (⌘K "Take the walkthrough" / the
  *     pinned /help row) → `restart()` + strip the param.
  *   · Pause: the ⌘K palette dispatches `document:command-bar-opened/closed`;
@@ -56,6 +65,7 @@ import {
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { markMarginNoteSeen } from '@/components/document/margin-note';
+import { openCaptureLead } from '@/components/document/command-bar';
 import { useHelpState } from './help-state-provider';
 import {
   DESK_WALKTHROUGH_TOUR_ID,
@@ -110,18 +120,22 @@ function scrollAnchorIntoView(
 //
 // Module-scope + stable so TourController's memo deps don't churn. The RATIFIED
 // fallback copy makes the tour navigable with zero published CMS content; Sanity
-// copy (persona 'designer') wins when present. (Step 6's "To work" CTA label is
-// CMS-only — the CoachmarkStep type carries no fallback ctaLabel, so the package
-// default "Done" shows during CMS downtime.)
+// copy (persona 'designer') wins when present. Step 6 now ends the tour by
+// acting, not describing (decisions #1) — `handleComplete` below opens the
+// capture-lead sheet after marking the tour complete. Its CTA reads "Capture
+// a lead" via `fallbackCtaLabel` below (Sanity's `ctaLabel` still wins when
+// published); clicking it completes the tour and opens the sheet either way.
 const TOUR = SurfaceKeys.DesignerPortal.Tours.DeskWalkthrough;
 const STEPS: CoachmarkStep[] = [
   {
     surfaceKey: TOUR.Step1TheDesk,
-    anchorSelector: '[data-tour-anchor="desk-needs-your-hand"]',
+    // Anchored on the greeting header, not the needs-your-hand roster: a quiet
+    // Desk (no live jobs) never renders that region, which orphaned the
+    // coachmark to Radix's fallback top-left corner. The greeting always
+    // renders, populated or not.
+    anchorSelector: '[data-tour-anchor="desk-greeting"]',
     side: 'bottom',
-    // No scroll: the Desk opens at the top and the coachmark reads against the
-    // needs-your-hand region in place. (Scrolling this tall region would push a
-    // bottom-placed coachmark below the fold.)
+    beforeShow: scrollAnchorIntoView('[data-tour-anchor="desk-greeting"]'),
     fallbackHeading: 'The Desk',
     fallbackBody:
       'Every live job lands here, one line each, grouped by stage. A mark at the margin is a job that needs your hand.',
@@ -169,6 +183,7 @@ const STEPS: CoachmarkStep[] = [
     fallbackHeading: 'Begin with a lead',
     fallbackBody:
       'Every project begins as a captured lead — a name and a note, under a minute. The Desk takes it from there.',
+    fallbackCtaLabel: 'Capture a lead',
   },
 ];
 
@@ -218,6 +233,16 @@ export function useDeskWalkthroughOffer(): boolean {
   return useContext(DeskWalkthroughContext).offerEligible;
 }
 
+/**
+ * desk/page.tsx — clears a deferred ("Show me later") tour's `later` flag.
+ * Wired to the `desk-walkthrough-offer` margin note's `onSeen` so the one
+ * re-offer that `later` earns never re-fires once it has been dismissed or
+ * acted on (decisions #2). A no-op for a designer with no `later` record.
+ */
+export function clearDeskWalkthroughLater(): void {
+  setTourState(DESK_WALKTHROUGH_TOUR_ID, { later: false });
+}
+
 // ─── The machinery ────────────────────────────────────────────────────────────
 
 /**
@@ -259,7 +284,7 @@ function DeskWalkthroughInner() {
   const tourApiRef = useRef<TourControllerAPI | null>(null);
   const autoDecidedRef = useRef(false); // the auto-modal fires at most once per mount
   const replayHandledRef = useRef(false); // the ?tour= param is consumed once
-  const modalOutcomeRef = useRef<'start' | 'decline' | null>(null);
+  const modalOutcomeRef = useRef<'start' | 'decline' | 'later' | null>(null);
 
   // ── ≥980px (SSR-safe; read after mount) ────────────────────────────────────
   useEffect(() => {
@@ -406,6 +431,14 @@ function DeskWalkthroughInner() {
     setTourRecord({ abandoned: true, atStep: 0 });
   }, []);
 
+  // "Show me later" — decisions #2. NOT abandoned, so `tourResolved` stays
+  // false and the offer note (desk/page.tsx) gets exactly one re-offer; that
+  // note clears `later` itself once it is dismissed or acted on.
+  const deferWalkthrough = useCallback(() => {
+    setTourState(DESK_WALKTHROUGH_TOUR_ID, { later: true, atStep: 0 });
+    setTourRecord((prev) => ({ ...prev, later: true, atStep: 0 }));
+  }, []);
+
   const handleStartTour = useCallback(() => {
     modalOutcomeRef.current = 'start';
     setStartRequested('first_signin');
@@ -416,17 +449,24 @@ function DeskWalkthroughInner() {
     declineWalkthrough();
   }, [declineWalkthrough]);
 
+  const handleLater = useCallback(() => {
+    modalOutcomeRef.current = 'later';
+    deferWalkthrough();
+  }, [deferWalkthrough]);
+
   const handleWelcomeOpenChange = useCallback(
     (open: boolean) => {
       setWelcomeOpen(open);
       if (!open) {
-        // A pure dismiss (Esc / backdrop) records no CTA outcome — treat it as
-        // declining the walkthrough so it never re-offers.
-        if (modalOutcomeRef.current === null) declineWalkthrough();
+        // A pure dismiss (Esc / backdrop click) records no CTA outcome. It now
+        // defers rather than declines — "Skip for now" is the only path that
+        // abandons the tour outright (decisions #2); everything else leaves
+        // the door open for the offer note's one re-offer.
+        if (modalOutcomeRef.current === null) deferWalkthrough();
         modalOutcomeRef.current = null;
       }
     },
-    [declineWalkthrough],
+    [deferWalkthrough],
   );
 
   // ── Tour lifecycle ──────────────────────────────────────────────────────────
@@ -435,6 +475,12 @@ function DeskWalkthroughInner() {
     setTourRecord({ completed: true });
     // The tour taught ⌘K — retire the desk first-touch note so it never shows.
     markMarginNoteSeen('desk-first-touch');
+    // Decisions #1 — the tour's last step acts rather than describes: open
+    // the capture-lead sheet over the Desk after marking completion. `onComplete`
+    // only fires from TourController's own `complete()`, which is only
+    // reachable from the last step's CTA or Enter-on-last-step — never from a
+    // replay resuming mid-tour without a CTA.
+    openCaptureLead();
   }, []);
 
   const handleAbandon = useCallback(() => {
@@ -450,6 +496,8 @@ function DeskWalkthroughInner() {
         onOpenChange={handleWelcomeOpenChange}
         onStartTour={handleStartTour}
         onSkip={handleSkip}
+        onLater={handleLater}
+        laterLabel="Show me later"
         persona="designer"
         fallbackTitle="This is your Desk"
         fallbackBody="Every client’s project is one document, and every document lives here. Six stops, about a minute, and you’ll know your way around. You can leave at any step."

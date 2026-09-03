@@ -75,6 +75,8 @@ import { startBoardPending } from '@/lib/document/shelves';
 import { DocumentAction } from './document-action';
 import { PLAN_ROOM_SURFACE } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { KEYS_SHEET_EVENT } from './overlays/keys-sheet';
+import { THE_WORDS_HREF } from '@/lib/help-system/keys-reference';
 
 // A minimal document_state row — only the fields command-bar.tsx's own code
 // paths read (folderTab, fillStateForDesk's active_section, the
@@ -796,5 +798,45 @@ describe('the "Leave a note" doorway follows the tester-notes flag', () => {
 
     expect(screen.getByText('Leave a note')).toBeInTheDocument();
     expect(screen.getByText('feedback on this screen')).toBeInTheDocument();
+  });
+});
+
+describe('L5 — the two reference doorways in ⌘K', () => {
+  function typeInPalette(query: string) {
+    render(
+      <>
+        <FindAnythingButton />
+        <CommandBar />
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+      target: { value: query },
+    });
+  }
+
+  it('offers "The keys" and opens the sheet rather than routing', () => {
+    const heard: string[] = [];
+    const handler = (event: Event) => {
+      heard.push((event as CustomEvent<{ source: string }>).detail?.source ?? '');
+    };
+    window.addEventListener(KEYS_SHEET_EVENT, handler);
+
+    typeInPalette('shortcuts');
+    expect(screen.getByText('The keys')).toBeInTheDocument();
+    expect(screen.getByText('shortcuts, one page')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('The keys'));
+    expect(heard).toEqual(['palette']);
+    window.removeEventListener(KEYS_SHEET_EVENT, handler);
+  });
+
+  it('offers "The words" and routes to the Ideas & vocabulary shelf', () => {
+    typeInPalette('glossary');
+    expect(screen.getByText('The words')).toBeInTheDocument();
+    expect(screen.getByText('what Patina calls things')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('The words'));
+    expect(mockPush).toHaveBeenCalledWith(THE_WORDS_HREF);
   });
 });

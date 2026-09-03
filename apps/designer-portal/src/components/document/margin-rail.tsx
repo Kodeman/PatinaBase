@@ -35,6 +35,8 @@ import {
   MarginDecisionClassificationNotice,
 } from '@/lib/document/stage2-approval-exclusions';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
+import { documentEvents } from '@/lib/analytics/document-events';
+import { hasBeenAuthored, markFirstAuthored } from './help/first-authored-state';
 import {
   useMarkProjectFileChangeRead,
   useProjectFileChangeNotifications,
@@ -90,6 +92,15 @@ export const OPEN_MARGIN_EVENT = 'document:open-margin' as const;
 export function openMarginRail(): void {
   window.dispatchEvent(new CustomEvent(OPEN_MARGIN_EVENT));
 }
+
+/**
+ * Onboarding Wave 1 (L6) — a margin note or decision was successfully
+ * written into the open document. `doc/[id]/page.tsx` listens for this to
+ * know a "write happened in between", the guard `document_zone_flight`
+ * needs so a pick-up/put-down that included real work is never misread as
+ * thrash.
+ */
+export const DOCUMENT_WRITE_EVENT = 'document:write' as const;
 
 /**
  * What the 1180–1439 tab prints beside its own word. `MarginRail` knows the
@@ -359,6 +370,7 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
 export function MarginRail({
   projectId,
   proposalId,
+  docId = null,
   clientName,
   clientUserId = null,
   onHoverLine,
@@ -370,6 +382,10 @@ export function MarginRail({
 }: {
   projectId: string | null;
   proposalId: string | null;
+  /** `row.engagement_id` — the `doc_id` onboarding Wave 1 (L6)'s
+   *  `document_first_authored` fires with. Optional so existing call sites
+   *  (and their fixtures) are unaffected; falls back to `projectId`. */
+  docId?: string | null;
   clientName: string;
   /** Whether the Stage-2 approval ceremony is mounted on this document; the
    *  gates' `open` act dispatches to it and is withheld when it is not. */
@@ -520,6 +536,23 @@ export function MarginRail({
     onNoteAnchorConsumed();
   }, [pendingNoteAnchor, onNoteAnchorConsumed]);
 
+  // Onboarding Wave 1 (L6) — this person's first successful write (a margin
+  // note or a decision) into any document, ever: the handoff's activation
+  // signal (synthesis §10). Guarded by `help_state.firstAuthoredAt` so a
+  // second write, here or on another document, never re-fires it.
+  const fireFirstAuthoredIfDue = useCallback(() => {
+    if (hasBeenAuthored()) return;
+    markFirstAuthored();
+    documentEvents.firstAuthored({ doc_id: docId ?? projectId ?? '' });
+  }, [docId, projectId]);
+
+  // Every note/decision write dispatches DOCUMENT_WRITE_EVENT — the doc
+  // page's zone-flight guard (L6) listens for it so a pick-up that included
+  // a real write is never counted as thrash.
+  const announceDocumentWrite = useCallback(() => {
+    window.dispatchEvent(new CustomEvent(DOCUMENT_WRITE_EVENT));
+  }, []);
+
   const saveNote = () => {
     if (!noteBody.trim()) return;
     createNote.mutate(
@@ -537,6 +570,8 @@ export function MarginRail({
           setNoteBody('');
           setNoteDue(todayYmd());
           setNoteAnchorLine(null);
+          announceDocumentWrite();
+          fireFirstAuthoredIfDue();
         },
       },
     );
@@ -587,9 +622,9 @@ export function MarginRail({
           owns once-only + recede. */}
       {projectId && (
         <MarginNote noteKey="doc-first-touch" clamp className="mb-5">
-          The margin on the right is where decisions and money gather. Esc puts
-          the document down — and the hours log themselves while it&apos;s in
-          your hand.
+          One client, one paper. The rail on the left says where this stands;
+          the margin here is where decisions, messages, and money gather.
+          Nothing is a form — it fills as the work happens.
         </MarginNote>
       )}
       {fileChanges.map((change) => (
@@ -827,7 +862,11 @@ export function MarginRail({
             parties={parties ?? []}
             editItem={composer.mode === 'edit' ? composer.item : null}
             onClose={() => setComposer(null)}
-            onCreated={() => setComposer(null)}
+            onCreated={() => {
+              setComposer(null);
+              announceDocumentWrite();
+              fireFirstAuthoredIfDue();
+            }}
           />
         )}
       </DocSheet>

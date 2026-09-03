@@ -35,6 +35,7 @@ import { StudioSetupWhisper } from '@/components/document/account/studio-setup-w
 import { deriveSetupSteps } from '@/lib/document/studio-setup';
 import {
   START_DESK_WALKTHROUGH_EVENT,
+  clearDeskWalkthroughLater,
   useDeskWalkthroughOffer,
   useSuppressDeskFirstTouch,
 } from '@/components/document/help/desk-walkthrough';
@@ -85,13 +86,23 @@ export default function DeskPage() {
   const { data: studioContacts } = useStudioContacts(
     callSheetOn ? (studio?.id ?? null) : null,
   );
+  // activeMemberCountBeyondSelf / hiresWithFirstDocument (L3, 00559): same
+  // active-only / first-document-opened derivation as account-studio-page.tsx,
+  // so this whisper's openCount never runs ahead or behind the checklist it
+  // sends you to.
+  const otherActiveStudioMembers = (studioMembers ?? []).filter(
+    (m) => m.user_id !== user?.id && m.status === 'active',
+  );
   const { openCount: studioSetupOpenCount } = deriveSetupSteps({
     orgCreatedAt: studio?.created_at ?? null,
     myJobTitle: studioMembers?.find((m) => m.user_id === user?.id)?.job_title ?? null,
-    memberCountBeyondSelf: (studioMembers ?? []).filter((m) => m.user_id !== user?.id).length,
+    activeMemberCountBeyondSelf: otherActiveStudioMembers.length,
     projectsCount: studioProjects?.length ?? 0,
     contactsCount: callSheetOn ? (studioContacts?.length ?? 0) : 0,
     seedSkipped: callSheetOn ? !!studio?.rolodex_seed_skipped_at : false,
+    hiresWithFirstDocument: otherActiveStudioMembers.filter(
+      (m) => m.first_document_opened_at != null,
+    ).length,
   });
 
   // A9: no mobile primary action is registered here — the header's
@@ -203,7 +214,10 @@ export default function DeskPage() {
         <div>
           {/* The signature move: greeting in Playfair, the first name in
               Playfair italic, Aged Oak. Kept modest so the folios lead. */}
-          <h1 className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]">
+          <h1
+            data-tour-anchor="desk-greeting"
+            className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]"
+          >
             {firstName ? (
               <>
                 {greetingWord},{' '}
@@ -339,6 +353,10 @@ export default function DeskPage() {
             <MarginNote
               noteKey="desk-walkthrough-offer"
               actionEvents={[START_DESK_WALKTHROUGH_EVENT]}
+              // A deferred ("Show me later") record only earns one re-offer
+              // (decisions #2) — clear it as soon as this note is seen,
+              // whether dismissed (×) or acted on (the tour starting).
+              onSeen={clearDeskWalkthroughLater}
               className="mb-10"
             >
               New desk, same studio — your projects are all here as documents

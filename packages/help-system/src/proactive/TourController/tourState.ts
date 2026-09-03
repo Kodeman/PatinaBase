@@ -17,9 +17,8 @@
  * │  • Supabase (S4-1 — authoritative for signed-in users)                   │
  * │    Lives under `profiles.help_state` JSONB, sub-key `tours`. Wired in    │
  * │    the portal layer via `setTourStateBackend(supabaseTourStateBackend)`. │
- * │    See `../../persistence/supabaseAdapter.ts` for the adapter, and       │
- * │    `apps/designer-portal/src/components/help/first-signin-tour.tsx` for  │
- * │    the wiring pattern.                                                   │
+ * │    See `../../persistence/supabaseAdapter.ts` for the adapter, and the   │
+ * │    designer-portal `help-state-provider.tsx` for the wiring pattern.     │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
  * Spec §4.7 rule 1 ("One-shot per user per surface") calls out: "State
@@ -44,12 +43,20 @@ export interface TourState {
   completed?: boolean
   /** True once the user explicitly skipped the tour. */
   abandoned?: boolean
-  /** Zero-based step index the user was on when they skipped. */
+  /** Zero-based step index the user was on when they skipped (or deferred). */
   atStep?: number
   /** ISO timestamp of completion. */
   completedAt?: string
   /** ISO timestamp of abandonment. */
   abandonedAt?: string
+  /**
+   * True when the user chose "Show me later" rather than declining outright.
+   * Distinct from `abandoned`: a deferred tour is NOT resolved (spec §11.2 /
+   * decisions #2) — the eligible offer surface (a margin note, say) may
+   * re-offer it exactly once. A consumer clears this once that re-offer is
+   * shown or acted on, so the deferral itself never re-fires.
+   */
+  later?: boolean
 }
 
 /** Storage key prefix — shared with the migration scanner. */
