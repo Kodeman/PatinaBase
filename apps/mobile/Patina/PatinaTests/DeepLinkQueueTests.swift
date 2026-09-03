@@ -43,7 +43,7 @@ struct DeepLinkQueueTests {
 
     @Test("a universal link arriving before configure is stashed, not dropped")
     func aLinkArrivingBeforeConfigureIsStashed() throws {
-        let handler = DeepLinkHandler(queue: queue())
+        let handler = DeepLinkHandler.makeForTests(queue: queue())
         let link = try url(Self.proposal)
 
         // No coordinator: `configure` runs from ContentView's `.onAppear`,
@@ -61,7 +61,7 @@ struct DeepLinkQueueTests {
 
     @Test("handle returns false for a link it cannot route, and queues nothing")
     func anUnroutableLinkIsNotReportedHandled() throws {
-        let handler = DeepLinkHandler(queue: queue())
+        let handler = DeepLinkHandler.makeForTests(queue: queue())
         #expect(handler.handle(try url("https://client.patina.cloud/nowhere/1")) == false)
         #expect(handler.handle(try url("https://example.com/proposals/1")) == false)
         #expect(handler.queuedURLs.isEmpty)
@@ -72,7 +72,7 @@ struct DeepLinkQueueTests {
     @Test("a link arriving at any non-main phase is queued, not pushed at a stack that isn't mounted")
     func everyNonMainPhaseQueues() throws {
         for phase in [AppPhase.launching, .auth, .onboarding] {
-            let handler = DeepLinkHandler(queue: queue())
+            let handler = DeepLinkHandler.makeForTests(queue: queue())
             let coordinator = AppCoordinator(houseFirstRoot: true)
             coordinator.forcePhaseForTesting(phase)
             handler.configure(coordinator: coordinator)
@@ -86,7 +86,7 @@ struct DeepLinkQueueTests {
 
     @Test("the queue holds more than one link and drains in arrival order")
     func theQueueIsAFifo() throws {
-        let handler = DeepLinkHandler(queue: queue())
+        let handler = DeepLinkHandler.makeForTests(queue: queue())
         let coordinator = AppCoordinator(houseFirstRoot: true)
         coordinator.forcePhaseForTesting(.auth)
         handler.configure(coordinator: coordinator)
@@ -108,7 +108,7 @@ struct DeepLinkQueueTests {
     @Test("the queue is bounded — the oldest link is dropped rather than the newest refused")
     func theQueueIsBounded() throws {
         let store = queue()
-        let handler = DeepLinkHandler(queue: store)
+        let handler = DeepLinkHandler.makeForTests(queue: store)
         let coordinator = AppCoordinator(houseFirstRoot: true)
         coordinator.forcePhaseForTesting(.auth)
         handler.configure(coordinator: coordinator)
@@ -150,7 +150,7 @@ struct DeepLinkQueueTests {
 
     @Test("a queued link is acknowledged on the auth screen in one line")
     func aQueuedLinkIsAcknowledged() throws {
-        let handler = DeepLinkHandler(queue: queue())
+        let handler = DeepLinkHandler.makeForTests(queue: queue())
         let coordinator = AppCoordinator(houseFirstRoot: true)
         coordinator.forcePhaseForTesting(.auth)
         handler.configure(coordinator: coordinator)
@@ -161,6 +161,45 @@ struct DeepLinkQueueTests {
 
         coordinator.forcePhaseForTesting(.main)
         #expect(coordinator.pendingLinkNotice == nil, "the notice retires when the link arrives")
+    }
+
+    /// `GAP7B-09`'s three shapes are warm at the auth wall, cold at Welcome,
+    /// and after signing in from the cold one. Only the first set the notice:
+    /// on a cold launch `.onOpenURL` fires BEFORE `ContentView`'s `.onAppear`
+    /// runs `configure(coordinator:)`, so `deliver` had no coordinator to tell
+    /// and the drain returned early without telling one either. The link
+    /// arrived; the acknowledgement — the half that stops a tester concluding
+    /// the tap did nothing — was silent on exactly the shape the finding names
+    /// as silent (`RL1F-23`).
+    @Test("a link kept before the coordinator attaches is acknowledged when it does")
+    func aLinkHeldBeforeConfigureIsAcknowledged() throws {
+        let handler = DeepLinkHandler.makeForTests(queue: queue())
+
+        // No coordinator yet — the cold-launch window.
+        _ = handler.handle(try url(Self.proposal))
+        #expect(handler.queuedURLs.count == 1)
+
+        let coordinator = AppCoordinator(houseFirstRoot: true)
+        coordinator.forcePhaseForTesting(.auth)
+        #expect(coordinator.pendingLinkNotice == nil)
+
+        handler.configure(coordinator: coordinator)
+        #expect(coordinator.pendingLinkNotice == AppCoordinator.pendingLinkNoticeLine)
+
+        coordinator.forcePhaseForTesting(.main)
+        #expect(coordinator.pendingLinkNotice == nil, "the notice retires when the link arrives")
+    }
+
+    /// The other side of the same line: an empty queue must not put a notice on
+    /// the auth screen promising to open something nobody tapped.
+    @Test("configuring with nothing held says nothing")
+    func configuringWithAnEmptyQueueSaysNothing() {
+        let handler = DeepLinkHandler.makeForTests(queue: queue())
+        let coordinator = AppCoordinator(houseFirstRoot: true)
+        coordinator.forcePhaseForTesting(.auth)
+
+        handler.configure(coordinator: coordinator)
+        #expect(coordinator.pendingLinkNotice == nil)
     }
 
     @Test("the notice names no vendor, no URL and no error")
@@ -179,7 +218,7 @@ struct DeepLinkQueueTests {
     @Test("an auth callback is never queued, in any phase")
     func authCallbacksBypassTheQueue() throws {
         for phase in [AppPhase.launching, .auth, .onboarding] {
-            let handler = DeepLinkHandler(queue: queue())
+            let handler = DeepLinkHandler.makeForTests(queue: queue())
             let coordinator = AppCoordinator(houseFirstRoot: true)
             coordinator.forcePhaseForTesting(phase)
             handler.configure(coordinator: coordinator)
@@ -193,7 +232,7 @@ struct DeepLinkQueueTests {
 
     @Test("a widget tap in a non-main phase is queued and replayed, not dropped")
     func theWidgetArmIsQueuedToo() throws {
-        let handler = DeepLinkHandler(queue: queue())
+        let handler = DeepLinkHandler.makeForTests(queue: queue())
         let coordinator = AppCoordinator(houseFirstRoot: true)
         coordinator.forcePhaseForTesting(.launching)
         handler.configure(coordinator: coordinator)
@@ -211,7 +250,7 @@ struct DeepLinkQueueTests {
     /// persist — so it keeps its own in-memory FIFO through the same drain.
     @Test("an APNs route delivered before .main is held and replayed")
     func anApnsRouteIsHeldUntilMain() {
-        let handler = DeepLinkHandler(queue: queue())
+        let handler = DeepLinkHandler.makeForTests(queue: queue())
         let coordinator = AppCoordinator(houseFirstRoot: true)
         coordinator.forcePhaseForTesting(.auth)
         handler.configure(coordinator: coordinator)

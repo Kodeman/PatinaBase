@@ -36,11 +36,22 @@ public final class DeepLinkHandler {
         self.queue = PendingLinkQueue()
     }
 
-    /// Test seam: the singleton reads the App Group defaults, which a unit test
-    /// must not share with the simulator it is running on.
-    init(queue: PendingLinkQueue) {
+    private init(queue: PendingLinkQueue) {
         self.queue = queue
     }
+
+    #if DEBUG
+    /// Test seam: the singleton reads the App Group defaults, which a unit test
+    /// must not share with the simulator it is running on.
+    ///
+    /// `private` + `#if DEBUG`, the same shape `BadgeCountService` takes and for
+    /// the same reason: a handler built by product code owns a queue nothing
+    /// else drains, which is a second copy of exactly the state these findings
+    /// are about.
+    static func makeForTests(queue: PendingLinkQueue) -> DeepLinkHandler {
+        DeepLinkHandler(queue: queue)
+    }
+    #endif
 
     // MARK: - Configuration
 
@@ -55,6 +66,13 @@ public final class DeepLinkHandler {
         // link account A tapped at the auth wall would otherwise drain into
         // account B's first `.main`.
         coordinator.attachDeepLinkClear { [weak self] in self?.queue.clear() }
+        // GAP7B-09 shape (b), the cold launch at Welcome — round one's FIRST
+        // state. `.onOpenURL` fires before `ContentView`'s `.onAppear` runs
+        // this, so `deliver` had no coordinator to tell: `noteLinkHeld()`
+        // optional-chained to nothing and the drain below returns early
+        // without noting. The link was kept; nothing on the screen said so,
+        // which is the half a tester reads as "the tap did nothing".
+        if !canOpen, !queue.isEmpty { coordinator.noteLinkHeld() }
         drainIfPossible()
     }
 

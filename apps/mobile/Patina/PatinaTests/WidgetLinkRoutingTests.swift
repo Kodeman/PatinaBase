@@ -220,7 +220,7 @@ struct WidgetLinkRoutingTests {
         // elapses and `AuthService` reports — exactly the cold-launch window a
         // widget tap arrives in.
         #expect(coordinator.phase == .launching)
-        let handler = DeepLinkHandler(
+        let handler = DeepLinkHandler.makeForTests(
             queue: PendingLinkQueue(
                 defaults: UserDefaults(suiteName: "patina.tests.widgetlink.\(UUID().uuidString)") ?? .standard
             )
