@@ -47,18 +47,34 @@ struct OnboardingCompletion: Sendable {
         completedUserIds().contains(userId)
     }
 
+    /// How many accounts this phone remembers onboarding for.
+    ///
+    /// The list survives sign-out on purpose — that is the whole of `B-21` on
+    /// a shared phone — so it needs a ceiling, or the device accumulates an
+    /// unbounded roster of who has signed in here. Oldest entry out first; a
+    /// dropped account pays one short pass through onboarding, which is the
+    /// pre-existing behaviour and cheaper than keeping the list forever.
+    static let recordLimit = 8
+
     /// Record that THIS account finished onboarding. Called wherever
     /// `hasCompletedOnboarding` is set, so the two never disagree.
     func markCompleted(userId: String?) {
         guard let userId, !userId.isEmpty else { return }
         var ids = completedUserIds()
         guard !ids.contains(userId) else { return }
-        ids.insert(userId)
-        defaults.set(Array(ids), forKey: Self.key)
+        ids.append(userId)
+        defaults.set(Array(ids.suffix(Self.recordLimit)), forKey: Self.key)
     }
 
-    private func completedUserIds() -> Set<String> {
-        Set(defaults.stringArray(forKey: Self.key) ?? [])
+    /// Delete Account purges everything else this app kept; this goes with it.
+    func forgetAll() {
+        defaults.removeObject(forKey: Self.key)
+    }
+
+    /// Insertion order, oldest first — `Set` would make "drop the oldest"
+    /// arbitrary.
+    private func completedUserIds() -> [String] {
+        defaults.stringArray(forKey: Self.key) ?? []
     }
 
     // MARK: - Decision (pure)

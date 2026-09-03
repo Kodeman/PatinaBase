@@ -19,6 +19,12 @@ import Foundation
 import Testing
 @testable import Patina
 
+/// Serialized: five cases below move `AppSettings.shared.hasCompletedOnboarding`,
+/// a process global. A `defer` restores it, which is enough for a sequential
+/// run and not enough for a parallel one — Swift Testing parallelises by
+/// default, and any other suite reading that flag during the window would see
+/// the mutation.
+@Suite(.serialized)
 struct OnboardingResumptionTests {
 
     private func store(_ suite: String) -> (OnboardingCompletion, UserDefaults) {
@@ -171,12 +177,39 @@ struct OnboardingResumptionTests {
 
     // MARK: - Wiring
 
-    @Test("resolution runs once per account, before auth state is published")
-    func resolvedBeforeThePhaseObserverReads() throws {
+    /// The resolve has to precede the assignment that wakes the phase
+    /// observer, not merely `markAuthStateReady` — which is already true by
+    /// the time anyone signs in from the Welcome screen.
+    ///
+    /// Measured on the lane's clone before the fix: signing in as an account
+    /// that HAS a `user_style_signals` row logged
+    /// `phase auth → onboarding (onboarded=false)` and then, 130 ms later,
+    /// `phase onboarding → main (onboarded=true)`. `ContentView` animates
+    /// phase changes over 0.5 s, so that was a visible cross-fade through the
+    /// intro carousel — B-21's own symptom, at a tenth of the duration.
+    @Test("the resolve runs before the session is published, not after")
+    func resolvedBeforeTheSessionIsPublished() throws {
         let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
-        let resolve = try #require(source.range(of: "await self.onboardingCompletion.resolve(userId:"))
-        let ready = try #require(source.range(of: "self.markAuthStateReady()"))
-        #expect(resolve.lowerBound < ready.lowerBound)
+        let body = try #require(
+            source.range(of: "private func establishSession(_ session: Session) async -> Bool {")
+        )
+        let block = String(source[body.lowerBound...].prefix(700))
+        let resolve = try #require(block.range(of: "await onboardingCompletion.resolve(userId:"))
+        let publish = try #require(block.range(of: "return applySession(session)"))
+        #expect(resolve.lowerBound < publish.lowerBound)
+
+        // And every site that installs a REAL session goes through it, so the
+        // ordering does not depend on which door the person came in by.
+        let strays = source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+            .filter { $0.contains("applySession(") }
+            .filter { !$0.contains("applySession(nil)") }
+            .filter { !$0.contains("private func applySession") }
+            .filter { !$0.contains("return applySession(session)") }
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .filter { !$0.contains("///") }
+        #expect(strays.isEmpty, "a session is installed without resolving first: \(strays)")
     }
 
     /// The gate is its own watermark, NOT `accountChanged`.
@@ -192,19 +225,45 @@ struct OnboardingResumptionTests {
     func gateIsItsOwnWatermark() throws {
         let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
         #expect(source.contains("private var onboardingResolvedForUserId: String?"))
-        #expect(source.contains("if onboardingResolvedForUserId != user.id.uuidString {"))
-        #expect(!source.contains("if accountChanged {\n                        await self.onboardingCompletion.resolve"))
+        #expect(source.contains("if onboardingResolvedForUserId != userId {"))
 
-        // Stamped BEFORE the await, so a second event during the read cannot
-        // double-run it.
-        let gate = try #require(source.range(of: "if onboardingResolvedForUserId != user.id.uuidString {"))
+        // Stamped BEFORE the await, so a second install landing during the
+        // read cannot double-run it.
+        let gate = try #require(source.range(of: "if onboardingResolvedForUserId != userId {"))
         let block = String(source[gate.lowerBound...].prefix(300))
-        let stamp = try #require(block.range(of: "onboardingResolvedForUserId = user.id.uuidString"))
-        let call = try #require(block.range(of: "await self.onboardingCompletion.resolve"))
+        let stamp = try #require(block.range(of: "onboardingResolvedForUserId = userId"))
+        let call = try #require(block.range(of: "await onboardingCompletion.resolve"))
         #expect(stamp.lowerBound < call.lowerBound)
 
         // And cleared on sign-out, so signing back in resolves again.
         #expect(source.contains("onboardingResolvedForUserId = nil"))
+    }
+
+    /// The list survives sign-out on purpose — that is the whole of B-21 on a
+    /// shared phone — so it needs a ceiling, or the device accumulates an
+    /// unbounded record of who has signed in here, outside everything
+    /// `LocalStoreReset` wipes.
+    @Test("the per-device account record is bounded, and delete-account drops it")
+    func theAccountRecordIsBounded() throws {
+        let (completion, defaults) = store("OnboardingResumptionTests.bound")
+        defer { defaults.removePersistentDomain(forName: "OnboardingResumptionTests.bound") }
+
+        for index in 0..<(OnboardingCompletion.recordLimit + 4) {
+            completion.markCompleted(userId: "user-\(index)")
+        }
+        let kept = try #require(defaults.stringArray(forKey: OnboardingCompletion.key))
+        #expect(kept.count == OnboardingCompletion.recordLimit)
+        // Oldest out first; the most recent account is still known.
+        #expect(!completion.hasCompleted(userId: "user-0"))
+        #expect(completion.hasCompleted(userId: "user-\(OnboardingCompletion.recordLimit + 3)"))
+
+        completion.forgetAll()
+        #expect(defaults.stringArray(forKey: OnboardingCompletion.key) == nil)
+
+        // And deleting the account is where the app drops it, because the
+        // record deliberately sits outside LocalStoreReset.
+        let deletion = try SourcePin.read("Patina/Features/Account/AccountDeletionService.swift")
+        #expect(deletion.contains("OnboardingCompletion.shared.forgetAll()"))
     }
 
     @Test("finishing onboarding records the account as well as the device")

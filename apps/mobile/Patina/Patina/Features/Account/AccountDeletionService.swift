@@ -99,7 +99,10 @@ final class AccountDeletionService {
         }
 
         // The account is gone server-side. Clear the device; the caller ends
-        // the session.
+        // the session. The onboarding record is deliberately outside
+        // `LocalStoreReset` — it has to survive sign-out (B-21) — so it is
+        // dropped here, where "this account no longer exists" is the fact.
         LocalStoreReset.wipeUserScopedData()
+        OnboardingCompletion.shared.forgetAll()
     }
 }

@@ -18,6 +18,9 @@ import Foundation
 import Testing
 @testable import Patina
 
+/// Serialized: `savedProgressRestores` drives a real `StyleQuizViewModel`,
+/// whose auto-advance is a live task.
+@Suite(.serialized)
 struct GuestEscapeTests {
 
     // MARK: - P-18 · a door back to Welcome
@@ -125,24 +128,23 @@ struct GuestEscapeTests {
         #expect(quiz.contains("@Environment(\\.scenePhase) private var scenePhase"))
     }
 
+    /// Its own defaults suite rather than `UserDefaults.standard`: this ran
+    /// beside 1600 other tests and wrote a real key into the shared domain.
     @Test("a saved snapshot is restored on the next mount")
     @MainActor
     func savedProgressRestores() {
-        let key = "styleQuiz.savedProgress.v1"
-        let defaults = UserDefaults.standard
-        let backup = defaults.data(forKey: key)
-        defer {
-            if let backup { defaults.set(backup, forKey: key) } else { defaults.removeObject(forKey: key) }
-        }
-        defaults.removeObject(forKey: key)
+        let suite = "GuestEscapeTests.savedProgress"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
 
-        let first = StyleQuizViewModel()
+        let first = StyleQuizViewModel(defaults: defaults)
         first.toggleSelection(question: 0, option: 1)
         first.currentQuestion = 2
         first.toggleSelection(question: 2, option: 0)
         first.saveProgress()
 
-        let resumed = StyleQuizViewModel()
+        let resumed = StyleQuizViewModel(defaults: defaults)
         #expect(resumed.currentQuestion == 2)
         #expect(resumed.selections[0] == [1])
         #expect(resumed.selections[2] == [0])

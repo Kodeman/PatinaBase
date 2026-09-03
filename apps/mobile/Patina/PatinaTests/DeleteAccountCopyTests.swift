@@ -30,9 +30,11 @@ struct DeleteAccountCopyTests {
         #expect(account.contains("Button(\"Delete account\")"))
         #expect(account.contains("Button(\"Delete account\", role: .destructive)"))
 
+        // `SettingsView.swift` is L1-C's file, so this pins only the coupling
+        // — that the second surface reads the same two constants and cannot
+        // drift from them — never its row's literal label, which would make an
+        // L1-A test fail on an L1-C edit.
         let settings = try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
-        #expect(settings.contains("label: \"Delete account\""))
-        // Both surfaces read the same constants, so they cannot drift.
         #expect(settings.contains("AccountDeletionService.confirmationTitle"))
         #expect(settings.contains("AccountDeletionService.confirmationBody"))
     }

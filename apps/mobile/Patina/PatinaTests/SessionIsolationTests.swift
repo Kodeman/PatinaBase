@@ -46,7 +46,10 @@ struct SessionIsolationTests {
     @Test("the reset runs before anything fetches for the new account")
     func theResetPrecedesTheFirstFetch() throws {
         let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
-        let apply = try #require(source.range(of: "self.applySession(session)"))
+        // `establishSession` resolves B-21 and then calls `applySession`, so
+        // it is the listener's one install point and the reset happens inside
+        // it.
+        let apply = try #require(source.range(of: "await self.establishSession(session)"))
         let settle = try #require(source.range(of: "Self.settleLocalStore(for:"))
         let hydrate = try #require(source.range(of: "await ProfileService.shared.fetchProfile"))
         let refresh = try #require(source.range(of: "SessionScope.refresh()"))
