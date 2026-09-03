@@ -171,14 +171,40 @@ struct OnboardingResumptionTests {
 
     // MARK: - Wiring
 
-    @Test("resolution runs on a real change of account, before auth state is published")
+    @Test("resolution runs once per account, before auth state is published")
     func resolvedBeforeThePhaseObserverReads() throws {
         let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
         let resolve = try #require(source.range(of: "await self.onboardingCompletion.resolve(userId:"))
         let ready = try #require(source.range(of: "self.markAuthStateReady()"))
         #expect(resolve.lowerBound < ready.lowerBound)
-        // Not on every token refresh.
-        #expect(source.contains("if accountChanged {\n                        await self.onboardingCompletion.resolve"))
+    }
+
+    /// The gate is its own watermark, NOT `accountChanged`.
+    ///
+    /// Six of the seven `applySession` call sites install the session before
+    /// GoTrue emits the matching event, so by the time `.signedIn` arrives
+    /// `settledUserId` already holds this user and `accountChanged` is false.
+    /// Gated on it, this never fired on a real sign-in — `client@patina.dev`,
+    /// which has a `user_style_signals` row, still met the intro carousel on
+    /// the simulator. Caught by the self-check walk, not by a test, so the
+    /// test is here now.
+    @Test("the resolve gate is not accountChanged")
+    func gateIsItsOwnWatermark() throws {
+        let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
+        #expect(source.contains("private var onboardingResolvedForUserId: String?"))
+        #expect(source.contains("if onboardingResolvedForUserId != user.id.uuidString {"))
+        #expect(!source.contains("if accountChanged {\n                        await self.onboardingCompletion.resolve"))
+
+        // Stamped BEFORE the await, so a second event during the read cannot
+        // double-run it.
+        let gate = try #require(source.range(of: "if onboardingResolvedForUserId != user.id.uuidString {"))
+        let block = String(source[gate.lowerBound...].prefix(300))
+        let stamp = try #require(block.range(of: "onboardingResolvedForUserId = user.id.uuidString"))
+        let call = try #require(block.range(of: "await self.onboardingCompletion.resolve"))
+        #expect(stamp.lowerBound < call.lowerBound)
+
+        // And cleared on sign-out, so signing back in resolves again.
+        #expect(source.contains("onboardingResolvedForUserId = nil"))
     }
 
     @Test("finishing onboarding records the account as well as the device")

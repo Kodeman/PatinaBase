@@ -98,6 +98,10 @@ public final class AuthService {
     /// sign-in. Injectable for tests.
     var onboardingCompletion: OnboardingCompletion = .shared
 
+    /// The account `onboardingCompletion` has already been resolved for this
+    /// launch. See the call site for why `accountChanged` cannot do this job.
+    private var onboardingResolvedForUserId: String?
+
     /// The account the in-memory singletons currently hold data for. Compared
     /// against every auth-state event so a token refresh — which yields the
     /// same user several times a session — costs nothing, and a real change of
@@ -166,15 +170,25 @@ public final class AuthService {
 
                 if let user = session?.user {
                     Self.settleLocalStore(for: user.id.uuidString)
-                    // B-21: resolve onboarding for THIS account before the
-                    // phase observer can read the flag, so a client who has
-                    // already done it never meets the intro carousel. Runs
-                    // only on a real change of account — a token refresh
-                    // yields the same user several times a session — and
-                    // returns immediately when the flag is already true.
-                    if accountChanged {
+                    // B-21: resolve onboarding for THIS account, once per
+                    // account per launch, so a client who has already done it
+                    // never meets the intro carousel.
+                    //
+                    // Deliberately NOT gated on `accountChanged`. Six of the
+                    // seven `applySession` call sites run BEFORE GoTrue emits
+                    // the matching event (the header above says so), so by the
+                    // time `.signedIn` arrives `settledUserId` already holds
+                    // this user and `accountChanged` is false — the gate never
+                    // fired on any real sign-in. Its own watermark instead,
+                    // stamped before the await so a second event landing during
+                    // the read cannot double-run it.
+                    if onboardingResolvedForUserId != user.id.uuidString {
+                        onboardingResolvedForUserId = user.id.uuidString
                         await self.onboardingCompletion.resolve(userId: user.id.uuidString)
                     }
+                } else {
+                    // Signed out: the next sign-in resolves again.
+                    onboardingResolvedForUserId = nil
                 }
 
                 self.markAuthStateReady()
