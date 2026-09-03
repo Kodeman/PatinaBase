@@ -12,6 +12,7 @@
 //  A golden assertion on purpose: the string is one edit away from `*` again.
 //
 
+import Foundation
 import Testing
 @testable import Patina
 
@@ -61,6 +62,38 @@ struct ProductSelectShapeTests {
             #expect(
                 ProductAPIClient.productColumns.contains(column),
                 "productSelect no longer asks for \(column)"
+            )
+        }
+    }
+
+    /// The other direction, and the one a hand-written list cannot see
+    /// (review `RL1B2-11`): a property ADDED to `RawProductWithVendor`
+    /// without being added to `productColumns` leaves every assertion above
+    /// green and produces a decode failure against live PostgREST — which,
+    /// with `C7-17`'s `FailableDecodable` in place, now silently drops the
+    /// row instead of throwing. So the expected set is read out of the
+    /// declaration itself rather than typed beside it.
+    @Test
+    func everyPropertyTheRowDecodesIsRequested() throws {
+        let source = try SourcePin.read("Patina/Core/Network/ProductAPIClient.swift")
+        let declaration = try #require(
+            source.components(separatedBy: "private struct RawProductWithVendor: Decodable {").last?
+                .components(separatedBy: "\n    struct VendorInfo").first
+        )
+        let decoded = declaration.components(separatedBy: .newlines).compactMap { line -> String? in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("let "), let colon = trimmed.firstIndex(of: ":") else {
+                return nil
+            }
+            return String(trimmed[trimmed.index(trimmed.startIndex, offsetBy: 4)..<colon])
+                .trimmingCharacters(in: .whitespaces)
+        }
+        // The walk found the struct, not an empty fragment after a rename.
+        #expect(decoded.count >= 21, "the RawProductWithVendor walk found \(decoded.count) properties")
+        for property in decoded where property != "vendors" {
+            #expect(
+                ProductAPIClient.productColumns.contains(property),
+                "RawProductWithVendor decodes \(property) and productSelect never asks for it"
             )
         }
     }

@@ -287,25 +287,52 @@ struct AccountIsolationTests {
 
     // MARK: - C2-06: the navigation stack (L1-F applies the other half)
 
-    /// `AppCoordinator` is L1-F's file this wave, and the exact change is in
-    /// `l1b-notes-out.md` → O2: `beginSplashTransition()` clears
-    /// `navigationPath`, `screenStack`, every tab stack and `tabs.selected`.
-    /// `isIntermittent` so the pin reddens neither this lane's gate before
-    /// the merge nor the integration gate after it — the state is in the
-    /// report either way.
+    /// `AppCoordinator` is L1-F's file this wave, and the exact change went
+    /// out as `l1b-notes-out.md` → O2. L1-F applied it in
+    /// `clearNavigationForEndedSession()` rather than in
+    /// `beginSplashTransition()`, which is the better seam — it is the one
+    /// the forced-sign-out branch actually takes, and it clears the return
+    /// route and the queued deep link as well. So this reads that function,
+    /// not the one the note named (review `RL1B2-03`).
+    ///
+    /// A known issue, and deliberately NOT `isIntermittent`: an intermittent
+    /// one passes in both states, which made this row unfalsifiable — an
+    /// unapplied note looked exactly like an applied one (review `RL1B-03`,
+    /// still true at `RL1B2-02`, which found this the last of the three).
+    /// Green here, where `AppCoordinator.swift` is the base sha's; red the
+    /// moment L1-F's file arrives, as an unrecorded known issue. That red is
+    /// the tripwire, and `l1b-notes-out.md` §S1 carries the hard `#expect`
+    /// the steward pastes in its place at merge 4.
     @Test
     func theSignOutClearsThePreviousAccountsNavigationStack() throws {
         let source = try SourcePin.read("Patina/App/Coordinators/AppCoordinator.swift")
-        let transition = try #require(
-            source.components(separatedBy: "public func beginSplashTransition(").last?
-                .components(separatedBy: "\n    }").first
-        )
-        let clears = transition.contains("navigationPath = NavigationPath()")
+        let clears = Self.endedSessionBody(in: source)?
+            .contains("navigationPath = NavigationPath()") ?? false
         withKnownIssue(
-            "C2-06 owes AppCoordinator.beginSplashTransition() its stack clear (l1b-notes-out.md O2, applied by L1-F)",
-            isIntermittent: true
+            "C2-06 owes AppCoordinator its ended-session stack clear (l1b-notes-out.md O2, applied by L1-F)"
         ) {
             #expect(clears)
         }
+    }
+
+    /// The body of `clearNavigationForEndedSession()`, brace-matched, or
+    /// `nil` when the function does not exist yet — which is the state on
+    /// this branch, and must be a recorded known issue rather than a hard
+    /// `#require` failure.
+    private static func endedSessionBody(in source: String) -> String? {
+        let marker = "func clearNavigationForEndedSession("
+        guard let start = source.range(of: marker),
+              let open = source[start.upperBound...].firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var body = ""
+        for character in source[open...] {
+            if character == "{" { depth += 1 }
+            if character == "}" {
+                depth -= 1
+                if depth == 0 { return body }
+            }
+            body.append(character)
+        }
+        return nil
     }
 }

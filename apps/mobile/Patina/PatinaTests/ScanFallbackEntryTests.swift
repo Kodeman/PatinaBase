@@ -125,4 +125,19 @@ struct ScanFallbackEntryTests {
                 == ScanUploadFailureCopy.unfinished
         )
     }
+
+    /// At `accessibility-extra-large` the three-across room-type grid is
+    /// narrower than its own words and the cells read "Bedroo m" (review
+    /// `RL1B2-18`, shot 24). Same defect class as `C6-18` on
+    /// `RoomTypePillRow`, in a second grid this lane owns.
+    @Test
+    func theRoomTypeCellsSurviveAccessibilitySizes() throws {
+        let view = try SourcePin.read("Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift")
+        let grid = try #require(
+            view.components(separatedBy: "private var roomTypeGrid: some View {").last?
+                .components(separatedBy: "\n    }").first
+        )
+        #expect(grid.contains(".lineLimit(1)"))
+        #expect(grid.contains(".minimumScaleFactor("))
+    }
 }

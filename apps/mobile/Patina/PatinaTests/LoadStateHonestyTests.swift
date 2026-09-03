@@ -33,44 +33,99 @@ struct LoadStateHonestyTests {
     /// Every list surface this lane owns, and the three states it must be
     /// able to be in. A surface that cannot distinguish them is a surface
     /// that will eventually lie.
+    ///
+    /// Nine, as PROGRAM.md §3 · L1-B writes it. Round 2 shipped five and the
+    /// charter's count went unremarked (review `RL1B2-12`); documents,
+    /// projects, decisions and the thread list are the four that were
+    /// missing. All four already draw three states — this locks that, and it
+    /// is a `#expect`, not a rewrite.
+    private struct Surface {
+        let path: String
+        let name: String
+        let required: [String]
+    }
+
+    private static let surfaces = [
+        Surface(
+            path: "Patina/Features/Rooms/RoomSyncCoordinator.swift", name: "rooms",
+            required: ["lastLoadFailed", "isLoading", "lastSuccessAt"]
+        ),
+        Surface(
+            path: "Patina/Features/Collections/ViewModels/CollectionsViewModel.swift",
+            name: "saved pieces",
+            required: ["lastLoadFailed", "isLoading", "loadState"]
+        ),
+        Surface(
+            path: "Patina/Features/Profile/ViewModels/StudioHubViewModel.swift",
+            name: "the Studio hub",
+            required: ["failedSources", "isLoading", "hasLoaded", "lastSuccessAt", "stalenessLine"]
+        ),
+        Surface(
+            path: "Patina/Features/Orders/Views/OrderDetailView.swift", name: "an order",
+            required: ["service.isLoading", "service.lastRefreshFailed"]
+        ),
+        Surface(
+            path: "Patina/Features/Proposals/ViewModels/ProposalsViewModel.swift",
+            name: "a proposal",
+            required: ["isLoading", "error", "fetchDeadline"]
+        ),
+        Surface(
+            path: "Patina/Features/Documents/DocumentsViewModel.swift",
+            name: "documents",
+            required: ["isLoading", "error"]
+        ),
+        Surface(
+            path: "Patina/Features/Projects/ViewModels/ProjectsViewModel.swift",
+            name: "projects",
+            required: ["isLoading", "error"]
+        ),
+        Surface(
+            path: "Patina/Features/Decisions/ViewModels/DecisionsViewModel.swift",
+            name: "decisions",
+            required: ["isLoading", "error"]
+        ),
+        Surface(
+            path: "Patina/Features/Messaging/ViewModels/MessagingViewModel.swift",
+            name: "the thread list",
+            required: ["isLoading", "error"]
+        )
+    ]
+
     @Test
     func everySurfaceCanTellTheThreeStatesApart() throws {
-        struct Surface {
-            let path: String
-            let name: String
-            let required: [String]
-        }
-        let surfaces = [
-            Surface(
-                path: "Patina/Features/Rooms/RoomSyncCoordinator.swift", name: "rooms",
-                required: ["lastLoadFailed", "isLoading", "lastSuccessAt"]
-            ),
-            Surface(
-                path: "Patina/Features/Collections/ViewModels/CollectionsViewModel.swift",
-                name: "saved pieces",
-                required: ["lastLoadFailed", "isLoading", "loadState"]
-            ),
-            Surface(
-                path: "Patina/Features/Profile/ViewModels/StudioHubViewModel.swift",
-                name: "the Studio hub",
-                required: ["failedSources", "isLoading", "hasLoaded", "lastSuccessAt", "stalenessLine"]
-            ),
-            Surface(
-                path: "Patina/Features/Orders/Views/OrderDetailView.swift", name: "an order",
-                required: ["service.isLoading", "service.lastRefreshFailed"]
-            ),
-            Surface(
-                path: "Patina/Features/Proposals/ViewModels/ProposalsViewModel.swift",
-                name: "a proposal",
-                required: ["isLoading", "error", "fetchDeadline"]
-            )
-        ]
-        for surface in surfaces {
+        #expect(Self.surfaces.count == 9, "PROGRAM.md §3 · L1-B names nine list surfaces")
+        for surface in Self.surfaces {
             let source = try SourcePin.read(surface.path)
             for token in surface.required {
                 #expect(source.contains(token), "\(surface.name) cannot express \(token)")
             }
         }
+    }
+
+    /// A view model that *can* say "failed" is only half of it. These four
+    /// draw their own list, so the pin is that the empty sentence sits behind
+    /// the error branch rather than beside it — the exact shape `C4-03` was
+    /// filed about on rooms and saved pieces.
+    @Test(
+        "a failed fetch never renders the empty copy",
+        arguments: [
+            "Patina/Features/Documents/DocumentListView.swift",
+            "Patina/Features/Projects/Views/ProjectListView.swift",
+            "Patina/Features/Decisions/Views/DecisionListView.swift",
+            "Patina/Features/Messaging/Views/ThreadListView.swift"
+        ]
+    )
+    func theListDrawsTheErrorBeforeTheEmptyState(path: String) throws {
+        let source = try SourcePin.read(path)
+        let error = try #require(source.range(of: "} else if let error = viewModel.error,"))
+        let loading = try #require(source.range(of: "if viewModel.isLoading &&"))
+        #expect(loading.lowerBound < error.lowerBound, "\(path) checks failure before loading")
+        // The bare `isEmpty` branch — the one that draws "nothing here yet" —
+        // must come after the failure branch, or a failed fetch renders it.
+        let empty = try #require(
+            source.range(of: "isEmpty {", range: error.upperBound..<source.endIndex)
+        )
+        #expect(error.upperBound < empty.lowerBound)
     }
 
     // MARK: - C4-03 · rooms
@@ -137,11 +192,13 @@ struct LoadStateHonestyTests {
         let view = try SourcePin.read("Patina/Features/Collections/Views/CollectionsView.swift")
         #expect(view.contains("CollectionsView.ErrorState"))
         #expect(view.contains("CollectionsView.Loading"))
-        #expect(view.contains(#"Text("No saved items yet")"#))
+        // C5-09 / note E3-L1B-4: this lane's C4-03 hunk rewrote the block
+        // L1-E had already corrected, and carried the retired noun back in.
+        #expect(view.contains(#"Text("No saved pieces yet")"#))
         // The empty copy must sit behind the failed and loading branches, not
         // beside them.
         let errorIndex = try #require(view.range(of: "CollectionsView.ErrorState")).lowerBound
-        let emptyIndex = try #require(view.range(of: #"Text("No saved items yet")"#)).lowerBound
+        let emptyIndex = try #require(view.range(of: #"Text("No saved pieces yet")"#)).lowerBound
         #expect(errorIndex < emptyIndex)
     }
 
@@ -282,6 +339,27 @@ struct LoadStateHonestyTests {
         let view = try SourcePin.read("Patina/Features/Proposals/Views/ProposalDetailView.swift")
         #expect(view.contains("ProposalDetailView.LoadingSkeleton"))
         #expect(view.contains(#"Text("Opening your proposal…")"#))
+    }
+
+    /// `R-05`'s other half: the fix line asks for the title "from the record
+    /// row that launched it", and the route carries only an id. The lookup
+    /// answers from the rows Today and Studio already hold; a proposal the
+    /// app has never seen still gets the grey skeleton (review `RL1B2-15`).
+    @Test
+    func theSkeletonCanNameAProposalItHasNotFetched() {
+        #expect(ProposalDetailViewModel.knownRecord(for: UUID().uuidString) == nil)
+    }
+
+    @Test
+    func theSkeletonDrawsThatNameInsteadOfAGreyBar() throws {
+        let view = try SourcePin.read("Patina/Features/Proposals/Views/ProposalDetailView.swift")
+        let skeleton = try #require(
+            view.components(separatedBy: "private var loadingSkeleton: some View {").last?
+                .components(separatedBy: "// MARK: - Header").first
+        )
+        #expect(skeleton.contains("ProposalDetailViewModel.knownRecord(for: proposalId)"))
+        #expect(skeleton.contains("if let title = known?.title, !title.isEmpty {"))
+        #expect(skeleton.contains("if let address = known?.project_address, !address.isEmpty {"))
     }
 
     // MARK: - C4-03 · the order detail, which already got this right

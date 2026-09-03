@@ -374,3 +374,36 @@ struct AttentionCountTests {
         #expect(badges.projects.count == badges.projectCount)
     }
 }
+
+@MainActor
+extension AttentionCountTests {
+
+    /// The third count `RL1F-25` found: after **Mark all read** the feed said
+    /// 0 unread, the bell said 3 and the Studio row said "6 unread updates",
+    /// because this builder counts the raw `notifications` table and 00534
+    /// writes two rows per event.
+    ///
+    /// `StudioQueueBuilder.swift` is this lane's file (steward ruling S-3) and
+    /// L1-F's note `L1F→B-5` carries the exact replacement —
+    /// `BadgeCountService.shared.unreadNotificationCount` at both sites. That
+    /// property exists only on `first-flight/w1-l1f`, which merges AFTER this
+    /// lane (D14), so the edit cannot compile here; it is scheduled as a
+    /// merge-4 apply in `l1b-notes-out.md` §S6 and answered as note **O15**.
+    ///
+    /// Not `isIntermittent`: green while the binding is owed, red the moment
+    /// it lands, which is the signal to delete this block — and it is the
+    /// mirror of `BadgeFreshnessTests.thereIsNoSecondCount` on L1-F's branch,
+    /// whose `owed` table names this same file.
+    @Test
+    func theStudioRowStillOwesTheSharedUnreadCount() throws {
+        let builder = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift")
+        )
+        let single = !builder.contains("unreadNotifications.count")
+        withKnownIssue(
+            "RL1F-25 · note L1F→B-5 needs BadgeCountService.unreadNotificationCount, which lands at merge 4"
+        ) {
+            #expect(single)
+        }
+    }
+}

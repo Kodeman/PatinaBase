@@ -258,4 +258,57 @@ struct RoomLifecycleTests {
         #expect(mirror.contains("RoomsAPIClient.shared.deleteRoom(id: remoteId)"))
         #expect(mirror.contains("RoomTombstones.clear(remoteId)"))
     }
+
+    /// Both callers clear the tombstone on a 2xx, and PostgREST answers 204
+    /// for a DELETE its row-level policy filtered to zero rows. So the client
+    /// has to know whether anything was actually deleted, or the tombstone is
+    /// dropped against a surviving row and the next reconcile re-inserts it —
+    /// silently, because nothing threw (review `RL1B2-09`).
+    @Test
+    func aDeleteThatRemovedNothingIsAFailure() throws {
+        let client = try SourcePin.read("Patina/Core/Network/RoomsAPIClient.swift")
+        let delete = try #require(
+            client.components(separatedBy: "public func deleteRoom(id: String) async throws {").last?
+                .components(separatedBy: "\n    }").first
+        )
+        #expect(delete.contains("return=representation"))
+        #expect(delete.contains("return=minimal") == false)
+        #expect(delete.contains("decode([RemoteRoom].self, from: data).isEmpty"))
+        #expect(delete.contains("throw RoomsAPIError.emptyResponse"))
+    }
+
+    /// `B-03`'s Today half. The Spaces list and the Studio counts follow a
+    /// local delete because they read `LocalRoomSignal`; the Today rail does
+    /// not, and drew a deleted room until the next foreground (review
+    /// `RL1B2-04`, shots 15–17). `DailyRoomView.swift` is L1-C's file this
+    /// wave, so the one-line fix went out as note **O14**.
+    ///
+    /// A known issue, and deliberately NOT `isIntermittent`: green here where
+    /// the note is genuinely open, red the moment L1-C's `.onChange` lands —
+    /// which is the signal to delete this block. `l1b-notes-out.md` §S6
+    /// carries the scheduling, because L1-C merges first.
+    @Test
+    func theTodayRailFollowsALocalDelete() throws {
+        let view = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
+        let observes = SourceScan.code(in: view).contains("LocalRoomSignal")
+        withKnownIssue(
+            "B-03 owes DailyRoomView its LocalRoomSignal observer (l1b-notes-out.md O14, applied by L1-C)"
+        ) {
+            #expect(observes)
+        }
+    }
+
+    /// The one irreversible control on Room Settings had a 100.7 × 14.7 pt
+    /// hit area — the glyph box, not the 46 pt row it draws — so a tap at its
+    /// visual centre landed on whatever was behind it (review `RL1B2-17`).
+    @Test
+    func theDeleteControlIsAWholeRow() throws {
+        let view = try SourcePin.read("Patina/Features/Rooms/Views/RoomSettingsView.swift")
+        let button = try #require(
+            view.components(separatedBy: "private var deleteButton: some View {").last?
+                .components(separatedBy: "\n    }").first
+        )
+        #expect(button.contains(".frame(height: 46)"))
+        #expect(button.contains(".contentShape(Rectangle())"))
+    }
 }
