@@ -55,6 +55,30 @@ final class RecordSnapshotStore: Sendable {
     /// mirror, not from `FeatureFlags` itself, which is `@MainActor` and holds
     /// nothing on disk.
     private let flagIsOn: @Sendable () -> Bool
+    /// Who the payload is for (B-16), read the way the widget's own container
+    /// is read — from the App Group stamp, which is `Sendable` and on disk,
+    /// rather than from `AuthService`, which is `@MainActor` and would put an
+    /// actor hop inside a write.
+    ///
+    /// A save that does not name its session falls back to this stamp. When it
+    /// is nil the payload is unowned, which the widget draws as its no-data
+    /// card — correct for a signed-out phone, wrong for the save that happens
+    /// one line before `RecordRefresh` stamps (`RL1F-21`). That is what
+    /// `save(_:houseLine:now:owner:)`'s `owner` is for.
+    private let ownerId: @Sendable () -> String?
+    /// The other half of `clearOwner`: a save that names its session writes the
+    /// stamp before it writes the payload, so no save for a signed-in session
+    /// can produce a payload nobody owns.
+    private let stampOwner: @Sendable (String) -> Void
+    /// Retire that stamp with the session.
+    ///
+    /// `RecordOwnerStamp` is cleared only by `LocalStoreReset`, which runs when
+    /// a DIFFERENT account signs IN. So between a sign-out and the next
+    /// account's first stamp, `ownerId()` still answered with the PREVIOUS
+    /// account's id — and any save in that window wrote it onto the new
+    /// session's rows. Clearing it here means an unstamped save carries no
+    /// owner, which the widget already draws as its no-data card.
+    private let clearOwner: @Sendable () -> Void
 
     init(
         appGroupIdentifier: String = "group.cloud.patina.app",
@@ -63,11 +87,17 @@ final class RecordSnapshotStore: Sendable {
         reloadWidgets: @escaping @Sendable (String) -> Void = { kind in
             WidgetCenter.shared.reloadTimelines(ofKind: kind)
         },
-        flagIsOn: @escaping @Sendable () -> Bool = { FeatureFlagMirror.isOn(.houseWidget) }
+        flagIsOn: @escaping @Sendable () -> Bool = { FeatureFlagMirror.isOn(.houseWidget) },
+        ownerId: @escaping @Sendable () -> String? = { RecordOwnerStamp.shared.ownerId },
+        clearOwner: @escaping @Sendable () -> Void = { RecordOwnerStamp.shared.clear() },
+        stampOwner: @escaping @Sendable (String) -> Void = { RecordOwnerStamp.shared.stamp($0) }
     ) {
         self.fileManager = fileManager
         self.reloadWidgets = reloadWidgets
         self.flagIsOn = flagIsOn
+        self.ownerId = ownerId
+        self.clearOwner = clearOwner
+        self.stampOwner = stampOwner
 
         let groupDirectory = fileManager
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
@@ -95,7 +125,22 @@ final class RecordSnapshotStore: Sendable {
     ///   and the last known line is carried forward rather than erased — a
     ///   record refresh does not know the rail, and a blanked line would read
     ///   on the widget as a house with no rooms.
-    func save(_ record: HouseRecord, houseLine: String? = nil, now: Date = Date()) {
+    /// - Parameter owner: the session this record was built for. Supplying it
+    ///   stamps the owner BEFORE the payload is composed, which is the whole
+    ///   point: the caller that rebuilds the record stamps immediately after
+    ///   saving, so the first save of every sign-in wrote real rows with
+    ///   `ownerId: nil` — and `save` reloads WidgetKit in the same breath, so
+    ///   that unowned payload was actively PUSHED to the Home Screen as the
+    ///   no-data card, on the sign-in every round-one tester performs
+    ///   (`GAP7B-02`, reproduced as `RL1F-21`). nil means "whatever the stamp
+    ///   already says", which is right for a caller that has no session.
+    func save(
+        _ record: HouseRecord,
+        houseLine: String? = nil,
+        now: Date = Date(),
+        owner: String? = nil
+    ) {
+        if let owner, !owner.isEmpty { stampOwner(owner) }
         locked {
             let encoder = Self.encoder()
             do {
@@ -116,7 +161,54 @@ final class RecordSnapshotStore: Sendable {
                     record: record,
                     houseLine: line,
                     refreshedAt: now,
-                    flagOn: flagIsOn()
+                    flagOn: flagIsOn(),
+                    // The named session wins over the stamp rather than being
+                    // read back through it: the stamp is a `UserDefaults` round
+                    // trip, and the payload must not depend on one having
+                    // landed.
+                    ownerId: owner ?? ownerId()
+                )
+            )
+        }
+        reloadWidgets(WidgetSnapshot.widgetKind)
+    }
+
+    /// The session ended. Remove the record and REPLACE the widget's file with
+    /// a payload that names no account and carries no rows.
+    ///
+    /// Replace rather than only delete: a delete that fails leaves the previous
+    /// client's designer on a Home Screen nobody is signed into, and the widget
+    /// process has no way to know the file it just read is orphaned. An empty,
+    /// unowned payload written `.atomic` is a state the widget already knows how
+    /// to draw — its no-data card — and it cannot half-happen (B-16).
+    ///
+    /// Called from `AppCoordinator`'s `.main → .auth / .launching` transition,
+    /// which is the one seam a sign-out actually crosses: nothing else on the
+    /// sign-out path touches this store — `AuthService.signOut()` calls none of
+    /// it, and `LocalStoreReset.wipeUserScopedData()` runs when a DIFFERENT
+    /// account signs IN.
+    ///
+    /// **What is observed after a real sign-out is that BOTH files are gone,
+    /// not that a placeholder is sitting there.** This method clears the stamp
+    /// first, so a `RecordRefresh` still in flight for the ended session then
+    /// reads `decide(stampedOwner: nil, session: <old id>)` → `.discard` and
+    /// calls `remove()`, which takes this placeholder with it. That is
+    /// accepted, not a defect: an absent file and an unowned file draw the same
+    /// no-data card, and the placeholder is what covers the window before the
+    /// delete lands and the case where the delete fails (`RL1F-24`).
+    func clearForSignedOut(now: Date = Date()) {
+        clearOwner()
+        locked {
+            try? fileManager.removeItem(at: fileURL)
+            notedHouseLine = nil
+            writeWidgetSnapshot(
+                WidgetSnapshot(
+                    movedRows: [],
+                    houseLine: nil,
+                    sinceDate: nil,
+                    refreshedAt: now,
+                    flagOn: flagIsOn(),
+                    ownerId: nil
                 )
             )
         }
@@ -141,7 +233,8 @@ final class RecordSnapshotStore: Sendable {
                     houseLine: line,
                     sinceDate: current.sinceDate,
                     refreshedAt: current.refreshedAt,
-                    flagOn: flagIsOn()
+                    flagOn: flagIsOn(),
+                    ownerId: current.ownerId
                 )
             )
             return true
@@ -204,10 +297,11 @@ final class RecordSnapshotStore: Sendable {
         fileManager.fileExists(atPath: fileURL.path)
     }
 
-    /// Remove the snapshot entirely. Called at the auth boundary
-    /// (`LocalStoreReset`) and by the paint path when the record on disk turns
-    /// out to belong to another account — the file is device-global and
-    /// outlives a sign-out, so deleting it is the only thing that keeps one
+    /// Remove the snapshot entirely. **Three callers**, not one:
+    /// `LocalStoreReset.wipeUserScopedData()` (a different account signs in),
+    /// `RecordIdentity.admits` and `RecordRefresh.run` (the record on disk turns
+    /// out to belong to another account, or to none). The file is device-global
+    /// and outlives a sign-out, so deleting it is the only thing that keeps one
     /// client's record off the next client's home.
     ///
     /// It takes the widget's file with it, and reloads: a signed-out widget

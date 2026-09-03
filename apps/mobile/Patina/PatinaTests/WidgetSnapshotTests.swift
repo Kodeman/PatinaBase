@@ -20,7 +20,8 @@ struct WidgetSnapshotTests {
     /// Reloads are counted rather than delivered; no widget is installed.
     private func fallbackStore(
         reloads: ReloadCounter = ReloadCounter(),
-        flagOn: Bool = true
+        flagOn: Bool = true,
+        ownerId: String? = "owner-1"
     ) -> RecordSnapshotStore {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("patina.tests.widget.\(UUID().uuidString)")
@@ -28,7 +29,8 @@ struct WidgetSnapshotTests {
             appGroupIdentifier: "group.does.not.exist.\(UUID().uuidString)",
             fallbackDirectory: directory,
             reloadWidgets: { kind in reloads.record(kind) },
-            flagIsOn: { flagOn }
+            flagIsOn: { flagOn },
+            ownerId: { ownerId }
         )
     }
 
@@ -100,13 +102,17 @@ struct WidgetSnapshotTests {
         #expect(snapshot.flagOn)
     }
 
-    @Test("the widget sees what moved, in order, and nothing else")
-    func onlyMovedRowsAreProjected() throws {
+    /// GAP7B-05 amends this: MOVED rows, in order, **that have somewhere to
+    /// go**. `story:s1` has no route, so a tap on it resolved to Today with no
+    /// explanation — and because `systemSmall` has one door, that was every tap
+    /// on the widget. A row the widget cannot open is not projected.
+    @Test("the widget sees what moved, in order, and only what it can open")
+    func onlyRoutedMovedRowsAreProjected() throws {
         let store = fallbackStore()
         store.save(record(), houseLine: nil, now: referenceDate)
 
         let snapshot = try #require(store.loadWidgetSnapshot())
-        #expect(snapshot.movedRows.map(\.id) == ["message:m1", "story:s1"])
+        #expect(snapshot.movedRows.map(\.id) == ["message:m1"])
     }
 
     /// Q8 / C5 / B §4: "carries what moved, not what is owed"; "no count on
@@ -126,7 +132,7 @@ struct WidgetSnapshotTests {
         #expect(json["hasMoreNeedsYou"] == nil)
         #expect(json["badge"] == nil)
         #expect(json["count"] == nil)
-        #expect(Set(json.keys) == ["movedRows", "houseLine", "sinceDate", "refreshedAt", "flagOn"])
+        #expect(Set(json.keys) == ["movedRows", "houseLine", "sinceDate", "refreshedAt", "flagOn", "ownerId"])
 
         // And no NEEDS YOU row's identifier slipped in through the projection.
         let text = try #require(String(data: data, encoding: .utf8))
@@ -142,8 +148,9 @@ struct WidgetSnapshotTests {
         let snapshot = try #require(store.loadWidgetSnapshot())
         #expect(snapshot.movedRows[0].route == WidgetRouteToken(.threadDetail(threadId: "t1")))
         #expect(snapshot.movedRows[0].route?.kind == "thread")
-        // A row with no destination still draws; it just has none.
-        #expect(snapshot.movedRows[1].route == nil)
+        // GAP7B-05: a row with no destination is not projected at all, so
+        // every row the widget holds has one.
+        #expect(snapshot.movedRows.allSatisfy { $0.route != nil })
     }
 
     @Test("the file decodes through a plain Codable mirror, as the widget will")
@@ -164,6 +171,7 @@ struct WidgetSnapshotTests {
             let sinceDate: Date?
             let refreshedAt: Date
             let flagOn: Bool
+            let ownerId: String?
         }
 
         let store = fallbackStore()
@@ -173,12 +181,13 @@ struct WidgetSnapshotTests {
         decoder.dateDecodingStrategy = .iso8601
         let mirror = try decoder.decode(Mirror.self, from: Data(contentsOf: store.widgetFileURL))
 
-        #expect(mirror.movedRows.count == 2)
+        #expect(mirror.movedRows.count == 1)
         #expect(mirror.movedRows[0].title == "message:m1 happened.")
         #expect(mirror.movedRows[0].route == MirrorRoute(kind: "thread", id: "t1"))
         #expect(mirror.houseLine == "Living Room")
         #expect(mirror.sinceDate == referenceDate.addingTimeInterval(-604_800))
         #expect(mirror.flagOn)
+        #expect(mirror.ownerId == "owner-1")
     }
 
     // MARK: - Honesty
@@ -297,7 +306,10 @@ struct WidgetSnapshotTests {
 
         let snapshot = try #require(store.loadWidgetSnapshot())
         #expect(snapshot.houseLine == "Kitchen")
-        #expect(snapshot.movedRows.count == 2)
+        // One, not two: the fixture's second MOVED row is a story with no
+        // route, and GAP7B-05 keeps those out of the projection entirely.
+        #expect(snapshot.movedRows.count == 1)
+        #expect(snapshot.ownerId == "owner-1")
     }
 
     // MARK: - The reload

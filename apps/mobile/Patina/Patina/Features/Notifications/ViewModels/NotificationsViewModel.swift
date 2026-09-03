@@ -18,6 +18,18 @@ final class NotificationsViewModel {
     var isLoading: Bool = false
     var error: String?
 
+    /// True once a fetch has ANSWERED for this session — with rows, with zero
+    /// rows, or with a failure.
+    ///
+    /// `A-80`: the feed drew "Nothing yet — Updates from your designer will
+    /// land here." in the same frame whose Companion caption read "5 THINGS
+    /// NEED YOUR EYE", and five populated rows appeared seconds later. The
+    /// screen was not empty, it had not asked yet — `isLoading` is false until
+    /// `.task` fires, which is at least one frame after the body first
+    /// evaluates. "Nothing" is a claim about the world; it may only be made
+    /// once the world has answered.
+    private(set) var hasResolved: Bool = false
+
     // MARK: - Loading
 
     func load() async {
@@ -28,6 +40,8 @@ final class NotificationsViewModel {
             notifications = []
             error = nil
             isLoading = false
+            hasResolved = true
+            publishUnreadCount()
             return
         }
         isLoading = true
@@ -50,6 +64,15 @@ final class NotificationsViewModel {
             PatinaLog.ui.error("[Notifications] load failed: \(error.localizedDescription)")
             #endif
         }
+        hasResolved = true
+        publishUnreadCount()
+    }
+
+    /// The bell's count comes from one service, and this is the only writer
+    /// (`C2-07`). Called wherever `notifications` changes, so the badge cannot
+    /// outlive the rows it was computed from.
+    private func publishUnreadCount() {
+        BadgeCountService.shared.applyNotificationRows(notifications)
     }
 
     /// 00534 writes TWO rows per event — `in_app`/`delivered` and
@@ -192,6 +215,7 @@ final class NotificationsViewModel {
         if let idx = notifications.firstIndex(where: { $0.id == notification.id }) {
             notifications[idx].isRead = true
         }
+        publishUnreadCount()
         guard let remoteId = notification.remoteId else { return }
         Task {
             do {
@@ -200,7 +224,10 @@ final class NotificationsViewModel {
                 #if DEBUG
                 PatinaLog.ui.error("[Notifications] markOpened failed: \(error.localizedDescription)")
                 #endif
-                await MainActor.run { self.notifications = previous }
+                await MainActor.run {
+                    self.notifications = previous
+                    self.publishUnreadCount()
+                }
             }
         }
     }
@@ -214,6 +241,7 @@ final class NotificationsViewModel {
             if !copy.isStudioFallback { copy.isRead = true }
             return copy
         }
+        publishUnreadCount()
         Task {
             do {
                 try await NotificationsAPIClient.shared.markAllOpened()
@@ -221,7 +249,10 @@ final class NotificationsViewModel {
                 #if DEBUG
                 PatinaLog.ui.error("[Notifications] markAllOpened failed: \(error.localizedDescription)")
                 #endif
-                await MainActor.run { self.notifications = previous }
+                await MainActor.run {
+                    self.notifications = previous
+                    self.publishUnreadCount()
+                }
             }
         }
     }
