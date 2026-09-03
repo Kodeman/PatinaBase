@@ -10,7 +10,9 @@
 //  under a photograph of the reader's own living room.
 //
 //  Modelled on `Features/Purchase/OrderFailureCopy.swift` and obeying the
-//  same rule: the thrown error is logged, never interpolated.
+//  same rule: the thrown error is logged at the write site
+//  (`RoomScanPackage.markFailed`), never interpolated and never logged from
+//  here — a view body calls this on every layout pass.
 //  `RoomScanPackage.lastError` stays exactly as it is — it is the on-disk
 //  diagnostic column, it is unit-tested, and it is what a support ask reads.
 //  Only the view stops printing it.
@@ -30,9 +32,6 @@ enum ScanUploadFailureCopy {
     static func message(for package: RoomScanPackage) -> String? {
         guard let raw = package.lastError, !raw.isEmpty else { return nil }
         guard package.status == .failed || package.status == .pending else { return nil }
-        #if DEBUG
-        PatinaLog.sync.error("[ScanUpload] failure detail (never shown): \(raw)")
-        #endif
         return message(forRawError: raw)
     }
 

@@ -249,4 +249,32 @@ struct ProductDecodingTests {
         #expect(wrapped.count == 3)
         #expect(wrapped.compactMap(\.value).map(\.id) == ["p1", "p3"])
     }
+
+    /// C5-16 must suppress `Unknown Maker`, not a maker the app knows.
+    ///
+    /// `SavedItem` carries no `brand`, so a save that copied the raw vendor
+    /// join stored "Unknown" for a brand-only piece and `SavedItem`'s own
+    /// guard then printed nothing — VoiceOver read "Kilim Runner, $1,550"
+    /// for a piece whose maker is on the row (review RL1B-11).
+    @Test
+    func savingABrandOnlyPieceKeepsItsMaker() throws {
+        let json = #"[{"id":"p-brand","name":"Kilim Runner","maker_name":"Unknown Maker","brand":"Studio Piet"}]"#
+        let product = try #require(
+            ProductAPIClient.decodeProducts(from: Data(json.utf8)).first
+        )
+        let saved = SavedItem.make(from: product, matchScore: 0)
+        #expect(saved.resolvedMakerName == "Studio Piet")
+    }
+
+    /// …and a piece with no maker anywhere still has none, so the guard the
+    /// deck asked for keeps working.
+    @Test
+    func savingAMakerlessPieceStillShowsNoMaker() throws {
+        let json = #"[{"id":"p-none","name":"Oak Bench","maker_name":"Unknown Maker"}]"#
+        let product = try #require(
+            ProductAPIClient.decodeProducts(from: Data(json.utf8)).first
+        )
+        let saved = SavedItem.make(from: product, matchScore: 0)
+        #expect(saved.resolvedMakerName == nil)
+    }
 }

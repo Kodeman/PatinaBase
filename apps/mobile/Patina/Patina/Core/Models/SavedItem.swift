@@ -126,7 +126,11 @@ public final class SavedItem {
         SavedItem(
             productId: product.id,
             productName: product.name,
-            makerName: product.makerName,
+            // C5-16: `Product.makerName` is the vendor join, which is
+            // "Unknown" for a brand-only piece — `resolvedMakerName` is the
+            // one that falls back to `brand`. Copying the raw field meant the
+            // guard below then dropped a maker the app knew (review RL1B-11).
+            makerName: product.resolvedMakerName ?? product.makerName,
             priceCents: product.priceCents,
             matchScore: matchScore,
             hasAR: product.hasARModel,

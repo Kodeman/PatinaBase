@@ -90,4 +90,39 @@ struct ScanFallbackEntryTests {
         #expect(source.contains("QuietConversationFlowHost.Initial"))
         #expect(source.contains(#"Text("Getting ready…")"#))
     }
+
+    // MARK: - C4-09: the copy function a view body calls is pure
+
+    /// It logged the raw error, and `ScanUploadProgressView` calls it from
+    /// inside its body — so a failed upload logged its storage/Postgres text
+    /// once per layout pass instead of once per failure. The log belongs
+    /// where `lastError` is written (review RL1B-17).
+    @Test
+    func theFailureCopyDoesNotLogFromTheViewBody() throws {
+        let copy = try SourcePin.read(
+            "Patina/Features/RoomScan/Shared/Components/ScanUploadFailureCopy.swift"
+        )
+        let body = try #require(copy.components(separatedBy: "enum ScanUploadFailureCopy {").last)
+        #expect(body.contains("PatinaLog") == false)
+
+        let model = try SourcePin.read("Patina/Core/Models/RoomScanPackage.swift")
+        let markFailed = try #require(
+            model.components(separatedBy: "public func markFailed(").last?
+                .components(separatedBy: "\n    }").first
+        )
+        #expect(markFailed.contains("PatinaLog.sync.error"))
+    }
+
+    /// The classification itself is unchanged by the move.
+    @Test
+    func theTwoFailureSentencesStillClassify() {
+        #expect(
+            ScanUploadFailureCopy.message(forRawError: "The Internet connection appears to be offline.")
+                == ScanUploadFailureCopy.connection
+        )
+        #expect(
+            ScanUploadFailureCopy.message(forRawError: "duplicate key value violates unique constraint")
+                == ScanUploadFailureCopy.unfinished
+        )
+    }
 }
