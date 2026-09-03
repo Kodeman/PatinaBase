@@ -35,7 +35,7 @@ extension CompanionActionProvider {
     static func homeRow(isAuthenticated: Bool, hasLocalWork: Bool) -> CompanionActionItem {
         let hint = (isAuthenticated || hasLocalWork)
             ? "Back to your space"
-            : "See what's on Patina"
+            : "See what’s on Patina"
         return item("house", "Home", hint, route: .heroFrame, id: "home")
     }
 
@@ -70,7 +70,7 @@ extension CompanionActionProvider {
     }
 
     static func budgetRow(label: String, suggested: Bool = false) -> CompanionActionItem {
-        item("chart.pie", label, "What's been billed", route: .budget, id: "budget", suggested: suggested)
+        item("chart.pie", label, "What’s been billed", route: .budget, id: "budget", suggested: suggested)
     }
 
     static func proposalsRow(suggested: Bool = false) -> CompanionActionItem {
@@ -85,7 +85,7 @@ extension CompanionActionProvider {
     }
 
     static func invoicesRow(label: String, suggested: Bool = false) -> CompanionActionItem {
-        item("creditcard", label, "What's due", route: .invoiceList, id: "invoices", suggested: suggested)
+        item("creditcard", label, "What’s due", route: .invoiceList, id: "invoices", suggested: suggested)
     }
 
     // MARK: - Discovery

@@ -145,7 +145,7 @@ struct ProfileView: View {
                         .tracking(1)
                         .accessibilityAddTraits(.isHeader)
 
-                    profileActionRow(icon: "paintpalette", label: "Retake Style Quiz") {
+                    profileActionRow(icon: "paintpalette", label: "Retake your style quiz") {
                         coordinator.navigate(to: .styleQuiz)
                     }
                     profileActionRow(icon: "bubble.left", label: "Get design help") {
@@ -219,7 +219,7 @@ struct ProfileView: View {
             fallback: "Saved counts every piece you've hearted across the app — from the daily feed, room views, and product details. They flow into your style signature."
         ) {
             statItem(value: "\(viewModel.savedItemCount)", label: "Saved")
-                .accessibilityLabel("Saved items: \(viewModel.savedItemCount). More information available.")
+                .accessibilityLabel("Saved pieces: \(viewModel.savedItemCount). More information available.")
         }
     }
 

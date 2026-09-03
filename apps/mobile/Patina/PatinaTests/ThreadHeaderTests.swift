@@ -151,7 +151,7 @@ struct ThreadHeaderTests {
         #expect(code.contains("var sendError: String?"))
         #expect(code.contains("sendError = Self.sendFailureLine"))
         // The load failure keeps its own field and its own retry.
-        #expect(code.contains("self.error = \"Couldn't load messages\""))
+        #expect(code.contains("self.error = \"We couldn’t load this conversation. Try again.\""))
         #expect(!code.contains("self.error = \"Couldn't send\""))
     }
 
@@ -177,7 +177,7 @@ struct ThreadHeaderTests {
     @Test("the failure sentence says nothing was lost, and names no server")
     func theFailureSentenceIsAHomeownerSentence() {
         let line = ThreadDetailViewModel.sendFailureLine
-        #expect(line == "We couldn't send that. Nothing was lost — your message is still here.")
+        #expect(line == "We couldn’t send that. Nothing was lost — your message is still here.")
         #expect(!line.lowercased().contains("error"))
         #expect(!line.lowercased().contains("http"))
         #expect(!line.contains("URLSession"))

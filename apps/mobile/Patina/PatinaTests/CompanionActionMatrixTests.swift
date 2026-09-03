@@ -788,7 +788,7 @@ struct CompanionHomeMenuMatrixTests {
         // scanned a room. It is true the moment there is local work, and only
         // then.
         #expect(CompanionActionProvider.homeRow(isAuthenticated: false, hasLocalWork: false).hint
-                == "See what's on Patina")
+                == "See what’s on Patina")
         for (signedIn, local) in [(true, false), (true, true), (false, true)] {
             #expect(CompanionActionProvider.homeRow(isAuthenticated: signedIn,
                                                     hasLocalWork: local).hint

@@ -72,7 +72,7 @@ final class ThreadListViewModel {
                 )
             }
         } catch {
-            self.error = "Couldn't load conversations"
+            self.error = "We couldn’t load your messages. Try again."
             #if DEBUG
             PatinaLog.ui.error("[Messaging] threads failed: \(error.localizedDescription)")
             #endif
@@ -328,7 +328,7 @@ final class ThreadDetailViewModel {
             try? await MessagingAPIClient.shared.markRead(threadId: threadId)
             await resolveSenderNames(for: self.messages)
         } catch {
-            self.error = "Couldn't load messages"
+            self.error = "We couldn’t load this conversation. Try again."
             #if DEBUG
             PatinaLog.ui.error("[Messaging] thread load failed: \(error.localizedDescription)")
             #endif
@@ -410,7 +410,7 @@ final class ThreadDetailViewModel {
     /// The invoice screen's failure banner is the model: one sentence that says
     /// nothing was lost, and a recovery beside it. It names no vendor and no
     /// server string.
-    static let sendFailureLine = "We couldn't send that. Nothing was lost — your message is still here."
+    static let sendFailureLine = "We couldn’t send that. Nothing was lost — your message is still here."
 
     /// Open a Supabase Realtime subscription for new messages on this
     /// thread. Safe to call repeatedly — the prior subscription is

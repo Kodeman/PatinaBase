@@ -226,9 +226,9 @@ struct SettingsView: View {
         } message: {
             Text("This removes your local taste portrait and its tuning. Rooms, scans, saved pieces, and projects are not changed.")
         }
-        .alert("Sign Out", isPresented: $showingSignOutConfirmation) {
+        .alert("Sign out?", isPresented: $showingSignOutConfirmation) {
             Button("Cancel", role: .cancel) {}
-            Button("Sign Out") { signOut() }
+            Button("Sign out") { signOut() }
         } message: {
             Text("Are you sure you want to sign out?")
         }

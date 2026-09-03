@@ -59,7 +59,10 @@ struct AccountActionsTests {
     @Test("Settings offers Sign Out and Delete account directly")
     func settingsSurfacesBothAccountActions() throws {
         let source = try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
-        #expect(source.contains("\"Sign Out\""))
+        // Deck row C5-10 / SettingsView.swift:212,214 — the alert and its
+        // button now read the same sentence case as the row that opens them.
+        #expect(source.contains("\"Sign out\""))
+        #expect(!source.contains("\"Sign Out\""))
         #expect(source.contains("\"Delete account\""))
     }
 
