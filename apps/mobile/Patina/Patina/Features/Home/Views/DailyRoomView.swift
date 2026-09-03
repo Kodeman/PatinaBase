@@ -27,6 +27,10 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
     @State private var viewModel = DailyRoomViewModel()
     @State private var notificationsViewModel = NotificationsViewModel()
     @State private var expandedStory: DailyStory?
+    // C5-02: nothing sets this in round one — the `?` triggers are removed
+    // because zero `ios-app/*` help articles exist in production Sanity, so
+    // every door opened on an empty panel. The sheet wiring stays as a seam
+    // W2 restores the buttons to; it is deliberately unreachable, not live.
     @State private var isHelpPanelPresented = false
     @State private var resumableScan: ScanRecoveryService.RecoveryCandidate?
     /// SP-08 / Q7: the ask arrives here, once, the first time something
@@ -187,12 +191,19 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
         }
         // C4-12 / R-03 (L1-B's note): a root whose data is stale or whose
         // load failed offered no way to ask again short of a relaunch.
+        // The same sequence, in the same order, as the `scenePhase` handler
+        // above — minus `presentPushPrimerIfEarned()`, which is deliberately
+        // absent: a pull-to-refresh is not the moment to put a permission
+        // prompt in front of someone.
         .refreshable {
             viewModel.load()
+            syncCompanionContext()
             await badges.refresh()
             await requestStatus.refresh()
+            syncCompanionContext()
             await viewModel.refreshProjectRooms()
             await viewModel.refreshRecord()
+            await ProfileService.shared.mirrorLastSeenIfNeeded()
             await viewModel.refreshNewThisWeek()
             await notificationsViewModel.load()
         }

@@ -19,6 +19,10 @@ struct ProfileView: View {
     @State private var viewModel = ProfileViewModel()
     /// Drives the contextual help-panel sheet attached to the Profile surface.
     /// Toggled by the `?` button in the top-right corner of the header.
+    // C5-02: nothing sets this in round one — the `?` triggers are removed
+    // because zero `ios-app/*` help articles exist in production Sanity, so
+    // every door opened on an empty panel. The sheet wiring stays as a seam
+    // W2 restores the buttons to; it is deliberately unreachable, not live.
     @State private var isHelpPanelPresented: Bool = false
 
     /// Shared formatter for room-card "Scanned" dates. `static let` so we
@@ -41,15 +45,19 @@ struct ProfileView: View {
                     // the avatar would start under the floating chevron
                     // (top 8 + 36); as the Studio tab root, `patinaScreen`'s
                     // title band now supplies most of it.
+                    // The top inset belongs to the column, not to the disc:
+                    // `.overlay` centres inside the bounds it is applied to, so
+                    // padding the circle first drew the initial half the padding
+                    // above its centre — 6 pt on the tab root, 22 pt pushed.
                     Circle()
                         .fill(PatinaGradients.earth)
                         .frame(width: 80, height: 80)
-                        .padding(.top, isTabRoot ? 12 : 44)
                         .overlay(
                             Text(viewModel.userInitial)
                                 .font(PatinaTypography.displaySmall)
                                 .foregroundStyle(PatinaColors.offWhite)
                         )
+                        .padding(.top, isTabRoot ? 12 : 44)
                         .padding(.bottom, 16)
                         .accessibilityHidden(true)
 
@@ -162,8 +170,13 @@ struct ProfileView: View {
         .onAppear {
             viewModel.loadData(context: modelContext)
         }
-        // C4-12 / R-03 (L1-B's note).
+        // C4-12 / R-03 (L1-B's note, verbatim). `loadData(context:)` alone is a
+        // synchronous fetch over local SwiftData — it answers instantly and
+        // touches no network, so the one gesture meant to recover a failed
+        // backend read could not. `StudioHubViewModel.load()` is what the
+        // screen's own `.task` runs.
         .refreshable {
+            await StudioHubViewModel.shared.load()
             viewModel.loadData(context: modelContext)
         }
         // Contextual help panel — surfaces every Sanity article whose

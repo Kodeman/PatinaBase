@@ -53,6 +53,8 @@ struct DecisionDetailView: View {
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
         .task { await viewModel.load(decisionId: decisionId) }
+        // C4-12 (L1-B's note C-L1B-2): exactly what the `.task` above calls.
+        .refreshable { await viewModel.load(decisionId: decisionId) }
         .sheet(item: $viewModel.pendingDeferral) { deferral in
             DecisionDeferSheet(
                 deferral: deferral,
