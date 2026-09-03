@@ -72,4 +72,35 @@ struct AccountActionsTests {
         #expect(!source.contains("\"Sign Out\""))
         #expect(source.contains("\"Delete account\""))
     }
+
+    // MARK: - A-79 · the claim sheet, the guest→account handover
+
+    /// The deck's three shapes, from the pure function the sheet renders.
+    /// Never asked at zero — `LocalStoreClaim.shouldAsk` requires guest work.
+    @Test("the claim sheet's title is composed from the real counts")
+    func theClaimSheetTitleNamesWhatIsActuallyThere() {
+        #expect(LocalStoreClaimSheet.title(rooms: 0, pieces: 1)
+            == "Keep the 1 piece you saved on this phone?")
+        #expect(LocalStoreClaimSheet.title(rooms: 2, pieces: 0)
+            == "Keep the 2 rooms you saved on this phone?")
+        #expect(LocalStoreClaimSheet.title(rooms: 1, pieces: 3)
+            == "Keep the 1 room and 3 pieces you saved on this phone?")
+    }
+
+    /// RL3A-14 — two SwiftData `fetchCount`s ran on every body evaluation of a
+    /// sheet whose counts cannot change while it is up. They are cached now,
+    /// and the cache is filled without leaving the title blank for a frame.
+    @Test("the claim sheet reads its counts once, not once per render")
+    func theClaimSheetReadsItsCountsOnce() throws {
+        let source = try SourcePin.read("Patina/Features/Collections/Views/LocalStoreClaimSheet.swift")
+        #expect(source.contains("@State private var counts: (rooms: Int, pieces: Int)?"))
+        #expect(source.contains("counts = readCounts()"))
+        #expect(source.contains("let resolved = counts ?? readCounts()"))
+        // The two fetches exist in exactly one place.
+        #expect(source.components(separatedBy: "modelContext.fetchCount").count - 1 == 2)
+        let start = try #require(source.range(of: "private func readCounts()"))
+        let end = try #require(source.range(of: "private var title: String {"))
+        let reader = String(source[start.lowerBound..<end.lowerBound])
+        #expect(reader.components(separatedBy: "modelContext.fetchCount").count - 1 == 2)
+    }
 }

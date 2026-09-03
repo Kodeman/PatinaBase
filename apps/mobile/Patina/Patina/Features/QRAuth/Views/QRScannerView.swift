@@ -15,7 +15,13 @@ public struct QRScannerView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = QRScannerViewModel()
     /// Drives the contextual help-panel sheet attached to the QR-auth surface.
-    /// Toggled by the `?` button in the top bar.
+    ///
+    /// PARKED, not dead (RL3A-13). L0.4 removed the `?` button that set it —
+    /// the Sanity articles behind it are not published for round one and a
+    /// door onto an empty room is worse than no door — and `l1-c-notes.md`'s
+    /// integration note is explicit that the `.helpPanel(…)` mount below
+    /// stays. `C5-05` (the Help Center 404) is the finding that puts the door
+    /// back; nothing writes this binding until it does.
     @State private var isHelpPanelPresented: Bool = false
 
     public init() {}
@@ -83,6 +89,9 @@ public struct QRScannerView: View {
         }
         // Contextual help panel — surfaces every Sanity article whose
         // surfaceKey is `ios-app/qr-auth` or a child of it.
+        //
+        // Mounted with no door on purpose: L0.4 took the `?` out for round one
+        // and L1-C's note says to keep this. `C5-05` re-opens it.
         .helpPanel(
             isPresented: $isHelpPanelPresented,
             surfaceKey: SurfaceKeys.IOSApp.QRAuth.root

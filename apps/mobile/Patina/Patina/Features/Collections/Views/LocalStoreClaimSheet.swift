@@ -35,10 +35,23 @@ struct LocalStoreClaimSheet: View {
         }
     }
 
+    /// RL3A-14 — the counts are read once, not on every body evaluation. Two
+    /// SwiftData `fetchCount`s ran per render of a sheet whose counts cannot
+    /// change while it is up: it is a one-shot claim decision. Cached rather
+    /// than deferred to `.task` alone, so the title is never blank for a frame
+    /// while the sheet animates in.
+    @State private var counts: (rooms: Int, pieces: Int)?
+
+    private func readCounts() -> (rooms: Int, pieces: Int) {
+        (
+            rooms: (try? modelContext.fetchCount(FetchDescriptor<RoomModel>())) ?? 0,
+            pieces: (try? modelContext.fetchCount(FetchDescriptor<TableItemModel>())) ?? 0
+        )
+    }
+
     private var title: String {
-        let rooms = (try? modelContext.fetchCount(FetchDescriptor<RoomModel>())) ?? 0
-        let pieces = (try? modelContext.fetchCount(FetchDescriptor<TableItemModel>())) ?? 0
-        return Self.title(rooms: rooms, pieces: pieces)
+        let resolved = counts ?? readCounts()
+        return Self.title(rooms: resolved.rooms, pieces: resolved.pieces)
     }
 
     var body: some View {
@@ -48,6 +61,10 @@ struct LocalStoreClaimSheet: View {
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 40)
+                .task {
+                    guard counts == nil else { return }
+                    counts = readCounts()
+                }
 
             Text("They were saved before you signed in. Keep them and they become yours; start fresh and this phone keeps nothing from before.")
                 .font(PatinaTypography.bodySmall)
