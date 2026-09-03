@@ -60,26 +60,64 @@ struct SelectedStateTests {
     ///   not far. A `Capsule().fill(clay)` whose next lines are a `.frame` and
     ///   a closing brace is a track or a progress fill: it has no label, and
     ///   the 4.5:1 bar does not apply to it.
+    /// `RL1D-R3-13`. The first version of this pin matched only
+    /// `PatinaColors.clay)` — with the closing paren — so a ternary
+    /// (`isSelected ? PatinaColors.clay : …`) was invisible to it, and the
+    /// light-ink list held only the three named tokens, so a bare SwiftUI
+    /// `.white` was invisible too. Both live `C3-05` sites were exactly that
+    /// shape, and the suite was green over them for a whole round. The accent
+    /// is matched wherever an expression can end — `)`, `,`, ` :`, or the end
+    /// of the line — and `.white` is in the list, because the finding's own
+    /// words are "white/off-white labels on clay fills".
+    private static func namesTheRawAccent(_ line: String) -> Bool {
+        for token in ["PatinaColors.clayDeep", "PatinaColors.clay"] {
+            var rest = Substring(line)
+            while let hit = rest.range(of: token) {
+                let after = rest[hit.upperBound...]
+                let next = after.first
+                // `clay` must not be the prefix of `clayDeep` / `clayInk`.
+                let isWholeToken = next.map { !$0.isLetter && $0 != "_" } ?? true
+                if isWholeToken {
+                    if next == nil || next == ")" || next == "," || next == " " || next == "\n" {
+                        return true
+                    }
+                }
+                rest = after
+            }
+        }
+        return false
+    }
+
     @Test("no filled control pairs a light label with the raw brand accent")
     func noLightLabelRidesOnTheRawAccent() {
         let lightInk = [
             "PatinaColors.offWhite",
             "PatinaColors.Text.inverse",
-            "PatinaColors.OnDark.primary"
+            "PatinaColors.OnDark.primary",
+            ".white",
+            "Color.white"
         ]
         var offenders: [String] = []
 
         for path in SourcePin.swiftFiles(under: "Patina") {
-            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            let source = SourcePin.code(raw)
             let lines = source.components(separatedBy: "\n")
             for (index, line) in lines.enumerated() {
-                let isAccent =
-                    line.contains("PatinaColors.clay)") || line.contains("PatinaColors.clayDeep)")
-                guard isAccent else { continue }
+                guard Self.namesTheRawAccent(line) else { continue }
 
+                // A `.fill(` is a shape a label is drawn into — look forward,
+                // and not far, so a `Capsule().fill(clay)` that is a progress
+                // track stays out of the results. Unless the fill is inside a
+                // `.background { … }` block, in which case the label is above
+                // it and the window has to reach back past the opening line:
+                // `MoveOrCopyItemSheet`'s selected mode button is exactly that
+                // shape, five lines below its own `.foregroundStyle`.
+                let opensABackground = (max(0, index - 3)..<index)
+                    .contains { lines[$0].contains("background(") }
                 let range: ClosedRange<Int>
-                if line.contains("background(") {
-                    range = max(0, index - 5)...min(lines.count - 1, index + 2)
+                if line.contains("background(") || opensABackground {
+                    range = max(0, index - 8)...min(lines.count - 1, index + 2)
                 } else if line.contains("fill(") {
                     range = index...min(lines.count - 1, index + 5)
                 } else {
@@ -93,25 +131,47 @@ struct SelectedStateTests {
             }
         }
 
-        // The auth form's inverted enabled/disabled affordance (`C3-06`) is the
-        // one remaining site, and it is not this branch's to fix:
-        // `AuthenticationView.swift` is L1-A's, L1-A restructured it in this
-        // wave, and L1-A has **already closed it** on `first-flight/w1-l1a`
-        // (`.background(PatinaColors.Interactive.active)`, with the finding
-        // named in a comment above it). Editing it here would be a merge
-        // conflict over a fix that already exists. The allowance goes to zero
-        // on the integration tip; it is not a standing exemption.
-        let inL1AsAuthForm = offenders.filter { $0.hasPrefix("AuthenticationView.swift") }
-        let mine = offenders.filter { !$0.hasPrefix("AuthenticationView.swift") }
+        // Three files carry a `C3-05` site that is closed on ANOTHER LANE'S
+        // BRANCH and open on this one, because this branch is cut from `main`.
+        // Editing them here is a merge conflict over a fix that already exists,
+        // and — for `RoomTypePillRow` — over one whose exact final text has
+        // already been written and sent. Each allowance is a count, not a
+        // silence: a second site appearing in any of them fails, and all three
+        // go to zero on the integration tip. This is not a standing exemption.
+        //
+        //   AuthenticationView.swift  — `C3-06`, TWO sites: the OTP Verify
+        //     button (a multiline ternary the old heuristic could not see) and
+        //     the main submit button. Both are `Text.inverse` on a `clay`
+        //     disabled fill; both are closed on `w1-l1a`, where the only
+        //     surviving `clay` is decorative `.opacity()`. L1-A merges 5th.
+        //   StyleQuizView.swift       — two selection controls, closed on
+        //     `w1-l1a`: L1-A moved them to `StyleQuizView+Questions.swift` on
+        //     `Interactive.active` + `Text.inverse` and pinned them with
+        //     `QuizIconographyTests.noLightLabelSitsOnClay` (note D-L1A-5).
+        //   RoomTypePillRow.swift     — L1-C's by name, and L1-C merges FIRST.
+        //     Notes `D→C-6` and `D→C-7` carry the exact final lines; L1-C could
+        //     not apply them because the tokens do not exist on its base.
+        let deferred = [
+            ("AuthenticationView.swift", 2, "C3-06 ×2, closed on w1-l1a"),
+            ("StyleQuizView.swift", 2, "closed on w1-l1a, note D-L1A-5"),
+            ("RoomTypePillRow.swift", 1, "L1-C's file, notes D→C-6 / D→C-7")
+        ]
+        let deferredNames = deferred.map(\.0)
+        let mine = offenders.filter { name in
+            !deferredNames.contains { name.hasPrefix($0) }
+        }
 
         #expect(
             mine.isEmpty,
             "a light label still rides on the raw brand accent at: \(mine.joined(separator: ", ")) — C3-05 measured this shape at 2.33:1"
         )
-        #expect(
-            inL1AsAuthForm.count <= 1,
-            "more sites appeared in L1-A's auth form than the one C3-06 names: \(inL1AsAuthForm.joined(separator: ", "))"
-        )
+        for (file, ceiling, why) in deferred {
+            let hits = offenders.filter { $0.hasPrefix(file) }
+            #expect(
+                hits.count <= ceiling,
+                "more C3-05 sites appeared in \(file) than the \(ceiling) deferred to its owner (\(why)): \(hits.joined(separator: ", "))"
+            )
+        }
     }
 
     /// `RL1D-10`. The purchase bar's secondary button was filled with
@@ -120,7 +180,7 @@ struct SelectedStateTests {
     /// identical commitment buttons.
     @Test("the purchase bar has exactly one filled commitment button")
     func thePurchaseBarHasOneFilledButton() throws {
-        let source = try SourcePin.read("Patina/Features/Purchase/PurchaseActionBar.swift")
+        let source = try SourcePin.readCode("Patina/Features/Purchase/PurchaseActionBar.swift")
         let filled = source.components(separatedBy: "PatinaColors.Interactive.active").count - 1
         #expect(
             filled == 1,

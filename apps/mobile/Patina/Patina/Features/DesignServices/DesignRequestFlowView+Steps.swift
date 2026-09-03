@@ -375,13 +375,23 @@ extension DesignRequestFlowView {
         Button(action: action) {
             Text(text)
                 .font(PatinaTypography.caption)
-                .foregroundStyle(isSelected ? .white : PatinaColors.Text.secondary)
+                // C3-05: a bare `.white` on a `clay` fill is 2.18:1.
+                // `Interactive.active` + `Text.inverse` is the pair the kit
+                // publishes for a filled control — 13.53:1 light, 14.24:1 dark
+                // — and the one `PatinaButton(.primary)` and the room-type
+                // chips take. `clayInk` is the *static* filled accent and pairs
+                // only with a static light ink; under `Text.inverse` it drops
+                // to 2.92:1 in dark, which is the finding over again.
+                .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.secondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(isSelected ? PatinaColors.clay : PatinaColors.Background.secondary)
+                .background(isSelected ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                 .clipShape(Capsule())
                 .overlay(
-                    Capsule().stroke(isSelected ? PatinaColors.clay : PatinaColors.Border.strong, lineWidth: 1.5)
+                    Capsule().stroke(
+                        isSelected ? PatinaColors.Interactive.active : PatinaColors.Border.strong,
+                        lineWidth: 1.5
+                    )
                 )
         }
         .buttonStyle(.plain)

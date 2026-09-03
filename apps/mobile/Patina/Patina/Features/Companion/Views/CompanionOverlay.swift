@@ -799,7 +799,13 @@ public struct CompanionOverlay: View {
                 // Icon
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(isSuggested ? PatinaColors.clay : Color.white.opacity(0.08))
+                        // C3-05: the suggested action's glyph is
+                        // `OnDark.primary` on a raw `clay` tile — 2.18:1. The
+                        // panel is dark in both appearances, so the fill has to
+                        // be the STATIC filled accent: `clayInk` reads 5.31:1
+                        // under the same glyph. `Interactive.active` would flip
+                        // to near-white here and lose the accent entirely.
+                        .fill(isSuggested ? PatinaColors.clayInk : Color.white.opacity(0.08))
                         .frame(width: 36, height: 36)
                     Image(systemName: icon)
                         .font(.system(size: 16))

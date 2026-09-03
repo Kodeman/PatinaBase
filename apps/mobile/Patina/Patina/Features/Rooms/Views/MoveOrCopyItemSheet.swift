@@ -103,16 +103,21 @@ struct MoveOrCopyItemSheet: View {
         return Button { mode = value } label: {
             Text(title)
                 .font(PatinaTypography.caption)
-                .foregroundStyle(selected ? .white : PatinaColors.Text.secondary)
+                // C3-05: a bare `.white` on a `clay` fill is 2.18:1. The kit's
+                // filled-control pair is `Interactive.active` + `Text.inverse`.
+                .foregroundStyle(selected ? PatinaColors.Text.inverse : PatinaColors.Text.secondary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(selected ? PatinaColors.clay : PatinaColors.Background.secondary)
+                        .fill(selected ? PatinaColors.Interactive.active : PatinaColors.Background.secondary)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(selected ? PatinaColors.clay : PatinaColors.Border.strong, lineWidth: 1.5)
+                        .stroke(
+                            selected ? PatinaColors.Interactive.active : PatinaColors.Border.strong,
+                            lineWidth: 1.5
+                        )
                 )
         }
         .buttonStyle(.plain)
