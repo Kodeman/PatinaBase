@@ -46,6 +46,15 @@ export interface HelpStateBlob {
   featureAnnouncements?: Record<string, FeatureAnnouncementState>
   /** `noteKey` → ISO instant seen (dismissed or acted). See decision 5. */
   marginNotes?: Record<string, string>
+  /**
+   * ISO instant of this person's first successful write (a margin note or a
+   * decision) into any document, ever. Onboarding Wave 1 (L6) — guards
+   * `document_first_authored` so the handoff's activation signal fires
+   * exactly once per person, cross-device, never re-armed (unlike the
+   * version-suffixed `marginNotes` keys — there is no "new version" of a
+   * first write).
+   */
+  firstAuthoredAt?: string
 }
 
 /**
@@ -92,6 +101,17 @@ export interface FeatureAnnouncementStateBackend {
 export interface MarginNoteStateBackend {
   hasSeen: (noteKey: string) => boolean
   markSeen: (noteKey: string) => void
+}
+
+/**
+ * Backend contract for the first-authored guard (onboarding Wave 1, L6).
+ * Same synchronous-read / write-through-cache requirements as the other
+ * backends. `markAuthored` is idempotent — once `firstAuthoredAt` is set it
+ * is never overwritten.
+ */
+export interface FirstAuthoredStateBackend {
+  hasAuthored: () => boolean
+  markAuthored: () => void
 }
 
 /**

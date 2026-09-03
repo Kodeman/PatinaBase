@@ -107,6 +107,7 @@ import { DiscoverySection } from '@/components/document/discovery/discovery-sect
 import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
 import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
 import {
+  DOCUMENT_WRITE_EVENT,
   MarginRail,
   openMarginRail,
   ResponsiveMarginRail,
@@ -1226,6 +1227,46 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     target.focus({ preventScroll: true });
   }, []);
 
+  // Onboarding Wave 1 (L6) — zone flight: a document put down (or navigated
+  // away from) within 10 seconds of pick-up with no write in between is the
+  // "pick-up/put-down thrash" stuck signal (synthesis §10, R-b). `pickedUpAt`
+  // resets on arrival at a distinct engagement id; `wrote` latches on any
+  // margin-rail note/decision write (DOCUMENT_WRITE_EVENT); the guard fires
+  // at most once per pick-up.
+  const zoneFlightRef = useRef<{
+    docId: string;
+    pickedUpAt: number;
+    wrote: boolean;
+    fired: boolean;
+  }>({ docId: '', pickedUpAt: 0, wrote: false, fired: false });
+  useEffect(() => {
+    if (!row?.engagement_id || zoneFlightRef.current.docId === row.engagement_id) return;
+    zoneFlightRef.current = {
+      docId: row.engagement_id,
+      pickedUpAt: Date.now(),
+      wrote: false,
+      fired: false,
+    };
+  }, [row?.engagement_id]);
+  useEffect(() => {
+    const onWrite = () => {
+      zoneFlightRef.current.wrote = true;
+    };
+    window.addEventListener(DOCUMENT_WRITE_EVENT, onWrite);
+    return () => window.removeEventListener(DOCUMENT_WRITE_EVENT, onWrite);
+  }, []);
+  const fireZoneFlightIfDue = useCallback(() => {
+    const z = zoneFlightRef.current;
+    if (!z.docId || z.fired || z.wrote) return;
+    const heldMs = Date.now() - z.pickedUpAt;
+    if (heldMs >= 10_000) return;
+    z.fired = true;
+    documentEvents.zoneFlight({ doc_id: z.docId, held_ms: heldMs });
+  }, []);
+  // Navigating away (route change unmounts this page) is a put-down too —
+  // covers every exit that isn't the explicit Esc handled below.
+  useEffect(() => () => fireZoneFlightIfDue(), [fireZoneFlightIfDue]);
+
   // Esc puts down (D1) — unless something above it owns the key. A sheet is
   // first (it is the topmost thing on the screen and closes itself), then an
   // open shelf leaf (ShelfPanel closes it); only a bare document is put down.
@@ -1240,11 +1281,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       if (isEditableTarget(e.target)) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (openShelf) return;
+      fireZoneFlightIfDue();
       router.push('/desk');
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [router, openShelf]);
+  }, [router, openShelf, fireZoneFlightIfDue]);
 
   // The shelf rows. A leaf toggles; the call sheet dispatches at the roster
   // sheet that already exists rather than printing a second, thinner copy.
@@ -3094,6 +3136,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           <MarginRail
             projectId={row.project_id}
             proposalId={row.proposal_id}
+            docId={row.engagement_id}
             clientName={row.client_name}
             clientUserId={row.client_profile_id}
             now={gateNow}

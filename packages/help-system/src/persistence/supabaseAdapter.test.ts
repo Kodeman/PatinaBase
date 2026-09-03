@@ -14,6 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  createSupabaseFirstAuthoredBackend,
   createSupabaseHelpStateBackends,
   createSupabaseMarginNoteBackend,
   loadHelpState,
@@ -358,5 +359,42 @@ describe('createSupabaseMarginNoteBackend', () => {
     await backend.hydrate()
     expect(backend.hasSeen('desk-first-touch')).toBe(true)
     expect(backend.hasSeen('doc-first-touch')).toBe(true)
+  })
+})
+
+describe('createSupabaseFirstAuthoredBackend', () => {
+  it('hasAuthored is false before hydrate and before markAuthored', () => {
+    const { client } = makeStubClient({})
+    const backend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    expect(backend.hasAuthored()).toBe(false)
+  })
+
+  it('markAuthored then hasAuthored round-trips true and writes through', async () => {
+    const { client, lastWrite } = makeStubClient({})
+    const backend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    backend.markAuthored()
+    expect(backend.hasAuthored()).toBe(true)
+    await backend.flush()
+    expect(lastWrite.current?.firstAuthoredAt).toEqual(expect.any(String))
+  })
+
+  it('markAuthored is idempotent — a second call does not overwrite the first instant', async () => {
+    const { client, lastWrite } = makeStubClient({})
+    const backend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    backend.markAuthored()
+    await backend.flush()
+    const first = lastWrite.current?.firstAuthoredAt
+    backend.markAuthored()
+    await backend.flush()
+    expect(lastWrite.current?.firstAuthoredAt).toBe(first)
+  })
+
+  it('hydrate merges server state without clobbering an in-flight local write', async () => {
+    const { client } = makeStubClient({
+      firstAuthoredAt: '2026-01-01T00:00:00Z',
+    })
+    const backend = createSupabaseFirstAuthoredBackend(client, 'user-1')
+    await backend.hydrate()
+    expect(backend.hasAuthored()).toBe(true)
   })
 })

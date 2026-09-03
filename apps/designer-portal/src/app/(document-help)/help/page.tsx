@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { HelpSearch, RelatedArticles } from '@patina/help-system';
 import { FEATURED_SURFACE_KEYS, HELP_TOPICS } from '@/lib/help-system/help-topics';
+import { HELP_EVENTS, safeCapture } from '@/lib/help-system/help-events';
 
 export default function HelpCenterPage() {
   // FEATURED is drafts-only today, so it can settle empty. `onEmpty` (fired
@@ -35,13 +36,7 @@ export default function HelpCenterPage() {
 
   // Fire `help.help_center.viewed` once per mount (snake_case per spec R11).
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const posthog = (
-      window as unknown as {
-        posthog?: { capture: (event: string, props?: Record<string, unknown>) => void };
-      }
-    ).posthog;
-    posthog?.capture('help.help_center.viewed', { source: 'page_view' });
+    safeCapture(HELP_EVENTS.HELP_CENTER_VIEWED, { source: 'page_view' });
   }, []);
 
   return (

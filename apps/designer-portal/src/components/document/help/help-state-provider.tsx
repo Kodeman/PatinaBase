@@ -6,9 +6,9 @@
  * install site.
  *
  * On an authenticated mount it:
- *   · installs the Supabase-backed tour, feature-announcement, and
- *     margin-note backends so a dismissal/completion propagates across
- *     devices (`profiles.help_state`),
+ *   · installs the Supabase-backed tour, feature-announcement, margin-note,
+ *     and first-authored backends so a dismissal/completion/guard propagates
+ *     across devices (`profiles.help_state`),
  *   · hydrates the in-memory cache(s) from Supabase,
  *   · sweeps any localStorage help state into Supabase (one-time migration),
  *   · exposes `{ helpStateReady }` via context so the Desk Walkthrough gate can
@@ -25,11 +25,13 @@ import { createBrowserClient, useSession } from '@patina/supabase';
 import {
   createSupabaseHelpStateBackends,
   createSupabaseMarginNoteBackend,
+  createSupabaseFirstAuthoredBackend,
   migrateLocalToSupabase,
   setFeatureAnnouncementStateBackend,
   setTourStateBackend,
 } from '@patina/help-system';
 import { setMarginNoteStateBackend } from '../margin-note';
+import { setFirstAuthoredStateBackend } from './first-authored-state';
 
 interface HelpStateContextValue {
   /** True once the Supabase help-state cache has hydrated (or failed and fallen
@@ -58,19 +60,23 @@ export function HelpStateProvider({ children }: { children: ReactNode }) {
     const supabaseClient = createBrowserClient();
     const backends = createSupabaseHelpStateBackends(supabaseClient, supabaseUser.id);
     const marginNoteBackend = createSupabaseMarginNoteBackend(supabaseClient, supabaseUser.id);
+    const firstAuthoredBackend = createSupabaseFirstAuthoredBackend(supabaseClient, supabaseUser.id);
     setTourStateBackend(backends.tourBackend);
     setFeatureAnnouncementStateBackend(backends.featureBackend);
-    // Installed but not yet hydrated — margin-note.tsx falls back to
-    // localStorage until the second call below flips it ready.
+    // Installed but not yet hydrated — margin-note.tsx / first-authored-state.ts
+    // fall back to localStorage until the hydrated calls below flip them ready.
     setMarginNoteStateBackend(marginNoteBackend, false);
+    setFirstAuthoredStateBackend(firstAuthoredBackend, false);
 
     let cancelled = false;
     const setup = async () => {
       try {
         await backends.hydrate();
         await marginNoteBackend.hydrate();
+        await firstAuthoredBackend.hydrate();
         if (!cancelled) {
           setMarginNoteStateBackend(marginNoteBackend, true);
+          setFirstAuthoredStateBackend(firstAuthoredBackend, true);
         }
         await migrateLocalToSupabase(backends, marginNoteBackend);
       } catch (err) {
@@ -97,6 +103,7 @@ export function HelpStateProvider({ children }: { children: ReactNode }) {
       setTourStateBackend(null);
       setFeatureAnnouncementStateBackend(null);
       setMarginNoteStateBackend(null);
+      setFirstAuthoredStateBackend(null);
       setHelpStateReady(false);
     };
   }, [supabaseUser?.id]);

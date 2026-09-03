@@ -41,6 +41,7 @@ import type {
   TourStateBackend,
   FeatureAnnouncementStateBackend,
   MarginNoteStateBackend,
+  FirstAuthoredStateBackend,
 } from './types'
 import type { TourState } from '../proactive/TourController/tourState'
 import {
@@ -282,6 +283,58 @@ export function createSupabaseMarginNoteBackend(
       }
       cache.hydrated = true
       return cache.blob.marginNotes ?? {}
+    },
+    async flush(): Promise<void> {
+      await cache.pendingWrite
+    },
+  }
+}
+
+/**
+ * Return shape for `createSupabaseFirstAuthoredBackend` — the synchronous
+ * accessors that satisfy `FirstAuthoredStateBackend`, plus `hydrate()`/
+ * `flush()` for the same reasons `createSupabaseMarginNoteBackend` carries
+ * them (see its doc comment).
+ */
+export interface CreateSupabaseFirstAuthoredBackendResult extends FirstAuthoredStateBackend {
+  hydrate: () => Promise<boolean>
+  flush: () => Promise<void>
+}
+
+/**
+ * Build a standalone first-authored backend for `userId` (onboarding Wave 1,
+ * L6). Same independent-cache design as `createSupabaseMarginNoteBackend` —
+ * it keeps its own cache of the full `help_state` blob (hydrated once) so
+ * its write-through never clobbers sibling sub-keys it never touches.
+ */
+export function createSupabaseFirstAuthoredBackend(
+  client: HelpStateSupabaseClient,
+  userId: string,
+): CreateSupabaseFirstAuthoredBackendResult {
+  const cache = createCache()
+  return {
+    hasAuthored(): boolean {
+      return typeof cache.blob.firstAuthoredAt === 'string'
+    },
+    markAuthored(): void {
+      if (typeof cache.blob.firstAuthoredAt === 'string') return
+      cache.blob = {
+        ...cache.blob,
+        firstAuthoredAt: new Date().toISOString(),
+      }
+      scheduleWrite(cache, client, userId)
+    },
+    async hydrate(): Promise<boolean> {
+      const blob = await loadHelpState(client, userId)
+      cache.blob = {
+        ...blob,
+        ...cache.blob,
+        // Server's firstAuthoredAt wins on first hydration; an in-flight
+        // local write (set before hydrate resolved) takes precedence.
+        firstAuthoredAt: cache.blob.firstAuthoredAt ?? blob.firstAuthoredAt,
+      }
+      cache.hydrated = true
+      return typeof cache.blob.firstAuthoredAt === 'string'
     },
     async flush(): Promise<void> {
       await cache.pendingWrite
