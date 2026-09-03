@@ -122,10 +122,9 @@ function scrollAnchorIntoView(
 // fallback copy makes the tour navigable with zero published CMS content; Sanity
 // copy (persona 'designer') wins when present. Step 6 now ends the tour by
 // acting, not describing (decisions #1) — `handleComplete` below opens the
-// capture-lead sheet after marking the tour complete. Its CTA label ("Capture
-// a lead") is CMS-only — the CoachmarkStep type carries no fallback ctaLabel,
-// so the package default "Done" shows during CMS downtime; clicking it still
-// completes the tour and opens the sheet either way.
+// capture-lead sheet after marking the tour complete. Its CTA reads "Capture
+// a lead" via `fallbackCtaLabel` below (Sanity's `ctaLabel` still wins when
+// published); clicking it completes the tour and opens the sheet either way.
 const TOUR = SurfaceKeys.DesignerPortal.Tours.DeskWalkthrough;
 const STEPS: CoachmarkStep[] = [
   {
@@ -184,6 +183,7 @@ const STEPS: CoachmarkStep[] = [
     fallbackHeading: 'Begin with a lead',
     fallbackBody:
       'Every project begins as a captured lead — a name and a note, under a minute. The Desk takes it from there.',
+    fallbackCtaLabel: 'Capture a lead',
   },
 ];
 
