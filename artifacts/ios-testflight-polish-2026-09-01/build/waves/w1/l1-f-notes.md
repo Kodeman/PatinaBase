@@ -238,3 +238,101 @@ Nothing here adds tab/zone/dashboard framing, a shadow, red/green status, a badg
 mechanic or the word "AI". Task F-L1B-1 surfaces one sentence and shortens two animations; F-L1B-2
 clears state; F-L1B-3 keeps an existing number on screen instead of deleting it; F-L1B-4 adds a
 gesture.
+
+
+---
+
+## From L1-E (Copy) — round 2, 2026-09-02 (after the adversarial review of deck revision 1)
+
+Full text, with the blocks sent to the other lanes, is at `build/waves/w1/l1e-notes-out.md`. Deck: `build/waves/w1/l1-e-copy-deck.md` **revision 2**.
+
+### Note F-L1E-1 — `A-52`'s third site was yours all along; thank you for catching it
+
+`Features/Notifications/Views/NotificationFeedView.swift:193`. Deck revision 1 filed this row under
+"L1-A applies", and `l1e-notes-out.md` round 1 recorded "**L1-F (none in W1)**" — so this lane never
+told you about a row in your own glob (`Features/Notifications/**`, steward.md §5.7). You found and
+applied it anyway; on `first-flight/w1-l1f` the guest empty state reads:
+
+```swift
+message: "Sign in to see updates on your projects and messages here.",
+```
+
+which is the deck's exact final text. **No action.** The routing is corrected in deck revision 2 and
+the string is pinned by `GuestPromiseTests.notificationsGuestStateMakesNoPromise`. Recorded here so
+the wave record shows the row had an owner who was told, rather than an owner who guessed.
+
+
+---
+
+## From L1-A — fix round (2026-09-02)
+
+Full text, with the notes sent to the other lanes, is `build/waves/w1/l1a-notes-out-round2.md`.
+
+### Note F-L1A-3 — the receiving half of `L1F→A-2` is in; one call-site line is still yours to unblock
+
+`AuthScreenView` now takes `pendingLinkNotice: String? = nil` and renders it as a **second, lower
+priority case in the existing 52 pt status slot** — exactly as agreed: an error wins, the notice shows
+only when `errorMessage == nil`, and the slot's height is unchanged either way
+(`AuthErrorRoutingTests.theNoticeYieldsToAnError` measures both through `UIHostingController`).
+
+What is **not** in, because it does not compile on this branch: the one line in `ContentView.swift`'s
+`.auth` case, which reads a property that exists only on `first-flight/w1-l1f`.
+
+```swift
+                    errorMessage: AuthService.shared.rootErrorMessage,
+                    pendingLinkNotice: coordinator.pendingLinkNotice
+```
+
+L1-F merges **fourth** and L1-A **fifth** (D14), so this is a one-line addition at L1-A's rebase.
+`AuthSheet.swift` needs nothing — the parameter defaults to nil, and a link held while the modal is up
+is acknowledged by the sheet dismissing into the destination, as you said.
+
+Reported open in L1-A's lane report against `C2-21` / `GAP7B-09`.
+
+### Note F-L1A-4 — round one's two blocks were never appended to `l1-f-notes.md`
+
+`RL1A-13`. `l1a-notes-out.md` carried a "To L1-F" section (Task `F-L1A-1`, Note `F-L1A-2`) that was
+written to L1-A's own out-file but never appended to L1-F's inbox — `grep -n "A-52\|NotificationFeedView\|F-L1A" l1-f-notes.md`
+returned nothing, while `l1-b`, `l1-c`, `l1-d` and `l1-e-notes.md` all carry their "From L1-A" block.
+
+**No work was lost:** L1-F read `l1a-notes-out.md` directly and records `F-L1A-1 … Applied … Commit
+8d8582db2` in `l1f-notes-out.md:251`, and answered `F-L1A-2` as `L1F→A-2`. The blocks are appended to
+`l1-f-notes.md` in this round so §7's "an integration note that no owner scheduled is not a plan"
+audit reads true from the inbox files alone.
+
+---
+
+
+
+---
+
+## From L1-A — round one, appended late (RL1A-13)
+
+These two blocks were written to `build/waves/w1/l1a-notes-out.md` during round one and never appended here. No work was lost — L1-F read the out-file directly and records `F-L1A-1 … Applied … Commit 8d8582db2`, and answered `F-L1A-2` as `L1F→A-2` — so this is the record catching up with the work, so that §7's "an integration note that no owner scheduled is not a plan" audit reads true from the inbox files alone.
+
+### Task F-L1A-1 — `A-52`, from L1-E's copy deck, in L1-F's file
+
+The deck files an `A-52` row under *"L1-A applies"* that lands in
+`Features/Notifications/Views/NotificationFeedView.swift:193` (`guestInviteView`), which is **L1-F's**
+glob. L1-A did not apply it. Exact final text, from the deck:
+
+- `:193` message → `"Sign in to see updates on your projects and messages here."`
+- `:192` title `"Nothing yet"` — **unchanged.**
+
+The view is already correctly branched on auth state; only the sentence inside it still presumes a
+designer relationship the guest does not have.
+
+### Note F-L1A-2 — `C2-21` / `GAP7B-09`'s acknowledgement line
+
+Both are **L1-F rows** on `AppCoordinator.swift` (the deep-link queue). PROGRAM.md §3 · L1-A's
+integration notes say they carry "an L1-A acknowledgement line on the auth screen".
+
+`AuthScreenView` now has a **fixed-height status slot** (`AuthScreenView.statusSlotHeight`, 52 pt,
+always in the layout) built for `P-29`. It renders `errorMessage` today. If L1-F wants the queued-link
+acknowledgement there, send back the exact sentence and the property name to read, and L1-A will add a
+second, lower-priority case to the same slot — **not** a second element, because the whole point of
+`P-29` is that nothing on that screen may move.
+
+L1-A has **not** added an acknowledgement line: with no queue state exposed to read there is nothing to
+render, and inventing a sentence for a mechanism L1-F has not built yet would be a guess.
+

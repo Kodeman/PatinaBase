@@ -304,3 +304,125 @@ way as the composer's. It is listed so the sweep does not miss it.
 **Whoever gets there first is fine by L1-F**: the steward applying all five on the integration tip
 after merge 2, or L1-F applying them in a fix round rebased onto that tip. They are mechanical and
 carry no behaviour.
+
+
+---
+
+## From L1-E (Copy) — round 2, 2026-09-02 (after the adversarial review of deck revision 1)
+
+Full text, with the blocks sent to the other lanes, is at `build/waves/w1/l1e-notes-out.md`. Deck: `build/waves/w1/l1-e-copy-deck.md` **revision 2**.
+
+### Note D-L1E-2 — `stillChoosingPieces` is ratified as you wrote it
+
+**This answers D→E-1 in `l1-e-notes.md`.** Keep your words; the deck now carries them as the row:
+
+```swift
+    static let stillChoosingPieces = PatinaEmptyStateContent(
+        icon: "square.stack",
+        title: "Nothing here yet",
+        message: "Your designer is still choosing pieces for you. This fills in as they do."
+    )
+```
+
+You are right and the deck's sentence was wrong. "Still building the collection" is a marketplace
+sentence about a catalogue; round one is Leah's own clients on the four-tab root, where the Pieces
+tab is *their designer's* selection, so naming the designer is the truer thing to say. The
+identifier rename `stillCuratingPieces` → `stillChoosingPieces` is right for the same reason the
+lexicon bans the word: a word the codebase says to itself becomes a word the codebase ships. No
+change requested; `ImagePlaceholderTests.emptyCatalogueStateIsAvailable` keeps it honest.
+
+One correction to the deck, not to your code: the `#Preview` default at `PatinaEmptyState.swift:66-67`
+was filed in revision 1 as "proactive, **no W1 finding id**, apply only if a real call site needs
+it". That was wrong — `PatinaEmptyState.swift:66-67` is named in `C5-09`'s own `where`. It is a real
+`C5-09` row, and you applied it. Recorded so the finding closes against a deck entry.
+
+
+---
+
+## From L1-A — fix round (2026-09-02)
+
+Full text, with the notes sent to the other lanes, is `build/waves/w1/l1a-notes-out-round2.md`.
+
+### Note D-L1A-4 — the three rows from `D→A-1` / `D→A-2` / `D→A-4` that do not compile on this branch
+
+L1-A applied everything in those three notes that exists today. What is left is exactly the set that
+references tokens introduced on `first-flight/w1-l1d`. Verified absent on `first-flight/w1-l1a`
+(base `ba83aa67f`) by grep: `PatinaColors.Border`, `clayInk`, `errorDeep`, `OnDark`, `Scrim`,
+`PatinaTypography.voiceLead`, `voiceSmall`, `voiceCaption`, `bodySerif`, `h6`, `monoLarge`.
+
+L1-D merges **second** and L1-A **fifth** (D14), so by the time L1-A rebases onto the integration tip
+every one of these is a one-line change. They are reported **open** in L1-A's lane report with this
+note as the closing plan. Exact final lines, so the integration pass does not have to re-derive them:
+
+**`A-73` — `D→A-2`'s seven `pearl` swaps.** Five are in files L1-A owns; two more turned up in this
+lane's own files during the fix round and are added to the table.
+
+| file:line | today | final |
+|---|---|---|
+| `Features/Authentication/Views/AuthScreenView.swift` · `guestButton` | `.stroke(PatinaColors.pearl, lineWidth: 1.5)` | `.stroke(PatinaColors.Border.strong, lineWidth: 1.5)` |
+| `Features/Authentication/Views/AuthScreenView.swift` · `AuthProviderRow` | `.stroke(PatinaColors.pearl, lineWidth: 1.5)` | `.stroke(PatinaColors.Border.strong, lineWidth: 1.5)` |
+| `Features/Onboarding/Views/OnboardingFlowView.swift:230` | `.fill(PatinaColors.pearl.opacity(0.6))` | `.fill(PatinaColors.Border.hairline)` |
+| `Features/StyleQuiz/Views/StyleQuizView.swift` · `exitButton` | `.overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))` | `.overlay(Circle().stroke(PatinaColors.Border.hairline, lineWidth: 0.5))` |
+| `Features/StyleQuiz/Views/StyleResultView.swift:153` | `.fill(PatinaColors.pearl)` | `.fill(PatinaColors.Border.hairline)` |
+| `Features/StyleConversation/Shared/Components/StylePillButton.swift:36` | `isSelected ? PatinaColors.Interactive.active : PatinaColors.pearl,` | `isSelected ? PatinaColors.Interactive.active : PatinaColors.Border.strong,` |
+| `Features/StyleConversation/Views/PriorityView.swift:71` | `isSelected ? PatinaColors.Interactive.active : PatinaColors.pearl,` | `isSelected ? PatinaColors.Interactive.active : PatinaColors.Border.strong,` |
+| `Features/StyleConversation/Views/InvestmentPerspectiveView.swift:60` | `.fill(PatinaColors.pearl)` | `.fill(PatinaColors.Border.hairline)` |
+
+**`C3-15` — the two of `D→A-4`'s nine sites whose token does not exist yet.** The other seven landed
+this round (commit in L1-A's report), pinned by `PatinaTests/QuizIconographyTests`.
+
+| file:line | today | final |
+|---|---|---|
+| `Features/StyleConversation/Shared/Components/ConversationHeaderView.swift:28` | `.font(.custom("PlayfairDisplay-Italic", size: 26, relativeTo: .title2))` | `.font(PatinaTypography.voiceLead)` |
+| `Features/StyleConversation/Views/PriorityView.swift:54` | `.font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .callout))` | `.font(PatinaTypography.bodySerif)` |
+
+**`P-25` — the OTP field's empty-state outline.** The accessibility half of `D→A-1` shipped this round
+(prompt, `accessibilityLabel("Sign-in code")`, a digit-counting `accessibilityValue`, and a border that
+changes width and colour with content). One colour is still the old one because `Border.strong` does
+not exist yet — `Features/Authentication/Views/AuthenticationView+Panels.swift`, the OTP `TextField`'s
+`.overlay`:
+
+```swift
+                        .stroke(
+                            viewModel.otpToken.isEmpty
+                                ? PatinaColors.clay.opacity(0.2)     // → PatinaColors.Border.strong
+                                : PatinaColors.Text.interactive,
+                            lineWidth: viewModel.otpToken.isEmpty ? 1 : 1.5
+                        )
+```
+
+### Note D-L1A-5 — `C3-05`'s quiz half is closed, and it took `clay` out of the file entirely
+
+`D→A-2`'s closing paragraph asked for the quiz's selected states to stop putting a light label on a
+`clay` fill. Done in `StyleQuizView+Questions.swift`: every selected state is
+`PatinaColors.Interactive.active` with `PatinaColors.Text.inverse`, the two bare `.white` labels are
+gone with them, and `PatinaTests/QuizIconographyTests.noLightLabelSitsOnClay` fails if either
+`PatinaColors.clay` or `.white` reappears in that file. Nothing further is needed from L1-D here.
+
+`A-11` is closed the same way — the thirteen emoji are the SF Symbol names from `D→A-3`'s table
+verbatim, rendered `Image(systemName:)` at `.font(.system(size: 22, weight: .light))` with
+`.accessibilityHidden(true)` at both sites. `everyIconIsARegisteredSymbol` builds each one through
+`UIImage(systemName:)`, so a typo'd symbol name fails rather than rendering nothing.
+
+### Note D-L1A-6 — the Apple button is hidden on the local stack unless the catalog makes an exception
+
+Not a change request; a fact L1-D needs before its own `C3-03` dark-mode check.
+
+`AuthProviderCatalog` renders only what `GET /auth/v1/settings` reports (`A3-06`, ruling D3). The
+local CLI stack answers `apple: false` — it has no Apple client id and needs none — and D1a tells
+every W1 walker, the R1 acceptance script and L1-D's dark-mode pass to launch
+`-DeploymentTarget local`. Under the rule alone the Apple row disappeared from the wave's own walks,
+which makes `C3-03`'s white-on-dark style and `C1-05`'s in-flight state unobservable outside prod.
+
+**Resolved in the app, not in `supabase/config.toml`:** `AuthProviderCatalog.providers(from:target:)`
+treats `.apple` as always offered when `DeploymentTarget.current == .local`. Editing the shared local
+stack's config mid-wave would have forced a `supabase stop/start` on six lanes' clones for a button
+that cannot complete an exchange locally anyway. Pinned by
+`AuthProviderVisibilityTests.appleIsOfferedOnTheLocalStack`, which also asserts the exception never
+invents a provider Strata has not enabled.
+
+`D→A-6`'s pairing is taken as written: the spinner keeps `PatinaColors.Text.inverse`, which flips in
+the same direction `.signInWithAppleButtonStyle` now does.
+
+---
+

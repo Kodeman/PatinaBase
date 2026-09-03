@@ -1031,3 +1031,105 @@ mechanic or the word "AI". The staleness affordance is a sentence by ruling; the
 modifiers add no chrome at all; Task C-L1B-4 makes a VoiceOver value say **less**, not more.
 
 ---
+
+
+---
+
+## From L1-E (Copy) — round 2, 2026-09-02 (after the adversarial review of deck revision 1)
+
+Full text, with the blocks sent to the other lanes, is at `build/waves/w1/l1e-notes-out.md`. Deck: `build/waves/w1/l1-e-copy-deck.md` **revision 2**.
+
+### Task C-L1E-7 — `C5-10` · the sign-out alert, with its pin (answers your open question)
+
+**This is the answer to "One thing the deck does not cover" in `l1-e-notes.md`.** Yes — case the
+alert to match the row, and here are both strings and the pin update, as you asked:
+
+`Features/Settings/Views/SettingsView.swift:212,214`
+
+```swift
+.alert("Sign Out", isPresented: $showingSignOutConfirmation)   // today
+Button("Sign Out") { signOut() }                                // today
+
+.alert("Sign out?", isPresented: $showingSignOutConfirmation)  // final
+Button("Sign out") { signOut() }                                // final
+```
+
+The `?` is not a casing change: the file's three other alerts are questions ("Forget recent
+context?", "Reset taste portrait?", "Discard this scan?"), and a title that is a bare command
+reads as a second button. One screen, one shape.
+
+⚠ **Same-commit pin:** `PatinaTests/AccountActionsTests.settingsSurfacesBothAccountActions` asserts
+`source.contains("\"Sign Out\"")` → change to `"\"Sign out\""`. Leave
+`accountViewSurfacesBothAccountActions` alone — that is L1-A's half, a different `@Test` function in
+the same file, so the two merge cleanly. Pinned by
+`SentenceCaseTests.settingsSignOutAlertMatchesItsRow`.
+
+### Task C-L1E-8 — `C5-10` · "Retake Style Quiz" beside "Get design help"
+
+`Features/Profile/Views/ProfileView.swift:154` (`:140` on your branch)
+
+```swift
+profileActionRow(icon: "paintpalette", label: "Retake Style Quiz")   // today
+profileActionRow(icon: "paintpalette", label: "Retake your style quiz")  // final
+```
+
+Title Case sits directly above `"Get design help"` and `"Settings"` inside one section — `C5-10`'s
+complaint verbatim, and `GAP2-22`'s own ruled fix, reused so W2 has nothing left to decide. Pinned
+by `SentenceCaseTests.studioActionRowsShareOneCasing`.
+
+### Task C-L1E-9 — `C5-09` · one word in one VoiceOver announcement
+
+`Features/Profile/Views/ProfileView.swift:217`
+
+```swift
+.accessibilityLabel("Saved items: \(viewModel.savedItemCount). More information available.")   // today
+.accessibilityLabel("Saved pieces: \(viewModel.savedItemCount). More information available.")  // final
+```
+
+The visible stat reads `"Saved"`, which is fine; only the announcement names the retired noun.
+Pinned by `NounConsistencyTests.profileSavedStatSaysPieces`.
+
+### Task C-L1E-10 — `A-52` · the two Companion guest rows are still open
+
+Your task `C-L1A-3` (re-routed to you by L1-A, correctly — `Features/Companion/**` is yours under
+§5.4) is **not applied on `first-flight/w1-l1c`**: `CompanionActionRows.swift:33` still reads
+`item("house", "Home", "Back to your space", …)` unconditionally, and the file carries no
+`isAuthenticated` parameter. Exact final text, unchanged from the deck:
+
+- `:32-34` (`homeRow`) — **guest** hint `"See what’s on Patina"`; signed in, or a guest with local
+  rooms, keeps `"Back to your space"`.
+- `:220-223` (`pieceActRow`, `.askAboutPiece`) — **guest** hint
+  `"Sign in and a designer will get back to you"`; signed in with no designer yet,
+  `"A designer will get back to you"`.
+
+Both need `isAuthenticated` (or `LocalStoreClaim.hasGuestWork` for the home row) threaded into the
+row builder. `:213-214` (`.askDesigner`) is **unchanged** — it is only reachable when
+`relationship.isLive`, which a guest cannot be. Note the apostrophe in `"what’s"` is **U+2019**
+(`A-06`). Pinned by `GuestPromiseTests.companionRowsBranchOnAuthState`, which is a recorded known
+issue until this lands.
+
+### Note C-L1E-11 — `C5-06` changed the greeting's width on the flags-off root
+
+Not a request; a heads-up, because you own `DailyRoomView.swift` and `DailyGreetingHeader.swift`.
+Launched on L1-E's clone at 21:41 with `-PatinaFlags ""`: the flags-off header — which carries the
+Studio pill, the bell and the help icon on the same row — now breaks the headline as "Good /
+evening" over two lines, where "Good night." fitted one. The same happens at midday, where "Good
+afternoon" (14 characters) replaces "Good day." (9). **The four-tab root has the width and renders
+one line**, so this only affects the D1 kill-switch fallback. Recorded rather than reverted; if you
+want the header to reserve two lines there, that is your call, not a copy change.
+
+### Note C-L1E-12 — `GAP1B-01` needs no sentence, and that is now written down
+
+`Features/Decisions/Views/DecisionDetailView.swift:368-448`. PROGRAM.md names `GAP1B-01` as a row
+this deck owes ("the sheet is L1-C's, the sentence is a deck row L1-C applies"). Having read the
+sheet: **no string is needed.** The copy inside it is already correct and no new text appears at any
+Dynamic Type size — the fix is entirely the content-driven detent. Recorded in the deck so the exit
+criterion "every deck row is either applied or carries a written 'not this wave, because…'" has an
+entry for it, and so you are not waiting on a sentence that is not coming.
+
+### Note C-L1E-13 — your three VoiceOver labels are blessed
+
+`"About Your Spaces"`, `"About Whole Home"`, `"About scanning a room"`, `"About Today"`. Correct
+voice, correct specificity, and `C-05`'s fix line asks for exactly this. No deck row needed. (Two
+carry Title Case — `"Your Spaces"` and `"Whole Home"` — but both are the on-screen proper names of
+those surfaces, so the announcement matching them is right.)

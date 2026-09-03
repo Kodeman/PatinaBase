@@ -197,3 +197,43 @@ lexicon's avoid-list, and a word the codebase says to itself becomes a word the 
 `PatinaTests/ImagePlaceholderTests.emptyCatalogueStateIsAvailable` names both strings, so a changed row
 fails loudly rather than drifting. L1-E merges last and can take it in its own worktree — this lane's
 file, but a string-only edit with a test that says exactly what it expects.
+
+
+---
+
+## From L1-A — fix round (2026-09-02)
+
+Full text, with the notes sent to the other lanes, is `build/waves/w1/l1a-notes-out-round2.md`.
+
+### Note E-L1A-2 — copy-deck addendum: the sheet header the `C5-10` sweep left behind
+
+`AuthenticationView.headerTitle` returned `AuthMode.rawValue`, which is Title Case — so the sheet read
+**"Sign In"** directly above a submit button reading "Sign in" and a mode switcher reading "Sign up".
+The deck's `C5-10` rows named `submitButtonTitle` (`:526-532`) and the switcher (`:632`); this was the
+residue.
+
+Applied in this lane's file this round, recorded so the deck is the record:
+
+| id | file | today | final |
+|---|---|---|---|
+| `C5-10` | `Features/Authentication/Views/AuthenticationView.swift` · `headerTitle` | `viewModel.mode.rawValue` → "Sign In" | `"Sign in"` |
+| `C5-10` | same | `viewModel.mode.rawValue` → "Sign Up" | `"Create account"` |
+| `C5-10` | same | `viewModel.mode.rawValue` → "Reset Password" | `"Reset password"` |
+
+`AuthMode`'s raw values are unchanged — they are no longer rendered anywhere, and `P-30`'s comment on
+`case magicLink = "Sign-in code"` is still the record of why that one was renamed. Pinned by
+`SignInCodeNamingTests.everyHeaderIsSentenceCase`.
+
+### Note E-L1A-3 — `A-52`'s two `Features/Companion/**` rows are in nobody's W1 globs
+
+The deck files three `A-52` rows under **"L1-A applies"** that land in
+`Features/Companion/Services/CompanionActionRows.swift` (`:213-214`, `:220-223`, `:32-34`).
+`Features/Companion/**` is not in L1-A's glob list (PROGRAM.md §3), and L1-A did not apply them. The
+`NotificationFeedView.swift` row went to L1-F as `F-L1A-1` and **is applied** (L1-F's `8d8582db2`).
+
+The two Companion rows need `isAuthenticated` threaded into `pieceActRow(_:)` and `homeRow()`, which
+is a behaviour change in a file this lane does not own. Flagged for the steward's glob table rather
+than taken.
+
+---
+

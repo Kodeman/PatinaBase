@@ -679,3 +679,34 @@ its 8 pt mono in favour of a 10 pt floor, and these two are 7 pt and 8 pt.
 `PatinaTests/TypographyAdoptionTests.theInlineFontCountNeverClimbs` carries the app-wide ratchet.
 
 ---
+
+
+---
+
+## From L1-E (Copy) — round 2, 2026-09-02 (after the adversarial review of deck revision 1)
+
+Full text, with the blocks sent to the other lanes, is at `build/waves/w1/l1e-notes-out.md`. Deck: `build/waves/w1/l1-e-copy-deck.md` **revision 2**.
+
+### Task B-L1E-4 — `C5-09` · three sites in `Features/Rooms/**` the deck missed
+
+`C5-09`'s `where` names eight sites; deck revision 1 covered one. Three of the remaining seven are
+yours:
+
+| file:line | today | final |
+|---|---|---|
+| `Features/Rooms/Views/CrossRoomView.swift:64` | `Text("All Items")` (screen title) | `Text("All pieces")` |
+| `Features/Rooms/Views/CrossRoomView.swift:81` | `tabButton("All Items", .all)` | `tabButton("All pieces", .all)` |
+| `Features/Rooms/Views/RoomProjectView.swift:212` | `Text("Your Items")` (section eyebrow) | `Text("Your pieces")` |
+
+The sibling tabs `"By Category"` / `"By Maker"` are Title Case too, but that is `C5-10`'s casing
+sweep, not `C5-09`'s noun collision — **leave them**; W2 has that row. Pinned by
+`NounConsistencyTests.roomsSurfacesSayPieces`.
+
+### Note B-L1E-5 — `B-20` was applied by L1-C in your file; do not apply it twice
+
+`Features/Rooms/Views/RoomProjectView.swift:254` now reads
+`cta(primary: "Browse pieces for this room")`. Deck revision 1 addressed `B-20` to L1-C, which was
+wrong — `Features/Rooms/**` is yours (§5.3) and `RoomProjectView.swift` is not one of the string-
+literal carve-outs. L1-C applied it anyway, as task `C-L1E-5`. The hunk is on
+`first-flight/w1-l1c`; your `C5-09` edit above is at `:212`, a different line, so the two merge.
+Flagged to the steward in L1-E's report.

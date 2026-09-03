@@ -835,3 +835,122 @@ behaviour near L1-A's, recorded so the merge holds no surprises. Full context in
    `"local_store_owner_user_id"` key `AuthService` writes at `:229`, and
    `AccountIsolationTests.theOwnerKeyMatchesTheOneAuthServiceWrites` pins the two spellings together —
    so if L1-A renames that key, that test is where it will surface.
+
+
+---
+
+## From L1-E (Copy) — round 2, 2026-09-02 (after the adversarial review of deck revision 1)
+
+Full text, with the blocks sent to the other lanes, is at `build/waves/w1/l1e-notes-out.md`. Deck: `build/waves/w1/l1-e-copy-deck.md` **revision 2**.
+
+### Task A-L1E-8 — `C5-10` · the taste portrait's primary CTA
+
+`Features/StyleQuiz/Views/StyleResultView.swift:54`
+
+```swift
+Text("View Recommendations")   // today
+Text("See your pieces")        // final
+```
+
+Title Case on the primary button of the screen every first-run tester lands on after the quiz.
+"See the piece" is the phrase `OrderPlacedView` already uses and the one `ItemActionMenu` takes
+under `C5-09`, so the plural is the same voice. Pinned by
+`SentenceCaseTests.stylePortraitCTAIsSentenceCase`.
+
+### Task A-L1E-9 — `C5-20` · the style quiz says "Curated" twice on the first-run path
+
+`Features/StyleQuiz/Models/QuizModels.swift:73` and `:105`. **Change the `label:` only. The `key:`
+values are spectrum-mapping and budget-lookup inputs** (`StyleQuizViewModel.swift:221,242,296` match
+on them) and must not change.
+
+```swift
+// :73  — question 1 of 5, "Which palette feels like home?"
+QuizOption(label: "Eclectic Curated",   gradient: PatinaGradients.rattan, key: "eclectic_curated")  // today
+QuizOption(label: "Collected Eclectic", gradient: PatinaGradients.rattan, key: "eclectic_curated")  // final
+
+// :105 — question 4 of 5, "Let's talk about investment"
+QuizOption(label: "Curated Comfort",    subtitle: "$2,000 – $5,000 per room", icon: "✦", key: "curated_comfort")  // today
+QuizOption(label: "Considered Comfort", subtitle: "$2,000 – $5,000 per room", icon: "✦", key: "curated_comfort")  // final
+```
+
+"Curated" is on the deck's banned lexicon and `BrandVoiceLintTests` bans it, yet the app ships it
+twice on the mandatory first-run quiz — a harder placement than `C5-20`'s own two strings.
+"Collected" is the interiors word for a room assembled over time, which is what that palette means.
+"Considered" is parallel to its siblings "Thoughtful Starter" and "Heirloom Investment". Pinned by
+`BrandVoiceLintTests.styleQuizIsClean`, which also asserts both keys survive.
+
+### Task A-L1E-10 — `A-06` · the ruling on the sweep's scope, and five strings
+
+**This answers your question in `l1-e-notes.md` Note E-L1A-3.** `A-06`'s W1 sweep is **every
+user-facing string in a file the deck names**, not only `OnboardingFlowView`; the app-wide sweep is
+W2 · L1-E's. Three of the five sentences you flagged carry an apostrophe, and they are in files the
+deck names, so they are in scope:
+
+| where | today | final |
+|---|---|---|
+| `AuthViewModel.emailValidationMessage` | `"That doesn't look like an email address yet."` | `"That doesn’t look like an email address yet."` |
+| `AccountView.signedOutSection` | `"You're looking around without an account."` | `"You’re looking around without an account."` |
+| `StyleQuizView` defer control | `"I'll do this later"` | `"I’ll do this later"` |
+
+The other two ("Reading your answers…", "I already have an account — Sign in") carry no apostrophe
+and are already correct.
+
+Two more in the same sweep, in `Features/Account/AccountDeletionService.swift`:
+
+| line | today | final |
+|---|---|---|
+| `:38-39` (`failureCopy`) | `"We couldn't delete your account just now. …"` | `"We couldn’t delete your account just now. Try again, or write to hello@patina.cloud."` |
+| `:55-58` (`confirmationBody`) | `"… This can't be undone."` | `"… This can’t be undone."` |
+
+⚠ **`confirmationBody`'s edit turns one of your own tests red unless it goes in the same commit.**
+`PatinaTests/AccountActionsTests.deletionConfirmationCopyIsHonest` asserts
+`confirmationBody.contains("can't be undone")` with a straight apostrophe — change it to
+`"can’t be undone"`.
+
+### Task A-L1E-11 — `C5-10` · the sign-out alert contradicts the button that opens it
+
+`Features/Account/AccountView.swift:59,61`
+
+```swift
+.alert("Sign Out", isPresented: $showingSignOutAlert)   // today
+Button("Sign Out") { … }                                 // today
+
+.alert("Sign out?", isPresented: $showingSignOutAlert)  // final
+Button("Sign out") { … }                                 // final
+```
+
+`AccountView.swift:217` already reads `"Sign out"` after your `C5-10` row, so one screen now ships
+both spellings — which is exactly `C5-10`'s complaint. The `?` on the title is not a casing change:
+it matches the file's sibling alerts, and it is the difference between a title and a command.
+
+⚠ **Same-commit pin:** `PatinaTests/AccountActionsTests.accountViewSurfacesBothAccountActions`
+asserts `source.contains("\"Sign Out\"")` → change to `"\"Sign out\""`. (The `SettingsView` half of
+that test file is L1-C's row — a different `@Test` function, so the two edits merge cleanly.)
+
+### Note A-L1E-12 — `A-101` · your acknowledgement is requested, and `A-13`'s string is ratified
+
+**`A-101`.** PROGRAM.md §3 · L1-E's exit criteria says the delete-account sentence names what is
+deleted, what is retained "**and for how long**, agreed with L1-A". The deck's sentence deliberately
+states **no retention period**: there is no purge window anywhere in the code — `purge_client_account`
+(00538) never writes to `proposals`, `projects`, `invoices`, `client_decisions` or `designer_clients`,
+and `delete-account/index.ts` schedules nothing — so any number would be a claim the product cannot
+keep, on the one screen App Review reads under 5.1.1(v). It is recorded in the deck as an explicit
+exception for Fable to ratify. **Please record your agreement (or your objection) in
+`l1-a-notes.md`**, so "agreed with L1-A" has a referent in the wave record.
+
+**`A-13`.** Revision 1 of the deck omitted this row entirely, though PROGRAM.md names it by id. You
+have already applied it, at `StyleQuizViewModel.swift:61-66` — the nudge is gone on every step that
+has a real Continue button, and the surviving line reads `"See your style"`. **That string is
+ratified as the deck row**; no change is asked for. Recorded so the finding is closeable against a
+deck entry rather than against a commit nobody filed.
+
+### Note A-L1E-13 — three rows are now correctly addressed elsewhere; no action
+
+Revision 1 filed these under "L1-A applies" against `steward.md` §5. You had already re-routed all
+three, correctly:
+
+| row | file | true owner |
+|---|---|---|
+| `A-52` ×2 | `Features/Companion/Services/CompanionActionRows.swift` | **L1-C** (§5.4) — your task `C-L1A-3` |
+| `A-52` ×1 | `Features/Notifications/Views/NotificationFeedView.swift:193` | **L1-F** (§5.7) — applied by L1-F |
+| `A-79` ×2 | `Features/Collections/Views/LocalStoreClaimSheet.swift` | **no W1 owner**, so L1-E's under its own carve-out — but you applied it verbatim first. Recorded, not re-applied. |
