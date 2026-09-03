@@ -129,8 +129,38 @@ struct BrandVoiceLintTests {
         )
     }
 
+    /// A→E-5, applied at merge 6. `lint` walked every string literal, so
+    /// `QuizOption(key: "eclectic_curated")` and `key: "curated_comfort"`
+    /// were read as copy — both carry "curated", which is on `bannedWords`.
+    /// They are wire keys: `StyleQuizViewModel` matches on them and
+    /// `styleQuizWireKeysAreUnchanged` requires them to stay, so the two pins
+    /// would have been in direct conflict. The exclusion is exactly one
+    /// argument label wide; a banned word in a `label:` still fails.
+    private static let wireArgumentLabels = ["key"]
+
+    /// The values of the wire-key arguments in a source, which are code the
+    /// server reads rather than words a person does.
+    private static func wireKeyValues(in source: String) -> Set<String> {
+        var out: Set<String> = []
+        for label in wireArgumentLabels {
+            let pattern = "\\b" + label + "\\s*:\\s*\"([^\"]*)\""
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let range = NSRange(source.startIndex..., in: source)
+            for match in regex.matches(in: source, range: range) {
+                if let r = Range(match.range(at: 1), in: source) { out.insert(String(source[r])) }
+            }
+        }
+        return out
+    }
+
+    /// Every literal a reader can see: `stringLiterals` less the wire keys.
+    static func copyLiterals(in source: String) -> [String] {
+        let wire = wireKeyValues(in: source)
+        return stringLiterals(in: source).filter { !wire.contains($0) }
+    }
+
     private static func lint(_ source: String, file: String) {
-        for literal in stringLiterals(in: source).map(copyText) {
+        for literal in copyLiterals(in: source).map(copyText) {
             let lower = literal.lowercased()
             for word in bannedWords {
                 #expect(!lower.contains(word), "\(file) ships \"\(literal)\" — banned lexicon word \"\(word)\"")
@@ -149,7 +179,7 @@ struct BrandVoiceLintTests {
     /// sees. Only apostrophes *between letters* are checked, so a literal
     /// carrying a Swift selector or a possessive-free path is untouched.
     private static func lintApostrophes(_ source: String, file: String) {
-        for literal in stringLiterals(in: source).map(copyText) {
+        for literal in copyLiterals(in: source).map(copyText) {
             #expect(
                 literal.range(of: "[A-Za-z]'[A-Za-z]", options: .regularExpression) == nil,
                 "\(file) ships \"\(literal)\" with a straight apostrophe (U+0027); A-06 wants U+2019"
@@ -297,18 +327,12 @@ extension BrandVoiceLintTests {
 
     @Test("L1-A · the delete-account sentences type their apostrophes as U+2019")
     func accountDeletionApostrophesAreCurly() throws {
-        try Self.pinDirtyToday(
-            "Patina/Features/Account/AccountDeletionService.swift",
-            row: "deck rows A-101 / A-06 at :39,:58 are L1-A's; unwrap after L1-A merges"
-        )
+        try Self.pinCleanToday("Patina/Features/Account/AccountDeletionService.swift")
     }
 
     @Test("L1-A · the style quiz's sentences type their apostrophes as U+2019")
     func styleQuizApostrophesAreCurly() throws {
-        try Self.pinDirtyToday(
-            "Patina/Features/StyleQuiz/Models/QuizModels.swift",
-            row: "deck rows A-06 / C5-20 in QuizModels.swift are L1-A's; unwrap after L1-A merges"
-        )
+        try Self.pinCleanToday("Patina/Features/StyleQuiz/Models/QuizModels.swift")
     }
 
     /// Clean today — the only two straight apostrophes in this file are in
@@ -322,42 +346,27 @@ extension BrandVoiceLintTests {
 
     @Test("L1-B · the money rail's sentences type their apostrophes as U+2019")
     func moneyFailureCopyApostrophesAreCurly() throws {
-        try Self.pinDirtyToday(
-            "Patina/Features/Money/MoneyFailureCopy.swift",
-            row: "deck row A-06 / MoneyFailureCopy.swift is L1-B's; unwrap after L1-B merges"
-        )
+        try Self.pinCleanToday("Patina/Features/Money/MoneyFailureCopy.swift")
     }
 
     @Test("L1-B · the scan review screen's sentences type their apostrophes as U+2019")
     func scanReviewApostrophesAreCurly() throws {
-        try Self.pinDirtyToday(
-            "Patina/Features/RoomScan/Views/ScanReviewView.swift",
-            row: "deck row A-06 / ScanReviewView.swift is L1-B's; unwrap after L1-B merges"
-        )
+        try Self.pinCleanToday("Patina/Features/RoomScan/Views/ScanReviewView.swift")
     }
 
     @Test("L1-B · the scan walk screen's sentences type their apostrophes as U+2019")
     func scanWalkApostrophesAreCurly() throws {
-        try Self.pinDirtyToday(
-            "Patina/Features/RoomScan/Views/ScanWalkView.swift",
-            row: "deck row A-06 / ScanWalkView.swift is L1-B's; unwrap after L1-B merges"
-        )
+        try Self.pinCleanToday("Patina/Features/RoomScan/Views/ScanWalkView.swift")
     }
 
     @Test("L1-B · the style response model's display names type their apostrophes as U+2019")
     func styleResponseModelApostrophesAreCurly() throws {
-        try Self.pinDirtyToday(
-            "Patina/Features/RoomScan/Shared/Models/StyleResponseModel.swift",
-            row: "deck row A-06 / StyleResponseModel.swift is L1-B's; unwrap after L1-B merges"
-        )
+        try Self.pinCleanToday("Patina/Features/RoomScan/Shared/Models/StyleResponseModel.swift")
     }
 
     @Test("L1-C · the Today story's retry row types its apostrophes as U+2019")
     func homeStoryRetryRowApostrophesAreCurly() throws {
-        try Self.pinDirtyToday(
-            "Patina/Features/Home/Views/HomeStoryRetryRow.swift",
-            row: "deck row A-06 / HomeStoryRetryRow.swift is L1-C's; unwrap after L1-C merges"
-        )
+        try Self.pinCleanToday("Patina/Features/Home/Views/HomeStoryRetryRow.swift")
     }
 
     /// `RL1E3-01`: the one file carrying a sentence *this deck wrote*
@@ -365,10 +374,7 @@ extension BrandVoiceLintTests {
     /// L1-C landed it with U+0027. Round 4's note to L1-C carries the byte.
     @Test("L1-C · the Companion's action rows type their apostrophes as U+2019")
     func companionActionRowsApostrophesAreCurly() throws {
-        try Self.pinDirtyToday(
-            "Patina/Features/Companion/Services/CompanionActionRows.swift",
-            row: "deck row A-52 / CompanionActionRows.swift:38 is L1-C's; unwrap after L1-C merges"
-        )
+        try Self.pinCleanToday("Patina/Features/Companion/Services/CompanionActionRows.swift")
     }
 
     /// `RL1E4-01`: the one file inside this lane's widened walk that another
@@ -378,10 +384,7 @@ extension BrandVoiceLintTests {
     /// `A1-14` deletes `designerCard` and `:68` with it.
     @Test("L1-C · the consultation hero types its apostrophes as U+2019")
     func designerConsultationApostrophesAreCurly() throws {
-        try Self.pinDirtyToday(
-            "Patina/Features/DesignServices/DesignerConsultationView.swift",
-            row: "deck row A-06 / DesignerConsultationView.swift:25 is L1-C's; unwrap after L1-C merges"
-        )
+        try Self.pinCleanToday("Patina/Features/DesignServices/DesignerConsultationView.swift")
     }
 
     /// `RL1E3-04`: L1-F is the one lane the round-3 sweep skipped entirely,
@@ -389,10 +392,7 @@ extension BrandVoiceLintTests {
     /// `ThreadDetailView.swift:198`) ships with U+0027 and had no deck row.
     @Test("L1-F · the message send-failure sentence types its apostrophes as U+2019")
     func messagingViewModelApostrophesAreCurly() throws {
-        try Self.pinDirtyToday(
-            "Patina/Features/Messaging/ViewModels/MessagingViewModel.swift",
-            row: "deck row A-06 / MessagingViewModel.swift:413 is L1-F's; unwrap after L1-F merges"
-        )
+        try Self.pinCleanToday("Patina/Features/Messaging/ViewModels/MessagingViewModel.swift")
     }
 
     /// The two files below do **not** exist on this branch — L1-B creates
@@ -402,19 +402,13 @@ extension BrandVoiceLintTests {
     /// the row. At the deck pass both reads move outside, like every other
     /// pin in this file.
     @Test("L1-B · the scan upload failure copy types its apostrophes as U+2019")
-    func scanUploadFailureCopyApostrophesAreCurly() {
-        withKnownIssue("deck row C4-09 / ScanUploadFailureCopy.swift is L1-B's — file arrives with the row") {
-            let path = "Patina/Features/RoomScan/Shared/Components/ScanUploadFailureCopy.swift"
-            Self.lintApostrophes(try SourcePin.read(path), file: path)
-        }
+    func scanUploadFailureCopyApostrophesAreCurly() throws {
+        try Self.pinCleanToday("Patina/Features/RoomScan/Shared/Components/ScanUploadFailureCopy.swift")
     }
 
     @Test("L1-B · the local-store recovery notice types its apostrophes as U+2019")
-    func localStoreRecoveryNoticeApostrophesAreCurly() {
-        withKnownIssue("O13 / LocalStoreRecoveryNotice.swift is L1-B's — file arrives with the row") {
-            let path = "Patina/Core/Persistence/LocalStoreRecoveryNotice.swift"
-            Self.lintApostrophes(try SourcePin.read(path), file: path)
-        }
+    func localStoreRecoveryNoticeApostrophesAreCurly() throws {
+        try Self.pinCleanToday("Patina/Core/Persistence/LocalStoreRecoveryNotice.swift")
     }
 
     // MARK: - Brand-voice violations in files another lane owns
@@ -423,18 +417,14 @@ extension BrandVoiceLintTests {
     func onboardingIsClean() throws {
         let path = "Patina/Features/Onboarding/Views/OnboardingFlowView.swift"
         let source = try SourcePin.read(path)
-        withKnownIssue("deck row C5-20 / OnboardingFlowView.swift:32 is L1-A's; unwrap after L1-A merges") {
-            Self.lint(source, file: path)
-        }
+        Self.lint(source, file: path)
     }
 
     @Test("the authentication screens carry no brand-voice violation")
     func authenticationIsClean() throws {
         let path = "Patina/Features/Authentication/Views/AuthenticationView.swift"
         let source = try SourcePin.read(path)
-        withKnownIssue("deck row C5-20 / AuthenticationView.swift:134 is L1-A's; unwrap after L1-A merges") {
-            Self.lint(source, file: path)
-        }
+        Self.lint(source, file: path)
     }
 
     /// `RL1E2-02`: this test used to hand-write six `contains` assertions,
@@ -446,19 +436,15 @@ extension BrandVoiceLintTests {
     func styleQuizIsClean() throws {
         let path = "Patina/Features/StyleQuiz/Models/QuizModels.swift"
         let source = try SourcePin.read(path)
-        withKnownIssue("deck rows C5-20 / QuizModels.swift:73,105,112 are L1-A's; unwrap after L1-A merges") {
-            Self.lint(source, file: path)
-        }
+        Self.lint(source, file: path)
     }
 
     @Test("the style quiz's renamed labels read as the deck writes them")
     func styleQuizLabelsAreRenamed() throws {
         let source = try SourcePin.read("Patina/Features/StyleQuiz/Models/QuizModels.swift")
-        withKnownIssue("deck rows C5-20 / QuizModels.swift:73,105,112 are L1-A's; unwrap after L1-A merges") {
-            #expect(source.contains("label: \"Collected Eclectic\""))
-            #expect(source.contains("label: \"Considered Comfort\""))
-            #expect(source.contains("title: \"What’s bringing you here?\""))
-        }
+        #expect(source.contains("label: \"Collected Eclectic\""))
+        #expect(source.contains("label: \"Considered Comfort\""))
+        #expect(source.contains("title: \"What’s bringing you here?\""))
     }
 
     /// Unwrapped, and permanently so: the wire keys feed the spectrum mapping
@@ -478,7 +464,13 @@ extension BrandVoiceLintTests {
     func styleResponseModelIsClean() throws {
         let path = "Patina/Features/RoomScan/Shared/Models/StyleResponseModel.swift"
         let source = try SourcePin.read(path)
-        withKnownIssue("deck rows RL1E2-19 / StyleResponseModel.swift:23,97 are L1-B's") {
+        // Both deck rows landed (`:23` "Collected Mix", `:97` "Considered
+        // Comfort"). What is left is `case curatedMix = "curated_mix"` — an
+        // enum RAW VALUE the server reads, which the deck rules must not be
+        // renamed, and which `wireArgumentLabels` cannot reach because it is
+        // not an argument. W2 · L1-E's call: widen the exclusion to raw
+        // values, or move the lint off this file.
+        withKnownIssue("StyleResponseModel.swift's remaining hit is the wire raw value curated_mix, which the deck rules stays") {
             Self.lint(source, file: path)
         }
     }
@@ -487,8 +479,6 @@ extension BrandVoiceLintTests {
     func namedAestheticIsClean() throws {
         let path = "Patina/Features/RoomScan/Shared/Models/NamedAesthetic.swift"
         let source = try SourcePin.read(path)
-        withKnownIssue("deck rows RL1E2-19 / NamedAesthetic.swift:40,82 are L1-B's") {
-            Self.lint(source, file: path)
-        }
+        Self.lint(source, file: path)
     }
 }

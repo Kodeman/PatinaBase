@@ -36,10 +36,8 @@ struct NounConsistencyTests {
     @Test("the room item menu says 'See the piece', not a class name")
     func itemActionMenuNamesThePiece() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Views/ItemActionMenu.swift")
-        withKnownIssue("deck row C5-09 / ItemActionMenu.swift:31 is L1-B's; unwrap after L1-B merges") {
-            #expect(!source.contains("\"View Product Detail\""))
-            #expect(source.contains("\"See the piece\""))
-        }
+        #expect(!source.contains("\"View Product Detail\""))
+        #expect(source.contains("\"See the piece\""))
     }
 
     /// The two `C5-09` sites in files **no W1 lane owns**, which L1-E
@@ -79,25 +77,19 @@ struct NounConsistencyTests {
     @Test("the cross-room screen says 'pieces'")
     func crossRoomViewSaysPieces() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Views/CrossRoomView.swift")
-        withKnownIssue("deck row C5-09 / CrossRoomView.swift:64,81 is L1-B's; unwrap after L1-B merges") {
-            #expect(!source.contains("\"All Items\""))
-        }
+        #expect(!source.contains("\"All Items\""))
     }
 
     @Test("the room screen's section eyebrow says 'pieces'")
     func roomProjectViewSaysPieces() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Views/RoomProjectView.swift")
-        withKnownIssue("deck row C5-09 / RoomProjectView.swift:212 is L1-B's; unwrap after L1-B merges") {
-            #expect(!source.contains("\"Your Items\""))
-        }
+        #expect(!source.contains("\"Your Items\""))
     }
 
     @Test("the profile's saved stat announces pieces, not items")
     func profileSavedStatSaysPieces() throws {
         let source = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
-        withKnownIssue("deck row C5-09 / ProfileView.swift:217 accessibility label is L1-C's") {
-            #expect(!source.contains("Saved items:"))
-        }
+        #expect(!source.contains("Saved items:"))
     }
 
     @Test("the empty catalogue state never says 'products'")
@@ -105,10 +97,8 @@ struct NounConsistencyTests {
         let source = try SourcePin.read(
             "../PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaEmptyState.swift"
         )
-        withKnownIssue("deck row C5-09 / PatinaEmptyState.swift:66-67 is L1-D's; unwrap after L1-D merges") {
-            #expect(!source.contains("\"No products yet\""))
-            #expect(!source.contains("Products you capture"))
-        }
+        #expect(!source.contains("\"No products yet\""))
+        #expect(!source.contains("Products you capture"))
     }
 
     // MARK: - A-60 / C-22 — one name for the client's own space
@@ -116,10 +106,8 @@ struct NounConsistencyTests {
     @Test("the Companion menu names the studio, not a profile")
     func companionMenuNamesOneStudio() throws {
         let source = try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
-        withKnownIssue("deck row A-60 / CompanionActionRows.swift:36-39 is L1-C's") {
-            #expect(!source.contains("\"Your profile\""))
-            #expect(source.contains("\"Your studio\""))
-        }
+        #expect(!source.contains("\"Your profile\""))
+        #expect(source.contains("\"Your studio\""))
     }
 
     /// `RL1E3-07`: this and the two needles below used to scan the whole
@@ -131,9 +119,7 @@ struct NounConsistencyTests {
         let literals = BrandVoiceLintTests.stringLiterals(
             in: try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
         )
-        withKnownIssue("deck row C-22 / CompanionActionRows.swift:36-39's hint is L1-C's") {
-            #expect(!literals.contains { $0.contains("Portal") })
-        }
+        #expect(!literals.contains { $0.contains("Portal") })
     }
 
     @Test("the profile screen no longer carries the retired 'YOUR PROFILE' header")
@@ -141,9 +127,7 @@ struct NounConsistencyTests {
         let literals = BrandVoiceLintTests.stringLiterals(
             in: try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
         )
-        withKnownIssue("deck row A-60 / ProfileView.swift:148 is L1-C's") {
-            #expect(!literals.contains("YOUR PROFILE"))
-        }
+        #expect(!literals.contains("YOUR PROFILE"))
     }
 
     // MARK: - C-38 — the boilerplate rationale, both implementations
@@ -167,9 +151,7 @@ struct NounConsistencyTests {
     @Test("the browse grid's card prints no rationale when there is no real match")
     func recommendationCardsCarryNoBoilerplate() throws {
         let source = try SourcePin.read("Patina/Features/Recommendations/Views/RecommendationsView.swift")
-        withKnownIssue("deck row C-38 / RecommendationsView.swift:413-421 is L1-C's; unwrap after L1-C merges") {
-            #expect(!source.contains("room-aware edit for"))
-        }
+        #expect(!source.contains("room-aware edit for"))
     }
 
     // MARK: - A-13 — the dead nudge above the real Continue button
@@ -182,9 +164,7 @@ struct NounConsistencyTests {
         let literals = BrandVoiceLintTests.stringLiterals(
             in: try SourcePin.read("Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift")
         )
-        withKnownIssue("deck row A-13 / StyleQuizViewModel.swift:44-47 is L1-A's; unwrap after L1-A merges") {
-            #expect(!literals.contains { $0.contains("Next question") })
-        }
+        #expect(!literals.contains { $0.contains("Next question") })
     }
 
     // MARK: - C5-16 — the literal "UNKNOWN MAKER" never reaches a reader
@@ -192,33 +172,25 @@ struct NounConsistencyTests {
     @Test("SavedItem carries the maker guard the Browse grid already has")
     func savedItemHasTheMakerGuard() throws {
         let source = try SourcePin.read("Patina/Core/Models/SavedItem.swift")
-        withKnownIssue("deck row C5-16 / SavedItem.swift is L1-B's; unwrap after L1-B merges") {
-            #expect(source.contains("resolvedMakerName"))
-        }
+        #expect(source.contains("resolvedMakerName"))
     }
 
     @Test("the room row drops the maker line rather than printing UNKNOWN MAKER")
     func roomItemRowGuardsTheMakerName() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Components/RoomItemRow.swift")
-        withKnownIssue("deck row C5-16 / RoomItemRow.swift:43,89 is L1-B's; unwrap after L1-B merges") {
-            #expect(source.contains("resolvedMakerName"), "RoomItemRow still prints item.makerName raw")
-        }
+        #expect(source.contains("resolvedMakerName"), "RoomItemRow still prints item.makerName raw")
     }
 
     @Test("the item menu drops the maker line rather than printing UNKNOWN MAKER")
     func itemActionMenuGuardsTheMakerName() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Views/ItemActionMenu.swift")
-        withKnownIssue("deck row C5-16 / ItemActionMenu.swift:53 is L1-B's; unwrap after L1-B merges") {
-            #expect(source.contains("resolvedMakerName"), "ItemActionMenu still prints item.makerName raw")
-        }
+        #expect(source.contains("resolvedMakerName"), "ItemActionMenu still prints item.makerName raw")
     }
 
     @Test("the move/copy sheet drops the maker line rather than printing UNKNOWN MAKER")
     func moveOrCopySheetGuardsTheMakerName() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Views/MoveOrCopyItemSheet.swift")
-        withKnownIssue("deck row C5-16 / MoveOrCopyItemSheet.swift:80 is L1-B's; unwrap after L1-B merges") {
-            #expect(source.contains("resolvedMakerName"), "MoveOrCopyItemSheet still prints item.makerName raw")
-        }
+        #expect(source.contains("resolvedMakerName"), "MoveOrCopyItemSheet still prints item.makerName raw")
     }
 
     // MARK: - A3-28 — one word for a kind of person, and it is never rendered

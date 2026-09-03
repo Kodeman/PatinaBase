@@ -26,11 +26,9 @@ struct PluralisationTests {
     @Test("both room-count stat call sites inflect the visible label")
     func roomCountInflectsAtEveryCallSite() throws {
         let source = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
-        withKnownIssue("deck row C-30 / ProfileView.swift:201,207 is L1-C's; unwrap after L1-C merges") {
-            let inflected = source.components(separatedBy: "roomCount == 1 ? \"Room\" : \"Rooms\"").count - 1
-            #expect(inflected == 2, "expected both stat call sites to inflect; found \(inflected)")
-            #expect(!source.contains("label: \"Rooms\")"), "a stat still passes the fixed plural")
-        }
+        let inflected = source.components(separatedBy: "roomCount == 1 ? \"Room\" : \"Rooms\"").count - 1
+        #expect(inflected == 2, "expected both stat call sites to inflect; found \(inflected)")
+        #expect(!source.contains("label: \"Rooms\")"), "a stat still passes the fixed plural")
     }
 
     /// The original defect was a *disagreement*: the accessibility label

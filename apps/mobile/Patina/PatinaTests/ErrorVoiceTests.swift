@@ -205,18 +205,14 @@ struct ErrorVoiceTests {
     @Test("ScanReviewView's error headline carries a terminal period, matching the app's one voice")
     func scanReviewHeadlineHasPeriod() throws {
         let source = try SourcePin.read("Patina/Features/RoomScan/Views/ScanReviewView.swift")
-        withKnownIssue("deck row C5-11 / ScanReviewView.swift:128 is L1-B's; unwrap after L1-B merges") {
-            #expect(!source.contains("Text(\"Something went wrong\")\n"))
-        }
+        #expect(!source.contains("Text(\"Something went wrong\")\n"))
     }
 
     @Test("RoomsAPIError conforms to LocalizedError so no caller can repeat the raw-description bug")
     func roomsAPIErrorIsLocalized() throws {
         let source = try SourcePin.read("Patina/Core/Network/RoomsAPIClient.swift")
-        withKnownIssue("deck row C4-08 / RoomsAPIClient.swift is L1-B's; unwrap after L1-B merges") {
-            #expect(source.contains("RoomsAPIError: Error, LocalizedError")
-                || source.contains("RoomsAPIError: LocalizedError"))
-        }
+        #expect(source.contains("RoomsAPIError: Error, LocalizedError")
+            || source.contains("RoomsAPIError: LocalizedError"))
     }
 
     @Test("ScanUploadProgressView no longer prints package.lastError verbatim")
@@ -224,8 +220,6 @@ struct ErrorVoiceTests {
         let source = try SourcePin.read(
             "Patina/Features/RoomScan/Shared/Components/ScanUploadProgressView.swift"
         )
-        withKnownIssue("deck row C4-09 / ScanUploadProgressView.swift:57 is L1-B's; unwrap after L1-B merges") {
-            #expect(!source.contains("Text(err)"))
-        }
+        #expect(!source.contains("Text(err)"))
     }
 }

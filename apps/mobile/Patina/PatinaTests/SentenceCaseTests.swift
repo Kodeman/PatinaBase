@@ -24,12 +24,10 @@ struct SentenceCaseTests {
     @Test("Settings' rows are sentence case")
     func settingsRowsAreSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
-        withKnownIssue("deck rows C5-10 / SettingsView.swift:81,121,156,159 are L1-C's; unwrap after L1-C merges") {
-            for titleCase in ["\"Haptic Feedback\"", "\"Contact Us\"", "\"Terms & Privacy\""] {
-                #expect(!source.contains(titleCase), "Settings still ships \(titleCase)")
-            }
-            #expect(source.contains("label: \"Sign out\""))
+        for titleCase in ["\"Haptic Feedback\"", "\"Contact Us\"", "\"Terms & Privacy\""] {
+            #expect(!source.contains(titleCase), "Settings still ships \(titleCase)")
         }
+        #expect(source.contains("label: \"Sign out\""))
     }
 
     /// L1-C flagged this as the one thing the deck did not cover: the row now
@@ -41,46 +39,41 @@ struct SentenceCaseTests {
     @Test("the sign-out alert matches the row that opens it")
     func settingsSignOutAlertMatchesItsRow() throws {
         let source = try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
-        withKnownIssue("fix-round deck row C5-10 / SettingsView.swift:212,214 is L1-C's (Task F7)") {
-            #expect(!source.contains(".alert(\"Sign Out\""))
-            #expect(!source.contains("Button(\"Sign Out\")"))
-        }
+        #expect(!source.contains(".alert(\"Sign Out\""))
+        #expect(!source.contains("Button(\"Sign Out\")"))
     }
 
     // MARK: - The auth sheet and the account screen (L1-A)
 
     @Test("the auth sheet's buttons are sentence case")
     func authSheetIsSentenceCase() throws {
-        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
-        withKnownIssue("deck rows C5-10 / AuthenticationView.swift are L1-A's; unwrap after L1-A merges") {
-            for titleCase in ["\"Sign In\"", "\"Create Account\"", "\"Send Reset Link\"", "\"Sign Up\""] {
-                #expect(!source.contains(titleCase), "the auth sheet still ships \(titleCase)")
-            }
+        // Code only: :139 is a COMMENT quoting the Title Case it replaced,
+        // and the wrapper this case used to carry was masking that, not a
+        // violation.
+        let source = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Authentication/Views/AuthenticationView.swift")
+        )
+        for titleCase in ["\"Sign In\"", "\"Create Account\"", "\"Send Reset Link\"", "\"Sign Up\""] {
+            #expect(!source.contains(titleCase), "the auth sheet still ships \(titleCase)")
         }
     }
 
     @Test("the account screen is sentence case")
     func accountScreenIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/Account/AccountView.swift")
-        withKnownIssue("deck row C5-10 / AccountView.swift:59,61,184 is L1-A's; unwrap after L1-A merges") {
-            #expect(!source.contains("\"Sign Out\""))
-        }
+        #expect(!source.contains("\"Sign Out\""))
     }
 
     @Test("the QR scanner's permission CTA is sentence case")
     func qrScannerIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/QRAuth/Views/QRScannerView.swift")
-        withKnownIssue("deck row C5-10 / QRScannerView.swift:201 is L1-A's; unwrap after L1-A merges") {
-            #expect(!source.contains("\"Open Settings\""))
-        }
+        #expect(!source.contains("\"Open Settings\""))
     }
 
     @Test("the camera permission screen's CTA is sentence case")
     func cameraPermissionIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/FirstLaunch/Views/CameraPermissionView.swift")
-        withKnownIssue("deck row C5-10 / CameraPermissionView.swift:223 is L1-A's; unwrap after L1-A merges") {
-            #expect(!source.contains("\"Open Settings\""))
-        }
+        #expect(!source.contains("\"Open Settings\""))
     }
 
     // MARK: - The scan pause menu and the room item menu (L1-B)
@@ -88,19 +81,15 @@ struct SentenceCaseTests {
     @Test("the scan pause menu is sentence case")
     func scanPauseMenuIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/RoomScan/Shared/Components/PauseMenuView.swift")
-        withKnownIssue("deck row C5-10 / PauseMenuView.swift:63-64 is L1-B's; unwrap after L1-B merges") {
-            #expect(!source.contains("\"Discard Scan\""))
-            #expect(!source.contains("\"Keep Scanning\""))
-        }
+        #expect(!source.contains("\"Discard Scan\""))
+        #expect(!source.contains("\"Keep Scanning\""))
     }
 
     @Test("the room item menu is sentence case")
     func roomItemMenuIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Views/ItemActionMenu.swift")
-        withKnownIssue("deck row C5-10 / ItemActionMenu.swift:32-34 is L1-B's; unwrap after L1-B merges") {
-            for titleCase in ["\"Move to Another Room\"", "\"Copy to Another Room\"", "\"Remove from Room\""] {
-                #expect(!source.contains(titleCase), "the item menu still ships \(titleCase)")
-            }
+        for titleCase in ["\"Move to Another Room\"", "\"Copy to Another Room\"", "\"Remove from Room\""] {
+            #expect(!source.contains(titleCase), "the item menu still ships \(titleCase)")
         }
     }
 
@@ -112,10 +101,8 @@ struct SentenceCaseTests {
     @Test("the room CTA is a fixed label, not 'for the ' plus a room name")
     func roomCTAIsAFixedLabel() throws {
         let source = try SourcePin.read("Patina/Features/Rooms/Views/RoomProjectView.swift")
-        withKnownIssue("deck row B-20 / RoomProjectView.swift:254 — L1-B's glob, applied by L1-C") {
-            #expect(!source.contains("Browse pieces for the \\("))
-            #expect(source.contains("\"Browse pieces for this room\""))
-        }
+        #expect(!source.contains("Browse pieces for the \\("))
+        #expect(source.contains("\"Browse pieces for this room\""))
     }
 
     // MARK: - The two sites this fix round found on the built branch
@@ -125,10 +112,8 @@ struct SentenceCaseTests {
     @Test("the taste portrait's primary CTA is sentence case and names the piece")
     func stylePortraitCTAIsSentenceCase() throws {
         let source = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleResultView.swift")
-        withKnownIssue("deck row C5-10 / StyleResultView.swift:54 is L1-A's; unwrap after L1-A merges") {
-            #expect(!source.contains("\"View Recommendations\""))
-            #expect(source.contains("\"See your pieces\""))
-        }
+        #expect(!source.contains("\"View Recommendations\""))
+        #expect(source.contains("\"See your pieces\""))
     }
 
     /// `RL1E-11`: Title Case and sentence case adjacent inside one section —
@@ -137,10 +122,8 @@ struct SentenceCaseTests {
     @Test("the Studio's action rows do not mix casing inside one section")
     func studioActionRowsShareOneCasing() throws {
         let source = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
-        withKnownIssue("deck row C5-10 / ProfileView.swift:154 is L1-C's; unwrap after L1-C merges") {
-            #expect(!source.contains("\"Retake Style Quiz\""))
-            #expect(source.contains("\"Retake your style quiz\""))
-        }
+        #expect(!source.contains("\"Retake Style Quiz\""))
+        #expect(source.contains("\"Retake your style quiz\""))
     }
 
     /// `RL1E2-13`: one screen shipped three casings of one concept — the
