@@ -355,7 +355,10 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
     /// "by Unknown Maker" is not a sentence anyone should hear.
     private func cardAccessibilityLabel(_ product: Product) -> String {
         let maker = product.resolvedMakerName.map { " by \($0)" } ?? ""
-        return "\(product.name)\(maker), \(product.fullFormattedPrice), \(product.matchLabel)"
+        // Withholding the badge alone would leave the claim audible and
+        // invisible — the worse of the two states (C-11).
+        let match = product.matchVerdict.map { ", \($0)" } ?? ""
+        return "\(product.name)\(maker), \(product.fullFormattedPrice)\(match)"
     }
 
     private func productCardLabel(_ product: Product) -> some View {
@@ -418,16 +421,23 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             // Save (accelerator) + ⋯ menu (U14: every card's actions
             // must be visible, not just reachable via long-press).
             HStack(alignment: .top, spacing: 6) {
-                Text(product.matchLabel)
-                    .font(PatinaTypography.monoSmall)
-                    .foregroundStyle(PatinaColors.OnDark.primary)
-                    .tracking(0.3)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .allowsTightening(true)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .patinaChromeScrim(RoundedRectangle(cornerRadius: 6))
+                // A-34 / C-11 (L1-B note O11): `matchScore` decodes to 0
+                // when the column is null, so a piece nobody scored wore
+                // "Not scored yet" as a badge — an absence dressed as a
+                // verdict. `matchVerdict` is nil exactly then, and the row's
+                // `Spacer` keeps the two chrome buttons where they were.
+                if let verdict = product.matchVerdict {
+                    Text(verdict)
+                        .font(PatinaTypography.monoSmall)
+                        .foregroundStyle(PatinaColors.OnDark.primary)
+                        .tracking(0.3)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .allowsTightening(true)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .patinaChromeScrim(RoundedRectangle(cornerRadius: 6))
+                }
 
                 Spacer(minLength: 4)
 

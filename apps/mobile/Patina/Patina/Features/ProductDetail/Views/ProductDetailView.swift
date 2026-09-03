@@ -354,18 +354,28 @@ struct ProductDetailView: View {
                                 .font(PatinaTypography.displaySmall)
                                 .foregroundStyle(PatinaColors.Text.primary)
 
-                            HelpTooltip(
-                                surfaceKey: SurfaceKeys.IOSApp.Home.matchPill,
-                                fallback: "Match score blends your room’s dimensions, style cues, and palette against this piece. Higher means a better fit for the room you’re viewing."
-                            ) {
-                                Text(product.matchLabel)
-                                    .font(PatinaTypography.mono)
-                                    .foregroundStyle(PatinaColors.success)
-                                    .tracking(0.3)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 4)
-                                    .background(PatinaColors.success.opacity(0.12))
-                                    .clipShape(Capsule())
+                            // A-34 / C-11 (L1-B note O11): `matchScore`
+                            // decodes to 0 when the column is null, so a
+                            // saved piece, a deep-linked piece, or any piece
+                            // opened in a session that never scored it drew
+                            // "Not scored yet" inside a `PatinaColors.success`
+                            // capsule — an absence dressed as a green verdict.
+                            // `matchVerdict` is nil exactly then, and the price
+                            // row simply loses its pill.
+                            if let verdict = product.matchVerdict {
+                                HelpTooltip(
+                                    surfaceKey: SurfaceKeys.IOSApp.Home.matchPill,
+                                    fallback: "Match score blends your room’s dimensions, style cues, and palette against this piece. Higher means a better fit for the room you’re viewing."
+                                ) {
+                                    Text(verdict)
+                                        .font(PatinaTypography.mono)
+                                        .foregroundStyle(PatinaColors.success)
+                                        .tracking(0.3)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(PatinaColors.success.opacity(0.12))
+                                        .clipShape(Capsule())
+                                }
                             }
                         }
                         .padding(.bottom, 16)
