@@ -79,11 +79,11 @@ final class PushTokenService {
             return .alreadyAuthorized
         case .denied:
             return .denied
-        // `.granted` is unreachable here — `outcome(for:)` returns only
-        // `.alreadyAuthorized`, `.denied` or `.ask` — and is listed so the
-        // switch stays exhaustive over the enum rather than over the three
-        // cases one function happens to produce today.
-        case .ask, .granted:
+        // `.granted` and `.failed` are unreachable here — `outcome(for:)`
+        // returns only `.alreadyAuthorized`, `.denied` or `.ask` — and are
+        // listed so the switch stays exhaustive over the enum rather than over
+        // the three cases one function happens to produce today.
+        case .ask, .granted, .failed:
             break
         }
 
@@ -97,7 +97,11 @@ final class PushTokenService {
             #if DEBUG
             PatinaLog.ui.error("[Push] requestAuthorization failed: \(error.localizedDescription)")
             #endif
-            return .denied
+            // NOT `.denied`. A throw here is the system failing to ask, not the
+            // person refusing — and `.denied` sends the screen to "Notifications
+            // are off for Patina" with a Settings button, offering a door for
+            // something Settings will not fix.
+            return .failed
         }
     }
 
@@ -112,6 +116,9 @@ final class PushTokenService {
         /// Refused — here or in a prior session. The system will never show its
         /// alert again, so the app has to say so and hand over Settings.
         case denied
+        /// The ask itself threw. Nothing was decided, so the screen must not
+        /// claim anything was: it stays as it is and the person can tap again.
+        case failed
     }
 
     /// Pure, so the rule is testable without touching `UNUserNotificationCenter`

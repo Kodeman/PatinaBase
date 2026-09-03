@@ -110,8 +110,46 @@ struct PushAuthorizationCopyTests {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Services/API/PushTokenService.swift")
         )
-        #expect(code.contains("case .ask, .granted:"))
+        #expect(code.contains("case .ask, .granted, .failed:"))
         #expect(code.contains("case .granted:\n            break") == false)
+    }
+
+    /// `C2-09`'s fix line says read the status BEFORE asking. The service does;
+    /// the screen did not, so a tester who refused in an earlier session was
+    /// still shown "Turn on notifications" and only learned it was inert by
+    /// tapping it (`RL1F-30`).
+    @Test("the primer opens in the state it is already in")
+    func thePrimerReadsAuthorizationOnAppear() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Notifications/Views/PushPrimerView.swift")
+        )
+        let task = try #require(code.range(of: ".task {"))
+        let read = try #require(code.range(of: "notificationSettings().authorizationStatus"))
+        let set = try #require(code.range(of: "isDenied = PushTokenService.outcome(for: status) == .denied"))
+        #expect(task.lowerBound < read.lowerBound)
+        #expect(read.lowerBound < set.lowerBound)
+    }
+
+    /// A transport failure is not a refusal. Reporting it as `.denied` printed
+    /// "Notifications are off for Patina" and handed over a Settings button for
+    /// something Settings will not fix.
+    @Test("a throw is its own outcome, and it changes nothing on the screen")
+    func aThrowIsNotARefusal() throws {
+        let service = SourceScan.code(
+            in: try SourcePin.read("Patina/Services/API/PushTokenService.swift")
+        )
+        let caught = try #require(service.range(of: "} catch {"))
+        let after = String(service[caught.lowerBound...].prefix(400))
+        #expect(after.contains("return .failed"))
+        #expect(!after.contains("return .denied"))
+
+        let screen = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Notifications/Views/PushPrimerView.swift")
+        )
+        #expect(screen.contains("if outcome == .failed { return }"))
+        // …and it is not folded into the denied arm, which would print the
+        // wrong sentence.
+        #expect(screen.contains("if outcome == .denied {"))
     }
 
     /// Q7's sentence is ruled verbatim and this lane does not touch it.

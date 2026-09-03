@@ -16,6 +16,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 struct PushPrimerView: View {
 
@@ -79,6 +80,10 @@ struct PushPrimerView: View {
                                 isDenied = true
                                 return
                             }
+                            // A throw decided nothing, so nothing is claimed:
+                            // the screen is left exactly as it was and the
+                            // button can be tapped again.
+                            if outcome == .failed { return }
                             onDecided()
                         }
                     }
@@ -97,6 +102,16 @@ struct PushPrimerView: View {
         .padding(.vertical, PatinaSpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(PatinaColors.Background.primary)
+        // C2-09's fix line is "read the status BEFORE asking". The service
+        // does; this screen did not — so a tester who refused in an earlier
+        // session (or whose one system alert `InvoiceReminderService` already
+        // consumed) was offered "Turn on notifications" and learned it was
+        // inert by tapping it. The screen opens in the state it is in.
+        .task {
+            let status = await UNUserNotificationCenter.current()
+                .notificationSettings().authorizationStatus
+            isDenied = PushTokenService.outcome(for: status) == .denied
+        }
     }
 }
 
