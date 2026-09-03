@@ -53,10 +53,28 @@ struct EditorialReadTimeTests {
         #expect(EditorialReadTime.claim(rowValue: 3, body: long) == 3)
     }
 
-    @Test("a row with no body cannot claim a read time at all")
-    func noBodyNoClaim() {
-        #expect(EditorialReadTime.claim(rowValue: 5, body: "") == 1)
-        #expect(EditorialReadTime.claim(rowValue: 0, body: "") == 1)
+    /// The test that used to sit here was named "a row with no body cannot
+    /// claim a read time at all" and asserted `== 1` — i.e. it asserted the
+    /// card DOES claim one. `A3-17`'s fix line asks for the badge to be hidden
+    /// below a threshold, and a body with no words is below every threshold.
+    @Test("a body with no words makes no claim, and the card prints none")
+    func aBodyThatCannotCarryAClaimMakesNone() {
+        #expect(EditorialReadTime.claim(rowValue: 5, body: "") == nil)
+        #expect(EditorialReadTime.claim(rowValue: 0, body: "") == nil)
+        #expect(EditorialReadTime.claim(rowValue: 5, body: "   \n  ") == nil)
+
+        // And the model carries the absence rather than inventing a number.
+        #expect(DailyStory.preview.readTimeLabel != nil)
+        let bodyless = RemoteEditorialStory(
+            id: "x", tag: "Maker", title: "T", subtitle: nil, bodyMarkdown: nil,
+            readMinutes: 5, heroImageURL: nil, heroGradientKey: nil,
+            makerName: nil, makerLocation: nil, makerAvatarURL: nil,
+            makerAvatarGradientKey: nil, featuredProductID: nil, publishedAt: nil
+        )
+        #expect(
+            DailyStory(from: bodyless, isUnread: true).readTimeLabel == nil,
+            "a story with no body still prints a read-time badge"
+        )
     }
 
     @Test("the mapping applies the clamp, not the raw row")

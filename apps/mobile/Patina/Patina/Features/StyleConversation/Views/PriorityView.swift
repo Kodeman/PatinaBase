@@ -51,7 +51,7 @@ struct PriorityView: View {
         return Button(action: { viewModel.answerQ5(card.id) }) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(card.label)
-                    .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .callout))
+                    .font(PatinaTypography.bodySerif)
                     .foregroundStyle(isSelected ? PatinaColors.Text.inverse : PatinaColors.Text.primary)
                 // Inter-Light is not bundled (silent system-font fallback).
                 Text(card.subtext)

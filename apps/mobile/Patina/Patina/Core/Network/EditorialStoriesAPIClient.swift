@@ -66,9 +66,15 @@ public enum EditorialReadTime {
         return max(1, Int((Double(words) / Double(wordsPerMinute)).rounded(.up)))
     }
 
-    /// The number the card is allowed to print.
-    public static func claim(rowValue: Int, body: String) -> Int {
-        max(1, min(rowValue <= 0 ? 1 : rowValue, minutes(forBody: body)))
+    /// The number the card is allowed to print, or **nil** when there is no
+    /// body to read. `A3-17` asks for the badge to be hidden below a
+    /// threshold, and a row whose `body_md` is empty or NULL is below every
+    /// threshold there is — clamping it to 1 would print "1 MIN READ" over
+    /// nothing, which is the same lie in a smaller font.
+    public static func claim(rowValue: Int, body: String) -> Int? {
+        let words = body.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+        guard words > 0 else { return nil }
+        return max(1, min(rowValue <= 0 ? 1 : rowValue, minutes(forBody: body)))
     }
 }
 

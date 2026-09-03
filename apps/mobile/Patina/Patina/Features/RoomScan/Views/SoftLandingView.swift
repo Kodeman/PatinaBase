@@ -109,7 +109,7 @@ struct SoftLandingView: View {
                 .font(PatinaTypography.patinaVoice)
                 .foregroundStyle(PatinaColors.Text.primary.opacity(0.8))
             Text("Your style: \(profile.aestheticName)")
-                .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
+                .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
 
             Button(action: { onOutcome(.skipToFloorPlan(profile)) }) {

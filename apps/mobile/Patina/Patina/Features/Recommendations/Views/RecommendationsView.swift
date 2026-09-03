@@ -255,14 +255,14 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
                 .padding(.top, 80)
                 .padding(.horizontal, 24)
         } else if viewModel.filteredProducts.isEmpty {
-            PatinaEmptyState(
-                icon: "sparkles",
-                title: "Nothing here yet",
-                message: "Save pieces you love or take the style quiz to tune what shows up.",
-                ctaTitle: "Take the style quiz",
-                ctaAction: { coordinator.navigate(to: .styleQuiz) }
-            )
-            .padding(.top, 60)
+            // A3-01: `filteredProducts` IS `products`, so an empty list here
+            // means the fetch came back with nothing — which on production it
+            // does, for every tester. The old copy blamed the reader ("save
+            // pieces you love or take the style quiz") and pointed at a door
+            // with nothing behind it: tuning taste cannot conjure rows that
+            // are not in the catalogue.
+            PatinaEmptyState(PatinaEmptyStateContent.stillChoosingPieces)
+                .padding(.top, 60)
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVGrid(columns: [
@@ -364,12 +364,17 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             // column stays the width the grid gave it.
             Color.clear
                 .aspectRatio(Self.cardImageAspect, contentMode: .fit)
+                // A-36 / C-27 / B-18: the no-URL arm used to fall through to
+                // a bare category gradient, so a piece with no photograph
+                // rendered as a flat colour slab carrying a heart, a ⋯ and a
+                // "45% match" pill over nothing. `PatinaAsyncImage` says which
+                // of the three things it is, and names the piece while it says
+                // it.
                 .overlay {
-                    if let imageURL = product.imageURL, let url = URL(string: imageURL) {
-                        PatinaAsyncImage(url: url)
-                    } else {
-                        product.placeholderGradient
-                    }
+                    PatinaAsyncImage(
+                        url: product.imageURL.flatMap(URL.init(string:)),
+                        caption: product.name
+                    )
                 }
                 .clipped()
                 // The card's combined label already names the piece; the photo
@@ -378,14 +383,17 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
                 .accessibilityHidden(true)
 
             // Match badge
+            // C-27: the translucent material this used to ride on inverts to a
+            // light-on-light wash over a light tile — the pill measured 1.86:1
+            // and the heart and ⋯ measured 2.01:1. A material's contrast is a
+            // function of what is behind it; a scrim's is not.
             Text(product.matchLabel)
                 .font(PatinaTypography.monoSmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
+                .foregroundStyle(PatinaColors.OnDark.primary)
                 .tracking(0.3)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .patinaChromeScrim(RoundedRectangle(cornerRadius: 6))
                 .padding(8)
 
             // Save (accelerator) + ⋯ menu (U14: every card's actions
@@ -504,12 +512,12 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             }
         } label: {
             Circle()
-                .fill(.ultraThinMaterial)
+                .fill(PatinaColors.Scrim.chrome)
                 .frame(width: 30, height: 30)
                 .overlay(
                     Image(systemName: isSaved ? "heart.fill" : "heart")
                         .font(.system(size: 14))
-                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .foregroundStyle(PatinaColors.OnDark.primary)
                 )
                 .contentShape(Rectangle())
         }
@@ -524,12 +532,12 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             cardMenuActions(product)
         } label: {
             Circle()
-                .fill(.ultraThinMaterial)
+                .fill(PatinaColors.Scrim.chrome)
                 .frame(width: 30, height: 30)
                 .overlay(
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14))
-                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .foregroundStyle(PatinaColors.OnDark.primary)
                 )
                 .contentShape(Rectangle())
         }

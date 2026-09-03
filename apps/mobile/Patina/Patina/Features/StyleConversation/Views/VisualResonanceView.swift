@@ -70,7 +70,7 @@ struct VisualResonanceView: View {
                     .frame(height: 64)
                     .overlay(alignment: .bottomLeading) {
                         Text(choice.displayName)
-                            .font(.custom("Inter-SemiBold", size: 11, relativeTo: .caption2))
+                            .font(PatinaTypography.captionMedium)
                             .foregroundStyle(.white)
                             .shadow(color: Color.black.opacity(0.6), radius: 2)
                             .padding(14)

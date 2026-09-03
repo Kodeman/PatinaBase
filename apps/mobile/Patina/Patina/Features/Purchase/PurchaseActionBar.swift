@@ -67,22 +67,31 @@ struct PurchaseActionBar: View {
                 .accessibilityIdentifier("PurchaseActionBar.Primary")
 
                 Button(action: onAddToRoom) {
+                    // This is the secondary of two buttons on one bar, and it
+                    // stays an outline in both its states. Filling it when
+                    // saved made it `Interactive.active` + `Text.inverse` —
+                    // pixel-identical to the Buy capsule beside it, so the bar
+                    // read as two primaries. The saved state is carried by the
+                    // accent ink and a heavier rule instead, which is a
+                    // difference a tester can see without a second commitment
+                    // colour (C3-05, C-41).
                     Text(isSaved ? "Saved ✓" : "Add to room")
                         .font(PatinaTypography.uiAction)
                         .foregroundStyle(
-                            isSaved ? PatinaColors.Text.inverse : PatinaColors.Text.primary
+                            isSaved ? PatinaColors.Text.interactive : PatinaColors.Text.primary
                         )
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 18)
                         .frame(height: 52)
-                        .background(
-                            Capsule()
-                                .fill(isSaved ? PatinaColors.Interactive.active : Color.clear)
-                        )
                         .overlay(
                             Capsule()
-                                .stroke(PatinaColors.Border.strong, lineWidth: isSaved ? 0 : 1)
+                                .stroke(
+                                    isSaved
+                                        ? PatinaColors.Text.interactive
+                                        : PatinaColors.Border.strong,
+                                    lineWidth: isSaved ? 1.5 : 1
+                                )
                         )
                 }
                 .accessibilityIdentifier("PurchaseActionBar.AddToRoom")

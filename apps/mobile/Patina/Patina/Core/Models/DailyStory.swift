@@ -12,7 +12,10 @@ struct DailyStory: Identifiable, Hashable {
     let tag: String
     let title: String
     let subtitle: String
-    let readMinutes: Int
+    /// A3-17: nil where the body cannot carry a claim, in which case the card
+    /// prints no read time rather than one the app invented — the same rule
+    /// `publishedAt` already follows two properties below.
+    let readMinutes: Int?
     let heroGradient: LinearGradient
     /// Published editorial photography when the story row provides one.
     /// The gradient remains the graceful fallback for older rows.
@@ -28,7 +31,7 @@ struct DailyStory: Identifiable, Hashable {
     /// alone rather than a date the app made up.
     let publishedAt: Date?
 
-    var readTimeLabel: String { "\(readMinutes) min read" }
+    var readTimeLabel: String? { readMinutes.map { "\($0) min read" } }
 
     static func == (lhs: DailyStory, rhs: DailyStory) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }

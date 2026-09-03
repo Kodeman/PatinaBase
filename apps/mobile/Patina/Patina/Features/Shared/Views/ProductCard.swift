@@ -154,7 +154,7 @@ public struct ProductCard: View {
             .overlay(alignment: .bottomLeading) {
                 if let price = data.formattedPrice {
                     Text(price)
-                        .font(PatinaTypography.captionMedium)
+                        .font(PatinaTypography.captionSerif)
                         .foregroundStyle(PatinaColors.OnDark.primary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)

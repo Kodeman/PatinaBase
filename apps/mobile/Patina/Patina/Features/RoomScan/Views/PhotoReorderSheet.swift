@@ -45,7 +45,7 @@ struct PhotoReorderSheet: View {
                                 if let caption = captions[photo.id] ?? photo.userAnnotation,
                                    !caption.isEmpty {
                                     Text(caption)
-                                        .font(.custom("Inter-Regular", size: 11, relativeTo: .caption2))
+                                        .font(PatinaTypography.captionSmall)
                                         .foregroundStyle(PatinaColors.Text.muted)
                                         .lineLimit(1)
                                 }

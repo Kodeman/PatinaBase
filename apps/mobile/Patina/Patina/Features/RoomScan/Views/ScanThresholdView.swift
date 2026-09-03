@@ -116,7 +116,7 @@ struct ScanThresholdView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Begin walking to start — or tap here.")
-                        .font(.custom("PlayfairDisplay-Italic", size: 17, relativeTo: .body))
+                        .font(PatinaTypography.patinaVoice)
                         .foregroundStyle(PatinaColors.Text.primary)
                     Text("Start scanning now")
                         .font(PatinaTypography.mono)

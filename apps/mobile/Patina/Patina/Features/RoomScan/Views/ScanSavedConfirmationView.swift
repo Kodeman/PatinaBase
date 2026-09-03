@@ -49,7 +49,7 @@ struct ScanSavedConfirmationView: View {
                         .foregroundStyle(PatinaColors.Text.primary.opacity(0.85))
 
                     Text("Saved to your rooms")
-                        .font(.custom("PlayfairDisplay-Italic", size: 24, relativeTo: .title2))
+                        .font(PatinaTypography.voiceLead)
                         .foregroundStyle(PatinaColors.Text.primary.opacity(0.9))
                         .multilineTextAlignment(.center)
 
@@ -60,7 +60,7 @@ struct ScanSavedConfirmationView: View {
                     }
 
                     Text("Your scan stays on this phone until you send it to a designer.")
-                        .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
+                        .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.Text.muted)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
@@ -124,7 +124,7 @@ struct ScanSavedConfirmationView: View {
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.primary.opacity(0.9))
                 Text("Only you can see it. Nothing is uploaded until you send it to a designer.")
-                    .font(.custom("Inter-Regular", size: 12, relativeTo: .caption))
+                    .font(PatinaTypography.captionRegular)
                     .foregroundStyle(PatinaColors.Text.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }

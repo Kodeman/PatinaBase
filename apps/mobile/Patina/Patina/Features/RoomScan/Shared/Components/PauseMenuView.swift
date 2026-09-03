@@ -36,7 +36,7 @@ struct PauseMenuView: View {
 
             VStack(spacing: 32) {
                 Text("Paused")
-                    .font(.custom("PlayfairDisplay-Regular", size: 28, relativeTo: .title))
+                    .font(PatinaTypography.h2)
                     .foregroundStyle(PatinaColors.offWhite)
 
                 VStack(spacing: 0) {

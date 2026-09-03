@@ -184,8 +184,12 @@ struct DailyStoryDetailView: View {
 
     private func productCard(_ product: Product) -> some View {
         VStack(spacing: 0) {
-            product.placeholderGradient
-                .frame(height: 160)
+            PatinaAsyncImage(
+                url: product.imageURL.flatMap(URL.init(string:)),
+                caption: product.name
+            )
+            .frame(height: 160)
+            .clipped()
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(product.name)
@@ -201,7 +205,7 @@ struct DailyStoryDetailView: View {
                     .foregroundStyle(PatinaColors.offWhite)
                     .padding(.vertical, 8)
                     .padding(.horizontal, 14)
-                    .background(Capsule().fill(PatinaColors.clay))
+                    .background(Capsule().fill(PatinaColors.clayInk))
             }
             .padding(12)
         }

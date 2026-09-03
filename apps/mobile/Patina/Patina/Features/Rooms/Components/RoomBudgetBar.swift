@@ -5,11 +5,11 @@
 //  Charcoal budget card shown in Room Project view. Fills only after the
 //  room reaches 50% of the budget its owner set.
 //
-//  It used to measure against a hard-coded $2,000–$5,000 and print
-//  "Your range: $2.0K–$5.0K" under a fill derived from it — a range nobody
-//  had given (C5, integration.md §6.3). It measures against
-//  `rooms.budget_cents` now, and where there is no budget the bar does not
-//  draw at all.
+//  It used to measure against a hard-coded $2,000–$5,000 and print a compact
+//  "K" range under a fill derived from it — a range nobody had given (C5,
+//  integration.md §6.3). It measures against `rooms.budget_cents` now, and
+//  where there is no budget the bar does not draw at all. Its figures go
+//  through `PatinaCurrency` like every other amount in the app (C5-14).
 //
 
 import SwiftUI
@@ -26,7 +26,7 @@ struct RoomBudgetBar: View {
                     .foregroundStyle(PatinaColors.OnDark.secondary)
                 Spacer()
                 Text(Self.figure(totalCents: totalCents, budgetCents: budgetCents))
-                    .font(.custom("PlayfairDisplay-Medium", size: 22, relativeTo: .title2))
+                    .font(PatinaTypography.h4Medium)
                     .foregroundStyle(PatinaColors.offWhite)
             }
 
@@ -64,12 +64,7 @@ struct RoomBudgetBar: View {
     }
 
     private static func money(_ cents: Int) -> String {
-        let dollars = cents / 100
-        if dollars == 0 { return "$0" }
-        if dollars >= 1000 {
-            return "$\(String(format: "%.1f", Double(dollars) / 1000))K"
-        }
-        return "$\(dollars)"
+        PatinaCurrency.formatWholeDollars(cents: cents)
     }
 
 }

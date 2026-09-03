@@ -30,7 +30,7 @@ struct ManualRoomEntryView: View {
                 }
                 group(title: "Room Name") {
                     TextField("e.g. Living Room", text: $name)
-                        .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                        .font(PatinaTypography.bodySerif)
                         .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.horizontal, 14)
                         .frame(height: 46)
@@ -64,7 +64,7 @@ struct ManualRoomEntryView: View {
                         TextField("0", text: $windowCountRaw)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.center)
-                            .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                            .font(PatinaTypography.bodySerif)
                             .foregroundStyle(PatinaColors.Text.primary)
                             .frame(width: 60, height: 46)
                             .background(fieldBackground)
@@ -132,7 +132,7 @@ struct ManualRoomEntryView: View {
             TextField(label, text: value)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
-                .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                .font(PatinaTypography.bodySerif)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)

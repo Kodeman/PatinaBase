@@ -29,10 +29,12 @@ struct TypographyAdoptionTests {
         "Patina/Features/Authentication/Views/SignInWithAppleButton.swift"
     ]
 
-    /// The app-wide count on this lane's base sha (`ba83aa67f`): 47 sites in
-    /// `Patina/Patina/**`. It may only go down. `disallow_font_custom_in_features`
-    /// is the SwiftLint half of the same ratchet.
-    private static let inlineFontCeiling = 47
+    /// C3-15's exit criterion: **zero** inline `.font(.custom(` in
+    /// `Features/**` and `Design/**`. The count on this lane's base sha
+    /// (`ba83aa67f`) was 47; round one left 44 and routed the rest as notes to
+    /// lanes that did not schedule them. `disallow_font_custom_in_features` is
+    /// the SwiftLint half of the same bar.
+    private static let inlineFontCeiling = 0
 
     private static func postScriptNames(in source: String) -> [String] {
         var names: [String] = []
@@ -100,18 +102,42 @@ struct TypographyAdoptionTests {
         }
     }
 
-    /// The app-wide ratchet. The remaining sites live in four other lanes'
-    /// files and reach them as integration notes; nobody may add one meanwhile.
-    @Test("the inline-font count never climbs")
-    func theInlineFontCountNeverClimbs() {
-        var total = 0
+    /// The app-wide bar, at zero.
+    @Test("no inline .font(.custom( survives anywhere in the app")
+    func zeroInlineFontCustom() {
+        var offenders: [String] = []
         for path in SourcePin.swiftFiles(under: "Patina") {
             guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
-            total += source.components(separatedBy: ".font(.custom(").count - 1
+            let count = source.components(separatedBy: ".font(.custom(").count - 1
+            if count > 0 {
+                offenders.append("\((path as NSString).lastPathComponent) ×\(count)")
+            }
         }
         #expect(
-            total <= Self.inlineFontCeiling,
-            "inline .font(.custom( sites rose to \(total); the ceiling on this branch's base is \(Self.inlineFontCeiling)"
+            offenders.count <= Self.inlineFontCeiling,
+            "inline .font(.custom( survives at: \(offenders.joined(separator: ", ")) — C3-15's exit criterion is zero"
+        )
+    }
+
+    /// `C3-15` + the Dynamic Type half the first round introduced.
+    ///
+    /// The Reveal's aesthetic-name hero renders **one `Text` per character**
+    /// inside `HStack(spacing: 0)`. The call it replaced was a FIXED 42 pt, so
+    /// Dynamic Type never reached it; a token brings `relativeTo: .largeTitle`
+    /// with it, and an `HStack` of per-character `Text`s cannot wrap. At AX3–AX5
+    /// each glyph passes 80 pt and an 11-character name runs off-canvas.
+    /// `.fixedSize(horizontal: false, vertical: true)` — which the view already
+    /// had — does nothing for a horizontal overflow.
+    @Test("the reveal's per-character hero can shrink instead of running off-canvas")
+    func theRevealHeroSurvivesAccessibilitySizes() throws {
+        let source = try SourcePin.read("Patina/Features/StyleReveal/Views/RevealView.swift")
+        #expect(
+            source.contains("minimumScaleFactor"),
+            "RevealView's hero has no scale floor — at AX sizes an 11-character aesthetic name leaves the screen"
+        )
+        #expect(
+            source.contains("PatinaTypography.display2Regular"),
+            "the Reveal hero is not on the Regular display token — C3-15 offered PlayfairDisplay-Light or -Regular, and Medium is heavier than either"
         )
     }
 }

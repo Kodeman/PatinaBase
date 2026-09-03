@@ -19,9 +19,13 @@ struct DailyStoryCard: View {
     /// on a screen built around what is new the reader is owed which day this
     /// one is. The date comes off the story itself — there is no override, so
     /// no caller can hand the card a date the story does not carry.
-    private var datedReadTimeLabel: String {
-        guard let date = story.publishedAt else { return story.readTimeLabel }
-        return "\(HouseRecordDates.short(date)) · \(story.readTimeLabel)"
+    private var datedReadTimeLabel: String? {
+        switch (story.publishedAt, story.readTimeLabel) {
+        case let (date?, readTime?): return "\(HouseRecordDates.short(date)) · \(readTime)"
+        case let (date?, nil):       return HouseRecordDates.short(date)
+        case let (nil, readTime?):   return readTime
+        case (nil, nil):             return nil
+        }
     }
 
     var body: some View {
@@ -74,21 +78,25 @@ struct DailyStoryCard: View {
             .padding(.horizontal, PatinaSpacing.md)
             .padding(.bottom, PatinaSpacing.md)
 
-            // Date and read time
-            Text(datedReadTimeLabel)
-                .font(PatinaTypography.monoSmall)
-                .tracking(0.3)
-                .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.offWhite)
-                .padding(.vertical, 3)
-                .padding(.horizontal, PatinaSpacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: PatinaRadius.md, style: .continuous)
-                        .fill(PatinaColors.charcoal.opacity(0.5))
-                )
-                .padding(.top, PatinaSpacing.xsm)
-                .padding(.leading, PatinaSpacing.xsm)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // Date and read time. A3-17: the badge draws only when there is
+            // something true to put in it — a story with no body claims no
+            // read time, and a row with no `published_at` claims no date.
+            if let datedReadTimeLabel {
+                Text(datedReadTimeLabel)
+                    .font(PatinaTypography.monoSmall)
+                    .tracking(0.3)
+                    .textCase(.uppercase)
+                    .foregroundStyle(PatinaColors.offWhite)
+                    .padding(.vertical, 3)
+                    .padding(.horizontal, PatinaSpacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: PatinaRadius.md, style: .continuous)
+                            .fill(PatinaColors.charcoal.opacity(0.5))
+                    )
+                    .padding(.top, PatinaSpacing.xsm)
+                    .padding(.leading, PatinaSpacing.xsm)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
 
             // Unread dot
             if story.isUnread {

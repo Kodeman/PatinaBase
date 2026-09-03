@@ -130,13 +130,13 @@ public struct ScanReviewView: View {
                 .foregroundStyle(PatinaColors.Text.primary.opacity(0.8))
             if let loadError {
                 Text(loadError)
-                    .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
+                    .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.muted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
             Text("Your other rooms are safe — this only affects this scan.")
-                .font(.custom("Inter-Regular", size: 12, relativeTo: .caption))
+                .font(PatinaTypography.captionRegular)
                 .foregroundStyle(PatinaColors.Text.muted.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -296,7 +296,7 @@ public struct ScanReviewView: View {
                 .font(.system(size: 18, weight: .regular))
                 .foregroundStyle(PatinaColors.Text.muted)
             Text("No photos captured — the scan shape is still saved.")
-                .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
+                .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -357,7 +357,7 @@ public struct ScanReviewView: View {
                             Image(systemName: "arrow.up.arrow.down")
                                 .font(.system(size: 10, weight: .medium))
                             Text("Reorder")
-                                .font(.custom("Inter-Medium", size: 11, relativeTo: .caption2))
+                                .font(PatinaTypography.caption)
                         }
                         .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.horizontal, 10)
@@ -375,7 +375,7 @@ public struct ScanReviewView: View {
             let supporting = visibleSupportingPhotos(manifest: manifest)
             if supporting.isEmpty {
                 Text("No additional photos captured.")
-                    .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
+                    .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.muted)
                     .padding(.vertical, 16)
             } else {
@@ -435,7 +435,7 @@ public struct ScanReviewView: View {
                             Image(systemName: "text.bubble")
                                 .font(.system(size: 9, weight: .medium))
                             Text("Note")
-                                .font(.custom("Inter-Medium", size: 10, relativeTo: .caption2))
+                                .font(PatinaTypography.caption)
                         }
                         .foregroundStyle(PatinaColors.Text.primary)
                         .padding(.horizontal, 8)

@@ -57,10 +57,10 @@ struct EdgeToastView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(kind.title)
-                    .font(.custom("PlayfairDisplay-Medium", size: 15, relativeTo: .subheadline))
+                    .font(PatinaTypography.h6)
                     .foregroundStyle(PatinaColors.charcoal)
                 Text(kind.body)
-                    .font(.custom("Inter-Regular", size: 12, relativeTo: .caption))
+                    .font(PatinaTypography.captionRegular)
                     .foregroundStyle(PatinaColors.mocha)
                 if let label = actionLabel, let action = onAction {
                     Button(action: action) {

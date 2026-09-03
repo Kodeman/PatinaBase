@@ -308,15 +308,13 @@ struct ProductDetailView: View {
                     // placeholder instead of a bare rectangle. The category
                     // gradient remains the deliberate no-URL fallback.
                     ZStack(alignment: .top) {
-                        if let imageURL = product.imageURL, let url = URL(string: imageURL) {
-                            PatinaAsyncImage(url: url)
-                                .frame(height: 340)
-                                .frame(maxWidth: .infinity)
-                                .clipped()
-                        } else {
-                            product.placeholderGradient
-                                .frame(height: 340)
-                        }
+                        PatinaAsyncImage(
+                            url: product.imageURL.flatMap(URL.init(string:)),
+                            caption: product.name
+                        )
+                        .frame(height: 340)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
 
                         // Top bar — back, help, share, and save actions.
                         HStack(spacing: 8) {

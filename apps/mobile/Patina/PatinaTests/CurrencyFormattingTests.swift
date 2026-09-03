@@ -25,10 +25,11 @@ struct CurrencyFormattingTests {
         "Patina/Core/Network/EditorialStoriesAPIClient.swift"
     ]
 
-    /// Hand-rolled `K` formatters on this lane's base sha (`ba83aa67f`): six,
-    /// in `Core/Models/**` and `Features/Rooms/**`. Each reaches its owner as
-    /// an integration note; the count may only go down.
-    private static let compactFormatterCeiling = 6
+    /// `C5-14`'s exit criterion: **one money format**, so the hand-rolled
+    /// compact count is zero. Six survived round one — in `Core/Models/**` and
+    /// `Features/Rooms/**` — behind integration notes their owners did not
+    /// schedule, and `$2.4K` still rendered live from the room budget bar.
+    private static let compactFormatterCeiling = 0
 
     @Test("one amount has exactly one shape")
     func oneAmountOneShape() {
@@ -76,9 +77,8 @@ struct CurrencyFormattingTests {
         }
     }
 
-    /// The app-wide ratchet, until the notes land in the four files that still
-    /// carry one.
-    @Test("the hand-rolled money-format count never climbs")
+    /// The app-wide bar, at zero.
+    @Test("no file in the app hand-rolls a compact money string")
     func theCompactFormatterCountNeverClimbs() {
         var total = 0
         for path in SourcePin.swiftFiles(under: "Patina") {

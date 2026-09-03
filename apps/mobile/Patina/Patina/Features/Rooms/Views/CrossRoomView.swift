@@ -236,8 +236,8 @@ struct CrossRoomView: View {
     // MARK: - Aggregates
 
     private var summary: String {
-        let total = items.reduce(0) { $0 + $1.priceCents } / 100
-        let dollarString = total >= 1000 ? String(format: "$%.1fK", Double(total) / 1000) : "$\(total)"
+        let totalCents = items.reduce(0) { $0 + $1.priceCents }
+        let dollarString = PatinaCurrency.formatWholeDollars(cents: totalCents)
         return "\(items.count) items · \(dollarString)"
     }
 

@@ -240,7 +240,7 @@ struct RoomSettingsView: View {
                     .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
                 Text(scanDate(room))
-                    .font(.custom("DMMono-Regular", size: 8, relativeTo: .caption2))
+                    .font(PatinaTypography.monoLabel)
                     .tracking(0.3)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
@@ -288,7 +288,7 @@ struct RoomSettingsView: View {
             .frame(height: 46)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(PatinaColors.clay)
+                    .fill(PatinaColors.clayInk)
             )
         }
         .buttonStyle(.plain)

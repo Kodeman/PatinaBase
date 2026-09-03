@@ -12,7 +12,9 @@
 //  it measures 2.01:1.
 //
 //  The component is where the three states get names: loading, loaded, and
-//  permanently missing. The call sites reach their owners as integration notes.
+//  permanently missing. Round one built it and left it with ONE production
+//  call site, on a card the Pieces tab does not use — so every finding above
+//  was still true on the screen it was measured on. These pin the call sites.
 //
 
 import Testing
@@ -72,5 +74,57 @@ struct ImagePlaceholderTests {
         #expect(state.title == "Nothing here yet")
         #expect(state.message == "Your designer is still choosing pieces for you. This fills in as they do.")
         #expect(state.ctaTitle == nil, "the empty-catalogue state must not offer an action there is nothing behind")
+    }
+
+    // MARK: - The call sites
+
+    /// The three surfaces `A-36`, `C-27` and `B-18` were measured on. A
+    /// component nothing renders fixes nothing.
+    @Test("every product surface routes its image through the component")
+    func everyProductSurfaceRoutesThroughTheComponent() throws {
+        for path in [
+            "Patina/Features/Recommendations/Views/RecommendationsView.swift",
+            "Patina/Features/ProductDetail/Views/ProductDetailView.swift",
+            "Patina/Features/Home/Views/DailyStoryDetailView.swift"
+        ] {
+            let source = try SourcePin.read(path)
+            #expect(
+                source.contains("PatinaAsyncImage("),
+                "\(path) does not render PatinaAsyncImage — A-36"
+            )
+            #expect(
+                !source.contains("placeholderGradient"),
+                "\(path) still falls through to a bare category gradient for a piece with no photograph — that IS A-36/B-18"
+            )
+        }
+    }
+
+    /// `C-27`. Chrome over a photograph takes an opaque ground, because a
+    /// material's contrast is a function of the photo behind it.
+    @Test("no chrome over a product photograph rides on a material")
+    func chromeOverAPhotographUsesTheScrim() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Recommendations/Views/RecommendationsView.swift"
+        )
+        #expect(
+            !source.contains("ultraThinMaterial"),
+            "the browse grid still floats its heart, its ⋯ and its match pill on .ultraThinMaterial — 2.01:1 and 1.86:1 over a light tile"
+        )
+    }
+
+    /// `A3-01`, the table's only blocker. The sentence has to be on a screen.
+    @Test("the browse surface renders the honest empty state when nothing comes back")
+    func browseRendersTheHonestEmptyState() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Recommendations/Views/RecommendationsView.swift"
+        )
+        #expect(
+            source.contains("PatinaEmptyStateContent.stillChoosingPieces"),
+            "browse does not render the empty-catalogue state — with production returning zero rows, this is the screen every tester sees"
+        )
+        #expect(
+            !source.contains("Take the style quiz"),
+            "browse still offers the quiz when the catalogue is empty — tuning taste cannot conjure rows that are not there"
+        )
     }
 }

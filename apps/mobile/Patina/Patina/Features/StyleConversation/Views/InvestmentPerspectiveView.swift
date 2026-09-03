@@ -31,11 +31,7 @@ struct InvestmentPerspectiveView: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(tier.displayName)
-                        .font(.custom(
-                            isDiscussRow ? "PlayfairDisplay-Italic" : "PlayfairDisplay-Regular",
-                            size: 18,
-                            relativeTo: .body
-                        ))
+                        .font(isDiscussRow ? PatinaTypography.patinaVoice : PatinaTypography.h5Regular)
                         .foregroundStyle(PatinaColors.Text.primary)
                     // Inter-Light is not bundled (silent system-font fallback).
                     Text(tier.descriptionText)
@@ -46,7 +42,7 @@ struct InvestmentPerspectiveView: View {
                 Spacer()
 
                 Text(tier.rangeLabel)
-                    .font(.custom("DMMono-Regular", size: 11, relativeTo: .caption2))
+                    .font(PatinaTypography.monoLabel)
                     .tracking(0.4)
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.interactive)

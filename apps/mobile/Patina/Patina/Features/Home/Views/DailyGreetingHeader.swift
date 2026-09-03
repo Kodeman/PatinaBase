@@ -155,7 +155,7 @@ struct DailyGreetingHeader: View {
                     .foregroundStyle(PatinaColors.offWhite)
                     .padding(.horizontal, PatinaSpacing.xs)
                     .frame(minWidth: 18, minHeight: 18)
-                    .background(Capsule().fill(PatinaColors.clayDeep))
+                    .background(Capsule().fill(PatinaColors.clayInk))
             }
         }
         .padding(.horizontal, PatinaSpacing.xsm)
@@ -189,7 +189,7 @@ private struct UnreadBadge: View {
                 .foregroundStyle(PatinaColors.offWhite)
                 .padding(.horizontal, PatinaSpacing.xs)
                 .frame(minWidth: 14, minHeight: 14)
-                .background(Capsule().fill(PatinaColors.clay))
+                .background(Capsule().fill(PatinaColors.clayInk))
                 .accessibilityHidden(true)
         }
     }

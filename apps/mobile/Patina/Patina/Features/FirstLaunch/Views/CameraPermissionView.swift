@@ -127,7 +127,7 @@ struct CameraPermissionView: View {
                     }
                     .foregroundStyle(PatinaColors.offWhite)
                     .frame(maxWidth: .infinity, minHeight: 50)
-                    .background(PatinaColors.clay)
+                    .background(PatinaColors.clayInk)
                     .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 }
                 .disabled(permissionService.isRequesting)
@@ -212,7 +212,7 @@ struct CameraPermissionView: View {
                         .font(PatinaTypography.bodyMedium)
                         .foregroundStyle(PatinaColors.offWhite)
                         .frame(maxWidth: .infinity, minHeight: 50)
-                        .background(PatinaColors.clay)
+                        .background(PatinaColors.clayInk)
                         .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.lg))
                 }
                 .buttonStyle(ScaleButtonStyle(reduceMotion: reduceMotion))

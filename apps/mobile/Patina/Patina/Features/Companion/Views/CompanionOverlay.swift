@@ -717,7 +717,7 @@ public struct CompanionOverlay: View {
                     .foregroundStyle(PatinaColors.offWhite)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(PatinaColors.clay)
+                    .background(PatinaColors.clayInk)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

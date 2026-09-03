@@ -19,7 +19,7 @@ struct WholeHomeCrossRoomBar: View {
             HStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(PatinaColors.clay)
+                        .fill(PatinaColors.clayInk)
                         .frame(width: 44, height: 44)
                     Text("⌂")
                         .font(.system(size: 18))
@@ -45,13 +45,7 @@ struct WholeHomeCrossRoomBar: View {
     }
 
     private var summary: String {
-        let dollars = totalCents / 100
-        let dollarString: String
-        if dollars >= 1000 {
-            dollarString = "$\(String(format: "%.1f", Double(dollars) / 1000))K"
-        } else {
-            dollarString = "$\(dollars)"
-        }
+        let dollarString = PatinaCurrency.formatWholeDollars(cents: totalCents)
         let roomWord = roomCount == 1 ? "room" : "rooms"
         let itemWord = itemCount == 1 ? "item" : "items"
         return "\(roomCount) \(roomWord) · \(itemCount) \(itemWord) · \(dollarString) total"

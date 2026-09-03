@@ -28,7 +28,7 @@ struct RoomItemRow: View {
                             .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.md, style: .continuous))
                         if item.hasAR {
                             Circle()
-                                .fill(PatinaColors.clay)
+                                .fill(PatinaColors.clayInk)
                                 .frame(width: 18, height: 18)
                                 .overlay(
                                     Text("◎")

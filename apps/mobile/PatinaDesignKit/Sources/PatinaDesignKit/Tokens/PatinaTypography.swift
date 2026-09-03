@@ -40,7 +40,17 @@ public enum PatinaTypography {
 
     public static let h4 = Font.custom(displayFont + "-Regular", size: 22, relativeTo: .title3)
 
+    /// C3-15: the ramp had `h4` in Regular and `h5` in Medium, so a 22 pt
+    /// Medium figure — the room-investment total — had nothing to promote to
+    /// without changing either its size or its weight.
+    public static let h4Medium = Font.custom(displayFont + "-Medium", size: 22, relativeTo: .title2)
+
     public static let h5 = Font.custom(displayFont + "-Medium", size: 18, relativeTo: .title3)
+
+    /// C3-15: `h5`'s Regular twin, for the 18 pt serif titles that are not
+    /// meant to carry Medium's weight — a room's empty-state line, and the
+    /// investment tier whose sibling row is set in the italic voice.
+    public static let h5Regular = Font.custom(displayFont + "-Regular", size: 18, relativeTo: .title3)
 
     /// C3-15: the ramp had no serif body size, so four screens reached past it
     /// for a raw 16 pt Playfair Regular.
@@ -69,6 +79,11 @@ public enum PatinaTypography {
     public static let bodySmallMedium = Font.custom(bodyFont + "-Medium", size: 14, relativeTo: .subheadline)
 
     public static let caption = Font.custom(bodyFont + "-Medium", size: 12, relativeTo: .caption)
+
+    /// C3-15: `caption` is Medium. Three scan surfaces set their supporting
+    /// line in Inter **Regular** at the same size, and promoting them to
+    /// `caption` would have bolded copy that is deliberately quiet.
+    public static let captionRegular = Font.custom(bodyFont + "-Regular", size: 12, relativeTo: .caption)
 
     public static let captionMedium = Font.custom(bodyFont + "-SemiBold", size: 12, relativeTo: .caption)
 
