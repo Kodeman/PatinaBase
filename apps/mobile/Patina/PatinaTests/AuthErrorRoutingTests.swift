@@ -182,7 +182,9 @@ struct AuthErrorRoutingTests {
         #expect(height(quiet) == height(AuthStatusSlot(errorMessage: nil)))
 
         let screen = try? SourcePin.read("Patina/Features/Authentication/Views/AuthScreenView.swift")
-        #expect(screen?.contains("var pendingLinkNotice: String? = nil") == true)
+        // Implicit nil in the memberwise init — SwiftLint's
+        // `implicit_optional_initialization` refuses the explicit `= nil`.
+        #expect(screen?.contains("var pendingLinkNotice: String?") == true)
     }
 
     // MARK: - 4. The screen fills the viewport (P-34)
