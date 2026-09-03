@@ -566,3 +566,150 @@ the Companion's prompt context, where the model can echo them back to the reader
 `"All items across your home"`. Neither `C5-09`'s nor `A-60`'s `where` cites this file and neither fix
 line reaches prompt context, so opening it in W1 would be scope this deck did not earn. Recorded with
 exact sites for W2 · L1-E's 48-row table. **No action this wave.**
+
+---
+
+# Round 4 — after the third adversarial review (`RL1E3-01` … `RL1E3-10`, 2026-09-03)
+
+Three lanes get a note. Every byte below was read off the target lane's own branch on 2026-09-03 with
+`git show first-flight/w1-<lane>:<path>`, and the glyphs were confirmed with `cat -v` — a straight
+apostrophe prints as `'`, a curly one as `M-bM-^@M-^Y`.
+
+## Round 4 → L1-C
+
+### Note E4-L1C-1 — `A-52` landed with the wrong apostrophe, and here is the byte
+
+`RL1E3-01`, and it is this lane's fault twice over: the deck wrote the sentence, and neither of this
+lane's two detectors could see the file it landed in.
+
+**File:** `apps/mobile/Patina/Patina/Features/Companion/Services/CompanionActionRows.swift:38`
+(`homeRow`, the guest leg).
+
+| today, on `first-flight/w1-l1c` | final |
+|---|---|
+| `            : "See what's on Patina"` | `            : "See what’s on Patina"` |
+
+That is one character: `'` (U+0027) → `’` (U+2019). Nothing else on the line changes. The deck row
+(`l1-e-copy-deck.md`, `A-52` / `CompanionActionRows.swift:32-34`) has always carried the curly form;
+the round-3 note to this lane (`E3-L1C-1`) swept `HomeStoryRetryRow.swift` and did not mention this
+line, because the cross-lane apostrophe pin set had no entry for this file.
+
+**Pinned by:** `PatinaTests/BrandVoiceLintTests.companionActionRowsApostrophesAreCurly` — new this
+round, `withKnownIssue` today, and it unwraps when this row lands.
+
+**`pieceActRow`'s sentence is clean** — `"Sign in and a designer will get back to you"`
+(`:233`) has no apostrophe at all. Checked in the same sweep so you do not have to.
+
+### Note E4-L1C-2 — two more straight apostrophes in the same file, no finding id
+
+Found by the new pin, in literals the Companion menu draws:
+
+| line | today | final |
+|---|---|---|
+| `:67` | `item("chart.pie", label, "What's been billed", …)` | `"What’s been billed"` |
+| `:82` | `item("creditcard", label, "What's due", …)` | `"What’s due"` |
+
+Both are hints under the money rows, both reader-facing, neither cited by any W1 finding. They are in
+the same file as `E4-L1C-1` and the same one-character edit, so they are cheapest applied in the same
+commit. `A-06`'s ruled scope is "every user-facing string in a file this deck names" — this deck names
+this file — so they are in scope rather than a W2 carry-forward.
+
+### Note E4-L1C-3 — a correction to `E3-L1C-3`: the four-tab root wraps too
+
+`RL1E3-09`. Round 3's note said "The four-tab root has the width and renders one line". That is true
+**at default Dynamic Type** and I should have said so. On the four-tab root at
+accessibility-extra-extra-extra-large, dark, the greeting wraps as "Good / evening" with the `?`
+affordance stranded beside "Good" (`shots/w1-review-l1e/r3-09-today-dark-axxxl.png`).
+
+This does **not** change the row's owner or its verdict: `"Good night."` (11 characters) wrapped at
+that size too, and `"Good afternoon"` (14) will wrap sooner, so `C5-06` is not the regression. But the
+note as written told a lane whose charter is Dynamic Type that the wrap was a flags-off-only concern,
+and that was the wrong brief. Accepting the wrap is still a legitimate answer on both roots.
+
+## Round 4 → L1-F
+
+### Note E4-L1F-1 — `A-06` · the send-failure sentence, and three more in the same file
+
+`RL1E3-04`. L1-F is the one lane the round-3 apostrophe sweep skipped entirely, because the sweep
+walked a hand-maintained file list and this lane's new copy had no deck row to put it on the list.
+
+**File:** `apps/mobile/Patina/Patina/Features/Messaging/ViewModels/MessagingViewModel.swift`.
+
+| line | today, on `first-flight/w1-l1f` | final |
+|---|---|---|
+| `:413` | `static let sendFailureLine = "We couldn't send that. Nothing was lost — your message is still here."` | `"We couldn’t send that. Nothing was lost — your message is still here."` |
+| `:75` | `self.error = "Couldn't load conversations"` | `"We couldn’t load your messages. Try again."` |
+| `:331` | `self.error = "Couldn't load messages"` | `"We couldn’t load this conversation. Try again."` |
+
+`:413` is the row that matters — it is rendered at `ThreadDetailView.swift:198` (`Text(sendError)`)
+and it is new, reader-facing copy on a round-one path. The sentence itself is right: it says nothing
+was lost and names no server string, exactly the `MoneyFailureCopy` shape. Only the glyph is wrong.
+
+`:75` and `:331` are older strings in the same file; they carry the same wrong glyph *and* are
+sentence fragments where the rest of the app ships whole sentences with a recovery. The final text
+above is offered, not imposed — if you would rather change only the glyph this wave and leave the
+wording, say so and the deck records it that way.
+
+**Pinned by:** `PatinaTests/BrandVoiceLintTests.messagingViewModelApostrophesAreCurly` — new this
+round, `withKnownIssue` today, unwraps when the rows land.
+
+### Note E4-L1F-2 — `AppCoordinator.swift:109` is a **W2** row, not a W1 one
+
+Same glyph, different urgency, and the difference is worth stating rather than sending both as equals.
+
+`App/Coordinators/AppCoordinator.swift:109`
+`public static let pendingLinkNoticeLine = "We'll open what you tapped once you're in."`
+
+No view binds it. `grep -rn "pendingLinkNotice" apps/mobile/Patina/Patina/` outside the coordinator
+returns only `DeepLinkQueueTests` and `SignOutResetTests`. So it is a landmine, not a live defect, and
+it belongs in W2 · L1-E's 48-row sweep rather than in your W1 exit criteria. **No action asked this
+wave.** Recorded here so nobody re-files it as a blocker later.
+
+## Round 4 → L1-B
+
+### Note E4-L1B-1 — `A-06` · the one byte Note A→E-3 flagged that had no row
+
+L1-A's `Note A→E-3` (in `l1-e-notes.md`) names
+`Features/RoomScan/Shared/Models/StyleResponseModel.swift:99` as carrying `"Let's Discuss"` with a
+straight apostrophe. Round 3's note to this lane (`E3-L1B-5`) renamed `:23` and `:97` for the
+`"Curated"` lexicon rows and did not carry `:99`.
+
+| line | today, on `first-flight/w1-l1b` | final |
+|---|---|---|
+| `:99` | `case .budgetDesigner: return "Let's Discuss"` | `return "Let’s Discuss"` |
+
+Casing is deliberately **unchanged**: these four are the parallel display names for the quiz's budget
+bands ("Thoughtful Starter", "Considered Comfort", "Heirloom Investment"), and `C5-10`'s sweep of that
+table is W2, not W1. One glyph, nothing else.
+
+**Pinned by:** `BrandVoiceLintTests.styleResponseModelApostrophesAreCurly` (already exists, wrapped) —
+this row is one of the reasons it is still wrapped.
+
+## Round 4 → L1-D
+
+### Note E4-L1D-1 — your branch adds a frozen copy of five other lanes' paperwork
+
+Not copy, and not a finding — a merge fact this lane hits because it merges last (D14).
+
+`git merge-tree --write-tree first-flight/w1-l1d first-flight/w1-l1e` is the **only** one of the five
+pairwise merges against this branch that conflicts, and the conflict is:
+
+```
+CONFLICT (add/add): Merge conflict in
+  artifacts/ios-testflight-polish-2026-09-01/build/waves/w1/l1-e-copy-deck.md
+```
+
+Commit `771016eaf` ("the paperwork the merge needs") adds `l1-a-notes.md`, `l1-b-notes.md`,
+`l1-c-notes.md`, `l1-e-notes.md`, `l1-f-notes.md` **and** a 153-line snapshot of
+`l1-e-copy-deck.md` — revision **1** of this lane's deck, frozen before the two review rounds that
+rewrote it. This branch carries revision 4 (336 lines), so the two adds cannot auto-merge.
+
+**Ask:** `git rm --cached` the five inbox files and `l1-e-copy-deck.md` from that commit's tree (a
+follow-up commit is fine — the content is not lost, it lives in the main checkout and on each owning
+lane's branch). This lane did the same thing to itself in Task G1 for the same reason
+(`034a6bb22`, `RL1E2-06`): a lane that commits another lane's paperwork turns a code merge into a
+paperwork merge. The app-code half of your branch merges clean and needs no change.
+
+If you would rather not amend, the alternative is that the steward resolves the deck file at merge by
+taking **this branch's** version wholesale — it is strictly newer. Either is fine; what is not fine is
+discovering it at merge time.
