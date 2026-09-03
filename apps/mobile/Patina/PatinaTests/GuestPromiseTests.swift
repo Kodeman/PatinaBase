@@ -7,9 +7,8 @@
 //  sheet composes its sentence from actual counts and is omitted at zero
 //  (A-79); the portrait footnote states what is true (B-23)."
 //
-//  Every site here is in a file another lane owns, so every assertion is
-//  wrapped in `withKnownIssue` naming the row and the lane — see
-//  `ErrorVoiceTests`'s header for why, and for the unwrap signal.
+//  One `@Test` per deck row (`RL1E2-05`), every `SourcePin.read` hoisted out
+//  of its wrapper (`RL1E2-15`) — see `NounConsistencyTests`'s header.
 //
 
 import Testing
@@ -22,15 +21,23 @@ struct GuestPromiseTests {
 
     /// The Companion menu's home row and the piece-act row both drew a
     /// signed-in sentence to an anonymous guest. Both need `isAuthenticated`
-    /// threaded into the row builder — the deck's own note, re-routed in this
-    /// fix round from L1-A to **L1-C**, which owns `Features/Companion/**`
-    /// (steward.md §5.4). L1-A recorded the re-route as task `C-L1A-3`.
-    @Test("the Companion's rows branch on auth state")
+    /// threaded into the row builder — the deck's own note, re-routed in the
+    /// first fix round from L1-A to **L1-C**, which owns
+    /// `Features/Companion/**` (steward.md §5.4). L1-A recorded the re-route
+    /// as task `C-L1A-3`.
+    @Test("the Companion's row builder takes the guest's auth state")
     func companionRowsBranchOnAuthState() throws {
-        withKnownIssue("deck row A-52 / CompanionActionRows.swift:32-34,220-223 is L1-C's (task C-L1A-3)") {
-            let source = try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
+        let source = try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
+        withKnownIssue("deck row A-52 / CompanionActionRows.swift:32-34 is L1-C's (task C-L1A-3)") {
             #expect(source.contains("isAuthenticated"), "no row builder takes the guest's state")
             #expect(source.contains("\"See what’s on Patina\""))
+        }
+    }
+
+    @Test("the Companion's piece-act row promises a designer only to someone who has one")
+    func companionPieceActRowMakesNoDesignerPromise() throws {
+        let source = try SourcePin.read("Patina/Features/Companion/Services/CompanionActionRows.swift")
+        withKnownIssue("deck row A-52 / CompanionActionRows.swift:220-223 is L1-C's (task C-L1A-3)") {
             #expect(source.contains("\"Sign in and a designer will get back to you\""))
         }
     }
@@ -40,8 +47,8 @@ struct GuestPromiseTests {
     /// L1-F has applied it.
     @Test("the notifications empty state says what signing in unlocks")
     func notificationsGuestStateMakesNoPromise() throws {
+        let source = try SourcePin.read("Patina/Features/Notifications/Views/NotificationFeedView.swift")
         withKnownIssue("deck row A-52 / NotificationFeedView.swift:193 is L1-F's; unwrap after L1-F merges") {
-            let source = try SourcePin.read("Patina/Features/Notifications/Views/NotificationFeedView.swift")
             #expect(source.contains("\"Sign in to see updates on your projects and messages here.\""))
             #expect(!source.contains("\"Updates from your designer will land here. Sign in to stay in the loop.\""))
         }
@@ -51,13 +58,13 @@ struct GuestPromiseTests {
 
     /// `Features/Collections/Views/**` has no W1 owner, so under L1-E's
     /// ownership rule this file was L1-E's to edit — but L1-A had already
-    /// applied both rows verbatim before this fix round opened
+    /// applied both rows verbatim before the first fix round opened
     /// (`l1-e-notes.md`, Note E-L1A-1). Recorded, and pinned here rather than
     /// re-applied, so the wave does not carry the same edit twice.
     @Test("the claim sheet composes its title from real counts")
     func claimSheetCountsWhatItClaims() throws {
+        let source = try SourcePin.read("Patina/Features/Collections/Views/LocalStoreClaimSheet.swift")
         withKnownIssue("deck row A-79 / LocalStoreClaimSheet.swift:17 applied by L1-A; unwrap after L1-A merges") {
-            let source = try SourcePin.read("Patina/Features/Collections/Views/LocalStoreClaimSheet.swift")
             #expect(!source.contains("\"Keep the room and the pieces you saved on this phone?\""))
             #expect(source.contains("piece") && source.contains("room"))
         }
@@ -78,8 +85,8 @@ struct GuestPromiseTests {
     /// was false. `Features/StyleQuiz/**` is L1-A's; applied there.
     @Test("the taste-portrait footnote makes no on-device claim")
     func portraitFootnoteIsTrue() throws {
+        let source = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleResultView.swift")
         withKnownIssue("deck row B-23 / StyleResultView.swift:65 is L1-A's; unwrap after L1-A merges") {
-            let source = try SourcePin.read("Patina/Features/StyleQuiz/Views/StyleResultView.swift")
             #expect(!source.contains("stays on this device"))
             #expect(source.contains("\"Your portrait is yours — reset it any time in Settings.\""))
         }

@@ -134,8 +134,14 @@ struct ErrorVoiceTests {
 
     @Test("dropping the raw text from the reader's sentence did not drop it from the log")
     func rawDetailIsStillLogged() throws {
+        // `RL1E2-16`: this asserted `contains("PatinaLog.")`, which any log
+        // call anywhere in the file satisfied. The site the message names is
+        // pinned instead, the way the three below already are.
         let service = try SourcePin.read("Patina/Services/DesignServices/DesignServicesService.swift")
-        #expect(service.contains("PatinaLog."), "submitDesignRequest discards the Postgres message entirely")
+        #expect(
+            service.contains("PatinaLog.sync.error(\"[DesignServices] submit_design_request failed:"),
+            "submitDesignRequest discards the Postgres message entirely"
+        )
 
         let companionClient = try SourcePin.read("Patina/Services/Companion/CompanionAPIClient.swift")
         #expect(companionClient.contains("PatinaLog.companion.error(\"Bad request:"))
@@ -162,18 +168,24 @@ struct ErrorVoiceTests {
 
     // MARK: - Cross-lane source-scans (see the file header)
 
+    // `RL1E2-15`: each `SourcePin.read` is hoisted OUT of its wrapper. The
+    // non-throwing `withKnownIssue` overload catches errors thrown by its
+    // body and records them as the known issue, so a file another lane
+    // renames used to leave the wrapper green forever — the detector failed
+    // open. Only the assertions are known-issue-tolerated now.
+
     @Test("ScanReviewView's error headline carries a terminal period, matching the app's one voice")
     func scanReviewHeadlineHasPeriod() throws {
+        let source = try SourcePin.read("Patina/Features/RoomScan/Views/ScanReviewView.swift")
         withKnownIssue("deck row C5-11 / ScanReviewView.swift:128 is L1-B's; unwrap after L1-B merges") {
-            let source = try SourcePin.read("Patina/Features/RoomScan/Views/ScanReviewView.swift")
             #expect(!source.contains("Text(\"Something went wrong\")\n"))
         }
     }
 
     @Test("RoomsAPIError conforms to LocalizedError so no caller can repeat the raw-description bug")
     func roomsAPIErrorIsLocalized() throws {
+        let source = try SourcePin.read("Patina/Core/Network/RoomsAPIClient.swift")
         withKnownIssue("deck row C4-08 / RoomsAPIClient.swift is L1-B's; unwrap after L1-B merges") {
-            let source = try SourcePin.read("Patina/Core/Network/RoomsAPIClient.swift")
             #expect(source.contains("RoomsAPIError: Error, LocalizedError")
                 || source.contains("RoomsAPIError: LocalizedError"))
         }
@@ -181,10 +193,10 @@ struct ErrorVoiceTests {
 
     @Test("ScanUploadProgressView no longer prints package.lastError verbatim")
     func scanUploadProgressDoesNotPrintRawLastError() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/RoomScan/Shared/Components/ScanUploadProgressView.swift"
+        )
         withKnownIssue("deck row C4-09 / ScanUploadProgressView.swift:57 is L1-B's; unwrap after L1-B merges") {
-            let source = try SourcePin.read(
-                "Patina/Features/RoomScan/Shared/Components/ScanUploadProgressView.swift"
-            )
             #expect(!source.contains("Text(err)"))
         }
     }
