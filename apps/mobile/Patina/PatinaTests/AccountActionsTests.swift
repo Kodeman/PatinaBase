@@ -32,7 +32,7 @@ struct AccountActionsTests {
         let copy = AccountDeletionService.failureCopy
         // A-101 / L1-E copy deck (W1): "close" → "delete", so the row, the
         // confirmation and this sentence all use one verb.
-        #expect(copy == "We couldn't delete your account just now. Try again, or write to hello@patina.cloud.")
+        #expect(copy == "We couldn’t delete your account just now. Try again, or write to hello@patina.cloud.")
         #expect(!copy.lowercased().contains("error"))
         #expect(!copy.contains("500"))
         #expect(!copy.contains("401"))
@@ -53,7 +53,7 @@ struct AccountActionsTests {
     func deletionConfirmationCopyIsHonest() {
         #expect(AccountDeletionService.confirmationTitle == "Delete account")
         #expect(AccountDeletionService.confirmationBody.contains("deletes your Patina account"))
-        #expect(AccountDeletionService.confirmationBody.contains("can't be undone"))
+        #expect(AccountDeletionService.confirmationBody.contains("can’t be undone"))
     }
 
     @Test("Settings offers Sign Out and Delete account directly")
@@ -66,7 +66,10 @@ struct AccountActionsTests {
     @Test("the account screen offers the same two acts, so the surfaces cannot disagree")
     func accountViewSurfacesBothAccountActions() throws {
         let source = try SourcePin.read("Patina/Features/Account/AccountView.swift")
-        #expect(source.contains("\"Sign Out\""))
+        // A-L1E-11: one screen shipped both spellings — the alert said
+        // "Sign Out" while the button that opens it said "Sign out".
+        #expect(source.contains("\"Sign out\""))
+        #expect(!source.contains("\"Sign Out\""))
         #expect(source.contains("\"Delete account\""))
     }
 }

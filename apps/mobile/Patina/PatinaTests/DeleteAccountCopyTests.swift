@@ -43,7 +43,7 @@ struct DeleteAccountCopyTests {
     func serverSideDeletionIsStated() {
         let body = AccountDeletionService.confirmationBody
         #expect(body.contains("deletes your Patina account"))
-        #expect(!body.contains("everything Patina keeps on this device. It can't be undone."))
+        #expect(!body.contains("everything Patina keeps on this device. It can’t be undone."))
         #expect(body.contains("rooms, pieces, and messages"))
     }
 
@@ -68,12 +68,12 @@ struct DeleteAccountCopyTests {
 
     @Test("it still says the act is irreversible")
     func irreversibilityIsStated() {
-        #expect(AccountDeletionService.confirmationBody.contains("can't be undone"))
+        #expect(AccountDeletionService.confirmationBody.contains("can’t be undone"))
     }
 
     @Test("the failure sentence is ours, never the server's")
     func failureCopyIsOurs() {
         #expect(AccountDeletionService.failureCopy
-            == "We couldn't delete your account just now. Try again, or write to hello@patina.cloud.")
+            == "We couldn’t delete your account just now. Try again, or write to hello@patina.cloud.")
     }
 }

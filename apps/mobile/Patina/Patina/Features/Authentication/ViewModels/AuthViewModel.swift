@@ -78,7 +78,7 @@ public final class AuthViewModel {
     /// never scolded.
     public var emailValidationMessage: String? {
         guard !email.isEmpty, !isValidEmail else { return nil }
-        return "That doesn't look like an email address yet."
+        return "That doesn’t look like an email address yet."
     }
 
     /// Whether password reset was successful
@@ -129,6 +129,13 @@ public final class AuthViewModel {
     // MARK: - Private
 
     private let authService = AuthService.shared
+
+    /// RL2A-12 — the verify call, injectable so the coalescing is a measured
+    /// fact rather than something only a live GoTrue can exercise.
+    @ObservationIgnored
+    var verifyOtpHandler: @MainActor @Sendable (String, String) async throws -> Void = { email, token in
+        try await AuthService.shared.verifyOtp(email: email, token: token)
+    }
     private var cooldownTask: Task<Void, Never>?
     private var verificationCooldownTask: Task<Void, Never>?
 
@@ -269,17 +276,24 @@ public final class AuthViewModel {
         guard otpToken.count == 6 else { return }
         verifyOtpTask?.cancel()
 
+        // RL2A-12: the guard above is only a guard if the flag is raised on
+        // THIS synchronous pass. Raised inside the Task instead, two callers
+        // both passed it — and `otpTokenChanged` is two callers whenever the
+        // pasted value needs trimming, because writing the trimmed string back
+        // re-fires the field's `onChange`. With a single-use code the second
+        // POST returns "Token has expired or is invalid", so an error banner
+        // could land after a successful sign-in.
+        isVerifyingOtp = true
         let email = magicLinkEmail
         let token = otpToken
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            self.isVerifyingOtp = true
             // P-22: the send's success line has done its job. Whatever this
             // attempt lands on replaces it — it never sits above a failure.
             self.successMessage = nil
             defer { self.isVerifyingOtp = false }
             do {
-                try await self.authService.verifyOtp(email: email, token: token)
+                try await self.verifyOtpHandler(email, token)
             } catch {
                 // authService.errorMessage is already set; clear the
                 // entered token so the user can retype without backspacing
@@ -395,7 +409,7 @@ public final class AuthViewModel {
             // screen no longer swallows Apple failures.
             if (error as? ASAuthorizationError)?.code != .canceled {
                 authService.reportExternalError(
-                    "Apple Sign In couldn't be completed. Please try again.",
+                    "Apple Sign In couldn’t be completed. Please try again.",
                     scope: scope
                 )
             }

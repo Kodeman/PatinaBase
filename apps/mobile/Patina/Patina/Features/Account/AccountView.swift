@@ -56,9 +56,9 @@ struct AccountView: View {
         .background(PatinaColors.Background.primary)
         .navigationTitle("Account")
         .toolbarTitleDisplayMode(.inline)
-        .alert("Sign Out", isPresented: $showingSignOutAlert) {
+        .alert("Sign out?", isPresented: $showingSignOutAlert) {
             Button("Cancel", role: .cancel) {}
-            Button("Sign Out") {
+            Button("Sign out") {
                 Task { @MainActor in
                     // Close the settings sheet first so the splash
                     // transition isn't covered by it, then trigger the
@@ -117,7 +117,7 @@ struct AccountView: View {
                 .foregroundStyle(PatinaColors.Text.muted)
                 .padding(.top, PatinaSpacing.lg)
 
-            Text("You're looking around without an account.")
+            Text("You’re looking around without an account.")
                 .font(PatinaTypography.bodyMedium)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .multilineTextAlignment(.center)

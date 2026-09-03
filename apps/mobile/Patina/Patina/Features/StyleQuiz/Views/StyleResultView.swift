@@ -51,7 +51,7 @@ struct StyleResultView: View {
                         coordinator.navigate(to: .emergence(pieceId: nil))
                     }
                 } label: {
-                    Text("View Recommendations")
+                    Text("See your pieces")
                         .font(PatinaTypography.uiAction)
                         .foregroundStyle(PatinaColors.Text.inverse)
                         .frame(maxWidth: .infinity)

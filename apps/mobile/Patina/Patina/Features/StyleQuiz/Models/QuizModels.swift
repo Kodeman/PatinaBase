@@ -70,7 +70,7 @@ enum QuizContent {
                 QuizOption(label: "Warm Minimal", gradient: PatinaGradients.warm, key: "warm_minimal"),
                 QuizOption(label: "Cool Modern", gradient: PatinaGradients.metal, key: "cool_modern"),
                 QuizOption(label: "Classic Comfort", gradient: PatinaGradients.linen, key: "classic_comfort"),
-                QuizOption(label: "Eclectic Curated", gradient: PatinaGradients.rattan, key: "eclectic_curated"),
+                QuizOption(label: "Collected Eclectic", gradient: PatinaGradients.rattan, key: "eclectic_curated"),
             ])
         ),
         QuizQuestion(
@@ -99,17 +99,17 @@ enum QuizContent {
         ),
         QuizQuestion(
             id: 3,
-            title: "Let's talk about investment",
+            title: "Let’s talk about investment",
             type: .budgetTiers([
                 QuizOption(label: "Thoughtful Starter", subtitle: "$500 – $2,000 per room", icon: "leaf", key: "starter"),
-                QuizOption(label: "Curated Comfort", subtitle: "$2,000 – $5,000 per room", icon: "sparkle", key: "curated_comfort"),
+                QuizOption(label: "Considered Comfort", subtitle: "$2,000 – $5,000 per room", icon: "sparkle", key: "curated_comfort"),
                 QuizOption(label: "Heirloom Investment", subtitle: "$5,000+ per room", icon: "diamond", key: "heirloom"),
-                QuizOption(label: "Let's Discuss", subtitle: "I'd like designer guidance", icon: "bubble.left.and.bubble.right", key: "discuss"),
+                QuizOption(label: "Let’s Discuss", subtitle: "I’d like designer guidance", icon: "bubble.left.and.bubble.right", key: "discuss"),
             ])
         ),
         QuizQuestion(
             id: 4,
-            title: "What's driving your design journey?",
+            title: "What’s driving your design journey?",
             type: .iconList([
                 QuizOption(label: "Fresh start, new space", subtitle: "Moving in or starting over", icon: "house", key: "new_space"),
                 QuizOption(label: "Finally making it mine", subtitle: "Ready to invest in this space", icon: "sparkles", key: "making_it_mine"),
