@@ -225,4 +225,83 @@ struct ThreadHeaderTests {
                 == CompanionHearthMetrics.dockHeight + 8
         )
     }
+
+    // MARK: - The header and the chrome (round 2)
+
+    /// `C-13`'s own fix drew the 34 pt avatar at x 16–50, underneath
+    /// `PatinaScreenChrome`'s back chevron (AXFrame {{17.75, 69.75}, {36.5,
+    /// 36.5}}). The header starts after the chevron's slot instead.
+    @Test("the header clears the back chevron")
+    func theHeaderClearsTheBackChevron() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Messaging/Views/ThreadDetailView.swift")
+        )
+        // The arithmetic, written where the reader can check it: the chrome's
+        // own leading inset plus the button it draws.
+        #expect(code.contains("backChevronClearance: CGFloat = 18 + 36.5 + 1.5"))
+        #expect(code.contains(".padding(.leading, Self.backChevronClearance)"))
+        // And the chrome's numbers are still what this depends on.
+        let chrome = SourceScan.code(
+            in: try SourcePin.read("Patina/Design/Components/PatinaScreenChrome.swift")
+        )
+        #expect(chrome.contains(".padding(.leading, 18)"))
+
+        let clearance: CGFloat = 18 + 36.5 + 1.5
+        #expect(clearance > 54.25, "the chevron's trailing edge on the measured frame")
+    }
+
+    /// C4-12 — L1-B's note F-L1B-4. The fourth of the five Studio detail
+    /// screens; it calls exactly what its `.task` calls.
+    @Test("the thread can be pulled to refresh")
+    func theThreadCanBePulledToRefresh() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Messaging/Views/ThreadDetailView.swift")
+        )
+        #expect(code.contains(".refreshable { await viewModel.load() }"))
+        #expect(code.contains(".task {"))
+    }
+
+    // MARK: - The message still in the air (L07-03, first clause)
+
+    /// `send()` clears the draft before the `await`. Until this, that meant the
+    /// text left the composer and arrived nowhere for the whole round trip —
+    /// up to `URLSession.shared`'s 60 s default — with no bubble, no spinner
+    /// and no banner. The disabled Send glyph was not a signal either: `canSend`
+    /// is already false because the draft is empty.
+    @Test("nothing is in the air on a fresh thread")
+    func nothingIsInTheAirToBeginWith() {
+        #expect(ThreadDetailViewModel(threadId: "t1").sendingBody == nil)
+    }
+
+    @Test("an in-flight send is on the screen")
+    func anInFlightSendIsVisible() throws {
+        let model = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Messaging/ViewModels/MessagingViewModel.swift")
+        )
+        // Set for the whole `await`, and cleared on BOTH arms — a `defer`, so
+        // a future `return` inside the `do` cannot leave a ghost bubble.
+        #expect(model.contains("sendingBody = body"))
+        #expect(model.contains("defer { sendingBody = nil }"))
+
+        let view = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Messaging/Views/ThreadDetailView.swift")
+        )
+        #expect(view.contains("if let sending = viewModel.sendingBody {"))
+        #expect(view.contains("unsentBubble(sending)"))
+        #expect(view.contains("accessibilityIdentifier(\"ThreadDetailView.Sending\")"))
+        // And the tap itself is acknowledged where the thumb was.
+        #expect(view.contains("if viewModel.isSending {"))
+    }
+
+    /// The bubble is the person's own words, not a status word: no "Sending…"
+    /// placeholder standing in for the text, and no second colour.
+    @Test("the unsent bubble draws the message, not a label")
+    func theUnsentBubbleDrawsTheMessage() throws {
+        let view = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Messaging/Views/ThreadDetailView.swift")
+        )
+        #expect(view.contains("private func unsentBubble(_ body: String) -> some View"))
+        #expect(view.contains("Text(body)"))
+        #expect(view.contains("PatinaColors.clay.opacity(0.35)"))
+    }
 }

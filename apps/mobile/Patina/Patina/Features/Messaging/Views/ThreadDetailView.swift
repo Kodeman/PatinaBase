@@ -48,11 +48,22 @@ struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
                                 row(for: item)
                             }
                         }
+                        // L07-03, first clause: for up to `URLSession.shared`'s
+                        // 60 s the person's own text had left the composer and
+                        // arrived nowhere. It is on the screen now, where they
+                        // put it, until it lands or the banner says it didn't.
+                        if let sending = viewModel.sendingBody {
+                            unsentBubble(sending)
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 12)
                 }
+                // C4-12: the fourth of the five Studio detail screens; the
+                // invoice detail is the in-repo pattern. Calls exactly what
+                // `.task` calls.
+                .refreshable { await viewModel.load() }
                 .onChange(of: viewModel.messages.count) { _, _ in
                     if let last = viewModel.messages.last?.id {
                         withAnimation { proxy.scrollTo(last, anchor: .bottom) }
@@ -89,6 +100,15 @@ struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
 
     // MARK: - Header (C-13)
 
+    /// `PatinaScreenChrome` overlays its back chevron top-leading at
+    /// `.padding(.leading, 18)`, and `BackChevronButton` measures 36.5 pt — so
+    /// the chrome owns x ∈ [18, 54.5] of this screen's first row. The header
+    /// starts after it. The number is written here rather than read from
+    /// `Design/Components/PatinaScreenChrome.swift` because that file is
+    /// another lane's this wave; `ThreadHeaderTests.theHeaderClearsTheBackChevron`
+    /// holds both to the same arithmetic.
+    private static let backChevronClearance: CGFloat = 18 + 36.5 + 1.5
+
     private var header: some View {
         HStack(spacing: 12) {
             avatar
@@ -106,8 +126,11 @@ struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
+        .padding(.leading, Self.backChevronClearance)
+        .padding(.trailing, 16)
+        // 8 pt puts the 34 pt avatar's centre within 1 pt of the 36.5 pt
+        // chevron's, which is what makes the row read as one bar.
+        .padding(.top, 8)
         .padding(.bottom, 12)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("ThreadDetailView.Header")
@@ -173,6 +196,34 @@ struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("ThreadDetailView.SendFailure")
         }
+    }
+
+    // MARK: - The message still in the air (L07-03)
+
+    /// The person's own text, in their own bubble, dimmed until it lands.
+    ///
+    /// `send()` clears the draft before the `await`, so between the tap and
+    /// `URLSession.shared`'s 60 s timeout the screen showed nothing at all —
+    /// no bubble, no spinner, no banner. The disabled Send glyph is not a
+    /// signal either: `canSend` is already false because the draft is empty.
+    private func unsentBubble(_ body: String) -> some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 48)
+            Text(body)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(PatinaColors.clay.opacity(0.35))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .frame(maxWidth: 280, alignment: .trailing)
+                .opacity(0.55)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.top, 14)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("You, \(body), sending")
+        .accessibilityIdentifier("ThreadDetailView.Sending")
     }
 
     // MARK: - Transcript rows
@@ -381,14 +432,24 @@ struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
             Button {
                 Task { await viewModel.send() }
             } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(canSend ? PatinaColors.Text.interactive : PatinaColors.Text.muted.opacity(0.6))
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
+                Group {
+                    if viewModel.isSending {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(
+                                canSend
+                                    ? PatinaColors.Text.interactive
+                                    : PatinaColors.Text.muted.opacity(0.6)
+                            )
+                    }
+                }
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
             .disabled(!canSend)
-            .accessibilityLabel("Send message")
+            .accessibilityLabel(viewModel.isSending ? "Sending message" : "Send message")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

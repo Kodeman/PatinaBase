@@ -296,6 +296,14 @@ final class ThreadDetailViewModel {
     /// The last body a failed send was carrying, so Retry re-sends THAT rather
     /// than whatever is in the composer now.
     private(set) var failedSendBody: String?
+    /// The body currently in the air (`L07-03`, first clause).
+    ///
+    /// `send()` clears the draft before the `await`, so the text left the
+    /// composer and arrived nowhere for as long as the round trip took — up to
+    /// `URLSession.shared`'s 60 s default. The transcript draws this as an
+    /// unsent bubble, which is the finding's own "better" option: the person
+    /// can see their words the whole time.
+    private(set) var sendingBody: String?
     private(set) var header: ThreadHeader?
 
     /// The transcript minus the studio's own bookkeeping (`C-14`).
@@ -372,6 +380,8 @@ final class ThreadDetailViewModel {
     private func send(body: String) async {
         isSending = true
         sendError = nil
+        sendingBody = body
+        defer { sendingBody = nil }
         do {
             let saved = try await MessagingAPIClient.shared.sendMessage(threadId: threadId, body: body)
             // Optimistic append; the realtime echo will be deduped by id
