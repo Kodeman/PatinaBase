@@ -100,6 +100,29 @@ enum PatinaContrast {
         return ratio(composited, on: ground, style)
     }
 
+    /// A translucent wash over a ground, as an opaque colour — the ground an
+    /// ink drawn on top of it is actually measured against. `PatinaStatusBadge`
+    /// paints `tint.opacity(0.14)` and then puts its label on that.
+    static func compositedGround(
+        _ wash: Color,
+        opacity: Double,
+        on ground: Color,
+        _ style: UIUserInterfaceStyle
+    ) -> Color {
+        let over = components(wash, style)
+        let under = components(ground, style)
+        func blend(_ a: CGFloat, _ b: CGFloat) -> Double {
+            Double(a) * opacity + Double(b) * (1 - opacity)
+        }
+        return Color(
+            .sRGB,
+            red: blend(over.red, under.red),
+            green: blend(over.green, under.green),
+            blue: blend(over.blue, under.blue),
+            opacity: 1
+        )
+    }
+
     /// True when the token resolves to a different value in the two
     /// appearances — the definition of "adaptive" every dark-mode finding in
     /// this lane turns on.

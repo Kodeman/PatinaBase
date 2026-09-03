@@ -159,6 +159,53 @@ struct ContrastTests {
         }
     }
 
+    /// `A-73`, `RL1D-R3-04`. The status badge draws a 12 pt uppercase label and
+    /// its glyph in one colour and paints its own ground with the same colour
+    /// at 14 %. That is a label on a wash, so it takes the body bar — and the
+    /// first round's sweep read `error` as "a status colour, therefore not
+    /// text" and left it: `PatinaColors.error` on its own wash is **2.65:1**
+    /// light. The badge is rendered by `PatinaStatusBadge(state: .error, …)` on
+    /// proposal detail, and the same pair is the invoice banner's glyph.
+    ///
+    /// Error alone. `info` (2.34:1), `success` (2.55:1) and `warning` (1.90:1)
+    /// fail the same bar on the light canvas and are **not** asserted here,
+    /// because no W1 finding measured them and inventing three text-grade
+    /// status tokens is a palette decision this lane was not asked to make.
+    /// They are reported as an open gap rather than left unnamed.
+    @Test("the status badge's error ink clears AA on its own wash")
+    func theStatusBadgeInkClearsAAOnItsOwnWash() {
+        for style in PatinaContrast.appearances {
+            for (groundName, ground) in Self.grounds {
+                // The wash as the component draws it: the state's tint at 14 %
+                // over whatever the badge is placed on.
+                let washed = PatinaContrast.compositedGround(
+                    PatinaStatusBadge.State.error.tint, opacity: 0.14, on: ground, style
+                )
+                let measured = PatinaContrast.ratio(
+                    PatinaStatusBadge.State.error.inkTint, on: washed, style
+                )
+                #expect(
+                    measured >= 4.5,
+                    "the error badge's ink on its own wash over \(groundName) in \(PatinaContrast.name(style)) is \(PatinaContrast.rounded(measured)):1, below the 4.5:1 body bar"
+                )
+            }
+        }
+    }
+
+    /// The counterfactual, so a future "just use the status colour" is met with
+    /// the number rather than an opinion.
+    @Test("the raw status colour still cannot carry the badge's label")
+    func theRawErrorColourStillCannotCarryTheLabel() {
+        let washed = PatinaContrast.compositedGround(
+            PatinaColors.error, opacity: 0.14, on: PatinaColors.Background.primary, .light
+        )
+        let measured = PatinaContrast.ratio(PatinaColors.error, on: washed, .light)
+        #expect(
+            measured < 4.5,
+            "PatinaColors.error on its own wash is now \(PatinaContrast.rounded(measured)):1 — if this passes, A-73's premise changed"
+        )
+    }
+
     /// `C3-05`. The tier badge is a 10 pt uppercase numeral on a filled pill —
     /// the exact shape the finding measured at 2.33:1.
     @Test("the tier pill's label clears AA on its own fill")

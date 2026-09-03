@@ -116,14 +116,14 @@ struct InvoiceDetailView: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: bannerIcon(state))
                 .font(PatinaTypography.bodySmall)
-                .foregroundStyle(bannerTint(state))
+                .foregroundStyle(state.inkTint)
             Text(text)
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.secondary)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(bannerTint(state).opacity(0.1))
+        .background(state.tint.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 24)
     }
@@ -136,14 +136,10 @@ struct InvoiceDetailView: View {
         }
     }
 
-    private func bannerTint(_ state: PatinaStatusBadge.State) -> Color {
-        switch state {
-        case .success: return PatinaColors.success
-        case .warning: return PatinaColors.warning
-        case .error: return PatinaColors.error
-        case .info: return PatinaColors.dustyBlue
-        }
-    }
+    // A-73: this re-derived the badge's palette by hand and painted the glyph
+    // with the wash value — `PatinaColors.error` at 2.65:1 on its own 10 %
+    // ground. The badge already publishes the two, split: `tint` is the wash,
+    // `inkTint` is the ink.
 
     // MARK: - Amount summary
 
