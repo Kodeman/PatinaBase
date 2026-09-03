@@ -56,14 +56,29 @@ public final class AuthService {
         errorScope == .root ? errorMessage : nil
     }
 
-    /// Clear any existing error message
-    public func clearError() {
-        errorMessage = nil
+    /// The mirror of `rootErrorMessage`: what a presented sheet may render.
+    /// Without it a root-scoped failure — an Apple exchange raised behind the
+    /// sheet — painted the sheet's own status region, which is the same leak
+    /// P-29 closed, pointing the other way.
+    public var sheetErrorMessage: String? {
+        errorScope == .sheet ? errorMessage : nil
     }
 
-    /// Record an error against the surface that raised it.
+    /// Clear any existing error message.
+    ///
+    /// The scope goes back with it. Leaving a stale `.sheet` behind a nil
+    /// message meant the next reader of `errorScope` was answering about an
+    /// error that no longer existed.
+    public func clearError() {
+        errorMessage = nil
+        errorScope = .root
+    }
+
+    /// Record an error against the surface that raised it. Not `private`:
+    /// `AuthErrorRoutingTests` drives it, because a test that compares two
+    /// enum cases to each other has not exercised the routing at all.
     @MainActor
-    private func setError(_ message: String?, scope: AuthErrorScope) {
+    func setError(_ message: String?, scope: AuthErrorScope) {
         errorScope = scope
         errorMessage = message
     }
@@ -145,6 +160,35 @@ public final class AuthService {
         return accountChanged
     }
 
+    /// Install a session, with `B-21` resolved FIRST.
+    ///
+    /// `applySession` publishing `session` is what wakes the phase observer,
+    /// and `derivePhase` reads `AppSettings.hasCompletedOnboarding` the moment
+    /// it does. Resolving from the auth-state listener instead put the resolve
+    /// ~130 ms late: signing in as an account that has already onboarded
+    /// logged `phase auth → onboarding (onboarded=false)` and then
+    /// `phase onboarding → main (onboarded=true)`, and `ContentView` animates
+    /// phase changes over 0.5 s — so it was a visible cross-fade through the
+    /// intro carousel, not a dropped frame.
+    ///
+    /// The resolve costs nothing on the repeat path (`hasCompletedOnboarding`
+    /// already true, or the account already recorded on this device); only a
+    /// genuinely unknown account pays the budgeted server read, which is
+    /// exactly the case `B-21` is about. `nil` sessions do not come through
+    /// here — there is nothing to resolve for a sign-out.
+    @MainActor
+    @discardableResult
+    private func establishSession(_ session: Session) async -> Bool {
+        let userId = session.user.id.uuidString
+        // Stamped before the await so a second install landing during the read
+        // cannot double-run it.
+        if onboardingResolvedForUserId != userId {
+            onboardingResolvedForUserId = userId
+            await onboardingCompletion.resolve(userId: userId)
+        }
+        return applySession(session)
+    }
+
     /// Mark auth state as ready after the first event and fan out to every
     /// awaiting caller. Its own function so the listener stays under the
     /// branch budget `cyclomatic_complexity` sets.
@@ -166,29 +210,24 @@ public final class AuthService {
                 // hydration a few lines down, and `settleLocalStore`'s room
                 // reconcile, both read singletons that are still holding the
                 // previous account's rows until the reset inside this runs.
-                let accountChanged = self.applySession(session)
+                //
+                // B-21's resolve is inside `establishSession`, not here: it has
+                // to precede the assignment that wakes the phase observer, and
+                // the observer wakes on `applySession`, wherever it is called
+                // from. Its own watermark means the six call sites that install
+                // a session BEFORE GoTrue emits the matching event have already
+                // paid for it by the time this arrives.
+                let accountChanged: Bool
+                if let session {
+                    accountChanged = await self.establishSession(session)
+                } else {
+                    accountChanged = self.applySession(nil)
+                    // Signed out: the next sign-in resolves again.
+                    onboardingResolvedForUserId = nil
+                }
 
                 if let user = session?.user {
                     Self.settleLocalStore(for: user.id.uuidString)
-                    // B-21: resolve onboarding for THIS account, once per
-                    // account per launch, so a client who has already done it
-                    // never meets the intro carousel.
-                    //
-                    // Deliberately NOT gated on `accountChanged`. Six of the
-                    // seven `applySession` call sites run BEFORE GoTrue emits
-                    // the matching event (the header above says so), so by the
-                    // time `.signedIn` arrives `settledUserId` already holds
-                    // this user and `accountChanged` is false — the gate never
-                    // fired on any real sign-in. Its own watermark instead,
-                    // stamped before the await so a second event landing during
-                    // the read cannot double-run it.
-                    if onboardingResolvedForUserId != user.id.uuidString {
-                        onboardingResolvedForUserId = user.id.uuidString
-                        await self.onboardingCompletion.resolve(userId: user.id.uuidString)
-                    }
-                } else {
-                    // Signed out: the next sign-in resolves again.
-                    onboardingResolvedForUserId = nil
                 }
 
                 self.markAuthStateReady()
@@ -363,7 +402,7 @@ public final class AuthService {
                 email: email,
                 password: password
             )
-            applySession(session)
+            await establishSession(session)
         } catch {
             // GoTrue returns `email_not_confirmed` when a fresh signup tries
             // to sign in before clicking the verification link. Surface this
@@ -406,7 +445,8 @@ public final class AuthService {
     @MainActor
     public func signInWithApple(
         credential: ASAuthorizationAppleIDCredential,
-        rawNonce: String?
+        rawNonce: String?,
+        scope: AuthErrorScope = .root
     ) async throws {
         lastAttemptedSignInMethod = "apple"
         isLoading = true
@@ -415,7 +455,7 @@ public final class AuthService {
 
         guard let identityToken = credential.identityToken,
               let tokenString = String(data: identityToken, encoding: .utf8) else {
-            setError("Failed to get Apple ID token", scope: .root)
+            setError("Failed to get Apple ID token", scope: scope)
             throw NetworkError.unauthorized
         }
 
@@ -427,12 +467,12 @@ public final class AuthService {
                     nonce: rawNonce
                 )
             )
-            applySession(session)
+            await establishSession(session)
             await captureAppleName(from: credential)
             // B2 v3(c) / A3-07 — see `applyHomeownerRoleAfterOAuth`.
             await applyHomeownerRoleAfterOAuth(session: session)
         } catch {
-            setError(error.localizedDescription, scope: .root)
+            setError(error.localizedDescription, scope: scope)
             throw error
         }
     }
@@ -549,7 +589,7 @@ public final class AuthService {
                 data: metadata
             )
             if let session = response.session {
-                applySession(session)
+                await establishSession(session)
             } else {
                 // Production has email confirmation on, so GoTrue returns a
                 // user but NO session here. Surface the same case `signIn`
@@ -572,9 +612,12 @@ public final class AuthService {
     /// authorization callback) on the shared auth error banner. Used by the
     /// welcome screen, which otherwise has no way to report a pre-service
     /// failure. User-cancellation should NOT be reported here.
+    /// `scope` names the surface the button lives on. The Apple button exists
+    /// on the Welcome root AND inside the sign-in sheet; a failure belongs to
+    /// whichever one the reader is looking at.
     @MainActor
-    public func reportExternalError(_ message: String) {
-        setError(message, scope: .root)
+    public func reportExternalError(_ message: String, scope: AuthErrorScope = .root) {
+        setError(message, scope: scope)
     }
 
     // MARK: - Sign Out
@@ -749,7 +792,7 @@ public final class AuthService {
                         accessToken: accessToken,
                         refreshToken: refreshToken
                     )
-                    applySession(session)
+                    await establishSession(session)
                     return
                 } catch {
                     // Root scope: the emailed link is opened against the auth
@@ -763,7 +806,7 @@ public final class AuthService {
         // PKCE / code-exchange flow — let the SDK handle it.
         do {
             let session = try await supabase.auth.session(from: url)
-            applySession(session)
+            await establishSession(session)
         } catch {
             setError(error.localizedDescription, scope: .root)
             throw error
@@ -792,7 +835,7 @@ public final class AuthService {
 
         do {
             let newSession = try await supabase.auth.refreshSession()
-            applySession(newSession)
+            await establishSession(newSession)
         } catch {
             // If refresh fails, user needs to re-authenticate
             applySession(nil)
@@ -805,7 +848,7 @@ public final class AuthService {
     public func getSession() async -> Session? {
         do {
             let session = try await supabase.auth.session
-            applySession(session)
+            await establishSession(session)
             return session
         } catch {
             return nil

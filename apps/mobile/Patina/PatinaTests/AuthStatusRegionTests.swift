@@ -35,7 +35,10 @@ struct AuthStatusRegionTests {
         #expect(viewModel.status?.isFailure == false)
 
         // With an error present, the success line is not what the region says.
-        AuthService.shared.reportExternalError("Token has expired or is invalid")
+        // Scoped `.sheet`: this region IS the sheet, and P-29 runs both ways —
+        // a root-scoped failure (the Welcome screen's own Apple button, behind
+        // this sheet) belongs to the screen underneath.
+        AuthService.shared.setError("Token has expired or is invalid", scope: .sheet)
         defer { AuthService.shared.clearError() }
         #expect(viewModel.status?.isFailure == true)
         #expect(viewModel.status?.message == "Token has expired or is invalid")

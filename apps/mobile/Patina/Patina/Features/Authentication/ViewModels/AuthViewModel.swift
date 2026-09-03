@@ -44,9 +44,14 @@ public final class AuthViewModel {
         authService.isLoading
     }
 
-    /// Error message
+    /// Error message.
+    ///
+    /// P-29, the other direction: this view model only ever drives a presented
+    /// sheet, so it reads the sheet-scoped message. A root-scoped failure —
+    /// the Welcome screen's own Apple button, raised behind this sheet —
+    /// belongs to the screen underneath, not here.
     public var errorMessage: String? {
-        authService.errorMessage
+        authService.sheetErrorMessage
     }
 
     /// Success message (e.g., for password reset)
@@ -368,13 +373,18 @@ public final class AuthViewModel {
     @MainActor
     public func handleAppleSignIn(
         result: Result<ASAuthorization, Error>,
-        rawNonce: String?
+        rawNonce: String?,
+        scope: AuthErrorScope = .root
     ) async {
         switch result {
         case .success(let authorization):
             if let credential = authorization.credential as? ASAuthorizationAppleIDCredential {
                 do {
-                    try await authService.signInWithApple(credential: credential, rawNonce: rawNonce)
+                    try await authService.signInWithApple(
+                        credential: credential,
+                        rawNonce: rawNonce,
+                        scope: scope
+                    )
                 } catch {
                     // Error is already set in authService
                 }
@@ -385,7 +395,8 @@ public final class AuthViewModel {
             // screen no longer swallows Apple failures.
             if (error as? ASAuthorizationError)?.code != .canceled {
                 authService.reportExternalError(
-                    "Apple Sign In couldn't be completed. Please try again."
+                    "Apple Sign In couldn't be completed. Please try again.",
+                    scope: scope
                 )
             }
             PatinaLog.auth.error("Apple Sign In failed: \(error.localizedDescription)")
