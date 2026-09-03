@@ -61,7 +61,7 @@ public final class FrameCaptureService {
     /// GPU-backed and thread-safe, the way `PosedPhotoService` already does
     /// it — which is why it is `nonisolated` and the encode can leave the
     /// main actor.
-    private nonisolated let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    nonisolated private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     // MARK: - Initialization
 
@@ -270,7 +270,7 @@ public final class FrameCaptureService {
 
     /// Render and compress off the main actor. HEIC, falling back to JPEG on
     /// a device or image the HEIC encoder refuses.
-    private nonisolated static func encode(
+    nonisolated private static func encode(
         _ image: CIImage,
         context: CIContext,
         quality: CGFloat

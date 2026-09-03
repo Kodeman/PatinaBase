@@ -35,37 +35,40 @@ struct LoadStateHonestyTests {
     /// that will eventually lie.
     @Test
     func everySurfaceCanTellTheThreeStatesApart() throws {
-        let sources: [(String, String, [String])] = [
-            (
-                "Patina/Features/Rooms/RoomSyncCoordinator.swift",
-                "rooms",
-                ["lastLoadFailed", "isLoading", "lastSuccessAt"]
+        struct Surface {
+            let path: String
+            let name: String
+            let required: [String]
+        }
+        let surfaces = [
+            Surface(
+                path: "Patina/Features/Rooms/RoomSyncCoordinator.swift", name: "rooms",
+                required: ["lastLoadFailed", "isLoading", "lastSuccessAt"]
             ),
-            (
-                "Patina/Features/Collections/ViewModels/CollectionsViewModel.swift",
-                "saved pieces",
-                ["lastLoadFailed", "isLoading", "loadState"]
+            Surface(
+                path: "Patina/Features/Collections/ViewModels/CollectionsViewModel.swift",
+                name: "saved pieces",
+                required: ["lastLoadFailed", "isLoading", "loadState"]
             ),
-            (
-                "Patina/Features/Profile/ViewModels/StudioHubViewModel.swift",
-                "the Studio hub",
-                ["failedSources", "isLoading", "hasLoaded", "lastSuccessAt", "stalenessLine"]
+            Surface(
+                path: "Patina/Features/Profile/ViewModels/StudioHubViewModel.swift",
+                name: "the Studio hub",
+                required: ["failedSources", "isLoading", "hasLoaded", "lastSuccessAt", "stalenessLine"]
             ),
-            (
-                "Patina/Features/Orders/Views/OrderDetailView.swift",
-                "an order",
-                ["service.isLoading", "service.lastRefreshFailed"]
+            Surface(
+                path: "Patina/Features/Orders/Views/OrderDetailView.swift", name: "an order",
+                required: ["service.isLoading", "service.lastRefreshFailed"]
             ),
-            (
-                "Patina/Features/Proposals/ViewModels/ProposalsViewModel.swift",
-                "a proposal",
-                ["isLoading", "error", "fetchDeadline"]
+            Surface(
+                path: "Patina/Features/Proposals/ViewModels/ProposalsViewModel.swift",
+                name: "a proposal",
+                required: ["isLoading", "error", "fetchDeadline"]
             )
         ]
-        for (path, surface, required) in sources {
-            let source = try SourcePin.read(path)
-            for token in required {
-                #expect(source.contains(token), "\(surface) cannot express \(token)")
+        for surface in surfaces {
+            let source = try SourcePin.read(surface.path)
+            for token in surface.required {
+                #expect(source.contains(token), "\(surface.name) cannot express \(token)")
             }
         }
     }

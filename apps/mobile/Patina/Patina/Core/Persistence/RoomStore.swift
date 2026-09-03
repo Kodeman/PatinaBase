@@ -15,18 +15,33 @@ public final class RoomStore {
 
     public let context: ModelContext
 
+    /// Whether this store is the device-global one every screen reads.
+    ///
+    /// GAP3-18's scope applies to that store and only that store: a caller
+    /// that brought its own `ModelContext` — a test, a preview, a migration
+    /// working set — is looking at rows it created, not at an account's.
+    /// Gating those too made `allRooms()` answer `[]` in every suite that
+    /// builds an in-memory container, which is a different bug.
+    private let isSharedStore: Bool
+
     public init(context: ModelContext) {
         self.context = context
+        self.isSharedStore = context === PersistenceController.shared.container.mainContext
     }
 
     // MARK: - Reads
+
+    /// The GAP3-18 scope, applied to the shared store only.
+    private var accountRowsAreVisible: Bool {
+        !isSharedStore || LocalStoreOwnership.accountRowsAreVisible
+    }
 
     public func allRooms() -> [RoomModel] {
         // GAP3-18: after a sign-out the store still holds the account's rooms
         // — it must, or the same account signing back in loses them — but the
         // guest now holding the phone is not their owner. The rows stay; the
         // read is scoped.
-        guard LocalStoreOwnership.accountRowsAreVisible else { return [] }
+        guard accountRowsAreVisible else { return [] }
         let descriptor = FetchDescriptor<RoomModel>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
@@ -34,7 +49,7 @@ public final class RoomStore {
     }
 
     public func room(id: UUID) -> RoomModel? {
-        guard LocalStoreOwnership.accountRowsAreVisible else { return nil }
+        guard accountRowsAreVisible else { return nil }
         let descriptor = FetchDescriptor<RoomModel>(
             predicate: #Predicate { $0.id == id }
         )
@@ -49,7 +64,7 @@ public final class RoomStore {
     }
 
     public func allItems() -> [SavedItem] {
-        guard LocalStoreOwnership.accountRowsAreVisible else { return [] }
+        guard accountRowsAreVisible else { return [] }
         let descriptor = FetchDescriptor<SavedItem>(
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
         )

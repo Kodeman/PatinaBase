@@ -183,11 +183,21 @@ struct AccountIsolationTests {
                 source.components(separatedBy: reader).last?
                     .components(separatedBy: "\n    }").first
             )
-            #expect(
-                body.contains("LocalStoreOwnership.accountRowsAreVisible"),
-                "\(reader) is not scoped"
-            )
+            #expect(body.contains("guard accountRowsAreVisible"), "\(reader) is not scoped")
         }
+        #expect(source.contains("!isSharedStore || LocalStoreOwnership.accountRowsAreVisible"))
+    }
+
+    /// …and the scope reaches only the device-global store. A caller that
+    /// brought its own context — a test, a preview — is reading rows it
+    /// created, not an account's, and gating those was a different bug: it
+    /// answered `[]` in every suite that builds an in-memory container.
+    @Test
+    func aPrivateContextIsNotScoped() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        _ = store.createRoom(name: "Bench", roomType: "other", manualEntry: true)
+        #expect(store.allRooms().count == 1)
     }
 
     /// B-15's real half: the taste portrait's two `UserDefaults` keys carry

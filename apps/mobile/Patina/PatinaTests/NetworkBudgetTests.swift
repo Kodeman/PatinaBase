@@ -55,14 +55,14 @@ struct NetworkBudgetTests {
 
     @Test
     func theQuizHasItsOwnShorterBudget() {
-        #expect(APIConfiguration.quizTimeout <= 10)
-        #expect(APIConfiguration.quizTimeout < APIConfiguration.requestTimeout)
+        #expect(APIConfiguration.quizSubmissionTimeout <= 10)
+        #expect(APIConfiguration.quizSubmissionTimeout < APIConfiguration.requestTimeout)
     }
 
     @Test
     func theQuizRPCAppliesIt() throws {
         let source = try SourcePin.read("Patina/Core/Network/ProductAPIClient.swift")
         let quiz = source.components(separatedBy: "func processStyleQuiz(").last ?? ""
-        #expect(quiz.contains("request.timeoutInterval = APIConfiguration.quizTimeout"))
+        #expect(quiz.contains("request.timeoutInterval = APIConfiguration.quizSubmissionTimeout"))
     }
 }

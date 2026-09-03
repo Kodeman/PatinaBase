@@ -78,10 +78,10 @@ struct RoomLifecycleTests {
 
         let viewModel = ProfileViewModel()
         viewModel.loadData(context: context)
-        let a = viewModel.rooms
-        let b = viewModel.rooms
-        #expect(a.count == b.count)
-        #expect(a.first?.id == b.first?.id)
+        let first = viewModel.rooms
+        let second = viewModel.rooms
+        #expect(first.count == second.count)
+        #expect(first.first?.id == second.first?.id)
     }
 
     // MARK: - B-04: the dead detail is left behind

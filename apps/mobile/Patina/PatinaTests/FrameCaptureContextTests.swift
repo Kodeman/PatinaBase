@@ -26,7 +26,7 @@ struct FrameCaptureContextTests {
     @Test
     func thereIsExactlyOneSharedContext() throws {
         let text = try source()
-        #expect(text.contains("private nonisolated let ciContext = CIContext("))
+        #expect(text.contains("nonisolated private let ciContext = CIContext("))
         // One construction site, and it is that one. Comment lines are
         // skipped so the doc comment above the declaration does not count.
         let constructions = text
@@ -41,7 +41,7 @@ struct FrameCaptureContextTests {
         let text = try source()
         let perFrame = try #require(
             text.components(separatedBy: "private func processARFrame(").last?
-                .components(separatedBy: "private nonisolated static func encode(").first
+                .components(separatedBy: "nonisolated private static func encode(").first
         )
         #expect(perFrame.contains("CIContext()") == false)
     }
@@ -49,7 +49,7 @@ struct FrameCaptureContextTests {
     @Test
     func theEncodeLeavesTheMainActor() throws {
         let text = try source()
-        #expect(text.contains("private nonisolated static func encode("))
+        #expect(text.contains("nonisolated private static func encode("))
         #expect(text.contains("Task.detached(priority: .utility)"))
     }
 
