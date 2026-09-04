@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
-import { useQueries } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useQueries } from "@tanstack/react-query";
 
 import {
   useMarkProjectRead,
@@ -14,23 +14,29 @@ import {
   useProjectRooms,
   useProjectTeamMembers,
   useStudioIdentity,
-} from '@patina/supabase';
-import type { ProjectApprovalReview, ProjectNote } from '@patina/supabase';
-import { getFieldTradeLabel } from '@patina/types';
+} from "@patina/supabase";
+import type { ProjectApprovalReview, ProjectNote } from "@patina/supabase";
+import { getFieldTradeLabel } from "@patina/types";
 
-import { openChapterOf, splitSpinePhases } from '@/components/making/making-spine';
-import { ScoredAction } from '@/components/making/scored-action';
-import { monthAndYear } from '@/components/making/standing-sentence';
-import { useAuth } from '@/hooks/use-auth';
+import {
+  openChapterOf,
+  splitSpinePhases,
+} from "@/components/making/making-spine";
+import { ScoredAction } from "@/components/making/scored-action";
+import { monthAndYear } from "@/components/making/standing-sentence";
+import { useAuth } from "@/hooks/use-auth";
 import {
   clientCommercialDocumentQueryOptions,
   useClientPlan,
   useClientSelections,
-} from '@/hooks/use-commercial-client';
-import { useHydrated } from '@/hooks/use-hydrated';
-import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
-import { isClientActionableProjectApproval } from '@/lib/client-attention';
-import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
+} from "@/hooks/use-commercial-client";
+import { useHydrated } from "@/hooks/use-hydrated";
+import {
+  partitionProposals,
+  useClientProposals,
+} from "@/hooks/use-proposals-client";
+import { isClientActionableProjectApproval } from "@/lib/client-attention";
+import { commercialSummaryFromProposal } from "@/lib/commercial-documents";
 import {
   deriveThreshold,
   parseSourceDate,
@@ -39,27 +45,37 @@ import {
   type ThresholdNote,
   type ThresholdReceipt,
   type ThresholdRoom,
-} from '@/lib/threshold/derive';
-import { planKeyGeometry } from '@/lib/threshold/plan-key';
-import { keySentence, previouslyLine, thresholdStanding } from '@/lib/threshold/standing';
-import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
+} from "@/lib/threshold/derive";
+import { planKeyGeometry } from "@/lib/threshold/plan-key";
+import {
+  keySentence,
+  previouslyLine,
+  thresholdStanding,
+} from "@/lib/threshold/standing";
+import type { ClientProjectOverview, MilestoneDetail } from "@/types/project";
 
-import { KIND_LABEL } from './consent-copy';
-import { DoorGate, type DoorProposal } from './door-gate';
-import { Doorplate } from './doorplate';
-import { Doorstep } from './doorstep';
-import { GroundFloor } from './ground-floor';
-import { HouseLedger } from './house-ledger';
-import { Letterbox } from './letterbox';
-import { Mat, type MatPaper, type MatPerson } from './mat';
-import { PlanKey } from './plan-key';
-import { Previously } from './previously';
-import { RoomBand } from './room-band';
-import { SinceYesterday } from './since-yesterday';
-import { StoryPole } from './story-pole';
-import { TheNote, type NoteEnclosure } from './the-note';
-import { TheRoad } from './the-road';
-import { WallGate } from './wall-gate';
+import { KIND_LABEL } from "./consent-copy";
+import { DoorGate, type DoorProposal } from "./door-gate";
+import { Doorplate } from "./doorplate";
+import { Doorstep } from "./doorstep";
+import { GroundFloor } from "./ground-floor";
+import { HouseLedger } from "./house-ledger";
+import { Letterbox } from "./letterbox";
+import { Mat, type MatPaper, type MatPerson } from "./mat";
+import { PlanKey } from "./plan-key";
+import { Previously } from "./previously";
+import {
+  SelectionEditionAsk,
+  StudioReviewAsk,
+  SubmittedReviewsPrevious,
+} from "./review-ask";
+import { RoomBand } from "./room-band";
+import { PendingScopeChangeAsk, RequestChangeAct } from "./scope-change-ask";
+import { SinceYesterday } from "./since-yesterday";
+import { StoryPole } from "./story-pole";
+import { TheNote, type NoteEnclosure } from "./the-note";
+import { TheRoad } from "./the-road";
+import { WallGate } from "./wall-gate";
 
 /* ── THE THRESHOLD ──────────────────────────────────────────────────────────
    The Making's wiring discipline, applied to the house: every part below is
@@ -81,30 +97,33 @@ import { WallGate } from './wall-gate';
 /** `deriveThreshold` takes a Date it does not read; this is the pre-hydration one. */
 const EPOCH = new Date(0);
 
-const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
+const LONG_MONTH_DAY = new Intl.DateTimeFormat("en-US", {
+  month: "long",
+  day: "numeric",
+});
 
 /** The house's brass. Every leaf reads it as `var(--threshold-accent, #8A5F19)`. */
-const ACCENT_STYLE = { '--threshold-accent': '#8A5F19' } as CSSProperties;
+const ACCENT_STYLE = { "--threshold-accent": "#8A5F19" } as CSSProperties;
 
 /** Team roles, in the house's own voice rather than the internal vocabulary. */
 const ROLE_WORD: Record<string, string> = {
-  lead_designer: 'lead designer',
-  support_designer: 'support designer',
-  bookkeeper: 'bookkeeper',
-  previous_lead: 'previous lead',
-  vendor: 'vendor',
+  lead_designer: "lead designer",
+  support_designer: "support designer",
+  bookkeeper: "bookkeeper",
+  previous_lead: "previous lead",
+  vendor: "vendor",
 };
 
 /** On-the-job kinds, matching the client portal's existing plain-English set. */
 const PARTY_WORD: Record<string, string> = {
-  gc: 'general contractor',
-  sub: 'subcontractor',
-  installer: 'installer',
-  receiver: 'receiving',
-  architect: 'architect',
-  photographer: 'photographer',
-  stager: 'stager',
-  vendor: 'vendor',
+  gc: "general contractor",
+  sub: "subcontractor",
+  installer: "installer",
+  receiver: "receiving",
+  architect: "architect",
+  photographer: "photographer",
+  stager: "stager",
+  vendor: "vendor",
 };
 
 function words(value: string | null | undefined): string | null {
@@ -131,21 +150,31 @@ function roomTargetCents(
   planTargets: Map<string, number>,
 ): number | null {
   const planned = planTargets.get(name.trim().toLowerCase());
-  if (typeof planned === 'number') return planned;
+  if (typeof planned === "number") return planned;
   const budget = row.budget_cents;
-  return typeof budget === 'number' && Number.isFinite(budget) && budget > 0 ? budget : null;
+  return typeof budget === "number" && Number.isFinite(budget) && budget > 0
+    ? budget
+    : null;
 }
 
-function toThresholdRoom(row: unknown, targets: Map<string, number>): ThresholdRoom | null {
+function toThresholdRoom(
+  row: unknown,
+  targets: Map<string, number>,
+): ThresholdRoom | null {
   const record = row as Record<string, unknown> | null;
-  if (!record || typeof record.id !== 'string' || typeof record.name !== 'string') return null;
+  if (
+    !record ||
+    typeof record.id !== "string" ||
+    typeof record.name !== "string"
+  )
+    return null;
   const area = record.floor_area_sqft;
   const name = record.name;
   return {
     id: record.id,
     name,
-    sortOrder: typeof record.sort_order === 'number' ? record.sort_order : 0,
-    floorAreaSqft: typeof area === 'number' ? area : null,
+    sortOrder: typeof record.sort_order === "number" ? record.sort_order : 0,
+    floorAreaSqft: typeof area === "number" ? area : null,
     targetCents: roomTargetCents(record, name, targets),
   };
 }
@@ -172,7 +201,8 @@ function toThresholdNote(note: ProjectNote): ThresholdNote {
  */
 function DoorstepApproval({ approval }: { approval: ProjectApprovalReview }) {
   const due = parseSourceDate(approval.dueAt);
-  const act = approval.lifecycleStatus === 'draft' ? 'Review exact edition' : 'Respond';
+  const act =
+    approval.lifecycleStatus === "draft" ? "Review exact edition" : "Respond";
 
   return (
     <section
@@ -184,9 +214,9 @@ function DoorstepApproval({ approval }: { approval: ProjectApprovalReview }) {
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
       <p className="pt-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-        {approval.lifecycleStatus === 'draft'
-          ? 'A gate · your review is required'
-          : 'A gate · your response is required'}
+        {approval.lifecycleStatus === "draft"
+          ? "A gate · your review is required"
+          : "A gate · your response is required"}
       </p>
       <h2
         id={`approval-gate-${approval.decisionId}`}
@@ -196,7 +226,7 @@ function DoorstepApproval({ approval }: { approval: ProjectApprovalReview }) {
       </h2>
       <p className="mt-2 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]">
         {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-        {due ? ` · Due ${LONG_MONTH_DAY.format(due)}` : ''}
+        {due ? ` · Due ${LONG_MONTH_DAY.format(due)}` : ""}
       </p>
       <div className="mt-4">
         <ScoredAction
@@ -281,44 +311,55 @@ export function Threshold({
 
   // undefined = the mark has not resolved this session; null = no previous
   // mark, so this is a first visit and nothing can have changed since.
-  const previousReadAt = typeof previousMark.data === 'string' ? previousMark.data : null;
-  const showSince = typeof previousMark.data === 'string';
+  const previousReadAt =
+    typeof previousMark.data === "string" ? previousMark.data : null;
+  const showSince = typeof previousMark.data === "string";
 
   // ── the papers ─────────────────────────────────────────────────────────────
-  const { pending: pendingProposals, accepted } = partitionProposals(proposalsQuery.data);
+  const { pending: pendingProposals, accepted } = partitionProposals(
+    proposalsQuery.data,
+  );
 
   // Filter on the SUMMARY's projectId, never the raw column: a furnishings
   // authorization is minted from the schedule and keeps proposals.project_id
   // NULL, so the raw column would hide the one paper that matters most.
-  const signatureGates: DoorProposal[] = pendingProposals.flatMap((proposal) => {
-    const commercial = commercialSummaryFromProposal(proposal);
-    if (commercial.projectId !== projectId || commercial.kind === 'legacy') return [];
-    return [
-      {
-        id: proposal.id,
-        title: proposal.title,
-        totalAmountCents:
-          typeof proposal.total_amount === 'number' ? proposal.total_amount : 0,
-        sentAt: commercial.sentAt,
-        updatedAt: proposal.updated_at ?? null,
-        kind: commercial.kind,
-      },
-    ];
-  });
+  const signatureGates: DoorProposal[] = pendingProposals.flatMap(
+    (proposal) => {
+      const commercial = commercialSummaryFromProposal(proposal);
+      if (commercial.projectId !== projectId || commercial.kind === "legacy")
+        return [];
+      return [
+        {
+          id: proposal.id,
+          title: proposal.title,
+          totalAmountCents:
+            typeof proposal.total_amount === "number"
+              ? proposal.total_amount
+              : 0,
+          sentAt: commercial.sentAt,
+          updatedAt: proposal.updated_at ?? null,
+          kind: commercial.kind,
+        },
+      ];
+    },
+  );
   const paperById = new Map(signatureGates.map((paper) => [paper.id, paper]));
 
-  const instrumentReceipts: ThresholdReceipt[] = accepted.flatMap((proposal) => {
-    const commercial = commercialSummaryFromProposal(proposal);
-    if (commercial.projectId !== projectId || commercial.kind === 'legacy') return [];
-    const kindLabel = KIND_LABEL[commercial.kind] ?? 'Document';
-    return [
-      {
-        id: `instrument:${proposal.id}`,
-        label: `${kindLabel} · ${proposal.title}`,
-        date: commercial.executedAt ?? null,
-      },
-    ];
-  });
+  const instrumentReceipts: ThresholdReceipt[] = accepted.flatMap(
+    (proposal) => {
+      const commercial = commercialSummaryFromProposal(proposal);
+      if (commercial.projectId !== projectId || commercial.kind === "legacy")
+        return [];
+      const kindLabel = KIND_LABEL[commercial.kind] ?? "Document";
+      return [
+        {
+          id: `instrument:${proposal.id}`,
+          label: `${kindLabel} · ${proposal.title}`,
+          date: commercial.executedAt ?? null,
+        },
+      ];
+    },
+  );
 
   // ── the rooms ──────────────────────────────────────────────────────────────
   // A room's target is the client plan's own figure, summed across the lines
@@ -338,7 +379,9 @@ export function Threshold({
     : null;
 
   // ── the asks that carry no room ────────────────────────────────────────────
-  const doorstepApprovals = projectApprovals.filter(isClientActionableProjectApproval);
+  const doorstepApprovals = projectApprovals.filter(
+    isClientActionableProjectApproval,
+  );
   const approvals: ThresholdApproval[] = doorstepApprovals.map((approval) => ({
     id: approval.decisionId,
     title: approval.question,
@@ -346,8 +389,12 @@ export function Threshold({
   }));
 
   const selections =
-    selectionsQuery.data?.origin === 'commercial' ? selectionsQuery.data.selections : [];
-  const selectionById = new Map(selections.map((selection) => [selection.id, selection]));
+    selectionsQuery.data?.origin === "commercial"
+      ? selectionsQuery.data.selections
+      : [];
+  const selectionById = new Map(
+    selections.map((selection) => [selection.id, selection]),
+  );
 
   // ── what is held behind the finished work ──────────────────────────────────
   // The detection is `deriveThreshold`'s wall-mark predicate, run here because
@@ -359,8 +406,8 @@ export function Threshold({
   const tradeInstrumentIds = Array.from(
     new Set(
       selections.flatMap((selection) =>
-        selection.kind === 'trade' &&
-        selection.tradeJourney === 'substantially_complete' &&
+        selection.kind === "trade" &&
+        selection.tradeJourney === "substantially_complete" &&
         selection.instrument?.proposalId
           ? [selection.instrument.proposalId]
           : [],
@@ -378,12 +425,14 @@ export function Threshold({
   tradeInstrumentIds.forEach((proposalId, index) => {
     const draws = heldBundles[index]?.data?.tradeScope?.draws ?? [];
     const gated = draws.find((draw) => draw.gatesOnAcceptance) ?? null;
-    if (gated && gated.amountCents > 0) heldDrawCentsByProposalId[proposalId] = gated.amountCents;
+    if (gated && gated.amountCents > 0)
+      heldDrawCentsByProposalId[proposalId] = gated.amountCents;
   });
 
   const selectionUpdatedAt: Record<string, string> = {};
   for (const selection of selections) {
-    if (selection.updatedAt) selectionUpdatedAt[selection.id] = selection.updatedAt;
+    if (selection.updatedAt)
+      selectionUpdatedAt[selection.id] = selection.updatedAt;
   }
 
   // ── the model ──────────────────────────────────────────────────────────────
@@ -430,10 +479,11 @@ export function Threshold({
   const standing =
     hydrated && !loading
       ? thresholdStanding({
-          doors: model.marks.filter((mark) => mark.kind === 'door').length,
-          walls: model.marks.filter((mark) => mark.kind === 'wall').length,
+          doors: model.marks.filter((mark) => mark.kind === "door").length,
+          walls: model.marks.filter((mark) => mark.kind === "wall").length,
           balanceCents: model.ledger.owedCents ?? 0,
-          nothingOwed: model.marks.length === 0 && model.doorstepAsks.length === 0,
+          nothingOwed:
+            model.marks.length === 0 && model.doorstepAsks.length === 0,
         })
       : null;
 
@@ -443,8 +493,9 @@ export function Threshold({
   // paragraph. A note that was taken down is history the client reads in
   // Previously, not on the doorstep.
   const firstReceipt =
-    model.previously.find((entry) => entry.kind === 'instrument' && entry.date !== null) ??
-    null;
+    model.previously.find(
+      (entry) => entry.kind === "instrument" && entry.date !== null,
+    ) ?? null;
   const previously =
     hydrated && !loading && firstReceipt?.date
       ? previouslyLine({ label: firstReceipt.label, date: firstReceipt.date })
@@ -453,15 +504,17 @@ export function Threshold({
   // ── the marks, sorted onto their rooms ─────────────────────────────────────
   // `first` is decided ACROSS the page, not per band, so `#door` and `#wall`
   // are unique ids: the collapsed /proposals route lands on exactly one door.
-  const doorMarks = model.marks.filter((mark) => mark.kind === 'door');
-  const wallMarks = model.marks.filter((mark) => mark.kind === 'wall');
+  const doorMarks = model.marks.filter((mark) => mark.kind === "door");
+  const wallMarks = model.marks.filter((mark) => mark.kind === "wall");
   const firstDoorId = doorMarks[0]?.id ?? null;
   const firstWallId = wallMarks[0]?.id ?? null;
 
   /** The gate's own element id, which is `door`/`wall` only for the first one. */
   const gateAnchor = (mark: ThresholdMark): string => {
-    const first = mark.kind === 'door' ? firstDoorId : firstWallId;
-    return mark.id === first ? mark.kind : `${mark.kind}-${mark.id.replace(/:/g, '-')}`;
+    const first = mark.kind === "door" ? firstDoorId : firstWallId;
+    return mark.id === first
+      ? mark.kind
+      : `${mark.kind}-${mark.id.replace(/:/g, "-")}`;
   };
 
   const renderDoor = (mark: ThresholdMark): ReactNode => {
@@ -484,7 +537,7 @@ export function Threshold({
   };
 
   const renderWall = (mark: ThresholdMark): ReactNode => {
-    const selection = selectionById.get(mark.id.replace(/^wall:/, ''));
+    const selection = selectionById.get(mark.id.replace(/^wall:/, ""));
     if (!selection) return null;
     return (
       <WallGate
@@ -502,7 +555,8 @@ export function Threshold({
   // partition read from the other side — and it holds even if a mark ever
   // arrives naming a room that is not in `model.bands`.
   const banded = new Set(model.bands.map((band) => band.roomId));
-  const onDoorstep = (mark: ThresholdMark) => mark.roomId === null || !banded.has(mark.roomId);
+  const onDoorstep = (mark: ThresholdMark) =>
+    mark.roomId === null || !banded.has(mark.roomId);
 
   const doorstepGates: ReactNode[] = [
     ...doorMarks.filter(onDoorstep).map(renderDoor),
@@ -513,8 +567,13 @@ export function Threshold({
   /** A trade scope's own name, off the instrument the selection was cut from. */
   const scopeNameById = new Map(
     selections.flatMap((selection) =>
-      selection.kind === 'trade' && selection.instrument?.proposalId
-        ? [[selection.instrument.proposalId, selection.instrument.name] as const]
+      selection.kind === "trade" && selection.instrument?.proposalId
+        ? [
+            [
+              selection.instrument.proposalId,
+              selection.instrument.name,
+            ] as const,
+          ]
         : [],
     ),
   );
@@ -523,32 +582,37 @@ export function Threshold({
   const signedById = new Map(
     accepted.flatMap((proposal) => {
       const commercial = commercialSummaryFromProposal(proposal);
-      if (commercial.projectId !== projectId || commercial.kind === 'legacy') return [];
+      if (commercial.projectId !== projectId || commercial.kind === "legacy")
+        return [];
       return [[proposal.id, proposal.title] as const];
     }),
   );
 
   const enclosures: NoteEnclosure[] = (model.note?.enclosures ?? []).flatMap(
     (enclosure): NoteEnclosure[] => {
-      if (enclosure.kind === 'invoice') {
-        const invoice = (invoicesQuery.data ?? []).find((row) => row.id === enclosure.id);
+      if (enclosure.kind === "invoice") {
+        const invoice = (invoicesQuery.data ?? []).find(
+          (row) => row.id === enclosure.id,
+        );
         return invoice
           ? [
               {
                 ...enclosure,
-                label: invoice.invoice_number ?? 'The invoice',
-                anchor: 'letterbox',
+                label: invoice.invoice_number ?? "The invoice",
+                anchor: "letterbox",
               },
             ]
           : [];
       }
-      const mark = model.marks.find((candidate) => candidate.proposalId === enclosure.id);
+      const mark = model.marks.find(
+        (candidate) => candidate.proposalId === enclosure.id,
+      );
       // A trade scope is enclosed as the SCOPE, not as one of the lines under
       // it — "Send it with the paintwork scope", never "with The paintwork".
       if (mark) {
         const label =
-          enclosure.kind === 'trade_scope'
-            ? scopeNameById.get(enclosure.id) ?? mark.label
+          enclosure.kind === "trade_scope"
+            ? (scopeNameById.get(enclosure.id) ?? mark.label)
             : mark.label;
         return [{ ...enclosure, label, anchor: gateAnchor(mark) }];
       }
@@ -556,52 +620,68 @@ export function Threshold({
       // vanish out of the letter that enclosed it — it moves to Previously,
       // which is where she can still read it.
       const settledPaper = signedById.get(enclosure.id);
-      return settledPaper ? [{ ...enclosure, label: settledPaper, anchor: 'previously' }] : [];
+      return settledPaper
+        ? [{ ...enclosure, label: settledPaper, anchor: "previously" }]
+        : [];
     },
   );
 
   // ── the mat ────────────────────────────────────────────────────────────────
   const people: MatPerson[] = [
     ...(studioName
-      ? [{ name: studioName, role: 'the studio', where: words(project.location) ?? '' }]
+      ? [
+          {
+            name: studioName,
+            role: "the studio",
+            where: words(project.location) ?? "",
+          },
+        ]
       : []),
     ...(teamQuery.data ?? [])
-      .filter((member) => member.role !== 'client')
+      .filter((member) => member.role !== "client")
       .map((member) => ({
-        name: member.user?.full_name ?? 'Team member',
+        name: member.user?.full_name ?? "Team member",
         role: ROLE_WORD[member.role] ?? member.role,
-        where: studioName ?? '',
+        where: studioName ?? "",
       })),
     // RLS already returns only show_to_client rows to a client session; the
     // explicit filter keeps a designer previewing the portal honest.
     ...(partiesQuery.data ?? [])
       .filter((party) => party.show_to_client === true)
       .map((party) => ({
-        name: party.display_name ?? party.company_name ?? 'On the job',
+        name: party.display_name ?? party.company_name ?? "On the job",
         role: party.trade
           ? getFieldTradeLabel(party.trade)
-          : PARTY_WORD[party.party_kind] ?? party.party_kind,
-        where: party.company_name ?? '',
+          : (PARTY_WORD[party.party_kind] ?? party.party_kind),
+        where: party.company_name ?? "",
       })),
   ];
 
   const papers: MatPaper[] = [
-    ...(model.bands.length > 0 ? [{ label: 'The drawing set', href: '#key' }] : []),
+    ...(model.bands.length > 0
+      ? [{ label: "The drawing set", href: "#key" }]
+      : []),
     ...doorMarks.flatMap((mark) =>
-      paperById.has(mark.proposalId ?? '')
+      paperById.has(mark.proposalId ?? "")
         ? [{ label: mark.label, href: `#${gateAnchor(mark)}` }]
         : [],
     ),
     ...model.previously
-      .filter((entry) => entry.kind === 'instrument')
-      .map((entry) => ({ label: entry.label, href: '#previously' })),
+      .filter((entry) => entry.kind === "instrument")
+      .map((entry) => ({ label: entry.label, href: "#previously" })),
     ...(model.letterbox
-      ? [{ label: model.letterbox.number ?? 'The invoice', href: '#letterbox' }]
+      ? [{ label: model.letterbox.number ?? "The invoice", href: "#letterbox" }]
       : []),
   ];
 
   const mat = (
-    <Mat people={people} papers={papers} accountHref="/account" onSignOut={() => void signOut()} />
+    <Mat
+      people={people}
+      papers={papers}
+      accountHref="/account"
+      onSignOut={() => void signOut()}
+      extraActs={<RequestChangeAct projectId={projectId} />}
+    />
   );
 
   const ledger = <HouseLedger ledger={model.ledger} />;
@@ -610,13 +690,18 @@ export function Threshold({
   const note = (
     <TheNote
       note={model.note}
-      earlier={model.previously.filter((entry) => entry.kind === 'note')}
+      earlier={model.previously.filter((entry) => entry.kind === "note")}
       enclosures={enclosures}
       authorName={studioName}
       today={today}
     />
   );
-  const previouslySection = <Previously entries={model.previously} />;
+  const previouslySection = (
+    <>
+      <Previously entries={model.previously} />
+      <SubmittedReviewsPrevious projectId={projectId} />
+    </>
+  );
 
   const doorstep = (
     <Doorstep
@@ -655,6 +740,9 @@ export function Threshold({
       {doorstepApprovals.map((approval) => (
         <DoorstepApproval key={approval.decisionId} approval={approval} />
       ))}
+      <StudioReviewAsk projectId={projectId} />
+      <SelectionEditionAsk projectId={projectId} />
+      <PendingScopeChangeAsk projectId={projectId} />
     </>
   );
 
@@ -685,7 +773,11 @@ export function Threshold({
     body = (
       <>
         {quietDoorstep}
-        <div aria-hidden="true" data-testid="threshold-hold" className="min-h-[60vh]" />
+        <div
+          aria-hidden="true"
+          data-testid="threshold-hold"
+          className="min-h-[60vh]"
+        />
       </>
     );
   } else if (model.groundFloor) {
@@ -703,13 +795,15 @@ export function Threshold({
     );
   } else {
     const sections = [
-      { id: 'doorstep', label: 'You stand at the doorstep' },
-      { id: 'key', label: 'The whole house' },
+      { id: "doorstep", label: "You stand at the doorstep" },
+      { id: "key", label: "The whole house" },
       ...model.bands.map((band) => ({ id: band.anchor, label: band.name })),
-      ...(road ? [{ id: 'road', label: 'The road' }] : []),
-      ...(model.note ? [{ id: 'note', label: 'The note' }] : []),
-      ...(model.previously.length > 0 ? [{ id: 'previously', label: 'Previously' }] : []),
-      { id: 'mat', label: 'The mat' },
+      ...(road ? [{ id: "road", label: "The road" }] : []),
+      ...(model.note ? [{ id: "note", label: "The note" }] : []),
+      ...(model.previously.length > 0
+        ? [{ id: "previously", label: "Previously" }]
+        : []),
+      { id: "mat", label: "The mat" },
     ];
 
     body = (
@@ -737,8 +831,13 @@ export function Threshold({
           {model.bands.map((band) => (
             <RoomBand key={band.roomId} band={band} projectId={projectId}>
               {band.marks.map((mark) =>
-                mark.kind === 'door' ? renderDoor(mark) : renderWall(mark),
+                mark.kind === "door" ? renderDoor(mark) : renderWall(mark),
               )}
+              <RequestChangeAct
+                projectId={projectId}
+                roomId={band.roomId}
+                roomName={band.name}
+              />
             </RoomBand>
           ))}
 
