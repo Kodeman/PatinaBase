@@ -119,6 +119,35 @@ describe('ThresholdRouteCollapse', () => {
     expect(replace).toHaveBeenNthCalledWith(2, '/projects/p1#ledger');
   });
 
+  it('carries a solo client off the sign-in landing route to their Threshold', () => {
+    mockPathname = '/projects';
+    flagMock.mockReturnValue({ value: true, isLoading: false });
+    render(<ThresholdRouteCollapse projectIds={['p1']} />);
+
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledWith('/projects/p1#doorstep');
+  });
+
+  it('leaves a two-project client on the sign-in landing route', () => {
+    mockPathname = '/projects';
+    flagMock.mockReturnValue({ value: true, isLoading: false });
+    render(<ThresholdRouteCollapse projectIds={['p1', 'p2']} />);
+
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('does not re-fire once the sign-in hop has landed on the project page', () => {
+    mockPathname = '/projects';
+    flagMock.mockReturnValue({ value: true, isLoading: false });
+    const { rerender } = render(<ThresholdRouteCollapse projectIds={['p1']} />);
+    expect(replace).toHaveBeenCalledTimes(1);
+
+    mockPathname = '/projects/p1';
+    rerender(<ThresholdRouteCollapse projectIds={['p1']} />);
+
+    expect(replace).toHaveBeenCalledTimes(1);
+  });
+
   it('renders nothing of its own', () => {
     flagMock.mockReturnValue({ value: true, isLoading: false });
     const { container } = render(<ThresholdRouteCollapse projectIds={['p1']} />);
