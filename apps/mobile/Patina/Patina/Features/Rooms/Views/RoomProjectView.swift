@@ -34,7 +34,7 @@ struct RoomScreenLines: Equatable {
     ) -> RoomScreenLines {
         var parts: [String] = []
         if let dimensions = RoomHero.dimensions(for: room) { parts.append(dimensions) }
-        parts.append(room.hasBeenScanned ? "SCANNED" : "TYPED, NOT SCANNED")
+        parts.append(room.provenanceLine().uppercased())
         return RoomScreenLines(
             meta: parts.joined(separator: " · "),
             figures: room.savedPiecesFigureLine,
@@ -150,7 +150,7 @@ struct RoomProjectView: View {
     /// forward path so this isn't a dead end.
     private var notFoundState: some View {
         VStack(spacing: 6) {
-            Text("This room isn't on this phone")
+            Text("This room isn’t on this phone")
                 .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.Text.primary)
             Text("It may have been removed.")

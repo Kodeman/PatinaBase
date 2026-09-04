@@ -301,6 +301,21 @@ public final class RoomModel {
         items.filter { $0.hasAR }.count
     }
 
+    /// **The one provenance sentence.** `W1-B-06`: the same Guest Bedroom read
+    /// "180 SQ FT · TYPED, NOT SCANNED" in Your Spaces and "SCANNED SEP 3" on
+    /// the Studio's room card, because the Studio printed "Scanned \(date)"
+    /// unconditionally while every other surface asked `hasBeenScanned`. Three
+    /// surfaces, one source.
+    ///
+    /// - Parameter date: the date to name when the room WAS scanned. Nil
+    ///   prints the bare word, which is what the room screen and the Today
+    ///   hero already do.
+    public func provenanceLine(on date: Date? = nil, formattedBy formatter: DateFormatter? = nil) -> String {
+        guard hasBeenScanned else { return "Typed, not scanned" }
+        guard let date, let formatter else { return "Scanned" }
+        return "Scanned \(formatter.string(from: date))"
+    }
+
     /// Spec's card meta line: "264 sq ft · South-facing · Scanned Apr 2"
     public var galleryMetaLine: String {
         var parts: [String] = []

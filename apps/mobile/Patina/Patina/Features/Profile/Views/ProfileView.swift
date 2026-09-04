@@ -74,7 +74,7 @@ struct ProfileView: View {
                     if let memberSince = viewModel.memberSince {
                         HelpTooltip(
                             surfaceKey: SurfaceKeys.IOSApp.Profile.designJournal,
-                            fallback: "Your profile is a Design Journal — Patina tracks the style you've taught it, the rooms you've captured, and the pieces you've saved. Everything here informs your recommendations."
+                            fallback: "Your profile is a Design Journal — Patina tracks the style you’ve taught it, the rooms you’ve captured, and the pieces you’ve saved. Everything here informs your recommendations."
                         ) {
                             MonoLabel(text: "Member since \(memberSince)")
                                 .accessibilityLabel("Member since \(memberSince). More information available.")
@@ -86,7 +86,7 @@ struct ProfileView: View {
                     // (it blends the quiz, teaching turns, and saved items).
                     HelpTooltip(
                         surfaceKey: SurfaceKeys.IOSApp.Profile.styleBadge,
-                        fallback: "Your style signature is the label Patina has resolved for your taste — it blends the style quiz, every teaching turn, and the pieces you've saved into a single descriptor."
+                        fallback: "Your style signature is the label Patina has resolved for your taste — it blends the style quiz, every teaching turn, and the pieces you’ve saved into a single descriptor."
                     ) {
                         HStack(spacing: 6) {
                             Text("✦")
@@ -216,7 +216,7 @@ struct ProfileView: View {
     private var savedStat: some View {
         HelpTooltip(
             surfaceKey: SurfaceKeys.IOSApp.Profile.savedItems,
-            fallback: "Saved counts every piece you've hearted across the app — from the daily feed, room views, and product details. They flow into your style signature."
+            fallback: "Saved counts every piece you’ve hearted across the app — from the daily feed, room views, and product details. They flow into your style signature."
         ) {
             statItem(value: "\(viewModel.savedItemCount)", label: "Saved")
                 .accessibilityLabel("Saved pieces: \(viewModel.savedItemCount). More information available.")
@@ -300,7 +300,15 @@ struct ProfileView: View {
                         .accessibilityHidden(true)
                 }
 
-                MonoLabel(text: "Scanned \(Self.scannedDateFormatter.string(from: room.createdAt))", size: PatinaTypography.monoLabel)
+                // W1-B-06: this card said "SCANNED SEP 3" about a room Your
+                // Spaces was calling "TYPED, NOT SCANNED" in the same session.
+                // It asked the date, never `hasBeenScanned`.
+                MonoLabel(
+                    text: room.provenanceLine(
+                        on: room.createdAt, formattedBy: Self.scannedDateFormatter
+                    ),
+                    size: PatinaTypography.monoLabel
+                )
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)

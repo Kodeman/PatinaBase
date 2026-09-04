@@ -43,7 +43,7 @@ struct RoomHero: Equatable {
         RoomHero(
             roomId: room.id,
             name: room.name,
-            provenance: room.hasBeenScanned ? "SCANNED" : "TYPED, NOT SCANNED",
+            provenance: room.provenanceLine().uppercased(),
             dimensions: dimensions(for: room),
             pieces: pieces(for: room),
             stateLine: stateLine(for: room, now: now, calendar: calendar)

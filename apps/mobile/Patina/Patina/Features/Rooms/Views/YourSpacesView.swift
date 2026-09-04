@@ -148,7 +148,7 @@ struct YourSpacesView: View {
                 // item count, plus a Whole Home aggregate at the top.
                 HelpInfoIcon(
                     surfaceKey: SurfaceKeys.IOSApp.Rooms.yourSpaces,
-                    fallback: "Your Spaces shows every room you've captured. Each card summarizes the room's items and budget. Scroll past the Whole Home bar to see them.",
+                    fallback: "Your Spaces shows every room you’ve captured. Each card summarizes the room’s items and budget. Scroll past the Whole Home bar to see them.",
                     size: 14,
                     accessibilityLabel: "About Your Spaces"
                 )
@@ -204,7 +204,11 @@ struct YourSpacesView: View {
                 coordinator.presentedSheet = .newRoom
             } label: {
                 HStack(spacing: 8) {
-                    Text("◎")
+                    // W1-B-13: `B-60` replaced the `◎` glyph with
+                    // `camera.viewfinder` on the add-room sheet, and the same
+                    // character survived one screen away on the guest / empty
+                    // Spaces CTA — the door onto that very sheet.
+                    Image(systemName: "camera.viewfinder")
                     Text("Scan Your First Room")
                 }
                 .font(PatinaTypography.bodySmallMedium)

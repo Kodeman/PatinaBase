@@ -281,13 +281,22 @@ public final class DeepLinkHandler {
         let id = parts[1]
         guard !id.isEmpty else { return nil }
 
-        // PLURAL is the real spelling: it is what client-portal serves
-        // (`ls apps/client-portal/src/app` → invoices, proposals, decisions,
-        // piece), what the AASA file publishes, and what 00534 writes into
-        // every notification's `deep_link` (d-notes.md §4). The singular forms
-        // are kept as aliases so an older link still lands somewhere true.
+        // PLURAL is the real spelling for the money paths: it is what
+        // client-portal serves (`ls apps/client-portal/src/app` → invoices,
+        // proposals, decisions, piece), what the AASA file publishes, and what
+        // 00534 writes into every notification's `deep_link` (d-notes.md §4).
+        // The singular forms are kept as aliases so an older link still lands
+        // somewhere true.
+        //
+        // W1-C-12: `piece` is the exception — SINGULAR is the real spelling
+        // there, and `"pieces"` was an alias for a path nothing serves. The
+        // AASA publishes `/piece/*` only, so a `/pieces/<id>` link was never
+        // claimed by the app: it opened Safari, where client-portal has no
+        // `/pieces` route either. The table claimed a path it could never be
+        // handed. One spelling, and it is the one the portal and the AASA
+        // already agree on.
         switch parts[0] {
-        case "piece", "pieces":
+        case "piece":
             return .pieceDetail(pieceId: id)
         case "invoices", "invoice":
             return .invoiceDetail(invoiceId: id)

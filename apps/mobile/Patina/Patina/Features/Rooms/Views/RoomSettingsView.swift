@@ -244,7 +244,11 @@ struct RoomSettingsView: View {
     private func scanCard(_ room: RoomModel) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Scan Data")
+                // W1-B-06: this block headed itself "Scan Data" and summarised
+                // "2 windows detected" for a room the person TYPED. Nothing was
+                // scanned and nothing was detected; the words belong to a real
+                // scan. Same source as every other surface — `hasBeenScanned`.
+                Text(room.hasBeenScanned ? "Scan Data" : "Room measurements")
                     .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Spacer()
@@ -359,6 +363,15 @@ struct RoomSettingsView: View {
         coordinator.goBack()
         coordinator.goBack()
     }
+}
+
+// MARK: - The measurement card's own lines
+
+/// `W1-B-06` grew both of these — the card is headed by what the room IS,
+/// and its summary no longer claims a scan detected anything — which took
+/// the struct past SwiftLint's 300-line `type_body_length`. Neither is view
+/// composition, so they move rather than buying a scoped disable.
+extension RoomSettingsView {
 
     private func scanDate(_ room: RoomModel) -> String {
         Self.scanDateFormatter.string(from: room.updatedAt)
@@ -377,7 +390,17 @@ struct RoomSettingsView: View {
         if !room.lastScanConfidenceRaw.isEmpty {
             parts.append("\(room.lastScanConfidenceRaw.capitalized) confidence")
         }
-        if room.windowCount > 0 { parts.append("\(room.windowCount) windows detected") }
+        // W1-B-06: "detected" is a claim about a scan. A typed room's windows
+        // were typed by the person reading this line.
+        if room.windowCount > 0 {
+            let plural = room.windowCount == 1 ? "window" : "windows"
+            parts.append(
+                room.hasBeenScanned
+                    ? "\(room.windowCount) \(plural) detected"
+                    : "\(room.windowCount) \(plural)"
+            )
+        }
+        parts.append(room.provenanceLine())
         return parts.joined(separator: " · ")
     }
 }

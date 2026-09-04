@@ -67,7 +67,7 @@ struct SheetChromeTests {
 
     // MARK: - Pushed-screen chrome (B-27, A-89)
 
-    @Test("a tab root's title is an in-flow band, not a floating capsule")
+    @Test("a tab root’s title is an in-flow band, not a floating capsule")
     func theTabRootTitleIsABand() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Design/Components/PatinaScreenChrome.swift")
@@ -113,7 +113,7 @@ struct SheetChromeTests {
 
     // MARK: - Product detail (A-45)
 
-    @Test("the product detail's top controls do not scroll away")
+    @Test("the product detail’s top controls do not scroll away")
     func productDetailControlsArePinned() throws {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/ProductDetail/Views/ProductDetailView.swift")
@@ -140,9 +140,43 @@ struct SheetChromeTests {
                 "the sheet still leaves a second ground below its content (B-60)")
     }
 
+    // MARK: - The in-context auth sheet (W1-B-12)
+
+    /// `A-100` / `C-23` gave Settings a Done and a grabber; the `.auth` sheet —
+    /// the one the Studio hub CTA, the feed's guest CTA and the Companion
+    /// prompt all raise — presented with neither, so a reader who does not
+    /// know to swipe down had no visible way out (walk B re-walk shot 41).
+    @Test("the in-context auth sheet has a dismiss control and a grabber")
+    func authSheetHasAWayOut() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Authentication/Views/AuthSheet.swift")
+        )
+        #expect(code.contains("presentationDragIndicator(.visible)"),
+                "the auth sheet still has no grabber (W1-B-12)")
+        #expect(code.contains("auth.sheet.done"),
+                "the untitled auth sheet still has no dismiss control (W1-B-12)")
+        #expect(code.contains("auth.sheet.cancel"),
+                "the titled auth sheet lost its Cancel")
+    }
+
+    // MARK: - The empty-Spaces CTA (W1-B-13)
+
+    /// `B-60` replaced the `◎` glyph with an SF Symbol on the add-room sheet
+    /// and the same character survived one screen away, on the CTA that opens
+    /// that very sheet (walk B re-walk shot 43).
+    @Test("the empty-Spaces CTA uses the icon system the add-room sheet uses")
+    func emptySpacesCTAUsesAnSFSymbol() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Rooms/Views/YourSpacesView.swift")
+        )
+        #expect(!code.contains("\"◎\""), "the glyph icon is still there (W1-B-13)")
+        #expect(code.contains("Image(systemName: \"camera.viewfinder\")"),
+                "the CTA does not use the add-room sheet’s own scan symbol (W1-B-13)")
+    }
+
     // MARK: - The Reveal (GAP4-16)
 
-    @Test("the Reveal's CTA is painted for the ground it sits on")
+    @Test("the Reveal’s CTA is painted for the ground it sits on")
     func theRevealCTAIsVisibleInLight() throws {
         let button = SourceScan.code(
             in: try SourcePin.read(
