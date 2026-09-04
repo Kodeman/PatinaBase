@@ -64,10 +64,20 @@ struct PatinaApp: App {
         PatinaFonts.registerAll()
 
         // Reset onboarding state if requested (for UI testing)
+        //
+        // W1-C-10: the three flags below are device-wide, and neither the
+        // intro carousel nor the first-launch tour is gated on them alone.
+        // `OnboardingCompletion` remembers which ACCOUNTS have onboarded on
+        // this phone (`B-21`), and the tour keeps its own resolved state under
+        // `help-system.tour.*` — so `--resetonboarding` cleared three flags
+        // and replayed nothing, which is how a walker with the flag set still
+        // could not reach either surface.
         if Self.shouldResetOnboarding {
             AppSettings.shared.hasSeenThreshold = false
             AppSettings.shared.hasCompletedOnboarding = false
             AppSettings.shared.roomCount = 0
+            OnboardingCompletion.shared.forgetAll()
+            forgetAllFirstLaunchTourState()
         }
         // Initialize PostHog analytics (skip during UI testing, and skip when
         // the analytics kill switch is off — Debug). It runs first because

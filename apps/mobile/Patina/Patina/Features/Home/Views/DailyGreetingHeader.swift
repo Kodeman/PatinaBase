@@ -94,6 +94,17 @@ struct DailyGreetingHeader: View {
         }
         .padding(.top, 56)
         .padding(.horizontal, PatinaSpacing.mdLarge)
+        // First-launch tour, step 1. B-10's cut-out never appeared on step 1:
+        // steps 2 and 3 punched their subject out of the scrim exactly (walk B
+        // re-walk pixel-probed the record card and the Studio tab) while the
+        // greeting stayed dimmed at rgb (172,170,167). Both working anchors are
+        // applied to a laid-out block AFTER its padding — `HouseRecordCard` in
+        // `DailyRoomView`, the Studio control on the bar — and this one was
+        // applied to `titleColumn`, an inner VStack inside a `Group`'s
+        // conditional branch. It moves here, to the same shape the two that
+        // work use, and the block the bubble is about ("This is Today") is the
+        // whole header band rather than two of its three lines.
+        .firstLaunchTourAnchor(.homeGreeting)
     }
 
     /// The Studio pill and its tour anchor, in ONE place.
@@ -149,10 +160,6 @@ struct DailyGreetingHeader: View {
                 )
             }
         }
-        // First-launch tour anchor — Step 1 popover attaches to the title
-        // row of the greeting header. Wrapping the inner VStack rather
-        // than the whole HStack so the popover arrow lands on the title.
-        .firstLaunchTourAnchor(.homeGreeting)
         // C-18 / W1-B-05: `.contain` groups the column and leaves its children
         // reachable — until a label is put on the container, at which point
         // VoiceOver reads the container and stops. `describe_screen(nested:)`

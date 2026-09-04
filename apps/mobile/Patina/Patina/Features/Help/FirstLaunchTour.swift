@@ -820,6 +820,17 @@ private struct FirstLaunchTourScrim: View {
         // Without this the destination-out blend punches through the whole
         // window instead of through the scrim alone.
         .compositingGroup()
+        // `W1-B-15` asked for `.ignoresSafeArea()` here, so the dim reaches the
+        // screen edge instead of stopping at the top inset. **It was tried and
+        // reverted**: measured on `EDFCE6CF-…` against walk B's own shot 29,
+        // expanding this view moves the cut-out out of the coordinate space the
+        // anchors report themselves in, and step 3's un-dimmed Studio tab —
+        // x 300–340 pt, rgb (233,230,225) before — went to (157,156,152), i.e.
+        // the spotlight the tour's last step is entirely about disappeared.
+        // The bright band above the dim is a polish row; a step that no longer
+        // points at anything is not. `W1-B-15` stays open, and the fix it needs
+        // measures the inset and offsets the cut-out by it rather than widening
+        // the frame the cut-out is positioned in.
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .transition(.opacity)
@@ -952,9 +963,19 @@ private struct FirstLaunchTourPopoverCard: View {
                 .foregroundStyle(PatinaColors.Text.muted)
                 .accessibilityIdentifier("FirstLaunchTour.StepIndicator")
 
+            // W1-B-09: at accessibility-extra-large the card truncated its own
+            // title — "Welcome to Pat…" — because the popover is capped at
+            // 320 pt and an `h5` serif at that size does not fit one line.
+            // Wrapping is what a title should do; the scale factor is there so
+            // a single long word cannot break inside itself the way `C-06`'s
+            // surfaces did.
             Text(resolvedHeading)
                 .font(PatinaTypography.h5)
                 .foregroundStyle(PatinaColors.Text.primary)
+                .lineLimit(3)
+                .minimumScaleFactor(0.6)
+                .allowsTightening(true)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("FirstLaunchTour.Heading")
 

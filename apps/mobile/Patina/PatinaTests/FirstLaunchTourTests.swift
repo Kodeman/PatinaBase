@@ -935,7 +935,7 @@ struct FirstLaunchTourTests {
         model.startTour(triggerSource: "test")
 
         let settled = await waitUntil { model.totalSteps == 2 }
-        #expect(settled, "the record's step never settled as unmountable")
+        #expect(settled, "the record’s step never settled as unmountable")
         #expect(model.currentStepNumber == 1)
         #expect(model.totalSteps == 2)          // "Step 1 of 2"
         #expect(model.isShowingPopover(forAnchor: .homeGreeting))
@@ -959,7 +959,7 @@ struct FirstLaunchTourTests {
             in: try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
         )
         #expect(!code.contains("buttonStyle(.borderedProminent)"),
-                "the tour's Next is still a system capsule (B-09)")
+                "the tour’s Next is still a system capsule (B-09)")
         #expect(code.contains("PatinaTypography."),
                 "the tour card still uses the system type ramp (B-09)")
         #expect(code.contains("tint(PatinaColors."),
@@ -974,5 +974,74 @@ struct FirstLaunchTourTests {
         #expect(FirstLaunchTourModel.defaultSteps.count == 3)
         #expect(FirstLaunchTourModel.defaultSteps[0].fallback?.heading == "Welcome to Patina")
         #expect(FirstLaunchTourModel.defaultSteps[2].fallback?.heading == "Your Studio")
+    }
+
+    // MARK: - B-10 · step 1's cut-out
+
+    /// The scrim landed and steps 2 and 3 punch their subject out of it
+    /// exactly — pixel-probed on the re-walk at the record card (shot 28) and
+    /// at the Studio tab, x 251-349 pt (shot 29). Step 1 had no un-dimmed
+    /// region at all and the greeting measured rgb (172,170,167) against an
+    /// un-dimmed (250,247,242) (shots 27, 39).
+    ///
+    /// The two anchors that work are applied to a laid-out block AFTER its
+    /// padding. Step 1's was applied to `titleColumn`, an inner VStack inside a
+    /// `Group`'s conditional branch. This pins the shape, and
+    /// `everyDefaultStepAnchorHasExactlyOneProductionMountPerRoot` above still
+    /// pins that there is exactly one of it.
+    @Test
+    func stepOnesAnchorIsOnTheLaidOutHeader() throws {
+        let code = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
+        )
+        let padding = try #require(
+            code.range(of: ".padding(.horizontal, PatinaSpacing.mdLarge)")
+        )
+        let anchor = try #require(code.range(of: ".firstLaunchTourAnchor(.homeGreeting)"))
+        #expect(anchor.lowerBound > padding.lowerBound,
+                "step 1's anchor is back inside the header instead of on it (B-10)")
+
+        // …and not on `titleColumn`, whose own modifier chain ends with the
+        // accessibility container.
+        let column = try #require(code.range(of: "private var titleColumn: some View {"))
+        #expect(anchor.lowerBound < column.lowerBound)
+    }
+
+    // MARK: - W1-B-15 · the scrim's safe-area band stays open
+
+    /// `W1-B-15` asked for `.ignoresSafeArea()` on the scrim so the dim reaches
+    /// the screen edge. It was tried in the second fix round and reverted:
+    /// widening this view moves the cut-out out of the coordinate space the
+    /// anchors report themselves in, and step 3's un-dimmed Studio tab —
+    /// x 300–340 pt, rgb (233,230,225) in walk B's shot 29 — measured
+    /// (157,156,152) with it on. The spotlight is what the step is for.
+    ///
+    /// This pin holds the trade: the scrim keeps its cut-out, and a future fix
+    /// for the bright band must offset the rect rather than widen the frame.
+    @Test
+    func theScrimKeepsItsCutOutRatherThanItsSafeArea() throws {
+        let source = try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
+        let scrim = try #require(source.range(of: "private struct FirstLaunchTourScrim: View {"))
+        let block = String(source[scrim.lowerBound...].prefix(2200))
+        #expect(block.contains(".blendMode(.destinationOut)"))
+        #expect(block.contains(".compositingGroup()"))
+        #expect(!SourceScan.code(in: block).contains(".ignoresSafeArea()"),
+                "the scrim expands past the anchors' coordinate space again (W1-B-15's reverted attempt)")
+    }
+
+    // MARK: - W1-B-09 · the card's own title
+
+    /// At accessibility-extra-large the card truncated its own title —
+    /// "Welcome to Pat…". The popover is capped at 320 pt and an `h5` serif at
+    /// that size does not fit one line.
+    @Test
+    func theTourTitleWrapsRatherThanTruncating() throws {
+        let source = try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
+        let heading = try #require(source.range(of: "Text(resolvedHeading)"))
+        let after = String(source[heading.lowerBound...].prefix(500))
+        #expect(after.contains(".lineLimit(3)"),
+                "the tour title still truncates at one line (W1-B-09)")
+        #expect(after.contains(".minimumScaleFactor("))
+        #expect(after.contains(".fixedSize(horizontal: false, vertical: true)"))
     }
 }

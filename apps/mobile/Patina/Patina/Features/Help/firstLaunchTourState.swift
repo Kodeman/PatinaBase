@@ -100,6 +100,21 @@ internal func firstLaunchTourStorageKey(_ tourKey: String) -> String {
     "\(firstLaunchTourStateStoragePrefix)\(tourKey)"
 }
 
+/// Forget every tour this device has resolved, whatever its key.
+///
+/// `W1-C-10`: `--resetonboarding` cleared three `AppSettings` flags and
+/// nothing else, so neither the intro carousel nor the first-launch tour could
+/// be replayed — the flag the W1 walk brief depends on was inert, and walker C
+/// had to delete defaults by hand to reach the tour at all. The prefix is
+/// walked rather than one key named, because `FirstLaunchTour` takes a
+/// `tourKey` and more than one tour may have been resolved on this install.
+public func forgetAllFirstLaunchTourState(_ defaults: UserDefaults = .standard) {
+    for key in defaults.dictionaryRepresentation().keys
+    where key.hasPrefix(firstLaunchTourStateStoragePrefix) {
+        defaults.removeObject(forKey: key)
+    }
+}
+
 // MARK: - UserDefaults abstraction (for testability)
 
 /// Minimal protocol over `UserDefaults` so tests can inject a stub without
