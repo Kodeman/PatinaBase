@@ -170,6 +170,23 @@ public final class FirstLaunchTourModel {
     /// back to `false` after `complete()` or `skip()`.
     public private(set) var isActive: Bool = false
 
+    /// Whether the one-shot first-launch decision has been made: the detector
+    /// has either declined to start (resolved / already launched, locally or
+    /// cross-device) or started a tour that has since resolved.
+    public private(set) var hasSettledFirstLaunch: Bool = false
+
+    /// `true` while the tour still owns the first-run moment — the detector
+    /// has not answered yet, or it has and the tour is running.
+    ///
+    /// W0 D8c: the detector's cross-device branch is asynchronous, so at the
+    /// instant Today mounts neither `isActive` nor the persisted state can say
+    /// whether a coachmark is about to appear. Any other surface that presents
+    /// from the same host must wait on this, because UIKit refuses the second
+    /// presentation and SwiftUI reports the refusal as a dismissal.
+    public var isFirstLaunchPending: Bool {
+        isActive || !hasSettledFirstLaunch
+    }
+
     /// Set of step indexes the user actually viewed. Surfaced as the
     /// `steps_viewed` property on `help.tour.completed`.
     @ObservationIgnored private var viewedSteps: Set<Int> = []
@@ -335,9 +352,11 @@ public final class FirstLaunchTourModel {
                 guard let self else { return }
                 let entry = await adapter.cachedTourEntry(self.tourKey)
                 if entry?.isResolved == true {
+                    self.hasSettledFirstLaunch = true
                     return
                 }
                 if entry?.launched == true {
+                    self.hasSettledFirstLaunch = true
                     return
                 }
                 self.checkLocalAndStart()
@@ -352,6 +371,9 @@ public final class FirstLaunchTourModel {
     /// Supabase-cache branch can re-use it after its async check.
     private func checkLocalAndStart() {
         let state = getFirstLaunchTourState(tourKey)
+        // The answer is now known either way; `isFirstLaunchPending` stays
+        // true past this line only for a tour that actually starts below.
+        hasSettledFirstLaunch = true
         if state.isResolved { return }
         if state.launched == true {
             // Already shown once but the user closed the app mid-tour. Per
@@ -523,6 +545,7 @@ public final class FirstLaunchTourModel {
             }
         }
         isActive = false
+        hasSettledFirstLaunch = true
     }
 
     /// Abandon the tour at the current step. Fires `help.tour.abandoned` and
@@ -564,6 +587,18 @@ public final class FirstLaunchTourModel {
             }
         }
         isActive = false
+        hasSettledFirstLaunch = true
+    }
+
+    /// SwiftUI dropped the popover for `anchor`. Only a popover that actually
+    /// appeared can spend the tour: UIKit refuses a second presentation from
+    /// the same host and SwiftUI reports that refusal by resetting the binding
+    /// to `false`, which is otherwise indistinguishable from an outside tap
+    /// (W0 D8c — a tour no one saw was persisted as abandoned).
+    public func popoverDismissed(forAnchor anchor: FirstLaunchTourAnchor, didPresent: Bool) {
+        guard didPresent else { return }
+        guard isShowingPopover(forAnchor: anchor) else { return }
+        skip()
     }
 
     // MARK: - Anchor helpers
@@ -932,6 +967,12 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
     /// `FirstLaunchTourPopoverPlacement` for why the edge cannot be a constant.
     @State private var geometry = FirstLaunchTourPopoverPlacement.AnchorGeometry.unmeasured
 
+    /// Whether this anchor's popover has ever actually appeared. A refused
+    /// presentation never sets it, and the binding's setter will not spend the
+    /// tour without it (W0 D8c). Sticky on purpose: once a card has been on
+    /// screen, every later `false` from SwiftUI is a real dismissal.
+    @State private var didPresent = false
+
     private var placement: FirstLaunchTourPopoverPlacement.Placement {
         FirstLaunchTourPopoverPlacement.placement(
             for: geometry,
@@ -976,6 +1017,7 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
             ) {
                 popoverContent
                     .presentationCompactAdaptation(.popover)
+                    .onAppear { didPresent = true }
             }
     }
 
@@ -984,14 +1026,15 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
     /// because that read happens while SwiftUI evaluates `body`, the modifier
     /// re-renders whenever `isActive`/`currentStep` mutate — no Combine
     /// `objectWillChange` bridge or local `@State` mirror required. The setter
-    /// treats a SwiftUI-initiated dismiss (outside tap) as a "skip".
+    /// treats a SwiftUI-initiated dismiss (outside tap) as a "skip" — but only
+    /// once the card has actually been on screen (`didPresent`).
     private var isShownBinding: Binding<Bool> {
         Binding(
             get: { model?.isShowingPopover(forAnchor: anchor) ?? false },
             set: { newValue in
                 guard let model else { return }
-                if !newValue && model.isShowingPopover(forAnchor: anchor) {
-                    model.skip()
+                if !newValue {
+                    model.popoverDismissed(forAnchor: anchor, didPresent: didPresent)
                 }
             }
         )
@@ -1011,6 +1054,24 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
         } else {
             Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
         }
+    }
+}
+
+/// Reports whether the first-launch tour still owns the first-run moment to a
+/// host surface that must not present anything over it — Today's push primer
+/// (`W0 D8c`). Lives below the tour host, which is why the reading is pushed
+/// out through a closure rather than read by the host view itself: a host that
+/// wraps its own content in `FirstLaunchTour` sits ABOVE the injection and its
+/// `@Environment` would resolve to `nil`.
+private struct FirstLaunchTourPendingModifier: ViewModifier {
+    @Environment(\.firstLaunchTourModel) private var model: FirstLaunchTourModel?
+    let report: (Bool) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: model?.isFirstLaunchPending ?? false, initial: true) { _, pending in
+                report(pending)
+            }
     }
 }
 
@@ -1046,6 +1107,13 @@ public extension View {
     /// card across it. No-op outside a `FirstLaunchTour` ancestor.
     func firstLaunchTourChrome() -> some View {
         modifier(FirstLaunchTourChromeModifier())
+    }
+
+    /// Receive whether the first-launch tour still owns the first-run moment —
+    /// undecided, or running. Reports `false` outside a `FirstLaunchTour`
+    /// ancestor, where no tour can ever draw.
+    func firstLaunchTourPending(_ report: @escaping (Bool) -> Void) -> some View {
+        modifier(FirstLaunchTourPendingModifier(report: report))
     }
 }
 
