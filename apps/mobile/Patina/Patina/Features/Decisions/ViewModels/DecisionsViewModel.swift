@@ -212,9 +212,15 @@ final class DecisionDetailViewModel {
     /// signoff` refuses a decision that carries options — a row a designer has
     /// since given choices to is answered by choosing one, and offering both
     /// is how a client and a designer come to read different answers.
+    ///
+    /// `!isResolved` is not enough: it reads `status == "responded"`, so an
+    /// EXPIRED sign-off passed it, drew "Give your sign-off", and was refused
+    /// by the RPC with a `check_violation` (23514) — an act offered that
+    /// cannot succeed. `isApprovableClientSignoff` is the status leg the
+    /// server actually applies.
     var awaitsClientSignoff: Bool {
         guard let decision, !isLoading, !isResolved else { return false }
-        return decision.isClientSignoff && options.isEmpty
+        return decision.isApprovableClientSignoff && options.isEmpty
     }
 
     /// Whether the decision is already resolved (any option chosen, a sign-off
@@ -301,6 +307,21 @@ final class DecisionDetailViewModel {
     /// Give the sign-off with the client's consent. On success the decision is
     /// `responded` server-side and every FF&E item held by it is released —
     /// which is the one thing Procurement was waiting on.
+    /// The act itself, behind a seam. Both of `confirmSignoff`'s branches are
+    /// what a client sees — the seal, or the failure banner with its retry —
+    /// and neither is reachable from a test through the singleton actor's own
+    /// network call.
+    @ObservationIgnored
+    var approveSignoff: (
+        String, DecisionsAPIClient.ConsentMethod, String?
+    ) async throws -> Void = { decisionId, consent, signature in
+        try await DecisionsAPIClient.shared.approveSignoff(
+            decisionId: decisionId,
+            consent: consent,
+            signature: signature
+        )
+    }
+
     func confirmSignoff(
         decisionId: String,
         consent: DecisionsAPIClient.ConsentMethod,
@@ -311,11 +332,7 @@ final class DecisionDetailViewModel {
         error = nil
         submitFailure = nil
         do {
-            try await DecisionsAPIClient.shared.approveSignoff(
-                decisionId: decisionId,
-                consent: consent,
-                signature: signature
-            )
+            try await approveSignoff(decisionId, consent, signature)
             self.hasSignedOff = true
             self.isApprovingSignoff = false
         } catch {

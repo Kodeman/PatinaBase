@@ -34,6 +34,10 @@
 --   7. a decision that HAS options is refused here for the same reason
 --   8. consent validation matches the option path's, word for word
 --   9. the grants are the neighbour's: authenticated only
+--  10. the designer hears about it: one `decision_resolved` notification,
+--      addressed to the designer, and a replay does not post a second
+--  11. a decision that is no longer pending — an EXPIRED sign-off — is refused
+--      rather than resolved, which is the status leg the screen now mirrors
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -141,6 +145,9 @@ DECLARE
   v_consented boolean;
   v_blocked boolean;
   v_responded_at timestamptz;
+  v_designer uuid;
+  v_notifications integer;
+  v_notified uuid;
 BEGIN
   SELECT project_id INTO v_project
     FROM public.client_decisions
@@ -185,6 +192,19 @@ BEGIN
   ASSERT v_blocked = false,
     'Procurement is still blocked after the sign-off — the one thing the row is for';
 
+  -- 10. The designer hears about it the same way the option path tells them.
+  SELECT designer_id INTO v_designer
+    FROM public.client_decisions
+   WHERE id = 'b0000000-0000-0000-0000-00000005c301'::uuid;
+  SELECT count(*), min(user_id::text)::uuid INTO v_notifications, v_notified
+    FROM public.decision_notifications
+   WHERE decision_id = 'b0000000-0000-0000-0000-00000005c301'::uuid
+     AND kind = 'decision_resolved';
+  ASSERT v_notifications = 1,
+    'the sign-off enqueued ' || v_notifications || ' decision_resolved rows, not 1';
+  ASSERT v_notified = v_designer,
+    'the resolution was announced to somebody other than the designer';
+
   -- 4. Replay by the same client returns the terminal row and moves nothing.
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000005'::uuid);
   PERFORM public.approve_client_signoff(
@@ -198,6 +218,14 @@ BEGIN
     SELECT responded_at FROM public.client_decisions
      WHERE id = 'b0000000-0000-0000-0000-00000005c301'::uuid
   ) = v_responded_at, 'a replay re-stamped responded_at';
+
+  -- …and it does not tell the designer twice.
+  SELECT count(*) INTO v_notifications
+    FROM public.decision_notifications
+   WHERE decision_id = 'b0000000-0000-0000-0000-00000005c301'::uuid
+     AND kind = 'decision_resolved';
+  ASSERT v_notifications = 1,
+    'a replay posted a second decision_resolved notification';
 END $$;
 ROLLBACK TO SAVEPOINT s2;
 
@@ -333,5 +361,52 @@ BEGIN
   ) = 'pending', 'a refused consent still moved the row';
 END $$;
 ROLLBACK TO SAVEPOINT s5;
+
+-- ─── 11. a sign-off that is no longer pending ──────────────────────────────
+-- `status` is one of `draft | pending | responded | expired` (00062). The
+-- function takes `pending`, plus `responded` as the same client's own replay;
+-- anything else is a `check_violation`. The iOS screen gated its "Give your
+-- sign-off" CTA on `!isResolved`, which reads `responded` alone — so an
+-- EXPIRED sign-off drew the act and the client met a 23514. This is the
+-- server half of the pair; `DecisionApprovalPathTests` is the screen half.
+
+SAVEPOINT s6;
+DO $$
+DECLARE
+  v_sqlstate text;
+  v_status text;
+BEGIN
+  -- Maintenance shape: postgres, no JWT — which is what the guard trigger
+  -- (00399) lets past for a fixture write.
+  UPDATE public.client_decisions
+     SET status = 'expired'
+   WHERE id = 'b0000000-0000-0000-0000-00000005c301'::uuid;
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000005'::uuid);
+  BEGIN
+    PERFORM public.approve_client_signoff(
+      'b0000000-0000-0000-0000-00000005c301'::uuid, 'click_through', NULL
+    );
+    ASSERT false, 'an expired sign-off was approved';
+  EXCEPTION WHEN OTHERS THEN
+    v_sqlstate := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_sqlstate = '23514',
+    'an expired decision must be refused with check_violation, got ' || v_sqlstate;
+
+  SELECT status INTO v_status
+    FROM public.client_decisions
+   WHERE id = 'b0000000-0000-0000-0000-00000005c301'::uuid;
+  ASSERT v_status = 'expired', 'the refused call moved the row to ' || v_status;
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.decision_notifications
+     WHERE decision_id = 'b0000000-0000-0000-0000-00000005c301'::uuid
+       AND kind = 'decision_resolved'
+  ), 'a refused approval still announced a resolution';
+END $$;
+ROLLBACK TO SAVEPOINT s6;
 
 ROLLBACK;

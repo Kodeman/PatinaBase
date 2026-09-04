@@ -148,6 +148,19 @@ public struct RemoteClientDecision: Codable, Sendable, Identifiable {
             && approval_contract == nil
     }
 
+    /// …and it can still be given.
+    ///
+    /// `client_decisions.status` is one of `draft | pending | responded |
+    /// expired` (00062), and `approve_client_signoff` accepts exactly one of
+    /// them: a `pending` row (a `responded` one only as the same client's own
+    /// replay, which `isResolved` already hides). Every other status raises
+    /// `check_violation`, so a decision that has EXPIRED drew "Give your
+    /// sign-off" over an act the server refuses with a 23514. The shape above
+    /// is what the row is; this is whether the act exists for it.
+    public var isApprovableClientSignoff: Bool {
+        isClientSignoff && status == "pending"
+    }
+
     /// Who asked. "your designer" when the embed brought nobody — the record
     /// names a person or it names nobody; it never invents one.
     public var designerDisplayName: String {

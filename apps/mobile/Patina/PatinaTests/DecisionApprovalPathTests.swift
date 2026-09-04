@@ -145,6 +145,122 @@ struct DecisionApprovalPathTests {
         #expect(viewModel.awaitsClientSignoff == false)
     }
 
+    // MARK: - The statuses the act does not exist for
+
+    /// `client_decisions.status` is `draft | pending | responded | expired`
+    /// (00062), and `approve_client_signoff` takes `pending` alone — every
+    /// other status is a `check_violation` (23514). `!isResolved` reads
+    /// `responded`, so an EXPIRED sign-off passed it and drew "Give your
+    /// sign-off" over an act the server refuses.
+    @Test("an expired sign-off is not offered an act the server refuses",
+          arguments: ["expired", "draft"])
+    func aNonPendingSignoffOffersNoAct(status: String) throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.decision = try decision(status: status)
+        #expect(viewModel.awaitsClientSignoff == false,
+                "\(status) drew the sign-off CTA (RPC answers 23514)")
+        // …and the retry act cannot re-open the consent step on it either.
+        viewModel.retrySelection()
+        #expect(viewModel.isApprovingSignoff == false)
+    }
+
+    @Test("the shape and the act are separate questions")
+    func theShapeSurvivesTheStatus() throws {
+        let expired = try decision(status: "expired")
+        #expect(expired.isClientSignoff, "an expired row is still a sign-off")
+        #expect(expired.isApprovableClientSignoff == false)
+        #expect(try decision().isApprovableClientSignoff)
+    }
+
+    // MARK: - The act, both ways it can end
+
+    /// `confirmSignoff`'s success branch: the seal, this session, before any
+    /// refetch — and the consent step closed behind it.
+    @Test("a sign-off that lands closes the act and shows as resolved")
+    func aSignoffThatLandsResolves() async throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.decision = try decision()
+        var sent: (String, DecisionsAPIClient.ConsentMethod, String?)?
+        viewModel.approveSignoff = { id, consent, signature in
+            sent = (id, consent, signature)
+        }
+
+        viewModel.beginSignoff()
+        await viewModel.confirmSignoff(
+            decisionId: "b0000000-0000-0000-0000-00000005c301",
+            consent: .electronicSignature,
+            signature: "Client User"
+        )
+
+        let call = try #require(sent, "the act never reached the RPC")
+        #expect(call.0 == "b0000000-0000-0000-0000-00000005c301")
+        #expect(call.1 == .electronicSignature)
+        #expect(call.2 == "Client User")
+        #expect(viewModel.isResolved)
+        #expect(viewModel.isApprovingSignoff == false)
+        #expect(viewModel.isSubmitting == false)
+        #expect(viewModel.submitFailure == nil)
+        #expect(viewModel.awaitsClientSignoff == false, "the act is offered twice")
+    }
+
+    /// …and the failure branch: the sentence a client can act on, the consent
+    /// step closed rather than left hanging, and the decision still open.
+    @Test("a sign-off that fails says so and leaves the decision open")
+    func aSignoffThatFailsSaysSo() async throws {
+        struct Boom: Error {}
+        let viewModel = DecisionDetailViewModel()
+        viewModel.decision = try decision()
+        viewModel.approveSignoff = { _, _, _ in throw Boom() }
+
+        viewModel.beginSignoff()
+        await viewModel.confirmSignoff(
+            decisionId: "b0000000-0000-0000-0000-00000005c301",
+            consent: .clickThrough
+        )
+
+        #expect(viewModel.submitFailure == MoneyFailureCopy.decision)
+        #expect(viewModel.isApprovingSignoff == false)
+        #expect(viewModel.isSubmitting == false)
+        #expect(viewModel.isResolved == false)
+        #expect(viewModel.awaitsClientSignoff, "the client cannot try again")
+    }
+
+    /// SP-15's retry, on the branch a sign-off added: there is no option to
+    /// remember, so the retry re-opens the consent step on the sign-off
+    /// itself. Without it "Let's try that again" did nothing at all.
+    @Test("the retry re-opens the consent step on a sign-off")
+    func theRetryReopensTheSignoff() async throws {
+        struct Boom: Error {}
+        let viewModel = DecisionDetailViewModel()
+        viewModel.decision = try decision()
+        viewModel.approveSignoff = { _, _, _ in throw Boom() }
+
+        viewModel.beginSignoff()
+        await viewModel.confirmSignoff(
+            decisionId: "b0000000-0000-0000-0000-00000005c301",
+            consent: .clickThrough
+        )
+        #expect(viewModel.isApprovingSignoff == false)
+
+        viewModel.retrySelection()
+        #expect(viewModel.isApprovingSignoff, "the retry act is dead on a sign-off")
+        #expect(viewModel.submitFailure == nil, "the banner outlived its own retry")
+    }
+
+    /// The option path's retry is untouched by that branch: it still re-opens
+    /// the consent step on the choice the client actually made.
+    @Test("the option path's retry still remembers the option")
+    func theOptionRetryIsUnchanged() throws {
+        let viewModel = DecisionDetailViewModel()
+        viewModel.decision = try decision(kind: "selection")
+        viewModel.lastAttemptedOptionId = "00000000-0000-0000-0000-0000000000aa"
+        viewModel.submitFailure = MoneyFailureCopy.decision
+
+        viewModel.retrySelection()
+        #expect(viewModel.pendingOptionId == "00000000-0000-0000-0000-0000000000aa")
+        #expect(viewModel.isApprovingSignoff == false)
+    }
+
     private func option() throws -> RemoteDecisionOption {
         let row: [String: Any] = [
             "id": "00000000-0000-0000-0000-0000000000aa",
