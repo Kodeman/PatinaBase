@@ -235,6 +235,6 @@ struct ProjectListView: View {
 #Preview {
     NavigationStack {
         ProjectListView()
-            .environment(\.appCoordinator, AppCoordinator())
+            .appCoordinator(AppCoordinator())
     }
 }

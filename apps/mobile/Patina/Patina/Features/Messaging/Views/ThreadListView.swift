@@ -253,6 +253,6 @@ struct ThreadListView: View {
 #Preview {
     NavigationStack {
         ThreadListView()
-            .environment(\.appCoordinator, AppCoordinator())
+            .appCoordinator(AppCoordinator())
     }
 }

@@ -1032,6 +1032,109 @@ struct FirstLaunchTourTests {
                 "the scrim expands past the anchors' coordinate space again (W1-B-15's reverted attempt)")
     }
 
+    // MARK: - W0 D8c · a refused presentation cannot spend the tour
+
+    /// SwiftUI resets a popover binding to `false` both when the user taps
+    /// outside and when UIKit refuses the presentation outright — and a walk
+    /// met the second, so a tour nobody saw was persisted as abandoned at step
+    /// 0, dead on every device from then on. Without an appearance, a `false`
+    /// decides nothing.
+    @Test
+    func aDismissalBeforeThePopoverAppearedDoesNotAbandonTheTour() {
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        model.checkFirstLaunch()
+        #expect(model.isActive)
+        #expect(model.isShowingPopover(forAnchor: .homeGreeting))
+
+        model.popoverDismissed(forAnchor: .homeGreeting, didPresent: false)
+
+        #expect(model.isActive, "a presentation UIKit never performed must leave the tour running")
+        #expect(model.currentStep == 0)
+        let state = getFirstLaunchTourState(model.tourKey)
+        #expect(state.abandoned == nil)
+        #expect(!state.isResolved)
+    }
+
+    /// The other half of the same rule: a card that WAS on screen and is then
+    /// dismissed is still a skip, exactly as before.
+    @Test
+    func aDismissalAfterThePopoverAppearedStillAbandonsTheTour() {
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        model.checkFirstLaunch()
+        #expect(model.isActive)
+
+        model.popoverDismissed(forAnchor: .homeGreeting, didPresent: true)
+
+        #expect(!model.isActive)
+        let state = getFirstLaunchTourState(model.tourKey)
+        #expect(state.abandoned == true)
+        #expect(state.atStep == 0)
+        #expect(state.isResolved)
+    }
+
+    /// A dismissal reported by an anchor the tour is not standing on is not
+    /// this tour's business, appeared or not.
+    @Test
+    func aDismissalFromAnotherAnchorIsIgnored() {
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        model.checkFirstLaunch()
+
+        model.popoverDismissed(forAnchor: .profileMonogram, didPresent: true)
+
+        #expect(model.isActive)
+        #expect(!getFirstLaunchTourState(model.tourKey).isResolved)
+    }
+
+    /// The primer's gate reads this: a tour that has already resolved on
+    /// another device never runs here, and must not hold the first-run moment
+    /// shut for the rest of the install either.
+    @Test
+    func aTourThatWillNeverRunStopsBeingPending() {
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        setFirstLaunchTourState(
+            model.tourKey,
+            FirstLaunchTourState(completed: true, launched: true)
+        )
+
+        #expect(model.isFirstLaunchPending)
+        model.checkFirstLaunch()
+
+        #expect(!model.isActive)
+        #expect(!model.isFirstLaunchPending)
+    }
+
+    /// The pin the fix rests on: the binding may not call `skip()` itself
+    /// again, and the primer's own guard may not be dropped from Today.
+    @Test
+    func theRefusedPresentationGuardsStayWired() throws {
+        let tour = try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
+        let binding = try #require(tour.range(of: "private var isShownBinding: Binding<Bool> {"))
+        let block = String(tour[binding.lowerBound...].prefix(600))
+        #expect(block.contains("popoverDismissed(forAnchor: anchor, didPresent: didPresent)"))
+        #expect(!block.contains("model.skip()"),
+                "the setter skips on a bare `false` again (W0 D8c)")
+
+        let home = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
+        #expect(home.contains("isTourPending: isFirstLaunchTourPending"))
+        #expect(home.contains(".firstLaunchTourPending {"))
+    }
+
     // MARK: - W1-B-09 · the card's own title
 
     /// At accessibility-extra-large the card truncated its own title —

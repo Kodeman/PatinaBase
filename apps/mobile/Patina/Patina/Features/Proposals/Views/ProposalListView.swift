@@ -181,6 +181,6 @@ private struct ProposalRowCard: View {
 #Preview {
     NavigationStack {
         ProposalListView()
-            .environment(\.appCoordinator, AppCoordinator())
+            .appCoordinator(AppCoordinator())
     }
 }

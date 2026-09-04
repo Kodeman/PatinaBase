@@ -227,8 +227,40 @@ struct PushTokenServiceTests {
         defer { PushTokenService.shared.resetAuthorizationPromptGate() }
 
         #expect(!PushTokenService.shared.hasAskedForAuthorization)
-        _ = PushPrimerTrigger.shouldPresent(rows: [Self.row(.invoice)])
+        _ = PushPrimerTrigger.shouldPresent(rows: [Self.row(.invoice)], isTourPending: false)
         #expect(!PushTokenService.shared.hasAskedForAuthorization)
+    }
+
+    /// W0 D8c: the first-launch tour and the primer are two presentations from
+    /// one host. While the tour is unresolved the primer must not even be
+    /// considered — the check runs before the auth read, so this holds whatever
+    /// session the test process is in.
+    @Test
+    func primerIsNotOfferedWhileTheFirstLaunchTourIsUnresolved() {
+        PushTokenService.shared.resetAuthorizationPromptGate()
+        defer { PushTokenService.shared.resetAuthorizationPromptGate() }
+
+        #expect(!PushPrimerTrigger.shouldPresent(rows: [Self.row(.invoice)], isTourPending: true))
+        #expect(!PushTokenService.shared.hasAskedForAuthorization)
+    }
+
+    /// The tour's own report is what un-gates it: a model that has answered
+    /// (and is not running) is not pending, and a fresh one always is.
+    @Test
+    func aResolvedTourStopsHoldingThePrimerBack() {
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        #expect(model.isFirstLaunchPending, "Before the detector answers, the tour holds the moment")
+
+        model.checkFirstLaunch()
+        #expect(model.isActive)
+        #expect(model.isFirstLaunchPending, "A running tour still holds it")
+
+        model.skip()
+        #expect(!model.isFirstLaunchPending)
     }
 
     /// M19: the ask MOVED rooms — it did not disappear and it did not double.

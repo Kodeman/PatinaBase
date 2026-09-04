@@ -86,6 +86,69 @@ struct ThreadHeaderTests {
         #expect(header.initials.isEmpty)
     }
 
+    // MARK: - W0 D8c · the nameless counterparty
+
+    /// Leah's production profile carries no name at all and her `role` is
+    /// `homeowner` — her designer identity is `is_designer`. The role switch
+    /// therefore labelled her "Client", which on a client-only app is the word
+    /// for the reader, printed back at her in her own inbox.
+    @Test("a nameless designer is never labelled Client")
+    func aNamelessDesignerIsNeverTheClient() {
+        let leah = ProfileSummary(
+            id: Self.designer,
+            displayName: nil,
+            fullName: nil,
+            avatarUrl: nil,
+            role: "homeowner",
+            isDesigner: true
+        )
+
+        #expect(leah.bestName == "Your designer")
+    }
+
+    /// The other arms are untouched: a name still wins over everything, and a
+    /// counterparty who is not a designer still gets her role word.
+    @Test("the rest of the fallback ladder is unchanged")
+    func theRemainingFallbacksStand() {
+        let named = ProfileSummary(
+            id: Self.designer,
+            displayName: "Leah Hartwell",
+            fullName: nil,
+            avatarUrl: nil,
+            role: "homeowner",
+            isDesigner: true
+        )
+        #expect(named.bestName == "Leah Hartwell")
+
+        let client = ProfileSummary(
+            id: Self.me,
+            displayName: nil,
+            fullName: nil,
+            avatarUrl: nil,
+            role: "homeowner",
+            isDesigner: false
+        )
+        #expect(client.bestName == "Client")
+
+        let vendor = ProfileSummary(
+            id: Self.me,
+            displayName: nil,
+            fullName: nil,
+            avatarUrl: nil,
+            role: "vendor",
+            isDesigner: nil
+        )
+        #expect(vendor.bestName == "Vendor")
+    }
+
+    /// The column has to be asked for, or `is_designer` decodes as nil on every
+    /// row and the ladder falls straight back through to the role word.
+    @Test("the lookup selects the column the fallback reads")
+    func theLookupSelectsIsDesigner() throws {
+        let source = try SourcePin.read("Patina/Services/API/ProfileLookupService.swift")
+        #expect(source.contains("is_designer\")"))
+    }
+
     @Test("a one-word name yields one initial, and a long name yields two")
     func initialsAreBounded() {
         #expect(ThreadHeader(name: "Leah", projectName: nil).initials == "L")

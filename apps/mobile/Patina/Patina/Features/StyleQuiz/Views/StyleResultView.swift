@@ -272,5 +272,5 @@ struct StyleResultView: View {
         budgetMax: 5000,
         confidence: 0.87
     ))
-    .environment(\.appCoordinator, AppCoordinator())
+    .appCoordinator(AppCoordinator())
 }

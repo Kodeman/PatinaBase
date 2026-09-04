@@ -22,6 +22,7 @@ public struct ProfileSummary: Codable, Sendable {
     public let fullName: String?
     public let avatarUrl: String?
     public let role: String?
+    public let isDesigner: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -29,13 +30,21 @@ public struct ProfileSummary: Codable, Sendable {
         case fullName = "full_name"
         case avatarUrl = "avatar_url"
         case role
+        case isDesigner = "is_designer"
     }
 
     /// Best human-readable name for the profile. Falls back to a
     /// role-based label so the UI never shows a raw UUID.
+    ///
+    /// `is_designer` is read BEFORE `role`, because a designer's `role` is
+    /// whatever she signed up as — Leah's is `homeowner` — and the role word
+    /// for that is "Client", which on a client-only app names the reader back
+    /// at herself (W0 D8c). `ThreadHeader.unnamed`'s wording is the sanctioned
+    /// one for a counterparty with no name of her own.
     public var bestName: String {
         if let displayName, !displayName.isEmpty { return displayName }
         if let fullName, !fullName.isEmpty { return fullName }
+        if isDesigner == true { return "Your designer" }
         switch role {
         case "designer": return "Designer"
         case "client", "homeowner": return "Client"
@@ -74,7 +83,7 @@ public actor ProfileLookupService {
             do {
                 let rows: [ProfileSummary] = try await supabase.database
                     .from("profiles")
-                    .select("id, display_name, full_name, avatar_url, role")
+                    .select("id, display_name, full_name, avatar_url, role, is_designer")
                     .in("id", values: Array(missing))
                     .execute()
                     .value

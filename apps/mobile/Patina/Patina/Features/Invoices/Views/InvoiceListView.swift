@@ -207,6 +207,6 @@ private struct InvoiceRowCard: View {
 #Preview {
     NavigationStack {
         InvoiceListView()
-            .environment(\.appCoordinator, AppCoordinator())
+            .appCoordinator(AppCoordinator())
     }
 }

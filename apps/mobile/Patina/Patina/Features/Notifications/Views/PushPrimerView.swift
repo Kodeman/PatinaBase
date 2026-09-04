@@ -143,8 +143,15 @@ enum PushPrimerTrigger {
     /// True at most once per install, and only when something money-shaped is
     /// actually waiting. Does NOT arm the gate — the caller arms it as it
     /// presents, so a decision the person never saw cannot burn the one ask.
+    ///
+    /// `isTourPending` is the first-launch tour's claim on the first-run
+    /// moment. While it holds, the answer is no at any cost: the two surfaces
+    /// present from the same host, UIKit refuses the second, and the loser is
+    /// spent anyway — which is how one walk burned the ask and abandoned the
+    /// tour with neither on screen (W0 D8c).
     @MainActor
-    static func shouldPresent(rows: [AppNotification]) -> Bool {
+    static func shouldPresent(rows: [AppNotification], isTourPending: Bool) -> Bool {
+        guard !isTourPending else { return false }
         guard AuthService.shared.isAuthenticated else { return false }
         guard !PushTokenService.shared.hasAskedForAuthorization else { return false }
         return hasMoneyMoment(in: rows)

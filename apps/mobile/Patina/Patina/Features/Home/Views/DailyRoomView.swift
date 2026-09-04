@@ -36,6 +36,12 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
     /// SP-08 / Q7: the ask arrives here, once, the first time something
     /// money-shaped is actually waiting for this client.
     @State private var isPushPrimerPresented = false
+    /// W0 D8c: the primer and the first-launch tour's coachmark are two
+    /// presentations from one host, and UIKit refuses the second — which the
+    /// tour then persisted as an abandon for a card nobody saw. Starts `true`
+    /// so the primer cannot win the race before the tour has answered; the
+    /// reporter below hands down the real value the moment Today mounts.
+    @State private var isFirstLaunchTourPending = true
     /// Spaces reads its rooms through `@Query` and repaints for free; this
     /// screen holds a snapshot, so it watches the coordinator instead. Every
     /// reconcile call site — the auth listener's included — reaches the rail
@@ -211,6 +217,13 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
             isPresented: $isHelpPanelPresented,
             surfaceKey: SurfaceKeys.IOSApp.Home.root
         )
+        .firstLaunchTourPending { isFirstLaunchTourPending = $0 }
+        .onChange(of: isFirstLaunchTourPending) { _, pending in
+            // The deferred ask, taken at the first moment it is free to be
+            // taken: the tour has finished or was never going to run.
+            guard !pending else { return }
+            presentPushPrimerIfEarned()
+        }
         .sheet(isPresented: $isPushPrimerPresented) {
             PushPrimerView { isPushPrimerPresented = false }
         }
@@ -219,7 +232,7 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
     /// Arms the once-per-install gate as it presents, so the ask is spent on a
     /// screen the person actually sees rather than on a background pass.
     private func presentPushPrimerIfEarned() {
-        guard PushPrimerTrigger.shouldPresent(rows: notificationsViewModel.notifications) else { return }
+        guard PushPrimerTrigger.shouldPresent(rows: notificationsViewModel.notifications, isTourPending: isFirstLaunchTourPending) else { return }
         guard PushTokenService.shared.armAuthorizationPromptGate() else { return }
         isPushPrimerPresented = true
     }
@@ -627,6 +640,6 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
 #Preview {
     NavigationStack {
         DailyRoomView()
-            .environment(\.appCoordinator, AppCoordinator())
+            .appCoordinator(AppCoordinator())
     }
 }

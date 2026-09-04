@@ -319,11 +319,11 @@ struct MatchIntroductionView: View {
 #if DEBUG
 #Preview("Introduced · 3 slots") {
     MatchIntroductionView(request: .previewIntroduced, booking: MatchBookingModel())
-        .environment(\.appCoordinator, AppCoordinator())
+        .appCoordinator(AppCoordinator())
 }
 
 #Preview("Introduced · stale slots") {
     MatchIntroductionView(request: .previewStale, booking: MatchBookingModel())
-        .environment(\.appCoordinator, AppCoordinator())
+        .appCoordinator(AppCoordinator())
 }
 #endif

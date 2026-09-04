@@ -274,5 +274,5 @@ struct ARViewContainer: UIViewRepresentable {
 
 #Preview {
     ARPlacementView(productId: "p1")
-        .environment(\.appCoordinator, AppCoordinator())
+        .appCoordinator(AppCoordinator())
 }
