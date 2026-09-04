@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
@@ -51,6 +52,9 @@ export interface MatProps {
   onOpenPapers?: () => void;
   /** Whether that sheet is down, so the act can say so where it is read. */
   papersOpen?: boolean;
+  /** L6 — "Ask for a change" (scope-change-ask.tsx), house-wide rather than
+   * room-scoped. Optional so every other caller of `Mat` is unaffected. */
+  extraActs?: ReactNode;
 }
 
 function Paper({ paper }: { paper: MatPaper }) {
@@ -80,6 +84,7 @@ export function Mat({
   correspondence,
   onOpenPapers,
   papersOpen = false,
+  extraActs,
 }: MatProps) {
   return (
     <section
@@ -154,6 +159,7 @@ export function Mat({
               Leave the house
             </ScoredAction>
           </div>
+          {extraActs}
           {/* Its own line: an act that governs the letters is not part of the
               client's own record, and reads as one when it sits inside it. */}
           {correspondence && <div className="mt-2">{correspondence}</div>}

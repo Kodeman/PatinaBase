@@ -137,4 +137,21 @@ describe('Mat — the people, the papers, and the way out', () => {
     await userEvent.click(leave);
     expect(onSignOut).toHaveBeenCalledTimes(1);
   });
+
+  // L6 — `extraActs` is where scope-change-ask.tsx's `RequestChangeAct`
+  // mounts ("Ask for a change"); optional so every caller that predates it is
+  // unaffected (asserted by every test above, none of which pass it).
+  it('renders extraActs, when the caller gives it one, after the two required acts', () => {
+    render(
+      <Mat {...mat({ extraActs: <p data-testid="mat-extra">Ask for a change</p> })} />,
+    );
+
+    expect(screen.getByTestId('mat-extra')).toBeInTheDocument();
+  });
+
+  it('renders nothing extra when the caller gives no extraActs', () => {
+    render(<Mat {...mat()} />);
+
+    expect(screen.queryByTestId('mat-extra')).not.toBeInTheDocument();
+  });
 });

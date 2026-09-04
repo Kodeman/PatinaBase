@@ -7,6 +7,8 @@ import { useQueries } from '@tanstack/react-query';
 import {
   useDirectOrders,
   useMarkProjectRead,
+  useMyPendingReviewRequests,
+  useMySubmittedReviews,
   usePreviousReadingMark,
   useProjectInvoices,
   useProjectNotes,
@@ -14,6 +16,7 @@ import {
   useProjectParties,
   useProjectRooms,
   useProjectTeamMembers,
+  useScopeChangeRequests,
   useStudioIdentity,
 } from '@patina/supabase';
 import type { ProjectApprovalReview, ProjectNote } from '@patina/supabase';
@@ -70,8 +73,15 @@ import type { OtherHouse } from './other-houses';
 import { PapersSheet } from './papers-sheet';
 import { PlanKey } from './plan-key';
 import { Previously } from './previously';
+import { SelectionEditionAsk, StudioReviewAsk, SubmittedReviewsPrevious } from './review-ask';
 import { RoomBand } from './room-band';
 import { RoomCapture, StrayCaptures } from './room-capture';
+import {
+  MyScopeChangeRequestsAsk,
+  PendingScopeChangeAsk,
+  RequestChangeAct,
+  ResolvedScopeChangesPrevious,
+} from './scope-change-ask';
 import { SinceYesterday } from './since-yesterday';
 import { StoryPole } from './story-pole';
 import { TheNote, type NoteEnclosure } from './the-note';
@@ -224,6 +234,15 @@ export function Threshold({
   const correspondence = useProjectCorrespondence(projectId);
   const markNoticesRead = useMarkNoticesRead();
   const markLettersRead = useMarkLettersRead();
+  // L6 — review-ask.tsx / scope-change-ask.tsx each call these hooks again
+  // themselves (React Query dedupes on the query key, so this is one fetch,
+  // not two); the copy here exists only so their `isPending` can join the
+  // settle gate below — without it the house could open with "nothing
+  // stands open" and grow a review or scope-change ask a beat later, the
+  // reversal `loading`'s own gate exists to forbid.
+  const pendingReviewQuery = useMyPendingReviewRequests(user?.id);
+  const submittedReviewQuery = useMySubmittedReviews(user?.id);
+  const scopeChangesQuery = useScopeChangeRequests(projectId);
   // Destructured: `mutate` is stable, the mutation OBJECT is not, and an
   // effect depending on the object would re-run every render for the ref-guard
   // below to swallow.
@@ -437,6 +456,9 @@ export function Threshold({
     roomsQuery.isPending ||
     planQuery.isPending ||
     correspondence.isPending ||
+    pendingReviewQuery.isPending ||
+    submittedReviewQuery.isPending ||
+    scopeChangesQuery.isPending ||
     heldBundles.some((bundle) => bundle.isPending);
 
   // ── the doorstep's sentence ────────────────────────────────────────────────
@@ -630,6 +652,7 @@ export function Threshold({
       }
       onOpenPapers={() => setPapersOpen(true)}
       papersOpen={papersOpen}
+      extraActs={<RequestChangeAct projectId={projectId} projectStatus={project.status} />}
     />
   );
 
@@ -680,21 +703,25 @@ export function Threshold({
   // component renders nothing, so a slot handed down unconditionally would
   // print an empty "Previously" over a house that has none.
   const previouslySection = (
-    <Previously
-      entries={model.previously}
-      correspondence={
-        hasRecord || replyHeadsTheRecord ? (
-          <Letters
-            letters={correspondence.letters}
-            notices={correspondence.notices}
-            reply={replyHeadsTheRecord ? writeBack : undefined}
-            hasEarlier={correspondence.hasEarlierLetters}
-            onEarlier={correspondence.readEarlierLetters}
-            earlierPending={correspondence.isReadingEarlierLetters}
-          />
-        ) : undefined
-      }
-    />
+    <>
+      <Previously
+        entries={model.previously}
+        correspondence={
+          hasRecord || replyHeadsTheRecord ? (
+            <Letters
+              letters={correspondence.letters}
+              notices={correspondence.notices}
+              reply={replyHeadsTheRecord ? writeBack : undefined}
+              hasEarlier={correspondence.hasEarlierLetters}
+              onEarlier={correspondence.readEarlierLetters}
+              earlierPending={correspondence.isReadingEarlierLetters}
+            />
+          ) : undefined
+        }
+      />
+      <SubmittedReviewsPrevious projectId={projectId} />
+      <ResolvedScopeChangesPrevious projectId={projectId} />
+    </>
   );
 
   const doorstep = (
@@ -752,6 +779,10 @@ export function Threshold({
       {doorstepReceipts.map((approval) => (
         <ApprovalReceipt key={approval.decisionId} approval={approval} />
       ))}
+      <StudioReviewAsk projectId={projectId} />
+      <SelectionEditionAsk projectId={projectId} />
+      <PendingScopeChangeAsk projectId={projectId} />
+      <MyScopeChangeRequestsAsk projectId={projectId} />
     </>
   );
 
@@ -836,10 +867,12 @@ export function Threshold({
               {band.marks.map((mark) =>
                 mark.kind === 'door' ? renderDoor(mark) : renderWall(mark),
               )}
-              <RoomCapture
+              <RoomCapture projectId={projectId} roomId={band.roomId} roomName={band.name} />
+              <RequestChangeAct
                 projectId={projectId}
                 roomId={band.roomId}
                 roomName={band.name}
+                projectStatus={project.status}
               />
             </RoomBand>
           ))}

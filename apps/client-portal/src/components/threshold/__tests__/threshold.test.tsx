@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 
@@ -80,6 +80,20 @@ jest.mock('@patina/supabase', () => ({
   useDecisionComments: jest.fn(),
   useCreateDecisionComment: jest.fn(),
   useDecisionRealtime: jest.fn(),
+  // L6 — the review and scope-change asks (review-ask.tsx, scope-change-ask.tsx)
+  // mount inside `asks`/`previouslySection`/the mat/every room band, so any
+  // threshold.tsx render exercises their hooks too. `resetMocks: true`
+  // (jest.config.js) strips these bare `jest.fn()`s before every test, so the
+  // "nothing pending" shape they need is set for real in the shared
+  // `beforeEach` below, alongside every other hook this file mocks.
+  useMyPendingReviewRequests: jest.fn(),
+  useMySubmittedReviews: jest.fn(),
+  useSubmitReview: jest.fn(),
+  useScopeChangeRequests: jest.fn(),
+  useApproveScopeChange: jest.fn(),
+  useDeclineScopeChange: jest.fn(),
+  useCreateClientScopeChangeRequest: jest.fn(),
+  useCancelClientScopeChangeRequest: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-commercial-client', () => ({
@@ -91,6 +105,12 @@ jest.mock('@/hooks/use-commercial-client', () => ({
   useAcceptTradeScope: jest.fn(),
   useProjectWorkingBudget: jest.fn(),
   invalidateSignedCommercialDocument: jest.fn().mockResolvedValue(undefined),
+  // L6 — SelectionEditionAsk (review-ask.tsx) reads no edition id from any of
+  // this file's fixtures (no `?review=` in jsdom's default URL), so it never
+  // calls these with a real id; the shared `beforeEach` gives them a safe
+  // default regardless (see the note above `useMyPendingReviewRequests`).
+  useClientProjectReviewBundle: jest.fn(),
+  useRecordProjectReviewFeedback: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -144,6 +164,13 @@ import {
   useProjectTeamMembers,
   useStudioIdentity,
   useClientSafeProposals,
+  useMyPendingReviewRequests,
+  useMySubmittedReviews,
+  useSubmitReview,
+  useScopeChangeRequests,
+  useApproveScopeChange,
+  useDeclineScopeChange,
+  useCreateClientScopeChangeRequest,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -159,7 +186,9 @@ import {
   useClientCommercialDocument,
   useClientPlan,
   useClientSelections,
+  useClientProjectReviewBundle,
   useProjectWorkingBudget,
+  useRecordProjectReviewFeedback,
 } from '@/hooks/use-commercial-client';
 
 import { Threshold } from '../threshold';
@@ -176,6 +205,15 @@ const markReadMock = useMarkProjectRead as jest.Mock;
 const previousMarkMock = usePreviousReadingMark as jest.Mock;
 const selectionsMock = useClientSelections as jest.Mock;
 const planMock = useClientPlan as jest.Mock;
+const pendingReviewMock = useMyPendingReviewRequests as jest.Mock;
+const submittedReviewMock = useMySubmittedReviews as jest.Mock;
+const submitReviewMock = useSubmitReview as jest.Mock;
+const scopeChangesMock = useScopeChangeRequests as jest.Mock;
+const approveScopeChangeMock = useApproveScopeChange as jest.Mock;
+const declineScopeChangeMock = useDeclineScopeChange as jest.Mock;
+const createScopeChangeMock = useCreateClientScopeChangeRequest as jest.Mock;
+const reviewBundleMock = useClientProjectReviewBundle as jest.Mock;
+const reviewFeedbackMock = useRecordProjectReviewFeedback as jest.Mock;
 const bundleMock = useClientCommercialDocument as jest.Mock;
 const queryOptionsMock = clientCommercialDocumentQueryOptions as jest.Mock;
 const acceptMock = useAcceptTradeScope as jest.Mock;
@@ -500,6 +538,19 @@ beforeEach(() => {
     staleTime: Infinity,
   }));
   acceptMock.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
+  // L6 — the review and scope-change asks, reset to "nothing pending" for
+  // every test in this file (the suite's jest config resets mocks between
+  // tests, so the module factory's own default never survives past the
+  // first). A test in the L6 describe block below overrides one of these.
+  pendingReviewMock.mockReturnValue({ data: [], isLoading: false, isPending: false });
+  submittedReviewMock.mockReturnValue({ data: [], isLoading: false, isPending: false });
+  submitReviewMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  scopeChangesMock.mockReturnValue({ data: [], isLoading: false, isPending: false });
+  approveScopeChangeMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  declineScopeChangeMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  createScopeChangeMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
+  reviewBundleMock.mockReturnValue({ data: null, isLoading: false, isError: false });
+  reviewFeedbackMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
 });
 
 describe('Threshold — which house', () => {
@@ -1358,5 +1409,133 @@ describe('Threshold — updatedAt off the raw payload', () => {
 
     expect(container.querySelector(`#room-${LIBRARY}`)).toHaveAttribute('data-changed', 'true');
     expect(container.querySelector(`#room-${ENTRY}`)).not.toHaveAttribute('data-changed');
+  });
+});
+
+describe('Threshold — L6, the review and scope-change asks mounted in place', () => {
+  it('stands the studio review request on the doorstep, naming this project', () => {
+    pendingReviewMock.mockReturnValue({
+      data: [
+        {
+          id: 'rev-1',
+          request_status: 'sent',
+          project: { id: PROJECT_ID, name: 'Vale Residence' },
+          designer: { full_name: 'Nora Quist', business_name: null, avatar_url: null },
+          custom_message: null,
+        },
+      ],
+      isLoading: false,
+      isPending: false,
+    });
+
+    renderThreshold();
+
+    expect(screen.getByTestId('studio-review-ask')).toHaveAttribute('id', 'review-rev-1');
+  });
+
+  it('stands a studio-sent scope change on the doorstep, not inside a band', () => {
+    scopeChangesMock.mockReturnValue({
+      data: [
+        {
+          id: 'sc-1',
+          title: 'Add a runner to the stair hall',
+          description: 'A runner underfoot in the stair hall.',
+          status: 'sent',
+          request_origin: 'designer_amendment',
+          additional_ffe_budget_cents: 0,
+          additional_design_fee_cents: 0,
+          timeline_impact_weeks: 0,
+          new_total_budget_cents: 0,
+        },
+      ],
+      isLoading: false,
+      isPending: false,
+    });
+
+    const { container } = renderThreshold();
+
+    const ask = container.querySelector('#scope-change-sc-1');
+    expect(ask).not.toBeNull();
+    expect(ask?.closest('section[id^="room-"]')).toBeNull();
+  });
+
+  it('offers "Ask for a change" on the mat', () => {
+    renderThreshold();
+
+    expect(within(screen.getByTestId('mat')).getByText('Ask for a change')).toBeInTheDocument();
+  });
+
+  it('offers "Ask for a change" inside a room band, naming the room', () => {
+    renderThreshold();
+
+    const band = document.querySelector(`#room-${LIBRARY}`);
+    expect(band).not.toBeNull();
+    expect(within(band as HTMLElement).getByText(/Ask for a change in/)).toBeInTheDocument();
+  });
+
+  // Finding #10 — the settle gate must hold the whole house, asks included,
+  // while any of the three ask queries this file mocks is still in flight,
+  // not just the sources `loading` already covered.
+  it('holds the house while a pending scope-change is still in flight', () => {
+    scopeChangesMock.mockReturnValue(IN_FLIGHT);
+    renderThreshold();
+
+    expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
+    expect(screen.getByTestId('doorstep-sentence-pending')).toBeInTheDocument();
+    expect(screen.queryByTestId('mat')).not.toBeInTheDocument();
+  });
+
+  // Finding #27 — SubmittedReviewsPrevious and SelectionEditionAsk were
+  // mounted into threshold.tsx with no test exercising either mount point.
+  it('lines a submitted review up in Previously', () => {
+    submittedReviewMock.mockReturnValue({
+      data: [
+        {
+          id: 's1',
+          project: { id: PROJECT_ID },
+          rating: 5,
+          review_text: null,
+          created_at: '2026-08-01T00:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isPending: false,
+    });
+
+    renderThreshold();
+
+    expect(screen.getByTestId('submitted-reviews-previously')).toBeInTheDocument();
+  });
+
+  it('mounts the selection-edition ask off ?review= on the URL', () => {
+    window.history.pushState({}, '', `/projects/${PROJECT_ID}?review=ed-1`);
+    reviewBundleMock.mockReturnValue({
+      data: {
+        projectId: PROJECT_ID,
+        editionId: 'ed-1',
+        publishedAt: null,
+        status: 'published',
+        items: [
+          {
+            id: 'item-1',
+            name: 'Wingback chair',
+            roomName: 'Library',
+            imageUrl: null,
+            clientPriceCents: null,
+            currency: 'USD',
+            verdict: null,
+            comment: null,
+            mediaAssetIds: [],
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    renderThreshold();
+
+    expect(screen.getByTestId('review-edition-ask')).toBeInTheDocument();
+    window.history.pushState({}, '', `/projects/${PROJECT_ID}`);
   });
 });
