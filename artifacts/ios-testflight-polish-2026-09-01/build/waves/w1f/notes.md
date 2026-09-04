@@ -207,3 +207,189 @@ the behaviour and not the note.
    `{}` and the tour replays.
 5. **`W1-C-13` owes one more look** at step 2 with a record carrying several
    attention rows, which is the geometry the finding was filed against.
+   — **Done in pass 2 below, and it was still broken. Now fixed and walked.**
+
+---
+
+# Pass 2 — the follow-up review's seven rows
+
+Same worktree and branch. Base **`d837d4a7f`** (pass 1 plus the walk's four
+shots); code tip **`da2ec81bf`**. Clean tree, nothing pushed. Production
+untouched: the only database written is `127.0.0.1:54322`.
+
+| gate | result |
+|---|---|
+| `ios-gate.sh build` | `** BUILD SUCCEEDED **`, exit 0 · `.gatelogs/w1f2-build-final.log` |
+| `ios-gate.sh release` | `** BUILD SUCCEEDED **`, exit 0 · `.gatelogs/w1f2-release.log` |
+| `ios-gate.sh unit` | `━ Test run with 2322 tests in 252 suites passed after 7.060 seconds with 2 known issues.` · `** TEST SUCCEEDED **` · `.gatelogs/w1f2-unit-final2.log` |
+| `ios-gate.sh lint-delta main` | `✓ lint-delta: no new warnings in touched files`, exit 0 · `.gatelogs/w1f2-lintdelta-2.log` |
+| SQL | `psql … -f supabase/tests/rls/00564_client_signoff_approval.test.sql` → exit 0, silent (every ASSERT passed, including the two new sections) |
+
+2309 → **2322** tests. The two known issues are the same two pass 1 left
+(`BrandVoiceLintTests` :168, `RoomLifecycleTests` :297).
+
+**Compiler warnings.** `RF-03`'s nine are **0**. Counted off the build log the
+same way twice — the branch's own build against pass 1's
+(`.gatelogs/w1f-904959e78-build.log`):
+
+```
+the nine "main actor-isolated static property 'shared' can not be referenced
+on a nonisolated actor instance" at the API clients' `= PatinaURLSession.shared`
+   before 9   after 0
+unique warnings across the target   before 266   after 248
+new warnings introduced by this branch: 0
+```
+
+The 18 rows that look new in a naive `comm` are the same warnings at shifted
+line numbers (`SanityHelpClient` +1, `DecisionsAPIClient` +13,
+`FirstLaunchTour` +15) — every one matched to its pre-existing twin before this
+was written.
+
+## The commits
+
+| sha | rows |
+|---|---|
+| `d4a614482` | `RF-03` + `RF-02` + `RF-09` — one file carries all three, so one commit does |
+| `6412cf801` | `RF-01` + `RF-08` + `RF-11` — the expired sign-off, its two tests and its SQL |
+| `a84bbc447` | `RF-04` — an empty Studio does not date itself |
+| `1d2c83a85` | `W1F-01` + `RF-05` — the bar measures itself; the 83/49 doc |
+| `da2ec81bf` | the branch's own two new SwiftLint warnings |
+
+`RF-03`, `RF-02` and `RF-09` are one commit rather than three because all three
+change `PatinaURLSession.swift` and two of them change
+`NetworkRecoveryTests.swift`; a pathspec cannot split a file. `RF-05` rides
+with `W1F-01` for the same reason (both are `FirstLaunchTour.swift`).
+
+## `W1F-01` — what the fixture actually measures
+
+The item that failed twice, so this one was measured rather than reasoned. A
+temporary probe in the anchor modifier logged every anchor's geometry on the
+clone, signed in as `client@patina.dev`, on the full Today record (invoice,
+proposal, decision, message, story, shipped, See all) — the walk's own fixture:
+
+```
+[tour-geom] todayRecord      rect=(0.0, 177.33, 402.0, 486.67) container=0.0   edge=top
+[tour-geom] homeGreeting     rect=(0.0,  62.0,  402.0, 115.33) container=0.0   edge=top
+[tour-geom] profileMonogram  rect=(258.0, 729.0, 84.0,  49.0)  container=778.0 edge=bottom
+```
+
+**`containerHeight` is 0** for every anchor inside Today's `ScrollView`:
+`proxy.bounds(of: .named(rootCoordinateSpace))` resolves nothing through the
+scroll. So `arrowEdge`'s very first guard — `containerHeight > 0` — returned
+`.top` for step 2 on every layout pass, and `containerHeight -
+bottomReservation` (the whole of `W1-C-13`'s fix) was unreachable exactly where
+it was needed. **That is why pass 1's pins passed while the screen failed**:
+they fed the rule a container of 778, which the shipping path never has.
+
+The bar's own anchor, outside the scroll, resolves the space fine (729 = screen
+791). So the bar now reports its own top — `firstLaunchTourChrome()` on
+`HouseFirstRoot.bar` → `FirstLaunchTourModel.reportChromeTop` → the placement —
+and the rule reads a measured line instead of deriving one.
+
+**And then the flip alone was still wrong.** The record is 487 pt of an 874 pt
+screen: 115 pt above it, 127 pt below it to the bar, against a card of 139 pt
+(298 at accessibility-extra-large). It fits on **neither** side. Driven on the
+clone with the flip in:
+
+- default size — the popover shrank to the ~99 pt it had; the "Step 2 of 3"
+  counter was not drawn and the Skip/Next row was cut by the bubble's edge;
+- accessibility-extra-large — card frame `{45, 15.33} 312 × 298`, i.e. the
+  action row drawn **off the top of the screen**. That is `W1-B-18` re-opened,
+  which this wave had just closed.
+
+So the rule's third answer: an anchor with room for a card on neither side does
+not get one beside it. The popover attaches to the anchor's own 44 pt top lip
+(`Placement.attachment` → `attachmentAnchor: .rect(.rect(…))`) and the card
+hangs from there, whole, over the subject the scrim is already holding open —
+never over the chrome.
+
+**Walked, same clone, same fixture, both text sizes** (`describe_screen`
+frames):
+
+| | before | after |
+|---|---|---|
+| step 2 · large | `{57, 685.17} 288 × 135.5` → bottom **820.7**, across the bar row 791–840 | `{57, 241.5} 288 × 139.17` → bottom **380.7**, whole card, whole bar |
+| step 2 · AX-XL | walk's `{45, 516} 312 × 298` → 814 | `{45, 343} 312 × 298` → bottom **641**, whole card, whole bar |
+| step 1 · large | `{57, 198.17} 288 × 135.5` | `{57, 197.5} 288 × 139.17` — unmoved |
+| step 3 · large | `{88, 631.5} 288 × 139.2` → 770.7 | `{88, 631.5} 288 × 139.17` → **770.7** — walk C's control number exactly |
+| step 3 · AX-XL | `{64, 537} 312 × 225.3` → 762.3 | `{64, 537} 312 × 225.33` → **762.3** — likewise |
+
+Shots: `shots/w1f/05-w1f01-before-step2-across-the-bar.png` (the finding
+reproduced on this clone), `06-…-after-step2-hangs-from-the-record.png` and
+`07-…-after-step2-axxl.png`.
+
+The probe was removed before the commit; what survives is
+`FirstLaunchTourPlacementTests.theShippingGeometryClearsTheBar`, which drives
+the rule with the logged numbers (container 0, chrome 729, the record's rect)
+and asserts a 139.5 and a 298 pt card both land above 791.
+
+## The other six
+
+- **`RF-01`** — `awaitsClientSignoff` gated on `!isResolved`, which reads
+  `status == "responded"` only. `RemoteClientDecision.isApprovableClientSignoff`
+  adds the leg the RPC applies: `status = 'pending'`. `draft` and `expired` are
+  both refused now, and both are pinned. The screen draws nothing in that slot
+  for an expired sign-off — the header still carries the title, the date and
+  the deferral acts — rather than a line about options, which is not what is
+  wrong with it.
+- **`RF-11`** — the migration's test gains the expired refusal (23514, the row
+  does not move, nothing is announced) and the `decision_resolved` tail the walk
+  saw on glass but the file never checked: exactly one row, addressed to the
+  designer, and a replay does not post a second.
+- **`RF-08`** — `confirmSignoff`'s two branches and `retrySelection`'s sign-off
+  branch are driven, not read. The act is behind a seam on the view model
+  (`approveSignoff`), which is how a failure can be produced without a network.
+- **`RF-09`** — a success clears the flush mark only if the request STARTED
+  after the flush (`successProvesFlush`), so a request that was already in
+  flight when the stall fired cannot re-arm the recovery inside its own burst.
+- **`RF-02`** — the seven, plus `SanityHelpClient`'s injected default, which is
+  what makes the pin's title true. `ARPlacementManager`'s one-shot asset
+  download is the only `URLSession.shared` left and the pin names it.
+  `patinaData(from:)` carries the session's budget so the two `data(from:)`
+  readers do not silently inherit Foundation's 60 s.
+- **`RF-04`** — the hub's seam asks whether the floor draws anything before it
+  dates it. `BadgeCountService.drawsAnyCount`.
+
+## Two things a reviewer should look at first
+
+1. **`APIConfiguration.requestTimeout` / `resourceTimeout` are `nonisolated`.**
+   `PatinaURLSession` is built from them off the main actor, so without this
+   `RF-03` trades nine warnings for three. They are immutable `TimeInterval`s;
+   the modifier only relaxes access. It also silences the same warning at other
+   call sites, which is why the target's total falls 266 → 248.
+2. **The chrome's top and the scroll anchors' rects are measured in different
+   spaces**, and the rule compares them anyway. The bar resolves the named
+   coordinate space (729); an anchor inside the scroll does not and its frame
+   comes back global (the record's 177.33 … 664 is screen space, and matches the
+   drawn card exactly). The difference is the root's 62 pt top inset, so the
+   rule's "room below" reads 62 pt short — conservative in the safe direction
+   (it under-estimates the room below the anchor, never over-estimates it), and
+   on this fixture it changes no answer. Making `bounds(of:)` resolve through
+   the scroll would be the real repair, and it is nobody's item yet.
+
+## Local-stack state this pass changed
+
+The walk left the fixture decision `b0000000-…-00000005c301` **responded**,
+with its `decision_notifications` row — the SQL test's first ASSERT is that it
+is `pending`, so it could not run. The row was put back to its seeded shape
+(`status='pending'`, the four resolution columns NULL, the notification row
+deleted) with one `psql` transaction against `127.0.0.1:54322`. Nothing else
+was touched, and no seeded `project_ffe_items` row was ever blocked by that
+decision, so nothing was lost. After this pass's SQL run the row reads
+`pending`, `responded_at` null, 0 notifications.
+
+`00564` is still applied to the local stack by file and **still has no row in
+`supabase_migrations.schema_migrations`** — pass 1's warning stands.
+
+## Kody-run, and owed (pass 2)
+
+1. Everything pass 1 owed above still stands — starting with **applying
+   `00564_client_signoff_approval.sql` to Strata**.
+2. **`W1F-01`'s new placement is walked on a simulator only.** What it needs on
+   the device pass is one `--resetonboarding` launch with a full record at both
+   text sizes; the shape to watch is that step 2's card hangs from the record's
+   top edge with the whole tab bar visible.
+3. **The tour's copy column cap (300 pt) is untouched.** If a future step's copy
+   is much longer than these three, a card hung from the lip has the whole
+   screen below it and will simply be taller — the cap, not the placement, is
+   the thing to raise.
