@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
@@ -43,7 +43,10 @@ export interface MatProps {
   papers: MatPaper[];
   /** Every other project this client can open. Empty for a solo client. */
   otherHouses?: OtherHouse[];
-  accountHref: '/account';
+  /** Opens the details sheet in place (L7 absorbs /account — never a route). */
+  onOpenDetails: () => void;
+  /** Whether the details sheet is currently open, for aria-expanded on the act that opens it. */
+  detailsOpen?: boolean;
   onSignOut: () => void;
   /** The act that governs the letters, wired next door. */
   correspondence?: ReactNode;
@@ -78,7 +81,8 @@ export function Mat({
   people,
   papers,
   otherHouses = [],
-  accountHref,
+  onOpenDetails,
+  detailsOpen,
   onSignOut,
   correspondence,
   onOpenPapers,
@@ -144,7 +148,9 @@ export function Mat({
               regionKey="mat"
               surfaceKey="the_threshold"
               variant="tertiary"
-              href={accountHref}
+              onClick={onOpenDetails}
+              aria-haspopup="dialog"
+              aria-expanded={!!detailsOpen}
             >
               Your details
             </ScoredAction>

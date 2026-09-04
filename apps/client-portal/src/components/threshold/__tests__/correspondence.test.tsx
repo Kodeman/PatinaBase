@@ -302,7 +302,7 @@ describe('the mounts', () => {
       <Mat
         people={[]}
         papers={[]}
-        accountHref="/account"
+        onOpenDetails={jest.fn()}
         onSignOut={jest.fn()}
         correspondence={<p data-testid="the-mute">mute</p>}
       />,
@@ -311,7 +311,7 @@ describe('the mounts', () => {
     expect(details).toContainElement(screen.getByTestId('the-mute'));
     // Its own line: not inside the row that carries the client's own record.
     expect(
-      screen.getByRole('link', { name: /your details/i }).parentElement,
+      screen.getByRole('button', { name: /your details/i }).parentElement,
     ).not.toContainElement(screen.getByTestId('the-mute'));
   });
 });

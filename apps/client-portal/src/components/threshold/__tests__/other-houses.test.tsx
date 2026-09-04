@@ -122,7 +122,7 @@ describe('Mat — the other houses column', () => {
       people: [{ name: 'Nora Quist', role: 'on the letterhead', where: 'Quist Interiors' }],
       papers: [{ label: 'The design set' }],
       otherHouses,
-      accountHref: '/account' as const,
+      onOpenDetails: jest.fn(),
       onSignOut: jest.fn(),
     };
   }
