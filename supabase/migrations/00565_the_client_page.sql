@@ -64,7 +64,18 @@
 --       REPLACED. A signed-then-superseded line would otherwise stand on the
 --       page beside the line that replaced it.
 --     · projectId / projectName, so nothing the head emitted is lost.
---   Three deliberate departures from the head, each narrow:
+--   Four deliberate departures from the head, each narrow:
+--     · One ADDITIVE key beyond 00423: updatedAt, on both branches. It is
+--       GREATEST(project_ffe_items.updated_at,
+--       project_ffe_items.last_status_change_at, <instrument>.executed_at) —
+--       the live line's own edit stamp, the logistics stamp that
+--       stamp_ffe_status_change writes when status moves, and the moment the
+--       instrument behind the line was executed. GREATEST ignores NULLs, so this
+--       is null only when a line carries none of the three, which cannot happen
+--       on either branch (updated_at is NOT NULL and executed_at is joined
+--       NOT NULL). It exists so the client's page can say what has moved since
+--       she last looked without a second read. It is a TIME, not money: the
+--       trade cost / vendor / markup rule is untouched.
 --     · jsonb_strip_nulls is NOT carried over. The client page's derivations and
 --       its tests read a stable key set; an absent key and a null one are not
 --       the same contract. Emitting an explicit null discloses nothing.
@@ -479,6 +490,7 @@ BEGIN
         'clientLineTotalCents', authorization_item.client_line_total_cents,
         'itemType', item.item_type,
         'logisticsStatus', item.status,
+        'updatedAt', GREATEST(item.updated_at, item.last_status_change_at, doc.executed_at),
         'tradeJourney', NULL,
         -- The block exists because the CLIENT signed an allowance — that is the
         -- frozen snapshot's business (authorization_item.item_type), and it
@@ -554,6 +566,7 @@ BEGIN
         'clientLineTotalCents', item.line_total_cents,
         'itemType', item.item_type,
         'logisticsStatus', item.status,
+        'updatedAt', GREATEST(item.updated_at, item.last_status_change_at, doc.executed_at),
         'tradeJourney', terms.progress_state,
         'allowance', NULL,
         'instrument', jsonb_build_object(
