@@ -1,0 +1,2033 @@
+<title>The Decision, Delivered</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+:root{
+  --ground:#FAF7F2;
+  --paper:#FCFAF6;
+  --paper-inset:#F5F1EA;
+  --rule:#E5E2DD;
+  --rule-2:#CFC9C0;
+  --ink:#2C2926;
+  --body:#4A453F;
+  --mocha:#5C4A3C;
+  --clay:#C4A57B;
+  --clay-ink:#7C5E30;
+  --gold-ink:#79651E;
+  --terracotta-ink:#9C5340;
+  --muted:#635C53;
+  --faint:#726A5F;
+  --accent:#7C5E30;
+  --focus:#7C5E30;
+  --stamp-border:#5C4A3C;
+  --stamp-ink:#5C4A3C;
+  --font-display:"Playfair Display","Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --font-body:"Newsreader","Iowan Old Style",Georgia,"Times New Roman",serif;
+  --font-mono:"DM Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#1F1C19;
+    --paper:#2A2622;
+    --paper-inset:#231F1C;
+    --rule:#3B3631;
+    --rule-2:#4C463F;
+    --ink:#EDE7DF;
+    --body:#C9C1B6;
+    --mocha:#C7AB92;
+    --clay:#D6B98F;
+    --clay-ink:#D6B98F;
+    --gold-ink:#C9AE55;
+    --terracotta-ink:#D08A72;
+    --muted:#ABA294;
+    --faint:#998F80;
+    --accent:#D6B98F;
+    --focus:#D6B98F;
+    --stamp-border:#C7AB92;
+    --stamp-ink:#C7AB92;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#1F1C19;
+  --paper:#2A2622;
+  --paper-inset:#231F1C;
+  --rule:#3B3631;
+  --rule-2:#4C463F;
+  --ink:#EDE7DF;
+  --body:#C9C1B6;
+  --mocha:#C7AB92;
+  --clay:#D6B98F;
+  --clay-ink:#D6B98F;
+  --gold-ink:#C9AE55;
+  --terracotta-ink:#D08A72;
+  --muted:#ABA294;
+  --faint:#998F80;
+  --accent:#D6B98F;
+  --focus:#D6B98F;
+  --stamp-border:#C7AB92;
+  --stamp-ink:#C7AB92;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--ground);
+  color:var(--body);
+  font-family:var(--font-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.shell{
+  max-width:1360px;
+  margin:0 auto;
+  padding:0 20px 8rem;
+}
+main{max-width:none;}
+p,li{max-width:66ch;}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--rule-2);}
+a:hover{border-bottom-color:var(--accent);}
+a:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:3px;}
+
+/* ---------- running index ---------- */
+.index{
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  line-height:1.5;
+  padding:2rem 0 1rem;
+  border-bottom:1px solid var(--rule);
+  margin-bottom:2.5rem;
+}
+.index .idxhead{
+  font-family:var(--font-mono);
+  font-size:10px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--faint);
+  margin:0 0 .9rem;
+  font-weight:500;
+}
+.index ol{list-style:none;margin:0;padding:0;display:grid;gap:.5rem;}
+.index li{max-width:none;}
+.index a{
+  color:var(--muted);
+  border-bottom:none;
+  display:grid;
+  grid-template-columns:1.9rem 1fr;
+  gap:.3rem;
+}
+.index a:hover{color:var(--ink);}
+.index .n{color:var(--faint);font-variant-numeric:tabular-nums;}
+
+/* ---------- masthead ---------- */
+.masthead{padding:3.5rem 0 2.5rem;border-bottom:1.5px solid var(--ink);}
+.masthead .eyebrow{margin-bottom:1.4rem;}
+.masthead h1{
+  font-family:var(--font-display);
+  font-size:clamp(2.6rem,6vw,4.4rem);
+  line-height:1.02;
+  font-weight:500;
+  color:var(--ink);
+  margin:0 0 1.4rem;
+  text-wrap:balance;
+  letter-spacing:-.01em;
+}
+.standing{
+  font-family:var(--font-display);
+  font-style:italic;
+  font-size:clamp(1.15rem,2.4vw,1.5rem);
+  line-height:1.45;
+  color:var(--mocha);
+  max-width:44ch;
+  margin:0 0 2.2rem;
+}
+.masthead-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:2rem 3rem;
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.masthead-meta div{max-width:26ch;}
+.masthead-meta b{display:block;color:var(--faint);font-weight:400;margin-bottom:.45rem;}
+.masthead-meta span{display:block;text-transform:none;letter-spacing:.02em;font-size:12px;color:var(--body);}
+
+/* ---------- section openers ---------- */
+.eyebrow{
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--faint);
+  margin:0;
+}
+section{padding-top:4.5rem;scroll-margin-top:1.5rem;}
+.opener{border-top:1px solid var(--rule);padding-top:1.1rem;margin-bottom:2rem;}
+section > h2{
+  font-family:var(--font-display);
+  font-size:clamp(1.8rem,3.6vw,2.7rem);
+  line-height:1.12;
+  font-weight:500;
+  color:var(--ink);
+  margin:.7rem 0 0;
+  text-wrap:balance;
+  max-width:24ch;
+}
+h3{
+  font-family:var(--font-display);
+  font-size:1.35rem;
+  line-height:1.25;
+  font-weight:500;
+  color:var(--ink);
+  margin:2.8rem 0 .8rem;
+  text-wrap:balance;
+}
+h4{
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--faint);
+  font-weight:500;
+  margin:2rem 0 .7rem;
+}
+.lede{font-size:1.12rem;color:var(--body);}
+
+/* ---------- utilities ---------- */
+.mono{font-family:var(--font-mono);font-size:.82em;letter-spacing:.02em;color:var(--muted);}
+.ref{font-family:var(--font-mono);font-size:.74em;letter-spacing:.02em;color:var(--faint);white-space:nowrap;}
+td .ref,th .ref{white-space:normal;overflow-wrap:anywhere;}
+.quote{
+  font-style:italic;
+  color:var(--mocha);
+}
+blockquote{
+  margin:1.4rem 0;
+  padding-left:1.1rem;
+  border-left:2px solid var(--clay);
+  font-family:var(--font-display);
+  font-style:italic;
+  font-size:1.1rem;
+  color:var(--mocha);
+}
+blockquote p{max-width:52ch;}
+.cols{display:grid;gap:2.2rem;grid-template-columns:minmax(0,1fr);}
+@media (min-width:760px){ .cols-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} }
+hr{border:none;border-top:1px solid var(--rule);margin:2.6rem 0;}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin:1.4rem 0;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--rule-2);}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.45;}
+th,td{
+  text-align:left;
+  vertical-align:top;
+  padding:.72rem .9rem .72rem 0;
+  border-bottom:1px solid var(--rule);
+}
+th{
+  font-family:var(--font-mono);
+  font-size:10px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--faint);
+  font-weight:500;
+  white-space:nowrap;
+}
+td{color:var(--body);}
+td strong{color:var(--ink);font-weight:600;}
+tbody tr:last-child td{border-bottom:none;}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap;}
+.tight td,.tight th{font-size:13.5px;}
+.w-name{min-width:15rem;}
+.w-what{min-width:20rem;}
+.w-why{min-width:18rem;}
+.w-dep{min-width:20rem;}
+
+/* master proposal table: dependencies drop to a second line per row,
+   so effort, wave and lanes stay on screen at 1440 */
+.master .w-name{min-width:10rem;}
+.master .w-what{min-width:16rem;}
+.master .w-why{min-width:12rem;}
+.master .w-eff{min-width:3.4rem;}
+.master .w-wave{min-width:3rem;}
+.master .w-lanes{min-width:8rem;}
+.master td{padding-right:.8rem;}
+.master tbody tr.head td{border-bottom:none;padding-bottom:.25rem;}
+.master tbody tr.deps td{border-bottom:1px solid var(--rule);padding-top:0;padding-bottom:.9rem;}
+.master tbody tr.deps .deplabel{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);display:block;margin-bottom:.15rem;
+}
+.master tbody tr:last-child td{border-bottom:none;}
+
+/* ---------- mock panels ---------- */
+.panel{
+  background:var(--paper);
+  border:1px solid var(--rule);
+  border-radius:2px;
+  padding:1.6rem 1.5rem;
+  margin:1.4rem 0;
+}
+.panel-cap{
+  font-family:var(--font-mono);
+  font-size:10px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--faint);
+  margin:0 0 1rem;
+}
+.panelrow{display:grid;gap:1.4rem;align-items:start;grid-template-columns:minmax(0,1fr);}
+@media (min-width:900px){ .panelrow-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} }
+.letterhead{
+  font-family:var(--font-display);
+  font-size:1.3rem;
+  color:var(--ink);
+  letter-spacing:.01em;
+  margin:0 0 .7rem;
+}
+.hair{border-top:1px solid var(--rule-2);margin:.7rem 0 1rem;}
+.foldrule{position:relative;border-top:1.5px solid var(--ink);margin:1.4rem 0 1.2rem;}
+.foldrule::before{content:"";position:absolute;left:0;top:-1.5px;width:16px;height:4px;background:var(--clay);}
+.waiting{
+  font-family:var(--font-display);
+  font-style:italic;
+  font-size:1.18rem;
+  line-height:1.42;
+  color:var(--mocha);
+  margin:0 0 .4rem;
+  max-width:46ch;
+}
+.plate{
+  border:1px solid var(--rule-2);
+  background:var(--paper-inset);
+  padding:8px;
+  margin:0 0 .5rem;
+}
+.plate-inner{
+  border:1px solid var(--rule);
+  min-height:118px;
+  display:grid;
+  place-items:center;
+  padding:1rem;
+  text-align:center;
+}
+.plate-inner .mono{color:var(--faint);}
+.ask{
+  border-left:2px solid var(--clay);
+  padding-left:1.1rem;
+  margin:1.6rem 0 1rem;
+}
+.ask p{
+  font-family:var(--font-display);
+  font-size:1.35rem;
+  line-height:1.3;
+  color:var(--ink);
+  margin:0;
+  max-width:34ch;
+}
+.ask .attrib{
+  font-family:var(--font-display);
+  font-style:italic;
+  font-size:.95rem;
+  color:var(--mocha);
+  margin:.6rem 0 0;
+  text-align:right;
+  max-width:34ch;
+}
+.weigh{
+  font-family:var(--font-display);
+  font-style:italic;
+  font-size:1.2rem;
+  line-height:1.45;
+  color:var(--mocha);
+  margin:0 0 .7rem;
+  max-width:48ch;
+}
+.ledger{
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--muted);
+  font-variant-numeric:tabular-nums;
+  margin:0;
+}
+.choice{border-top:1px solid var(--rule);padding:.85rem 0 .85rem 2rem;position:relative;min-height:44px;}
+.choice:first-of-type{border-top:none;}
+.choice .box{
+  position:absolute;left:0;top:1rem;width:14px;height:14px;
+  border:1.5px solid var(--ink);background:none;
+}
+.choice.on .box::after{
+  content:"";position:absolute;left:2px;top:5px;width:8px;height:4px;
+  border-left:1.5px solid var(--mocha);border-bottom:1.5px solid var(--mocha);
+  transform:rotate(-45deg);
+}
+.choice .word{font-family:var(--font-display);font-size:1.06rem;color:var(--ink);display:block;}
+.choice .meaning{font-size:.9rem;color:var(--muted);margin:.15rem 0 0;max-width:44ch;}
+.signline{margin:1.4rem 0 .4rem;max-width:22rem;}
+.signline .name{
+  font-family:var(--font-display);
+  font-size:1.6rem;
+  color:var(--ink);
+  padding:0 0 .25rem 2px;
+}
+.signline .rule{
+  border-top:1px solid var(--ink);
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding-top:.35rem;
+}
+.signline .rule .mono{font-size:11px;letter-spacing:.1em;text-transform:uppercase;}
+
+/* scored press */
+.scored{
+  background:none;border:none;padding:0;margin:1.3rem 0 .3rem;
+  display:inline-block;cursor:pointer;text-align:left;
+  font-family:var(--font-mono);
+  touch-action:none;
+}
+.scored .word{
+  display:block;
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink);padding:.2rem 0 .35rem;
+}
+.scored .track{display:block;position:relative;height:1.5px;background:var(--rule-2);}
+.scored .fill{
+  display:block;position:absolute;inset:0;background:var(--ink);
+  transform:scaleX(0);transform-origin:left center;
+}
+.scored .under{display:block;height:1px;background:var(--clay);margin-top:2.5px;}
+.scored:disabled{cursor:default;opacity:.6;}
+.hint{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:.35rem 0 0;}
+.recorded{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:.6rem 0 0;}
+.sealline{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin:1.3rem 0 0;}
+.sealline .said{font-family:var(--font-display);font-size:1.05rem;color:var(--ink);}
+.replay{
+  background:none;border:none;padding:0;margin:.9rem 0 0;cursor:pointer;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);border-bottom:1px solid var(--rule-2);
+}
+
+/* ---------- stamps ---------- */
+.stamp{
+  display:inline-block;position:relative;
+  border:1.5px solid var(--stamp-border);
+  color:var(--stamp-ink);
+  font-family:var(--font-mono);
+  font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  padding:.55rem .85rem;
+  transform:rotate(-2deg);
+  opacity:.88;
+  background:none;
+  line-height:1.25;
+}
+.stamp::after{content:"";position:absolute;inset:2.5px;border:1px solid var(--stamp-border);opacity:.42;pointer-events:none;}
+.stamp.single::after{display:none;}
+.stamp.upright{transform:none;}
+.stamp .sub{display:block;font-size:9px;letter-spacing:.16em;color:var(--stamp-ink);opacity:.8;margin-top:.2rem;}
+.stamp.struck .word{position:relative;}
+.stamp.struck .word::after{content:"";position:absolute;left:-2px;right:-2px;top:50%;height:1px;background:var(--stamp-ink);}
+.s-approved,.s-signed,.s-paper{--stamp-border:var(--mocha);--stamp-ink:var(--mocha);}
+.s-held{--stamp-border:var(--gold-ink);--stamp-ink:var(--ink);}
+.s-awaiting{--stamp-border:var(--gold-ink);--stamp-ink:var(--ink);}
+.s-returned{--stamp-border:var(--clay-ink);--stamp-ink:var(--ink);}
+.s-declined{--stamp-border:var(--terracotta-ink);--stamp-ink:var(--ink);}
+.s-quiet{--stamp-border:var(--faint);--stamp-ink:var(--muted);}
+.stampgrid{display:grid;gap:1.6rem 1.2rem;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));margin:1.6rem 0 0;}
+.stampcell{display:grid;gap:.6rem;justify-items:start;align-content:start;}
+.stampcell .note{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;color:var(--faint);text-transform:uppercase;}
+.stampcell .tie{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:var(--muted);}
+.stampcell .signer{font-family:var(--font-display);font-size:.95rem;color:var(--mocha);}
+
+/* ---------- spine ---------- */
+.spinewrap{display:grid;gap:2rem;align-items:start;grid-template-columns:minmax(0,1fr);}
+@media (min-width:820px){ .spinewrap{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} }
+.spine{position:relative;padding-left:2.2rem;min-height:280px;}
+.spine .line-top,.spine .line-bot{position:absolute;left:12px;width:1.5px;background:var(--rule-2);}
+.spine .line-top{top:0;height:64px;}
+.spine .line-bot{bottom:0;height:86px;}
+.spine .cap{position:absolute;left:9px;width:8px;height:5px;background:var(--clay);}
+.spine .cap-a{top:64px;}
+.spine .cap-b{bottom:86px;height:3px;opacity:.5;}
+.spine .line-mid{
+  position:absolute;left:12px;top:64px;width:1.5px;height:0;
+  background:var(--rule-2);
+  transition:height 620ms ease-out;
+}
+.spine.closed .line-mid{height:calc(100% - 150px);}
+.spine .ev{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+.spine .gatebox{margin:1.2rem 0;}
+.spine .gatekind{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--clay-ink);margin:0 0 .5rem;}
+.spine .gatetitle{font-family:var(--font-display);font-size:1.1rem;color:var(--ink);margin:0 0 .3rem;}
+.spine .gatevitals{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--muted);margin:0 0 .5rem;font-variant-numeric:tabular-nums;}
+.spine .cap-note{font-family:var(--font-display);font-style:italic;font-size:.98rem;color:var(--mocha);margin:.4rem 0 0;max-width:34ch;}
+
+/* ---------- phone ---------- */
+.phones{display:flex;gap:1.4rem;flex-wrap:wrap;margin:1.4rem 0;}
+.phone{
+  width:290px;flex:0 0 auto;
+  background:var(--paper);
+  border:1px solid var(--rule-2);
+  border-radius:2px;
+  padding:1.1rem 1rem 1.4rem;
+}
+.phone .status{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;color:var(--faint);display:flex;justify-content:space-between;margin-bottom:1rem;text-transform:uppercase;}
+.phone .eyebrow{font-size:10px;}
+.phone h5{font-family:var(--font-display);font-size:1.05rem;color:var(--ink);margin:.5rem 0 .4rem;font-weight:500;line-height:1.25;}
+.phone p{font-size:.9rem;line-height:1.5;margin:.3rem 0;max-width:none;}
+.rowobl{position:relative;padding:.6rem 0 .6rem .8rem;border-bottom:1px solid var(--rule);}
+.rowobl::before{content:"";position:absolute;left:0;top:.6rem;bottom:.6rem;width:2px;background:var(--clay);}
+.rownews{padding:.6rem 0;border-bottom:1px solid var(--rule);}
+.rowobl:last-child,.rownews:last-child{border-bottom:none;}
+.rowobl .t,.rownews .t{font-size:.88rem;color:var(--ink);line-height:1.4;}
+.rowobl .r,.rownews .r{font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:.2rem;font-variant-numeric:tabular-nums;}
+.lockbanner{border:1px solid var(--rule-2);border-radius:2px;padding:.8rem;background:var(--paper-inset);}
+.lockbanner .app{font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);display:flex;justify-content:space-between;margin-bottom:.4rem;}
+.lockactions{display:flex;border-top:1px solid var(--rule);margin-top:.7rem;font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+.lockactions span{flex:1;padding-top:.5rem;text-align:center;}
+.lockactions span + span{border-left:1px solid var(--rule);}
+
+/* ---------- before/after ---------- */
+.ba{display:grid;gap:1.2rem;margin:1.2rem 0;grid-template-columns:minmax(0,1fr);}
+@media (min-width:820px){ .ba{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} }
+.ba .side{border:1px solid var(--rule);border-radius:2px;padding:1.2rem;background:var(--paper);}
+.ba .side h5{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 .8rem;font-weight:500;}
+.ba .subj{font-family:var(--font-display);font-size:1.02rem;color:var(--ink);margin:0 0 .5rem;line-height:1.3;}
+.ba p{font-size:.94rem;line-height:1.55;margin:.5rem 0;}
+.ba .sig{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:.8rem;}
+
+/* ---------- lists ---------- */
+.deck{list-style:none;margin:1.2rem 0;padding:0;display:grid;gap:.9rem;}
+.deck li{
+  display:grid;grid-template-columns:2.2rem minmax(0,1fr);gap:.4rem;
+  padding-bottom:.9rem;border-bottom:1px solid var(--rule);max-width:70ch;
+}
+.deck li > span{min-width:0;overflow-wrap:anywhere;}
+.deck li:last-child{border-bottom:none;}
+.deck .n{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--faint);padding-top:.28rem;font-variant-numeric:tabular-nums;}
+.deck b{color:var(--ink);font-weight:600;}
+ul.plain{list-style:none;padding:0;margin:1rem 0;display:grid;gap:.6rem;}
+ul.plain li{padding-left:1.1rem;position:relative;}
+ul.plain li::before{content:"";position:absolute;left:0;top:.72em;width:6px;height:1px;background:var(--clay);}
+
+/* ---------- rulings ---------- */
+.ruling{border-top:1px solid var(--rule);padding:1.3rem 0;}
+.ruling:last-of-type{border-bottom:1px solid var(--rule);}
+.ruling h4{margin:0 0 .5rem;color:var(--muted);}
+.ruling .q{font-family:var(--font-display);font-size:1.15rem;color:var(--ink);margin:0 0 .5rem;line-height:1.3;max-width:52ch;}
+.ruling .rec{margin:.5rem 0 0;}
+.ruling .rec b{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--clay-ink);display:block;margin-bottom:.15rem;font-weight:500;}
+.who{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:.5rem;}
+
+@media (max-width:600px){
+  /* two- and three-column tables stop reserving desktop widths and stop
+     wrapping to two words a line; the master table keeps its own widths
+     and scrolls inside its wrapper */
+  .w-name{min-width:9rem;}
+  .w-what,.w-why,.w-dep{min-width:0;}
+}
+@media (min-width:1100px){
+  .shell{display:grid;grid-template-columns:210px minmax(0,1fr);gap:0 4.5rem;}
+  .index{
+    position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;
+    border-bottom:none;border-right:1px solid var(--rule);
+    padding:3.9rem 1.5rem 3rem 0;margin-bottom:0;
+  }
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation:none !important;transition:none !important;}
+}
+</style>
+
+<div class="shell">
+
+<nav class="index" aria-label="Contents">
+  <p class="idxhead">Contents</p>
+  <ol>
+    <li><a href="#short"><span class="n">01</span><span>The short version</span></a></li>
+    <li><a href="#today"><span class="n">02</span><span>What exists today</span></a></li>
+    <li><a href="#principles"><span class="n">03</span><span>Principles</span></a></li>
+    <li><a href="#decision"><span class="n">04</span><span>The Decision</span></a></li>
+    <li><a href="#surfaces"><span class="n">05</span><span>Per surface</span></a></li>
+    <li><a href="#household"><span class="n">06</span><span>Household</span></a></li>
+    <li><a href="#designer"><span class="n">07</span><span>What the designer supplies</span></a></li>
+    <li><a href="#master"><span class="n">08</span><span>The proposal list</span></a></li>
+    <li><a href="#waves"><span class="n">09</span><span>Three waves</span></a></li>
+    <li><a href="#rulings"><span class="n">10</span><span>Open rulings</span></a></li>
+    <li><a href="#appendix"><span class="n">11</span><span>Appendix</span></a></li>
+  </ol>
+</nav>
+
+<main>
+
+<header class="masthead">
+  <p class="eyebrow">Client approval experience &middot; Middle West Studio &middot; 3 September 2026</p>
+  <h1>The Decision,<br>Delivered</h1>
+  <p class="standing">An approval should arrive like a letter from someone who knows your house, and leave a mark you would keep.</p>
+  <div class="masthead-meta">
+    <div><b>Prepared for</b><span>Kody &middot; build, infrastructure, operations</span><span>Leah &middot; design and voice</span></div>
+    <div><b>Discovery</b><span>Designer-side approval authoring</span><span>Client-portal journey</span><span>iOS client application</span><span>Backend and notifications</span></div>
+    <div><b>Design</b><span>Journey architecture</span><span>Ceremony and visual language</span><span>Behavior and copy</span><span>iOS native</span></div>
+    <div><b>Synthesis</b><span>Lead and proposal writer</span></div>
+  </div>
+</header>
+
+<!-- ============================================================ 1 -->
+<section id="short">
+  <div class="opener"><p class="eyebrow">One</p><h2>The short version</h2></div>
+
+  <p class="lede">Patina already owns the hardest parts of a client approval. The evidence is immutable, the authority is frozen, the artifact is hashed, and the six-part gate ceremony on <span class="ref">/decisions/[id]</span> is genuinely good design. What is missing is everything around the act: the notice does not carry a door, the first notice reads like a scolding, the impact arrives as a spreadsheet row, one of the three answers leaves no mark, and when a homeowner finally answers, the product says nothing back to her at all. The work below does not rebuild the machine. It gives the machine a voice, a threshold, a gesture, a seal, and a receipt, on all three surfaces, in the studio's name rather than Patina's.</p>
+
+  <h3>Five floor defects</h3>
+  <ol class="deck">
+    <li><span class="n">F1</span><span><b>The approval email carries no link.</b> <code class="mono">renderDecisionEmail</code> builds its body from <code class="mono">paragraph()</code> calls only, with zero <code class="mono">ctaButton()</code> anywhere in the file. It says "Open your Patina dashboard" and gives her nothing to tap. Every proposal-family email does carry a real deep link. <span class="ref">disc 02 §9.1</span></span></li>
+    <li><span class="n">F2</span><span><b>The first notice reads as a reminder.</b> Issue and the 48-hour cron both route through the identical <code class="mono">decision_required</code> render, so a brand-new approval arrives subject-lined <span class="quote">Reminder: "{title}" needs your decision</span>. <span class="ref">disc 02 §9.2</span></span></li>
+    <li><span class="n">F3</span><span><b>Every attention is read twice on iOS.</b> The bell query filters <code class="mono">channel IN (in_app, push)</code> while <code class="mono">notify_client_attention</code> writes one row of each, so the count a homeowner sees is roughly double the truth. Documented in the migration itself as a seam, not a defect in that file. <span class="ref">disc 04 §3.4</span></span></li>
+    <li><span class="n">F4</span><span><b>The iOS notifications toggle never asks iOS.</b> <code class="mono">SettingsService.setNotificationsEnabled</code> writes <code class="mono">user_settings.push_notifications</code> and <code class="mono">notification_preferences.channels_push</code> and never calls <code class="mono">requestAuthorizationAndRegister()</code>. A homeowner who tapped "Not now" can switch it on, watch it stay on, and receive nothing forever. <span class="ref">ux 04 §5.3</span></span></li>
+    <li><span class="n">F5</span><span><b>A signed-out universal link is dropped.</b> <code class="mono">DeepLinkHandler.handle</code> queues a URL only when the phase is <code class="mono">.launching</code>. She taps her proposal in Mail, signs in, and lands on Today. <span class="ref">ux 04 §5.4</span></span></li>
+  </ol>
+
+  <h3>The seven moments</h3>
+  <ol class="deck">
+    <li><span class="n">1</span><span><b>Notice.</b> A linkless machine mail becomes a short note in the designer's voice with one door.</span></li>
+    <li><span class="n">2</span><span><b>Arrive.</b> The canonical address <code class="mono">client.patina.cloud/decisions/{id}</code> works from mail, from push, and through sign-in on both devices.</span></li>
+    <li><span class="n">3</span><span><b>Understand.</b> The artifact stops being a title with a version and becomes a plate on the page, with the designer's one-line why beneath the question.</span></li>
+    <li><span class="n">4</span><span><b>Weigh.</b> Three signed deltas become one spoken sentence, with the exact figures kept in a mono ledger underneath.</span></li>
+    <li><span class="n">5</span><span><b>Decide.</b> Three doors of equal weight, a typed legal name, and a scored press-and-hold that makes the gesture cost what the act costs.</span></li>
+    <li><span class="n">6</span><span><b>Seal.</b> One stamp grammar, eleven states, drawn the same way on web and on iOS, settling once and then never moving again.</span></li>
+    <li><span class="n">7</span><span><b>Afterglow.</b> The line resumes, the standing sentence drops a clause, and she gets a receipt naming what her yes released.</span></li>
+  </ol>
+
+  <h3>Three waves</h3>
+  <ol class="deck">
+    <li><span class="n">W1</span><span><b>Fix the floor.</b> Arrival, links, counts, and five verified code defects. Nothing here needs a ruling, and nothing here is a redesign.</span></li>
+    <li><span class="n">W2</span><span><b>Make it a ceremony.</b> The why-line, the plate, the weighing sentence, the three stamps, the press-and-hold, the seal on iOS, and the receipt.</span></li>
+    <li><span class="n">W3</span><span><b>Make it a habit.</b> The threshold at <span class="ref">/decisions</span>, the ceremony inside The Making, the keepsake, the household, and the pace she sets.</span></li>
+  </ol>
+</section>
+
+<!-- ============================================================ 2 -->
+<section id="today">
+  <div class="opener"><p class="eyebrow">Two</p><h2>What exists today</h2></div>
+
+  <p class="lede">Two independent approval systems reach one homeowner across three surfaces, and a third rail is already taking new work. The client experiences one grammar. The systems stay separate: the authority contract states plainly that Patina <span class="quote">must not create or dual-write another approval aggregate</span>, so nothing below merges them.</p>
+
+  <h3>The map</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>System</th><th>Origin</th><th>Notice</th><th>Client surface, web</th><th>Client surface, iOS</th><th>The act</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Stage-2 project approvals</strong><br><span class="ref">client_decisions &middot; project_artifact_v1</span></td>
+          <td>Designer authors in the Document's <span class="quote">Client approvals</span> region, then draft &rarr; client confirms review &rarr; publish <span class="ref">disc 01 §A.3</span></td>
+          <td>Email with no link; in-app row; numeric header badge <span class="ref">disc 02 §1A</span></td>
+          <td><span class="ref">/decisions</span> six buckets, then <span class="ref">/decisions/[id]</span> six-part gate; The Making announces and hands off <span class="ref">disc 02 §7</span></td>
+          <td>Decisions list and detail; option cards; consent sheet <span class="ref">disc 03 §1.1</span></td>
+          <td>Click-through review confirmation, then a radio and Submit response <span class="ref">disc 02 §2A</span></td>
+        </tr>
+        <tr>
+          <td><strong>Proposals and commercial documents</strong><br><span class="ref">proposals, document_kind, commercial_state</span></td>
+          <td>Send sheet in the Document; legacy send is retired, new client work travels as a design services agreement <span class="ref">disc 01 §B.1</span></td>
+          <td>Email with a real deep link and a CTA button <span class="ref">disc 01 §B.3</span></td>
+          <td><span class="ref">/proposals/[id]</span> document, then <span class="ref">/proposals/[id]/sign</span>; The Making hosts the gate inline <span class="ref">disc 02 §2B</span></td>
+          <td>Proposal list and detail; sign sheet at a medium detent <span class="ref">disc 03 §1.2</span></td>
+          <td>Typed full name, required consent checkbox, server-derived trusted IP <span class="ref">disc 02 §3</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Both write into the same physical table in mutually exclusive shapes, enforced by <code class="mono">client_decisions_stage2_shape_check</code> <span class="ref">00463:34-49</span>. A proposal signature is a <code class="mono">client_decisions</code> row with no approval contract; a Stage-2 approval is one that forbids <code class="mono">linked_proposal_id</code>. They are siblings, and in the ordinary lifecycle they are sequential: a signature activates the project, which is exactly the event that flips <code class="mono">engagement_kind</code> from proposal to project and hands the same document from the proposal watch to the approvals region. <span class="ref">disc 01 §C</span></p>
+
+  <h3>The seven moments, today</h3>
+  <p>What each moment is today, and where it is cited. What each becomes is section four, step by step, and is not restated here.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th>Moment</th><th class="w-what">Today</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1 &middot; Notice</strong></td><td>Proposal mail is good: studio name in the subject, personal message, real link. Approval mail is a linkless note whose first send says "Reminder", printing a 64-character checksum to a homeowner. Push fires for decisions only. <span class="ref">disc 02 §1A</span></td></tr>
+        <tr><td><strong>2 &middot; Arrive</strong></td><td>Proposal mail lands on the document behind a sign-in wall. Approval mail lands nowhere. iOS universal links parse <span class="ref">/decisions/&lt;id&gt;</span> correctly and nothing points at that door. <span class="ref">disc 03 §5.5</span></td></tr>
+        <tr><td><strong>3 &middot; Understand</strong></td><td>The strongest thing in the product. Six parts in fixed order, and the load-bearing sentence <span class="quote">You are approving edition {N}, exactly as shown.</span> But the artifact is named rather than shown, and Scope is optional free text. <span class="ref">disc 02 §2A</span></td></tr>
+        <tr><td><strong>4 &middot; Weigh</strong></td><td>A three-column definition list: <code class="mono">+$4,200</code>, <code class="mono">+3 days</code>, <code class="mono">$0 &mdash; no cost change</code>. The designer's own side already joins the same three into one line and states the zero in words. The client gets the table; the designer gets the line. <span class="ref">disc 02 §2A.5</span></td></tr>
+        <tr><td><strong>5 &middot; Decide</strong></td><td>Two clicks for a budget edition that unblocks procurement; a typed name for a services agreement. The weight is inverted. <span class="ref">ux 01 §2 Moment 5</span></td></tr>
+        <tr><td><strong>6 &middot; Seal</strong></td><td>An excellent stamp for Approved and Held. Changes requested gets plain text and no mark. iOS gets an Apple glyph, <code class="mono">checkmark.seal.fill</code>. <span class="ref">disc 02 §2A</span></td></tr>
+        <tr><td><strong>7 &middot; Afterglow</strong></td><td>Almost nothing. <code class="mono">decision_resolved</code> is addressed to the designer. Meanwhile the response unblocks <code class="mono">project_ffe_items</code> rows and invalidates six query families. Real things move and she is never told. <span class="ref">disc 02 §3</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>The defect ledger</h3>
+  <p>Severity is read from the homeowner's side. <b>High</b> means she cannot complete the act, or is told something untrue. <b>Medium</b> means the act completes and the experience is wrong. <b>Low</b> means it is a wart on an otherwise working surface.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th>#</th><th class="w-name">Defect</th><th class="w-what">Evidence</th><th>Source</th><th>Severity</th></tr></thead>
+      <tbody>
+        <tr><td class="num">D1</td><td><strong>Approval email has no link</strong></td><td>Zero <code class="mono">ctaButton</code> or href in <code class="mono">decision-notify.ts</code>; body says "Open your Patina dashboard"</td><td><span class="ref">disc 02 §9.1</span></td><td>High</td></tr>
+        <tr><td class="num">D2</td><td><strong>First send is subject-lined as a reminder</strong></td><td>Issue and cron share one <code class="mono">decision_required</code> render path</td><td><span class="ref">disc 02 §9.2</span></td><td>High</td></tr>
+        <tr><td class="num">D3</td><td><strong>Client footer points at the studio's portal</strong></td><td><code class="mono">portalBase()</code> resolves from <code class="mono">DESIGNER_PORTAL_URL</code>, default <code class="mono">app.patina.cloud</code>, for every recipient</td><td><span class="ref">disc 01 §E.1</span></td><td>Medium</td></tr>
+        <tr><td class="num">D4</td><td><strong>Every attention reads twice on iOS</strong></td><td>Bell query <code class="mono">channel IN (in_app, push)</code> against one in-app plus one push row per event</td><td><span class="ref">disc 04 §3.4</span></td><td>High</td></tr>
+        <tr><td class="num">D5</td><td><strong>Settings notifications toggle never requests OS authorization</strong></td><td><code class="mono">SettingsService.setNotificationsEnabled</code> writes preferences only; <code class="mono">requestAuthorizationAndRegister()</code> is never called from it</td><td><span class="ref">ux 04 §5.3</span></td><td>High</td></tr>
+        <tr><td class="num">D6</td><td><strong>Signed-out deep link is dropped</strong></td><td><code class="mono">DeepLinkHandler.handle</code> queues only when <code class="mono">phase == .launching</code>; a signed-out arrival resolves to <code class="mono">.auth</code></td><td><span class="ref">ux 04 §5.4</span></td><td>High</td></tr>
+        <tr><td class="num">D7</td><td><strong>Proposal and invoice push routes exist and nothing emits them</strong></td><td><code class="mono">NotificationRouter</code> cases annotated "Forward-compatible: no edge function emits entity_type"; the primer promises all three</td><td><span class="ref">disc 03 §8.4</span> &middot; <span class="ref">ux 04 §1.1</span></td><td>High</td></tr>
+        <tr><td class="num">D8</td><td><strong>Changes requested leaves no mark</strong></td><td>Approved seals, Held holds, changes requested renders as a text line only</td><td><span class="ref">disc 02 §2A</span></td><td>Medium</td></tr>
+        <tr><td class="num">D9</td><td><strong>The client is never told her answer was recorded</strong></td><td><code class="mono">decision_resolved</code> is addressed to the designer</td><td><span class="ref">disc 02 §1A</span></td><td>Medium</td></tr>
+        <tr><td class="num">D10</td><td><strong>Household comments are misattributed</strong></td><td><code class="mono">isMine ? 'You' : 'Designer'</code>; a spouse's note reads as the studio's</td><td><span class="ref">disc 02 §9.3</span></td><td>Medium</td></tr>
+        <tr><td class="num">D11</td><td><strong>"Awaiting studio issue" is a client-visible dead end</strong></td><td>No timing, no act, after she completed her attestation</td><td><span class="ref">disc 02 §9.6</span></td><td>Medium</td></tr>
+        <tr><td class="num">D12</td><td><strong>Red status on the iOS Record</strong></td><td><code class="mono">HouseRecord.state(for:now:)</code> returns the <code class="mono">.overdue</code> case; <code class="mono">HouseRecordCard.swift:410</code> paints it <code class="mono">PatinaColors.error</code></td><td><span class="ref">disc 03 §2.1</span> &middot; <span class="ref">ux 02 §1.3</span></td><td>Medium</td></tr>
+        <tr><td class="num">D13</td><td><strong>Numeric badges on both client surfaces</strong></td><td>Web <code class="mono">CountBadge</code>, iOS tab badge from <code class="mono">BadgeCountService.attentionCount</code>, refused by name in the vision</td><td><span class="ref">disc 02 §1A</span> &middot; <span class="ref">ux 04 §1.2</span></td><td>Medium</td></tr>
+        <tr><td class="num">D14</td><td><strong>Green check on the signed banner</strong></td><td><span class="quote">Signed by {name} on {date}.</span> with a green check icon on <span class="ref">/proposals/[id]</span></td><td><span class="ref">ux 02 §1.3</span></td><td>Medium</td></tr>
+        <tr><td class="num">D15</td><td><strong>The Making hands its own ceremony off</strong></td><td><code class="mono">ProjectApprovalGate</code> links to legacy <span class="ref">/decisions/[id]</span> while proposal gates are fully inline on the spine</td><td><span class="ref">disc 02 §9.5</span></td><td>Medium</td></tr>
+        <tr><td class="num">D16</td><td><strong>The overflow link can point at the wrong half</strong></td><td>One "See all" per Record card, aimed at whichever half has more rows, so an obligation can be reachable only through a link labelled for news</td><td><span class="ref">ux 04 §1.2</span></td><td>Low</td></tr>
+        <tr><td class="num">D17</td><td><strong>A signature glyph on a field that cannot draw</strong></td><td><code class="mono">PatinaTextField(icon: "signature")</code> beside a typed-characters-only control</td><td><span class="ref">ux 04 §1.5</span></td><td>Low</td></tr>
+        <tr><td class="num">D18</td><td><strong>iOS signs without stating the edition</strong></td><td>The web gate carries the immutability sentence; the iOS document has no counterpart</td><td><span class="ref">ux 04 §1.5</span></td><td>Medium</td></tr>
+        <tr><td class="num">D19</td><td><strong>No delivery confirmation for approval notices</strong></td><td>The proposal send outbox has a full claim, retry and terminal-state machine; <code class="mono">decision_notifications</code> rows are optimistic with no provider callback</td><td><span class="ref">disc 04 §6.11</span></td><td>Low</td></tr>
+        <tr><td class="num">D20</td><td><strong>The nudge email bypasses the compliant chokepoint</strong></td><td><code class="mono">proposal-nudge</code> calls Resend directly, so it gets no suppression list, rate cap, or unsubscribe headers</td><td><span class="ref">disc 04 §6.7</span></td><td>Low</td></tr>
+        <tr><td class="num">D21</td><td><strong>The word "gate" is live in front of the homeowner</strong></td><td>The Making's spine prints the eyebrow <span class="quote">A gate &middot; the line stops until you sign</span> to the client, with an <code class="mono">acceptance</code> twin beside it <span class="ref">spine-gate.tsx:36-37</span></td><td><span class="ref">disc 02 §7</span></td><td>Medium</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>One verified fact that corrects the record</h3>
+  <p>The journey lane marked iOS Stage-2 capability <b>unclear</b> and asked for it to be verified first. It has been. The answer is precise, and it is neither yes nor no.</p>
+  <div class="panel">
+    <p class="panel-cap">Verified in code</p>
+    <p><b>The iOS app can submit a Stage-2 project approval response.</b> <code class="mono">apply_client_decision</code> carries a guarded <code class="mono">project_artifact_v1</code> branch at <span class="ref">00464:1547-1558</span>, and <code class="mono">DecisionsAPIClient.swift:360</code> posts to that RPC with a null note and null quantity, which is exactly what the guard admits.</p>
+    <p><b>But the app has no Stage-2 vocabulary.</b> It selects no <code class="mono">approval_contract</code>, <code class="mono">court</code>, or <code class="mono">outcome</code> columns. It renders a Stage-2 row as a generic option card, so the three canonical outcomes lose their meaning: there is no Approved, no Changes requested, no Needs discussion, only options to choose from.</p>
+    <p><b>And it never confirms review.</b> <code class="mono">confirm_project_decision_review</code> is not called anywhere in the app, so the review confirmation that unlocks publish is web-only today.</p>
+    <p class="recorded">Consequence: a NEEDS YOU row for a Stage-2 approval does not dead-end, and it also does not carry the ceremony. Wave 1 closes the vocabulary gap before Wave 2 builds a seal on top of it.</p>
+  </div>
+</section>
+
+<!-- ============================================================ 3 -->
+<section id="principles">
+  <div class="opener"><p class="eyebrow">Three</p><h2>Principles</h2></div>
+
+  <h3>The thesis</h3>
+  <p class="lede">An approval in Patina should feel like a letter that arrived from someone who knows your house. A single sheet on warm paper, with a studio's name at the top, one question in the designer's own hand, the consequences written out in sentences a person would say aloud, a ruled line to sign on, and a stamp that settles into the paper and then stops moving forever. Not a task. Not a card in a queue. A piece of correspondence you could print, put in a drawer, and find in four years still legible about what you agreed to and why.</p>
+
+  <p>Everything the system already knows how to do, the immutable edition, the checksum, the frozen authority, the trusted IP, is provenance. Provenance is Patina's native register. It should be shown quietly, the way a maker's stamp is shown on the underside of a drawer, not hidden as compliance plumbing and not shouted in an inbox.</p>
+
+  <h3>Engagement without manipulation</h3>
+  <blockquote><p>Engaged every day means there is something true to read every day. It never means we ask for something every day.</p></blockquote>
+  <p>The house is always moving. Patina's job is to keep an honest record of that movement where she can see it, and to ask for exactly one thing at a time, only when a real decision is genuinely owed. The iOS Record already models this correctly: NEEDS YOU never decays, because <span class="quote">an open obligation does not age out of view</span>; MOVED is a rolling seven-day window. Obligations are permanent and few. News is recent and finite.</p>
+
+  <ul class="plain">
+    <li><b>The daily return is a record, not a feed.</b> She comes back to see what moved, not because we pinged her.</li>
+    <li><b>Curiosity is earned with substance.</b> A notice that names the white oak, the back hall, the maker earns the open. "Something needs you" trains her to ignore us.</li>
+    <li><b>Reciprocity flows from the designer, never from the system.</b> Leah gives first. That is why Anne answers.</li>
+    <li><b>Progress is plain arithmetic, never scored.</b> Two papers wait for your name. Never a bar, a percentage, or a streak.</li>
+    <li><b>One ask per notice.</b> One approval, one door, one link.</li>
+    <li><b>She sets the pace.</b> A homeowner who can turn the volume down does not have to turn us off.</li>
+    <li><b>Waiting is never failure.</b> Overdue is information for the studio. To her it is at most a stated consequence, said once.</li>
+  </ul>
+
+  <h4>The blacklist</h4>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name">Pattern</th><th>Why not</th></tr></thead>
+      <tbody>
+        <tr><td><strong>False urgency, invented deadlines</strong></td><td>Numbers must be true. The only real deadlines are <code class="mono">due_at</code> and <code class="mono">valid_until</code>.</td></tr>
+        <tr><td><strong>Countdown timers, Live Activities on an open approval</strong></td><td>A ticking clock on a rug color is the opposite of fewer surprises, and it contradicts the Record's own law that nothing decays.</td></tr>
+        <tr><td><strong>Streaks, response-time scores, stats about the client</strong></td><td>Refused by the vision. Also unpleasant.</td></tr>
+        <tr><td><strong>Confetti, celebration animation, sound anywhere in the ceremony</strong></td><td>The stamp is the reward. Someone who just committed real money does not want a party, and she may be opening this in bed at eleven at night.</td></tr>
+        <tr><td><strong>Guilt copy</strong></td><td><span class="quote">has passed its due date and is still waiting on you</span> is live today and fails this.</td></tr>
+        <tr><td><strong>Apologetic copy</strong></td><td><span class="quote">Just a gentle nudge</span> is live too, and reads like Patina is embarrassed to be there.</td></tr>
+        <tr><td><strong>Red and green status, badges as scoring</strong></td><td>Refused by name in the vision, and currently shipping on both client surfaces.</td></tr>
+        <tr><td><strong>Social proof</strong></td><td>There are no other people in her project. It would be a lie.</td></tr>
+        <tr><td><strong>Engagement-optimized send timing</strong></td><td>Send times follow her preferences and quiet hours, never open-rate tuning.</td></tr>
+        <tr><td><strong>Read receipts used as pressure</strong></td><td>Telemetry is one-directional today. Keep it so, or make it mutual and honest.</td></tr>
+        <tr><td><strong>Dark defaults on cadence</strong></td><td>The default is the quietest cadence that still gets a real decision to her on time.</td></tr>
+        <tr><td><strong>Re-asking a dismissed permission prompt</strong></td><td>The push primer is deliberately one-shot. Add a settings door she opens herself, never an automatic re-ask.</td></tr>
+        <tr><td><strong>One-tap Approve or Sign from a lock screen</strong></td><td>It consents to a document the person has not seen, and a phone on a kitchen counter is not proof of who tapped.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Vision refusals honored</h3>
+  <p>Five refusals from <span class="ref">VISION.md §6</span> govern this work, and three of them are currently being broken by shipping code. This page obeys the same refusals it cites: there are no badges, no red or green status, no shadows, and no emoji anywhere in it.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th>Refusal</th><th>Where it is broken today</th><th>Closed by</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Badges</strong></td><td>Web header <code class="mono">CountBadge</code>; iOS tab badge</td><td>Proposal 24</td></tr>
+        <tr><td><strong>Red and green status</strong></td><td>iOS overdue in <code class="mono">PatinaColors.error</code>; green check on the signed banner; <code class="mono">SIGNED</code> stamped in sage</td><td>Proposals 4 and 17</td></tr>
+        <tr><td><strong>Dashboards and tab or zone UI</strong></td><td>Six parenthesised buckets on <span class="ref">/decisions</span></td><td>Proposal 24</td></tr>
+        <tr><td><strong>Shadows</strong></td><td>Not broken. The client stamp and gate grammar are already flat, and every component below holds that line.</td><td>&mdash;</td></tr>
+        <tr><td><strong>Engagement metrics on the studio surface</strong></td><td>Not broken. No success signal in this program is a studio-surface engagement number.</td><td>&mdash;</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>The vocabulary ruling</h3>
+  <p>The product currently says approval, decision, gate, sign-off, and task for the same family of thing. In front of a homeowner, the <i>ask</i> has exactly one name.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th>Word</th><th>Use</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Approval</strong></td><td>The name of the ask, always: for the Stage-2 artifact-bound act and for a commercial document awaiting her name</td><td><span class="quote">Leah sent the kitchen plan set for your approval</span></td></tr>
+        <tr><td><strong>Decision</strong></td><td>Allowed in two places and no others: an option choice between named alternatives, and the record as a whole. Never as the name of the ask.</td><td><span class="quote">Rug color, Natural or Sand</span><br><span class="quote">the decision record is the relationship</span></td></tr>
+        <tr><td><strong>Gate</strong></td><td>Never in front of a homeowner. It is an internal word for a break in the spine.</td><td>Designer-side and code only. Live violation at <span class="ref">spine-gate.tsx:36</span>, ledgered as D21 and retired by proposal 4</td></tr>
+        <tr><td><strong>Task</strong></td><td>Never. She is not working a queue.</td><td>Retired from <span class="quote">Approval tasks, {N} need attention</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="recorded">This page uses the second sense of "decision" deliberately: its title, section four, and the keepsake at proposal 26 name the record, not the ask. The vision's own phrase is that the decision record is the relationship. Nowhere in this program is a homeowner asked to make "a decision" on an approval.</p>
+</section>
+
+<!-- ============================================================ 4 -->
+<section id="decision">
+  <div class="opener"><p class="eyebrow">Four</p><h2>The Decision</h2></div>
+  <p class="lede">One ceremony grammar, seven steps, the same seven on desktop web, mobile web, and native iOS, in the same order with the same names. A surface may compress a step into a line. No surface may skip one or reorder them. The panels below are working mock-ups rendered in the tokens this program proposes.</p>
+
+  <h3>Step one &middot; The arrival fold</h3>
+  <p>The first frame of any approval, wherever it is first seen. Letterhead band, the designer's name, one sentence naming what waits, and the artifact behind a deliberate unfold. On iOS the NEEDS YOU row on the Record is the outside of the envelope, so tapping it opens the detail already unfolding and the gesture is continuous. This is the one aesthetic risk in the program and it is <b>Wave 2, flag-gated, and measured</b>. It is not a floor fix.</p>
+
+  <div class="panelrow panelrow-2">
+    <div class="panel">
+      <p class="panel-cap">Desktop and mobile web &middot; 760px column</p>
+      <p class="letterhead">Middle West Studio</p>
+      <div class="hair"></div>
+      <p class="eyebrow">A letter from your studio &middot; 3 September</p>
+      <p class="waiting" style="margin-top:.9rem;">Leah has one question about the dining room before the walnut goes on order.</p>
+      <div class="foldrule"></div>
+      <p class="eyebrow" style="letter-spacing:.14em;color:var(--ink);">Open the letter</p>
+      <div style="height:1.5px;background:var(--ink);width:9rem;margin-top:.35rem;"></div>
+      <div style="height:1px;background:var(--clay);width:9rem;margin-top:2.5px;"></div>
+    </div>
+    <div class="panel">
+      <p class="panel-cap">Native iOS &middot; the envelope is the Record row</p>
+      <div class="phones">
+        <div class="phone" style="width:100%;">
+          <div class="status"><span>9:41</span><span>Today</span></div>
+          <p class="eyebrow">Needs you</p>
+          <div style="margin-top:.5rem;">
+            <div class="rowobl"><div class="t">Leah asked about the dining room budget.</div><div class="r">By Sep 5</div></div>
+            <div class="rowobl"><div class="t">Leah Hartwell sent a proposal to review.</div><div class="r">By Sep 11</div></div>
+          </div>
+          <p class="eyebrow" style="margin-top:1.2rem;">Moved</p>
+          <div style="margin-top:.5rem;">
+            <div class="rownews"><div class="t">Meadow Linen Sectional arrived.</div><div class="r">Aug 28</div></div>
+          </div>
+          <p class="recorded">Obligations carry a two-point clay margin rule. News does not. No color change, no weight change, no badge.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Step two and three &middot; The artifact, and the ask in her voice</h3>
+  <p>The artifact stops being a heading with metadata under it and becomes a plate on the page, framed like a mounted print, with the checksum printed small at the frame's edge as a maker's mark rather than a compliance string. The question stays the page's <code class="mono">h1</code> and gains what it has always lacked: attribution. She is answering a person, and today the page never says whose question it is.</p>
+
+  <div class="panel">
+    <p class="panel-cap">Web and iOS, identical &middot; type scale drops one step on the phone</p>
+    <p class="eyebrow">Artifact</p>
+    <div class="plate">
+      <div class="plate-inner"><span class="mono">Budget checkpoint plate &middot; edition 3<br>plan issue, spec page, or budget table, at a size worth looking at</span></div>
+    </div>
+    <p class="mono" style="letter-spacing:.1em;text-transform:uppercase;font-size:10px;color:var(--faint);margin:0 0 1rem;">Checksum 4f9c2ab17e03</p>
+    <p style="font-family:var(--font-display);font-size:1.35rem;color:var(--ink);margin:0 0 .2rem;">Dining room budget &middot; Edition 3</p>
+    <p style="font-size:.94rem;color:var(--muted);margin:0;">You are approving edition 3, exactly as shown.</p>
+    <div class="ask">
+      <p>Do we hold the walnut table at $8,400, or step down to the ash at $5,900?</p>
+      <p class="attrib">&mdash; Leah</p>
+    </div>
+    <p class="eyebrow">What this covers</p>
+    <p style="font-size:.98rem;margin:.4rem 0 0;">This releases the dining order only. Lighting stays open until the fixture walk next week.</p>
+    <p class="recorded">Example values. Real copy pulls from <code class="mono">project_approval_artifacts</code>.</p>
+  </div>
+
+  <h3>Step four &middot; The weighing</h3>
+  <p>Three signed integers become one sentence plus one ledger line. The rule from <code class="mono">project-approval-model.ts</code> survives intact, <span class="quote">a zero delta is stored evidence, so it is stated rather than omitted</span>, and a zero is stated in words. No color encodes direction. A positive cost delta is not terracotta and a negative one is not sage, because that is red and green by another route. The sentence carries the meaning; the ledger carries the fact.</p>
+
+  <div class="panelrow panelrow-2">
+    <div class="panel">
+      <p class="panel-cap">Proposed</p>
+      <p class="eyebrow">What it costs</p>
+      <p class="weigh" style="margin-top:.6rem;">Saying yes adds four thousand two hundred dollars and three days. Lead time does not move.</p>
+      <p class="ledger">Cost +$4,200 &middot; Schedule +3 days &middot; Lead time unchanged</p>
+      <p class="recorded" style="margin-top:1rem;">Three zero deltas collapse to one clause: nothing about the money or the dates moves.</p>
+    </div>
+    <div class="panel">
+      <p class="panel-cap">Today &middot; verbatim</p>
+      <div class="tablewrap" style="margin-top:.4rem;border-top-width:1px;">
+        <table class="tight">
+          <thead><tr><th>Cost</th><th>Schedule</th><th>Lead time</th></tr></thead>
+          <tbody><tr><td class="num">+$4,200</td><td class="num">+3 days</td><td class="num">$0 &mdash; no cost change</td></tr></tbody>
+        </table>
+      </div>
+      <p class="recorded" style="margin-top:1rem;">A spreadsheet row wearing serif type, at the one moment she is being asked to accept a consequence. The designer's own side already joins the same three into one line and states the zero in words.</p>
+    </div>
+  </div>
+
+  <h3>Step five &middot; The act</h3>
+  <p>The only place on the page where more than one thing can be chosen, drawn as a ruled line to sign on rather than as a form. Three outcomes of equal weight, each a full-width row with a fourteen-point ruled box that fills with a drawn tick, not a radio dot. Beneath it, the typed legal name on a rule with the date at its right end, and a scored press-and-hold to commit.</p>
+  <p><b>The gesture recommendation is settled: typed legal name plus a scored press-and-hold on every surface.</b> A hold is still a click-through, so the review confirmation keeps <code class="mono">review_method: 'portal_clickthrough'</code> and needs no migration; the response RPC already writes <code class="mono">client_signature</code> and <code class="mono">client_consent_method</code>, so the typed name drops straight in. Drawn signature capture is <b>considered and declined</b>: it gains no evidence, has no column to live in, is less identifying than a typed legal name, and prints badly on the keepsake. It is listed as an open ruling for Kody to close permanently.</p>
+
+  <div class="panelrow panelrow-2">
+    <div class="panel" id="act-panel">
+      <p class="panel-cap">Project approval &middot; the answer</p>
+      <p class="eyebrow">Your answer</p>
+      <div style="margin-top:.9rem;" id="choices" role="radiogroup" aria-label="Your answer">
+        <div class="choice on" data-word="Approved"><span class="box"></span><span class="word">Approve this edition</span><p class="meaning">You accept edition 3 exactly as shown, with the cost and schedule stated above.</p></div>
+        <div class="choice" data-word="Returned"><span class="box"></span><span class="word">Send it back for changes</span><p class="meaning">Tell Leah what to change. She will revise it and send a new edition; this one closes.</p></div>
+        <div class="choice" data-word="Held"><span class="box"></span><span class="word">Hold it for a conversation</span><p class="meaning">Nothing moves and nothing is decided. Leah will reach out.</p></div>
+      </div>
+      <div class="signline">
+        <div class="name">Margaret Whitfield</div>
+        <div class="rule"><span class="mono" style="font-size:10px;">Your typed name is your signature</span><span class="mono" style="font-size:10px;">3 Sept 2026</span></div>
+      </div>
+      <div id="act-live">
+        <button class="scored" id="holdBtn" aria-describedby="holdHint">
+          <span class="word">Press and hold to record</span>
+          <span class="track"><span class="fill" id="holdFill"></span></span>
+          <span class="under"></span>
+        </button>
+        <p class="hint" id="holdHint">Press and hold for a moment, or press Enter to record.</p>
+      </div>
+      <div id="act-sealed" hidden>
+        <div class="sealline">
+          <span class="stamp s-approved" id="sealStamp"><span class="word" id="sealWord">Approved</span></span>
+          <span class="said" id="sealSaid">Approved &middot; 3 September 2026</span>
+        </div>
+        <p class="recorded">Recorded 3 Sept 2026, 3:12 PM &middot; electronic signature</p>
+        <p class="weigh" style="font-size:1rem;margin-top:.8rem;" id="sealAfter">Three pieces order the moment the studio places them.</p>
+        <button class="replay" id="replayBtn" type="button">Replay the act</button>
+      </div>
+    </div>
+    <div class="panel">
+      <p class="panel-cap">Proposal rail &middot; the signature</p>
+      <p class="eyebrow">Sign here</p>
+      <div class="signline" style="margin-top:1rem;">
+        <div class="name">Anne Brenner</div>
+        <div class="rule"><span class="mono" style="font-size:10px;">Your typed name is your signature</span><span class="mono" style="font-size:10px;">2 Oct 2026</span></div>
+      </div>
+      <div class="choice on" style="border-top:none;padding-top:1.2rem;"><span class="box" style="top:1.35rem;"></span><span class="word" style="font-family:var(--font-body);font-size:.96rem;">I authorize the studio to procure only the named lines at the quantities and client prices shown.</span></div>
+      <p class="eyebrow" style="letter-spacing:.14em;color:var(--ink);margin-top:1.4rem;">Press and hold to sign</p>
+      <div style="height:1.5px;background:var(--rule-2);width:11rem;margin-top:.35rem;"></div>
+      <div style="height:1px;background:var(--clay);width:11rem;margin-top:2.5px;"></div>
+      <p class="recorded" style="margin-top:1.2rem;">The kind-specific consent sentences already shipping on the sign page are kept verbatim. What changes is the paper around them: a rule to sign on, the date beside it, and a press that costs what the act costs.</p>
+    </div>
+  </div>
+
+  <h4>Accessibility of the press</h4>
+  <ul class="plain">
+    <li>Enter and Space complete immediately. A keyboard user cannot hold meaningfully.</li>
+    <li>Under reduced motion the hold collapses to a tap. A motion preference must never impose a longer physical gesture.</li>
+    <li>The VoiceOver label carries the outcome, not just the verb: "Record your answer, approved."</li>
+    <li>On iOS the component wraps the existing hold modifier, which already ships an Activate action and reports percent as an accessibility value. That fallback must not be lost.</li>
+    <li>Focus is the clay proofreader's caret, not a browser ring, on every act in the ceremony.</li>
+  </ul>
+
+  <h3>Step six &middot; The seal</h3>
+  <p>One component, four dials: border weight, border pigment, word ink, and rotation. No fills. No shadows. No badges. No red and green pair anywhere, so no traffic-light reading is available. Two pigment changes from what ships today: <code class="mono">SIGNED</code> moves from sage to mocha, because sage is a green on the single most consequential state and because the designer side and the client side currently stamp one meaning in two pigments; and the hold border moves from gold to golden-hour ink, which is the same hue at a contrast ratio that reads as a mark rather than a wash.</p>
+
+  <div class="panel">
+    <p class="panel-cap">The stamp system &middot; eleven states, one grammar</p>
+    <p><b>Where the eleven come from.</b> The ceremony lane defined <b>ten</b> states <span class="ref">ux 02 §5</span>. This page adds an eleventh, <code class="mono">Reviewed</code>, taken from that lane's own ruling <span class="ref">ux 02 R-C9</span> and built by proposal 10, so the attestation she already completed finally leaves a mark. <b>Two of the words are renames, not new states:</b> <code class="mono">RETURNED</code> is the contract's <code class="mono">changes_requested</code>, and <code class="mono">HELD</code> is its <code class="mono">needs_discussion</code>. The three canonical outcome names in the database are unchanged; only what is printed on the paper changes.</p>
+    <div class="stampgrid">
+      <div class="stampcell"><span class="stamp s-awaiting upright single"><span class="word">Awaiting you</span></span><span class="note">Upright, single, golden-hour ink. Deliberately not yet stamped. On the spine the break is the state and no stamp is drawn.</span></div>
+      <div class="stampcell"><span class="stamp s-approved"><span class="word">Approved</span></span><span class="note">Doubled, mocha, minus two degrees. Settles once, then never again.</span></div>
+      <div class="stampcell"><span class="stamp s-returned single"><span class="word">Returned</span></span><span class="note">Outcome <code class="mono">changes_requested</code>. Single rule means not terminal. Clay ink border, charcoal word. New variant; today this state has no mark at all.</span></div>
+      <div class="stampcell"><span class="stamp s-held"><span class="word">Held</span></span><span class="note">Outcome <code class="mono">needs_discussion</code>. Doubled, golden-hour ink, as loud as the seal. A held break must never read as a soft approval.</span></div>
+      <div class="stampcell"><span class="stamp s-signed"><span class="word">Signed</span></span><span class="signer">Anne Brenner</span><span class="note">Signer's name beneath, in display type.</span></div>
+      <div class="stampcell"><span class="stamp s-paper upright"><span class="word">Signed</span><span class="sub">On paper</span></span><span class="note">Upright, because it was not stamped on this surface.</span></div>
+      <div class="stampcell"><span class="stamp s-quiet upright single"><span class="word">Reviewed</span></span><span class="note">The eleventh state, added here from <span class="ref">ux 02 R-C9</span>. Muted grammar with the date. Gives the attestation she already completed a visible mark.</span></div>
+      <div class="stampcell"><span class="stamp s-quiet upright single struck"><span class="word">Withdrawn</span></span><span class="note">Struck through. Muted border and ink.</span></div>
+      <div class="stampcell"><span class="stamp s-quiet upright single"><span class="word">Superseded</span></span><span class="tie">&rarr; Edition 4</span><span class="note">Mono tie-line beneath names the successor.</span></div>
+      <div class="stampcell"><span class="stamp s-quiet upright single"><span class="word">Expired</span></span><span class="tie">14 Aug 2026</span><span class="note">Date printed beneath.</span></div>
+      <div class="stampcell"><span class="stamp s-declined single"><span class="word">Declined</span></span><span class="note">Terracotta ink appears exactly once in the system, with no sage counterpart. Open ruling on whether it survives.</span></div>
+    </div>
+    <hr>
+    <p><b>How they age.</b> The settle animation plays only in the session where the outcome was recorded; on every later visit the stamp is simply present, because a stamp that re-animates on each page load is a badge pretending to be paper. One aging step at thirty days drops the outer border opacity from 0.88 to 0.74 and the inner rule from 0.42 to 0.26, and the word ink never degrades. Nothing ages further, ever. Terminal states age, <code class="mono">Reviewed</code> among them; Awaiting you, Returned and Held stay at full ink no matter how old, because they are still asking something.</p>
+    <p class="recorded">The stamp is decoration over a sentence and stays <code class="mono">aria-hidden</code>, with the meaning carried by the adjacent recorded line. Rotation is transform only, never writing-mode, so the text stays selectable and translatable. In print, rotation drops to zero, because a tilted stamp on a laser printer reads as a misfeed.</p>
+  </div>
+
+  <h3>Step seven &middot; The line resumes</h3>
+  <p>The consequence, shown immediately, in the place the homeowner already understands. On The Making the gate's break closes, the resume cap thickens back to full ink, and the standing sentence recomposes without the clause that named this paper. That is the reward, and it is the honest one: the thing she did unblocked the thing she was waiting for. If no honest consequence exists, the caption is silent, per the rule the spine gate already enforces.</p>
+
+  <div class="spinewrap">
+    <div class="panel">
+      <p class="panel-cap">Before &middot; the line stops</p>
+      <div class="spine" id="spineDemo">
+        <span class="line-top"></span>
+        <span class="cap cap-a"></span>
+        <span class="line-mid" id="spineMid"></span>
+        <span class="cap cap-b"></span>
+        <span class="line-bot"></span>
+        <p class="ev">Sept 1 &middot; the walnut arrives</p>
+        <div class="gatebox" id="gateBox">
+          <p class="gatekind">Your name is needed before the line continues</p>
+          <p class="gatetitle">Furnishings authorization No. 7</p>
+          <p class="gatevitals">Furnishings authorization &middot; $12,500</p>
+          <p class="gatevitals">Two thousand five hundred dollars on signing</p>
+          <p class="cap-note">Three pieces order the moment you sign.</p>
+          <button class="scored" id="signBtn" style="margin-top:1rem;">
+            <span class="word">Press and hold to sign</span>
+            <span class="track"><span class="fill" id="signFill"></span></span>
+            <span class="under"></span>
+          </button>
+        </div>
+        <div class="gatebox" id="sealedBox" hidden>
+          <div class="sealline" style="margin:0;">
+            <span class="stamp s-signed"><span class="word">Signed</span></span>
+            <span class="said">Signed &middot; 3 September 2026</span>
+          </div>
+          <p class="recorded">Recorded 3:12 PM &middot; electronic signature</p>
+          <p class="cap-note">Three pieces order the moment the studio places them.</p>
+          <button class="replay" id="spineReplay" type="button">Replay the gate demo</button>
+        </div>
+        <p class="ev">Sept 9 &middot; the shop books the install week</p>
+      </div>
+    </div>
+    <div class="panel">
+      <p class="panel-cap">The standing sentence, recomposed</p>
+      <p class="weigh">Two papers wait for your name, and a balance of $3,200 stands open.</p>
+      <p class="recorded" style="margin:.6rem 0 1.6rem;">Before</p>
+      <p class="weigh">One paper waits for your name, and a balance of $3,200 stands open.</p>
+      <p class="recorded" style="margin:.6rem 0 0;">After</p>
+      <hr>
+      <p class="panel-cap">iOS Record &middot; the row crosses the eyebrow</p>
+      <div class="phone" style="width:100%;">
+        <p class="eyebrow">Moved</p>
+        <div style="margin-top:.5rem;">
+          <div class="rownews" style="display:flex;gap:.7rem;align-items:center;">
+            <span class="stamp s-approved" style="font-size:9px;padding:.35rem .55rem;"><span class="word">Approved</span></span>
+            <span><span class="t">You approved the dining room budget.</span><span class="r" style="display:block;">3 Sept</span></span>
+          </div>
+          <div class="rownews"><div class="t">Meadow Linen Sectional arrived.</div><div class="r">Aug 28</div></div>
+        </div>
+      </div>
+      <p class="recorded" style="margin-top:1rem;">The afterglow row is the homeowner's own act, in second person, dated honestly. It lives in MOVED and ages out on the existing seven-day window like everything else. No special case, no tombstone, no decay rule to invent.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 5 -->
+<section id="surfaces">
+  <div class="opener"><p class="eyebrow">Five</p><h2>Per surface</h2></div>
+
+  <h3>Email and push</h3>
+  <p>Every body is designer-voiced and studio-signed. Patina does not sign email to a homeowner. Replacing <span class="quote">&mdash; Patina</span> with the studio's own name is the single most vision-aligned change in this section: the studio leads, Patina is quiet. Push limits observed: title at or under sixty characters, body at or under one hundred twenty.</p>
+
+  <h4>New approval issued</h4>
+  <div class="ba">
+    <div class="side">
+      <h5>Today, verbatim template &middot; example values</h5>
+      <p class="subj">Reminder: "Kitchen and back hall plan set" needs your decision</p>
+      <p>Hi Anne,</p>
+      <p>Your designer is waiting on a decision: <b>Kitchen and back hall plan set</b>.</p>
+      <p>Approval artifact: <b>Kitchen and back hall plan set</b> (plan issue, version 3).</p>
+      <p class="mono" style="word-break:break-all;">SHA-256 checksum: 4f9c2ab17e03d5b8c1a7e94f2b60d83a5e17cc94b2a8f03d16e7c9b40af5217e</p>
+      <p>It's due in approximately 46 hour(s).</p>
+      <p>Open your Patina dashboard to review the options and pick one.</p>
+      <p class="sig">&mdash; Patina &middot; no link anywhere in the body</p>
+    </div>
+    <div class="side">
+      <h5>Proposed</h5>
+      <p class="subj">Leah sent the kitchen plan set for your approval</p>
+      <p class="mono" style="font-size:11px;letter-spacing:.06em;">Preheader &middot; Edition 3, due Thursday. Three ways to answer.</p>
+      <p>Hi Anne, the kitchen and back hall plan set is ready. Edition 3, exactly as drawn. The deeper counter run gets the sink under the window and keeps the back hall clear. It adds $1,240 and moves install two days later. Approving it releases the cabinet order; nothing is ordered before your answer. Approve it, send it back for changes, or hold it for a conversation. All three are fine answers.</p>
+      <p class="eyebrow" style="letter-spacing:.14em;color:var(--ink);margin-top:1rem;">Review the plan set</p>
+      <div style="height:1.5px;background:var(--ink);width:10rem;margin-top:.35rem;"></div>
+      <div style="height:1px;background:var(--clay);width:10rem;margin-top:2.5px;"></div>
+      <p style="margin-top:.9rem;">Due Thursday, October 8.</p>
+      <p class="sig">&mdash; Leah Kochaver, Middle West Studio &middot; Madison</p>
+    </div>
+  </div>
+
+  <h4>Overdue</h4>
+  <div class="ba">
+    <div class="side">
+      <h5>Today, verbatim</h5>
+      <p class="subj">Overdue: "Kitchen and back hall plan set" still needs your decision</p>
+      <p>The decision <b>Kitchen and back hall plan set</b> has passed its due date and is still waiting on you.</p>
+      <p>Open your Patina dashboard to review the options and pick one.</p>
+      <p class="sig">&mdash; Patina</p>
+    </div>
+    <div class="side">
+      <h5>Proposed</h5>
+      <p class="subj">The kitchen plan set is past its date</p>
+      <p class="mono" style="font-size:11px;letter-spacing:.06em;">Preheader &middot; It's holding the cabinet order. No rush from me.</p>
+      <p>Anne, the kitchen plan set went past its date Thursday. It's holding the cabinet order, so I wanted you to know rather than let it sit quietly. No penalty and no rush from me. If you need more time or want to talk it through, say so.</p>
+      <p class="sig">&mdash; Leah Kochaver, Middle West Studio &middot; Madison</p>
+    </div>
+  </div>
+  <p class="recorded">The overdue notice keeps its quiet-hours bypass, because it is genuinely time-critical. Only the words and the ink change. The client-facing word "overdue" is retired in favour of <span class="quote">Still open, Leah asked on 28 August.</span></p>
+
+  <h4>The nudge, and the resolution</h4>
+  <div class="ba">
+    <div class="side">
+      <h5>Today, verbatim</h5>
+      <p class="subj">A gentle reminder about your proposal: "Van Hise design services"</p>
+      <p>Just a gentle nudge, Leah's proposal <b>Van Hise design services</b> is still waiting for you whenever you have a moment to review it.</p>
+      <hr>
+      <p class="subj">Resolved: "Kitchen and back hall plan set"</p>
+      <p>Your client has responded to the decision <b>Kitchen and back hall plan set</b>.</p>
+      <p class="sig">Addressed to the designer. The client gets nothing.</p>
+    </div>
+    <div class="side">
+      <h5>Proposed</h5>
+      <p class="subj">Leah is checking in on your agreement</p>
+      <p>Anne, checking in on the design services agreement. No hurry; I just want to make sure it didn't get buried. If there's anything you'd like to go over first, tell me and I'll walk you through it.</p>
+      <hr>
+      <p class="subj">Recorded: you approved the kitchen plan set</p>
+      <p>Anne, your approval of the kitchen plan set, edition 3, is on the record as of Tuesday, October 6. It releases the cabinet order. I'll confirm the install week once the shop books it. Nothing else is waiting on you.</p>
+      <p class="sig">&mdash; Leah Kochaver, Middle West Studio &middot; Madison</p>
+    </div>
+  </div>
+
+  <h4>The cadence ladder</h4>
+  <p>Per approval: issue, then one reminder forty-eight hours before due, then one on the due date, then one overdue notice, then stop. After that Patina goes quiet and the item is the studio's to chase by hand. A system that keeps emailing after the fourth notice has stopped informing and started nagging. No second automated notice inside twenty-four hours, none on an answered or snoozed item, none where there is no due date, never two approvals in one body, and no automated approval mail on Sunday.</p>
+
+  <h4>Push and the lock screen</h4>
+  <div class="phones">
+    <div class="phone">
+      <div class="status"><span>Lock screen</span><span>Now</span></div>
+      <div class="lockbanner">
+        <div class="app"><span>Patina</span><span>now</span></div>
+        <p style="font-size:.92rem;color:var(--ink);margin:0 0 .2rem;">Leah has a question</p>
+        <p style="font-size:.86rem;margin:0;">Dining chairs, Shaker Oak or Windsor Elm. Two minutes.</p>
+        <div class="lockactions"><span>Open</span><span>Ask a question</span></div>
+      </div>
+      <p class="recorded" style="margin-top:.9rem;">Category <code class="mono">PATINA_DECISION</code>. Thread and collapse id <code class="mono">decision-&lt;id&gt;</code>, so a reminder collapses onto the original rather than stacking. Interruption level <code class="mono">active</code>, never time-sensitive: a rug color is not.</p>
+    </div>
+    <div class="phone">
+      <div class="status"><span>Lock screen</span><span>Now</span></div>
+      <div class="lockbanner">
+        <div class="app"><span>Patina</span><span>now</span></div>
+        <p style="font-size:.92rem;color:var(--ink);margin:0 0 .2rem;">Leah sent your proposal</p>
+        <p style="font-size:.86rem;margin:0;">Aspen Loft, Living Room Refresh. $18,500, good through Sep 8.</p>
+        <div class="lockactions"><span>Open</span><span>Ask a question</span></div>
+      </div>
+      <p class="recorded" style="margin-top:.9rem;">This route is written and tested in <code class="mono">NotificationRouter</code> and nothing emits it. The largest financial artifact in the app is currently silent on the lock screen.</p>
+    </div>
+  </div>
+  <p><b>No Approve or Sign action, ever.</b> A one-tap approve from a lock screen consents to a document the person has not seen, and the sign RPC requires an authenticated client with the server's restated terms in front of her. The honest non-answer, Ask a question, is the second action instead, because it needs to be as reachable as the answer.</p>
+
+  <h3>Web legacy &middot; <span class="ref">/decisions/[id]</span> and <span class="ref">/proposals/[id]/sign</span></h3>
+  <p>The list at <span class="ref">/decisions</span> is proposal 24 and is not restated here.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name">Surface</th><th class="w-what">What changes</th><th class="w-why">What stays</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong><span class="ref">/decisions/[id]</span></strong><br>the gate</td>
+          <td>Impact becomes a sentence plus a ledger. The question gains attribution and a clay pull-quote rule. The artifact gains a plate. The three outcomes become ruled rows of equal weight with single-word stamps. The authority counter is rewritten from <span class="quote">1 of 1 required reviews confirmed</span> to <span class="quote">You're the one who answers this.</span></td>
+          <td>The six-part anatomy in fixed order, the immutability sentence verbatim, the optimistic-concurrency error copy, the discussion guardrail, and every 44-pixel target. The route must keep working unchanged for email arrivals.</td>
+        </tr>
+        <tr>
+          <td><strong><span class="ref">/proposals/[id]</span></strong><br>the document</td>
+          <td>The green check retires in favour of the stamp grammar. The four-act bar re-ranks: Sign as scored primary, Ask a question secondary, Request a change and Decline tertiary. On mobile the primary act docks so a long agreement no longer hides its own act.</td>
+          <td>Decline stays reachable without scrolling. Tertiary is not hidden. Every kind-specific consent sentence stays verbatim.</td>
+        </tr>
+        <tr>
+          <td><strong><span class="ref">/proposals/[id]/sign</span></strong></td>
+          <td>The typed name moves onto a ruled line with the date at its right end and the helper below it. Submit becomes a scored press-and-hold. The page gains a letterhead band above the form so it reads as continuous with the document it signs.</td>
+          <td><code class="mono">autoComplete="name"</code>, required, minimum length two, the consent checkbox, the trusted-IP capture, and every guard state. The helper sentence <span class="quote">Your typed name acts as your electronic signature.</span> stays verbatim.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>The Making &middot; the ceremony on the spine</h3>
+  <p>The surface whose whole argument is that the line stops until you act currently outsources the act. Proposal signature gates are fully inline; approval gates announce and hand off to the legacy route. Wave 3 hosts the seven steps inside the break, behind the <code class="mono">single-pane</code> flag that already fails closed. One component, two mounts: the legacy detail page keeps working for email arrivals.</p>
+
+  <h3>iOS</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name">Element</th><th class="w-what">Today</th><th class="w-why">Proposed</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Record row</strong></td><td>NEEDS YOU and MOVED drawn in identical typography, separated by a ten-point eyebrow and a hairline. The only differentiator is red on overdue.</td><td>A two-point clay margin rule on obligations, and nothing else changes. Overdue prints in primary text at the same mono size. One "See all" per overflowing half.</td></tr>
+        <tr><td><strong>Decision spread</strong></td><td>A vertical stack of option cards, each ending in a full-width charcoal Choose this. Comparison is the task and stacking makes it impossible. The two honest non-answers are the weakest elements on the screen.</td><td>Two options side by side with a non-committal hold state, one named act button reading "I choose Shaker Oak", and the deferral acts at equal weight below it rather than smaller.</td></tr>
+        <tr><td><strong>The act</strong></td><td>A medium detent over a dimmed document, a name field with a handwriting glyph, no consent checkbox, no edition line.</td><td>Full screen, not a sheet. The restated terms stay exactly as written, with an edition line added above them, a consent checkbox to match the web, and the typed name on a rule.</td></tr>
+        <tr><td><strong>The seal</strong></td><td>A sage line and an Apple glyph, <code class="mono">checkmark.seal.fill</code>.</td><td>A new <code class="mono">PatinaSeal</code> in the shared design kit, the same doubled border, low-opacity ink, two degrees off square, mono caps, no shadow and no fill, so the surfaces rhyme rather than merely coexist.</td></tr>
+        <tr><td><strong>Afterglow row</strong></td><td>The row simply vanishes on the next rebuild. The kind enum has no case for the thing she did.</td><td>Two new MOVED kinds so "You chose Shaker Oak." appears the day it happens and ages out on the existing window.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4>Native affordances, kept and refused</h4>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name">Affordance</th><th>Verdict</th><th class="w-why">Why</th></tr></thead>
+      <tbody>
+        <tr><td>Rich push with the artifact image</td><td><strong>Keep</strong></td><td>The lock screen is the first frame and today it is a grey system banner. One swatch or board thumbnail makes the arrival Patina's rather than the operating system's.</td></tr>
+        <tr><td>Push actions Open and Ask a question</td><td><strong>Keep</strong></td><td>The honest non-answer becomes as reachable as the answer, from where she actually is.</td></tr>
+        <tr><td>Push action Approve or Sign</td><td><strong>Refuse</strong></td><td>Breaks the authority contract and consents to an unseen document.</td></tr>
+        <tr><td>Live Activity or lock-screen countdown</td><td><strong>Refuse</strong></td><td>A persistent engagement instrument with a running timer, against a Record whose own law is that nothing decays.</td></tr>
+        <tr><td>Home-screen widget carrying one open approval</td><td><strong>Keep, narrowly</strong></td><td>One dated sentence, no number, ever. This changes a standing ruling and needs Kody, not a designer.</td></tr>
+        <tr><td>Lock-screen accessory widget for an approval</td><td><strong>Refuse</strong></td><td>An obligation on the lock screen is a badge with extra steps.</td></tr>
+        <tr><td>Focus filters</td><td><strong>Refuse</strong></td><td>Configuration work handed to a homeowner who did not ask for an app.</td></tr>
+        <tr><td>Read-only Siri intent, "what is Leah waiting on?"</td><td><strong>Keep</strong></td><td>Speaks the Record's own sentences. Delightful, zero authority risk.</td></tr>
+        <tr><td>App intents that approve or sign</td><td><strong>Refuse</strong></td><td>Same authority argument as the push action.</td></tr>
+        <tr><td>PencilKit drawn signature</td><td><strong>Refuse</strong></td><td>Considered and declined. No evidence gain, no column, less identifying than a typed legal name, and a poor keepsake. Listed as an open ruling to close permanently.</td></tr>
+        <tr><td>Haptics</td><td><strong>Keep, sparingly</strong></td><td>Four moments only, and every one must read the haptics setting, which nothing on the money rail reads today.</td></tr>
+        <tr><td>SF Symbol as the signed mark</td><td><strong>Refuse as primary</strong></td><td>Apple's glyph cannot be Patina's seal. It stays in the notification feed where it reads as an icon.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ 6 -->
+<section id="household">
+  <div class="opener"><p class="eyebrow">Six</p><h2>Household</h2></div>
+  <p class="lede">The rule is right and should not be softened. One designated household decision lead answers; other participants may comment. The problem is that today the rule is expressed by erasing the other person: every comment not authored by the current viewer is labelled <span class="quote">Designer</span>, so a spouse's note is misattributed to the studio.</p>
+
+  <h3>One lead</h3>
+  <p>The decision lead is hard-locked to the project client server-side and frozen into an immutable snapshot at creation. Notifications resolve from that snapshot, never from the live relationship, so reassigning authority mid-flight never rewrites an in-flight approval's recipient. Nothing below weakens that. The lead is named in her own words rather than counted: <span class="quote">You're the one who answers this.</span> Being named as the one who decides is flattering in the honest way, and it is already a designer-facing line.</p>
+
+  <h3>Comments are conversation</h3>
+  <p>The discussion guardrail is correct and gets shorter: <span class="quote">Talk it through here. Nothing said here changes your answer above.</span> While no outcome is chosen, the box carries one quiet line pointing back up at the three doors, because a client with a question may write it in the box and believe she has answered. After posting, the page scrolls back to the picker rather than leaving it behind.</p>
+
+  <h3>Naming</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th>Author</th><th>Today</th><th>Proposed</th></tr></thead>
+      <tbody>
+        <tr><td>The viewer</td><td><code class="mono">You</code></td><td><code class="mono">You</code></td></tr>
+        <tr><td>A second household member</td><td><code class="mono">Designer</code>, incorrectly</td><td><code class="mono">Dave</code>, the given name from the profile</td></tr>
+        <tr><td>The studio</td><td><code class="mono">Designer</code></td><td><code class="mono">Leah &middot; Middle West Studio</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Studio-side comments are attributed to the studio, not to whichever internal person typed them, because the authority contract forbids exposing internal reviewer identities. One designer name plus the studio name satisfies both the warmth and the constraint. When a household member has commented since the lead last looked, the row carries one plain line, <span class="quote">Dave left a note</span>, with no badge and no count bubble.</p>
+
+  <h3>Loop in</h3>
+  <div class="panel">
+    <p class="panel-cap">Under the discussion thread, on any approval</p>
+    <p style="font-family:var(--font-display);font-size:1.2rem;color:var(--ink);margin:0 0 .5rem;">Loop in someone</p>
+    <p>Add someone in your household to this project. They can read everything and join the conversation. You stay the one who answers.</p>
+    <div class="hair"></div>
+    <p class="ledger">Their name &middot; their email</p>
+    <p class="eyebrow" style="letter-spacing:.14em;color:var(--ink);margin-top:1rem;">Send the invitation</p>
+    <div style="height:1.5px;background:var(--ink);width:9.5rem;margin-top:.35rem;"></div>
+    <div style="height:1px;background:var(--clay);width:9.5rem;margin-top:2.5px;"></div>
+    <p class="recorded" style="margin-top:1.2rem;">Confirmation: Dave can see the project now. You're still the one who signs.</p>
+  </div>
+  <p>The invitation is studio-signed, like everything else: <span class="quote">Dave, Anne added you to the Van Hise kitchen and back hall. You can read the plans, the specs, and the numbers, and talk with me right in the project. Anne signs off on decisions, so nothing is waiting on you.</span> In place of the outcome picker, the non-lead sees a line rather than a disabled button, because a greyed-out act reads as a bug: <span class="quote">Anne answers this one. You can read every edition and say what you think below; she'll see it before she decides.</span></p>
+
+  <h3>The co-approver</h3>
+  <p>Schema-present and RPC-blocked. Creation requires the co-approver id to be null and the portal always sends an explicit null, so the state is currently unreachable. When it opens, the contract already dictates the shape: the co-approver reviews but never answers. Two constraints on any copy written for it: internal reviewer identities must never reach clients, and whether the lead and co-approver are household members or studio reviewers is an open ruling that every word of this section depends on.</p>
+</section>
+
+<!-- ============================================================ 7 -->
+<section id="designer">
+  <div class="opener"><p class="eyebrow">Seven</p><h2>What the designer supplies</h2></div>
+  <p class="lede">The studio must not notice Patina. So this is not "add fields". It is: capture, inside the natural act of composing, the three things without which the client experience is flat, and ask for them so lightly that the composer does not grow a form.</p>
+
+  <h3>One line of why, in her voice</h3>
+  <p>The composer today has a <b>Scope note</b> with the placeholder <span class="quote">What this releases, and what it does not.</span> and the helper <span class="quote">The bound phase is the scope of record; the note qualifies it and is never an approval response</span>. That is a legal qualifier, and it has quietly become "this field does not matter". The thing that most reduces a homeowner's anxiety is the least-supported field on the form.</p>
+  <p>Ask for it as the composer's first field, labelled in her register, with a real placeholder:</p>
+  <div class="panel">
+    <p class="panel-cap">Designer portal &middot; the composer's first field</p>
+    <p class="eyebrow">What would you tell her about this?</p>
+    <p class="waiting" style="margin-top:.7rem;">The kitchen counts came in under what we planned, so I'd like to move the island stone up a grade.</p>
+    <p class="recorded">About 140 characters. Frozen into the immutable artifact snapshot at creation, so it travels to email, push, the gate, and the iOS row from one field. The sentence is the designer's: never generated, never suggested.</p>
+  </div>
+
+  <h3>The deltas, already required, spoken back</h3>
+  <p>Cost, schedule and lead-time deltas are already mandatory and already stated even at zero. Nothing new is asked. The only change is to render the sentence they produce, live, under the three fields, so she corrects the sentence rather than the columns.</p>
+  <div class="panel">
+    <p class="panel-cap">Under the three delta inputs</p>
+    <p class="ledger">Cost delta (cents) &middot; Schedule delta (days) &middot; Lead-time delta (days)</p>
+    <p class="weigh" style="margin-top:.8rem;">Saying yes adds four thousand two hundred dollars and three days. Lead time does not move.</p>
+  </div>
+
+  <h3>Due-date framing</h3>
+  <p>The field is <b>Due date and time</b> and the email computes <span class="quote">It's due in approximately {N} hour(s).</span> Hours-precision from a designer to her own client is the wrong register. Keep the timestamp, because the cron needs it. Change the ask to <span class="quote">When would you like her answer?</span> with three quiet presets that map to real timestamps: this week, by Friday, before the order goes in. Client-facing, it reads <span class="quote">Leah would like an answer by Friday.</span></p>
+
+  <h3>The preview, as a link</h3>
+  <p>The artifact snapshot already freezes source kind, id, version, hash, and a snapshot blob, so nothing extra is asked of her. What The Document should do is show her the client's view at compose time, exactly as the send sheet already does with <b>Preview as {family}</b>. One line: <b>See what she'll see.</b> An empty or unrenderable preview then becomes a compose-time signal rather than a client-time surprise.</p>
+
+  <h3>How The Document asks, lightly</h3>
+  <ul class="plain">
+    <li>Nothing new in the region head. It stays <b>Client approvals</b> with the eyebrow <span class="quote">Exact artifact &middot; named authority</span>.</li>
+    <li>The why-line is one input above Title, and empty is allowed. On Create review draft with it empty, one inline line appears where the button is, <span class="quote">She'll get this with no note from you. Send it that way?</span>, and the button relabels to <b>Send it plain</b>. One beat. No modal, no blocker.</li>
+    <li>The preview is a link, not a panel.</li>
+    <li>No new region, no counters, no completeness meter. A percentage bar on approvals would be exactly the studio-surface engagement instrumentation the vision refuses.</li>
+    <li>Whether the why-line is <i>required</i> is Leah's call, not ours. Requiring a field changes designer flow, and the studio must not notice Patina.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 8 -->
+<section id="master">
+  <div class="opener"><p class="eyebrow">Eight</p><h2>The proposal list</h2></div>
+  <p class="lede">Thirty proposals, deduplicated across the four design lanes. Where two lanes proposed the same thing they are merged and both are credited. Dependencies are kept verbatim from the lanes, because they are what make this actionable; each proposal carries its own on the line beneath it.</p>
+
+  <div class="tablewrap">
+    <table class="tight master">
+      <thead>
+        <tr>
+          <th>#</th><th class="w-name">Name</th><th>Surface</th><th class="w-what">What changes</th><th class="w-why">Why it delights</th><th class="w-eff">Effort</th><th class="w-wave">Wave</th><th class="w-lanes">Lanes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="head">
+          <td class="num">1</td>
+          <td><strong>The door in the email</strong></td>
+          <td>Email</td>
+          <td>Add a CTA button and plaintext fallback to <code class="mono">client.patina.cloud/decisions/{id}</code>, the exact shape iOS already parses. Today the approval email is the only client-facing mail in the product with no way in.</td>
+          <td>Fixes arrival outright. One tap instead of remembering a domain, signing in, and hunting six buckets.</td>
+          <td class="w-eff">S</td><td class="w-wave">1</td><td class="w-lanes">ux 01 P1 &middot; ux 03 §8.2</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">_shared/decision-notify.ts</code>; <code class="mono">_shared/branded-email.ts</code> <code class="mono">ctaButton</code>; a <code class="mono">CLIENT_PORTAL_URL</code> env for the decision functions; redeploy every function importing <code class="mono">_shared/*</code>. <b>Lands with #3</b>, which resolves <code class="mono">portalBase()</code> per recipient audience against the same env</td>
+        </tr>
+        <tr class="head">
+          <td class="num">2</td>
+          <td><strong>A first notice that reads like one</strong></td>
+          <td>Email, in-app</td>
+          <td>Split first send from reminder. First: <span class="quote">Leah sent the kitchen plan set for your approval</span>. Later: <span class="quote">Thursday: the kitchen plan set</span>. Derive first-send from existing state, either <code class="mono">reminder_sent_at IS NULL</code> or a boolean passed from publish. <b>No enum widening.</b></td>
+          <td>Opening with "Reminder" makes the studio look impatient before she has seen anything.</td>
+          <td class="w-eff">M</td><td class="w-wave">1</td><td class="w-lanes">ux 01 P2 &middot; ux 03 §8.1</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">publish_client_decision</code> (00464); <code class="mono">_enqueue_decision_notification</code> (00466); <code class="mono">renderDecisionEmail</code>. Alternate if dedupe keys force it: widen <code class="mono">decision_notifications.kind</code>, which must land with the <code class="mono">(decision_id, kind)</code> unique constraint and 00466's re-arm semantics together</td>
+        </tr>
+        <tr class="head">
+          <td class="num">3</td>
+          <td><strong>The studio signs the mail</strong></td>
+          <td>Email</td>
+          <td>Replace <span class="quote">&mdash; Patina</span> with the designer, studio and city across all eleven events; resolve <code class="mono">portalBase()</code> per recipient audience so a homeowner's footer stops pointing at the studio's own portal; replace the SHA-256 line with an edition-and-date line and keep the hash in the record.</td>
+          <td>The studio leads and Patina is quiet, which is the promise. And her inbox stops carrying a wall of hex about her kitchen.</td>
+          <td class="w-eff">S</td><td class="w-wave">1</td><td class="w-lanes">ux 01 P3 &middot; ux 03 §6, §8.2</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">_shared/branded-email.ts:69-79,161-164</code>; <code class="mono">decision-notify.ts</code> artifact citation block <code class="mono">:296-310</code>; confirm the prod value of <code class="mono">DESIGNER_PORTAL_URL</code> first; redeploy importers. <b>Lands with #1</b>, which introduces the client URL env this row resolves against</td>
+        </tr>
+        <tr class="head">
+          <td class="num">4</td>
+          <td><strong>Quiet overdue</strong></td>
+          <td>iOS, web, email</td>
+          <td>Remove red from the Record's overdue state; retire the word from client-facing copy in favour of <span class="quote">Still open, Leah asked on 28 August.</span>; relabel the bucket to <span class="quote">Past its date</span>; rewrite the overdue subject and body; and retire the live spine eyebrow <span class="quote">A gate &middot; the line stops until you sign</span> in favour of <span class="quote">Your name is needed before the line continues</span>, because "gate" is ruled out in front of a homeowner and is shipping in front of one today (D21). The push icon moves from a warning triangle to a clock.</td>
+          <td>Overdue stops feeling like an error state and starts reading like a note in the margin. She is the studio's client, not a delinquent.</td>
+          <td class="w-eff">S</td><td class="w-wave">1</td><td class="w-lanes">ux 01 P11 &middot; ux 02 P12 &middot; ux 04 P10</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">HouseRecord.swift</code> <code class="mono">state(for:now:)</code> ~440-452 and <code class="mono">HouseRecordCard.swift:406-411</code>; <code class="mono">decisions/page.tsx</code> bucket label; <code class="mono">decision-notify.ts</code> overdue copy; <code class="mono">DecisionPushHandler.swift:44</code>; the eyebrow strings at <code class="mono">spine-gate.tsx:36-37</code> <span class="ref">disc 02 §7</span>. Keep the quiet-hours bypass</td>
+        </tr>
+        <tr class="head">
+          <td class="num">5</td>
+          <td><strong>One count, not two</strong></td>
+          <td>iOS</td>
+          <td>Narrow the bell query to <code class="mono">channel = 'in_app'</code> so each attention reads once. Every count the homeowner sees today is roughly double.</td>
+          <td>A count that is wrong is worse than no count, and this must land before any new push doubles two more things.</td>
+          <td class="w-eff">S</td><td class="w-wave">1</td><td class="w-lanes">ux 04 P3 &middot; ux 01 P10</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">NotificationsAPIClient.swift:65</code> and <code class="mono">:105</code>, the two sites carrying <code class="mono">channel=in.(in_app,push)</code>. Documented as a seam at <code class="mono">00534:93-103</code>, whose own comment names <code class="mono">:64-65</code></td>
+        </tr>
+        <tr class="head">
+          <td class="num">6</td>
+          <td><strong>Push that keeps the primer's promise</strong></td>
+          <td>iOS, backend</td>
+          <td>Emit <code class="mono">entity_type</code> <code class="mono">proposal</code> and <code class="mono">invoice</code> on the push leg so the already-tested routes fire. The primer promises a decision, a proposal, or an invoice; only decisions are delivered.</td>
+          <td>The largest financial artifact in the app is currently silent on the lock screen, and the app promised otherwise in writing.</td>
+          <td class="w-eff">M</td><td class="w-wave">1</td><td class="w-lanes">ux 04 P2 &middot; ux 01 P10 &middot; ux 03 §8.11</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">notify_client_attention</code> (<code class="mono">00534:110-217</code>) passes <code class="mono">p_entity_type</code> through to the push leg; <code class="mono">apns-send/core.ts</code>; <code class="mono">NotificationRouter.swift:60-109</code>. <b>Blocked on #5.</b></td>
+        </tr>
+        <tr class="head">
+          <td class="num">7</td>
+          <td><strong>The toggle that tells the truth</strong></td>
+          <td>iOS</td>
+          <td>Make the Settings notifications row authorization-aware: read the authorization status on appear; if not determined, the toggle requests it; if denied, the row becomes a link to iOS Settings; if authorized, current behaviour is correct. No re-prompting anywhere else.</td>
+          <td>Today a homeowner can switch push on, watch it stay on, have the server believe it, and receive nothing forever.</td>
+          <td class="w-eff">M</td><td class="w-wave">1</td><td class="w-lanes">ux 04 P12 &middot; ux 04 §5.3</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">SettingsView.swift:110-118</code>; <code class="mono">SettingsService.swift:123-130</code>; <code class="mono">PushTokenService.swift:103-109</code> and <code class="mono">:112-115</code></td>
+        </tr>
+        <tr class="head">
+          <td class="num">8</td>
+          <td><strong>The link that survives sign-in</strong></td>
+          <td>iOS</td>
+          <td>Queue the incoming deep link whenever the phase is not <code class="mono">.main</code>, not only when it is <code class="mono">.launching</code>. The drain already exists. After authentication the artifact opens directly, with the same arrival transition as a push tap.</td>
+          <td>The email and the app read as one continuous act instead of dropping her on Today with the thing she was invited to read two taps away and unannounced.</td>
+          <td class="w-eff">S</td><td class="w-wave">1</td><td class="w-lanes">ux 04 P12 &middot; ux 04 §5.4</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">DeepLinkHandler.swift:64-71</code>; <code class="mono">AppCoordinator.swift</code> <code class="mono">derivePhase</code> at <code class="mono">:259-271</code> and the drain at <code class="mono">:243-246</code></td>
+        </tr>
+        <tr class="head">
+          <td class="num">9</td>
+          <td><strong>iOS learns Stage-2's vocabulary</strong></td>
+          <td>iOS</td>
+          <td>Select <code class="mono">approval_contract</code>, <code class="mono">court</code> and <code class="mono">outcome</code>; render a Stage-2 row as an approval with the three canonical outcomes rather than as generic option cards; wire <code class="mono">confirm_project_decision_review</code> so review confirmation stops being web-only. The app can already submit the response, so this is presentation and one missing call, not a new capability.</td>
+          <td>Her outcome must not depend on which device opened the mail. A NEEDS YOU row that cannot say Approved, Changes requested or Needs discussion is not the same act.</td>
+          <td class="w-eff">M</td><td class="w-wave">1</td><td class="w-lanes">Verified for ux 01 §3 (marked unclear there)</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">DecisionsAPIClient.swift</code> (read columns, and the confirm RPC); <code class="mono">DecisionDetailView.swift</code>; <code class="mono">DecisionsViewModel.swift</code>. Guarded branch verified at <code class="mono">00464:1547-1558</code>, post at <code class="mono">DecisionsAPIClient.swift:360</code></td>
+        </tr>
+        <tr class="head">
+          <td class="num">10</td>
+          <td><strong>End the waiting dead end</strong></td>
+          <td>Web, The Making</td>
+          <td>Replace <span class="quote">Your review is complete. The studio is preparing the approval for issue.</span> with <span class="quote">You've confirmed edition 3. Leah issues it next, usually a day or two. Nothing is waiting on you.</span> plus one act, Ask Leah about this, into the existing project thread. Optionally stamp <code class="mono">Reviewed</code> in the muted grammar.</td>
+          <td>It is the one state where she did her part and the product went quiet.</td>
+          <td class="w-eff">S</td><td class="w-wave">1</td><td class="w-lanes">ux 01 P14 &middot; ux 03 §8.10 &middot; ux 02 R-C9</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">decisions/page.tsx:120-232</code>; <code class="mono">the-making.tsx</code> deferred sections; the project-thread route used by <code class="mono">ProposalClarifyButton</code>. Any stated timing must be true, never a promise</td>
+        </tr>
+        <tr class="head">
+          <td class="num">11</td>
+          <td><strong>Household names, not "Designer"</strong></td>
+          <td>Web discussion, later iOS</td>
+          <td>Attribute comments by given name and side; attribute studio comments to the studio, never to the individual who typed them; add one standing line naming who answers.</td>
+          <td>Fixes an outright misattribution and makes a partner present instead of erased.</td>
+          <td class="w-eff">M</td><td class="w-wave">1</td><td class="w-lanes">ux 01 P12 &middot; ux 03 §8.7</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">decisions/[id]/page.tsx</code> label at ~108-110; the decision-comments read hook; a display-name read for co-household authors; <code class="mono">project_decision_authority_snapshots.decision_lead_id</code>; RLS review. Internal reviewer identities must stay hidden</td>
+        </tr>
+        <tr class="head">
+          <td class="num">12</td>
+          <td><strong>Obligations read as obligations</strong></td>
+          <td>iOS</td>
+          <td>A two-point clay margin rule on NEEDS YOU rows and none on MOVED. One "See all" per overflowing half rather than one per card aimed at whichever half is larger.</td>
+          <td>Obligation stops depending on a ten-point eyebrow to distinguish itself from news, and an open obligation is never reachable only through a link labelled for the news half.</td>
+          <td class="w-eff">S</td><td class="w-wave">1</td><td class="w-lanes">ux 04 P10, P11</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">HouseRecordCard.swift:343-422</code> and <code class="mono">:266-288</code>. Keep the three-row cap</td>
+        </tr>
+        <tr class="head">
+          <td class="num">13</td>
+          <td><strong>The designer's one-line why</strong></td>
+          <td>Composer, web, iOS, email, push</td>
+          <td>Capture a first-class one-line why at compose time, freeze it into the artifact snapshot, render it under the question as the designer's note on every client surface.</td>
+          <td>The single change that most makes the studio's voice lead and Patina disappear, and the highest-leverage anxiety reduction available.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td><td class="w-lanes">ux 01 P6 &middot; ux 03 §8.3</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span>New column on <code class="mono">project_approval_artifacts</code> (hand-numbered migration; the table is immutable by design so it freezes correctly), or the existing <code class="mono">context</code> relabelled; <code class="mono">_create_project_approval_decision_checked</code> (00463); <code class="mono">project-approval-document.tsx</code>; <code class="mono">decision-notify.ts</code>; <code class="mono">project-approval-review.tsx</code>; <code class="mono">HouseRecordBuilder.title(for:)</code> at <code class="mono">HouseRecord.swift:407-419</code></td>
+        </tr>
+        <tr class="head">
+          <td class="num">14</td>
+          <td><strong>The artifact shown, and the ask in her hand</strong></td>
+          <td>All three</td>
+          <td>An artifact plate with a real preview of the edition, framed with the checksum as a maker's mark at the frame's edge; the question becomes a pull-quote with a clay rule and the designer's attribution beneath it.</td>
+          <td>She is answering a person about a thing she can see, and today the page names the thing without showing it and never says whose question it is.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td><td class="w-lanes">ux 01 Moment 3 &middot; ux 02 P3, §3 step 2</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">project-approval-review.tsx</code> Artifact and Question blocks; <code class="mono">project_approval_artifacts</code> <code class="mono">source_snapshot</code>; the designer's name already resolves for the iOS Record row copy. Budget breakdown collapses to three totals with a scored disclosure on small screens</td>
+        </tr>
+        <tr class="head">
+          <td class="num">15</td>
+          <td><strong>The weighing becomes a sentence</strong></td>
+          <td>Web, iOS, email</td>
+          <td>Replace the three-column definition list with one spoken sentence in the standing-sentence grammar plus a mono ledger line. Zero is stated in words. A baseline accompanies the delta where the data supports one.</td>
+          <td>It is the difference between reading a variance report and being told what happens if you say yes.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td><td class="w-lanes">ux 01 P7 &middot; ux 02 P2 &middot; ux 03 §3B</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">project-approval-review.tsx</code> Impact block, <code class="mono">formatMoneyDelta</code>, <code class="mono">formatDayDelta</code>; composition rules from <code class="mono">making/standing-sentence.ts</code>; the designer side already joins the three into one line at <code class="mono">project-approval-model.ts:87-115</code>. Pure and unit-testable, like <code class="mono">standing-sentence.test.ts</code></td>
+        </tr>
+        <tr class="head">
+          <td class="num">16</td>
+          <td><strong>Three doors, three stamps</strong></td>
+          <td>Web, The Making, iOS</td>
+          <td>Equal weight for all three outcomes, verb-then-consequence labels, a <code class="mono">RETURNED</code> stamp so the answer a nervous homeowner is most likely to give finally leaves a mark, and single-word marks so the grammar is one family. On web the change note is required with instructional copy, never validation; on iOS it is pre-opened and encouraged.</td>
+          <td>Today the asymmetry quietly teaches that approve is the real answer.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td><td class="w-lanes">ux 01 P8 &middot; ux 03 §8.4, §8.5</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">gate-stamp.tsx</code>; <code class="mono">project-approval-review.tsx</code>; stamp tests; web validation before <code class="mono">respond_project_approval</code>; <code class="mono">DecisionsViewModel</code>. The web-required and iOS-encouraged split is deliberate and must be documented; a database-layer requirement is an open ruling</td>
+        </tr>
+        <tr class="head">
+          <td class="num">17</td>
+          <td><strong>Eleven states, one stamp</strong></td>
+          <td>All three, plus the designer portal</td>
+          <td>One stamp component implementing the full state table with the thirty-day aging step. <code class="mono">SIGNED</code> moves from sage to mocha; the hold border moves from gold to golden-hour ink. The green check on the proposal banner and <code class="mono">checkmark.seal.fill</code> as the primary mark both retire.</td>
+          <td>Every terminal state finally looks like it belongs to the same office, and it removes the last green from the ceremony.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td><td class="w-lanes">ux 02 P5, P6 &middot; ux 04 P1</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">gate-stamp.tsx</code>; <code class="mono">commercial-document-shell.tsx</code> banners; <code class="mono">proposals/[id]/page.tsx:182-252</code>; <code class="mono">proposal-watch.tsx</code> <code class="mono">SignedSeal</code>; <code class="mono">proposal-watch-derivation.ts</code> <code class="mono">deriveStamp</code>; new <code class="mono">PatinaStamp</code> in <code class="mono">PatinaDesignKit/Sources/PatinaDesignKit/Components/</code>; <code class="mono">ProposalDetailView.statusIcon</code>. The intent pinned by <code class="mono">ProposalDetailStatusIconTests</code> must survive the swap</td>
+        </tr>
+        <tr class="head">
+          <td class="num">18</td>
+          <td><strong>The act, ranked and held</strong></td>
+          <td>All three</td>
+          <td>Typed legal name on a ruled line with the date beside it, and a scored press-and-hold replacing the tap on review confirmation, submit response, and every sign submit. On the proposal document the four acts re-rank, with Sign as scored primary and the primary docked on mobile.</td>
+          <td>The weight of the gesture matches the weight of the act, and the page stops asking "which of these four" and starts asking one thing.</td>
+          <td class="w-eff">L</td><td class="w-wave">2</td><td class="w-lanes">ux 02 P4, P11 &middot; ux 02 §4</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">scored-action.tsx</code>; the I107 block in <code class="mono">globals.css</code>; <code class="mono">HoldGesture.swift</code> <code class="mono">HoldableModifier</code>, which already ships the VoiceOver fallback; <code class="mono">HapticManager</code>; <code class="mono">proposals/[id]/page.tsx:277-318</code>; the sign page input. <code class="mono">review_method: 'portal_clickthrough'</code> is unchanged, so no migration. Decline stays reachable without scrolling. Effort splits M on web, L on iOS</td>
+        </tr>
+        <tr class="head">
+          <td class="num">19</td>
+          <td><strong>The seal and the act, full screen on iOS</strong></td>
+          <td>iOS</td>
+          <td>A full-screen cover instead of a medium detent over a dimmed document, carrying the restated terms unchanged with an edition line added above them, a consent checkbox to match the web, and the typed name on a rule. Then a full-screen seal moment with the new mark, one settle animation, one success haptic, and a plain statement of what happens next.</td>
+          <td>A half sheet reads as one more field; a full screen reads as a moment. And the seal is the only acknowledgement of what the person just did.</td>
+          <td class="w-eff">L</td><td class="w-wave">2</td><td class="w-lanes">ux 04 P1, P6</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span>New <code class="mono">PatinaSeal.swift</code> and <code class="mono">SealMomentView.swift</code>; <code class="mono">ProposalSignSheet.swift</code>; <code class="mono">ProposalDetailView.swift:43-58</code>; <code class="mono">ProposalSignTerms.swift</code>; <code class="mono">get_client_proposal_bundle</code> must return the version. Reduced motion cross-fades with no scale or rotation, and the haptic still fires. Effort is M if the seal is ported from #17, L if it is drawn twice</td>
+        </tr>
+        <tr class="head">
+          <td class="num">20</td>
+          <td><strong>The approval receipt</strong></td>
+          <td>Email, push, in-app, web</td>
+          <td>On response, send the client a receipt naming what she answered and what it released. <code class="mono">decision_resolved</code> addresses the designer only today.</td>
+          <td>Closure is what makes deciding feel good. Today the biggest act in the product is met with silence, while real things move.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td><td class="w-lanes">ux 01 P9 &middot; ux 03 §8.6</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span>Add a <code class="mono">notify_client_attention()</code> call from <code class="mono">_respond_project_approval_checked</code> (00464), which already writes an in-app and a push row; <code class="mono">decision-notify.ts</code>; the released-work clause derives from <code class="mono">project_ffe_items.blocked_by_decision_id</code> unblocked at <code class="mono">00464:745-753</code> and stays silent when there is nothing honest to say. Stage-2 recipient resolution stays bound to the frozen snapshot. The receipt cites; it must never re-offer the act</td>
+        </tr>
+        <tr class="head">
+          <td class="num">21</td>
+          <td><strong>The line resumes, and the afterglow row</strong></td>
+          <td>Web (The Making), iOS</td>
+          <td>After an outcome the gate's break closes with a draw, the standing sentence recomposes, and the afterglow caption prints only when real downstream state supports it. On iOS the row crosses from NEEDS YOU to MOVED carrying its stamp.</td>
+          <td>The reward for deciding is seeing the thing you unblocked, and the person's own act stops vanishing overnight.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td><td class="w-lanes">ux 02 P8 &middot; ux 04 P9</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">spine-gate.tsx</code>; <code class="mono">the-making.tsx</code>; <code class="mono">standing-sentence.ts</code>; two new <code class="mono">HouseRecordRow.Kind</code> cases at <code class="mono">HouseRecord.swift:22-35</code> and <code class="mono">:395-455</code>; resolved-at timestamps through the Studio queue read. Captions stay silent when no honest consequence exists</td>
+        </tr>
+        <tr class="head">
+          <td class="num">22</td>
+          <td><strong>The lock screen as the first frame</strong></td>
+          <td>iOS, backend</td>
+          <td>Notification categories with Open and Ask a question, thread and collapse ids so a reminder replaces rather than stacks, an active interruption level, and a notification service extension carrying the option swatch or board image. Wire the decision push handler into the delegate, which is a stub today.</td>
+          <td>The arrival becomes recognisably Patina before the app opens, and the honest non-answer becomes reachable from where she actually is.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td><td class="w-lanes">ux 04 P4, P5, §1.1</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">buildApnsPayload</code> at <code class="mono">apns-send/core.ts:63-73</code> gains <code class="mono">category</code>, <code class="mono">thread-id</code>, <code class="mono">collapse-id</code>, <code class="mono">interruption-level</code>, <code class="mono">mutable-content</code> and an attachment key; <code class="mono">notify_client_attention</code> gains defaulted <code class="mono">p_category</code> and <code class="mono">p_attachment_url</code>; new <code class="mono">PatinaNotificationService</code> target; <code class="mono">NotificationCategories.swift</code>; <code class="mono">AppDelegate.swift</code>. <b>Blocked on #5 and #6.</b> Degrades to today's plain banner if the fetch fails</td>
+        </tr>
+        <tr class="head">
+          <td class="num">23</td>
+          <td><strong>The letter arrives closed</strong></td>
+          <td>All three</td>
+          <td>An arrival fold as the first frame: studio letterhead, the designer's name, one waiting sentence, and one unfold act, with the artifact behind it. The unfold is recorded as the honest moment she saw the exact edition.</td>
+          <td>The difference between a chore and an occasion is almost entirely whether you opened it, and it puts the studio's name on the page when she is most attentive.</td>
+          <td class="w-eff">M</td><td class="w-wave">2</td><td class="w-lanes">ux 02 P1</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">project-approval-review.tsx</code>; <code class="mono">proposals/[id]/page.tsx</code>; the per-dispatch studio identity and logo snapshot already resolved on the send outbox. <b>Flag-gated and measured.</b> One extra act on a completion-critical flow, so it is not a floor fix and does not widen without evidence</td>
+        </tr>
+        <tr class="head">
+          <td class="num">24</td>
+          <td><strong>One thing at a time, and no numbers</strong></td>
+          <td>Web header, <span class="ref">/decisions</span>, iOS tab</td>
+          <td><span class="ref">/decisions</span> stops being six parenthesised buckets and becomes a letterhead page: the nearest-due open approval full size, one sentence counting the rest, history behind a quiet link. The header count badge becomes the standing sentence; the nav word takes a clay under-score when something waits. The iOS tab badge is removed; the NEEDS YOU eyebrow already carries the truth.</td>
+          <td>It stops the product counting chores at a homeowner, and it retires two refusals at once.</td>
+          <td class="w-eff">M</td><td class="w-wave">3</td><td class="w-lanes">ux 01 P4 &middot; ux 02 P10 &middot; ux 04 R8</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">decisions/page.tsx:120-232</code>; <code class="mono">lib/client-attention.ts</code>; <code class="mono">app-chrome.tsx:60-84</code>; <code class="mono">client-header.tsx:124-129</code>; <code class="mono">making/standing-sentence.ts</code>; <code class="mono">BadgeCountService.swift:73</code>. Must not become a dashboard: one act drawn, everything else a sentence</td>
+        </tr>
+        <tr class="head">
+          <td class="num">25</td>
+          <td><strong>The ceremony inside The Making</strong></td>
+          <td>Web</td>
+          <td>The approval gate stops handing off to the legacy route and hosts the seven steps inline on the spine, the way signature gates already do.</td>
+          <td>It removes the one place where the single pane stops being single, on the surface that argues the line stops until you act.</td>
+          <td class="w-eff">L</td><td class="w-wave">3</td><td class="w-lanes">ux 01 P5 &middot; ux 02 P9</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">the-making.tsx:274-319</code>; extract the anatomy from <code class="mono">project-approval-review.tsx</code> as a shared component; <code class="mono">spine-gate.tsx</code>; <code class="mono">use-project-approvals.ts</code>. Behind <code class="mono">single-pane</code>, which already fails closed. One component, two mounts: the legacy route must keep working for email arrivals</td>
+        </tr>
+        <tr class="head">
+          <td class="num">26</td>
+          <td><strong>The Record of Decision</strong></td>
+          <td>All three</td>
+          <td>A printable one-sheet keepsake at <span class="ref">/decisions/[id]/record</span> and <span class="ref">/proposals/[id]/record</span>, and a scored Keep a copy act at the seal. Replaces the raw print call behind Download PDF. The consent method is written in a sentence, never as the raw enum, and the IP is never printed.</td>
+          <td>It is the only artifact in the product a homeowner might put in a drawer, and it makes the checksum and the frozen edition feel like provenance rather than paperwork.</td>
+          <td class="w-eff">M</td><td class="w-wave">3</td><td class="w-lanes">ux 02 P7</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span>The print classes already on <code class="mono">ProposalDocument</code>; <code class="mono">project_approval_artifacts</code> title, version and hash; <code class="mono">client_consent_method</code>; <code class="mono">SignatureLedger</code>; on iOS an image renderer behind a share link. Print forces white paper and drops rotation to zero</td>
+        </tr>
+        <tr class="head">
+          <td class="num">27</td>
+          <td><strong>The successor read as one thread</strong></td>
+          <td>Web, email</td>
+          <td>A superseded edition opens with a continuation line and one forward act; the successor names what changed since her last answer. Today it is two bare links.</td>
+          <td>The chain of editions is the decision record, and the decision record is the relationship.</td>
+          <td class="w-eff">M</td><td class="w-wave">3</td><td class="w-lanes">ux 01 P13</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">predecessor_decision_id</code> and successor receipts (00463, <code class="mono">supersede_project_approval_decision</code> 00464); the <code class="mono">disposition</code> states typed in <code class="mono">use-project-approvals.ts:13-26</code>; the revision-history block in <code class="mono">project-approval-review.tsx</code>. A successor is a new decision, never a reopen, so copy must not imply the old answer was undone</td>
+        </tr>
+        <tr class="head">
+          <td class="num">28</td>
+          <td><strong>She sets the pace</strong></td>
+          <td>Web, iOS, email footer</td>
+          <td>Per-approval snooze (tomorrow morning, Sunday, when it's due, don't remind me) and three cadences in plain words: tell me right away, once a day, once a week on Sunday. Quiet hours honored everywhere except the overdue notice, with a floor of 8am to 8pm and no automated approval mail on Sunday. On the push leg, defer outside 8am to 8pm and release at 8am; never defer the in-app row.</td>
+          <td>A homeowner who can turn the volume down never has to turn us off.</td>
+          <td class="w-eff">M</td><td class="w-wave">3</td><td class="w-lanes">ux 03 §8.9 &middot; ux 04 R6</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">notification_preferences.reminder_cadence</code> widening; a snooze store; <code class="mono">decision-reminders</code> honoring both; <code class="mono">notify_client_attention</code> for the push window. Snooze must never suppress an overdue notice or a superseding edition</td>
+        </tr>
+        <tr class="head">
+          <td class="num">29</td>
+          <td><strong>Loop in a household member</strong></td>
+          <td>Web, email, later iOS</td>
+          <td>The lead invites a participant who reads everything and comments and never answers. The non-lead sees a line rather than a disabled button in place of the picker. On iOS the non-lead sees the same row and the same artifact spread, and a different act.</td>
+          <td>Spouse alignment is one of the five anxieties and has no product answer today.</td>
+          <td class="w-eff">L</td><td class="w-wave">3</td><td class="w-lanes">ux 03 §8.8 &middot; ux 04 §4</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span>New invite path; household membership; auth and RLS surface; the ADR stays literally true. <b>Blocked on the lead and co-approver ruling and on whether a partner gets a login.</b> Easy to accidentally imply approval authority</td>
+        </tr>
+        <tr class="head">
+          <td class="num">30</td>
+          <td><strong>The decision spread</strong></td>
+          <td>iOS</td>
+          <td>Two options side by side with a non-committal hold state and one named act button, replacing a vertical stack of two submit buttons. The deferral acts sit at equal weight below rather than smaller. A zoom transition from the Record row.</td>
+          <td>Comparison is the actual task and the current screen makes it impossible; a hold state gives permission to lean before committing.</td>
+          <td class="w-eff">L</td><td class="w-wave">3</td><td class="w-lanes">ux 04 P8</td>
+        </tr>
+        <tr class="deps">
+          <td></td>
+          <td colspan="7"><span class="deplabel">Dependencies</span><code class="mono">DecisionDetailView.swift:189-281</code>, the option cards, and the deferral acts below them (line range unverified). Needs care at three or more options and at accessibility text sizes. Reduced motion cross-fades</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="recorded">Thirty rows, thirty proposals. Number 9 began as the verified-fact item the journey lane could not resolve and is carried here as a proposal because it is real work. Where a lane's proposal does not appear it was merged: the ceremony lane's arrival fold is #23, its stamp work is split across #16 and #17, its action-bar rank is inside #18; the copy lane's eleven notification events are inside #1, #2, #3 and #20; the iOS lane's continuity pair is #7 and #8.</p>
+</section>
+
+<!-- ============================================================ 9 -->
+<section id="waves">
+  <div class="opener"><p class="eyebrow">Nine</p><h2>Three waves</h2></div>
+
+  <h3>Wave one &middot; Fix the floor</h3>
+  <p><b>Proposals 1 through 12.</b> Arrival, links, counts, copy, and five verified code defects. Nothing here needs a ruling and nothing here is a redesign. The order inside the wave matters in one place: the double-read fix at #5 lands before the push work at #6, and both land before the lock-screen work in Wave 2, because adding two push categories to a rail that reads every attention twice doubles two more things.</p>
+  <p>The wave also closes the question the journey lane could not answer. The iOS app can already submit a Stage-2 response; what it lacks is the vocabulary and the review confirmation. Proposal 9 gives it both, so that from Wave 2 onward the ceremony can be built once and land the same way on either device.</p>
+  <p><b>Success, qualitatively:</b> a homeowner who receives an approval email reaches the exact document without asking how, on either device, and the notice sounds like her designer rather than like a system.</p>
+  <p><b>Success, measurably:</b> the share of approval notices whose recipient reaches the approval within twenty-four hours. This is a client-surface arrival measure. It is never shown to a designer and never becomes a studio-facing number.</p>
+
+  <h3>Wave two &middot; Make it a ceremony</h3>
+  <p><b>Proposals 13 through 23.</b> The act itself: the why-line, the plate and the attributed ask, the weighing sentence, three doors and eleven stamps, the press-and-hold, the full-screen seal on iOS, the receipt, the resumed line, the lock screen, and the closed letter behind a flag.</p>
+  <p>Two sequencing notes. The stamp work at #17 lands before the seal moment at #19, so the iOS mark is ported rather than invented twice. The closed letter at #23 ships last in the wave, flag-gated, with the unfold recorded as an event, because it is the one proposal in this program that trades a completion risk for an experience gain and it should be able to be withdrawn without unpicking anything else.</p>
+  <p><b>Success, qualitatively:</b> Leah reads the client's approval email and recognises her own sentence at the top. A homeowner shown the three stamps can say what each one means without being told.</p>
+  <p><b>Success, measurably:</b> the share of approvals created carrying a non-empty designer why-line. This is a quality measure of the artifact, not of anyone's activity, and it is never surfaced as a studio score.</p>
+
+  <h3>Wave three &middot; Make it a habit</h3>
+  <p><b>Proposals 24 through 30.</b> Return, continuity, and household: the threshold at <span class="ref">/decisions</span>, the ceremony inside The Making, the keepsake, the successor thread, the pace she sets, loop-in, and the decision spread. Loop-in stays blocked until the household ruling lands; everything else in the wave is unblocked.</p>
+  <p><b>Success, qualitatively:</b> a homeowner opening the portal or the app on a day with nothing owed still sees a true sentence about her house and leaves satisfied.</p>
+  <p><b>Success, measurably:</b> the share of approvals reaching a recorded outcome without any reminder firing. This is a friction measure. It goes down when the studio has to chase, and it never rewards volume of client activity.</p>
+
+  <h4>Explicitly not measured, on any surface</h4>
+  <p>Sessions, time in app, streaks, notification open rates as a designer-facing figure, or any completeness score on the studio's own composition. The studio surface is never optimized for engagement, and no number in this program is ever shown to Leah as a score for her client.</p>
+</section>
+
+<!-- ============================================================ 10 -->
+<section id="rulings">
+  <div class="opener"><p class="eyebrow">Ten</p><h2>Open rulings</h2></div>
+  <p class="lede">Sixteen rulings, consolidated from thirty-nine raised across the four lanes and the authority contract. Each carries the recommendation the team would make if forced, and who rules. Five are carried from <span class="ref">APPROVAL-AUTHORITY-CONTRACT.md</span> and block copy until they land.</p>
+
+  <div class="ruling">
+    <h4>R1 &middot; the gesture</h4>
+    <p class="q">Does an approval outcome need a signature, or is a click-through enough?</p>
+    <p>Approving a budget edition that unblocks procurement is two clicks today; signing a services agreement is a typed name. Either weight is defensible. The mismatch is not.</p>
+    <p class="rec"><b>Recommendation</b>Typed legal name plus a scored press-and-hold on every surface. The response RPC already writes <code class="mono">client_signature</code> and <code class="mono">client_consent_method</code>, so the field drops in without a migration; the review confirmation keeps <code class="mono">portal_clickthrough</code>, because a hold is still a click-through.</p>
+    <p class="who">Kody rules, with counsel on whether the typed name changes the evidentiary weight &middot; carried from the contract</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R2 &middot; drawn signatures</h4>
+    <p class="q">Do we close finger-drawn signature capture permanently, or leave it open?</p>
+    <p>Considered and declined by this team. There is no canvas in the client app and no column to hold an image. A finger scrawl on glass is less identifying than a typed legal name, gains no evidence over the server-derived trusted IP that is already the strongest evidence Patina holds, and prints badly on the keepsake. It is the sort of thing that gets re-proposed every six months.</p>
+    <p class="rec"><b>Recommendation</b>Close it permanently. Record the reasoning so the next proposal can be answered with a link.</p>
+    <p class="who">Kody rules</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R3 &middot; who the approvers are</h4>
+    <p class="q">Are the decision lead and co-approver household members or internal studio reviewers, does a partner get his own login, and do we ship the co-approver at all in the next twelve months?</p>
+    <p>Every word of the household section assumes household. If the ruling lands on studio reviewers, loop-in loses its authority implication, the co-approver must stay invisible to clients, and every co-approver string is rewritten. The co-approver is schema-present and RPC-blocked: creation requires a null co-approver and the portal always sends an explicit null, so the state is currently unreachable.</p>
+    <p class="rec"><b>Recommendation</b>Household. A partner gets his own login with read and comment rights and no authority. Do not ship the co-approver in the next twelve months unless a real Leah project has two people who must both look before one answers.</p>
+    <p class="who">Kody and Leah rule; counsel on the co-approver's contractual meaning &middot; carried from the contract</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R4 &middot; the login-less door</h4>
+    <p class="q">May a homeowner reach an approval without signing in?</p>
+    <p>Every other homeowner-facing surface has a login-less door, and the middleware comment explains why in her own terms: a homeowner texts the link to her husband, who has no Patina account and may never have one. Approvals deliberately do not.</p>
+    <p class="rec"><b>Recommendation</b>A view-only tokened preview of the artifact, borrowing the share-token precedent verbatim including its calm dead-link page, with the act itself still behind sign-in. Reading is shared; answering is not.</p>
+    <p class="who">Kody rules, with counsel on whether a tokened artifact view weakens the evidence chain</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R5 &middot; the springboard badge</h4>
+    <p class="q">The web header badge and the iOS tab badge are retired as vision refusals. Does the refusal reach the app icon on the home screen?</p>
+    <p>The springboard badge is a different object. It is how a homeowner learns something arrived when the app is shut, and it is the only re-engagement instrument that does not require a notification to be delivered.</p>
+    <p class="rec"><b>Recommendation</b>Keep the springboard badge, retire the two in-product badges. Note that fixing the double count makes the number correct, which is a separate question from whether it is permitted.</p>
+    <p class="who">Kody rules</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R6 &middot; the checksum</h4>
+    <p class="q">Should the SHA-256 checksum be visible to the homeowner at all?</p>
+    <p>It is real evidence, it is currently in her email, and to a homeowner it is a wall of characters in a note about her kitchen.</p>
+    <p class="rec"><b>Recommendation</b>Out of the email body, replaced by an edition-and-date line. Kept on the Record of Decision as twelve characters at the artifact plate's edge, printed as provenance rather than as a compliance string.</p>
+    <p class="who">Kody rules; counsel confirms no evidentiary requirement puts it in her copy</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R7 &middot; whose name is on the letter</h4>
+    <p class="q">Who signs email to a homeowner, and whose name is on the letterhead and the keepsake?</p>
+    <p>This program replaces the Patina sign-off with the studio's own name everywhere, and puts the studio at the top of the arrival fold and the Record of Decision with Patina in the footer. It follows from the promise that the studio leads and Patina is quiet. It also makes the studio the counterparty in the homeowner's memory of the record, which touches how the margin stream and the Pledge are eventually explained.</p>
+    <p class="rec"><b>Recommendation</b>The studio signs and the studio's name is on the letterhead. Confirm deliberately rather than by default, because it is a visible brand change.</p>
+    <p class="who">Leah rules the voice; Kody confirms the brand and commercial implication</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R8 &middot; the words</h4>
+    <p class="q">What replaces "Overdue" in the studio's own mouth, is HELD the right stamp word, and what is the lock-screen voice?</p>
+    <p>Overdue is presentation-only by contract, but Leah is the one whose relationship it touches. HELD is precise and slightly institutional; alternatives are TALKING, ON HOLD, PAUSED. The lock screen is the one Patina surface a homeowner cannot dismiss without reading, and this program rewrites its overdue line from a warning into a check-in.</p>
+    <p class="rec"><b>Recommendation</b><span class="quote">Still open, Leah asked on 28 August.</span> for overdue; keep HELD unless Leah's ear says otherwise; the lock screen speaks in her voice, never in a warning register.</p>
+    <p class="who">Leah rules</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R9 &middot; what each side is told</h4>
+    <p class="q">What may an approval receipt name, and does the studio see when a client opened an approval?</p>
+    <p>The receipt wants to tell her what her yes released, sourced honestly from unblocked FF&amp;E rows. Separately, the proposal watch shows opens, reading minutes and most-read section; Stage-2 has no equivalent and the read model has no Stage-2 arm.</p>
+    <p class="rec"><b>Recommendation</b>The receipt names only what the caption discipline already permits: the real consequence, or silence. No watch on approvals. Given that the studio should not notice Patina, a reading-time instrument pointed at her own client is a service to nobody.</p>
+    <p class="who">Leah rules the receipt sentence; Kody rules the watch</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R10 &middot; the change note</h4>
+    <p class="q">Must "changes requested" carry a comment at the database layer?</p>
+    <p>The contract leaves this open and states the constraint plainly: web can require it now, installed clients cannot. A database requirement makes the surfaces consistent and strands installed clients that cannot supply one.</p>
+    <p class="rec"><b>Recommendation</b>No database constraint. Web requires it with instructional copy, never validation language; iOS pre-opens an encouraged composer. Document the asymmetry as deliberate.</p>
+    <p class="who">Kody rules &middot; carried from the contract</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R11 &middot; the three deltas</h4>
+    <p class="q">Are cost, schedule and lead-time deltas additive or independent?</p>
+    <p>The weighing sentence states them side by side because summing them would be an invented number. A ruling unlocks a shorter sentence.</p>
+    <p class="rec"><b>Recommendation</b>Independent, stated side by side, with a baseline beside the cost delta where one exists. A delta with a baseline is a fact; a delta alone is a fragment.</p>
+    <p class="who">Kody rules &middot; carried from the contract</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R12 &middot; the closed letter</h4>
+    <p class="q">Is one deliberate unfold worth the completion-rate risk on a surface where an unanswered approval blocks a phase?</p>
+    <p>The ceremony lane says yes and would ship it behind a flag with the unfold recorded as an event. The journey lane is not persuaded. Note that a pending Stage-2 approval always blocks phase advancement with no designer override, so a completion cost here has a real schedule cost behind it.</p>
+    <p class="rec"><b>Recommendation</b>Ship it in Wave 2 behind a flag, measure the unfold, and do not widen it without evidence. It is not a floor fix and nothing else in the program depends on it.</p>
+    <p class="who">Kody rules, and rules again on the measurement</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R13 &middot; the pigments</h4>
+    <p class="q">Does SIGNED move to mocha, does terracotta survive as Declined, and is an un-stamped "Awaiting you" legible?</p>
+    <p>Moving SIGNED off sage removes the last green from the ceremony and changes a mark Leah has been looking at for months. Terracotta at 1.5 points with no sage counterpart is a warm clay pigment rather than a red light, but a homeowner may not read the distinction; the alternative is the muted grammar. And away from the spine, where the break itself is the state, an upright unstamped outline is proposed for an approval that is still waiting.</p>
+    <p class="rec"><b>Recommendation</b>SIGNED moves to mocha. Terracotta survives, once, with no counterpart. Proof the upright outline on paper before building it, because an un-stamped stamp may read as a bug.</p>
+    <p class="who">Leah rules, on the designer-portal ground and on paper</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R14 &middot; the target rail, and what can be an artifact</h4>
+    <p class="q">Which rail does the ceremony target, and what is the immutable-retention policy for generic project documents?</p>
+    <p>This program designs against Stage-2 approvals and the proposal and commercial sign path as they exist today. The codebase is already mid-migration toward a design-services and commercial-document rail, and legacy proposal sending is retired. Separately, until retention lands, project documents cannot be approvable artifacts, so the comprehension work covers plan sets, spec books and budget versions only.</p>
+    <p class="rec"><b>Recommendation</b>Build the ceremony as shared components mounted by both rails rather than owned by either, so the migration does not orphan it. Keep the artifact kinds as they are until retention is ruled.</p>
+    <p class="who">Kody rules; counsel on retention &middot; carried from the contract</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R15 &middot; the ceremony on the front door</h4>
+    <p class="q">Does an approval ceremony belong on the iOS app at all, and may the widget carry one open obligation?</p>
+    <p>The vision calls the iOS app a marketing and qualification instrument the studio owns, not a consumer product in its own right, and everything in the native ceremony is homeowner craft. The case for it is the homeowner promise and the sentence that the decision record is the relationship. Separately, a standing ruling makes the widget structurally incapable of carrying what is owed, and this program proposes one dated sentence with no number.</p>
+    <p class="rec"><b>Recommendation</b>Yes, because universal links make the device choice hers and not ours: web and iOS must complete the same act or her outcome depends on which device opened the mail. On the widget, one dated sentence and no number, or leave the standing ruling alone. This is not a designer's call.</p>
+    <p class="who">Kody rules both</p>
+  </div>
+
+  <div class="ruling">
+    <h4>R16 &middot; when Patina stops talking</h4>
+    <p class="q">What happens after the overdue notice, and do we adopt quiet hours on push?</p>
+    <p>The cadence ladder ends after four notices and hands the item to the studio to chase by hand. The SMS rail honors an eight to eight window and push honors nothing, which matters more on a phone than on a laptop because a phone is on a nightstand.</p>
+    <p class="rec"><b>Recommendation</b>Patina goes quiet after the overdue notice and the studio takes it from there. Adopt the eight to eight window on the push leg only, never on the in-app row, releasing at 8am. Confirm the studio wants the hand-off rather than a continuing ladder.</p>
+    <p class="who">Leah rules the hand-off; Kody rules the window</p>
+  </div>
+</section>
+
+<!-- ============================================================ 11 -->
+<section id="appendix">
+  <div class="opener"><p class="eyebrow">Eleven</p><h2>Appendix</h2></div>
+
+  <h3>Sources</h3>
+  <p>Eight documents, 52,864 words, all produced 2026-09-03 against the main checkout at <code class="mono">/Users/kody/Code/patina-merged</code>. Discovery cited to file and line; design lanes cited to discovery.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th>File</th><th>Lane</th><th class="num">Words</th></tr></thead>
+      <tbody>
+        <tr><td><code class="mono">discovery/01-designer-approval-creation.md</code></td><td>How a designer creates and sends client approvals</td><td class="num">6,545</td></tr>
+        <tr><td><code class="mono">discovery/02-client-portal-journey.md</code></td><td>Client portal approval and signature journey</td><td class="num">7,646</td></tr>
+        <tr><td><code class="mono">discovery/03-ios-client-app.md</code></td><td>iOS client app, approvals and proposals</td><td class="num">3,884</td></tr>
+        <tr><td><code class="mono">discovery/04-backend-and-notifications.md</code></td><td>Backend and notification backbone</td><td class="num">6,576</td></tr>
+        <tr><td><code class="mono">ux/01-journey-architecture.md</code></td><td>Journey architecture, the seven moments</td><td class="num">6,315</td></tr>
+        <tr><td><code class="mono">ux/02-ceremony-and-visual-language.md</code></td><td>Ceremony and visual language</td><td class="num">8,222</td></tr>
+        <tr><td><code class="mono">ux/03-behavior-and-copy.md</code></td><td>Behavior and copy</td><td class="num">7,192</td></tr>
+        <tr><td><code class="mono">ux/04-ios-native.md</code></td><td>iOS native</td><td class="num">6,484</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Also read in full for this synthesis: <code class="mono">docs/vision/VISION.md</code> and <code class="mono">.claude/skills/patina-brand-voice/SKILL.md</code>. Every line of client-facing copy quoted here was written by the copy lane against those two.</p>
+
+  <h3>Verified in code, versus marked unclear</h3>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th class="w-name">Claim</th><th>Status</th><th class="w-why">Note</th></tr></thead>
+      <tbody>
+        <tr><td>The iOS app can submit a Stage-2 project approval response</td><td><strong>Verified</strong></td><td>Guarded <code class="mono">project_artifact_v1</code> branch at <code class="mono">00464:1547-1558</code>; <code class="mono">DecisionsAPIClient.swift:360</code> posts with null note and null quantity, satisfying the guard. Corrects the journey lane's "unclear".</td></tr>
+        <tr><td>The app renders Stage-2 rows without approval semantics, and never confirms review</td><td><strong>Verified</strong></td><td>No <code class="mono">approval_contract</code>, <code class="mono">court</code> or <code class="mono">outcome</code> columns selected; no <code class="mono">confirm_project_decision_review</code> call site in the app. Review confirmation is web-only today.</td></tr>
+        <tr><td>The approval email contains no link</td><td><strong>Verified</strong></td><td>Confirmed by grep: zero matches for <code class="mono">ctaButton|appUrl|dashboardUrl|/decisions</code> in <code class="mono">decision-notify.ts</code>.</td></tr>
+        <tr><td>The first send and the reminder share one render path</td><td><strong>Verified</strong></td><td>Both <code class="mono">publish_client_decision</code> and the 48-hour cron fire <code class="mono">decision_required</code>.</td></tr>
+        <tr><td>The in-app and push double-read</td><td><strong>Verified</strong></td><td>Documented in the migration itself at <code class="mono">00534:93-103</code> as a seam, with the fix tracked as a separate task.</td></tr>
+        <tr><td>The Settings toggle never requests OS authorization</td><td><strong>Verified</strong></td><td>Setter writes preferences only; the prompt gate is a true one-shot per install with only a test-seam reset.</td></tr>
+        <tr><td>The signed-out deep link is dropped</td><td><strong>Verified</strong></td><td>Queue condition is <code class="mono">phase == .launching</code>; a signed-out arrival derives <code class="mono">.auth</code>.</td></tr>
+        <tr><td>Proposal and invoice push routes are unemitted</td><td><strong>Verified</strong></td><td>Annotated in <code class="mono">NotificationRouter</code> as forward-compatible with no emitter.</td></tr>
+        <tr><td>The prod value of <code class="mono">DESIGNER_PORTAL_URL</code></td><td><strong>Unclear</strong></td><td>The variable name and default read as designer-portal-scoped, but the deployed value was not confirmed. Confirm before shipping proposal 3.</td></tr>
+        <tr><td>Whether <code class="mono">stamp_client_decision_reminder</code>'s <code class="mono">deep_link</code> metadata has any reader</td><td><strong>Unclear</strong></td><td>No consumer found in either portal. It may feed a surface not checked, or be dead.</td></tr>
+        <tr><td>Whether the scored-action instrumentation fires on the legacy decision page or only inside The Making</td><td><strong>Unclear</strong></td><td>The review component passes the action keys; the component itself was not read in full.</td></tr>
+        <tr><td>Whether two authorization predicates for authoring resolve identically</td><td><strong>Unclear</strong></td><td>Create uses studio co-membership; the publish branch uses proposal authorship. Worth a product sanity check that a role which can draft can always publish.</td></tr>
+        <tr><td>Whether <code class="mono">pending_retry</code> notification state is discoverable on a later visit</td><td><strong>Unclear</strong></td><td>It is surfaced via a URL query parameter today.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Prior audit &middot; F01, F05, F07</h3>
+  <p>The 2026-07-31 client journey audit raised fourteen findings. Three bear directly on what a homeowner eventually signs, and all three concern financial and date integrity in the payload she puts her name to.</p>
+  <div class="tablewrap">
+    <table class="tight">
+      <thead><tr><th>#</th><th class="w-name">Finding</th><th class="w-what">Remediation claim</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="num">F01</td>
+          <td><strong>Critical.</strong> The sent proposal contained a zero-dollar payment schedule. The editor showed a full deposit; the client preview and the sent document both showed a zero milestone. Stated impact: a client can sign an agreement whose payment schedule contradicts the proposal total.</td>
+          <td>Bind send to the exact reviewed snapshot, reconcile canonical amounts server-side, reject changed tokens, remove the unsafe legacy send overload.</td>
+          <td>Consistent with the code read today, not verified as lineage</td>
+        </tr>
+        <tr>
+          <td class="num">F05</td>
+          <td><strong>High.</strong> Date-only values shifted across local and generated records, so a corrected signature date still opened the project one day later. Stated impact: off-by-one dates weaken legal records, schedules and client expectations.</td>
+          <td>Direct date-only entry with guarded parsing rather than UTC timestamp defaults.</td>
+          <td>Consistent with the code read today, not verified as lineage</td>
+        </tr>
+        <tr>
+          <td class="num">F07</td>
+          <td><strong>High.</strong> Send validation did not catch stale financial data; an 83 percent draft could be sent with no warning. Stated impact: the product knowingly exposes a client-facing preview yet does not validate the exact payload that will be signed.</td>
+          <td>Gate active refetches, refresh drafting state before send, reset acknowledgement when gaps change, require a second reviewed click after any snapshot change.</td>
+          <td>Consistent with the code read today, not verified as lineage</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p><b>The status note.</b> The remediation artifact claims fourteen of fourteen findings addressed with SQL suites and a full browser witness passing, and its own top-line stamp reads <span class="quote">Production unchanged. No deployment was performed</span>. The current send path does carry a single reviewed-snapshot binding, server-side trusted-IP capture, and atomic execution, which is the shape those fixes describe, and the optimistic-concurrency guards on send are visible in the migration ledger. That is consistency, not lineage. <b>Before Wave 2 puts a heavier ceremony and a keepsake on top of the signed payload, someone should confirm against the deploy record that F01, F05 and F07 are live in prod</b>, because every one of them concerns the exact numbers and dates a homeowner is asked to put her name to, and the Record of Decision would print them.</p>
+
+  <hr>
+  <p class="recorded">Prepared 3 September 2026 &middot; nine contributors &middot; one living record of one engagement.</p>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---- choice rows ----
+  var choices = document.querySelectorAll('#choices .choice');
+
+  function pickRow(row) {
+    Array.prototype.forEach.call(choices, function (r) {
+      r.classList.remove('on');
+      r.setAttribute('aria-checked', 'false');
+      r.setAttribute('tabindex', '-1');
+    });
+    row.classList.add('on');
+    row.setAttribute('aria-checked', 'true');
+    row.setAttribute('tabindex', '0');
+  }
+
+  Array.prototype.forEach.call(choices, function (row, i) {
+    row.setAttribute('role', 'radio');
+    row.setAttribute('aria-checked', row.classList.contains('on') ? 'true' : 'false');
+    row.setAttribute('tabindex', row.classList.contains('on') ? '0' : '-1');
+    row.addEventListener('click', function () { pickRow(row); });
+    row.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickRow(row); return; }
+      var step = 0;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') step = 1;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') step = -1;
+      if (!step) return;
+      e.preventDefault();
+      var next = choices[(i + step + choices.length) % choices.length];
+      pickRow(next);
+      next.focus();
+    });
+  });
+
+  // ---- outcome vocabulary for the sealed state ----
+  var outcomes = {
+    Approved: {
+      cls: 'stamp s-approved',
+      said: 'Approved &middot; 3 September 2026',
+      after: 'Three pieces order the moment the studio places them.'
+    },
+    Returned: {
+      cls: 'stamp s-returned single',
+      said: 'Returned for changes &middot; 3 September 2026',
+      after: 'Nothing is ordered. Leah has your note and a new edition follows.'
+    },
+    Held: {
+      cls: 'stamp s-held',
+      said: 'Held &middot; 3 September 2026',
+      after: 'Nothing moves and nothing is decided until you and Leah have talked.'
+    }
+  };
+
+  function chosenWord() {
+    var on = document.querySelector('#choices .choice.on');
+    var w = on && on.getAttribute('data-word');
+    return outcomes[w] ? w : 'Approved';
+  }
+
+  // ---- scored press-and-hold ----
+  function wireHold(btnId, fillId, onComplete) {
+    var btn = document.getElementById(btnId);
+    var fill = document.getElementById(fillId);
+    if (!btn || !fill) return;
+    var timer = null;
+    var done = false;
+
+    function start(e) {
+      if (done) return;
+      if (e && e.type === 'pointerdown') e.preventDefault();
+      if (reduce) { finish(); return; }
+      fill.style.transition = 'transform 1200ms linear';
+      fill.style.transform = 'scaleX(1)';
+      timer = window.setTimeout(finish, 1200);
+    }
+    function cancel() {
+      if (done) return;
+      if (timer) { window.clearTimeout(timer); timer = null; }
+      fill.style.transition = 'transform 200ms ease-out';
+      fill.style.transform = 'scaleX(0)';
+    }
+    function finish() {
+      if (done) return;
+      done = true;
+      if (timer) { window.clearTimeout(timer); timer = null; }
+      fill.style.transition = 'none';
+      fill.style.transform = 'scaleX(1)';
+      onComplete();
+    }
+
+    btn.addEventListener('pointerdown', start);
+    btn.addEventListener('pointerup', cancel);
+    btn.addEventListener('pointerleave', cancel);
+    btn.addEventListener('pointercancel', cancel);
+    btn.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); finish(); }
+    });
+
+    return {
+      reset: function () {
+        done = false;
+        fill.style.transition = 'none';
+        fill.style.transform = 'scaleX(0)';
+      }
+    };
+  }
+
+  var actLive = document.getElementById('act-live');
+  var actSealed = document.getElementById('act-sealed');
+  var actHold = wireHold('holdBtn', 'holdFill', function () {
+    var word = chosenWord();
+    var o = outcomes[word];
+    var stamp = document.getElementById('sealStamp');
+    var stampWord = document.getElementById('sealWord');
+    var said = document.getElementById('sealSaid');
+    var after = document.getElementById('sealAfter');
+    if (stamp) stamp.className = o.cls;
+    if (stampWord) stampWord.textContent = word;
+    if (said) said.innerHTML = o.said;
+    if (after) after.textContent = o.after;
+    if (actLive) actLive.hidden = true;
+    if (actSealed) actSealed.hidden = false;
+  });
+  var replay = document.getElementById('replayBtn');
+  if (replay) {
+    replay.addEventListener('click', function () {
+      if (actSealed) actSealed.hidden = true;
+      if (actLive) actLive.hidden = false;
+      if (actHold) actHold.reset();
+      var b = document.getElementById('holdBtn');
+      if (b) b.focus();
+    });
+  }
+
+  var gateBox = document.getElementById('gateBox');
+  var sealedBox = document.getElementById('sealedBox');
+  var spineDemo = document.getElementById('spineDemo');
+  var signHold = wireHold('signBtn', 'signFill', function () {
+    if (gateBox) gateBox.hidden = true;
+    if (sealedBox) sealedBox.hidden = false;
+    // the payoff: the break closes and the line is drawn through.
+    // under reduced motion the CSS transition is off, so it is simply there.
+    if (spineDemo) spineDemo.classList.add('closed');
+  });
+  var spineReplay = document.getElementById('spineReplay');
+  if (spineReplay) {
+    spineReplay.addEventListener('click', function () {
+      if (sealedBox) sealedBox.hidden = true;
+      if (gateBox) gateBox.hidden = false;
+      if (spineDemo) spineDemo.classList.remove('closed');
+      if (signHold) signHold.reset();
+      var b = document.getElementById('signBtn');
+      if (b) b.focus();
+    });
+  }
+})();
+</script>
