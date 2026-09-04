@@ -19,6 +19,14 @@ struct DecisionDeferSheet: View {
     @State private var note: String = ""
     @Environment(\.dismiss) private var dismiss
 
+    /// `W1-C-15`: the note box was a hard 120 pt minimum while the text inside
+    /// it rides the type ramp, so at accessibility-XXXL the preview clipped its
+    /// own draft mid-line — "Oak vs Wind…" — on the sheet whose whole purpose
+    /// is to let the client read what they are about to send. The box grows on
+    /// the same ramp as its text, the way `AuthStatusSlot` already does.
+    @ScaledMetric(relativeTo: .subheadline)
+    private var noteMinHeight: CGFloat = 120
+
     private var trimmed: String {
         note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -41,7 +49,7 @@ struct DecisionDeferSheet: View {
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.primary)
                     .scrollContentBackground(.hidden)
-                    .frame(minHeight: 120)
+                    .frame(minHeight: noteMinHeight)
                     .padding(12)
                     .background(PatinaColors.Background.secondary)
                     .clipShape(RoundedRectangle(cornerRadius: 12))

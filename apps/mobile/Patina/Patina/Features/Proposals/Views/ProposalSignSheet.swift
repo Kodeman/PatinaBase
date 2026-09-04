@@ -109,9 +109,17 @@ struct ProposalSignSheet: View {
                             .minimumScaleFactor(0.6)
                             .allowsTightening(true)
                             .frame(width: labelColumnWidth, alignment: .leading)
+                        // W1-B-10: `C-06`'s label fix took and the VALUE broke
+                        // instead — at accessibility-extra-large TOTAL read
+                        // "$18,500 / .00", a contract's money figure split
+                        // after the thousands group. Same treatment as the
+                        // label: one line, tightened, scaled, never split.
                         Text(line.value)
                             .font(PatinaTypography.bodySmallMedium)
                             .foregroundStyle(PatinaColors.Text.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .allowsTightening(true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }

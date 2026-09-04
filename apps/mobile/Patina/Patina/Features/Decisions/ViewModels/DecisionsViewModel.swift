@@ -22,7 +22,7 @@ final class DecisionsListViewModel {
         do {
             self.decisions = try await DecisionsAPIClient.shared.listPending()
         } catch {
-            self.error = "Couldn't load decisions"
+            self.error = "Couldn’t load decisions"
             #if DEBUG
             PatinaLog.ui.error("[Decisions] list failed: \(error.localizedDescription)")
             #endif
@@ -173,7 +173,7 @@ final class DecisionDetailViewModel {
         self.selectedOptionId = o.first(where: { $0.selected == true })?.id
         self.isLoading = false
         if self.decision == nil {
-            self.error = "Couldn't load this decision"
+            self.error = "Couldn’t load this decision"
         }
         // Fire-and-forget "seen" stamp. Failure here is non-fatal — it only
         // affects the designer's read receipt, never the client's flow.
@@ -190,6 +190,14 @@ final class DecisionDetailViewModel {
     /// instead of drawing them.
     var hasNoRenderableOptions: Bool {
         !options.isEmpty && !options.contains { $0.hasRenderableContent }
+    }
+
+    /// `W1-B-03`: the decision loaded and carries **no options row at all**.
+    /// Distinct from `hasNoRenderableOptions`, which is about options that
+    /// exist and render blank. Gated on the decision having loaded, so the
+    /// line is never printed over a screen that is still fetching.
+    var hasNoOptionsAtAll: Bool {
+        decision != nil && !isLoading && options.isEmpty
     }
 
     /// Whether the decision is already resolved (any option chosen, or the

@@ -402,30 +402,39 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
                 // uncropped bounds into the union.
                 .accessibilityHidden(true)
 
+            // W1-C-04: the badge and the two chrome buttons used to be two
+            // independent overlays in one ZStack, so at XXXL the pill grew
+            // under the heart ("Good matc" with the heart drawn on top of it)
+            // and at AX3XL it overflowed the card entirely. One row instead:
+            // the pill takes what is left after the buttons have their lane,
+            // and scales rather than clipping.
+            //
             // Match badge
             // C-27: the translucent material this used to ride on inverts to a
             // light-on-light wash over a light tile — the pill measured 1.86:1
             // and the heart and ⋯ measured 2.01:1. A material's contrast is a
             // function of what is behind it; a scrim's is not.
-            Text(product.matchLabel)
-                .font(PatinaTypography.monoSmall)
-                .foregroundStyle(PatinaColors.OnDark.primary)
-                .tracking(0.3)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .patinaChromeScrim(RoundedRectangle(cornerRadius: 6))
-                .padding(8)
-
+            //
             // Save (accelerator) + ⋯ menu (U14: every card's actions
             // must be visible, not just reachable via long-press).
-            VStack {
-                HStack(spacing: 6) {
-                    Spacer()
-                    saveButton(product)
-                    menuButton(product)
-                }
-                .padding(8)
+            HStack(alignment: .top, spacing: 6) {
+                Text(product.matchLabel)
+                    .font(PatinaTypography.monoSmall)
+                    .foregroundStyle(PatinaColors.OnDark.primary)
+                    .tracking(0.3)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .allowsTightening(true)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .patinaChromeScrim(RoundedRectangle(cornerRadius: 6))
+
+                Spacer(minLength: 4)
+
+                saveButton(product)
+                menuButton(product)
             }
+            .padding(8)
         }
     }
 

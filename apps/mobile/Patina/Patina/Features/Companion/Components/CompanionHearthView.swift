@@ -479,10 +479,19 @@ private extension CompanionHearthView {
 
     private func headerText(_ content: CompanionExpandedPresentation) -> some View {
         VStack(alignment: .leading, spacing: 3) {
+            // C-06 / W1-C-03: the AX branch above already gives the title its
+            // own full-width row, and it STILL broke mid-word at
+            // accessibility-XXXL — "Want a recommendati / on?" — because
+            // `minimumScaleFactor` does nothing while wrapping is unbounded:
+            // SwiftUI wraps first, and a single word wider than the line
+            // breaks inside itself. A line ceiling is what makes the scale
+            // factor engage, so the longest word is shrunk to fit rather than
+            // split.
             Text(content.title)
                 .font(PatinaTypography.patinaVoice)
                 .foregroundStyle(PatinaColors.offWhite)
-                .minimumScaleFactor(0.7)
+                .lineLimit(3)
+                .minimumScaleFactor(0.5)
                 .allowsTightening(true)
                 .fixedSize(horizontal: false, vertical: true)
 
