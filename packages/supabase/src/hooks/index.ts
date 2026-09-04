@@ -612,7 +612,10 @@ export type {
   RoomScanStyleSignals,
   RoomScanFilters,
 } from "./use-room-scans";
-export type { RoomScanOwnerKind, RoomScanWithProvenance } from "./use-room-scans";
+export type {
+  RoomScanOwnerKind,
+  RoomScanWithProvenance,
+} from "./use-room-scans";
 export {
   useRoomScanPhotos,
   useRoomScanCovers,
@@ -1499,9 +1502,7 @@ export type {
   BoardItemFeedbackRow,
 } from "./board-verdicts";
 export { useBoardReactionStatuses } from "./use-board-reaction-status";
-export {
-  useBoardsReactionRollup,
-} from "./use-board-reaction-rollup";
+export { useBoardsReactionRollup } from "./use-board-reaction-rollup";
 export type {
   BoardReactionRollupEntry,
   BoardsReactionRollup,
@@ -1907,3 +1908,18 @@ export {
   type ProjectVisitCapture,
   type ProjectVisitRow,
 } from "./use-project-visits";
+export {
+  projectNotesKeys,
+  useProjectNotes,
+  useSendProjectNote,
+  useRetireProjectNote,
+  useProjectNotesRealtime,
+} from "./use-project-notes";
+export type { ProjectNoteEnclosure, ProjectNote } from "./use-project-notes";
+export {
+  readingMarkKeys,
+  useReadingMark,
+  useMarkProjectRead,
+  usePreviousReadingMark,
+} from "./use-reading-marks";
+export type { MarkProjectReadInput } from "./use-reading-marks";
