@@ -33,6 +33,7 @@ import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
 import { thresholdPhases } from '@/lib/threshold/canonical-phases';
 import {
   deriveThreshold,
+  parseSourceDate,
   type ThresholdApproval,
   type ThresholdMark,
   type ThresholdNote,
