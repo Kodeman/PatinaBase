@@ -32,6 +32,59 @@ const VALE: MilestoneDetail[] = [
   phase({ id: 'ph6', index: 5, title: 'Completion', phase: 'final_walkthrough', status: 'upcoming' }),
 ];
 
+/**
+ * A real project's phases: five main-lane chapters whose `phase_key` is null,
+ * which is the shape that used to collapse the whole pole onto "Discovery".
+ * One of them ("Site survey") names no client phase at all, so it stands under
+ * its own name.
+ */
+const ASPEN: MilestoneDetail[] = [
+  phase({
+    id: 'a1',
+    index: 0,
+    title: 'Schematic Design',
+    phase: '',
+    status: 'completed',
+    startDate: '2026-03-02',
+    completionDate: '2026-03-27',
+  }),
+  phase({
+    id: 'a2',
+    index: 1,
+    title: 'Design Development',
+    phase: '',
+    status: 'completed',
+    startDate: '2026-04-01',
+    completionDate: '2026-05-29',
+  }),
+  phase({
+    id: 'a3',
+    index: 2,
+    title: 'Site survey',
+    phase: '',
+    status: 'in_progress',
+    startDate: '2026-06-01',
+    targetDate: '2026-06-30',
+  }),
+  phase({
+    id: 'a4',
+    index: 3,
+    title: 'Installation & Styling',
+    phase: 'installation',
+    status: 'pending',
+    targetDate: '2026-10-14',
+  }),
+  phase({
+    id: 'a5',
+    index: 4,
+    title: 'Completion',
+    phase: '',
+    status: 'pending',
+    startDate: '2026-10-20',
+    targetDate: '2026-10-27',
+  }),
+];
+
 const SECTIONS = [
   { id: 'doorstep', label: 'You stand at the doorstep' },
   { id: 'key', label: 'You are reading the key' },
@@ -71,6 +124,53 @@ function captureObserver() {
       }),
   };
 }
+
+describe('StoryPole — a graduation per phase, in its own name', () => {
+  function aspen() {
+    return <StoryPole phases={splitSpinePhases(ASPEN)} sections={SECTIONS} />;
+  }
+
+  it('names every phase for itself, and never four times over', () => {
+    render(aspen());
+
+    const rail = screen.getByTestId('story-pole-rail');
+    const names = within(rail)
+      .getAllByRole('listitem')
+      .map((item) => item.querySelector('b')?.textContent);
+
+    expect(names).toEqual([
+      'Design',
+      'Design Refinement',
+      'Site survey',
+      'Installation',
+      'Completion',
+    ]);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('dates each graduation the way the pole speaks a span', () => {
+    render(aspen());
+
+    expect(screen.getByTestId('story-pole-span-a1')).toHaveTextContent('March');
+    expect(screen.getByTestId('story-pole-span-a2')).toHaveTextContent('April–May');
+    expect(screen.getByTestId('story-pole-span-a3')).toHaveTextContent('June');
+    expect(screen.getByTestId('story-pole-span-a4')).toHaveTextContent('week of 12 October');
+    expect(screen.getByTestId('story-pole-span-a5')).toHaveTextContent('October');
+  });
+
+  it('holds the open chapter, and gives one dot to each of the five phases', () => {
+    render(aspen());
+
+    const held = screen.getByTestId('story-pole-graduation-a3');
+    expect(held).toHaveAttribute('data-held', 'true');
+    expect(held).toHaveTextContent('the house stands here');
+
+    const dots = Array.from(screen.getByTestId('story-pole-dots').children).map((dot) =>
+      dot.getAttribute('data-dot'),
+    );
+    expect(dots).toEqual(['walked', 'walked', 'held', 'ahead', 'ahead']);
+  });
+});
 
 describe('StoryPole — six graduations, and one caret that moves', () => {
   it('carries the anchor and is deliberately not a threshold unit', () => {

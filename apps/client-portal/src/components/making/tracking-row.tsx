@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import type { FFEStageKey } from '@patina/types';
 
 import {
@@ -59,7 +59,11 @@ const STAGE_INK = STAGE_PHASE.map(
 export interface TrackingRowProps {
   /** The piece, as the client knows it. */
   name: string;
-  /** The selection's image. Null draws a quiet placeholder block, not a gap. */
+  /**
+   * The selection's image. Null draws a quiet placeholder block, not a gap —
+   * and so does a URL that fails to load, because a browser's broken-image
+   * glyph is the one mark on this page nobody chose to put there.
+   */
   imageUrl: string | null;
   /** What was agreed for it, in cents. Omitted when the line carries no price. */
   priceCents: number | null;
@@ -82,6 +86,10 @@ export function TrackingRow({ name, imageUrl, priceCents, status }: TrackingRowP
   const stopIndex = journeyStageIndexForStatus(status);
   const stage = GOODS_JOURNEY_STAGES[stopIndex];
   const ink = STAGE_INK[stopIndex];
+  // Keyed on the URL so a row re-pointed at a good image draws it again
+  // instead of staying quiet because an earlier one 404'd.
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const drawImage = !!imageUrl && brokenUrl !== imageUrl;
 
   return (
     <div
@@ -89,11 +97,12 @@ export function TrackingRow({ name, imageUrl, priceCents, status }: TrackingRowP
       data-journey-stop={stage}
       className="flex items-start gap-4 border-b border-[var(--border-subtle)] py-3.5"
     >
-      {imageUrl ? (
+      {drawImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={imageUrl}
+          src={imageUrl as string}
           alt=""
+          onError={() => setBrokenUrl(imageUrl)}
           className="h-16 w-16 shrink-0 rounded-[3px] object-cover"
           data-testid="tracking-row-thumb"
         />

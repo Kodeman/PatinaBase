@@ -37,12 +37,35 @@ export interface PlanKeyGeometry {
   rects: Array<{ roomId: string; x: number; y: number; w: number; h: number; anchor: string }>;
   labels: Array<{ roomId: string; x: number; y: number; text: string }>;
   road: { x1: number; x2: number; y: number; anchor: 'road' };
+  /** The baseline the road's own name sits on — the room labels' line. */
+  roadLabelY: number;
   doorMarks: Array<{ roomId: string; x: number; y1: number; y2: number; kind: MarkKind; anchor: string }>;
   leaders: Array<{ fromX: number; fromY: number; toX: number; toY: number; text: string }>;
 }
 
 /** The mark's stroke, in the same user units as the geometry. Brass, 3 wide. */
 export const PLAN_MARK_STROKE = 3;
+
+/** Mono in the drawing, in user units. Desktop, where the drawing has room. */
+export const LEADER_TYPE = 13;
+/** One mono character at `LEADER_TYPE`, rounded up so the budget never lies. */
+const LEADER_CHAR_W = 8;
+/**
+ * A leader's text budget. Mono at 13 units spends 8 units a character, so 22
+ * characters is the longest label the drawing can letter without pushing the
+ * house off its own sheet — and it is long enough for every mark the key has
+ * ever drawn ("Paintwork and plaster", "The library door").
+ */
+export const MAX_LEADER_CHARS = 22;
+/** The gap between the leader's elbow and the first letter. */
+export const LEADER_TEXT_DX = 4;
+
+/** A label cut to the drawing's budget, with the cut marked. */
+export function fitLeaderText(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= MAX_LEADER_CHARS) return trimmed;
+  return `${trimmed.slice(0, MAX_LEADER_CHARS - 1).trimEnd()}…`;
+}
 
 const ORIGIN_X = 18;
 const BAND_Y = 30;
@@ -155,23 +178,34 @@ export function planKeyGeometry(rooms: KeyRoom[], marks: KeyMark[]): PlanKeyGeom
             fromY: BAND_Y + BAND_H,
             toX: rect.x + DOOR_LEADER_RUN,
             toY: BAND_Y + BAND_H + DOOR_LEADER_DROP,
-            text: mark.label,
+            text: fitLeaderText(mark.label),
           }
         : {
             fromX: rect.x,
             fromY: BAND_Y,
             toX: rect.x + WALL_LEADER_RUN,
             toY: BAND_Y - WALL_LEADER_RISE,
-            text: mark.label,
+            text: fitLeaderText(mark.label),
           },
     );
   }
 
+  // The sheet is cut to fit its own lettering. A viewBox drawn to the road
+  // alone clips a leader's last characters ("Paintwork and p"), and an SVG
+  // clips in silence — so the widest leader's last letter sets the right edge
+  // wherever it lands past the road.
+  const lettersRight = leaders.reduce(
+    (right, leader) =>
+      Math.max(right, leader.toX + LEADER_TEXT_DX + leader.text.length * LEADER_CHAR_W),
+    0,
+  );
+
   return {
-    viewBox: `0 0 ${road.x2 + RIGHT_MARGIN} ${VIEW_H}`,
+    viewBox: `0 0 ${Math.max(road.x2, lettersRight) + RIGHT_MARGIN} ${VIEW_H}`,
     rects,
     labels,
     road,
+    roadLabelY: BAND_Y + BAND_H + LABEL_DY,
     doorMarks,
     leaders,
   };

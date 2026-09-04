@@ -1,7 +1,12 @@
 import { render, screen } from '@testing-library/react';
 
 import type { ThresholdMark } from '@/lib/threshold/derive';
-import { PLAN_MARK_STROKE, planKeyGeometry, type KeyRoom } from '@/lib/threshold/plan-key';
+import {
+  fitLeaderText,
+  PLAN_MARK_STROKE,
+  planKeyGeometry,
+  type KeyRoom,
+} from '@/lib/threshold/plan-key';
 
 import {
   PLAN_PHONE_CONTENT_PX,
@@ -192,5 +197,59 @@ describe('PlanKey — a key on a drawing', () => {
     );
     expect(hrefs).toEqual(['#road']);
     expect(screen.queryByTestId('plan-key-item-open')).not.toBeInTheDocument();
+  });
+
+  it('letters a long mark to the budget, inside the sheet it widened for it', () => {
+    const long = {
+      ...MARKS[1],
+      label: 'Paintwork and plaster to the whole upper floor',
+    };
+    const geo = geometry(ROOMS, [long]);
+    const { container } = render(
+      <PlanKey
+        geometry={geo}
+        marks={[long]}
+        keySentence="One mark stands open on this drawing."
+      />,
+    );
+
+    const lettered = Array.from(container.querySelectorAll('svg g text')).map(
+      (node) => node.textContent,
+    );
+    expect(lettered).toContain(fitLeaderText(long.label));
+    // The key list still says the mark in full; only the drawing is cut.
+    expect(screen.getByTestId(`plan-key-item-${long.id}`)).toHaveTextContent(long.label);
+
+    const width = Number(geo.viewBox.split(/\s+/)[2]);
+    const leader = geo.leaders[0];
+    expect(width).toBeGreaterThanOrEqual(leader.toX + leader.text.length * 8);
+  });
+
+  it('sets the road below its dash, right-aligned on the label baseline', () => {
+    const geo = geometry(ROOMS, []);
+    const { container } = render(
+      <PlanKey geometry={geo} marks={[]} keySentence="Nothing stands open on this drawing." />,
+    );
+
+    const road = Array.from(container.querySelectorAll('svg text')).find(
+      (node) => node.textContent === 'The road',
+    );
+    expect(road).toBeDefined();
+    expect(road).toHaveAttribute('text-anchor', 'end');
+    expect(Number(road?.getAttribute('y'))).toBe(geo.roadLabelY);
+    expect(Number(road?.getAttribute('y'))).toBeGreaterThan(geo.road.y);
+  });
+
+  it('keeps a lettered drawing above eleven rendered pixels on a phone', () => {
+    const long = {
+      ...MARKS[1],
+      roomId: 'r5',
+      label: 'Paintwork and plaster to the whole upper floor',
+    };
+    for (const count of [3, 4, 5]) {
+      const phoneViewBox = planPhoneViewBox(planKeyGeometry(rooms(count), [long]).viewBox);
+      const viewBoxWidth = Number(phoneViewBox.split(/\s+/)[2]);
+      expect((PLAN_PHONE_TYPE * PLAN_PHONE_CONTENT_PX) / viewBoxWidth).toBeGreaterThanOrEqual(11);
+    }
   });
 });

@@ -4,7 +4,12 @@ import { useSyncExternalStore } from 'react';
 
 import { moneyInWords } from '@/components/making/standing-sentence';
 import type { ThresholdMark } from '@/lib/threshold/derive';
-import { PLAN_MARK_STROKE, type PlanKeyGeometry } from '@/lib/threshold/plan-key';
+import {
+  LEADER_TEXT_DX,
+  LEADER_TYPE,
+  PLAN_MARK_STROKE,
+  type PlanKeyGeometry,
+} from '@/lib/threshold/plan-key';
 
 /* ── The plan key ───────────────────────────────────────────────────────────
    A key on a drawing, not a floor plan: the whole house in one band of rooms,
@@ -26,8 +31,6 @@ import { PLAN_MARK_STROKE, type PlanKeyGeometry } from '@/lib/threshold/plan-key
    the key list beside it still names every mark in full-size prose.
    ────────────────────────────────────────────────────────────────────────── */
 
-/** Mono in the drawing, in user units. Desktop, where the drawing has room. */
-const LEADER_TYPE = 13;
 /** …and on a phone, where it does not. Mirrors the mock's ≤600px bump. */
 export const PLAN_PHONE_TYPE = 17;
 /** A 390px phone, less the sheet's own clamp(14px,4vw,26px) gutters. */
@@ -158,9 +161,11 @@ export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
               y2={geometry.road.y}
               strokeDasharray="6 5"
             />
+            {/* On the room labels' own baseline, under the dash: at the
+                road's mid-height the words sat across the dashes they name. */}
             <text
               x={geometry.road.x2}
-              y={geometry.road.y + 30}
+              y={geometry.roadLabelY}
               textAnchor="end"
               fontSize={type}
               className={TEXT_CLASS}
@@ -185,7 +190,12 @@ export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
           {geometry.leaders.map((leader) => (
             <g key={`${leader.text}-${leader.toX}-${leader.toY}`}>
               <line x1={leader.fromX} y1={leader.fromY} x2={leader.toX} y2={leader.toY} />
-              <text x={leader.toX + 4} y={leader.toY + 4} fontSize={type} className={TEXT_CLASS}>
+              <text
+                x={leader.toX + LEADER_TEXT_DX}
+                y={leader.toY + 4}
+                fontSize={type}
+                className={TEXT_CLASS}
+              >
                 {leader.text}
               </text>
             </g>

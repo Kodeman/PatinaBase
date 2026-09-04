@@ -12,6 +12,7 @@ function ledger(overrides: Partial<HouseLedgerModel> = {}): HouseLedgerModel {
     owedInvoiceCount: 1,
     heldCents: 144_000,
     awaitingCents: 689_000,
+    overageLine: null,
     ...overrides,
   };
 }
@@ -33,10 +34,54 @@ describe('HouseLedger — the house in figures, with its words', () => {
     );
   });
 
-  it('says nothing about agreed-of-planned when either half is unknown', () => {
-    render(<HouseLedger ledger={ledger({ plannedCents: null })} />);
+  it('stands on whichever half it knows, and says nothing with neither', () => {
+    const { unmount } = render(<HouseLedger ledger={ledger({ plannedCents: null })} />);
+    expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
+      'The house stands at $61,400 agreed.',
+    );
+    unmount();
 
+    const planned = render(<HouseLedger ledger={ledger({ agreedCents: null })} />);
+    expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
+      'The house stands at $85,000 planned.',
+    );
+    planned.unmount();
+
+    render(<HouseLedger ledger={ledger({ agreedCents: null, plannedCents: null })} />);
     expect(screen.queryByTestId('house-ledger-top')).not.toBeInTheDocument();
+  });
+
+  it('carries the column with the sentence when only one row stands', () => {
+    render(
+      <HouseLedger
+        ledger={ledger({ heldCents: null, awaitingCents: 0 })}
+      />,
+    );
+
+    expect(screen.getByTestId('house-ledger-top')).toBeInTheDocument();
+    expect(screen.getByTestId('house-ledger-owed')).toBeInTheDocument();
+    expect(screen.queryByTestId('house-ledger-held')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('house-ledger-awaiting')).not.toBeInTheDocument();
+  });
+
+  it('notes the room standing past its target, and the one absorbing it', () => {
+    render(
+      <HouseLedger
+        ledger={ledger({
+          overageLine: 'The library stands about eleven hundred past its target; the bedroom absorbs it.',
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId('house-ledger-overage')).toHaveTextContent(
+      'The library stands about eleven hundred past its target; the bedroom absorbs it.',
+    );
+  });
+
+  it('says nothing about overage when no room has passed its target', () => {
+    render(<HouseLedger ledger={ledger()} />);
+
+    expect(screen.queryByTestId('house-ledger-overage')).not.toBeInTheDocument();
   });
 
   it('gives owed, held and awaiting each a figure and a sentence', () => {

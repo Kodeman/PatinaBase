@@ -241,6 +241,7 @@ export function Threshold({
   // ── every hook, before any branch ──────────────────────────────────────────
   const hydrated = useHydrated();
   const { user, signOut } = useAuth();
+  const preparedFor = words(user?.name);
   const proposalsQuery = useClientProposals();
   const selectionsQuery = useClientSelections(projectId);
   const invoicesQuery = useProjectInvoices(projectId);
@@ -396,6 +397,10 @@ export function Threshold({
     previousReadAt,
     today: today ?? EPOCH,
     liveAuthorizedTotalCents: planQuery.data?.liveAuthorizedTotalCents ?? null,
+    plannedTotalCents: (planQuery.data?.lines ?? []).reduce(
+      (sum, line) => sum + (line.targetCents || 0),
+      0,
+    ),
     heldDrawCentsByProposalId,
     selectionUpdatedAt,
   });
@@ -404,13 +409,22 @@ export function Threshold({
   const openChapter = openChapterOf(phases, project.currentPhase);
   const studioName = words(identityQuery.data?.name);
 
+  // The plan and the trade bundles are in this gate for the same reason the
+  // other six are: they are not decoration on a settled page, they DECIDE what
+  // it says. The plan carries every room's target — so every variance line and
+  // the ledger's planned figure — and the bundles carry what is held back. A
+  // page that renders before them prints "about eleven hundred past its
+  // target" and then rewrites it, which is the one thing this surface may
+  // never do.
   const loading =
     projectApprovalsLoading ||
     proposalsQuery.isPending ||
     selectionsQuery.isPending ||
     invoicesQuery.isPending ||
     notesQuery.isPending ||
-    roomsQuery.isPending;
+    roomsQuery.isPending ||
+    planQuery.isPending ||
+    heldBundles.some((bundle) => bundle.isPending);
 
   // ── the doorstep's sentence ────────────────────────────────────────────────
   const standing =
@@ -652,7 +666,7 @@ export function Threshold({
       projectName={project.name}
       phaseLabel={openChapter.label ?? null}
       monthLabel={today ? monthAndYear(today) : null}
-      preparedFor={user?.name ?? null}
+      preparedFor={preparedFor}
     />
   );
 

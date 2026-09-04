@@ -452,11 +452,63 @@ describe('deriveThreshold — the ledger and the letterbox', () => {
     expect(model.ledger.plannedCents).toBe(939_000);
   });
 
-  it('takes the agreed figure only when it is handed in', () => {
+  it('takes the plan’s own planned total over the sum of the rooms’ targets', () => {
+    const rooms = [
+      { ...ENTRY, targetCents: 250_000 },
+      { ...LIBRARY, targetCents: 689_000 },
+      STAIR,
+    ];
+    expect(deriveThreshold(input({ rooms, plannedTotalCents: 2_380_000 })).ledger.plannedCents).toBe(
+      2_380_000,
+    );
+    // A plan with nothing planned in it falls to the rooms, not to silence.
+    expect(deriveThreshold(input({ rooms, plannedTotalCents: 0 })).ledger.plannedCents).toBe(
+      939_000,
+    );
+  });
+
+  it('stands at the live authorized total, and at what the bands agreed without one', () => {
     expect(deriveThreshold(input()).ledger.agreedCents).toBeNull();
     expect(
       deriveThreshold(input({ liveAuthorizedTotalCents: 1_825_000 })).ledger.agreedCents,
     ).toBe(1_825_000);
+
+    const agreed = {
+      origin: 'commercial' as const,
+      selections: [
+        selection({ id: 's-1', roomId: 'r-lib', clientLineTotalCents: 400_000 }),
+        selection({ id: 's-2', roomId: 'r-ent', clientLineTotalCents: 120_000 }),
+      ],
+    };
+    expect(deriveThreshold(input({ selections: agreed })).ledger.agreedCents).toBe(520_000);
+    // The plan still wins where it has been read.
+    expect(
+      deriveThreshold(input({ selections: agreed, liveAuthorizedTotalCents: 1_825_000 })).ledger
+        .agreedCents,
+    ).toBe(1_825_000);
+  });
+
+  it('notes the room past its target and the one whose headroom absorbs it', () => {
+    const model = deriveThreshold(
+      input({
+        rooms: [
+          { ...ENTRY, targetCents: 100_000 },
+          { ...LIBRARY, targetCents: 900_000 },
+          STAIR,
+        ],
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({ id: 's-1', roomId: 'r-ent', clientLineTotalCents: 210_000 }),
+            selection({ id: 's-2', roomId: 'r-lib', clientLineTotalCents: 400_000 }),
+          ],
+        },
+      }),
+    );
+    expect(model.ledger.overageLine).toBe(
+      'The Entry stands about eleven hundred past its target; the Library absorbs it.',
+    );
+    expect(deriveThreshold(input()).ledger.overageLine).toBeNull();
   });
 
   it('holds the draw behind each wall, when the draws are handed in', () => {

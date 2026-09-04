@@ -20,7 +20,13 @@ export function useAuth() {
       user: {
         id: user.id,
         email: user.email || '',
-        name: (user.user_metadata?.displayName as string) || (user.user_metadata?.name as string) || null,
+        // `full_name` is what Supabase's own sign-up path and public.profiles
+        // both write; without it a seeded or invited user reads as nameless.
+        name:
+          (user.user_metadata?.displayName as string) ||
+          (user.user_metadata?.name as string) ||
+          (user.user_metadata?.full_name as string) ||
+          null,
         roles,
         permissions,
       },
