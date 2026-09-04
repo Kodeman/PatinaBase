@@ -91,9 +91,20 @@ END; $$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_ffe_actor('f5000000-0000-4000-8000-000000000002');
-DO $$ BEGIN
+DO $$
+DECLARE v_projection jsonb;
+BEGIN
   ASSERT (SELECT count(*)=0 FROM public.project_ffe_items WHERE project_id='f5100000-0000-4000-8000-000000000001'),'client raw FF&E read must fail closed';
-  ASSERT jsonb_array_length(public.get_client_project_selections('f5100000-0000-4000-8000-000000000001')->'selections')>0,'curated client reader must remain available';
+  -- 00565: the curated reader answers only for lines standing under an EXECUTED
+  -- commercial instrument. This fixture carries no commercial documents at all,
+  -- so what must hold is that the reader still ANSWERS the client rather than
+  -- erroring — legacy origin, empty list — not that it hands her lines she has
+  -- never signed for.
+  v_projection:=public.get_client_project_selections('f5100000-0000-4000-8000-000000000001');
+  ASSERT v_projection->>'origin'='legacy',
+    'a project with no commercial documents must read legacy, got '||COALESCE(v_projection->>'origin','<missing>');
+  ASSERT jsonb_array_length(v_projection->'selections')=0,
+    'curated client reader must expose nothing the client has not signed for';
 END; $$;
 
 SELECT pg_temp.assume_ffe_actor('f5000000-0000-4000-8000-000000000001');

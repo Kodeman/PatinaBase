@@ -126,11 +126,60 @@ BEGIN
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000002');
   ASSERT position('/review/chair.webp' in public.get_client_project_review_bundle(v_edition)::text)=0,
     'client bundle must not expose private derivative paths';
+  -- 00565 re-contracts the curated reader. Until 00423 it emitted the client's
+  -- own signed figures; 00433 replaced that with the studio's LIVE working-row
+  -- prices mislabelled as the client's, and 00439 withdrew those. 00565 restores
+  -- the signed snapshot and leaves the live working row withdrawn. So the
+  -- contract asserted here is no longer "no price" but "only the signed price,
+  -- and only for lines standing under an executed instrument".
+  --
+  -- The fixture's two placements carry no instrument, so one of them is signed
+  -- here, at a client figure deliberately different from the live working-row
+  -- price. That difference is what makes the price assertion below load-bearing.
+  PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000001');
+  INSERT INTO public.proposals(id,project_id,designer_id,title,status,document_kind,commercial_state,total_amount,subtotal)
+  VALUES('fa700000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000001',
+    'Release Authorization No. 1','accepted','furnishings_authorization','executed',165000,165000);
+  INSERT INTO public.project_commercial_documents(id,project_id,proposal_id,document_kind,wave_name,is_origin,bound_at,executed_at,created_by)
+  VALUES('fa700000-0000-4000-8000-000000000002','fa100000-0000-4000-8000-000000000001','fa700000-0000-4000-8000-000000000001',
+    'furnishings_authorization','Authorization No. 1',false,now(),now(),'fa000000-0000-4000-8000-000000000001');
+  INSERT INTO public.furnishing_authorization_items(id,commercial_document_id,source_ffe_item_id,product_id,name,room_name,
+    category,item_type,quantity,client_unit_price_cents,client_line_total_cents,trade_unit_cost_cents,markup_percent,sort_order)
+  VALUES('fa700000-0000-4000-8000-000000000003','fa700000-0000-4000-8000-000000000002',(v_selected->>'selectionId')::uuid,
+    'fa300000-0000-4000-8000-000000000001','Release Chair','Throughout','seating','fixed',1,165000,165000,90000,83.33,0);
+  -- guard_project_ffe_purchase_authority freezes provenance once
+  -- source_commercial_document_id is set, so both columns move together, once.
+  UPDATE public.project_ffe_items
+     SET source_commercial_document_id='fa700000-0000-4000-8000-000000000002',
+         source_authorization_item_id='fa700000-0000-4000-8000-000000000003'
+   WHERE id=(v_selected->>'selectionId')::uuid;
+  PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000002');
+
   v_projection:=public.get_client_project_selections('fa100000-0000-4000-8000-000000000001');
-  ASSERT jsonb_array_length(v_projection->'selections')=1,'curated projection must expose selected lines only';
-  ASSERT position('price' in lower(v_projection::text))=0
-    AND v_projection->'selections'->0 ? 'logisticsStatus',
-    'curated selection projection must omit price and retain allowlisted logistics state';
+  ASSERT jsonb_array_length(v_projection->'selections')=1,
+    'curated projection must expose only lines standing under an executed instrument';
+  ASSERT v_projection->'selections'->0->>'id'=(v_selected->>'selectionId')
+    AND v_projection->'selections'->0->'instrument'->>'documentId'='fa700000-0000-4000-8000-000000000002',
+    'the exposed line must be the signed one, and must name the instrument it stands under';
+  ASSERT (SELECT unit_price_cents<>165000 FROM public.project_ffe_items WHERE id=(v_selected->>'selectionId')::uuid),
+    'FIXTURE: the live working-row price must differ from the signed figure, or the price assertion proves nothing';
+  ASSERT (v_projection->'selections'->0->>'clientUnitPriceCents')::integer=165000
+    AND (v_projection->'selections'->0->>'clientLineTotalCents')::integer=165000,
+    'the emitted price must be the frozen furnishing_authorization_items client figure, never the live working row';
+  -- tradeJourney is exempt by name: it is the trade scope's progress vocabulary
+  -- (00423), carries no money, and is client-facing by design. Everything else
+  -- matching this pattern is the studio's side of the transaction.
+  ASSERT NOT EXISTS(
+    SELECT 1 FROM jsonb_array_elements(v_projection->'selections') AS line
+    CROSS JOIN LATERAL (
+      SELECT jsonb_object_keys(line) AS k
+      UNION ALL SELECT jsonb_object_keys(line->'instrument') WHERE jsonb_typeof(line->'instrument')='object'
+      UNION ALL SELECT jsonb_object_keys(line->'allowance') WHERE jsonb_typeof(line->'allowance')='object'
+    ) AS keys
+    WHERE k<>'tradeJourney' AND k ~* '(trade|cost|markup|vendor)'
+  ),'the curated projection must never carry a trade, cost, markup or vendor key at any depth';
+  ASSERT v_projection->'selections'->0 ? 'logisticsStatus',
+    'curated selection projection must retain allowlisted logistics state';
   PERFORM public.record_project_review_feedback(v_review_item,'comment','Please confirm the finish');
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000001');
   PERFORM public.revoke_project_review_access(v_edition,'Client access withdrawn');

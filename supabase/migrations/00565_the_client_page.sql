@@ -70,6 +70,21 @@
 --   markup_percent, vendor identity, purchase orders, bids. Enforced by
 --   supabase/tests/rls/project_notes_test.sql §7.
 --
+--   Two existing SQL tests asserted the 00439 contract this reverses and are
+--   RE-CONTRACTED to 00565 in the same commit as this file, not silenced:
+--     · supabase/tests/ffe/release_security_test.sql — was "curated selection
+--       projection must omit price"; now asserts the projection exposes ONLY
+--       lines under an executed instrument, that the emitted price is the frozen
+--       furnishing_authorization_items client figure and not the live
+--       project_ffe_items working row (its fixture signs one line at a
+--       deliberately different figure to make that observable), and that no key
+--       matches trade|cost|markup|vendor at any depth — tradeJourney exempt by
+--       name, being 00423's money-free progress vocabulary.
+--     · supabase/tests/ffe/domain_and_placement_test.sql — was "curated client
+--       reader must remain available" asserting a non-empty list for a fixture
+--       carrying no commercial documents; now asserts that same fixture reads
+--       origin 'legacy' with an empty selections array and does not error.
+--
 -- Reuses, never redefines: public.is_studio_comember (head body 00556) and
 -- public.is_coordination_party (00217). Policy-only predicates live in
 -- app_private (precedent 00467).
