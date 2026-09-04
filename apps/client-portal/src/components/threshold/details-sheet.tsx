@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   useProfile,
@@ -13,11 +13,11 @@ import {
   useUpdateThreadNotificationPref,
   useMuteThread,
   type NotificationPref,
-} from '@patina/supabase';
-import type { NotificationPreferences } from '@patina/shared/types';
+} from "@patina/supabase";
+import type { NotificationPreferences } from "@patina/shared/types";
 
-import { ScoredAction } from '@/components/making/scored-action';
-import { AvatarUploadField } from '@/components/account/AvatarUploadField';
+import { ScoredAction } from "@/components/making/scored-action";
+import { AvatarUploadField } from "@/components/account/AvatarUploadField";
 
 /* ── Your details ──────────────────────────────────────────────────────────
    The one place on the Threshold that is about her, not the house: the
@@ -42,12 +42,13 @@ export interface DetailsSheetProps {
 }
 
 const SECTION_HEAD_CLASS =
-  'font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]';
+  "font-mono text-[11px] font-normal uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]";
 const FIELD_LABEL_CLASS =
-  'block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)] mb-1.5';
+  "block font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)] mb-1.5";
 const TEXT_INPUT_CLASS =
-  'w-full max-w-[36ch] border-0 border-b border-current bg-transparent px-0.5 py-1.5 text-[15px] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]';
-const ROW_CLASS = 'flex items-start justify-between gap-4 border-t border-[var(--border-subtle)] py-2.5';
+  "w-full max-w-[36ch] border-0 border-b border-current bg-transparent px-0.5 py-1.5 text-[15px] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--threshold-accent,#8A5F19)]";
+const ROW_CLASS =
+  "flex items-start justify-between gap-4 border-t border-[var(--border-subtle)] py-2.5";
 
 /* Every client-relevant preference key from both retired pages, deduped and
    grouped as the merge — /preferences' "Marketing & inspiration" plus
@@ -58,78 +59,97 @@ const ROW_CLASS = 'flex items-start justify-between gap-4 border-t border-[var(-
 const PREF_GROUPS: Array<{
   title: string;
   description: string;
-  rows: Array<{ key: keyof NotificationPreferences; label: string; help?: string }>;
+  rows: Array<{
+    key: keyof NotificationPreferences;
+    label: string;
+    help?: string;
+  }>;
 }> = [
   {
-    title: 'Projects',
-    description: 'Updates on your projects and messages from the studio.',
+    title: "Projects",
+    description: "Updates on your projects and messages from the studio.",
     rows: [
-      { key: 'type_project_milestone', label: 'Project milestones', help: 'Design reveals, approvals, delivery dates' },
-      { key: 'type_client_message', label: 'Messages', help: 'New messages from your designer or team' },
+      {
+        key: "type_project_milestone",
+        label: "Project milestones",
+        help: "Design reveals, approvals, delivery dates",
+      },
+      {
+        key: "type_client_message",
+        label: "Messages",
+        help: "New messages from your designer or team",
+      },
     ],
   },
   {
-    title: 'Orders',
+    title: "Orders",
     description: "Receipts and shipping updates.",
     rows: [
-      { key: 'type_order_confirmation', label: 'Order confirmations' },
-      { key: 'type_payment_receipt', label: 'Payment receipts' },
+      { key: "type_order_confirmation", label: "Order confirmations" },
+      { key: "type_payment_receipt", label: "Payment receipts" },
     ],
   },
   {
-    title: 'Product alerts',
+    title: "Product alerts",
     description: "Updates on pieces you've saved or asked about.",
     rows: [
-      { key: 'type_price_drop', label: 'Price drops' },
-      { key: 'type_back_in_stock', label: 'Back in stock' },
-      { key: 'type_wishlist_update', label: 'Wishlist updates' },
+      { key: "type_price_drop", label: "Price drops" },
+      { key: "type_back_in_stock", label: "Back in stock" },
+      { key: "type_wishlist_update", label: "Wishlist updates" },
     ],
   },
   {
-    title: 'Inspiration & marketing',
-    description: 'Curated content, launches, and seasonal features. Easy to mute.',
+    title: "Inspiration & marketing",
+    description:
+      "Curated content, launches, and seasonal features. Easy to mute.",
     rows: [
-      { key: 'type_weekly_inspiration', label: 'Weekly inspiration' },
-      { key: 'type_new_products', label: 'New products' },
-      { key: 'type_product_launch', label: 'Product launches' },
-      { key: 'type_seasonal_campaign', label: 'Seasonal campaigns' },
-      { key: 'type_founding_circle', label: 'Founding Circle updates' },
-      { key: 'type_reengagement', label: 'Re-engagement' },
+      { key: "type_weekly_inspiration", label: "Weekly inspiration" },
+      { key: "type_new_products", label: "New products" },
+      { key: "type_product_launch", label: "Product launches" },
+      { key: "type_seasonal_campaign", label: "Seasonal campaigns" },
+      { key: "type_founding_circle", label: "Founding Circle updates" },
+      { key: "type_reengagement", label: "Re-engagement" },
     ],
   },
 ];
 
-const DIGEST_OPTIONS: Array<{ value: NotificationPreferences['digest_frequency']; label: string }> = [
-  { value: 'never', label: 'Never' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'biweekly', label: 'Every two weeks' },
-  { value: 'monthly', label: 'Monthly' },
+const DIGEST_OPTIONS: Array<{
+  value: NotificationPreferences["digest_frequency"];
+  label: string;
+}> = [
+  { value: "never", label: "Never" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Every two weeks" },
+  { value: "monthly", label: "Monthly" },
 ];
 
-const REMINDER_OPTIONS: Array<{ value: NotificationPreferences['reminder_cadence']; label: string }> = [
-  { value: 'immediate', label: 'Right away' },
-  { value: 'daily_digest', label: 'Daily summary' },
+const REMINDER_OPTIONS: Array<{
+  value: NotificationPreferences["reminder_cadence"];
+  label: string;
+}> = [
+  { value: "immediate", label: "Right away" },
+  { value: "daily_digest", label: "Daily summary" },
 ];
 
 const COMMON_TIMEZONES = [
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Anchorage',
-  'America/Phoenix',
-  'Pacific/Honolulu',
-  'America/Toronto',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Europe/Madrid',
-  'Asia/Tokyo',
-  'Asia/Singapore',
-  'Asia/Dubai',
-  'Australia/Sydney',
-  'UTC',
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Anchorage",
+  "America/Phoenix",
+  "Pacific/Honolulu",
+  "America/Toronto",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Europe/Madrid",
+  "Asia/Tokyo",
+  "Asia/Singapore",
+  "Asia/Dubai",
+  "Australia/Sydney",
+  "UTC",
 ];
 
 const FOCUSABLE_SELECTOR =
@@ -144,7 +164,8 @@ export function DetailsSheet({ open, onClose }: DetailsSheetProps) {
   useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement as HTMLElement | null;
-    const first = containerRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+    const first =
+      containerRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
     first?.focus();
     return () => {
       previouslyFocused.current?.focus?.();
@@ -159,13 +180,14 @@ export function DetailsSheet({ open, onClose }: DetailsSheetProps) {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
       if (!containerRef.current?.contains(event.target as Node)) return;
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         event.preventDefault();
         onClose();
         return;
       }
-      if (event.key !== 'Tab') return;
-      const focusable = containerRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+      if (event.key !== "Tab") return;
+      const focusable =
+        containerRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
       if (!focusable || focusable.length === 0) return;
       const list = Array.from(focusable);
       const first = list[0];
@@ -178,15 +200,15 @@ export function DetailsSheet({ open, onClose }: DetailsSheetProps) {
         first.focus();
       }
     }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
   // ── Lock the page behind the sheet from scrolling under the scrim ───────
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
@@ -213,7 +235,10 @@ export function DetailsSheet({ open, onClose }: DetailsSheetProps) {
         className="relative z-10 my-[clamp(20px,6vh,80px)] w-full max-w-[560px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-[clamp(20px,4vw,36px)]"
       >
         <div className="flex items-baseline justify-between gap-4">
-          <h2 id={headingId} className="font-heading text-[1.4rem] text-[var(--text-primary)]">
+          <h2
+            id={headingId}
+            className="font-heading text-[1.4rem] text-[var(--text-primary)]"
+          >
             Your details
           </h2>
           <ScoredAction
@@ -240,8 +265,8 @@ function ProfileSection() {
   const { data: profile, isLoading, isError } = useProfile();
   const updateProfile = useUpdateProfile();
 
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   // Adjusted during render, not in an effect (react-hooks/set-state-in-effect):
   // the moment the profile query resolves, the fields take its values once —
@@ -252,8 +277,8 @@ function ProfileSection() {
   const hydrated = !!profile && hydratedId === profile.id;
   if (profile && hydratedId !== profile.id) {
     setHydratedId(profile.id);
-    setFullName(profile.full_name ?? '');
-    setPhone(profile.phone ?? '');
+    setFullName(profile.full_name ?? "");
+    setPhone(profile.phone ?? "");
   }
 
   const dirty =
@@ -270,13 +295,20 @@ function ProfileSection() {
   }
 
   return (
-    <section className="mt-6 border-t border-[var(--border-default)] pt-5" data-testid="details-profile">
+    <section
+      className="mt-6 border-t border-[var(--border-default)] pt-5"
+      data-testid="details-profile"
+    >
       <p className={SECTION_HEAD_CLASS}>Name and number</p>
 
       {isError ? (
-        <p className="mt-3 text-[15px] text-[var(--text-muted)]">The file could not be read.</p>
+        <p className="mt-3 text-[15px] text-[var(--text-muted)]">
+          The file could not be read.
+        </p>
       ) : isLoading || !hydrated ? (
-        <p className="mt-3 text-[15px] text-[var(--text-muted)]">Reading the file…</p>
+        <p className="mt-3 text-[15px] text-[var(--text-muted)]">
+          Reading the file…
+        </p>
       ) : (
         <div className="mt-3 flex flex-col gap-4">
           {profile && (
@@ -302,7 +334,9 @@ function ProfileSection() {
 
           <div>
             <span className={FIELD_LABEL_CLASS}>Email</span>
-            <p className="text-[15px] text-[var(--text-muted)]">{profile?.email}</p>
+            <p className="text-[15px] text-[var(--text-muted)]">
+              {profile?.email}
+            </p>
           </div>
 
           <label htmlFor="details-phone">
@@ -334,12 +368,21 @@ function ProfileSection() {
             </ScoredAction>
             {!updateProfile.isPending && savedAt && (
               <p role="status" className="text-[13px] text-[var(--text-muted)]">
-                Saved {savedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                Saved{" "}
+                {savedAt.toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
               </p>
             )}
             {updateProfile.isError && (
-              <p role="alert" className="text-[13px] text-[var(--color-error,#C77B6E)]">
-                {updateProfile.error instanceof Error ? updateProfile.error.message : 'Could not save.'}
+              <p
+                role="alert"
+                className="text-[13px] text-[var(--color-error,#C77B6E)]"
+              >
+                {updateProfile.error instanceof Error
+                  ? updateProfile.error.message
+                  : "Could not save."}
               </p>
             )}
           </div>
@@ -352,10 +395,17 @@ function ProfileSection() {
 function NotificationsSection() {
   const { data: prefs, isLoading, isError } = useNotificationPreferences();
   const updatePrefs = useUpdateNotificationPreferences();
-  const browserTz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  const browserTz = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    [],
+  );
 
   const timezones = useMemo(() => {
-    return Array.from(new Set([browserTz, prefs?.timezone, ...COMMON_TIMEZONES].filter(Boolean))) as string[];
+    return Array.from(
+      new Set(
+        [browserTz, prefs?.timezone, ...COMMON_TIMEZONES].filter(Boolean),
+      ),
+    ) as string[];
   }, [browserTz, prefs?.timezone]);
 
   function update(updates: Partial<NotificationPreferences>) {
@@ -363,7 +413,10 @@ function NotificationsSection() {
   }
 
   return (
-    <section className="mt-6 border-t border-[var(--border-default)] pt-5" data-testid="details-notifications">
+    <section
+      className="mt-6 border-t border-[var(--border-default)] pt-5"
+      data-testid="details-notifications"
+    >
       <div className="flex items-baseline justify-between gap-4">
         <p className={SECTION_HEAD_CLASS}>What reaches you</p>
         {updatePrefs.isPending && (
@@ -372,16 +425,25 @@ function NotificationsSection() {
           </p>
         )}
         {updatePrefs.isError && (
-          <p role="alert" className="text-[13px] text-[var(--color-error,#C77B6E)]">
-            {updatePrefs.error instanceof Error ? updatePrefs.error.message : 'Could not save.'}
+          <p
+            role="alert"
+            className="text-[13px] text-[var(--color-error,#C77B6E)]"
+          >
+            {updatePrefs.error instanceof Error
+              ? updatePrefs.error.message
+              : "Could not save."}
           </p>
         )}
       </div>
 
       {isError ? (
-        <p className="mt-3 text-[15px] text-[var(--text-muted)]">The file could not be read.</p>
+        <p className="mt-3 text-[15px] text-[var(--text-muted)]">
+          The file could not be read.
+        </p>
       ) : isLoading || !prefs ? (
-        <p className="mt-3 text-[15px] text-[var(--text-muted)]">Reading the file…</p>
+        <p className="mt-3 text-[15px] text-[var(--text-muted)]">
+          Reading the file…
+        </p>
       ) : (
         <div className="mt-3">
           <PrefToggle
@@ -404,22 +466,30 @@ function NotificationsSection() {
 
           {PREF_GROUPS.map((group) => (
             <div key={group.title} className="mt-5">
-              <p className="text-[15px] font-medium text-[var(--text-primary)]">{group.title}</p>
-              <p className="text-[13px] text-[var(--text-muted)]">{group.description}</p>
+              <p className="text-[15px] font-medium text-[var(--text-primary)]">
+                {group.title}
+              </p>
+              <p className="text-[13px] text-[var(--text-muted)]">
+                {group.description}
+              </p>
               {group.rows.map((row) => (
                 <PrefToggle
                   key={String(row.key)}
                   label={row.label}
                   help={row.help}
                   checked={!!prefs[row.key]}
-                  onChange={(v) => update({ [row.key]: v } as Partial<NotificationPreferences>)}
+                  onChange={(v) =>
+                    update({ [row.key]: v } as Partial<NotificationPreferences>)
+                  }
                 />
               ))}
             </div>
           ))}
 
           <div className="mt-5">
-            <p className="text-[15px] font-medium text-[var(--text-primary)]">Quiet hours</p>
+            <p className="text-[15px] font-medium text-[var(--text-primary)]">
+              Quiet hours
+            </p>
             <p className="text-[13px] text-[var(--text-muted)]">
               Pause non-urgent notifications during set hours.
             </p>
@@ -435,8 +505,10 @@ function NotificationsSection() {
                   <input
                     id="details-quiet-start"
                     type="time"
-                    value={prefs.quiet_hours_start ?? '22:00'}
-                    onChange={(event) => update({ quiet_hours_start: event.target.value })}
+                    value={prefs.quiet_hours_start ?? "22:00"}
+                    onChange={(event) =>
+                      update({ quiet_hours_start: event.target.value })
+                    }
                     className={TEXT_INPUT_CLASS}
                   />
                 </label>
@@ -445,8 +517,10 @@ function NotificationsSection() {
                   <input
                     id="details-quiet-end"
                     type="time"
-                    value={prefs.quiet_hours_end ?? '08:00'}
-                    onChange={(event) => update({ quiet_hours_end: event.target.value })}
+                    value={prefs.quiet_hours_end ?? "08:00"}
+                    onChange={(event) =>
+                      update({ quiet_hours_end: event.target.value })
+                    }
                     className={TEXT_INPUT_CLASS}
                   />
                 </label>
@@ -455,13 +529,15 @@ function NotificationsSection() {
                   <select
                     id="details-quiet-tz"
                     value={prefs.timezone || browserTz}
-                    onChange={(event) => update({ timezone: event.target.value })}
+                    onChange={(event) =>
+                      update({ timezone: event.target.value })
+                    }
                     className={TEXT_INPUT_CLASS}
                   >
                     {timezones.map((tz) => (
                       <option key={tz} value={tz}>
                         {tz}
-                        {tz === browserTz ? ' (your timezone)' : ''}
+                        {tz === browserTz ? " (your timezone)" : ""}
                       </option>
                     ))}
                   </select>
@@ -471,14 +547,19 @@ function NotificationsSection() {
           </div>
 
           <div className="mt-5">
-            <p className="text-[15px] font-medium text-[var(--text-primary)]">Digest frequency</p>
+            <p className="text-[15px] font-medium text-[var(--text-primary)]">
+              Digest frequency
+            </p>
             <p className="text-[13px] text-[var(--text-muted)]">
               Bundle routine updates into a single email.
             </p>
             <fieldset className="mt-2 flex flex-col gap-1.5">
               <legend className="sr-only">Digest frequency</legend>
               {DIGEST_OPTIONS.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-2.5 text-[15px] text-[var(--text-body)]">
+                <label
+                  key={opt.value}
+                  className="flex items-center gap-2.5 text-[15px] text-[var(--text-body)]"
+                >
                   <input
                     type="radio"
                     name="details-digest-frequency"
@@ -494,21 +575,28 @@ function NotificationsSection() {
           </div>
 
           <div className="mt-5">
-            <p className="text-[15px] font-medium text-[var(--text-primary)]">Reminders</p>
+            <p className="text-[15px] font-medium text-[var(--text-primary)]">
+              Reminders
+            </p>
             <p className="text-[13px] text-[var(--text-muted)]">
-              How gentle nudges — proposal reminders and decision requests — reach you. A new
-              proposal and invoice reminders are time-sensitive and always arrive right away,
-              regardless of this setting.
+              How gentle nudges — proposal reminders and decision requests —
+              reach you. A new proposal and invoice reminders are time-sensitive
+              and always arrive right away, regardless of this setting.
             </p>
             <fieldset className="mt-2 flex flex-col gap-1.5">
               <legend className="sr-only">Reminder cadence</legend>
               {REMINDER_OPTIONS.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-2.5 text-[15px] text-[var(--text-body)]">
+                <label
+                  key={opt.value}
+                  className="flex items-center gap-2.5 text-[15px] text-[var(--text-body)]"
+                >
                   <input
                     type="radio"
                     name="details-reminder-cadence"
                     value={opt.value}
-                    checked={(prefs.reminder_cadence ?? 'immediate') === opt.value}
+                    checked={
+                      (prefs.reminder_cadence ?? "immediate") === opt.value
+                    }
                     onChange={() => update({ reminder_cadence: opt.value })}
                     className="h-4 w-4 border border-current"
                   />
@@ -537,8 +625,14 @@ function PrefToggle({
   return (
     <label className={`${ROW_CLASS} cursor-pointer first:border-t-0`}>
       <span className="flex-1">
-        <span className="block text-[15px] text-[var(--text-body)]">{label}</span>
-        {help && <span className="block text-[13px] text-[var(--text-muted)]">{help}</span>}
+        <span className="block text-[15px] text-[var(--text-body)]">
+          {label}
+        </span>
+        {help && (
+          <span className="block text-[13px] text-[var(--text-muted)]">
+            {help}
+          </span>
+        )}
       </span>
       <input
         type="checkbox"
@@ -551,8 +645,8 @@ function PrefToggle({
 }
 
 const THREAD_KIND_LABEL: Record<string, string> = {
-  project: 'Project',
-  vendor_brief: 'Vendor brief',
+  project: "Project",
+  vendor_brief: "Vendor brief",
 };
 
 function ConversationsSection() {
@@ -561,24 +655,36 @@ function ConversationsSection() {
   const muteThread = useMuteThread();
 
   const muted = overrides.filter((o) => o.muted_at);
-  const customPref = overrides.filter((o) => !o.muted_at && o.notification_pref !== 'all');
+  const customPref = overrides.filter(
+    (o) => !o.muted_at && o.notification_pref !== "all",
+  );
 
-  if (!isLoading && !isError && muted.length + customPref.length === 0) return null;
+  if (!isLoading && !isError && muted.length + customPref.length === 0)
+    return null;
 
   return (
-    <section className="mt-6 border-t border-[var(--border-default)] pt-5" data-testid="details-threads">
+    <section
+      className="mt-6 border-t border-[var(--border-default)] pt-5"
+      data-testid="details-threads"
+    >
       <p className={SECTION_HEAD_CLASS}>Conversations, muted or set apart</p>
 
       {isError ? (
-        <p className="mt-3 text-[15px] text-[var(--text-muted)]">The file could not be read.</p>
+        <p className="mt-3 text-[15px] text-[var(--text-muted)]">
+          The file could not be read.
+        </p>
       ) : isLoading ? (
-        <p className="mt-3 text-[15px] text-[var(--text-muted)]">Reading the file…</p>
+        <p className="mt-3 text-[15px] text-[var(--text-muted)]">
+          Reading the file…
+        </p>
       ) : (
         <div className="mt-3">
           {[...muted, ...customPref].map((override) => {
             const label =
-              override.thread_title ?? (override.counterpart_names.join(', ') || 'A conversation');
-            const kindLabel = THREAD_KIND_LABEL[override.thread_kind] ?? 'Direct';
+              override.thread_title ??
+              (override.counterpart_names.join(", ") || "A conversation");
+            const kindLabel =
+              THREAD_KIND_LABEL[override.thread_kind] ?? "Direct";
             return (
               <div key={override.thread_id} className={ROW_CLASS}>
                 <span className="flex-1 text-[15px] text-[var(--text-body)]">
@@ -593,7 +699,12 @@ function ConversationsSection() {
                     regionKey="details"
                     surfaceKey="the_threshold"
                     variant="tertiary"
-                    onClick={() => muteThread.mutate({ threadId: override.thread_id, muted: false })}
+                    onClick={() =>
+                      muteThread.mutate({
+                        threadId: override.thread_id,
+                        muted: false,
+                      })
+                    }
                   >
                     Unmute
                   </ScoredAction>
@@ -633,18 +744,22 @@ function SessionsSection() {
     setError(null);
     try {
       await signOutAll.mutateAsync();
-      router.push('/auth/signin');
+      router.push("/auth/signin");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-out failed');
+      setError(err instanceof Error ? err.message : "Sign-out failed");
       setConfirming(false);
     }
   }
 
   return (
-    <section className="mt-6 border-t border-[var(--border-default)] pt-5 pb-1" data-testid="details-sessions">
+    <section
+      className="mt-6 border-t border-[var(--border-default)] pt-5 pb-1"
+      data-testid="details-sessions"
+    >
       <p className={SECTION_HEAD_CLASS}>Every session, everywhere</p>
       <p className="mt-2 max-w-[48ch] text-[15px] text-[var(--text-body)]">
-        End every active session on every device. You&rsquo;ll need to sign in again afterwards.
+        End every active session on every device. You&rsquo;ll need to sign in
+        again afterwards.
       </p>
 
       {!confirming ? (
@@ -690,7 +805,10 @@ function SessionsSection() {
         </div>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-[13px] text-[var(--color-error,#C77B6E)]">
+        <p
+          role="alert"
+          className="mt-2 text-[13px] text-[var(--color-error,#C77B6E)]"
+        >
           {error}
         </p>
       )}
