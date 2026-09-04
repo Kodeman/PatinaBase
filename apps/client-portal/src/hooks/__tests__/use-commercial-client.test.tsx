@@ -193,7 +193,9 @@ describe('commercial client hooks', () => {
     const { result } = renderHook(() => useClientSelections('project-1'), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(rpc).toHaveBeenCalledWith('get_client_project_selections', { p_project_id: 'project-1' });
+    // The web surfaces read the threshold projection; `get_client_project_selections`
+    // stays at its shipped shape for the iOS app.
+    expect(rpc).toHaveBeenCalledWith('get_client_project_threshold', { p_project_id: 'project-1' });
     expect(result.current.data?.origin).toBe('commercial');
     expect(result.current.data?.selections).toHaveLength(1);
     expect(result.current.data?.selections[0].name).toBe('Meadow linen sectional');
