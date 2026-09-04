@@ -1,0 +1,86 @@
+'use client';
+
+import { moneyInWords } from '@/components/making/standing-sentence';
+import type { HouseLedgerModel } from '@/lib/threshold/derive';
+
+/* ── The house ledger ───────────────────────────────────────────────────────
+   Where the house stands in money, on the doorstep, in four lines.
+
+   Every figure keeps its sentence. A number on its own is a dashboard tile,
+   and a homeowner reading "$1,440" with no words is being handed a fact she
+   has to decode; "Held on finished work · $1,440" is a fact she can read. So
+   the row is the pair, and a row that has lost its words is not rendered.
+
+   Nothing is ever reported as zero. A line with nothing to say says nothing —
+   the same rule the standing sentence keeps — and a figure the surface does
+   not yet know is silence, not "—".
+
+   The ROWS opt into dimming (`data-dimmable`), not the whole block: in the
+   since-yesterday reading the sentence that says where the house stands is
+   still the thing worth reading. ─────────────────────────────────────────── */
+
+export interface HouseLedgerProps {
+  ledger: HouseLedgerModel;
+}
+
+interface LedgerRow {
+  key: 'owed' | 'held' | 'awaiting';
+  words: string;
+  cents: number;
+}
+
+function figure(cents: number | null | undefined): cents is number {
+  return typeof cents === 'number' && Number.isFinite(cents) && cents > 0;
+}
+
+/** One open invoice is "the open invoice"; several are counted in words. */
+function owedWords(count: number): string {
+  return count > 1 ? `Owed across ${count} open invoices` : 'Owed on the open invoice';
+}
+
+export function HouseLedger({ ledger }: HouseLedgerProps) {
+  const stands = figure(ledger.agreedCents) && figure(ledger.plannedCents);
+
+  const rows: LedgerRow[] = [
+    { key: 'owed' as const, words: owedWords(ledger.owedInvoiceCount), cents: ledger.owedCents },
+    { key: 'held' as const, words: 'Held on finished work', cents: ledger.heldCents },
+    { key: 'awaiting' as const, words: 'Awaiting your name', cents: ledger.awaitingCents },
+  ].flatMap((row) => (figure(row.cents) ? [{ ...row, cents: row.cents }] : []));
+
+  return (
+    <div
+      id="ledger"
+      data-threshold-unit="ledger"
+      data-testid="house-ledger"
+      className="border-t border-[var(--border-default)] pt-3"
+    >
+      {stands && (
+        <p
+          data-testid="house-ledger-top"
+          className="font-heading pb-[10px] text-[clamp(1.05rem,1.6vw,1.3rem)] leading-[1.35] tracking-[-0.01em] text-[var(--text-primary)]"
+        >
+          {`The house stands at ${moneyInWords(ledger.agreedCents as number)} agreed of ${moneyInWords(
+            ledger.plannedCents as number,
+          )} planned.`}
+        </p>
+      )}
+
+      {rows.map((row) => (
+        <div
+          key={row.key}
+          data-dimmable
+          data-testid={`house-ledger-${row.key}`}
+          className="flex justify-between gap-[14px] border-b border-[var(--border-subtle)] py-1.5 text-[15px] leading-[1.5] text-[var(--text-body)]"
+        >
+          <span data-ledger-words>{row.words}</span>
+          <span
+            data-ledger-figure
+            className="font-mono text-[13.5px] tabular-nums text-[var(--text-primary)]"
+          >
+            {moneyInWords(row.cents)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
