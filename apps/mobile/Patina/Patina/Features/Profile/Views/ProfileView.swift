@@ -456,5 +456,5 @@ private struct RoomCardHeroImage: View {
 
 #Preview {
     ProfileView()
-        .environment(\.appCoordinator, AppCoordinator())
+        .appCoordinator(AppCoordinator())
 }

@@ -179,6 +179,6 @@ struct BudgetProjectSectionView: View {
 #Preview {
     NavigationStack {
         BudgetView()
-            .environment(\.appCoordinator, AppCoordinator())
+            .appCoordinator(AppCoordinator())
     }
 }

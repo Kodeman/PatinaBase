@@ -587,7 +587,7 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
 
 #Preview {
     RecommendationsView()
-        .environment(\.appCoordinator, AppCoordinator())
+        .appCoordinator(AppCoordinator())
 }
 
 // MARK: - Card text block

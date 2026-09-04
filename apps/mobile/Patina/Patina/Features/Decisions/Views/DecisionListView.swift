@@ -181,6 +181,6 @@ struct DecisionListView: View {
 #Preview {
     NavigationStack {
         DecisionListView()
-            .environment(\.appCoordinator, AppCoordinator())
+            .appCoordinator(AppCoordinator())
     }
 }

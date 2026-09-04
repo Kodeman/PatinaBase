@@ -209,5 +209,5 @@ struct OnboardingFlowHost: View {
 
 #Preview {
     OnboardingFlowHost()
-        .environment(\.appCoordinator, AppCoordinator())
+        .appCoordinator(AppCoordinator())
 }

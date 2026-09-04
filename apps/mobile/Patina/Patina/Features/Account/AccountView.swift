@@ -283,5 +283,5 @@ struct AccountView: View {
     NavigationStack {
         AccountView()
     }
-    .environment(\.appCoordinator, AppCoordinator())
+    .appCoordinator(AppCoordinator())
 }

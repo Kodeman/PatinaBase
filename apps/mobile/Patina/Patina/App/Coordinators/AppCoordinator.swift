@@ -994,5 +994,24 @@ extension AppCoordinator {
 }
 
 extension EnvironmentValues {
-    @Entry public var appCoordinator: AppCoordinator = .environmentDefault
+    /// Injection storage. Optional with a nil default because `.environment`
+    /// writes through a WritableKeyPath, and a computed property's keypath
+    /// write is a get-modify-set: writing a non-optional `appCoordinator`
+    /// evaluated `environmentDefault` BEFORE storing the injected value, so
+    /// the injection at the root of `PatinaApp` trapped on every Release
+    /// launch. Writing an Optional whose default is nil reads no default.
+    @Entry public var injectedAppCoordinator: AppCoordinator?
+
+    /// The coordinator for this subtree. Read-only on purpose — inject with
+    /// `View.appCoordinator(_:)`.
+    public var appCoordinator: AppCoordinator {
+        injectedAppCoordinator ?? .environmentDefault
+    }
+}
+
+extension View {
+    /// Injects `coordinator` into this subtree's environment.
+    public func appCoordinator(_ coordinator: AppCoordinator) -> some View {
+        environment(\.injectedAppCoordinator, coordinator)
+    }
 }

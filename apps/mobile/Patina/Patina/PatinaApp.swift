@@ -104,7 +104,7 @@ struct PatinaApp: App {
         WindowGroup {
             ContentView()
                 .preferredColorScheme((AppearanceSetting(rawValue: appearanceRaw) ?? .system).colorScheme)
-                .environment(\.appCoordinator, coordinator)
+                .appCoordinator(coordinator)
                 .environment(\.scanEventChannel, scanEvents)
                 .modelContainer(PersistenceController.shared.container)
                 // C7-01: the launch after a store this app could not open.

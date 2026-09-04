@@ -380,5 +380,5 @@ private extension StyleQuizView {
 
 #Preview {
     StyleQuizView()
-        .environment(\.appCoordinator, AppCoordinator())
+        .appCoordinator(AppCoordinator())
 }

@@ -195,6 +195,6 @@ private struct DocumentRow: View {
 #Preview {
     NavigationStack {
         DocumentListView()
-            .environment(\.appCoordinator, AppCoordinator())
+            .appCoordinator(AppCoordinator())
     }
 }

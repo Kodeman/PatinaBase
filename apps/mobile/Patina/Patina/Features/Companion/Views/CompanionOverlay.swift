@@ -1222,5 +1222,5 @@ private extension View {
         Text("Home Screen Content")
         CompanionOverlay()
     }
-    .environment(\.appCoordinator, AppCoordinator())
+    .appCoordinator(AppCoordinator())
 }

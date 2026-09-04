@@ -627,6 +627,6 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
 #Preview {
     NavigationStack {
         DailyRoomView()
-            .environment(\.appCoordinator, AppCoordinator())
+            .appCoordinator(AppCoordinator())
     }
 }

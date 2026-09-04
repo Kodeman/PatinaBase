@@ -435,5 +435,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .environment(\.appCoordinator, AppCoordinator())
+        .appCoordinator(AppCoordinator())
 }
