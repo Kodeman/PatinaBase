@@ -19,7 +19,6 @@ import type { ProjectApprovalReview, ProjectNote } from '@patina/supabase';
 import { getFieldTradeLabel } from '@patina/types';
 
 import { openChapterOf } from '@/components/making/making-spine';
-import { ScoredAction } from '@/components/making/scored-action';
 import { monthAndYear } from '@/components/making/standing-sentence';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -34,7 +33,6 @@ import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
 import { thresholdPhases } from '@/lib/threshold/canonical-phases';
 import {
   deriveThreshold,
-  parseSourceDate,
   type ThresholdApproval,
   type ThresholdMark,
   type ThresholdNote,
@@ -50,6 +48,7 @@ import {
 } from '@/lib/threshold/standing';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
+import { ApprovalAsk, ApprovalReceipt, useDoorstepApprovals } from './approval-ask';
 import { KIND_LABEL } from './consent-copy';
 import { DoorGate, type DoorProposal } from './door-gate';
 import { Doorplate } from './doorplate';
@@ -87,8 +86,6 @@ import { WallGate } from './wall-gate';
 
 /** `deriveThreshold` takes a Date it does not read; this is the pre-hydration one. */
 const EPOCH = new Date(0);
-
-const LONG_MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' });
 
 /** The house's brass. Every leaf reads it as `var(--threshold-accent, #8A5F19)`. */
 const ACCENT_STYLE = { '--threshold-accent': '#8A5F19' } as CSSProperties;
@@ -169,57 +166,6 @@ function toThresholdNote(note: ProjectNote): ThresholdNote {
   };
 }
 
-/**
- * A phase approval, standing on the doorstep because it carries no room.
- *
- * The Making's `ProjectApprovalGate` cannot be reused: it draws itself onto
- * the spine through `useSpineInk`, and there is no spine here. The words, the
- * act and the destination are its own, so the two surfaces cannot disagree
- * about what the client is being asked.
- */
-function DoorstepApproval({ approval }: { approval: ProjectApprovalReview }) {
-  const due = parseSourceDate(approval.dueAt);
-  const act = approval.lifecycleStatus === 'draft' ? 'Review exact edition' : 'Respond';
-
-  return (
-    <section
-      id={`approval-${approval.decisionId}`}
-      data-threshold-unit="doorstep-approval"
-      data-never-dim=""
-      data-testid="doorstep-approval"
-      aria-labelledby={`approval-gate-${approval.decisionId}`}
-      className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
-    >
-      <p className="pt-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-        {approval.lifecycleStatus === 'draft'
-          ? 'A gate · your review is required'
-          : 'A gate · your response is required'}
-      </p>
-      <h2
-        id={`approval-gate-${approval.decisionId}`}
-        className="font-heading mt-1.5 text-[1.35rem] font-medium tracking-[-0.012em]"
-      >
-        {approval.question}
-      </h2>
-      <p className="mt-2 max-w-[52ch] text-[15px] leading-relaxed text-[var(--text-body)]">
-        {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
-        {due ? ` · Due ${LONG_MONTH_DAY.format(due)}` : ''}
-      </p>
-      <div className="mt-4">
-        <ScoredAction
-          actionKey="gate_project_approval"
-          regionKey="doorstep"
-          surfaceKey="the_threshold"
-          variant="primary"
-          href={`/decisions/${approval.decisionId}`}
-        >
-          {act}
-        </ScoredAction>
-      </div>
-    </section>
-  );
-}
-
 export interface ThresholdProps {
   /** The project this house is. Same value as `project.id`. */
   projectId: string;
@@ -232,10 +178,10 @@ export interface ThresholdProps {
   /** Every other project this client can open. Empty for a solo client. */
   otherHouses?: OtherHouse[];
   /**
-   * Taken and deliberately unread, for parity with `TheMaking`'s signature.
-   * The Making prints "Project approvals could not be read just now"; the
-   * house has no register for that sentence — a region that cannot be read is
-   * simply absent. Absence is silence.
+   * The approvals could not be read. Silence is for absence, not for failure:
+   * once the doorstep is the only place a gate can be answered, a failed read
+   * that shows nothing tells the client they owe nothing. It says so instead,
+   * where the asks would have stood.
    */
   projectApprovalsError?: boolean;
 }
@@ -247,6 +193,7 @@ export function Threshold({
   projectApprovals = [],
   projectApprovalsLoading = false,
   otherHouses = [],
+  projectApprovalsError = false,
 }: ThresholdProps) {
   // ── every hook, before any branch ──────────────────────────────────────────
   const hydrated = useHydrated();
@@ -349,6 +296,15 @@ export function Threshold({
 
   // ── the asks that carry no room ────────────────────────────────────────────
   const doorstepApprovals = projectApprovals.filter(isClientActionableProjectApproval);
+  // The model counts only what is still owed; the doorstep also keeps the gate
+  // waiting on the studio and the gates already answered, so a recorded outcome
+  // has a place to stand after the visit that recorded it.
+  const {
+    asks: doorstepAsks,
+    receipts: doorstepReceipts,
+    anchoredDecisionIds,
+    onAnswered: onApprovalAnswered,
+  } = useDoorstepApprovals(projectApprovals);
   const approvals: ThresholdApproval[] = doorstepApprovals.map((approval) => ({
     id: approval.decisionId,
     title: approval.question,
@@ -677,8 +633,25 @@ export function Threshold({
   const asks = (
     <>
       {doorstepGates}
-      {doorstepApprovals.map((approval) => (
-        <DoorstepApproval key={approval.decisionId} approval={approval} />
+      {projectApprovalsError && (
+        <p
+          role="alert"
+          data-testid="threshold-approvals-error"
+          className="mt-8 max-w-[52ch] border-t border-[var(--border-subtle)] pt-4 text-[15px] leading-[1.62] text-[var(--color-error)]"
+        >
+          Project approvals could not be read just now. Refresh before taking action.
+        </p>
+      )}
+      {doorstepAsks.map((approval) => (
+        <ApprovalAsk
+          key={approval.decisionId}
+          approval={approval}
+          onAnswered={onApprovalAnswered}
+          anchoredDecisionIds={anchoredDecisionIds}
+        />
+      ))}
+      {doorstepReceipts.map((approval) => (
+        <ApprovalReceipt key={approval.decisionId} approval={approval} />
       ))}
     </>
   );
