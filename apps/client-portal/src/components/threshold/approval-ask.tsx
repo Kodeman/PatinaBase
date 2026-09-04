@@ -23,6 +23,7 @@ import {
   projectApprovalAttentionLabel,
 } from '@/lib/client-attention';
 import { parseSourceDate } from '@/lib/threshold/derive';
+import { refusalSentence } from '@/lib/threshold/refusal';
 
 /* ── THE DOORSTEP ASK ────────────────────────────────────────────────────────
    A phase approval stands on the doorstep because it carries no room, and it
@@ -126,17 +127,6 @@ function moneyExact(cents: number, currency: string): string {
 function dayDelta(days: number): string {
   const whole = Math.abs(days);
   return `${days > 0 ? '+' : '−'}${whole} ${whole === 1 ? 'day' : 'days'}`;
-}
-
-/**
- * A refused act reads in the house's words. The cause's own text is a Postgres
- * string, not copy, so it is carried only where a developer is reading.
- */
-function refusalSentence(cause: unknown, sentence: string): string {
-  if (process.env.NODE_ENV === 'development' && cause instanceof Error && cause.message) {
-    return `${sentence} (${cause.message})`;
-  }
-  return sentence;
 }
 
 /**

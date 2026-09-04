@@ -12,9 +12,15 @@
  * Two rules the map obeys:
  *  - Carry the project id when the old URL had one; otherwise target `/`, which
  *    resolves to the client's active project.
- *  - Carry the entity id as a query param when the Threshold reads one. Only
- *    `invoice` does today (the letterbox's `?invoice=` contract, shared with
- *    `create-checkout-session`); `?order=` already rides the original query.
+ *  - Carry the entity id as a query param when the Threshold reads one:
+ *    `?invoice=` (the letterbox's contract, shared with
+ *    `create-checkout-session` and read by `Letterbox`), `?review=` (the
+ *    selection edition the doorstep's ask opens on) and `?proposal=`;
+ *    `?order=` already rides the original query.
+ *  - `?invoice=` and `?proposal=` also decide WHICH house `/` opens: the
+ *    front door resolves the instrument's own project before it falls back to
+ *    the house that moved last (`lib/data/active-project.ts`), so mail about
+ *    money or a signature cannot land in another house's room.
  */
 
 export type ThresholdAnchor =
@@ -90,13 +96,20 @@ export function retiredRouteTarget(pathname: string): RetiredRouteTarget | null 
     case 'decisions':
       return segments.length === 2 ? { path: '/', anchor: 'doorstep' } : null;
 
-    // `/proposals/<id>` and `/proposals/<id>/sign` — signing happens at the door.
-    case 'proposals':
-      if (segments.length === 2) return { path: '/', anchor: 'door' };
-      if (segments.length === 3 && third === 'sign') {
-        return { path: '/', anchor: 'door' };
-      }
-      return null;
+    // `/proposals/<id>` and `/proposals/<id>/sign` — signing happens at the
+    // door. `?proposal=` names WHICH house's door: `/` on its own opens the
+    // house that moved last, which for a multi-house client is the wrong one.
+    case 'proposals': {
+      const named =
+        segments.length === 2 ||
+        (segments.length === 3 && third === 'sign');
+      if (!named) return null;
+      return {
+        path: '/',
+        anchor: 'door',
+        ...(ID_SEGMENT.test(second) ? { params: { proposal: second } } : {}),
+      };
+    }
 
     // `/invoices/<id>` — the letterbox reads `?invoice=` to name which one.
     // `/invoices/<id>/print` keeps its own page.
@@ -127,12 +140,36 @@ export function retiredRouteTarget(pathname: string): RetiredRouteTarget | null 
     case 'preferences':
       return second === 'unsubscribe' ? null : { path: '/', anchor: 'mat' };
 
-    // `/projects/<id>/reviews[/<editionId>]` — the only old URLs that carried
-    // a project id, so they are the only ones that keep their house.
+    // `/projects/<id>/reviews[/<editionId>]` and
+    // `/projects/<id>/scope-change/*` — the only old URLs that carried a
+    // project id, so they are the only ones that keep their house.
     case 'projects': {
+      // `/projects/<id>/scope-change[/new|/<changeId>]` — asking for and
+      // reading a change of scope both happen on the doorstep now. Mapped
+      // ahead of R2's deletion of those trees so the old addresses fold rather
+      // than 404 the moment the pages go.
+      if (segments.length >= 3 && third === 'scope-change') {
+        return {
+          path: ID_SEGMENT.test(second) ? `/projects/${second}` : '/',
+          anchor: 'doorstep',
+        };
+      }
       if (segments.length < 3 || third !== 'reviews') return null;
       const projectPath = ID_SEGMENT.test(second) ? `/projects/${second}` : '/';
-      return { path: projectPath, anchor: 'doorstep' };
+      // `/projects/<id>/reviews/<editionId>` — the edition id is the whole
+      // point of the link: `project_review_editions` is studio-only by RLS, so
+      // the emailed address is the ONLY way a client ever reaches an edition,
+      // and `SelectionEditionAsk` reads it off `?review=`. Dropping it here
+      // would land the mail on a doorstep that cannot show what it was sent
+      // about.
+      const editionId = segments[3];
+      return {
+        path: projectPath,
+        anchor: 'doorstep',
+        ...(segments.length === 4 && editionId && ID_SEGMENT.test(editionId)
+          ? { params: { review: editionId } }
+          : {}),
+      };
     }
 
     default:

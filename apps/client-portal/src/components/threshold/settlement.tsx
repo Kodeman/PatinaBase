@@ -17,6 +17,7 @@ import {
 import { SpineToll } from '@/components/making/spine-toll';
 import { clientEvents } from '@/lib/analytics/events';
 import type { InvoiceModel } from '@/lib/threshold/derive';
+import { refusalSentence } from '@/lib/threshold/refusal';
 
 import {
   PaymentMethodChooser,
@@ -138,7 +139,11 @@ export function Settlement({
         await onRefetch?.();
         return;
       }
-      setPayError(err instanceof Error ? err.message : 'Unable to start payment.');
+      // Every OTHER cause — a network failure, a PostgREST string, an
+      // unenumerated edge-function refusal — reads in the house's words. The
+      // two codes above keep their own copy because each says something true
+      // and specific about the client's money.
+      setPayError(refusalSentence(err, 'Unable to start payment.'));
     }
   };
 

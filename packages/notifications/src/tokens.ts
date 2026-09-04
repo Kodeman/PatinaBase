@@ -99,6 +99,14 @@ export async function verifyUnsubscribeToken(
 
 /**
  * Generate a full unsubscribe URL with embedded token.
+ *
+ * `baseUrl` must be a portal that still SERVES `/preferences`. The admin
+ * portal (the default) does. The CLIENT portal does not: its route tree is
+ * retired onto the one project page, `/preferences` 308s to `/#mat`, the
+ * token rides along as a query param and nothing reads it — the one-click
+ * link would silently do nothing. Send client recipients to
+ * `/api/unsubscribe` or the token-less `/preferences/unsubscribe` outcome
+ * page instead.
  */
 export async function generateUnsubscribeUrl(
   userId: string,

@@ -166,7 +166,7 @@ describe('PapersSheet — the papers, laid over the house', () => {
     // retired page's own words rather than blanking the sheet.
     expect(screen.getByTestId('papers-sheet-drawings')).toBeInTheDocument();
     expect(screen.getByTestId('papers-sheet-error')).toHaveTextContent(
-      'We couldn’t load your documents right now. Try refreshing the page.',
+      'The documents could not be read just now. Please refresh.',
     );
   });
 
@@ -178,7 +178,7 @@ describe('PapersSheet — the papers, laid over the house', () => {
     // page; the register carries its own notice instead.
     expect(screen.getByTestId('papers-sheet-other')).toBeInTheDocument();
     expect(screen.getByTestId('plan-set-error')).toHaveTextContent(
-      'We couldn’t load your drawings right now. Try refreshing the page.',
+      'The drawings could not be read just now. Please refresh.',
     );
     expect(screen.queryByTestId('papers-sheet-empty')).not.toBeInTheDocument();
   });

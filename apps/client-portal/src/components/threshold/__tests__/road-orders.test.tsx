@@ -107,15 +107,19 @@ describe('RoadOrders — the pieces she bought herself', () => {
     expect(assign).toHaveBeenCalledWith('https://checkout.stripe.test/order');
   });
 
+  // In the house's words, not the till's: an edge-function or PostgREST
+  // string is a developer's message and is never printed to the homeowner.
   it('states a failure in place and stays on the road', async () => {
     render(<RoadOrders orders={[LAMP]} />);
-    mutateAsync.mockRejectedValue(new Error('This order was refunded.'));
+    mutateAsync.mockRejectedValue(new Error('direct_orders row refused: 42501'));
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /pay for this piece/i }));
     });
 
-    expect(screen.getByTestId('road-orders-error')).toHaveTextContent('This order was refunded.');
+    const stated = screen.getByTestId('road-orders-error');
+    expect(stated).toHaveTextContent('Unable to start payment.');
+    expect(stated).not.toHaveTextContent('42501');
   });
 
   it('says the money landed only once the order’s own row says so', () => {

@@ -15,10 +15,13 @@ import { journeyStageIndexForStatus } from '@/components/commercial/journey-step
    `/orders` used for it and the day it was raised, so a refunded piece still
    has somewhere to be read once that page retires.
 
-   An order raised without a project stands on the road of the house she is
-   standing in — it has no other house to stand in, and it says so on its own
-   line, because the same lamp standing in two houses must not read as two
-   lamps. ─────────────────────────────────────────────────────────────────── */
+   An order raised without a project stands on the road of exactly ONE of the
+   client's houses — it has no house of its own, and the same lamp drawn in two
+   houses reads as two lamps. `standsUnfiled` is the caller's answer to "is
+   this the house that holds the unfiled ones", decided the same deterministic
+   way the unfiled asks are (the lowest project id the client can open), so the
+   lamp stands in the same house on every visit. It says so on its own line
+   either way. ────────────────────────────────────────────────────────────── */
 
 export interface RoadOrderModel {
   id: string;
@@ -67,10 +70,13 @@ function stopOf(order: DirectOrder): number {
 export function toRoadOrders(
   orders: DirectOrder[] | undefined,
   projectId: string,
+  standsUnfiled = true,
 ): RoadOrderModel[] {
   return (orders ?? [])
     .filter((order) => order.status === 'pending_payment' || order.status === 'paid')
-    .filter((order) => !order.project_id || order.project_id === projectId)
+    .filter((order) =>
+      order.project_id ? order.project_id === projectId : standsUnfiled,
+    )
     .map((order) => ({
       id: order.id,
       name: order.product_name,
@@ -97,10 +103,13 @@ const CLOSED_WORD: Record<string, string> = {
 export function toClosedOrders(
   orders: DirectOrder[] | undefined,
   projectId: string,
+  standsUnfiled = true,
 ): ClosedOrderModel[] {
   return (orders ?? [])
     .filter((order) => order.status === 'refunded' || order.status === 'canceled')
-    .filter((order) => !order.project_id || order.project_id === projectId)
+    .filter((order) =>
+      order.project_id ? order.project_id === projectId : standsUnfiled,
+    )
     .map((order) => ({
       id: order.id,
       name: order.product_name,

@@ -51,8 +51,11 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
               <p className="text-[#4A453F] text-[15px] leading-6 mb-6">
                 Change your mind? Manage all preferences in your account.
               </p>
+              {/* `/preferences` is retired: preferences live on the mat of
+                  the client's project page now. Linking the old address would
+                  cost a fold (and a sign-in hop) to reach the same place. */}
               <Link
-                href="/preferences"
+                href="/#mat"
                 className="inline-block bg-[#A3927C] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
               >
                 Manage Preferences
@@ -70,7 +73,7 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
                 You can always log in and update preferences directly.
               </p>
               <Link
-                href="/preferences"
+                href="/#mat"
                 className="inline-block bg-[#A3927C] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
               >
                 Sign in to manage

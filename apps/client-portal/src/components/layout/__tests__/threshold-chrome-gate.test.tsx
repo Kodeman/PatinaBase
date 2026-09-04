@@ -14,11 +14,9 @@ import { ThresholdChromeGate } from '../threshold-chrome-gate';
 
 const header = <div data-testid="header">header</div>;
 
-function gate(pathname: string, hasHouse = true) {
+function gate(pathname: string) {
   return render(
-    <ThresholdChromeGate pathname={pathname} hasHouse={hasHouse}>
-      {header}
-    </ThresholdChromeGate>,
+    <ThresholdChromeGate pathname={pathname}>{header}</ThresholdChromeGate>,
   );
 }
 
@@ -67,13 +65,14 @@ describe('ThresholdChromeGate', () => {
     expect(screen.getByTestId('header')).toBeInTheDocument();
   });
 
-  // A client with no house gets the empty state on `/`, and the empty state
-  // has no mat under it — dropping the header there would leave her with no
-  // sign-out, no /account and no way anywhere.
-  it('keeps the header on the front door for a client with no house', () => {
-    gate('/', false);
+  // A client with no house gets the empty state on `/`, and she loses the
+  // header too: every destination it offers is a retired route that folds
+  // straight back to `/`, so keeping it up would hand her a ring of dead
+  // links. `ProjectsEmptyState` carries the mat's two acts instead.
+  it('drops the header on the front door for a client with no house as well', () => {
+    gate('/');
 
-    expect(screen.getByTestId('header')).toBeInTheDocument();
+    expect(screen.queryByTestId('header')).not.toBeInTheDocument();
   });
 
   it('renders the same answer on every re-render — there is nothing to resolve', () => {
@@ -81,7 +80,7 @@ describe('ThresholdChromeGate', () => {
     expect(screen.queryByTestId('header')).not.toBeInTheDocument();
 
     rerender(
-      <ThresholdChromeGate pathname="/projects/proj-1" hasHouse>
+      <ThresholdChromeGate pathname="/projects/proj-1">
         {header}
       </ThresholdChromeGate>,
     );

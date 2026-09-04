@@ -116,6 +116,13 @@ export interface StrayCapturesProps {
   /** The signed-in client; their own captures are the register /scans listed. */
   userId: string;
   rooms: Array<{ roomId: string; name: string }>;
+  /**
+   * Is this the one house that holds what was filed against no house at all?
+   * A capture with no project has no house of its own, and drawn in every
+   * house it reads as one capture per house. The caller decides the same
+   * deterministic way the unfiled asks are decided.
+   */
+  standsUnfiled?: boolean;
 }
 
 /**
@@ -124,7 +131,12 @@ export interface StrayCapturesProps {
  * phone filed with no project at all. /scans listed all of them; without this
  * they would have no surface anywhere once it is retired.
  */
-export function StrayCaptures({ projectId, userId, rooms }: StrayCapturesProps) {
+export function StrayCaptures({
+  projectId,
+  userId,
+  rooms,
+  standsUnfiled = true,
+}: StrayCapturesProps) {
   const { data: scans, isError } = useRoomScans({ userId });
   // The same list the bands read (one fetch — React Query dedupes on the key),
   // so "already drawn above" is decided by what a band SHOWS, not by what it
@@ -138,8 +150,10 @@ export function StrayCaptures({ projectId, userId, rooms }: StrayCapturesProps) 
   );
   const stray = ((scans ?? []) as Capture[]).filter(
     (scan) =>
-      // A capture filed against ANOTHER house belongs to that house's page.
-      (!scan.project_id || scan.project_id === projectId) && !drawn.has(scan.id),
+      // A capture filed against ANOTHER house belongs to that house's page;
+      // one filed against NO house stands in exactly one of hers.
+      (scan.project_id ? scan.project_id === projectId : standsUnfiled) &&
+      !drawn.has(scan.id),
   );
 
   // /scans said so rather than showing an empty register; a read that failed

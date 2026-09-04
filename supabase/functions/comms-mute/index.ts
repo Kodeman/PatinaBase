@@ -58,11 +58,10 @@ const SUCCESS_HTML = (threadId: string) => `<!doctype html>
     <p>You won't receive email about new messages in this conversation.
        It will still appear in your inbox, and any unread badge updates
        will continue.</p>
-    <p>Changed your mind? Open the conversation in the
-       <a href="https://app.patina.cloud/people?thread=${threadId}">designer portal</a>
-       or
-       <a href="https://client.patina.cloud/#note">client portal</a>
-       and tap the bell to unmute.</p>
+    <p>Changed your mind? Unmute it in the
+       <a href="https://app.patina.cloud/people?thread=${threadId}">designer portal</a>,
+       or on the mat of your project page in the
+       <a href="https://client.patina.cloud/#mat">client portal</a>.</p>
     <p class="meta">Thread ID: <code>${threadId}</code></p>
   </div>
 </body>

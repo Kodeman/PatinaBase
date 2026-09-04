@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useProjectApprovals } from '@patina/supabase';
+import { useEffect, useMemo } from 'react';
+import { useMyProjectApprovalReviews } from '@patina/supabase';
 
 import { Threshold } from '@/components/threshold/threshold';
 import type { OtherHouse } from '@/components/threshold/other-houses';
@@ -36,7 +36,20 @@ export function ProjectSurfaceSwitch({
   otherHouses = [],
   viewSource = 'named',
 }: ProjectSurfaceSwitchProps) {
-  const approvalsQuery = useProjectApprovals(projectId);
+  // The caller-global sanitized read (00440), NOT `get_project_decision_reviews`:
+  // that one authorizes a studio co-member or the decision lead and raises
+  // `insufficient_privilege` for a homeowner, so every client got a failed read
+  // and no approval ask at all. `list_my_project_decision_reviews` is the read
+  // the retired `/decisions` list and the chrome already use; filter it to this
+  // house here.
+  const approvalsQuery = useMyProjectApprovalReviews();
+  const projectApprovals = useMemo(
+    () =>
+      (approvalsQuery.data ?? []).filter(
+        (review) => review.projectId === projectId,
+      ),
+    [approvalsQuery.data, projectId],
+  );
 
   useEffect(() => {
     clientEvents.projectView(projectId, viewSource);
@@ -50,7 +63,7 @@ export function ProjectSurfaceSwitch({
       project={project}
       milestones={milestones}
       otherHouses={otherHouses}
-      projectApprovals={approvalsQuery.data ?? []}
+      projectApprovals={projectApprovals}
       projectApprovalsLoading={approvalsQuery.isLoading}
       projectApprovalsError={approvalsQuery.isError}
     />

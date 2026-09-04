@@ -30,6 +30,7 @@ import {
   useClientPlan,
   useClientSelections,
 } from '@/hooks/use-commercial-client';
+import { useHoldCeiling } from '@/hooks/use-hold-ceiling';
 import { useHydrated } from '@/hooks/use-hydrated';
 import {
   useMarkLettersRead,
@@ -388,6 +389,12 @@ export function Threshold({
     const key = line.roomName.trim().toLowerCase();
     planTargets.set(key, (planTargets.get(key) ?? 0) + line.targetCents);
   }
+  // A read that FAILED has not answered. React Query drops `isPending` on
+  // error, so without this the empty list below would become "this house has
+  // no rooms" — a failure dressed as a fact. The model still settles (a
+  // never-ending hold is a blank page, not silence); what the failure buys is
+  // the right to say so instead of asserting an empty house.
+  const roomsUnread = roomsQuery.isError;
   const roomsSettled = !roomsQuery.isPending;
   const rooms: ThresholdRoom[] | null = roomsSettled
     ? ((roomsQuery.data ?? []) as unknown[]).flatMap((row) => {
@@ -519,6 +526,10 @@ export function Threshold({
     heldBundles.some((bundle, index) =>
       holds(!!tradeInstrumentIds[index], bundle.isPending),
     );
+
+  // A hold that never settles is a blank page, not silence. `retry: 2` bounds
+  // a failing request; nothing bounds a hanging one.
+  const heldTooLong = useHoldCeiling(!hydrated || loading || model.pending);
 
   // ── the doorstep's sentence ────────────────────────────────────────────────
   const standing =
@@ -745,6 +756,13 @@ export function Threshold({
     />
   );
 
+  // A review request, a direct order or a capture filed against no house at
+  // all belongs to the relationship rather than to a project, and must stand
+  // in exactly ONE of the client's houses — the same one on every visit, or
+  // she answers the same ask twice and reads the same lamp twice.
+  const standsUnfiledAsks =
+    [projectId, ...otherHouses.map((house) => house.id)].sort()[0] === projectId;
+
   const ledger = <HouseLedger ledger={model.ledger} today={today} />;
   const letterbox = (
     <Letterbox
@@ -759,15 +777,22 @@ export function Threshold({
   // in it — it decides what the ROAD says, not what the house says, so it
   // gates the road alone rather than the whole page's first paint. The road
   // holds until it settles, so the count never rewrites itself.
-  const ordersSettled = !ordersQuery.isPending;
-  const roadOrders = ordersSettled ? toRoadOrders(ordersQuery.data, projectId) : [];
-  const closedOrders = ordersSettled ? toClosedOrders(ordersQuery.data, projectId) : [];
+  // Same rule as the rooms: a failed read is not an empty road. `isPending`
+  // is false on error, so an unguarded settle would print "Nothing on the
+  // road." over goods that are simply unreadable.
+  const ordersUnread = ordersQuery.isError;
+  const ordersSettled = !ordersQuery.isPending && !ordersUnread;
+  const roadOrders = ordersSettled ? toRoadOrders(ordersQuery.data, projectId, standsUnfiledAsks) : [];
+  const closedOrders = ordersSettled ? toClosedOrders(ordersQuery.data, projectId, standsUnfiledAsks) : [];
   const road =
-    ordersSettled && (model.road.length > 0 || roadOrders.length > 0 || closedOrders.length > 0) ? (
+    ordersUnread ||
+    (ordersSettled &&
+      (model.road.length > 0 || roadOrders.length > 0 || closedOrders.length > 0)) ? (
       <TheRoad
         pieces={model.road}
         orders={roadOrders}
         closedOrders={closedOrders}
+        ordersUnread={ordersUnread}
         onOrdersRefetch={ordersQuery.refetch}
         today={today}
       />
@@ -788,12 +813,6 @@ export function Threshold({
       reply={replyHeadsTheRecord ? undefined : writeBack}
     />
   );
-  // A review request filed against no house at all belongs to the relationship
-  // rather than to a project, and must stand in exactly ONE of the client's
-  // houses — the same one on every visit, or she answers the same ask twice.
-  const standsUnfiledAsks =
-    [projectId, ...otherHouses.map((house) => house.id)].sort()[0] === projectId;
-
   // Gated HERE, not inside Previously: a React element is truthy even when the
   // component renders nothing, so a slot handed down unconditionally would
   // print an empty "Previously" over a house that has none.
@@ -867,13 +886,18 @@ export function Threshold({
   const asks = (
     <>
       {doorstepGates}
+      {/* A failed read, in the ink every other failed read on this surface
+          uses (the papers registers, the captures). Not red: the house has no
+          red, and this is not a refusal of an act — it is the page saying it
+          could not see, which it must say rather than show an empty doorstep
+          and let her read it as nothing owed. */}
       {projectApprovalsError && (
         <p
           role="alert"
           data-testid="threshold-approvals-error"
-          className="mt-8 max-w-[52ch] border-t border-[var(--border-subtle)] pt-4 text-[15px] leading-[1.62] text-[var(--color-error)]"
+          className="mt-8 max-w-[52ch] border-t border-[var(--border-subtle)] pt-4 text-[15px] leading-[1.62] text-[var(--text-body)]"
         >
-          Project approvals could not be read just now. Refresh before taking action.
+          The approvals could not be read just now. Please refresh before taking action.
         </p>
       )}
       {doorstepAsks.map((approval) => (
@@ -918,6 +942,20 @@ export function Threshold({
     body = (
       <>
         {quietDoorstep}
+        {/* Silence is for a hold that ends. Past the ceiling this one has not
+            ended, and a blank page saying nothing is not silence — it is a
+            page that looks broken. One sentence, stating no fact about the
+            house, so nothing is ever taken back. Outside the spacer, which is
+            aria-hidden and would take the sentence with it. */}
+        {heldTooLong && (
+          <p
+            role="status"
+            data-testid="threshold-hold-ceiling"
+            className="mt-8 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
+          >
+            This is taking longer than it should. Please refresh.
+          </p>
+        )}
         <div
           aria-hidden="true"
           data-testid="threshold-hold"
@@ -925,7 +963,7 @@ export function Threshold({
         />
       </>
     );
-  } else if (model.groundFloor) {
+  } else if (model.groundFloor && !roomsUnread) {
     body = (
       <GroundFloor
         doorstep={doorstep}
@@ -967,11 +1005,20 @@ export function Threshold({
         <div className="min-w-0">
           {doorstep}
           {asks}
-          <PlanKey
-            geometry={planKeyGeometry(rooms ?? [], model.marks)}
-            marks={model.marks}
-            keySentence={keySentence(model.drawnMarkCount)}
-          />
+          {roomsUnread ? (
+            <p
+              data-testid="threshold-rooms-error"
+              className="mt-8 max-w-[60ch] border-t border-[var(--border-subtle)] pt-4 text-[15px] leading-relaxed text-[var(--text-body)]"
+            >
+              Couldn&rsquo;t load your rooms. Please refresh.
+            </p>
+          ) : (
+            <PlanKey
+              geometry={planKeyGeometry(rooms ?? [], model.marks)}
+              marks={model.marks}
+              keySentence={keySentence(model.drawnMarkCount)}
+            />
+          )}
 
           {model.bands.map((band) => (
             <RoomBand key={band.roomId} band={band} projectId={projectId}>
@@ -992,6 +1039,7 @@ export function Threshold({
             <StrayCaptures
               projectId={projectId}
               userId={user.id}
+              standsUnfiled={standsUnfiledAsks}
               rooms={model.bands.map((band) => ({ roomId: band.roomId, name: band.name }))}
             />
           )}

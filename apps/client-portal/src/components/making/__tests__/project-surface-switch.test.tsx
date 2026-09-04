@@ -10,7 +10,7 @@ import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
    outright: `client_project_view` fires exactly once per project. ────────── */
 
 jest.mock('@patina/supabase', () => ({
-  useProjectApprovals: jest.fn(),
+  useMyProjectApprovalReviews: jest.fn(),
 }));
 
 // A plain function component, NOT a jest.fn: `resetMocks: true` wipes mock
@@ -42,11 +42,11 @@ jest.mock('@/lib/analytics/events', () => ({
 }));
 
 import { clientEvents } from '@/lib/analytics/events';
-import { useProjectApprovals } from '@patina/supabase';
+import { useMyProjectApprovalReviews } from '@patina/supabase';
 
 import { ProjectSurfaceSwitch } from '../project-surface-switch';
 
-const approvalsMock = useProjectApprovals as jest.Mock;
+const approvalsMock = useMyProjectApprovalReviews as jest.Mock;
 
 const PROJECT_ID = 'proj-vale';
 
@@ -76,7 +76,7 @@ function renderSwitch(otherHouses?: { id: string; name: string }[]) {
 
 beforeEach(() => {
   approvalsMock.mockReturnValue({
-    data: [{ decisionId: 'approval-1' }],
+    data: [{ decisionId: 'approval-1', projectId: PROJECT_ID }],
     isLoading: false,
     isError: false,
   });
@@ -108,11 +108,30 @@ describe('ProjectSurfaceSwitch — which surface', () => {
     expect(screen.getByTestId('the-threshold')).toBeInTheDocument();
   });
 
-  it('owns one canonical project approval query', () => {
+  // The studio-scoped `get_project_decision_reviews` refuses a homeowner
+  // outright; the caller-global sanitized read is the only one she may run.
+  it('owns one canonical project approval query — the caller-global read', () => {
     renderSwitch();
 
     expect(approvalsMock).toHaveBeenCalledTimes(1);
-    expect(approvalsMock).toHaveBeenCalledWith(PROJECT_ID);
+    expect(approvalsMock).toHaveBeenCalledWith();
+  });
+
+  it('hands the house only the approvals filed against it', () => {
+    approvalsMock.mockReturnValue({
+      data: [
+        { decisionId: 'approval-1', projectId: PROJECT_ID },
+        { decisionId: 'approval-2', projectId: 'proj-linden' },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    renderSwitch();
+
+    expect(screen.getByTestId('the-threshold')).toHaveAttribute(
+      'data-approval-count',
+      '1',
+    );
   });
 
   it('passes an approvals read that is still loading through as loading', () => {

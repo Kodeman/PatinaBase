@@ -114,14 +114,18 @@ describe('AppChrome', () => {
     },
   );
 
-  it('keeps the header on the front door for a client with no house at all', () => {
+  // Her too: every destination the header offers is a retired route that
+  // folds straight back to `/`, so it would be a ring of dead links. The
+  // empty state carries the mat's two acts instead.
+  it('drops the header on the front door for a client with no house at all', () => {
     mockPathname = '/';
     render(
       <AppChrome projects={[]}>
         <div>app content</div>
       </AppChrome>,
     );
-    expect(screen.getByTestId('client-header')).toBeInTheDocument();
+    expect(screen.queryByTestId('client-header')).not.toBeInTheDocument();
+    expect(screen.getByText('app content')).toBeInTheDocument();
   });
 
   it('adds the sanitized global Stage-2 actionable total to non-Stage2 project work without double counting', () => {

@@ -16,9 +16,56 @@
  * try the consumer-tailored variant first before falling back to 'all'.
  */
 
-import Link from 'next/link';
+import { useState } from 'react';
 import { EmptyState, SurfaceKeys, useHelpContent } from '@patina/help-system';
 import { Folder } from 'lucide-react';
+
+import { ScoredAction } from '@/components/making/scored-action';
+import { DetailsSheet } from '@/components/threshold/details-sheet';
+import { useAuth } from '@/hooks/use-auth';
+
+/**
+ * The two acts the mat carries, for the one page that has no mat under it.
+ *
+ * The header is gone from `/` for every client, house or no house, so a
+ * homeowner who has been invited but not yet given a project would otherwise
+ * stand on a page with no way to her own details and no way out. Every
+ * destination the old header offered is now a retired route that 308s
+ * straight back here, so restoring the header would be a ring of dead links
+ * rather than navigation.
+ */
+function EmptyStateActs() {
+  const { signOut } = useAuth();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  return (
+    <div data-testid="empty-state-acts" className="mt-8">
+      <div className="flex flex-wrap items-baseline justify-center gap-x-5">
+        <ScoredAction
+          actionKey="mat_account"
+          regionKey="mat"
+          surfaceKey="the_threshold"
+          variant="tertiary"
+          onClick={() => setDetailsOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={detailsOpen}
+        >
+          Your details
+        </ScoredAction>
+        <ScoredAction
+          actionKey="mat_sign_out"
+          regionKey="mat"
+          surfaceKey="the_threshold"
+          variant="secondary"
+          onClick={() => void signOut()}
+        >
+          Leave the house
+        </ScoredAction>
+      </div>
+      <DetailsSheet open={detailsOpen} onClose={() => setDetailsOpen(false)} />
+    </div>
+  );
+}
 
 export function ProjectsEmptyState() {
   // Cheap CMS probe; react-query dedupes with the fetch inside <EmptyState>,
@@ -45,6 +92,7 @@ export function ProjectsEmptyState() {
           persona="consumer"
           icon={<Folder className="h-12 w-12" />}
         />
+        <EmptyStateActs />
       </div>
     );
   }
@@ -62,14 +110,10 @@ export function ProjectsEmptyState() {
         Your designer kicks off a project when you’re ready to begin. Once they
         do, you’ll see its timeline, approvals, and updates here.
       </p>
-      <div className="mt-6">
-        <Link
-          href="/messages"
-          className="inline-flex items-center rounded-[3px] border border-[var(--border-default)] px-4 py-2 type-meta text-[var(--text-primary)] transition hover:border-[var(--accent-primary)]"
-        >
-          Message your designer
-        </Link>
-      </div>
+      {/* No "Message your designer" here any more: /messages is retired and
+          folds to the note of the client's active house, which a client with
+          no house does not have — the link came straight back to this page. */}
+      <EmptyStateActs />
     </div>
   );
 }

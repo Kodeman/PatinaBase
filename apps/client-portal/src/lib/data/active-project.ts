@@ -66,3 +66,56 @@ export async function resolveActiveHouse(projectIds: string[]): Promise<string |
     return freshest;
   }
 }
+
+/* ── The house an instrument names ──────────────────────────────────────────
+   `/invoices/<id>` and `/proposals/<id>` are still emitted on purpose — the
+   Patina iOS app claims both in its `applinks:` entitlement — so they fold to
+   `/` for everyone without the app. `/` on its own opens the house that moved
+   LAST, which for a client with two houses is the wrong letterbox and the
+   wrong door: the money and signature path, landing silently in someone
+   else's room. The fold carries the entity id, and this resolves the house it
+   belongs to before the active-house clocks are consulted.
+
+   It never guesses: an id that resolves to nothing, or to a project outside
+   the client's own list, returns null and the active house stands. ───────── */
+
+export async function resolveHouseForInstrument(
+  projectIds: string[],
+  instrument: { invoiceId?: string | null; proposalId?: string | null },
+): Promise<string | null> {
+  const { invoiceId, proposalId } = instrument;
+  if (projectIds.length < 2) return null;
+  if (!invoiceId && !proposalId) return null;
+  if (env.useProjectFixtures) return null;
+
+  const owns = (projectId: unknown): string | null =>
+    typeof projectId === 'string' && projectIds.includes(projectId)
+      ? projectId
+      : null;
+
+  try {
+    const supabase = (await createServerClient()) as any;
+
+    if (invoiceId) {
+      // Scoped to the client's own projects as well as by id: RLS should not
+      // be the only thing standing between this read and another client's row.
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('project_id')
+        .eq('id', invoiceId)
+        .in('project_id', projectIds)
+        .maybeSingle();
+      if (!error && data) return owns(data.project_id);
+      return null;
+    }
+
+    // `list_client_proposals` is the same client-safe read the door itself
+    // runs; there is no client-readable proposals table to select from.
+    const { data, error } = await supabase.rpc('list_client_proposals');
+    if (error || !Array.isArray(data)) return null;
+    const match = data.find((row: any) => row?.id === proposalId);
+    return match ? owns(match.project_id) : null;
+  } catch {
+    return null;
+  }
+}

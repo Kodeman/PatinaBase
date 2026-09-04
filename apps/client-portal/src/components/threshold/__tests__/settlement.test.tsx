@@ -168,15 +168,20 @@ describe('Settlement — the balance settled in place', () => {
     );
   });
 
-  it('states any other failure in the words the till gave', async () => {
+  // The two enumerated InvoiceCheckoutError codes keep their own copy, because
+  // each says something true and specific about the client's money. Every
+  // other cause reads in the house's words — a PostgREST string is never
+  // printed to the homeowner as content.
+  it('states any other failure in the house’s own words', async () => {
     renderSettlement();
-    mutateAsync.mockRejectedValue(new Error('A bank transfer is already processing.'));
+    mutateAsync.mockRejectedValue(new Error('invoices row refused: 42501'));
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /settle the balance/i }));
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent('A bank transfer is already processing.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to start payment.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('42501');
   });
 
   it('does not go to the till twice while the first session is being claimed', async () => {

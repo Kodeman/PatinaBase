@@ -31,6 +31,7 @@ describe('client middleware Universal Link exemption', () => {
       (url: URL, status?: number) => ({
         url,
         status,
+        headers: new Headers(),
         cookies: { set: jest.fn() },
       }),
     );
@@ -355,7 +356,11 @@ describe('client middleware retired-route map', () => {
   const lastRedirect = () => {
     const calls = (NextResponse.redirect as jest.Mock).mock.calls;
     const [url, status] = calls[calls.length - 1] as [URL, number | undefined];
-    return { url, status };
+    const results = (NextResponse.redirect as jest.Mock).mock.results;
+    const response = results[results.length - 1]?.value as
+      | { headers: Headers }
+      | undefined;
+    return { url, status, headers: response?.headers };
   };
 
   beforeEach(() => {
@@ -368,6 +373,7 @@ describe('client middleware retired-route map', () => {
       (url: URL, status?: number) => ({
         url,
         status,
+        headers: new Headers(),
         cookies: { set: jest.fn() },
       }),
     );
@@ -429,6 +435,35 @@ describe('client middleware retired-route map', () => {
 
   it('carries the project id when the old URL had one', async () => {
     await visit('/projects/proj-1/reviews/edition-1');
+    const { url, status } = lastRedirect();
+    expect(status).toBe(308);
+    expect(url.pathname).toBe('/projects/proj-1');
+    expect(url.hash).toBe('#doorstep');
+  });
+
+  // The edition id is the only way to the ask: the editions table is
+  // studio-only by RLS, so the emailed link is the client's sole route in.
+  // A 308 with no ceiling can be cached by a browser or an intermediary for
+  // good; the anchors are a design decision and will move.
+  it('puts a ceiling on how long a fold may be cached', async () => {
+    await visit('/invoices');
+    expect(lastRedirect().headers?.get('Cache-Control')).toBe('max-age=3600');
+  });
+
+  it('carries the edition id the review mail was sent about', async () => {
+    await visit('/projects/proj-1/reviews/edition-1');
+    const { url } = lastRedirect();
+    expect(url.searchParams.get('review')).toBe('edition-1');
+  });
+
+  it('carries no review param when the old URL named no edition', async () => {
+    await visit('/projects/proj-1/reviews');
+    const { url } = lastRedirect();
+    expect(url.searchParams.get('review')).toBeNull();
+  });
+
+  it('folds the scope-change tree onto its own house', async () => {
+    await visit('/projects/proj-1/scope-change/new');
     const { url, status } = lastRedirect();
     expect(status).toBe(308);
     expect(url.pathname).toBe('/projects/proj-1');

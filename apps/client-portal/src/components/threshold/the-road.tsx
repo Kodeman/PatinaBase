@@ -57,6 +57,12 @@ export interface TheRoadProps {
   closedOrders?: ClosedOrderModel[];
   /** Re-read the direct orders while a return from the till is waiting. */
   onOrdersRefetch?: () => void | Promise<unknown>;
+  /**
+   * The direct-orders read failed. "Nothing on the road." is an assertion, and
+   * a read that never answered has no standing to make it — the road says the
+   * register could not be read instead.
+   */
+  ordersUnread?: boolean;
   today?: Date;
 }
 
@@ -65,6 +71,7 @@ export function TheRoad({
   orders = [],
   closedOrders = [],
   onOrdersRefetch,
+  ordersUnread = false,
   today,
 }: TheRoadProps) {
   const [liftedId, setLiftedId] = useState<string | null>(null);
@@ -143,8 +150,17 @@ export function TheRoad({
           under it in the next element takes it straight back. Where the road
           holds only pieces that are no longer coming, the list speaks for
           itself and the sentence is not said. */}
+      {ordersUnread ? (
+        <p
+          data-testid="road-orders-error"
+          className="mt-2.5 max-w-[60ch] text-[15px] leading-relaxed text-[var(--text-body)]"
+        >
+          Couldn&rsquo;t load what you bought direct. Please refresh.
+        </p>
+      ) : null}
+
       {inMotion === 0 ? (
-        closedOrders.length > 0 ? null : (
+        closedOrders.length > 0 || ordersUnread ? null : (
           <p className="mt-2.5 max-w-[60ch] text-[15px] leading-relaxed text-[var(--text-body)]">
             Nothing on the road.
           </p>

@@ -161,7 +161,10 @@ describe('PaymentMethodChooser — in the letterbox', () => {
       fireEvent.click(notify);
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Network unreachable');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Unable to notify your designer.',
+    );
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Network unreachable');
     expect(screen.getByRole('button', { name: /let .+ know a check is coming/i })).not.toBeDisabled();
   });
 

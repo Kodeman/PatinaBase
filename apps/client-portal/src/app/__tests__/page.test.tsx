@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react';
 
 import HomePage from '../page';
-import { resolveActiveHouse } from '@/lib/data/active-project';
+import {
+  resolveActiveHouse,
+  resolveHouseForInstrument,
+} from '@/lib/data/active-project';
 import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
 
 /* ── The front door ─────────────────────────────────────────────────────────
@@ -17,6 +20,7 @@ jest.mock('@/lib/data/projects', () => ({
 
 jest.mock('@/lib/data/active-project', () => ({
   resolveActiveHouse: jest.fn(),
+  resolveHouseForInstrument: jest.fn(),
 }));
 
 jest.mock('@/components/making/project-surface-switch', () => ({
@@ -45,6 +49,7 @@ jest.mock('@/components/projects/ProjectsEmptyState', () => ({
 const mockProjects = fetchClientProjects as jest.Mock;
 const mockProjectView = fetchClientProjectView as jest.Mock;
 const mockActiveHouse = resolveActiveHouse as jest.Mock;
+const mockInstrumentHouse = resolveHouseForInstrument as jest.Mock;
 
 const listItem = (id: string, name: string) => ({
   id,
@@ -62,6 +67,10 @@ const view = (id: string) => ({
 });
 
 describe('the front door', () => {
+  beforeEach(() => {
+    mockInstrumentHouse.mockResolvedValue(null);
+  });
+
   it('opens the house the active-house rule chose', async () => {
     mockProjects.mockResolvedValue([listItem('p1', 'The Vale Residence')]);
     mockActiveHouse.mockResolvedValue('p1');
@@ -131,6 +140,39 @@ describe('the front door', () => {
     expect(mockProjectView).toHaveBeenCalledWith('p1');
     expect(mockProjectView).toHaveBeenCalledWith('p2');
     expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p2');
+  });
+
+  // `/invoices/<id>` and `/proposals/<id>` fold here carrying the instrument
+  // they were sent about. The active house is the wrong answer for a client
+  // with two: the money and the signature would land in another house's room.
+  it('opens the house the instrument on the address belongs to', async () => {
+    mockProjects.mockResolvedValue([
+      listItem('p1', 'The Vale Residence'),
+      listItem('p2', 'The Linden house'),
+    ]);
+    mockActiveHouse.mockResolvedValue('p1');
+    mockInstrumentHouse.mockResolvedValue('p2');
+    mockProjectView.mockImplementation(async (id: string) => view(id));
+
+    render(await HomePage({ searchParams: Promise.resolve({ invoice: 'inv-9' }) }));
+
+    expect(mockInstrumentHouse).toHaveBeenCalledWith(['p1', 'p2'], {
+      invoiceId: 'inv-9',
+      proposalId: undefined,
+    });
+    expect(mockActiveHouse).not.toHaveBeenCalled();
+    expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p2');
+  });
+
+  it('falls back to the active house when the address names no instrument', async () => {
+    mockProjects.mockResolvedValue([listItem('p1', 'The Vale Residence')]);
+    mockActiveHouse.mockResolvedValue('p1');
+    mockProjectView.mockImplementation(async (id: string) => view(id));
+
+    render(await HomePage());
+
+    expect(mockActiveHouse).toHaveBeenCalledWith(['p1']);
+    expect(screen.getByTestId('surface')).toHaveAttribute('data-project-id', 'p1');
   });
 
   it('answers with the empty state, never a 404, when no house will open', async () => {

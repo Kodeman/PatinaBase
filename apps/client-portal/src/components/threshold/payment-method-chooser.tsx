@@ -10,6 +10,7 @@ import {
 } from '@patina/shared';
 
 import { ScoredAction } from '@/components/making/scored-action';
+import { refusalSentence } from '@/lib/threshold/refusal';
 
 /* ── HOW SHE WOULD LIKE TO PAY ───────────────────────────────────────────────
    The invoice page's chooser (migration 00428), brought inside the letterbox:
@@ -103,7 +104,7 @@ export function PaymentMethodChooser({
       setNotifyState('sent');
     } catch (err) {
       setNotifyState('error');
-      setNotifyError(err instanceof Error ? err.message : 'Unable to notify your designer.');
+      setNotifyError(refusalSentence(err, 'Unable to notify your designer.'));
     }
   };
 

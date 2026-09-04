@@ -123,6 +123,57 @@ describe('Letterbox — one letter, half out of the slot', () => {
     Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
   });
 
+  /* ── The letter the address named ────────────────────────────────────────
+     `/invoices/<id>` still goes out in the studio's mail and folds to
+     `?invoice=<id>`. The slot holds one letter, chosen by due date, so
+     without this the client who followed a link about one invoice reads
+     another and is never told which. ─────────────────────────────────────── */
+
+  it('stands the letter the address named in the slot, not the soonest-due one', () => {
+    standAt('?invoice=inv-9');
+
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-4', number: 'Invoice No. 4' })}
+        invoices={[
+          invoiceRow({ id: 'inv-9', invoice_number: 'Invoice No. 9', status: 'sent' }),
+        ]}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 9');
+    expect(screen.getByTestId('letterbox-body')).not.toHaveTextContent('Invoice No. 4');
+  });
+
+  it('says nothing new when the address names a letter this house is not holding', () => {
+    standAt('?invoice=inv-nowhere');
+
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-4', number: 'Invoice No. 4' })}
+        invoices={[invoiceRow({ id: 'inv-9', invoice_number: 'Invoice No. 9' })]}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 4');
+  });
+
+  it('leaves the till the return: `?invoice=` under `?checkout=` names a receipt, not a letter', () => {
+    standAt('?invoice=inv-9&checkout=cancel');
+
+    render(
+      <Letterbox
+        invoice={invoice({ id: 'inv-4', number: 'Invoice No. 4' })}
+        invoices={[invoiceRow({ id: 'inv-9', invoice_number: 'Invoice No. 9' })]}
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Invoice No. 4');
+  });
+
   it('carries the anchor, the unit, and never opts into dimming', () => {
     render(<Letterbox invoice={invoice()} />);
 

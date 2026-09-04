@@ -280,7 +280,9 @@ function positive(cents: number | null | undefined): number | null {
   return typeof cents === 'number' && Number.isFinite(cents) && cents > 0 ? cents : null;
 }
 
-function toInvoiceModel(invoice: Invoice): InvoiceModel {
+/** The letterbox's own reading of a row. Exported so the letter a mailed
+ *  `/invoices/<id>` names can stand in the slot the model chose. */
+export function toInvoiceModel(invoice: Invoice): InvoiceModel {
   return {
     id: invoice.id,
     number: invoice.invoice_number,

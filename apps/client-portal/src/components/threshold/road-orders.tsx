@@ -14,6 +14,7 @@ import {
 } from '@/lib/threshold/checkout-return';
 import { parseSourceDate } from '@/lib/threshold/derive';
 import type { ClosedOrderModel, RoadOrderModel } from '@/lib/threshold/road-orders';
+import { refusalSentence } from '@/lib/threshold/refusal';
 
 /* ── THE PIECES SHE BOUGHT HERSELF ───────────────────────────────────────────
    The same road, the same stops, one line each — and, on a piece that has not
@@ -87,7 +88,7 @@ export function RoadOrders({ orders, closed = [], onRefetch, today }: RoadOrders
       const { url } = await startCheckout.mutateAsync({ directOrderId: orderId });
       window.location.assign(url);
     } catch (err) {
-      setPayError(err instanceof Error ? err.message : 'Unable to start payment.');
+      setPayError(refusalSentence(err, 'Unable to start payment.'));
       setPayingId(null);
     }
   };

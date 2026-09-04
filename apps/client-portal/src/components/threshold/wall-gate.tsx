@@ -12,6 +12,7 @@ import {
 import { makingEvents } from '@/lib/analytics/events';
 import type { ClientSelection } from '@/lib/commercial-documents';
 import type { ThresholdMark } from '@/lib/threshold/derive';
+import { refusalSentence } from '@/lib/threshold/refusal';
 
 import { KIND_LABEL } from './consent-copy';
 
@@ -165,7 +166,7 @@ export function WallGate({
       setAcceptedAt(new Date());
       onAccepted?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to accept this work right now.');
+      setError(refusalSentence(err, 'Unable to accept this work right now.'));
     } finally {
       inFlight.current = false;
     }

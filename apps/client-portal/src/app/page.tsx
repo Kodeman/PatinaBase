@@ -1,6 +1,9 @@
 import { ProjectSurfaceSwitch } from '@/components/making/project-surface-switch';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
-import { resolveActiveHouse } from '@/lib/data/active-project';
+import {
+  resolveActiveHouse,
+  resolveHouseForInstrument,
+} from '@/lib/data/active-project';
 import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
 import { toOtherHouses } from '@/lib/threshold/other-houses';
 
@@ -14,20 +17,35 @@ import { toOtherHouses } from '@/lib/threshold/other-houses';
  * replaced — so anything that reaches this function is a signed-in client of
  * this portal.
  */
-export default async function HomePage() {
+export default async function HomePage(props?: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const projects = await fetchClientProjects();
-  const activeProjectId = await resolveActiveHouse(projects.map((project) => project.id));
+  const projectIds = projects.map((project) => project.id);
+  const query = (await props?.searchParams) ?? {};
+  const one = (value: string | string[] | undefined) =>
+    Array.isArray(value) ? value[0] : value;
+
+  // A fold from `/invoices/<id>` or `/proposals/<id>` names the instrument it
+  // was sent about. Those are the money and signature paths, and the active
+  // house is the wrong answer for a client with more than one: the letterbox
+  // would show a different invoice and the door whatever that house happens to
+  // have pending. Resolve the instrument's own house first; the active-house
+  // clocks decide only when nothing names one.
+  const namedProjectId = await resolveHouseForInstrument(projectIds, {
+    invoiceId: one(query.invoice),
+    proposalId: one(query.proposal),
+  });
+  const activeProjectId =
+    namedProjectId ?? (await resolveActiveHouse(projectIds));
 
   // The house that moved last, then the rest in the list's own order. A client
   // who HAS houses must land in one of them: the chrome drops the header on
-  // `/` because the list says she has a house, so an empty state here would
-  // strand her with no navigation and tell her she has no projects.
+  // `/`, so an empty state here would strand her with no navigation and tell
+  // her she has no projects.
   const candidates = activeProjectId
-    ? [
-        activeProjectId,
-        ...projects.map((project) => project.id).filter((id) => id !== activeProjectId),
-      ]
-    : projects.map((project) => project.id);
+    ? [activeProjectId, ...projectIds.filter((id) => id !== activeProjectId)]
+    : projectIds;
 
   let projectView: Awaited<ReturnType<typeof fetchClientProjectView>> = null;
   for (const candidateId of candidates) {

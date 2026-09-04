@@ -4,7 +4,6 @@ import { Inter, Playfair_Display, DM_Mono } from 'next/font/google';
 
 import { Providers } from './providers';
 import { AppChrome } from '@/components/layout/app-chrome';
-import { ThresholdRouteCollapse } from '@/components/threshold/threshold-route-collapse';
 import { fetchClientProjects } from '@/lib/data/projects';
 import './globals.css';
 
@@ -77,7 +76,6 @@ export default async function RootLayout({ children }: RootLayoutProps) {
         </Script>
         <Providers>
           <div className="min-h-screen bg-[var(--bg-primary)]">
-            <ThresholdRouteCollapse projectIds={projects.map((p) => p.id)} />
             <AppChrome projects={projects}>{children}</AppChrome>
           </div>
         </Providers>

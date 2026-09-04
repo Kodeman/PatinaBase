@@ -282,13 +282,16 @@ function PapersSheetBody({
         {!viewing && (
           <>
             {/* Absence is silence about CONTENT; it does not license silence
-                about a failure the client can act on by refreshing. Both
-                sentences are the retired page's own. */}
+                about a failure the client can act on by refreshing. The
+                retired page said these in the first person ("We couldn't load
+                your drawings…"); the page voice here is third, and first
+                person is reserved for a note the studio actually wrote. Same
+                fact, this surface's voice. */}
             {planSet.isError && (
               <section className="mt-6" data-testid="plan-set-error">
                 <h3 className={HEAD_CLASS}>Your drawings</h3>
                 <p className="mt-2 text-[15px] leading-relaxed text-[var(--text-body)]">
-                  We couldn&rsquo;t load your drawings right now. Try refreshing the page.
+                  The drawings could not be read just now. Please refresh.
                 </p>
               </section>
             )}
@@ -298,7 +301,7 @@ function PapersSheetBody({
                 data-testid="papers-sheet-error"
                 className="mt-6 text-[15px] leading-relaxed text-[var(--text-body)]"
               >
-                We couldn&rsquo;t load your documents right now. Try refreshing the page.
+                The documents could not be read just now. Please refresh.
               </p>
             )}
 
@@ -307,7 +310,7 @@ function PapersSheetBody({
                 data-testid="instruments-error"
                 className="mt-6 text-[15px] leading-relaxed text-[var(--text-body)]"
               >
-                We couldn&rsquo;t load your signed papers right now. Try refreshing the page.
+                The signed papers could not be read just now. Please refresh.
               </p>
             )}
 

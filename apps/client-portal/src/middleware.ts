@@ -293,7 +293,14 @@ export async function middleware(req: NextRequest) {
     // the Threshold reads both (`?invoice=`/`?order=` name the row, `#letterbox`
     // names the section).
     if (retired.anchor) target.hash = retired.anchor;
-    return redirectWithCookies(target, 308);
+    const folded = redirectWithCookies(target, 308);
+    // 308 is permanent, and a permanent redirect with no ceiling may be cached
+    // by a browser or an intermediary for good. The anchors are a design
+    // decision and will move; an hour is long enough to spare the round trip
+    // on a mail campaign's burst and short enough that a changed map reaches
+    // everyone the same day.
+    folded.headers.set('Cache-Control', 'max-age=3600');
+    return folded;
   }
 
   return res;

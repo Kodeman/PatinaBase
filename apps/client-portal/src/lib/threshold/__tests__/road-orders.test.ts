@@ -70,6 +70,18 @@ describe('toRoadOrders', () => {
     );
 
     expect(kept.map((piece) => piece.id)).toEqual(['mine', 'houseless']);
+
+    // The same lamp drawn in every house reads as one lamp per house. Only
+    // the house that holds the unfiled ones may draw it.
+    const elsewhere = toRoadOrders(
+      [
+        order({ id: 'mine', project_id: 'project-1' }),
+        order({ id: 'houseless', project_id: null }),
+      ],
+      'project-1',
+      false,
+    );
+    expect(elsewhere.map((piece) => piece.id)).toEqual(['mine']);
   });
 
   it('drops what is not coming, and holds nothing when nothing was bought', () => {
@@ -123,5 +135,15 @@ describe('toClosedOrders — a piece bought against no house', () => {
       'project-1',
     );
     expect(closed[0].houseless).toBe(false);
+  });
+
+  it('keeps a houseless closed order out of every house but the one that holds it', () => {
+    expect(
+      toClosedOrders(
+        [order({ id: 'loose', status: 'refunded', project_id: null })],
+        'project-1',
+        false,
+      ),
+    ).toEqual([]);
   });
 });

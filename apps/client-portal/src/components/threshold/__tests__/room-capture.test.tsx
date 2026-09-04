@@ -363,6 +363,22 @@ describe('StrayCaptures — the captures no band claimed', () => {
     expect(screen.getByText('Scan 12 June')).toBeInTheDocument();
   });
 
+  // A capture filed against no house has no house of its own; drawn in every
+  // house it reads as one capture per house.
+  it('leaves a houseless capture to the one house that holds the unfiled ones', () => {
+    setSources({ scans: [scan({ id: 'nameless', name: 'Scan 12 June', project_id: null })] });
+    const { container } = render(
+      <StrayCaptures
+        projectId="project-1"
+        userId="client-1"
+        rooms={rooms}
+        standsUnfiled={false}
+      />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('leaves another house’s capture to that house', () => {
     const { container } = stray([
       scan({ id: 'elsewhere', name: 'Their kitchen', project_id: 'project-2' }),

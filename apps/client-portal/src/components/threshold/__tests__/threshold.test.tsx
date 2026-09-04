@@ -620,6 +620,39 @@ describe('Threshold — which house', () => {
     expect(screen.queryByTestId('plan-key')).not.toBeInTheDocument();
   });
 
+  // React Query drops `isPending` on error. A failed register that settles
+  // into an empty one tells the client her house has no rooms because a read
+  // failed — a failure dressed as a fact.
+  it('says the rooms could not be read rather than standing an empty house', () => {
+    roomsMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+    });
+    renderThreshold();
+
+    expect(screen.getByTestId('threshold-rooms-error')).toHaveTextContent(
+      'Couldn’t load your rooms. Please refresh.',
+    );
+    expect(screen.queryByTestId('ground-floor')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('plan-key')).not.toBeInTheDocument();
+  });
+
+  it('says what she bought direct could not be read rather than “Nothing on the road.”', () => {
+    ordersMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isLoading: false,
+      isError: true,
+      refetch: jest.fn(),
+    });
+    renderThreshold();
+
+    expect(screen.getByTestId('road-orders-error')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing on the road.')).not.toBeInTheDocument();
+  });
+
   it('says nothing at all while the queries are in flight', () => {
     notesMock.mockReturnValue({ data: undefined, isPending: true, isLoading: true, isError: false });
     renderThreshold();
@@ -869,7 +902,7 @@ describe('Threshold — the doorstep’s own asks', () => {
     renderWithApprovals([], { error: true });
 
     expect(screen.getByTestId('threshold-approvals-error')).toHaveTextContent(
-      'Project approvals could not be read just now. Refresh before taking action.',
+      'The approvals could not be read just now. Please refresh before taking action.',
     );
   });
 

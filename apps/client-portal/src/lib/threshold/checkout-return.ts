@@ -77,6 +77,51 @@ export function consumeCheckoutReturn(): CheckoutReturn | null {
   return consumedValue;
 }
 
+/* ── A LETTER NAMED ON THE ADDRESS ───────────────────────────────────────────
+   `/invoices/<id>` still goes out in the studio's mail — the Patina iOS app
+   claims it — and the middleware folds it to `/#letterbox?invoice=<id>`. The
+   letterbox holds ONE letter, chosen by due date, so without this the client
+   who followed a link about invoice B reads invoice A and is never told which
+   she is looking at. The named letter stands in the slot instead.
+
+   Read once and struck out, the same way the till's return is: a param left on
+   the address would keep re-choosing the letter across every later navigation.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+let namedConsumed = false;
+let namedValue: string | null = null;
+
+export function consumeNamedInvoice(): string | null {
+  if (namedConsumed) return namedValue;
+  namedConsumed = true;
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  // A return from the till owns `?invoice=` while it is being read; the
+  // receipt, not the slot, is what that address is about.
+  if (params.get('checkout')) return null;
+  const id = params.get('invoice');
+  if (!id) return null;
+  namedValue = id;
+  window.history.replaceState(
+    {},
+    '',
+    cleanedCheckoutUrl(window.location.href, window.location.hash || '#letterbox'),
+  );
+  return namedValue;
+}
+
+/** The named letter, after hydration — never during SSR. */
+export function useNamedInvoice(): string | null {
+  const [named, setNamed] = useState<string | null>(null);
+  useEffect(() => {
+    // Reading the browser's address is a synchronization with an external
+    // system, not derived state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNamed(consumeNamedInvoice());
+  }, []);
+  return named;
+}
+
 /**
  * A fresh page load, in a module that only ever reads once.
  *
@@ -86,6 +131,8 @@ export function consumeCheckoutReturn(): CheckoutReturn | null {
 export function resetCheckoutReturn(): void {
   consumed = false;
   consumedValue = null;
+  namedConsumed = false;
+  namedValue = null;
 }
 
 /** The return, after hydration — never during SSR, where there is no address. */
@@ -108,8 +155,13 @@ export function useCheckoutReturn(): CheckoutReturn | null {
    So the house waits for its own row to say so. While it waits it says it is
    waiting, and after `CONFIRM_POLL_TIMEOUT_MS` it says plainly that nothing is
    confirmed yet — the two sentences the invoice detail page said, in its own
-   words. Nothing here ever reverses: `confirming` hardens into `confirmed` or
-   into `unconfirmed`, and neither one un-says a payment. ─────────────────── */
+   words.
+
+   `confirmed` is final and never un-said. `unconfirmed` is NOT: it means "not
+   yet", and a row that settles later — an ACH debit clearing days after the
+   poll gave up — still hardens into `confirmed` on the next read. The one
+   direction refused is confirmed → anything else, which would un-say a
+   payment the client has already been told about. ────────────────────────── */
 
 export const CONFIRM_POLL_INTERVAL_MS = 3_000;
 export const CONFIRM_POLL_TIMEOUT_MS = 30_000;

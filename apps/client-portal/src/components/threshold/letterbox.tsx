@@ -12,8 +12,13 @@ import {
   revealReturnAnchor,
   useCheckoutConfirmation,
   useCheckoutReturn,
+  useNamedInvoice,
 } from '@/lib/threshold/checkout-return';
-import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
+import {
+  parseSourceDate,
+  toInvoiceModel,
+  type InvoiceModel,
+} from '@/lib/threshold/derive';
 
 import { EarlierInvoices } from './earlier-invoices';
 import { Settlement } from './settlement';
@@ -108,13 +113,21 @@ function Drawing({ full }: { full: boolean }) {
 }
 
 export function Letterbox({
-  invoice,
+  invoice: soonestDue,
   invoices = [],
   designerName,
   onRefetch,
   today,
 }: LetterboxProps) {
   const [open, setOpen] = useState(false);
+
+  // A mailed `/invoices/<id>` folds to `?invoice=<id>`, and the letter it
+  // names is the one the client came to read — not the soonest-due one the
+  // model would otherwise pick. An id this house is not holding names nothing
+  // and changes nothing: the slot never states a letter it has no row for.
+  const namedId = useNamedInvoice();
+  const namedRow = namedId ? (invoices.find((row) => row.id === namedId) ?? null) : null;
+  const invoice = namedRow ? toInvoiceModel(namedRow) : soonestDue;
   const due = invoice ? formatDue(invoice.dueDate, today) : null;
 
   // The return from the till. A return that names an order belongs to the road,
@@ -162,6 +175,17 @@ export function Letterbox({
     revealed.current = true;
     revealReturnAnchor(slot.current);
   }, [settlement]);
+
+  // The letter the address named is unfolded and brought into view: she asked
+  // for this one by following a link about it, and the letterbox sits well
+  // below the first viewport.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (!namedRow || opened.current) return;
+    opened.current = true;
+    setOpen(true);
+    revealReturnAnchor(slot.current);
+  }, [namedRow]);
 
   // The row behind the model: the currency the figures are quoted in, and the
   // designer a check would be made out to.
