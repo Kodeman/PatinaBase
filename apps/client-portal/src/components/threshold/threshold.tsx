@@ -42,7 +42,7 @@ import { planKeyGeometry } from '@/lib/threshold/plan-key';
 import { keySentence, previouslyLine, thresholdStanding } from '@/lib/threshold/standing';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
-import { ApprovalAsk, useDoorstepApprovals } from './approval-ask';
+import { ApprovalAsk, ApprovalReceipt, useDoorstepApprovals } from './approval-ask';
 import { KIND_LABEL } from './consent-copy';
 import { DoorGate, type DoorProposal } from './door-gate';
 import { Doorplate } from './doorplate';
@@ -169,10 +169,10 @@ export interface ThresholdProps {
   projectApprovals?: ProjectApprovalReview[];
   projectApprovalsLoading?: boolean;
   /**
-   * Taken and deliberately unread, for parity with `TheMaking`'s signature.
-   * The Making prints "Project approvals could not be read just now"; the
-   * house has no register for that sentence — a region that cannot be read is
-   * simply absent. Absence is silence.
+   * The approvals could not be read. Silence is for absence, not for failure:
+   * once the doorstep is the only place a gate can be answered, a failed read
+   * that shows nothing tells the client they owe nothing. It says so instead,
+   * where the asks would have stood.
    */
   projectApprovalsError?: boolean;
 }
@@ -183,6 +183,7 @@ export function Threshold({
   milestones,
   projectApprovals = [],
   projectApprovalsLoading = false,
+  projectApprovalsError = false,
 }: ThresholdProps) {
   // ── every hook, before any branch ──────────────────────────────────────────
   const hydrated = useHydrated();
@@ -285,10 +286,15 @@ export function Threshold({
 
   // ── the asks that carry no room ────────────────────────────────────────────
   const doorstepApprovals = projectApprovals.filter(isClientActionableProjectApproval);
-  // The model counts only what is still owed; the doorstep also keeps the ask
-  // that was answered while the client stood on it, so its stamp has a place.
-  const { asks: doorstepAsks, onAnswered: onApprovalAnswered } =
-    useDoorstepApprovals(projectApprovals);
+  // The model counts only what is still owed; the doorstep also keeps the gate
+  // waiting on the studio and the gates already answered, so a recorded outcome
+  // has a place to stand after the visit that recorded it.
+  const {
+    asks: doorstepAsks,
+    receipts: doorstepReceipts,
+    anchoredDecisionIds,
+    onAnswered: onApprovalAnswered,
+  } = useDoorstepApprovals(projectApprovals);
   const approvals: ThresholdApproval[] = doorstepApprovals.map((approval) => ({
     id: approval.decisionId,
     title: approval.question,
@@ -602,12 +608,25 @@ export function Threshold({
   const asks = (
     <>
       {doorstepGates}
+      {projectApprovalsError && (
+        <p
+          role="alert"
+          data-testid="threshold-approvals-error"
+          className="mt-8 max-w-[52ch] border-t border-[var(--border-subtle)] pt-4 text-[15px] leading-[1.62] text-[var(--color-error)]"
+        >
+          Project approvals could not be read just now. Refresh before taking action.
+        </p>
+      )}
       {doorstepAsks.map((approval) => (
         <ApprovalAsk
           key={approval.decisionId}
           approval={approval}
           onAnswered={onApprovalAnswered}
+          anchoredDecisionIds={anchoredDecisionIds}
         />
+      ))}
+      {doorstepReceipts.map((approval) => (
+        <ApprovalReceipt key={approval.decisionId} approval={approval} />
       ))}
     </>
   );

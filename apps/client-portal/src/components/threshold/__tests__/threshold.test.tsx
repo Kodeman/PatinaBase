@@ -57,6 +57,7 @@ jest.mock('@/hooks/use-commercial-client', () => ({
   useClientCommercialDocument: jest.fn(),
   clientCommercialDocumentQueryOptions: jest.fn(),
   useAcceptTradeScope: jest.fn(),
+  useProjectWorkingBudget: jest.fn(),
   invalidateSignedCommercialDocument: jest.fn().mockResolvedValue(undefined),
 }));
 
@@ -82,6 +83,7 @@ import {
   useConfirmProjectApprovalReview,
   useCreateDecisionComment,
   useDecisionComments,
+  useDecisionRealtime,
   useMarkProjectRead,
   usePreviousReadingMark,
   useRespondProjectApproval,
@@ -100,6 +102,7 @@ import {
   useClientCommercialDocument,
   useClientPlan,
   useClientSelections,
+  useProjectWorkingBudget,
 } from '@/hooks/use-commercial-client';
 
 import { Threshold } from '../threshold';
@@ -368,7 +371,7 @@ beforeEach(() => {
   markReadMock.mockReturnValue({ mutate: jest.fn(), isPending: false });
   previousMarkMock.mockReturnValue({ data: undefined, isPending: false, isError: false });
   // The doorstep ask answers in place; jest.config resets mocks per test, so
-  // its five hooks are re-armed here rather than at the factory.
+  // its six hooks are re-armed here rather than at the factory.
   (useConfirmProjectApprovalReview as jest.Mock).mockReturnValue({
     mutateAsync: jest.fn(),
     isPending: false,
@@ -385,6 +388,12 @@ beforeEach(() => {
   (useCreateDecisionComment as jest.Mock).mockReturnValue({
     mutate: jest.fn(),
     isPending: false,
+  });
+  (useDecisionRealtime as jest.Mock).mockReturnValue(undefined);
+  (useProjectWorkingBudget as jest.Mock).mockReturnValue({
+    data: null,
+    isLoading: false,
+    isError: false,
   });
   bundles = {
     'prop-7': AUTHORIZATION_BUNDLE,
@@ -600,7 +609,10 @@ const PHASE_APPROVAL = {
   updatedAt: '2026-08-12T10:00:00Z',
 } as unknown as ProjectApprovalReview;
 
-function renderWithApprovals(approvals: ProjectApprovalReview[]) {
+function renderWithApprovals(
+  approvals: ProjectApprovalReview[],
+  { error = false }: { error?: boolean } = {},
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -611,6 +623,7 @@ function renderWithApprovals(approvals: ProjectApprovalReview[]) {
         project={PROJECT}
         milestones={MILESTONES}
         projectApprovals={approvals}
+        projectApprovalsError={error}
       />
     </QueryClientProvider>,
   );
@@ -643,6 +656,28 @@ describe('Threshold — the doorstep’s own asks', () => {
     expect(
       screen.getByRole('button', { name: /review exact edition/i }),
     ).toBeInTheDocument();
+  });
+
+  it('keeps the record of an approval answered on an earlier visit', () => {
+    renderWithApprovals([
+      {
+        ...PHASE_APPROVAL,
+        outcome: 'approved',
+        lifecycleStatus: 'responded',
+        respondedAt: '2026-08-14T12:00:00Z',
+      } as ProjectApprovalReview,
+    ]);
+
+    expect(screen.queryByTestId('doorstep-approval')).not.toBeInTheDocument();
+    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('Approved 14 August');
+  });
+
+  it('says so where the asks would stand when the approvals cannot be read', () => {
+    renderWithApprovals([], { error: true });
+
+    expect(screen.getByTestId('threshold-approvals-error')).toHaveTextContent(
+      'Project approvals could not be read just now. Refresh before taking action.',
+    );
   });
 
   it('stands a roomless paper on the doorstep, not inside a band', () => {

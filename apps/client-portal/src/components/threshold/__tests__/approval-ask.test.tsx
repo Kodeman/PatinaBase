@@ -4,9 +4,10 @@ import type { ProjectApprovalReview } from '@patina/supabase';
 
 /* ── Boundaries ──────────────────────────────────────────────────────────────
    The ask is `/decisions/[id]`'s ceremony moved onto the doorstep, so the
-   boundary is the same five hooks that page used. The assertions are about
-   the payloads: an outcome recorded here and an outcome recorded there must
-   be the same row. ────────────────────────────────────────────────────────── */
+   boundary is the same five hooks that page used, plus the working-budget read
+   the budget editions need. The assertions are about the payloads: an outcome
+   recorded here and an outcome recorded there must be the same row.
+   ────────────────────────────────────────────────────────────────────────── */
 
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
@@ -15,6 +16,11 @@ jest.mock('@patina/supabase', () => ({
   useDecisionComments: jest.fn(),
   useCreateDecisionComment: jest.fn(),
   useDecisionRealtime: jest.fn(),
+}));
+
+jest.mock('@/hooks/use-commercial-client', () => ({
+  __esModule: true,
+  useProjectWorkingBudget: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -38,8 +44,9 @@ import {
   useRespondProjectApproval,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
 
-import { ApprovalAsk, useDoorstepApprovals } from '../approval-ask';
+import { ApprovalAsk, ApprovalReceipt, useDoorstepApprovals } from '../approval-ask';
 
 const confirmHook = useConfirmProjectApprovalReview as jest.Mock;
 const respondHook = useRespondProjectApproval as jest.Mock;
@@ -47,6 +54,7 @@ const commentsHook = useDecisionComments as jest.Mock;
 const createCommentHook = useCreateDecisionComment as jest.Mock;
 const realtimeHook = useDecisionRealtime as jest.Mock;
 const authHook = useAuth as jest.Mock;
+const budgetHook = useProjectWorkingBudget as jest.Mock;
 
 const respondMutate = jest.fn();
 const confirmMutate = jest.fn();
@@ -83,6 +91,19 @@ const APPROVAL: ProjectApprovalReview = {
   updatedAt: '2026-08-12T12:00:00Z',
 };
 
+/** Choose an outcome, then submit it — the two beats an outcome now takes. */
+async function answer(name: RegExp) {
+  fireEvent.click(screen.getByRole('button', { name }));
+  fireEvent.click(await screen.findByRole('button', { name: /submit response/i }));
+}
+
+// jsdom's Crypto has no `randomUUID`, so it is lent for the test and handed
+// back afterwards. The rest of the global — `getRandomValues` above all — is
+// left where it is; replacing the whole object takes it away from every test
+// that follows.
+type WithRandomUUID = { randomUUID?: () => string };
+const realRandomUUID = (globalThis.crypto as WithRandomUUID).randomUUID;
+
 beforeEach(() => {
   respondMutate.mockReset().mockResolvedValue({});
   confirmMutate.mockReset().mockResolvedValue({});
@@ -93,25 +114,49 @@ beforeEach(() => {
   commentsHook.mockReturnValue({ data: [], isLoading: false, isError: false });
   createCommentHook.mockReturnValue({ mutate: commentMutate, isPending: false });
   realtimeHook.mockReturnValue(undefined);
+  budgetHook.mockReturnValue({ data: null, isLoading: false, isError: false });
   authHook.mockReturnValue({ user: { id: 'user-1', name: 'Harper Vale' } });
 
-  Object.defineProperty(globalThis, 'crypto', {
+  Object.defineProperty(globalThis.crypto, 'randomUUID', {
     configurable: true,
-    value: { randomUUID: () => 'request-key-1' },
+    writable: true,
+    value: () => 'request-key-1',
   });
 });
 
+afterEach(() => {
+  if (realRandomUUID) {
+    Object.defineProperty(globalThis.crypto, 'randomUUID', {
+      configurable: true,
+      writable: true,
+      value: realRandomUUID,
+    });
+  } else {
+    delete (globalThis.crypto as WithRandomUUID).randomUUID;
+  }
+  expect(typeof globalThis.crypto.getRandomValues).toBe('function');
+});
+
 describe('ApprovalAsk — the ask, answered where it stands', () => {
-  it('renders the ask: title, edition, due date, rationale and impact', () => {
+  it('renders the ask: title, edition, due date, rationale, authority and impact', () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
     const ask = screen.getByTestId('doorstep-approval');
     expect(ask).toHaveAttribute('id', 'approval-dec-1');
     expect(ask).toHaveAttribute('data-threshold-unit', 'doorstep-approval');
+    expect(ask).toHaveAttribute('data-never-dim');
     expect(ask).toHaveTextContent('Do the library elevations read right to you?');
     expect(ask).toHaveTextContent('Library elevations · Edition 3 · Due August 20');
     expect(screen.getByTestId('approval-rationale')).toHaveTextContent(
       'This releases the joinery package for pricing.',
+    );
+    // The line that fixes what the client is bound to, byte for byte.
+    expect(screen.getByTestId('immutability-sentence')).toHaveTextContent(
+      'You are approving edition 3, exactly as shown.',
+    );
+    // Authority is unconditional copy, not a companion of the confirm act.
+    expect(screen.getByTestId('approval-review-count')).toHaveTextContent(
+      '1 of 1 required reviews confirmed.',
     );
 
     const impact = screen.getByTestId('approval-impact');
@@ -127,11 +172,48 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(screen.getByRole('button', { name: /^decline$/i })).toBeInTheDocument();
   });
 
+  it('states an edition that changes nothing rather than showing a blank', () => {
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          costCentsDelta: 0,
+          scheduleDaysDelta: 0,
+          leadTimeDaysDelta: 0,
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId('approval-impact')).not.toBeInTheDocument();
+    expect(screen.getByTestId('approval-no-impact')).toHaveTextContent(
+      'No cost, schedule or lead-time change.',
+    );
+  });
+
+  it('names the consequence and takes a second beat before recording an outcome', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+
+    // Nothing is recorded on the first click.
+    expect(respondMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('approval-consequence')).toHaveTextContent(
+      'Approve · Accept this exact artifact and its stated impacts.',
+    );
+    // The other two acts are gone while one is chosen, so no second act can fire.
+    expect(screen.queryByRole('button', { name: /^decline$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ask a question/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /choose another outcome/i }));
+    expect(screen.getByRole('button', { name: /^decline$/i })).toBeInTheDocument();
+    expect(respondMutate).not.toHaveBeenCalled();
+  });
+
   it('approves with the payload the old detail page sent, then stamps in place', async () => {
     const onAnswered = jest.fn();
     render(<ApprovalAsk approval={APPROVAL} onAnswered={onAnswered} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+    await answer(/^approve$/i);
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     expect(respondMutate).toHaveBeenCalledWith({
@@ -151,7 +233,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
   it('declines as changes_requested and reads back as Declined', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /^decline$/i }));
+    await answer(/^decline$/i);
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     expect(respondMutate.mock.calls[0][0]).toMatchObject({
@@ -164,7 +246,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
   it('holds the gate when the client asks a question', async () => {
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /ask a question/i }));
+    await answer(/ask a question/i);
 
     await waitFor(() => expect(respondMutate).toHaveBeenCalledTimes(1));
     expect(respondMutate.mock.calls[0][0]).toMatchObject({ outcome: 'needs_discussion' });
@@ -189,10 +271,32 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     expect(screen.getByTestId('doorstep-approval')).not.toHaveAttribute('data-never-dim');
   });
 
-  it('confirms the exact edition with the old page’s payload while the gate is a draft', async () => {
+  it('stamps no date rather than a date the client did not answer on', () => {
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          outcome: 'approved',
+          lifecycleStatus: 'responded',
+          respondedAt: null,
+          // A later write to the row — a supersede, a disposition change — is
+          // not the day the client answered.
+          updatedAt: '2026-09-30T12:00:00Z',
+        }}
+      />,
+    );
+
+    const stamp = screen.getByTestId('approval-stamp');
+    expect(stamp).toHaveTextContent(/^Approved\s*Library elevations/);
+    expect(stamp).not.toHaveTextContent('September');
+  });
+
+  it('confirms the exact edition with the old page’s payload, and keeps its place', async () => {
+    const onAnswered = jest.fn();
     render(
       <ApprovalAsk
         approval={{ ...APPROVAL, lifecycleStatus: 'draft', completedReviewCount: 0 }}
+        onAnswered={onAnswered}
       />,
     );
 
@@ -210,16 +314,209 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
       idempotencyKey: 'request-key-1',
     });
     expect(screen.queryByTestId('approval-acts')).not.toBeInTheDocument();
+    // The surface speaks rather than deleting itself.
+    expect(await screen.findByTestId('approval-notice')).toHaveTextContent(
+      'Review confirmed for this exact artifact. Your designer can now issue it.',
+    );
+    expect(onAnswered).toHaveBeenCalledWith('dec-1');
   });
 
-  it('says so when the approval moved under the client', async () => {
+  it('says so in the house’s words when a confirm is refused', async () => {
+    confirmMutate.mockRejectedValue(new Error('artifact_checksum_mismatch'));
+    render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, lifecycleStatus: 'draft', completedReviewCount: 0 }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /review exact edition/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'The artifact changed or the review could not be confirmed. Refresh and review it again.',
+    );
+    expect(alert).not.toHaveTextContent('artifact_checksum_mismatch');
+    expect(screen.queryByTestId('approval-notice')).not.toBeInTheDocument();
+  });
+
+  it('holds the confirmed draft on the doorstep and says the studio has it', () => {
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          lifecycleStatus: 'draft',
+          completedReviewCount: 1,
+          requiredReviewCount: 1,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
+      'A gate · with your studio',
+    );
+    expect(screen.getByTestId('approval-awaiting-studio-issue')).toHaveTextContent(
+      'Review complete. Your designer can now issue this request.',
+    );
+    expect(screen.queryByRole('button', { name: /review exact edition/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('approval-acts')).not.toBeInTheDocument();
+  });
+
+  it('says why the review cannot be confirmed when the authority revision is missing', () => {
+    render(
+      <ApprovalAsk
+        approval={{
+          ...APPROVAL,
+          lifecycleStatus: 'draft',
+          completedReviewCount: 0,
+          authorityRevision: null,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('approval-confirmation-unavailable')).toHaveTextContent(
+      'Review confirmation is temporarily unavailable. The frozen authority revision was not supplied.',
+    );
+    expect(screen.queryByRole('button', { name: /review exact edition/i })).not.toBeInTheDocument();
+  });
+
+  it('says so in the house’s words when the approval moved under the client', async () => {
     respondMutate.mockRejectedValue(new Error('approval_conflict'));
     render(<ApprovalAsk approval={APPROVAL} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /^approve$/i }));
+    await answer(/^approve$/i);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('approval_conflict');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'This approval changed while it was open. Refresh before responding.',
+    );
+    // A Postgres string is never copy.
+    expect(alert).not.toHaveTextContent('approval_conflict');
     expect(screen.queryByTestId('approval-stamp')).not.toBeInTheDocument();
+  });
+
+  it('renders no ask copy for a withdrawn or superseded gate’s acts', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, disposition: 'withdrawn' }} />);
+    expect(screen.queryByTestId('approval-acts')).not.toBeInTheDocument();
+    expect(screen.getByTestId('doorstep-approval')).toHaveTextContent(
+      'Do the library elevations read right to you?',
+    );
+  });
+
+  it('stands the rationale block down when the gate carries no scope line', () => {
+    render(<ApprovalAsk approval={{ ...APPROVAL, context: null }} />);
+    expect(screen.queryByTestId('approval-rationale')).not.toBeInTheDocument();
+  });
+
+  it('reads the neighbouring editions in place, and only when they stand on this page', () => {
+    const { rerender } = render(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, predecessorDecisionId: 'dec-0', successorDecisionId: 'dec-2' }}
+      />,
+    );
+    // Nothing is anchored, so nothing is claimed.
+    expect(screen.queryByTestId('approval-revisions')).not.toBeInTheDocument();
+
+    rerender(
+      <ApprovalAsk
+        approval={{ ...APPROVAL, predecessorDecisionId: 'dec-0', successorDecisionId: 'dec-2' }}
+        anchoredDecisionIds={['dec-1', 'dec-0']}
+      />,
+    );
+    const link = screen.getByRole('link', { name: 'Review previous edition' });
+    expect(link).toHaveAttribute('href', '#approval-dec-0');
+    expect(
+      screen.queryByRole('link', { name: 'Review revised edition' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('ApprovalAsk — a budget edition', () => {
+  const BUDGET_APPROVAL: ProjectApprovalReview = {
+    ...APPROVAL,
+    artifactKind: 'budget_version',
+    artifactId: 'budget-9',
+    artifactTitle: 'Working budget',
+  };
+
+  const BUDGET = {
+    id: 'budget-9',
+    projectId: 'proj-1',
+    version: 3,
+    state: 'published' as const,
+    currency: 'USD',
+    lowTotalCents: 4000000,
+    targetTotalCents: 5000000,
+    highTotalCents: 6000000,
+    lines: [
+      {
+        roomName: 'Library',
+        category: 'seating',
+        lowCents: 100000,
+        targetCents: 150000,
+        highCents: 200000,
+        notes: null,
+      },
+    ],
+    checkpoint: {
+      id: 'cp-1',
+      state: 'published' as const,
+      publishedAt: '2026-08-02T12:00:00Z',
+      acknowledgedAt: null,
+      overrideReason: null,
+      evidenceFingerprint: 'a'.repeat(64),
+    },
+  };
+
+  it('shows the figures of the exact edition the question is about', () => {
+    budgetHook.mockReturnValue({ data: BUDGET, isLoading: false, isError: false });
+    render(<ApprovalAsk approval={BUDGET_APPROVAL} />);
+
+    expect(budgetHook).toHaveBeenCalledWith('proj-1');
+    const details = screen.getByTestId('approval-budget-details');
+    expect(details).toHaveTextContent('Target');
+    expect(details).toHaveTextContent('$50,000');
+    expect(details).toHaveTextContent('Library · seating');
+    expect(details).toHaveTextContent('Target $1,500');
+  });
+
+  it('fails closed when the budget on hand is not that exact edition', () => {
+    budgetHook.mockReturnValue({
+      data: { ...BUDGET, version: 4 },
+      isLoading: false,
+      isError: false,
+    });
+    render(<ApprovalAsk approval={BUDGET_APPROVAL} />);
+
+    expect(screen.queryByTestId('approval-budget-details')).not.toBeInTheDocument();
+    expect(screen.getByTestId('approval-budget-unavailable')).toHaveTextContent(
+      'Budget details are unavailable for this exact approved edition.',
+    );
+  });
+
+  it('fails closed when the checkpoint fingerprint does not match the artifact', () => {
+    budgetHook.mockReturnValue({
+      data: { ...BUDGET, checkpoint: { ...BUDGET.checkpoint, evidenceFingerprint: 'b'.repeat(64) } },
+      isLoading: false,
+      isError: false,
+    });
+    render(<ApprovalAsk approval={BUDGET_APPROVAL} />);
+
+    expect(screen.getByTestId('approval-budget-unavailable')).toBeInTheDocument();
+  });
+
+  it('holds the figures while the budget is still coming', () => {
+    budgetHook.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+    render(<ApprovalAsk approval={BUDGET_APPROVAL} />);
+
+    expect(screen.getByTestId('approval-budget-loading')).toHaveTextContent(
+      'Budget details are loading…',
+    );
+  });
+
+  it('reads no budget at all for an edition that is not a budget', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    expect(screen.queryByTestId('approval-budget')).not.toBeInTheDocument();
+    expect(budgetHook).not.toHaveBeenCalled();
   });
 });
 
@@ -243,6 +540,8 @@ describe('ApprovalAsk — the discussion', () => {
     expect(screen.getByTestId('approval-discussion')).toHaveTextContent(
       'They never submit or change an approval outcome.',
     );
+    // The thread has a heading of its own to browse to.
+    expect(screen.getByRole('heading', { name: 'The discussion' })).toBeInTheDocument();
   });
 
   it('writes the thread back, the client’s own words in her own name', () => {
@@ -274,6 +573,32 @@ describe('ApprovalAsk — the discussion', () => {
     expect(thread).toHaveTextContent('You');
     expect(thread).toHaveTextContent('The studio');
     expect(thread).toHaveTextContent('I will bring both finishes on Thursday.');
+    expect(screen.queryByTestId('approval-comments-empty')).not.toBeInTheDocument();
+  });
+
+  it('says the thread is empty rather than leaving it ambiguous', () => {
+    render(<ApprovalAsk approval={APPROVAL} />);
+    expect(screen.getByTestId('approval-comments-empty')).toHaveTextContent(
+      'No comments yet. Add a note for your designer below.',
+    );
+  });
+
+  it('does not invite a reply into a thread that failed to read', () => {
+    commentsHook.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    expect(screen.getByTestId('approval-comments-error')).toHaveTextContent(
+      'Comments could not be read just now. Refresh to try again.',
+    );
+    expect(screen.queryByTestId('approval-comment-field')).not.toBeInTheDocument();
+  });
+
+  it('holds the thread while it is still coming', () => {
+    commentsHook.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+    render(<ApprovalAsk approval={APPROVAL} />);
+
+    expect(screen.getByTestId('approval-comments-loading')).toBeInTheDocument();
+    expect(screen.queryByTestId('approval-comment-field')).not.toBeInTheDocument();
   });
 
   it('keeps the draft and says so when the comment does not land', () => {
@@ -292,6 +617,33 @@ describe('ApprovalAsk — the discussion', () => {
   });
 });
 
+describe('ApprovalReceipt', () => {
+  it('stands as the record of a gate answered on an earlier visit', () => {
+    render(
+      <ApprovalReceipt
+        approval={{
+          ...APPROVAL,
+          outcome: 'approved',
+          lifecycleStatus: 'responded',
+          respondedAt: '2026-08-14T12:00:00Z',
+        }}
+      />,
+    );
+
+    const receipt = screen.getByTestId('doorstep-approval-receipt');
+    expect(receipt).toHaveAttribute('id', 'approval-dec-1');
+    expect(screen.getByTestId('approval-receipt-stamp')).toHaveTextContent('Approved 14 August');
+    expect(receipt).toHaveTextContent('Library elevations · Edition 3');
+    // Nothing is left to do on it.
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('says nothing about a gate with no recorded outcome', () => {
+    const { container } = render(<ApprovalReceipt approval={APPROVAL} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
 describe('useDoorstepApprovals', () => {
   it('keeps an ask that was answered while the client stood on the doorstep', () => {
     const { result, rerender } = renderHook(
@@ -307,14 +659,27 @@ describe('useDoorstepApprovals', () => {
     });
     expect(result.current.asks).toHaveLength(1);
     expect(result.current.asks[0].outcome).toBe('approved');
+    expect(result.current.receipts).toHaveLength(0);
   });
 
-  it('never stands an ask that was already answered before the client arrived', () => {
+  it('keeps the record of an approval answered before the client arrived', () => {
     const { result } = renderHook(() =>
       useDoorstepApprovals([
         { ...APPROVAL, outcome: 'approved', lifecycleStatus: 'responded' },
       ]),
     );
     expect(result.current.asks).toHaveLength(0);
+    expect(result.current.receipts).toHaveLength(1);
+    expect(result.current.anchoredDecisionIds).toEqual(['dec-1']);
+  });
+
+  it('keeps a confirmed draft standing while the studio holds it', () => {
+    const { result } = renderHook(() =>
+      useDoorstepApprovals([
+        { ...APPROVAL, lifecycleStatus: 'draft', completedReviewCount: 1, requiredReviewCount: 1 },
+      ]),
+    );
+    expect(result.current.asks).toHaveLength(1);
+    expect(result.current.receipts).toHaveLength(0);
   });
 });
