@@ -30,9 +30,23 @@
  * or off, and while `useProjectNotes` is still loading — a second standing
  * note is possible once one exists, since 00565's guard is a partial index,
  * not a uniqueness constraint, so this composer must never guess "no note
- * yet" from an unresolved query). Every hook below runs unconditionally
- * above every early return so hook order never depends on their resolved
- * values.
+ * yet" from an unresolved query).
+ *
+ * Two-component split (integration review fix 2026-09-04, finding 1/6): the
+ * outer `ClientNoteComposer` reads ONLY `useFeatureFlag('threshold')` and
+ * returns null while it is loading or false — it holds no data hook at all.
+ * `ClientNoteComposerInner`, mounted only once the flag resolves true, holds
+ * every other hook (unconditionally, above its own early return, so hook
+ * order there never depends on their resolved values). Before the split,
+ * every doc/[id] page test file's OWN inline `jest.mock('@patina/supabase',
+ * …)` factory had to know about `useProjectNotes` / `useProposals` /
+ * `useSendProjectNote` / `useRetireProjectNote` even with the flag off,
+ * because the component called them above its guard — that broke six
+ * unrelated suites (61 tests) whose mocks predate this composer. It also
+ * meant a flag-off project document issued two extra, undeduped queries
+ * (`useProjectNotes`, `useProposals`) on every load. Splitting the component
+ * fixes both: with the flag off, `ClientNoteComposerInner` never mounts, so
+ * none of its hooks run and no six-suite mock update was needed.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -194,22 +208,25 @@ function sendErrorMessage(error: unknown): string {
     : "That didn't send. Try again in a moment.";
 }
 
-export function ClientNoteComposer({
+/**
+ * The flag gate itself — the ONLY hook this outer component calls. It never
+ * mounts `ClientNoteComposerInner` (and so never calls any of its hooks)
+ * until the flag has resolved true.
+ */
+export function ClientNoteComposer(props: ClientNoteComposerProps) {
+  const flag = useFeatureFlag("threshold");
+  if (flag.isLoading || !flag.value) return null;
+  return <ClientNoteComposerInner {...props} />;
+}
+
+function ClientNoteComposerInner({
   projectId,
   clientFirstName,
 }: ClientNoteComposerProps) {
-  const flag = useFeatureFlag("threshold");
   const { data: notes, isLoading: notesLoading } = useProjectNotes(projectId);
-  const notesReady = !flag.isLoading && flag.value;
-  const { data: authorizationRows } = useProjectInstruments(
-    projectId,
-    notesReady,
-  );
-  // useProposals has no `enabled` override (packages/supabase/src/hooks/
-  // use-proposals.ts — outside this fix's pathspec), so it always fires;
-  // its result is only ever read once `notesReady` is true.
+  const { data: authorizationRows } = useProjectInstruments(projectId);
   const { data: designServicesRows } = useProposals({ projectId });
-  const { data: tradeScopeRows } = useTradeScopes(projectId, notesReady);
+  const { data: tradeScopeRows } = useTradeScopes(projectId);
   const { data: invoiceRows } = useProjectInvoices(projectId);
   const sendNote = useSendProjectNote();
   const retireNote = useRetireProjectNote();
@@ -251,7 +268,7 @@ export function ClientNoteComposer({
     setTicked(defaultTickedKeys(openProposals, openTradeScopes));
   }, [composing, ticksTouched, openProposals, openTradeScopes]);
 
-  if (flag.isLoading || !flag.value || notesLoading) return null;
+  if (notesLoading) return null;
 
   const standingNoteRaw: ProjectNote | undefined = (notes ?? []).find(
     (n) => n.state === "standing",
