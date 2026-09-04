@@ -28,6 +28,25 @@ function stopX(index: number): number {
   return Math.round(ROAD_X1 + STOP_GAP * index);
 }
 
+const PIECE_W = 72;
+
+/**
+ * A furnishings authorization releases a batch of pieces that then move
+ * through the stages together, so two pieces sharing a stop is the common
+ * case, not an edge one. Fan them across the stop's own neighbourhood rather
+ * than stacking identical rects on the same x.
+ */
+function pieceX(pieces: RoadPieceModel[], piece: RoadPieceModel): number {
+  const sharing = pieces.filter((other) => other.stageIndex === piece.stageIndex);
+  const place = sharing.findIndex((other) => other.selectionId === piece.selectionId);
+  const centre = stopX(piece.stageIndex);
+  if (sharing.length <= 1) return centre - PIECE_W / 2;
+  // Keep the fan inside the gap to the next stop so a piece never drifts past
+  // the tick it is standing at.
+  const stride = Math.min(PIECE_W + 8, (STOP_GAP * 0.9) / sharing.length);
+  return centre - ((sharing.length - 1) * stride) / 2 + place * stride - PIECE_W / 2;
+}
+
 export interface TheRoadProps {
   pieces: RoadPieceModel[];
 }
@@ -39,6 +58,7 @@ export function TheRoad({ pieces }: TheRoadProps) {
     <section
       id="road"
       data-threshold-unit="road"
+      data-dimmable=""
       aria-labelledby="road-title"
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
@@ -84,7 +104,6 @@ export function TheRoad({ pieces }: TheRoadProps) {
             />
           ))}
           {pieces.map((piece) => {
-            const x = stopX(piece.stageIndex);
             const lifted = liftedId === piece.selectionId;
             return (
               <rect
@@ -92,9 +111,9 @@ export function TheRoad({ pieces }: TheRoadProps) {
                 data-road-piece={piece.selectionId}
                 data-stop-index={piece.stageIndex}
                 data-lifted={lifted ? 'true' : undefined}
-                x={x - 36}
+                x={Math.round(pieceX(pieces, piece))}
                 y={ROAD_Y - 46 - (lifted ? 2 : 0)}
-                width={72}
+                width={PIECE_W}
                 height={40}
               />
             );
@@ -137,7 +156,7 @@ export function TheRoad({ pieces }: TheRoadProps) {
                   </span>
                   <span className="text-[15px] text-[var(--text-body)]">
                     {GOODS_JOURNEY_STAGES[piece.stageIndex]}
-                    {piece.roomName ? ` · for the ${piece.roomName}` : ' · no room named'}
+                    {piece.roomName ? ` · for the ${piece.roomName}` : ''}
                   </span>
                 </button>
                 <div id={`road-record-${piece.selectionId}`}>

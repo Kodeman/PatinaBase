@@ -10,6 +10,7 @@ const ENTRIES: PreviouslyEntry[] = [
     kind: 'instrument',
     label: 'Design services agreement',
     date: new Date('2026-03-12T12:00:00Z'),
+    state: 'signed',
   },
   {
     id: 'note-0',
@@ -17,12 +18,14 @@ const ENTRIES: PreviouslyEntry[] = [
     label:
       'The design set is with you — three rooms concepted: library and lounge, entry and stair hall, primary bedroom.',
     date: new Date('2026-05-30T12:00:00Z'),
+    state: 'answered',
   },
   {
     id: 'note-x',
     kind: 'note',
     label: 'A line with no date behind it.',
     date: null,
+    state: 'standing',
   },
 ];
 
@@ -43,13 +46,38 @@ describe('Previously', () => {
     const lines = screen.getAllByTestId('previously-line');
     expect(within(lines[0]).getByTestId('previously-date')).toHaveTextContent('12 March');
     expect(within(lines[0]).getByTestId('previously-state')).toHaveTextContent('Signed');
-    expect(within(lines[1]).getByTestId('previously-state')).toHaveTextContent('Sent');
+    expect(within(lines[1]).getByTestId('previously-state')).toHaveTextContent('Answered');
+    expect(within(lines[2]).getByTestId('previously-state')).toHaveTextContent('Standing');
     expect(within(lines[2]).getByTestId('previously-date')).toHaveTextContent('—');
   });
 
   it('rules a dotted leader between the title and the state word', () => {
     render(<Previously entries={ENTRIES} />);
     expect(screen.getAllByTestId('previously-leader')).toHaveLength(3);
+  });
+
+  it('opts into dimming', () => {
+    const { container } = render(<Previously entries={ENTRIES} />);
+    expect(container.querySelector('section')).toHaveAttribute('data-dimmable');
+  });
+
+  it('truncates a long line and keeps the whole of it for the unfold', () => {
+    render(<Previously entries={ENTRIES} />);
+
+    const line = screen.getAllByTestId('previously-line')[1];
+    expect(line.textContent).toContain('…');
+    expect(line.textContent).not.toContain('primary bedroom');
+
+    fireEvent.click(within(line).getByRole('button'));
+    expect(screen.getByTestId('previously-body')).toHaveTextContent('primary bedroom');
+  });
+
+  it('offers no unfold on a line that already carries the whole of it', () => {
+    render(<Previously entries={[ENTRIES[0]]} />);
+
+    const line = screen.getByTestId('previously-line');
+    expect(within(line).queryByRole('button')).not.toBeInTheDocument();
+    expect(line).toHaveTextContent('Design services agreement');
   });
 
   it('unfolds a receipt into its body in place, and folds it back', () => {

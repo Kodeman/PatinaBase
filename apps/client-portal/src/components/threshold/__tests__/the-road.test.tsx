@@ -79,6 +79,33 @@ describe('TheRoad', () => {
     expect(screen.queryByTestId('road-record')).not.toBeInTheDocument();
   });
 
+  it('fans two pieces sharing a stop apart instead of stacking them', () => {
+    const alsoInProduction: RoadPieceModel = {
+      ...CREDENZA,
+      selectionId: 'sel-console',
+      name: 'Oak console',
+    };
+    const { container } = render(
+      <TheRoad pieces={[CREDENZA, alsoInProduction]} />,
+    );
+
+    const first = container.querySelector('[data-road-piece="sel-credenza"]');
+    const second = container.querySelector('[data-road-piece="sel-console"]');
+    expect(first).toHaveAttribute('data-stop-index', '2');
+    expect(second).toHaveAttribute('data-stop-index', '2');
+    expect(first?.getAttribute('x')).not.toEqual(second?.getAttribute('x'));
+  });
+
+  it('opts into dimming', () => {
+    const { container } = render(<TheRoad pieces={[CREDENZA]} />);
+    expect(container.querySelector('section')).toHaveAttribute('data-dimmable');
+  });
+
+  it('stays silent about a room a piece has not got', () => {
+    render(<TheRoad pieces={[CHAIRS]} />);
+    expect(screen.queryByText(/no room named/)).not.toBeInTheDocument();
+  });
+
   it('says so plainly when nothing is on the road', () => {
     render(<TheRoad pieces={[]} />);
 

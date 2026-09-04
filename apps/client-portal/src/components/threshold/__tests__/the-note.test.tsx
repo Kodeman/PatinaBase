@@ -12,11 +12,23 @@ import { TheNote } from '../the-note';
 const BODY =
   'Three last pieces for the library — the sconces you loved, the drapery, the runner. Sign and I’ll have them ordered by Friday.';
 
+/**
+ * A calendar day, not an instant. `parseSourceDate` reads a bare YYYY-MM-DD as
+ * LOCAL midnight, which is the whole point of that helper — pinning the
+ * fixtures to it keeps the dateline assertions true in every timezone rather
+ * than only east of UTC-9.
+ */
+const SENT_YESTERDAY = '2026-08-04';
+const SENT_TODAY = '2026-08-05';
+const SENT_LONG_AGO = '2026-06-19';
+/** Local noon on 5 August, so no offset can push "today" onto another day. */
+const TODAY = new Date(2026, 7, 5, 12, 0, 0);
+
 function note(over: Partial<NoteModel> = {}): NoteModel {
   return {
     id: 'note-1',
     body: BODY,
-    sentAt: '2026-08-04T15:00:00Z',
+    sentAt: SENT_YESTERDAY,
     enclosures: [{ kind: 'proposal', id: 'prop-7' }],
     ...over,
   };
@@ -27,7 +39,8 @@ const EARLIER: PreviouslyEntry[] = [
     id: 'note-0',
     kind: 'note',
     label: 'The design set is with you — three rooms concepted.',
-    date: new Date('2026-05-30T00:00:00Z'),
+    date: new Date(2026, 4, 30, 12, 0, 0),
+    state: 'sent',
   },
 ];
 
@@ -56,7 +69,7 @@ describe('TheNote', () => {
         earlier={[]}
         enclosures={[]}
         authorName="Nora Quist"
-        today={new Date('2026-08-05T09:00:00Z')}
+        today={TODAY}
       />,
     );
 
@@ -72,10 +85,10 @@ describe('TheNote', () => {
   it('datelines a note sent today as today', () => {
     render(
       <TheNote
-        note={note({ sentAt: '2026-08-05T08:00:00Z' })}
+        note={note({ sentAt: SENT_TODAY })}
         earlier={[]}
         enclosures={[]}
-        today={new Date('2026-08-05T09:00:00Z')}
+        today={TODAY}
       />,
     );
     expect(screen.getByTestId('note-dateline')).toHaveTextContent('today');
@@ -84,10 +97,10 @@ describe('TheNote', () => {
   it('datelines an older note by its date', () => {
     render(
       <TheNote
-        note={note({ sentAt: '2026-06-19T08:00:00Z' })}
+        note={note({ sentAt: SENT_LONG_AGO })}
         earlier={[]}
         enclosures={[]}
-        today={new Date('2026-08-05T09:00:00Z')}
+        today={TODAY}
       />,
     );
     expect(screen.getByTestId('note-dateline')).toHaveTextContent('19 June');

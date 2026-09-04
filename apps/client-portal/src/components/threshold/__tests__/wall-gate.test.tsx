@@ -69,10 +69,13 @@ const SELECTION: ClientSelection = {
 };
 
 const BUNDLE = {
+  isLoading: false,
+  isError: false,
   data: {
     furnishings: null,
     tradeScope: {
       party: { displayName: 'Prairie Coat Painting', company: null, trade: 'Painting' },
+      progress: { state: 'substantially_complete' },
       draws: [
         {
           id: 'd1',
@@ -124,9 +127,45 @@ describe('WallGate', () => {
     expect(section).toHaveAttribute('data-never-dim');
   });
 
-  it('anchors a second wall at its own mark id', () => {
+  it('anchors a second wall at its own mark id, with no colon in it', () => {
     const { container } = renderGate({ first: false });
-    expect(container.querySelector('section')).toHaveAttribute('id', 'wall-wall:sel-paint');
+    expect(container.querySelector('section')).toHaveAttribute('id', 'wall-wall-sel-paint');
+  });
+
+  it('never dims while the acceptance is owed', () => {
+    const { container } = renderGate();
+    expect(container.querySelector('section')).toHaveAttribute('data-never-dim');
+  });
+
+  it('states what is required before the client clicks', () => {
+    renderGate();
+    const hint = screen.getByTestId('wall-hint');
+    expect(hint).toHaveTextContent('Type your full name to accept.');
+    expect(screen.getByRole('button', { name: /accept/i })).toHaveAttribute(
+      'aria-describedby',
+      hint.id,
+    );
+  });
+
+  it('says it is still reading the draws while the bundle is in flight', () => {
+    bundleMock.mockReturnValue({ isLoading: true, isError: false, data: undefined });
+    renderGate();
+    expect(screen.getByTestId('wall-hint')).toHaveTextContent('Reading the draws');
+  });
+
+  it('reads acceptance back off the scope, so the healed wall survives a refetch', () => {
+    bundleMock.mockReturnValue({
+      ...BUNDLE,
+      data: {
+        ...BUNDLE.data,
+        tradeScope: { ...BUNDLE.data.tradeScope, progress: { state: 'accepted' } },
+      },
+    });
+    const { container } = renderGate();
+
+    expect(screen.getByTestId('wall-hatch')).toHaveAttribute('data-wall-state', 'settled');
+    expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument();
+    expect(container.querySelector('section')).not.toHaveAttribute('data-never-dim');
   });
 
   it('draws the hatched wall with a square notch cut into it', () => {

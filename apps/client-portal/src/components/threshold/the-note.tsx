@@ -3,7 +3,12 @@
 import { useState } from 'react';
 
 import { ScoredAction } from '@/components/making/scored-action';
-import { parseSourceDate, type NoteModel, type PreviouslyEntry } from '@/lib/threshold/derive';
+import {
+  parseSourceDate,
+  type NoteModel,
+  type PreviouslyEntry,
+  type ThresholdNoteEnclosure,
+} from '@/lib/threshold/derive';
 
 /* ── THE NOTE ────────────────────────────────────────────────────────────────
    The one place on this surface that speaks in the first person, because it is
@@ -40,15 +45,18 @@ function initialOf(authorName: string | null | undefined): string | null {
   return `— ${trimmed[0].toUpperCase()}.`;
 }
 
-export interface NoteEnclosure {
-  kind: string;
-  id: string;
+export interface NoteEnclosure extends ThresholdNoteEnclosure {
   label: string;
   /** The id of the section this enclosure stands in, e.g. `door`. */
   anchor: string;
 }
 
 export interface TheNoteProps {
+  /**
+   * CONTRACT: the standing note is rendered EITHER here or pinned to a
+   * `DoorGate` leaf, never both — neither component dedupes, and the same
+   * first-person paragraph printed twice reads as two letters.
+   */
   note: NoteModel | null;
   /** Retired notes and closed instruments, unrolled behind "Earlier letters". */
   earlier: PreviouslyEntry[];

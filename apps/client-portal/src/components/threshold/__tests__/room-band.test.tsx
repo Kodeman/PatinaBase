@@ -63,11 +63,15 @@ function band(over: Partial<RoomBandModel> = {}): RoomBandModel {
       },
     }),
   ];
+  const agreedCents = over.agreedCents ?? 2490000;
   return {
     roomId: 'room-library',
     name: 'Library & lounge',
     anchor: 'room-room-library',
-    totalCents: 2490000,
+    totalCents: agreedCents,
+    targetCents: 2380000,
+    agreedCents,
+    varianceLine: 'about eleven hundred past its target',
     pieces,
     marks: [DOOR_MARK],
     ...over,
@@ -90,15 +94,36 @@ describe('RoomBand', () => {
     render(<RoomBand band={band()} projectId="proj-1" />);
 
     const lintel = screen.getByTestId('room-band-lintel');
-    expect(lintel).toHaveTextContent('$24,900 agreed');
+    expect(lintel).toHaveTextContent(
+      '$24,900 agreed against $23,800 planned — about eleven hundred past its target',
+    );
     expect(lintel).toHaveTextContent('two pieces');
     expect(lintel).toHaveTextContent('one door waits on your name');
+  });
+
+  it('states the agreed figure alone when the room carries no target', () => {
+    render(
+      <RoomBand
+        band={band({ targetCents: null, varianceLine: null })}
+        projectId="proj-1"
+      />,
+    );
+
+    const ledger = screen.getByTestId('room-band-ledger');
+    expect(ledger).toHaveTextContent('$24,900 agreed');
+    expect(ledger).not.toHaveTextContent('planned');
   });
 
   it('suppresses the ledger sentence when the band carries no figures', () => {
     render(
       <RoomBand
-        band={band({ pieces: [], marks: [], totalCents: 0 })}
+        band={band({
+          pieces: [],
+          marks: [],
+          agreedCents: 0,
+          targetCents: null,
+          varianceLine: null,
+        })}
         projectId="proj-1"
       />,
     );
@@ -141,7 +166,9 @@ describe('RoomBand', () => {
   it('lifts a piece on click and unfolds its record with the six stops, the current one marked', () => {
     render(<RoomBand band={band()} projectId="proj-1" />);
 
-    const lift = screen.getByRole('button', { name: /Brass library sconces/ });
+    const lift = screen.getByRole('button', {
+      name: 'Brass library sconces — open its record',
+    });
     expect(lift).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId('threshold-journey')).not.toBeInTheDocument();
 
@@ -167,6 +194,22 @@ describe('RoomBand', () => {
     fireEvent.click(lift);
     expect(lift).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId('room-band-record')).not.toBeInTheDocument();
+  });
+
+  it('keeps the lift control free of flow content, with a name of its own', () => {
+    const { container } = render(<RoomBand band={band()} projectId="proj-1" />);
+
+    for (const button of Array.from(container.querySelectorAll('button'))) {
+      expect(button.querySelector('div, p, ul, ol, dl, section')).toBeNull();
+    }
+    expect(
+      screen.getByRole('button', { name: 'Kilim runner — open its record' }),
+    ).toBeInTheDocument();
+  });
+
+  it('opts into dimming', () => {
+    const { container } = render(<RoomBand band={band()} projectId="proj-1" />);
+    expect(container.querySelector('section')).toHaveAttribute('data-dimmable');
   });
 
   it('renders the lintel alone when the room holds no pieces', () => {

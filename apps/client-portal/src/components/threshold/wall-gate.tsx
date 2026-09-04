@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 
 import { ScoredAction } from '@/components/making/scored-action';
 import { SpineGate } from '@/components/making/spine-gate';
@@ -13,6 +13,8 @@ import { makingEvents } from '@/lib/analytics/events';
 import type { ClientSelection } from '@/lib/commercial-documents';
 import type { ThresholdMark } from '@/lib/threshold/derive';
 
+import { KIND_LABEL } from './consent-copy';
+
 /* ── THE PAINTED WALL ────────────────────────────────────────────────────────
    Finished trade work waiting to be accepted, drawn the way a decorator's
    elevation draws it: the wall hatched where the work stands, with a square
@@ -23,8 +25,10 @@ import type { ThresholdMark } from '@/lib/threshold/derive';
    The acceptance itself is The Making's AcceptanceGate, lifted: the same
    bundle read for the draws, the same caption composed from draws that
    actually exist, the same two-character name validation, the same
-   `useAcceptTradeScope` mutation, the same telemetry. Only the drawing around
-   it is new. ─────────────────────────────────────────────────────────────── */
+   `useAcceptTradeScope` mutation, the same `gateFollowed` payload. Two things
+   are deliberately not the same — the gate's accent, because off the spine
+   there is no `useSpineInk` chapter colour to continue and SpineGate's own
+   default is the honest reading; and the drawing, which is new. ─────────── */
 
 const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
@@ -113,9 +117,11 @@ export function WallGate({
   const [signedName, setSignedName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [acceptedAt, setAcceptedAt] = useState<Date | null>(null);
+  const inFlight = useRef(false);
 
-  const fieldId = useId();
+  const fieldId = useId().replace(/:/g, '');
   const nameId = `accept-name-${fieldId}`;
+  const hintId = `accept-hint-${fieldId}`;
 
   const draws = bundle.data?.tradeScope?.draws ?? [];
   const gatedDraw = draws.find((draw) => draw.gatesOnAcceptance) ?? null;
@@ -139,12 +145,14 @@ export function WallGate({
       .join(' ') || null;
 
   async function onAccept() {
+    if (inFlight.current) return;
     const name = signedName.trim();
     if (name.length < 2) {
       setError('Type your full name to accept the finished work.');
       return;
     }
     setError(null);
+    inFlight.current = true;
     if (proposalId) {
       makingEvents.gateFollowed({
         projectId,
@@ -158,16 +166,24 @@ export function WallGate({
       onAccepted?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to accept this work right now.');
+    } finally {
+      inFlight.current = false;
     }
   }
 
-  const accepted = acceptedAt !== null;
+  // Acceptance is not only a local event: the mutation's invalidation refetches
+  // the bundle, and revisiting the page has no local state at all. Reading the
+  // scope's own progress back means the healed wall survives both.
+  const acceptedOnRecord =
+    bundle.data?.tradeScope?.progress?.state === 'accepted' ||
+    selection.tradeJourney === 'accepted';
+  const accepted = acceptedAt !== null || acceptedOnRecord;
 
   return (
     <section
-      id={first ? 'wall' : `wall-${mark.id}`}
+      id={first ? 'wall' : `wall-${mark.id.replace(/:/g, '-')}`}
       data-threshold-unit="wall"
-      data-never-dim=""
+      {...(accepted ? {} : { 'data-never-dim': '' })}
       aria-labelledby={`wall-title-${fieldId}`}
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
@@ -213,7 +229,7 @@ export function WallGate({
           <SpineGate
             variant="acceptance"
             title={selection.name}
-            kindLabel="Trade scope"
+            kindLabel={KIND_LABEL.trade_scope ?? null}
             totalCents={selection.clientLineTotalCents || null}
             caption={caption}
             act={
@@ -233,19 +249,36 @@ export function WallGate({
                       onChange={(event) => setSignedName(event.target.value)}
                       autoComplete="name"
                       data-testid="accept-trade-scope-name"
-                      className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)] focus-visible:focus-ring"
+                      className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)]"
                     />
                     <ScoredAction
-                      actionKey="wall_accept"
-                      regionKey="wall"
+                      actionKey="gate_accept"
+                      regionKey="gate"
                       variant="primary"
                       loading={accept.isPending}
                       loadingLabel="Accepting"
+                      aria-describedby={hintId}
                       onClick={onAccept}
                     >
                       Accept the finished work
                     </ScoredAction>
                   </div>
+                  <p
+                    id={hintId}
+                    data-testid="wall-hint"
+                    className="mt-2 text-[15px] leading-normal text-[var(--text-muted)]"
+                  >
+                    {bundle.isLoading
+                      ? 'Reading the draws on this scope.'
+                      : caption === null
+                        ? 'Type your full name to accept.'
+                        : `Type your full name to accept. ${caption}`}
+                  </p>
+                  {/* A refused acceptance is a genuine error, so it takes the
+                      error ink — NOT terracotta, which on this surface is the
+                      Installation phase. The money-is-never-red rule governs
+                      balances, overages and lateness; it does not ask a
+                      validation message to whisper (the-making.tsx:494). */}
                   {error && (
                     <p
                       role="alert"

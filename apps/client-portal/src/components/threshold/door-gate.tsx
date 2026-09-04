@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import type { CommercialDocumentKind } from '@patina/types';
 
 import { ScoredAction } from '@/components/making/scored-action';
 import { SpineGate } from '@/components/making/spine-gate';
@@ -10,7 +11,7 @@ import {
   invalidateSignedCommercialDocument,
   useClientCommercialDocument,
 } from '@/hooks/use-commercial-client';
-import { proposalClientEvents } from '@/lib/analytics/events';
+import { makingEvents, proposalClientEvents } from '@/lib/analytics/events';
 import {
   parseSourceDate,
   type NoteModel,
@@ -18,32 +19,75 @@ import {
   type ThresholdProposal,
 } from '@/lib/threshold/derive';
 
+import {
+  KIND_LABEL,
+  SIGNATURE_NOTICE,
+  consentLineFor,
+  refusalSentence,
+  signLabelFor,
+  summaryLineFor,
+} from './consent-copy';
+
 /* ── THE DOOR ────────────────────────────────────────────────────────────────
    A paper waiting for the client's name is not a card in a list: it is a door
    drawn shut across the full measure of the page, with the studio's note
-   pinned to the leaf and the authorization itself printed on it. The act is
-   the shipped signature flow — the same typed name, the same consent line, the
+   pinned to the leaf and the instrument itself printed on it. The act is the
+   shipped signature flow — the same typed name, the same consent line, the
    same POST to /api/proposals/[id]/sign, the same cache invalidation — hung on
    the gate device rather than on a route the client would have to leave for.
 
-   WHAT SIGNING LOOKS LIKE. The leaf swings on its hinges (rotateY, 520ms) and
-   the doorway collapses in the same beat, leaving a one-line lintel receipt
-   where the door stood. Under prefers-reduced-motion nothing swings: the
-   receipt crossfades in and the leaf is gone. On a phone the leaf lifts on the
-   vertical instead — a 68-degree rotation on a 360px measure reads as a glitch,
-   not as a door. ─────────────────────────────────────────────────────────── */
+   EVERY KIND OF PAPER COMES THROUGH HERE. `deriveThreshold` builds a door for
+   each signature gate, and The Making's `signatureGates` filter admits every
+   commercial kind, not only furnishings. So the consent, the act label and the
+   summary all branch on the resolved `CommercialDocumentKind` exactly as the
+   sign route branches them (consent-copy.ts, drift-guarded against the route's
+   source), and the line-item table draws only for the kind that has lines.
+
+   THE ACT IS NOT OFFERED UNTIL THE PAPER IS DRAWN. The whole argument of the
+   door is that the instrument is printed on the leaf, so Sign stays disarmed
+   while the bundle is in flight or errored — the route it copies gates its
+   entire page on the same read.
+
+   WHAT SIGNING LOOKS LIKE. The doorway is measured, pinned to that height,
+   then released to zero on the next frame so the collapse has a length to
+   interpolate from; the leaf swings on its hinges across the same 520 ms with
+   nothing clipping it. Under prefers-reduced-motion nothing swings: the leaf
+   goes at once and the receipt crossfades in. On a phone the leaf lifts on the
+   vertical instead — a 68-degree rotation on a 360px measure reads as a
+   glitch, not as a door. ─────────────────────────────────────────────────── */
 
 const SWING_MS = 520;
 
 /** "5 August" — the deck's own date idiom. */
 const DAY_MONTH = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' });
 
+function capitalize(text: string): string {
+  return text.length === 0 ? text : `${text[0].toUpperCase()}${text.slice(1)}`;
+}
+
 type DoorState = 'shut' | 'swinging' | 'open';
+
+/** The instrument behind the door. `kind` decides which legal line it carries. */
+export interface DoorProposal extends ThresholdProposal {
+  /**
+   * Resolved by Lane 4 from `commercialSummaryFromProposal`. When absent the
+   * bundle's own document kind is used, and failing that the route's `else`
+   * branch — never the furnishings copy by default.
+   */
+  kind?: CommercialDocumentKind;
+}
 
 export interface DoorGateProps {
   mark: ThresholdMark;
-  proposal: ThresholdProposal;
-  /** The studio's standing note, pinned to the leaf. Null pins nothing. */
+  proposal: DoorProposal;
+  /**
+   * The studio's standing note, pinned to the leaf. Null pins nothing.
+   *
+   * CONTRACT: the standing note is rendered EITHER here or by `TheNote`, never
+   * both — the two components take the same `NoteModel` and neither dedupes,
+   * so passing it to both prints the same first-person paragraph twice and has
+   * a screen reader announce it twice. A door that pins the note owns it.
+   */
   note: NoteModel | null;
   projectId: string;
   onSigned?: () => void;
@@ -53,7 +97,7 @@ export interface DoorGateProps {
    * its own mark.
    */
   first?: boolean;
-  /** Who countersigns. Falls back to "the studio" when the name is unknown. */
+  /** Who countersigns, where the kind's consent says someone does. */
   studioName?: string | null;
 }
 
@@ -74,8 +118,18 @@ export function DoorGate({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signedAt, setSignedAt] = useState<Date | null>(null);
+  const [deliveryPending, setDeliveryPending] = useState(false);
+  const [replay, setReplay] = useState<string | null>(null);
   const [doorState, setDoorState] = useState<DoorState>('shut');
+  const [swingHeight, setSwingHeight] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [receiptInked, setReceiptInked] = useState(false);
+
+  const doorwayRef = useRef<HTMLDivElement | null>(null);
   const swingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // State is render-time, so two clicks in one tick both read `submitting`
+  // false. The latch closes that; the shipped route has the same hole.
+  const inFlight = useRef(false);
 
   useEffect(
     () => () => {
@@ -84,24 +138,40 @@ export function DoorGate({
     [],
   );
 
-  const fieldId = useId();
+  const fieldId = useId().replace(/:/g, '');
   const nameId = `door-name-${fieldId}`;
   const consentId = `door-consent-${fieldId}`;
   const hintId = `door-hint-${fieldId}`;
 
-  const items = bundle.data?.furnishings?.items ?? [];
-  const depositCents = bundle.data?.furnishings?.depositRequiredCents ?? null;
+  const kind: CommercialDocumentKind =
+    proposal.kind ?? bundle.data?.document?.kind ?? 'legacy';
+  const isFurnishings = kind === 'furnishings_authorization';
+
+  const items = isFurnishings ? (bundle.data?.furnishings?.items ?? []) : [];
+  // The Making's fallback, verbatim: a trade scope carries no deposit percent,
+  // its deposit is simply the first draw in the schedule.
+  const depositCents =
+    bundle.data?.furnishings?.depositRequiredCents ??
+    bundle.data?.tradeScope?.draws[0]?.amountCents ??
+    null;
   const sent = parseSourceDate(proposal.sentAt);
 
-  // The same validation the shipped sign page runs: a name of at least two
-  // characters and the consent line ticked.
-  const ready = agreed && name.trim().length >= 2;
+  // The paper has to be on the leaf before the act is offered.
+  const drawn = !bundle.isLoading && !bundle.isError;
+  // The same validation the shipped sign page runs.
+  const ready = drawn && agreed && name.trim().length >= 2;
 
   async function onSign() {
-    if (!ready || submitting) return;
+    if (!ready || inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
     setError(null);
     const signedByName = name.trim();
+    makingEvents.gateFollowed({
+      projectId,
+      proposalId: proposal.id,
+      kind: kind === 'legacy' ? 'design_services' : kind,
+    });
     try {
       const response = await fetch(`/api/proposals/${proposal.id}/sign`, {
         method: 'POST',
@@ -111,8 +181,9 @@ export function DoorGate({
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
         projectId?: string | null;
+        notificationDelivery?: { state?: string };
       };
-      if (!response.ok) throw new Error(body.error || 'Failed to sign this authorization.');
+      if (!response.ok) throw new Error(refusalSentence(body.error));
 
       await invalidateSignedCommercialDocument(
         queryClient,
@@ -122,27 +193,63 @@ export function DoorGate({
       proposalClientEvents.signed({ proposalId: proposal.id, signedByName });
 
       setSignedAt(new Date());
+      // The route pushes ?delivery=pending_retry so CommercialNotificationRecovery
+      // can offer the replay. The Threshold IS the page that param lands on, so
+      // the recovery is surfaced here instead of being navigated to.
+      setDeliveryPending(body.notificationDelivery?.state === 'pending_retry');
+
       const stilled =
         typeof window !== 'undefined' &&
         typeof window.matchMedia === 'function' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
       if (stilled) {
         setDoorState('open');
       } else {
+        // Measure first: `max-height: none` cannot interpolate to a length, so
+        // the collapse needs a real starting pixel height.
+        setSwingHeight(doorwayRef.current?.scrollHeight ?? null);
         setDoorState('swinging');
+        window.requestAnimationFrame(() => setCollapsed(true));
         swingTimer.current = setTimeout(() => setDoorState('open'), SWING_MS);
       }
+      window.requestAnimationFrame(() => setReceiptInked(true));
       onSigned?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign this authorization.');
+      setError(err instanceof Error ? err.message : refusalSentence(null));
+    } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   }
 
+  async function onReplay() {
+    setReplay(null);
+    try {
+      const response = await fetch(
+        `/api/proposals/${encodeURIComponent(proposal.id)}/notifications/replay`,
+        { method: 'POST' },
+      );
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        notificationDelivery?: { state?: string };
+      };
+      if (!response.ok) throw new Error(body.error || 'Confirmation delivery could not be checked.');
+      setReplay(
+        body.notificationDelivery?.state === 'delivered'
+          ? 'Confirmation delivery is confirmed.'
+          : 'Confirmation delivery is still pending. You can retry safely.',
+      );
+    } catch (err) {
+      setReplay(
+        err instanceof Error ? err.message : 'Confirmation delivery could not be checked.',
+      );
+    }
+  }
+
+  const countersigns = studioName?.trim() || 'the studio';
   const receipt = signedAt
-    ? `${proposal.title} · signed ${DAY_MONTH.format(signedAt)} · ${
-        studioName?.trim() || 'the studio'
-      } countersigns`
+    ? `${proposal.title} · signed ${DAY_MONTH.format(signedAt)} · ${countersigns} countersigns`
     : null;
 
   // The document's own total is authoritative: Σ clientLineTotalCents
@@ -152,16 +259,29 @@ export function DoorGate({
   const totalCents = proposal.totalAmountCents > 0 ? proposal.totalAmountCents : lineSum;
   const caption =
     items.length > 0
-      ? `${countInWords(items.length)} ${
+      ? `${capitalize(countInWords(items.length))} ${
           items.length === 1 ? 'piece orders' : 'pieces order'
         } the moment you sign.`
       : null;
 
+  // Explicit px on both ends: `max-height: none` cannot interpolate to a
+  // length, and a unitless 0 leaves the transition nothing to read either.
+  const maxHeight =
+    doorState === 'shut'
+      ? undefined
+      : collapsed
+        ? '0px'
+        : swingHeight === null
+          ? undefined
+          : `${swingHeight}px`;
+
   return (
     <section
-      id={first ? 'door' : `door-${mark.id}`}
+      id={first ? 'door' : `door-${mark.id.replace(/:/g, '-')}`}
       data-threshold-unit="door"
-      data-never-dim=""
+      // A door that has been signed is no longer asking for her hand, so it
+      // stops claiming the ink that "since yesterday" reserves for open asks.
+      {...(signedAt ? {} : { 'data-never-dim': '' })}
       aria-labelledby={`door-title-${fieldId}`}
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
@@ -184,17 +304,44 @@ export function DoorGate({
       {receipt && (
         <p
           data-testid="door-receipt"
-          className="mt-3 font-mono text-[11px] leading-relaxed tracking-[0.04em] text-[var(--text-body)] transition-opacity duration-[420ms] motion-reduce:transition-none"
+          style={{ opacity: receiptInked ? 1 : 0 }}
+          className="mt-3 font-mono text-[11px] leading-relaxed tracking-[0.04em] text-[var(--text-body)] transition-opacity duration-[420ms]"
         >
           {receipt}
         </p>
       )}
 
+      {deliveryPending && (
+        <div data-testid="door-delivery-pending" className="mt-2">
+          <p role="status" className="max-w-[56ch] text-[15px] leading-relaxed text-[var(--text-body)]">
+            Your signature remains recorded, but confirmation delivery is still pending. You
+            can retry safely.
+          </p>
+          <ScoredAction
+            actionKey="door_notice_replay"
+            regionKey="door"
+            variant="secondary"
+            onClick={onReplay}
+          >
+            Resend confirmation notice
+          </ScoredAction>
+          {replay && (
+            <p role="status" className="text-[15px] leading-relaxed text-[var(--text-body)]">
+              {replay}
+            </p>
+          )}
+        </div>
+      )}
+
       {doorState !== 'open' && (
         <div
+          ref={doorwayRef}
           data-testid="door-way"
-          className="mt-4 overflow-hidden [perspective:1800px] [perspective-origin:8%_50%] transition-[max-height] duration-[520ms] ease-[cubic-bezier(.24,.78,.28,1)] max-[600px]:duration-[240ms] motion-reduce:transition-none"
-          style={{ maxHeight: doorState === 'swinging' ? 0 : undefined }}
+          // Nothing clips while the leaf is swinging; the doorway is unmounted
+          // the moment the collapse completes, which is what does the hiding.
+          aria-hidden={doorState !== 'shut' ? true : undefined}
+          style={maxHeight === undefined ? undefined : { maxHeight }}
+          className="mt-4 [perspective:1800px] [perspective-origin:8%_50%] transition-[max-height] duration-[520ms] ease-[cubic-bezier(.24,.78,.28,1)] max-[600px]:duration-[240ms] motion-reduce:transition-none"
         >
           <div
             data-testid="door-leaf"
@@ -221,19 +368,39 @@ export function DoorGate({
               className="absolute right-4 top-1/2 -mt-[5px] h-2.5 w-2.5 rounded-full border border-current"
             />
 
+            <p
+              data-testid="door-summary"
+              className="max-w-[56ch] text-[15px] leading-relaxed text-[var(--text-body)]"
+            >
+              {summaryLineFor(kind, proposal.title)}
+            </p>
+
             {note && (
-              <div
+              <figure
                 data-testid="door-note-pin"
-                className="relative mt-1 max-w-[58ch] border border-[var(--border-subtle)] bg-[var(--bg-warm)] px-5 pb-4 pt-4"
+                className="relative mt-5 max-w-[58ch] border border-[var(--border-subtle)] bg-[var(--bg-warm)] px-5 pb-4 pt-4"
               >
                 <span
                   aria-hidden="true"
                   className="absolute -top-[5px] left-1/2 -ml-1 h-[9px] w-[9px] rounded-full border border-current bg-[var(--color-off-white)]"
                 />
-                <p className="font-heading text-[1.1rem] italic leading-relaxed">
-                  {note.body}
-                </p>
-              </div>
+                {/* The quote marks are load-bearing: this is the one first-person
+                    paragraph on a third-person page, and unattributed it reads
+                    as the page speaking. */}
+                <blockquote className="font-heading text-[1.1rem] italic leading-relaxed">
+                  {`“${note.body}”`}
+                </blockquote>
+                <figcaption className="mt-2.5 font-mono text-[11px] uppercase not-italic tracking-[0.1em] text-[var(--text-muted)]">
+                  {[
+                    studioName?.trim() ? `— ${studioName.trim()}` : '— the studio',
+                    parseSourceDate(note.sentAt)
+                      ? DAY_MONTH.format(parseSourceDate(note.sentAt) as Date)
+                      : null,
+                  ]
+                    .filter((part): part is string => !!part)
+                    .join(' · ')}
+                </figcaption>
+              </figure>
             )}
 
             {items.length > 0 && (
@@ -262,7 +429,7 @@ export function DoorGate({
             <SpineGate
               variant="signature"
               title={proposal.title}
-              kindLabel={sent ? `Sent ${DAY_MONTH.format(sent)}` : null}
+              kindLabel={KIND_LABEL[kind] ?? null}
               totalCents={items.length > 0 ? null : totalCents}
               depositCents={depositCents}
               caption={items.length > 0 ? null : caption}
@@ -278,13 +445,9 @@ export function DoorGate({
                       checked={agreed}
                       disabled={submitting || !!signedAt}
                       onChange={(event) => setAgreed(event.target.checked)}
-                      className="mt-1 h-3 w-3 shrink-0 border border-current"
+                      className="mt-1 h-4 w-4 shrink-0 border border-current"
                     />
-                    <span>
-                      I authorize the studio to procure only the named lines at the
-                      quantities and client prices shown. {studioName?.trim() || 'The studio'}{' '}
-                      countersigns.
-                    </span>
+                    <span>{consentLineFor(kind)}</span>
                   </label>
 
                   <label
@@ -302,11 +465,11 @@ export function DoorGate({
                       disabled={submitting || !!signedAt}
                       onChange={(event) => setName(event.target.value)}
                       data-testid="door-sign-name"
-                      className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)] focus-visible:focus-ring"
+                      className="min-w-[12rem] border-0 border-b border-current bg-transparent px-0.5 py-1 font-heading text-[1.1rem] text-[var(--text-primary)]"
                     />
                     <ScoredAction
-                      actionKey="door_sign"
-                      regionKey="door"
+                      actionKey="gate_sign"
+                      regionKey="gate"
                       variant="primary"
                       disabled={!ready}
                       loading={submitting}
@@ -314,17 +477,27 @@ export function DoorGate({
                       aria-describedby={hintId}
                       onClick={onSign}
                     >
-                      Sign
+                      {signLabelFor(kind)}
                     </ScoredAction>
                   </div>
                   <p
                     id={hintId}
+                    data-testid="door-hint"
                     className="mt-2 text-[15px] leading-normal text-[var(--text-muted)]"
                   >
-                    {ready
-                      ? 'Ready when you are. Your typed name acts as your electronic signature.'
-                      : 'Type your full name and tick the line to sign.'}
+                    {!drawn
+                      ? bundle.isError
+                        ? 'This paper could not be drawn just now. Reload to try again.'
+                        : 'Drawing this paper.'
+                      : ready
+                        ? `Ready when you are. ${SIGNATURE_NOTICE}`
+                        : `Type your full name and tick the line to sign. ${SIGNATURE_NOTICE}`}
                   </p>
+                  {/* A refused signature is a genuine error, so it takes the
+                      error ink — NOT terracotta, which on this surface is the
+                      Installation phase. The money-is-never-red rule governs
+                      balances, overages and lateness; it does not ask a
+                      validation message to whisper (the-making.tsx:494). */}
                   {error && (
                     <p
                       role="alert"

@@ -107,9 +107,13 @@ function RoomDrawing({
     <svg
       data-testid="room-band-drawing"
       role="img"
-      aria-label={`Section through ${roomName}, with ${
-        feet.length === 0 ? 'nothing' : countInWords(feet.length)
-      } drawn on the floor`}
+      aria-label={
+        feet.length === 0
+          ? `Section through ${roomName}, with nothing on the floor yet`
+          : `Section through ${roomName}, with ${countInWords(feet.length)} ${
+              feet.length === 1 ? 'footprint' : 'footprints'
+            } on the floor`
+      }
       viewBox={`0 0 ${DRAW_W} ${DRAW_H}`}
       className="mt-4 block h-auto w-full"
       style={{ stroke: 'currentColor', fill: 'none', strokeWidth: 1, color: 'inherit' }}
@@ -150,7 +154,15 @@ function RoomDrawing({
  */
 function lintelLedger(band: RoomBandModel): string | null {
   const parts: string[] = [];
-  if (band.totalCents > 0) parts.push(`${moneyInWords(band.totalCents)} agreed`);
+  if (band.agreedCents > 0 && band.targetCents !== null) {
+    parts.push(
+      `${moneyInWords(band.agreedCents)} agreed against ${moneyInWords(
+        band.targetCents,
+      )} planned${band.varianceLine ? ` — ${band.varianceLine}` : ''}`,
+    );
+  } else if (band.agreedCents > 0) {
+    parts.push(`${moneyInWords(band.agreedCents)} agreed`);
+  }
   if (band.pieces.length > 0) {
     parts.push(
       `${countInWords(band.pieces.length)} ${band.pieces.length === 1 ? 'piece' : 'pieces'}`,
@@ -274,13 +286,14 @@ export function RoomBand({ band, projectId, children }: RoomBandProps) {
     <section
       id={band.anchor}
       data-threshold-unit={band.anchor}
+      data-dimmable=""
       data-project-id={projectId}
       aria-labelledby={headingId}
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
       <div
         data-testid="room-band-lintel"
-        className="sticky top-0 z-[4] flex flex-wrap items-baseline justify-between gap-4 border-b border-[var(--border-default)] bg-[var(--color-off-white)] pb-2.5 pt-2.5 max-[600px]:static"
+        className="sticky top-0 z-[4] flex flex-wrap items-baseline justify-between gap-4 border-b border-[var(--border-default)] bg-[var(--bg-primary)] pb-2.5 pt-2.5 max-[600px]:static"
       >
         <h2
           id={headingId}
@@ -328,14 +341,13 @@ export function RoomBand({ band, projectId, children }: RoomBandProps) {
                       : 'transition-transform duration-200 motion-reduce:transition-none'
                   }
                 >
-                  <button
-                    type="button"
-                    aria-expanded={lifted}
-                    aria-controls={`record-${piece.id}`}
-                    onClick={() => setLiftedId(lifted ? null : piece.id)}
-                    className={`w-full text-left ${
-                      lifted ? 'border-b border-current' : ''
-                    }`}
+                  {/* The control is a sibling of the row, not its parent: a
+                      <button> takes phrasing content, and TrackingRow draws
+                      divs and paragraphs. Overlaying it keeps the whole row
+                      clickable while the accessible name stays one phrase
+                      instead of the row's every word. */}
+                  <div
+                    className={`relative ${lifted ? 'border-b border-current' : ''}`}
                   >
                     <TrackingRow
                       name={piece.name}
@@ -353,7 +365,15 @@ export function RoomBand({ band, projectId, children }: RoomBandProps) {
                         {detail}
                       </span>
                     )}
-                  </button>
+                    <button
+                      type="button"
+                      aria-expanded={lifted}
+                      aria-controls={`record-${piece.id}`}
+                      aria-label={`${piece.name} — ${lifted ? 'close' : 'open'} its record`}
+                      onClick={() => setLiftedId(lifted ? null : piece.id)}
+                      className="absolute inset-0 h-full w-full"
+                    />
+                  </div>
                   <div id={`record-${piece.id}`}>{lifted && <PieceRecord piece={piece} />}</div>
                 </li>
               );
