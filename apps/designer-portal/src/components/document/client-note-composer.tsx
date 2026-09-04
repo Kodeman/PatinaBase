@@ -7,52 +7,86 @@
  * note composer (collapsed DocumentAction → textarea → DocumentActionRow);
  * scored ink, no shadows, no "AI" — VISION §6.
  *
+ * Self-sufficient (ruling 2026-09-04): the composer fetches its own open
+ * proposals / trade scopes / invoices from EXISTING hooks rather than
+ * taking them as props, so page.tsx's mount stays projectId +
+ * clientFirstName only. No new hook was added to @patina/supabase (Lane 1
+ * owns that package) — `useTradeScopes` is an existing designer-portal
+ * app-local hook (apps/designer-portal/src/hooks/use-commercial-documents.ts).
+ *
  * Gated on the `threshold` flag (fail-closed: renders nothing while loading
  * or off). Every hook below runs unconditionally above the gate's early
  * return so hook order never depends on the flag's resolved value.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useProjectNotes,
   useSendProjectNote,
   useRetireProjectNote,
+  useProposals,
+  useProjectInvoices,
   type ProjectNote,
   type ProjectNoteEnclosure,
+  type Proposal,
+  type Invoice,
 } from "@patina/supabase";
+import { useTradeScopes } from "@/hooks/use-commercial-documents";
+import type { TradeScopeView } from "@/lib/document/project-commerce";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { fmtDay } from "@/lib/document/format";
 import { DocumentAction, DocumentActionRow } from "./document-action";
 import { DOCUMENT_WRITE_EVENT } from "./margin-rail";
 
 const MAX_BODY_LENGTH = 2000;
 
-/** "4 September" — the day-month form the receipt lines are written in.
- *  `en-GB` for the day-before-month order; the words themselves stay
- *  English regardless of locale. */
-function dayMonth(iso: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "long",
-  }).format(new Date(iso));
-}
-
-export interface ClientNoteComposerEnclosureOption {
+interface EnclosureOption {
   id: string;
   title: string;
-  code?: string;
+}
+
+/** Open proposals: sent, not yet countersigned. */
+function openProposalOptions(
+  proposals: Proposal[] | undefined,
+): EnclosureOption[] {
+  return (proposals ?? [])
+    .filter((p) => p.status === "sent" && p.commercial_state !== "executed")
+    .map((p) => ({ id: p.id, title: p.title }));
+}
+
+/** Open trade scopes: the id is the scope's underlying `proposals` row id —
+ *  the same identity space `kind: 'proposal'` enclosures use — since a
+ *  trade scope IS a proposal row (document_kind service_addendum). */
+function openTradeScopeOptions(
+  scopes: TradeScopeView[] | undefined,
+): EnclosureOption[] {
+  return (scopes ?? [])
+    .filter((t) => t.progressState === "substantially_complete")
+    .map((t) => ({ id: t.proposalId, title: t.title }));
+}
+
+/** Open invoices: sent or partially paid. */
+function openInvoiceOptions(
+  invoices: Invoice[] | undefined,
+): EnclosureOption[] {
+  return (invoices ?? [])
+    .filter((inv) => inv.status === "sent" || inv.status === "partially_paid")
+    .map((inv) => ({
+      id: inv.id,
+      title: inv.invoice_number
+        ? `invoice No. ${inv.invoice_number}`
+        : "the invoice",
+    }));
 }
 
 export interface ClientNoteComposerProps {
   projectId: string;
   clientFirstName: string | null | undefined;
-  openProposals: ClientNoteComposerEnclosureOption[];
-  openTradeScopes: ClientNoteComposerEnclosureOption[];
-  openInvoices: ClientNoteComposerEnclosureOption[];
 }
 
 function defaultTickedKeys(
-  openProposals: ClientNoteComposerEnclosureOption[],
-  openTradeScopes: ClientNoteComposerEnclosureOption[],
+  openProposals: EnclosureOption[],
+  openTradeScopes: EnclosureOption[],
 ): Set<string> {
   return new Set([
     ...openProposals.map((p) => `proposal:${p.id}`),
@@ -70,14 +104,27 @@ function ticketsToEnclosures(ticked: Set<string>): ProjectNoteEnclosure[] {
 export function ClientNoteComposer({
   projectId,
   clientFirstName,
-  openProposals,
-  openTradeScopes,
-  openInvoices,
 }: ClientNoteComposerProps) {
   const flag = useFeatureFlag("threshold");
   const { data: notes } = useProjectNotes(projectId);
+  const { data: proposalRows } = useProposals({ projectId, status: "sent" });
+  const { data: tradeScopeRows } = useTradeScopes(projectId);
+  const { data: invoiceRows } = useProjectInvoices(projectId);
   const sendNote = useSendProjectNote();
   const retireNote = useRetireProjectNote();
+
+  const openProposals = useMemo(
+    () => openProposalOptions(proposalRows),
+    [proposalRows],
+  );
+  const openTradeScopes = useMemo(
+    () => openTradeScopeOptions(tradeScopeRows),
+    [tradeScopeRows],
+  );
+  const openInvoices = useMemo(
+    () => openInvoiceOptions(invoiceRows),
+    [invoiceRows],
+  );
 
   const [composing, setComposing] = useState(false);
   const [body, setBody] = useState("");
@@ -128,7 +175,7 @@ export function ClientNoteComposer({
       {
         onSuccess: () => {
           setRetiredReceipt(
-            `Taken down ${dayMonth(new Date().toISOString())}. It moves to Previously.`,
+            `Taken down ${fmtDay(new Date().toISOString())}. It moves to Previously.`,
           );
         },
       },
@@ -151,7 +198,7 @@ export function ClientNoteComposer({
           {standingNote.body}
         </p>
         <p className="mt-1 text-[11px] italic text-[var(--text-muted)]">
-          Sent {dayMonth(standingNote.sentAt)}. It stands on her page until she
+          Sent {fmtDay(standingNote.sentAt)}. It stands on her page until she
           answers.
         </p>
         <DocumentActionRow

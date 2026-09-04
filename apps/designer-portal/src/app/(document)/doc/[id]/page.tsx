@@ -2678,7 +2678,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         {row.engagement_kind === 'project' && row.project_id && (
           <FolioLetterhead projectId={row.project_id} />
         )}
-        {row.engagement_kind === 'project' && row.project_id && <ClientNoteComposer projectId={row.project_id} clientFirstName={row.client_name?.split(' ')[0]} openProposals={[]} openTradeScopes={[]} openInvoices={[]} />}
+        {row.engagement_kind === 'project' && row.project_id && <ClientNoteComposer projectId={row.project_id} clientFirstName={row.client_name?.split(' ')[0]} />}
 
         {/* D-B30: the letterhead margin chips block is retired at 390 — the
             Margin sheet (mobile-bar's "In this document" door) replaces it.

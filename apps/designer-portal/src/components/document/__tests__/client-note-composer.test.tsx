@@ -3,6 +3,11 @@
  * composer. Gated on the `threshold` flag (fail-closed: renders nothing
  * while loading or off — mock @/hooks/use-feature-flag per test).
  *
+ * Self-sufficient (ruling 2026-09-04): the composer fetches its own open
+ * proposals (`useProposals`), trade scopes (`useTradeScopes`), and invoices
+ * (`useProjectInvoices`) rather than taking them as props — this suite
+ * mocks those hooks and re-asserts the pre-tick behaviour against them.
+ *
  * TRAPS avoided (patina-testing): never `jest.mock('@patina/help-system', …)`
  * (tsconfig alias absent from this app's jest moduleNameMapper — a silent
  * no-op); this component never reaches `@portabletext/react`, so no leaf
@@ -27,6 +32,22 @@ let mockNotes: Array<{
   answeredAt: string | null;
   retiredAt: string | null;
 }>;
+let mockProposals: Array<{
+  id: string;
+  title: string;
+  status: string;
+  commercial_state?: string;
+}>;
+let mockTradeScopes: Array<{
+  proposalId: string;
+  title: string;
+  progressState: string;
+}>;
+let mockInvoices: Array<{
+  id: string;
+  invoice_number: string | null;
+  status: string;
+}>;
 
 const sendMutate = jest.fn();
 const retireMutate = jest.fn();
@@ -37,6 +58,10 @@ jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: () => mockFlag,
 }));
 
+jest.mock("@/hooks/use-commercial-documents", () => ({
+  useTradeScopes: () => ({ data: mockTradeScopes }),
+}));
+
 jest.mock("@patina/supabase", () => ({
   useProjectNotes: () => ({ data: mockNotes }),
   useSendProjectNote: () => ({ mutate: sendMutate, isPending: sendPending }),
@@ -44,19 +69,29 @@ jest.mock("@patina/supabase", () => ({
     mutate: retireMutate,
     isPending: retirePending,
   }),
+  useProposals: () => ({ data: mockProposals }),
+  useProjectInvoices: () => ({ data: mockInvoices }),
 }));
 
 const baseProps = {
   projectId: "project-1",
   clientFirstName: "Elena",
-  openProposals: [{ id: "prop-1", title: "authorization No. 7" }],
-  openTradeScopes: [{ id: "ts-1", title: "paintwork scope" }],
-  openInvoices: [{ id: "inv-1", title: "invoice No. 12" }],
 };
 
 beforeEach(() => {
   mockFlag = { value: true, isLoading: false };
   mockNotes = [];
+  mockProposals = [
+    { id: "prop-1", title: "authorization No. 7", status: "sent" },
+  ];
+  mockTradeScopes = [
+    {
+      proposalId: "ts-1",
+      title: "paintwork scope",
+      progressState: "substantially_complete",
+    },
+  ];
+  mockInvoices = [{ id: "inv-1", invoice_number: "12", status: "sent" }];
   sendMutate.mockReset();
   retireMutate.mockReset();
   sendPending = false;
@@ -85,7 +120,7 @@ describe("ClientNoteComposer — no standing note", () => {
     ).toBeInTheDocument();
   });
 
-  it("opening pre-ticks proposals + trade scopes and leaves invoices unticked", () => {
+  it("opening pre-ticks proposals + trade scopes (from useProposals/useTradeScopes) and leaves invoices (from useProjectInvoices) unticked", () => {
     render(<ClientNoteComposer {...baseProps} />);
     fireEvent.click(
       screen.getByRole("button", { name: "Write to your client" }),
@@ -104,6 +139,52 @@ describe("ClientNoteComposer — no standing note", () => {
     expect(proposalBox).toBeChecked();
     expect(tradeScopeBox).toBeChecked();
     expect(invoiceBox).not.toBeChecked();
+  });
+
+  it("excludes a proposal whose commercial_state is executed even if status is still sent", () => {
+    mockProposals = [
+      {
+        id: "prop-executed",
+        title: "executed authorization",
+        status: "sent",
+        commercial_state: "executed",
+      },
+    ];
+    render(<ClientNoteComposer {...baseProps} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Write to your client" }),
+    );
+    expect(
+      screen.queryByText(/Send it with executed authorization/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("excludes a trade scope that is not yet substantially complete", () => {
+    mockTradeScopes = [
+      {
+        proposalId: "ts-2",
+        title: "framing scope",
+        progressState: "in_progress",
+      },
+    ];
+    render(<ClientNoteComposer {...baseProps} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Write to your client" }),
+    );
+    expect(
+      screen.queryByText(/Send it with the framing scope/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("excludes a draft invoice (only sent/partially_paid are open)", () => {
+    mockInvoices = [{ id: "inv-draft", invoice_number: "9", status: "draft" }];
+    render(<ClientNoteComposer {...baseProps} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Write to your client" }),
+    );
+    expect(
+      screen.queryByText(/Send it with invoice No\. 9/),
+    ).not.toBeInTheDocument();
   });
 
   it("Send calls the mutation with the body and serialized enclosures, and dispatches DOCUMENT_WRITE_EVENT", () => {
@@ -192,15 +273,13 @@ describe("ClientNoteComposer — standing note", () => {
     ];
   });
 
-  it('renders the note body, the receipt line, and "Take it down"', () => {
+  it('renders the note body, the receipt line (fmtDay wording), and "Take it down"', () => {
     render(<ClientNoteComposer {...baseProps} />);
     expect(
       screen.getByText("Three last pieces are ready for your signature."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Sent 4 September. It stands on her page until she answers.",
-      ),
+      screen.getByText("Sent Sep 4. It stands on her page until she answers."),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Take it down" }),
