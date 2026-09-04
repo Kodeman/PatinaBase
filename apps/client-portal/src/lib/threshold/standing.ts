@@ -75,7 +75,10 @@ export function thresholdStanding(m: ThresholdStandingInput): string {
     (clause): clause is string => clause !== null,
   );
 
-  if (!m.nothingOwed && clauses.length > 0) {
+  // A real ask always wins over the flag. `nothingOwed` and a door count are
+  // contradictory inputs, and only one direction of that contradiction is
+  // dangerous: telling a client nothing waits for her name while a paper does.
+  if (clauses.length > 0) {
     return `${capitalize(joinClauses(clauses))}.`;
   }
 
@@ -86,6 +89,40 @@ export function thresholdStanding(m: ThresholdStandingInput): string {
   const credenza = m.credenzaLine?.trim();
   if (credenza) sentences.push(credenza);
   return sentences.join(' ');
+}
+
+/**
+ * A variance at the granularity a person actually speaks it: hundreds, and
+ * approximate. "$1,137.40 over" is an accountant's figure; "about eleven
+ * hundred past its target" is what the designer says out loud.
+ *
+ * The twelve-and-under cutover is standing-sentence's own rule, not a new one
+ * — past twelve the word stops helping and becomes a puzzle, so the house's
+ * money format takes over.
+ */
+function hundredsInWords(cents: number): string | null {
+  const hundreds = Math.round(Math.abs(cents) / 10_000);
+  if (hundreds === 0) return null;
+  if (hundreds <= 12) return `${countInWords(hundreds)} hundred`;
+  return moneyInWords(hundreds * 10_000);
+}
+
+/**
+ * How a room's agreed total sits against what was planned for it. Null when
+ * the room carries no target, when the two agree, or when the gap rounds away
+ * to nothing at hundreds granularity — a room that is $40 over is, in the
+ * voice this page speaks, on its target.
+ */
+export function roomVarianceLine(
+  targetCents: number | null,
+  agreedCents: number,
+): string | null {
+  if (targetCents === null || !Number.isFinite(targetCents)) return null;
+  const delta = agreedCents - targetCents;
+  if (delta === 0) return null;
+  const amount = hundredsInWords(delta);
+  if (!amount) return null;
+  return `about ${amount} ${delta > 0 ? 'past' : 'under'} its target`;
 }
 
 /** "19 June" — the day a thing happened, the way the deck's own line prints it. */

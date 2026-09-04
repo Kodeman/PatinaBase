@@ -69,10 +69,14 @@ const WALL_LEADER_RUN = 66;
  * Plan order: the studio's own order first, then name, then id — sort_order is
  * uniformly 0 on a great many projects, and a drawing that reshuffles itself
  * between renders is not a drawing.
+ *
+ * Exported because the key's rects and the page's room bands MUST agree on
+ * order; two copies of this comparator is how that drift starts. The locale is
+ * pinned so a server pass and a browser pass cannot sort differently.
  */
-function byPlanOrder(a: KeyRoom, b: KeyRoom): number {
+export function byPlanOrder(a: KeyRoom, b: KeyRoom): number {
   if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-  const byName = a.name.localeCompare(b.name);
+  const byName = a.name.localeCompare(b.name, 'en');
   if (byName !== 0) return byName;
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
