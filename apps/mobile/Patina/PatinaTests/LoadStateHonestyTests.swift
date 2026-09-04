@@ -286,11 +286,8 @@ struct LoadStateHonestyTests {
     @Test
     func aHubThatNeverLoadedSaysThatInsteadOfANonExistentTimestamp() throws {
         let hub = StudioHubViewModel()
-        // No floor either: `W1-B-16` gave the cold shape a second source for
-        // "when was this last true", and `BadgeCountService.shared` reads the
-        // running clone's own `.standard` defaults — so a hub that never
-        // loaded has to say so here, not inherit a timestamp from whatever the
-        // app last did on this simulator (`RL1F-33`'s shape).
+        // `W1-B-16`: no floor either, and the seam reads this clone's own
+        // defaults (`RL1F-33`'s shape) — so it is named, not inherited.
         hub.restoredFloorAt = { nil }
         hub.apply(try hubResult(decisionsFailed: true))
         #expect(hub.stalenessLine == "We couldn’t reach your studio just now.")
@@ -301,9 +298,7 @@ struct LoadStateHonestyTests {
     @Test
     func anEmptyHubHasNoStalenessLine() throws {
         let hub = StudioHubViewModel()
-        // Nothing held AND no floor. With a floor there IS something to be
-        // stale about, and `ColdLaunchStalenessTests` is where that case lives.
-        hub.restoredFloorAt = { nil }
+        hub.restoredFloorAt = { nil }  // nothing held AND no floor (W1-B-16)
         hub.apply(try hubResult(everythingFailed: true))
         #expect(hub.stalenessLine == nil)
         #expect(hub.loadMessage == "We couldn’t gather your Studio. Check your connection and try again.")

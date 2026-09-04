@@ -421,7 +421,7 @@ public actor DecisionsAPIClient {
         let params: [String: Any] = [
             "p_decision_id": decisionId,
             "p_client_consent_method": consent.rawValue,
-            "p_client_signature": signature ?? NSNull(),
+            "p_client_signature": signature ?? NSNull()
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: params)
         let (data, response) = try await session.patinaData(for: request)
