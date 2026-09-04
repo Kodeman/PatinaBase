@@ -179,3 +179,101 @@ export function keySentence(markCount: number): string {
   if (marks === 1) return 'One mark stands open on this drawing.';
   return `${capitalize(countInWords(marks))} marks stand open on this drawing.`;
 }
+
+/* ── the day, in words ──────────────────────────────────────────────────────
+   The dateline speaks a day the way a person says it out loud — "the fourth
+   of August" — because it is a sentence about her last visit, not a stamp.
+   The ledger's figure keeps the deck's numeric idiom ("due 15 August"): it
+   stands beside money, and money is set in figures on this page. ─────────── */
+
+const ONES = [
+  '',
+  'first',
+  'second',
+  'third',
+  'fourth',
+  'fifth',
+  'sixth',
+  'seventh',
+  'eighth',
+  'ninth',
+  'tenth',
+  'eleventh',
+  'twelfth',
+  'thirteenth',
+  'fourteenth',
+  'fifteenth',
+  'sixteenth',
+  'seventeenth',
+  'eighteenth',
+  'nineteenth',
+  'twentieth',
+] as const;
+
+const TENS = ['', '', 'twentieth', 'thirtieth'] as const;
+const TENS_PREFIX = ['', '', 'twenty', 'thirty'] as const;
+
+/** "fourth", "twenty-first", "thirtieth" — a calendar day as it is spoken. */
+export function dayInWords(day: number): string | null {
+  if (!Number.isFinite(day)) return null;
+  const value = Math.trunc(day);
+  if (value < 1 || value > 31) return null;
+  if (value <= 20) return ONES[value];
+  const tens = Math.floor(value / 10);
+  const ones = value % 10;
+  return ones === 0 ? TENS[tens] : `${TENS_PREFIX[tens]}-${ONES[ones]}`;
+}
+
+/**
+ * The dateline beside the since control: when she last stood here. Null when
+ * there is no previous mark — a first visit has no "here" to have read from,
+ * and the page says nothing rather than inventing one.
+ */
+export function readingMarkLine(at: Date | null | undefined): string | null {
+  if (!at || Number.isNaN(at.getTime())) return null;
+  const day = dayInWords(at.getDate());
+  return day ? `Read here on the ${day} of ${MONTHS[at.getMonth()]}.` : null;
+}
+
+/**
+ * What the owed row adds to its figure. One dated invoice owes on one day;
+ * several owe on several, and the row names the first of them as the first —
+ * a bare "due 15 August" against a sum of three invoices would say the whole
+ * balance falls due that day, which is not true. `datedCount` is how many open
+ * invoices actually carry a due date, not how many are open: three invoices of
+ * which one is dated has exactly one day to name.
+ *
+ * The year is spelled out the moment it is not this year — the rule
+ * `SpineToll` and the letterbox already keep. `today` is omitted during SSR
+ * and the first client paint, which simply drops the year.
+ */
+export function owedDueLine(
+  due: Date | null | undefined,
+  datedCount: number,
+  today?: Date,
+): string | null {
+  if (!due || Number.isNaN(due.getTime())) return null;
+  const day =
+    today && today.getFullYear() !== due.getFullYear()
+      ? `${dayAndMonth(due)} ${due.getFullYear()}`
+      : dayAndMonth(due);
+  return `${tally(datedCount) > 1 ? 'first due' : 'due'} ${day}`;
+}
+
+/**
+ * The note as a door pins it: its opening, not its body. The full letter is
+ * rendered once, by `TheNote`, and the pin carries a quote short enough to
+ * read at a glance with "Read the note" beneath it. The cut lands on a word
+ * and is marked, so no sentence is left looking finished when it is not.
+ */
+export function noteInBrief(body: string, budget = 140): string {
+  const text = body.trim().replace(/\s+/g, ' ');
+  if (text.length <= budget) return text;
+  const cut = text.slice(0, budget);
+  const lastSpace = cut.lastIndexOf(' ');
+  // The raw cut is the fallback only for text with no space at all inside the
+  // budget — one unbroken run of characters. Anything else cuts on its last
+  // word, so no quote is left broken mid-word.
+  const kept = (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:—.!?-]+$/, '');
+  return `${kept}…`;
+}

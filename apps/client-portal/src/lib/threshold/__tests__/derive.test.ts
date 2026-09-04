@@ -996,6 +996,26 @@ describe('deriveThreshold — what is owed across every open invoice', () => {
     expect(model.letterbox?.id).toBe('inv-4');
     expect(model.ledger.owedInvoiceCount).toBe(2);
   });
+
+  it('names the SOONEST day the house owes on, whatever order the rows arrive in', () => {
+    const undated = invoice({ id: 'inv-undated', due_date: null, total_cents: 100 });
+    const model = deriveThreshold(input({ invoices: [second, undated, first] }));
+
+    expect(model.ledger.owedDueDate).toBe('2026-08-15');
+    // Only the dated ones can be counted towards "first due": three are open
+    // and two of them name a day.
+    expect(model.ledger.owedInvoiceCount).toBe(3);
+    expect(model.ledger.owedDatedCount).toBe(2);
+  });
+
+  it('names no day at all when every open invoice lacks one', () => {
+    const undated = invoice({ id: 'inv-undated', due_date: null, total_cents: 100 });
+    const alsoUndated = invoice({ id: 'inv-undated-2', due_date: null, total_cents: 200 });
+    const model = deriveThreshold(input({ invoices: [undated, alsoUndated] }));
+
+    expect(model.ledger.owedDueDate).toBeNull();
+    expect(model.ledger.owedDatedCount).toBe(0);
+  });
 });
 
 describe('deriveThreshold — the road, the rest of it', () => {

@@ -18,7 +18,7 @@ import {
 import type { ProjectApprovalReview, ProjectNote } from '@patina/supabase';
 import { getFieldTradeLabel } from '@patina/types';
 
-import { openChapterOf, splitSpinePhases } from '@/components/making/making-spine';
+import { openChapterOf } from '@/components/making/making-spine';
 import { ScoredAction } from '@/components/making/scored-action';
 import { monthAndYear } from '@/components/making/standing-sentence';
 import { useAuth } from '@/hooks/use-auth';
@@ -31,6 +31,7 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { isClientActionableProjectApproval } from '@/lib/client-attention';
 import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
+import { thresholdPhases } from '@/lib/threshold/canonical-phases';
 import {
   deriveThreshold,
   parseSourceDate,
@@ -41,7 +42,12 @@ import {
   type ThresholdRoom,
 } from '@/lib/threshold/derive';
 import { planKeyGeometry } from '@/lib/threshold/plan-key';
-import { keySentence, previouslyLine, thresholdStanding } from '@/lib/threshold/standing';
+import {
+  keySentence,
+  previouslyLine,
+  readingMarkLine,
+  thresholdStanding,
+} from '@/lib/threshold/standing';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
 import { KIND_LABEL } from './consent-copy';
@@ -405,7 +411,10 @@ export function Threshold({
     selectionUpdatedAt,
   });
 
-  const phases = useMemo(() => splitSpinePhases(milestones), [milestones]);
+  const phases = useMemo(
+    () => thresholdPhases(milestones, project.currentPhase, project.status),
+    [milestones, project.currentPhase, project.status],
+  );
   const openChapter = openChapterOf(phases, project.currentPhase);
   const studioName = words(identityQuery.data?.name);
 
@@ -455,7 +464,11 @@ export function Threshold({
   // are unique ids: the collapsed /proposals route lands on exactly one door.
   const doorMarks = model.marks.filter((mark) => mark.kind === 'door');
   const wallMarks = model.marks.filter((mark) => mark.kind === 'wall');
-  const firstDoorId = doorMarks[0]?.id ?? null;
+  // The first door that will actually RENDER: `renderDoor` answers null for a
+  // mark whose paper is missing, and a pin or a `#door` anchor on a door that
+  // is not drawn is simply lost.
+  const firstDoorId =
+    doorMarks.find((mark) => paperById.has(mark.proposalId ?? ''))?.id ?? null;
   const firstWallId = wallMarks[0]?.id ?? null;
 
   /** The gate's own element id, which is `door`/`wall` only for the first one. */
@@ -472,10 +485,11 @@ export function Threshold({
         key={mark.id}
         mark={mark}
         proposal={paper}
-        // The standing note is rendered by `TheNote`, once. Both components
-        // take the same NoteModel and neither dedupes, so pinning it here as
-        // well would print the same paragraph twice.
-        note={null}
+        // Pinned to the FIRST door only, and only ever as its opening: the
+        // letter itself is set once, by `TheNote`. Never on the ground floor,
+        // whose order sets the whole letter ABOVE the doors — there the pin's
+        // way back would point at a paragraph read one section ago.
+        note={!model.groundFloor && mark.id === firstDoorId ? model.note : null}
         projectId={projectId}
         first={mark.id === firstDoorId}
         studioName={studioName}
@@ -604,7 +618,7 @@ export function Threshold({
     <Mat people={people} papers={papers} accountHref="/account" onSignOut={() => void signOut()} />
   );
 
-  const ledger = <HouseLedger ledger={model.ledger} />;
+  const ledger = <HouseLedger ledger={model.ledger} today={today} />;
   const letterbox = <Letterbox invoice={model.letterbox} today={today} />;
   const road = model.road.length > 0 ? <TheRoad pieces={model.road} /> : null;
   const note = (
@@ -626,6 +640,7 @@ export function Threshold({
       showSince={showSince}
       sinceActive={sinceActive}
       onToggleSince={() => setSinceActive((was) => !was)}
+      readingMark={readingMarkLine(parseSourceDate(previousReadAt))}
     >
       {ledger}
       {model.groundFloor ? null : letterbox}
