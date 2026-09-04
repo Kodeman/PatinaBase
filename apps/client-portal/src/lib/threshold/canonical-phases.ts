@@ -30,7 +30,7 @@ import {
   splitSpinePhases,
   type SpinePhase,
   type SpinePhases,
-} from '@/components/making/making-spine';
+} from '@/components/threshold/instruments/making-spine';
 import type { MilestoneDetail } from '@/types/project';
 
 /**

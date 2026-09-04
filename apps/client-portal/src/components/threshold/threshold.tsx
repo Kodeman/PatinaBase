@@ -8,6 +8,7 @@ import {
   useDirectOrders,
   useMarkProjectRead,
   useMyPendingReviewRequests,
+  useMyProjectApprovalReviews,
   useMySubmittedReviews,
   usePreviousReadingMark,
   useProjectInvoices,
@@ -22,8 +23,9 @@ import {
 import type { ProjectApprovalReview, ProjectNote } from "@patina/supabase";
 import { getFieldTradeLabel } from "@patina/types";
 
-import { openChapterOf } from '@/components/making/making-spine';
-import { monthAndYear } from '@/components/making/standing-sentence';
+import { openChapterOf } from '@/components/threshold/instruments/making-spine';
+import { monthAndYear } from '@/components/threshold/instruments/standing-sentence';
+import { clientEvents } from '@/lib/analytics/events';
 import { useAuth } from '@/hooks/use-auth';
 import {
   clientCommercialDocumentQueryOptions,
@@ -211,31 +213,45 @@ export interface ThresholdProps {
   project: ClientProjectOverview;
   /** Server-fetched phases, in the studio's own order. */
   milestones: MilestoneDetail[];
-  projectApprovals?: ProjectApprovalReview[];
-  projectApprovalsLoading?: boolean;
   /** Every other project this client can open. Empty for a solo client. */
   otherHouses?: OtherHouse[];
-  /**
-   * The approvals could not be read. Silence is for absence, not for failure:
-   * once the doorstep is the only place a gate can be answered, a failed read
-   * that shows nothing tells the client they owe nothing. It says so instead,
-   * where the asks would have stood.
-   */
-  projectApprovalsError?: boolean;
+  /** How the client got here — `/` chose this house, or she named it. */
+  viewSource?: 'front-door' | 'named';
 }
 
 export function Threshold({
   projectId,
   project,
   milestones,
-  projectApprovals = [],
-  projectApprovalsLoading = false,
   otherHouses = [],
-  projectApprovalsError = false,
+  viewSource = 'named',
 }: ThresholdProps) {
   // ── every hook, before any branch ──────────────────────────────────────────
   const hydrated = useHydrated();
   const { user, signOut } = useAuth();
+  // The caller-global sanitized read (00440), NOT `get_project_decision_reviews`:
+  // that one authorizes a studio co-member or the decision lead and raises
+  // `insufficient_privilege` for a homeowner, so every client got a failed read
+  // and no approval ask at all. Filter it to this house here.
+  const approvalsQuery = useMyProjectApprovalReviews();
+  const projectApprovals: ProjectApprovalReview[] = useMemo(
+    () =>
+      (approvalsQuery.data ?? []).filter(
+        (review) => review.projectId === projectId,
+      ),
+    [approvalsQuery.data, projectId],
+  );
+  const projectApprovalsLoading = approvalsQuery.isLoading;
+  const projectApprovalsError = approvalsQuery.isError;
+  // THIS COMPONENT IS THE SOLE EMITTER OF `client_project_view`. Both pages
+  // that render a house (`/` and `/projects/[id]`) render this once per
+  // project, and `source` keeps "landed at the front door" apart from
+  // "opened this house by name".
+  useEffect(() => {
+    clientEvents.projectView(projectId, viewSource);
+    // `viewSource` is fixed per route render; the project is what changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
   const preparedFor = words(user?.name);
   const proposalsQuery = useClientProposals();
   const selectionsQuery = useClientSelections(projectId);

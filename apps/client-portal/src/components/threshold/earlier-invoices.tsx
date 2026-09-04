@@ -5,8 +5,8 @@ import { useState } from 'react';
 import type { Invoice } from '@patina/supabase';
 import { invoiceBalanceCents } from '@patina/shared';
 
-import { ScoredAction } from '@/components/making/scored-action';
-import { moneyInWords } from '@/components/making/standing-sentence';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import { visibleInvoices } from '@/app/budget/rollup';
 import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
 

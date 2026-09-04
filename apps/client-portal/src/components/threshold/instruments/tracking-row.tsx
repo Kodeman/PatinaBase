@@ -6,7 +6,7 @@ import type { FFEStageKey } from '@patina/types';
 import {
   GOODS_JOURNEY_STAGES,
   journeyStageIndexForStatus,
-} from '../commercial/journey-stepper';
+} from '@/components/commercial/journey-stepper';
 
 /* ── TRACKING ROW — parcel-grade, for a piece of furniture ───────────────────
    The piece, what it cost, a six-stop micro-spine filled to where it actually

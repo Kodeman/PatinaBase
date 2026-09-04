@@ -4,9 +4,9 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CommercialDocumentKind } from '@patina/types';
 
-import { ScoredAction } from '@/components/making/scored-action';
-import { SpineGate } from '@/components/making/spine-gate';
-import { countInWords, moneyInWords } from '@/components/making/standing-sentence';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { SpineGate } from '@/components/threshold/instruments/spine-gate';
+import { countInWords, moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import {
   invalidateSignedCommercialDocument,
   useClientCommercialDocument,
@@ -550,7 +550,7 @@ export function DoorGate({
                   {error && (
                     <p
                       role="alert"
-                      className="mt-2 text-[15px] leading-normal text-[var(--color-error)]"
+                      className="mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]"
                     >
                       {error}
                     </p>

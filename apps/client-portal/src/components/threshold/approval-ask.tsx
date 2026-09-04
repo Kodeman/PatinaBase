@@ -13,8 +13,8 @@ import {
   type ProjectApprovalReview,
 } from '@patina/supabase';
 
-import { ScoredAction } from '@/components/making/scored-action';
-import { moneyInWords } from '@/components/making/standing-sentence';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import { useProjectWorkingBudget } from '@/hooks/use-commercial-client';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -315,7 +315,7 @@ function Discussion({ decisionId, readOnly = false }: { decisionId: string; read
         <p
           role="alert"
           data-testid="approval-comments-error"
-          className="mt-3.5 text-[15px] leading-normal text-[var(--color-error)]"
+          className="mt-3.5 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]"
         >
           Comments could not be read just now. Refresh to try again.
         </p>
@@ -374,7 +374,7 @@ function Discussion({ decisionId, readOnly = false }: { decisionId: string; read
             </ScoredAction>
           </div>
           {postFailed && (
-            <p role="alert" className="mt-2 text-[15px] leading-normal text-[var(--color-error)]">
+            <p role="alert" className="mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]">
               The comment could not be posted. Your draft is still here; try again.
             </p>
           )}
@@ -726,7 +726,7 @@ export function ApprovalAsk({
           <p
             role="alert"
             data-testid="approval-confirmation-unavailable"
-            className="mt-2.5 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--color-error)]"
+            className="mt-2.5 max-w-[52ch] border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-[1.62] text-[var(--text-body)]"
           >
             Review confirmation is temporarily unavailable. The frozen authority revision was
             not supplied.
@@ -812,7 +812,7 @@ export function ApprovalAsk({
       )}
 
       {error && (
-        <p role="alert" className="mt-3 text-[15px] leading-normal text-[var(--color-error)]">
+        <p role="alert" className="mt-3 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]">
           {error}
         </p>
       )}

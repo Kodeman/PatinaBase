@@ -14,7 +14,7 @@ import {
   onlineSurchargeCents,
 } from '@patina/shared';
 
-import { SpineToll } from '@/components/making/spine-toll';
+import { SpineToll } from '@/components/threshold/instruments/spine-toll';
 import { clientEvents } from '@/lib/analytics/events';
 import type { InvoiceModel } from '@/lib/threshold/derive';
 import { refusalSentence } from '@/lib/threshold/refusal';

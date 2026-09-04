@@ -16,7 +16,7 @@ import {
 } from "@patina/supabase";
 import type { NotificationPreferences } from "@patina/shared/types";
 
-import { ScoredAction } from "@/components/making/scored-action";
+import { ScoredAction } from "@/components/threshold/instruments/scored-action";
 import { AvatarUploadField } from "@/components/account/AvatarUploadField";
 
 import { useScrollLock } from "./use-scroll-lock";
@@ -390,7 +390,7 @@ function ProfileSection() {
             {updateProfile.isError && (
               <p
                 role="alert"
-                className="text-[13px] text-[var(--color-error,#C77B6E)]"
+                className="border-t border-[var(--border-subtle)] pt-2 text-[13px] text-[var(--text-body)]"
               >
                 {updateProfile.error instanceof Error
                   ? updateProfile.error.message
@@ -444,7 +444,7 @@ function NotificationsSection() {
         {updatePrefs.isError && (
           <p
             role="alert"
-            className="text-[13px] text-[var(--color-error,#C77B6E)]"
+            className="border-t border-[var(--border-subtle)] pt-2 text-[13px] text-[var(--text-body)]"
           >
             {updatePrefs.error instanceof Error
               ? updatePrefs.error.message
@@ -824,7 +824,7 @@ function SessionsSection() {
       {error && (
         <p
           role="alert"
-          className="mt-2 text-[13px] text-[var(--color-error,#C77B6E)]"
+          className="mt-2 border-t border-[var(--border-subtle)] pt-2 text-[13px] text-[var(--text-body)]"
         >
           {error}
         </p>

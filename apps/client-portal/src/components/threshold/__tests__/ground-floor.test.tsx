@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
-import type { SpinePhase } from '@/components/making/making-spine';
+import type { SpinePhase } from '@/components/threshold/instruments/making-spine';
 
 import { GroundFloor } from '../ground-floor';
 

@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { Invoice } from '@patina/supabase';
 import { invoiceBalanceCents } from '@patina/shared';
 
-import { ScoredAction } from '@/components/making/scored-action';
-import { moneyInWords } from '@/components/making/standing-sentence';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
+import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
 import { clientEvents } from '@/lib/analytics/events';
 import {
   revealReturnAnchor,

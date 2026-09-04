@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 import { GOODS_JOURNEY_STAGES } from '@/components/commercial/journey-stepper';
-import { countInWords } from '@/components/making/standing-sentence';
+import { countInWords } from '@/components/threshold/instruments/standing-sentence';
 import type { RoadPieceModel } from '@/lib/threshold/derive';
 import type { ClosedOrderModel, RoadOrderModel } from '@/lib/threshold/road-orders';
 

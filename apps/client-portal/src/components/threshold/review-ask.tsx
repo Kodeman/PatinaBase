@@ -11,8 +11,8 @@ import {
   type ClientPendingReview,
 } from "@patina/supabase";
 
-import { ScoredAction } from "@/components/making/scored-action";
-import { moneyInWords } from "@/components/making/standing-sentence";
+import { ScoredAction } from "@/components/threshold/instruments/scored-action";
+import { moneyInWords } from "@/components/threshold/instruments/standing-sentence";
 import {
   useClientProjectReviewBundle,
   useRecordProjectReviewFeedback,
@@ -234,7 +234,7 @@ function StudioReviewCard({ request }: { request: ClientPendingReview }) {
         {error && (
           <p
             role="alert"
-            className="mt-2 text-[15px] leading-normal text-[var(--color-error)]"
+            className="mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]"
           >
             {error}
           </p>

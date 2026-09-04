@@ -11,8 +11,8 @@ import {
   countInWords,
   joinClauses,
   moneyInWords,
-} from '@/components/making/standing-sentence';
-import { TrackingRow } from '@/components/making/tracking-row';
+} from '@/components/threshold/instruments/standing-sentence';
+import { TrackingRow } from '@/components/threshold/instruments/tracking-row';
 import type { ClientSelection } from '@/lib/commercial-documents';
 import { DAY_MONTH, parseSourceDate, type RoomBandModel } from '@/lib/threshold/derive';
 

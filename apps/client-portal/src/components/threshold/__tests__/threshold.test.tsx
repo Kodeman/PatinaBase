@@ -73,6 +73,7 @@ jest.mock('@patina/supabase', () => ({
   useProjectTeamMembers: jest.fn(),
   useStudioIdentity: jest.fn(),
   useMarkProjectRead: jest.fn(),
+  useMyProjectApprovalReviews: jest.fn(),
   usePreviousReadingMark: jest.fn(),
   // The doorstep ask answers in place now; these are its boundary.
   useConfirmProjectApprovalReview: jest.fn(),
@@ -155,6 +156,7 @@ import {
   useDecisionRealtime,
   useDirectOrders,
   useMarkProjectRead,
+  useMyProjectApprovalReviews,
   usePreviousReadingMark,
   useRespondProjectApproval,
   useProjectInvoices,
@@ -193,6 +195,7 @@ import {
 
 import { Threshold } from '../threshold';
 
+const approvalsMock = useMyProjectApprovalReviews as jest.Mock;
 const invoicesMock = useProjectInvoices as jest.Mock;
 const proposalsMock = useClientSafeProposals as jest.Mock;
 const roomsMock = useProjectRooms as jest.Mock;
@@ -427,6 +430,7 @@ function renderThreshold(milestones: MilestoneDetail[] = MILESTONES) {
 }
 
 beforeEach(() => {
+  approvalsMock.mockReturnValue({ data: [], isLoading: false, isError: false });
   authMock.mockReturnValue({
     user: { id: 'client-1', name: 'Harper Vale' },
     signOut: jest.fn(),
@@ -839,18 +843,20 @@ function renderWithApprovals(
   approvals: ProjectApprovalReview[],
   { error = false }: { error?: boolean } = {},
 ) {
+  // The house reads its own approvals now — `list_my_project_decision_reviews`
+  // is caller-global, so the rows come back for every project this client has
+  // and the Threshold filters them to this one.
+  approvalsMock.mockReturnValue({
+    data: approvals,
+    isLoading: false,
+    isError: error,
+  });
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <Threshold
-        projectId={PROJECT_ID}
-        project={PROJECT}
-        milestones={MILESTONES}
-        projectApprovals={approvals}
-        projectApprovalsError={error}
-      />
+      <Threshold projectId={PROJECT_ID} project={PROJECT} milestones={MILESTONES} />
     </QueryClientProvider>,
   );
 }

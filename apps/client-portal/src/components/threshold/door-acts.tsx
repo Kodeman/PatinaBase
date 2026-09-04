@@ -10,7 +10,7 @@ import {
   useStartProjectThread,
 } from '@patina/supabase';
 
-import { ScoredAction } from '@/components/making/scored-action';
+import { ScoredAction } from '@/components/threshold/instruments/scored-action';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import { hasPassed } from '@/lib/threshold/expiry';
 
@@ -419,7 +419,7 @@ function Panel({
       </p>
 
       {error && (
-        <p role="alert" className="mt-2 text-[15px] leading-normal text-[var(--color-error)]">
+        <p role="alert" className="mt-2 border-t border-[var(--border-subtle)] pt-2 text-[15px] leading-normal text-[var(--text-body)]">
           {error}
         </p>
       )}
