@@ -274,13 +274,16 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     input.selections?.origin === 'commercial' ? input.selections.selections : [];
 
   const roomIds = new Set(rooms.map((room) => room.id));
+  // `changed` is EMPTY on a first reading, by rule. There is no mark to
+  // measure against, so a first visit shows no ticks at all — the whole page
+  // is new, and ticking every unit would say nothing. The ticks begin on the
+  // second visit, which is the first one that can have a "since".
   const previousReadAt = parseMoment(input.previousReadAt);
   const changed = new Set<string>();
-  const movedSince = (value: string | null | undefined): boolean => {
-    if (previousReadAt === null) return false;
-    const moment = parseMoment(value);
-    return moment !== null && moment > previousReadAt;
-  };
+  const movedSinceMoment = (moment: number | null): boolean =>
+    previousReadAt !== null && moment !== null && moment > previousReadAt;
+  const movedSince = (value: string | null | undefined): boolean =>
+    movedSinceMoment(parseMoment(value));
 
   // ── the doors ──────────────────────────────────────────────────────────────
   // A proposal knows nothing about rooms; its selections do. The door hangs on
@@ -418,6 +421,12 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     ];
   });
 
+  // A piece that moved ticks the road it is on as well as the room it is bound
+  // for; a roomless piece has only the road.
+  if (road.some((piece) => movedSince(input.selectionUpdatedAt?.[piece.selectionId]))) {
+    changed.add('road');
+  }
+
   // ── the letterbox and the ledger ───────────────────────────────────────────
   const openInvoices = visibleInvoices(input.invoices ?? [])
     .filter((invoice) => OPEN_INVOICE_STATUSES.has(invoice.status))
@@ -501,6 +510,10 @@ export function deriveThreshold(input: ThresholdInput): ThresholdModel {
     if (left !== right) return right - left;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
+
+  if (previously.some((entry) => movedSinceMoment(entry.date?.getTime() ?? null))) {
+    changed.add('previously');
+  }
 
   return {
     marks,

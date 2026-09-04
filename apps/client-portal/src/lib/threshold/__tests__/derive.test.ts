@@ -549,7 +549,15 @@ describe('deriveThreshold — what moved since the client last read', () => {
       }),
     );
 
-    expect([...model.changed].sort()).toEqual(['door', 'letterbox', 'note', 'room-r-lib']);
+    // The piece is still at 'specified', so it is on the road as well as bound
+    // for the library — both units tick.
+    expect([...model.changed].sort()).toEqual([
+      'door',
+      'letterbox',
+      'note',
+      'road',
+      'room-r-lib',
+    ]);
   });
 
   it('lights the doorstep, not a door, when the ask that moved has no room', () => {
@@ -1067,5 +1075,173 @@ describe('deriveThreshold — what became of each thing behind her', () => {
       'sent',
       'signed',
     ]);
+  });
+});
+
+describe('deriveThreshold — every unit the change tick can reach', () => {
+  const PREVIOUS = '2026-08-04T12:00:00.000Z';
+  const AFTER = '2026-08-05T09:00:00.000Z';
+  const BEFORE = '2026-08-01T09:00:00.000Z';
+
+  it('ticks the note when it was sent since she last read', () => {
+    const model = deriveThreshold(
+      input({ previousReadAt: PREVIOUS, notes: [note({ id: 'n-1', sentAt: AFTER })] }),
+    );
+    expect(model.changed.has('note')).toBe(true);
+  });
+
+  it('leaves the note alone when it was already there', () => {
+    const model = deriveThreshold(
+      input({ previousReadAt: PREVIOUS, notes: [note({ id: 'n-1', sentAt: BEFORE })] }),
+    );
+    expect(model.changed.has('note')).toBe(false);
+  });
+
+  it('shows no ticks at all on a first visit, note and all', () => {
+    const model = deriveThreshold(
+      input({
+        previousReadAt: null,
+        notes: [note({ id: 'n-1', sentAt: AFTER })],
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({ id: 's-1', roomId: null, logisticsStatus: 'shipped' }),
+          ],
+        },
+        selectionUpdatedAt: { 's-1': AFTER },
+        proposals: {
+          signatureGates: [],
+          instrumentReceipts: [{ id: 'r-1', label: 'Agreed', date: AFTER }],
+        },
+      }),
+    );
+    expect(model.note).not.toBeNull();
+    expect(model.road).toHaveLength(1);
+    expect(model.previously).toHaveLength(1);
+    expect(model.changed.size).toBe(0);
+  });
+
+  it('ticks the road when a piece on it moved', () => {
+    const model = deriveThreshold(
+      input({
+        previousReadAt: PREVIOUS,
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({ id: 's-roadside', roomId: null, name: 'Sconces', logisticsStatus: 'shipped' }),
+          ],
+        },
+        selectionUpdatedAt: { 's-roadside': AFTER },
+      }),
+    );
+    expect(model.road.map((piece) => piece.selectionId)).toEqual(['s-roadside']);
+    expect(model.changed.has('road')).toBe(true);
+  });
+
+  it('leaves the road alone when nothing on it moved', () => {
+    const model = deriveThreshold(
+      input({
+        previousReadAt: PREVIOUS,
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({ id: 's-roadside', roomId: null, logisticsStatus: 'shipped' }),
+          ],
+        },
+        selectionUpdatedAt: { 's-roadside': BEFORE },
+      }),
+    );
+    expect(model.changed.has('road')).toBe(false);
+  });
+
+  it('ticks both the road and the room a bound piece is headed for', () => {
+    const model = deriveThreshold(
+      input({
+        previousReadAt: PREVIOUS,
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({ id: 's-1', roomId: 'r-lib', logisticsStatus: 'shipped' }),
+          ],
+        },
+        selectionUpdatedAt: { 's-1': AFTER },
+      }),
+    );
+    expect(model.changed.has('road')).toBe(true);
+    expect(model.changed.has('room-r-lib')).toBe(true);
+  });
+
+  it('ticks a band by its own anchor when one of its pieces moved', () => {
+    const model = deriveThreshold(
+      input({
+        previousReadAt: PREVIOUS,
+        selections: {
+          origin: 'commercial',
+          selections: [
+            selection({ id: 's-1', roomId: 'r-lib', logisticsStatus: 'installed' }),
+            selection({ id: 's-2', roomId: 'r-ent', logisticsStatus: 'installed' }),
+          ],
+        },
+        selectionUpdatedAt: { 's-1': AFTER, 's-2': BEFORE },
+      }),
+    );
+
+    const library = model.bands.find((band) => band.roomId === 'r-lib')!;
+    const entry = model.bands.find((band) => band.roomId === 'r-ent')!;
+    expect(model.changed.has(library.anchor)).toBe(true);
+    expect(model.changed.has(entry.anchor)).toBe(false);
+    // Installed pieces are home, so neither one is on the road.
+    expect(model.changed.has('road')).toBe(false);
+  });
+
+  it('ticks previously when something landed behind her since', () => {
+    const model = deriveThreshold(
+      input({
+        previousReadAt: PREVIOUS,
+        proposals: {
+          signatureGates: [],
+          instrumentReceipts: [{ id: 'r-1', label: 'Fourteen selections agreed', date: AFTER }],
+        },
+      }),
+    );
+    expect(model.changed.has('previously')).toBe(true);
+  });
+
+  it('ticks previously for a note taken down since', () => {
+    const model = deriveThreshold(
+      input({
+        previousReadAt: PREVIOUS,
+        notes: [note({ id: 'n-1', state: 'retired', retiredAt: AFTER })],
+      }),
+    );
+    expect(model.changed.has('previously')).toBe(true);
+  });
+
+  it('leaves previously alone when its newest entry is older than her reading', () => {
+    const model = deriveThreshold(
+      input({
+        previousReadAt: PREVIOUS,
+        notes: [note({ id: 'n-1', state: 'retired', retiredAt: BEFORE })],
+        proposals: {
+          signatureGates: [],
+          instrumentReceipts: [{ id: 'r-1', label: 'Agreed', date: BEFORE }],
+        },
+      }),
+    );
+    expect(model.changed.has('previously')).toBe(false);
+  });
+
+  it('leaves previously alone when an entry carries no date at all', () => {
+    const model = deriveThreshold(
+      input({
+        previousReadAt: PREVIOUS,
+        proposals: {
+          signatureGates: [],
+          instrumentReceipts: [{ id: 'r-1', label: 'Agreed', date: null }],
+        },
+      }),
+    );
+    expect(model.previously).toHaveLength(1);
+    expect(model.changed.has('previously')).toBe(false);
   });
 });
