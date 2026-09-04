@@ -1907,3 +1907,23 @@ export {
   type ProjectVisitCapture,
   type ProjectVisitRow,
 } from "./use-project-visits";
+export {
+  projectNotesKeys,
+  useProjectNotes,
+  useSendProjectNote,
+  useRetireProjectNote,
+  useProjectNotesRealtime,
+} from "./use-project-notes";
+export type {
+  ProjectNoteEnclosure,
+  ProjectNote,
+  SendProjectNoteInput,
+  RetireProjectNoteInput,
+} from "./use-project-notes";
+export {
+  readingMarkKeys,
+  useReadingMark,
+  useMarkProjectRead,
+  usePreviousReadingMark,
+} from "./use-reading-marks";
+export type { MarkProjectReadInput } from "./use-reading-marks";

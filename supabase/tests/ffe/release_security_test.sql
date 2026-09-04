@@ -42,11 +42,17 @@ INSERT INTO public.project_review_media_assets(id,project_id,source_asset_id,sto
 ('fa500000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001','fa400000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001/review/chair.webp','display',repeat('d',64),2000,'image/webp','fa000000-0000-4000-8000-000000000001');
 
 DO $$
-DECLARE v_selected jsonb; v_candidate jsonb; v_review jsonb; v_edition uuid; v_review_item uuid; v_projection jsonb; v_manifest jsonb; v_board jsonb;
+DECLARE v_selected jsonb; v_candidate jsonb; v_allowance jsonb; v_threshold jsonb; v_review jsonb; v_edition uuid; v_review_item uuid; v_projection jsonb; v_manifest jsonb; v_board jsonb;
 BEGIN
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000001');
   v_selected:=public.place_product_in_project_v2('{"projectId":"fa100000-0000-4000-8000-000000000001","productId":"fa300000-0000-4000-8000-000000000001","assignmentScope":"throughout","disposition":"selected","duplicateMode":"create","idempotencyKey":"release-selected"}'::jsonb);
   v_candidate:=public.place_product_in_project_v2('{"projectId":"fa100000-0000-4000-8000-000000000001","productId":"fa300000-0000-4000-8000-000000000001","assignmentScope":"unassigned","disposition":"candidate","duplicateMode":"create","idempotencyKey":"release-candidate"}'::jsonb);
+  -- 'candidate', not 'selected', on purpose: the SHIPPED reader filters on
+  -- design_disposition = 'selected', so this line is invisible to it and its
+  -- assertion below stays exactly the count it has always been. The NEW reader
+  -- excludes only 'not_selected' and 'superseded' (00435's live set), so it sees
+  -- this line — which is the whole point of signing it.
+  v_allowance:=public.place_product_in_project_v2('{"projectId":"fa100000-0000-4000-8000-000000000001","productId":"fa300000-0000-4000-8000-000000000001","assignmentScope":"throughout","disposition":"candidate","duplicateMode":"create","idempotencyKey":"release-allowance"}'::jsonb);
   v_board:=public.create_project_board('{"projectId":"fa100000-0000-4000-8000-000000000001","name":"Review composition"}'::jsonb);
   PERFORM public.apply_board_room_state((v_board->>'boardId')::uuid,'project','fa100000-0000-4000-8000-000000000001',jsonb_build_object(
     'name','Review composition','canvasWidth',1200,'canvasHeight',800,'backgroundColor','#FAF8F5','sections','[]'::jsonb,'items','[]'::jsonb,
@@ -126,11 +132,124 @@ BEGIN
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000002');
   ASSERT position('/review/chair.webp' in public.get_client_project_review_bundle(v_edition)::text)=0,
     'client bundle must not expose private derivative paths';
+  -- 00565 does NOT touch get_client_project_selections — the iOS Patina app
+  -- reads it — so its contract below is unchanged, price-free and word for word
+  -- what it was before this branch. What 00565 adds is a SECOND reader,
+  -- get_client_project_threshold, carrying the payload the client's own page
+  -- needs: the client's signed figures, and only for lines standing under an
+  -- executed instrument.
+  --
+  -- The fixture's placements carry no instrument, so three of them are signed
+  -- here — a fixed line at a client figure deliberately different from the live
+  -- working-row price, an ALLOWANCE whose ceiling, signed resolution and live row
+  -- are three different numbers, and a line that is signed and then superseded.
+  -- Those differences are what make the assertions below load-bearing.
+  PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000001');
+  -- Authorization No. 1 signs three of the project's lines: a fixed chair, an
+  -- ALLOWANCE, and a line that is later superseded.
+  INSERT INTO public.proposals(id,project_id,designer_id,title,status,document_kind,commercial_state,total_amount,subtotal)
+  VALUES('fa700000-0000-4000-8000-000000000001','fa100000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000001',
+    'Release Authorization No. 1','accepted','furnishings_authorization','executed',365000,365000);
+  INSERT INTO public.project_commercial_documents(id,project_id,proposal_id,document_kind,wave_name,is_origin,bound_at,executed_at,created_by)
+  VALUES('fa700000-0000-4000-8000-000000000002','fa100000-0000-4000-8000-000000000001','fa700000-0000-4000-8000-000000000001',
+    'furnishings_authorization','Authorization No. 1',false,now(),now()-interval '2 days','fa000000-0000-4000-8000-000000000001');
+  INSERT INTO public.furnishing_authorization_items(id,commercial_document_id,source_ffe_item_id,product_id,name,room_name,
+    category,item_type,quantity,client_unit_price_cents,client_line_total_cents,trade_unit_cost_cents,markup_percent,sort_order)
+  VALUES
+    ('fa700000-0000-4000-8000-000000000003','fa700000-0000-4000-8000-000000000002',(v_selected->>'selectionId')::uuid,
+      'fa300000-0000-4000-8000-000000000001','Release Chair','Throughout','seating','fixed',1,165000,165000,90000,83.33,0),
+    ('fa700000-0000-4000-8000-000000000004','fa700000-0000-4000-8000-000000000002',(v_allowance->>'selectionId')::uuid,
+      'fa300000-0000-4000-8000-000000000001','Release Drapery Allowance','Throughout','soft_goods','allowance',1,200000,200000,120000,66.67,1),
+    ('fa700000-0000-4000-8000-000000000005','fa700000-0000-4000-8000-000000000002',(v_candidate->>'selectionId')::uuid,
+      'fa300000-0000-4000-8000-000000000001','Release Sconce','Throughout','lighting','fixed',1,90000,90000,50000,80.00,2);
+  -- Authorization No. 2 RESOLVES the allowance: the same live line, snapshotted
+  -- 'fixed' at the settled figure. That signed row is the only legitimate source
+  -- of allowance.resolvedCents.
+  INSERT INTO public.proposals(id,project_id,designer_id,title,status,document_kind,commercial_state,total_amount,subtotal)
+  VALUES('fa700000-0000-4000-8000-000000000011','fa100000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000001',
+    'Release Authorization No. 2','accepted','furnishings_authorization','executed',175000,175000);
+  INSERT INTO public.project_commercial_documents(id,project_id,proposal_id,document_kind,wave_name,is_origin,bound_at,executed_at,created_by)
+  VALUES('fa700000-0000-4000-8000-000000000012','fa100000-0000-4000-8000-000000000001','fa700000-0000-4000-8000-000000000011',
+    'furnishings_authorization','Authorization No. 2',false,now(),now(),'fa000000-0000-4000-8000-000000000001');
+  INSERT INTO public.furnishing_authorization_items(id,commercial_document_id,source_ffe_item_id,product_id,name,room_name,
+    category,item_type,quantity,client_unit_price_cents,client_line_total_cents,trade_unit_cost_cents,markup_percent,sort_order)
+  VALUES('fa700000-0000-4000-8000-000000000013','fa700000-0000-4000-8000-000000000012',(v_allowance->>'selectionId')::uuid,
+    'fa300000-0000-4000-8000-000000000001','Release Drapery, settled','Throughout','soft_goods','fixed',1,175000,175000,105000,66.67,0);
+  -- guard_project_ffe_purchase_authority freezes provenance once
+  -- source_commercial_document_id is set, so both columns move together, once.
+  UPDATE public.project_ffe_items
+     SET source_commercial_document_id='fa700000-0000-4000-8000-000000000002',
+         source_authorization_item_id='fa700000-0000-4000-8000-000000000003'
+   WHERE id=(v_selected->>'selectionId')::uuid;
+  UPDATE public.project_ffe_items
+     SET source_commercial_document_id='fa700000-0000-4000-8000-000000000002',
+         source_authorization_item_id='fa700000-0000-4000-8000-000000000004',
+         item_type='allowance',
+         line_total_cents=133333, unit_price_cents=133333
+   WHERE id=(v_allowance->>'selectionId')::uuid;
+  -- Signed, then superseded: the client did agree to this line, and it has since
+  -- been replaced. 00565 keeps 00435's live-set narrowing so it does not stand on
+  -- her page beside its replacement.
+  UPDATE public.project_ffe_items
+     SET source_commercial_document_id='fa700000-0000-4000-8000-000000000002',
+         source_authorization_item_id='fa700000-0000-4000-8000-000000000005',
+         design_disposition='superseded'
+   WHERE id=(v_candidate->>'selectionId')::uuid;
+  PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000002');
+
+  -- ── the SHIPPED reader: unchanged by 00565, and still price-free ────────
   v_projection:=public.get_client_project_selections('fa100000-0000-4000-8000-000000000001');
   ASSERT jsonb_array_length(v_projection->'selections')=1,'curated projection must expose selected lines only';
   ASSERT position('price' in lower(v_projection::text))=0
     AND v_projection->'selections'->0 ? 'logisticsStatus',
     'curated selection projection must omit price and retain allowlisted logistics state';
+
+  -- ── the NEW reader: the client's own signed figures ─────────────────────
+  v_projection:=public.get_client_project_threshold('fa100000-0000-4000-8000-000000000001');
+  ASSERT jsonb_array_length(v_projection->'selections')=2,
+    'the threshold reader must expose only live lines standing under an executed instrument';
+  ASSERT NOT EXISTS(
+    SELECT 1 FROM jsonb_array_elements(v_projection->'selections') AS line
+    WHERE line->>'id'=(v_candidate->>'selectionId')
+  ),'a signed-then-superseded line must not stand on the page beside its replacement';
+  ASSERT EXISTS(
+    SELECT 1 FROM jsonb_array_elements(v_projection->'selections') AS line
+    WHERE line->>'id'=(v_selected->>'selectionId')
+      AND line->'instrument'->>'documentId'='fa700000-0000-4000-8000-000000000002'
+  ),'the exposed line must be a signed one, and must name the instrument it stands under';
+  ASSERT (SELECT unit_price_cents<>165000 FROM public.project_ffe_items WHERE id=(v_selected->>'selectionId')::uuid),
+    'FIXTURE: the live working-row price must differ from the signed figure, or the price assertion proves nothing';
+  ASSERT (SELECT line->>'clientUnitPriceCents'='165000' AND line->>'clientLineTotalCents'='165000'
+    FROM jsonb_array_elements(v_projection->'selections') AS line WHERE line->>'id'=(v_selected->>'selectionId')),
+    'the emitted price must be the frozen furnishing_authorization_items client figure, never the live working row';
+  -- The allowance is the one path on which 00423 still read the live row.
+  -- 00565 sources its resolution from the later executed authorization instead.
+  ASSERT (SELECT line_total_cents=133333 FROM public.project_ffe_items WHERE id=(v_allowance->>'selectionId')::uuid),
+    'FIXTURE: the allowance line''s live working row must differ from both signed figures';
+  ASSERT (SELECT line->'allowance'->>'ceilingCents'='200000'
+    FROM jsonb_array_elements(v_projection->'selections') AS line WHERE line->>'id'=(v_allowance->>'selectionId')),
+    'an allowance ceiling must be the figure the client signed';
+  ASSERT (SELECT line->'allowance'->>'resolvedCents'='175000'
+    FROM jsonb_array_elements(v_projection->'selections') AS line WHERE line->>'id'=(v_allowance->>'selectionId')),
+    'a resolved allowance must report the LATER executed authorization''s client figure, never the live working row';
+  ASSERT (SELECT line->'allowance'->>'resolvedCents'<>'133333'
+    FROM jsonb_array_elements(v_projection->'selections') AS line WHERE line->>'id'=(v_allowance->>'selectionId')),
+    'allowance.resolvedCents must never be project_ffe_items.line_total_cents';
+  -- tradeJourney is exempt by name: it is the trade scope's progress vocabulary
+  -- (00423), carries no money, and is client-facing by design. Everything else
+  -- matching this pattern is the studio's side of the transaction.
+  ASSERT NOT EXISTS(
+    SELECT 1 FROM jsonb_array_elements(v_projection->'selections') AS line
+    CROSS JOIN LATERAL (
+      SELECT jsonb_object_keys(line) AS k
+      UNION ALL SELECT jsonb_object_keys(line->'instrument') WHERE jsonb_typeof(line->'instrument')='object'
+      UNION ALL SELECT jsonb_object_keys(line->'allowance') WHERE jsonb_typeof(line->'allowance')='object'
+    ) AS keys
+    WHERE k<>'tradeJourney' AND k ~* '(trade|cost|markup|vendor)'
+  ),'the curated projection must never carry a trade, cost, markup or vendor key at any depth';
+  ASSERT (SELECT bool_and(line ? 'logisticsStatus')
+    FROM jsonb_array_elements(v_projection->'selections') AS line),
+    'curated selection projection must retain allowlisted logistics state';
   PERFORM public.record_project_review_feedback(v_review_item,'comment','Please confirm the finish');
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000001');
   PERFORM public.revoke_project_review_access(v_edition,'Client access withdrawn');

@@ -54,3 +54,4 @@ src/**/*.jsx.map
 
 # hand-written type shims are tracked (the rule above targets build artifacts)
 !src/types/*.d.ts
+/.next-threshold/

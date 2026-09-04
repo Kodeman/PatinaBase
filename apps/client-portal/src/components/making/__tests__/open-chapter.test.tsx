@@ -240,6 +240,20 @@ describe('TrackingRow', () => {
     expect(screen.getByTestId('tracking-row-thumb-placeholder')).toBeInTheDocument();
   });
 
+  it('takes a dead image off the row rather than showing a broken glyph', () => {
+    const { rerender } = render(<TrackingRow {...CREDENZA} />);
+
+    fireEvent.error(screen.getByTestId('tracking-row-thumb'));
+
+    expect(screen.queryByTestId('tracking-row-thumb')).not.toBeInTheDocument();
+    expect(screen.getByTestId('tracking-row-thumb-placeholder')).toBeInTheDocument();
+    expect(screen.getByText('Walnut credenza')).toBeInTheDocument();
+
+    // A row re-pointed at a live image draws again; the failure is per URL.
+    rerender(<TrackingRow {...CREDENZA} imageUrl="https://cdn.patina.test/other.jpg" />);
+    expect(screen.getByTestId('tracking-row-thumb')).toBeInTheDocument();
+  });
+
   it('omits the price rather than printing a placeholder figure', () => {
     render(<TrackingRow {...CREDENZA} priceCents={null} />);
     expect(screen.queryByTestId('tracking-row-price')).not.toBeInTheDocument();

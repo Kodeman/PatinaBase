@@ -28,18 +28,33 @@ export const clientReviewKey = (editionId: string) => ['client-project-review', 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
 
-export function useClientCommercialDocument(proposalId: string) {
-  return useQuery<CommercialDocumentBundle | null>({
+/**
+ * The bundle's key and fetcher, apart from the hook.
+ *
+ * The Threshold reads several bundles at once (one per trade instrument, to
+ * total what is held behind them) and cannot call a hook in a loop, so it
+ * hands these options to `useQueries`. Both paths therefore share ONE cache
+ * entry per proposal: the gate that renders the paper and the ledger that
+ * sums it can never disagree, and neither pays for the other's fetch.
+ */
+export function clientCommercialDocumentQueryOptions(proposalId: string) {
+  return {
     queryKey: commercialKeys.clientBundle(proposalId),
     enabled: !!proposalId,
-    queryFn: async () => {
+    queryFn: async (): Promise<CommercialDocumentBundle | null> => {
       const { data, error } = await getSupabase().rpc('get_client_commercial_document_bundle', {
         p_proposal_id: proposalId,
       });
       if (error) throw error;
       return adaptCommercialDocumentBundle(data);
     },
-  });
+  };
+}
+
+export function useClientCommercialDocument(proposalId: string) {
+  return useQuery<CommercialDocumentBundle | null>(
+    clientCommercialDocumentQueryOptions(proposalId),
+  );
 }
 
 export function useProjectCommercialSummary(projectId: string) {
@@ -87,13 +102,26 @@ export function useProjectWorkingBudget(projectId: string) {
  * Room-grouped goods selections for the commercial rail's "Your selections"
  * card. origin discriminates commercial (design-services/furnishings
  * authority) projects from legacy ones — project-view-wrapper branches on it.
+ *
+ * READS `get_client_project_threshold`, NOT `get_client_project_selections`.
+ * The two are the same projection at different widths: the older RPC is the
+ * iOS app's, held at its shipped 00441 shape, and the newer one carries the
+ * keys the web surfaces need back (origin, kind, client prices, instrument,
+ * tradeJourney, allowance, docCode, imageUrl, updatedAt). Repointing here
+ * rather than widening there is what lets the native client keep its contract
+ * while the portal moves. The payload is the same shape to
+ * `adaptClientSelections`, which is unchanged.
+ *
+ * Every web caller of this hook moves with it — The Making under `single-pane`
+ * as well as The Threshold — which is the intended effect: the selection-derived
+ * regions The Making has been dark on light up again.
  */
 export function useClientSelections(projectId: string) {
   return useQuery<ClientProjectSelections>({
     queryKey: clientSelectionsKey(projectId),
     enabled: !!projectId,
     queryFn: async () => {
-      const { data, error } = await getSupabase().rpc('get_client_project_selections', {
+      const { data, error } = await getSupabase().rpc('get_client_project_threshold', {
         p_project_id: projectId,
       });
       if (error) throw error;

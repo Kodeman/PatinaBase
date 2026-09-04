@@ -91,9 +91,23 @@ END; $$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_ffe_actor('f5000000-0000-4000-8000-000000000002');
-DO $$ BEGIN
+DO $$
+DECLARE v_threshold jsonb;
+BEGIN
   ASSERT (SELECT count(*)=0 FROM public.project_ffe_items WHERE project_id='f5100000-0000-4000-8000-000000000001'),'client raw FF&E read must fail closed';
+  -- The shipped reader is UNCHANGED by 00565 — the iOS Patina app calls it, and
+  -- it must go on answering with every selected line whether or not a commercial
+  -- instrument stands behind it.
   ASSERT jsonb_array_length(public.get_client_project_selections('f5100000-0000-4000-8000-000000000001')->'selections')>0,'curated client reader must remain available';
+  -- 00565's NEW reader answers only for lines standing under an EXECUTED
+  -- commercial instrument. This fixture carries no commercial documents at all,
+  -- so what must hold is that it still ANSWERS the client rather than erroring —
+  -- legacy origin, empty list — not that it hands her lines she never signed for.
+  v_threshold:=public.get_client_project_threshold('f5100000-0000-4000-8000-000000000001');
+  ASSERT v_threshold->>'origin'='legacy',
+    'a project with no commercial documents must read legacy, got '||COALESCE(v_threshold->>'origin','<missing>');
+  ASSERT jsonb_array_length(v_threshold->'selections')=0,
+    'the threshold reader must expose nothing the client has not signed for';
 END; $$;
 
 SELECT pg_temp.assume_ffe_actor('f5000000-0000-4000-8000-000000000001');

@@ -13,6 +13,17 @@ jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
 }));
 
+// This suite is exercising approvals/unread-count plumbing, not the
+// Threshold gate — pin the flag off so it's immune to
+// NEXT_PUBLIC_FLAG_OVERRIDES (the documented dev/e2e escape hatch) ever
+// resolving `threshold` true out from under it and dropping the header the
+// "renders the authenticated header on a normal app route" case below
+// depends on.
+jest.mock('@/hooks/use-feature-flag', () => ({
+  __esModule: true,
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
+}));
+
 // ClientHeader pulls in useAuth/useProfile/help-system queries — the whole
 // point of PUBLIC_PREFIXES is that a login-less guest page never mounts it
 // (and never fires those queries), so it's stubbed here to a visible witness
