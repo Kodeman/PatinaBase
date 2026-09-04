@@ -8,9 +8,9 @@
  * no-op); this component never reaches `@portabletext/react`, so no leaf
  * mock is needed.
  */
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { ClientNoteComposer } from '../client-note-composer';
-import { DOCUMENT_WRITE_EVENT } from '../margin-rail';
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { ClientNoteComposer } from "../client-note-composer";
+import { DOCUMENT_WRITE_EVENT } from "../margin-rail";
 
 let mockFlag: { value: boolean; isLoading: boolean };
 let mockNotes: Array<{
@@ -18,8 +18,11 @@ let mockNotes: Array<{
   projectId: string;
   authorId: string;
   body: string;
-  enclosures: Array<{ kind: 'proposal' | 'trade_scope' | 'invoice'; id: string }>;
-  state: 'standing' | 'answered' | 'retired';
+  enclosures: Array<{
+    kind: "proposal" | "trade_scope" | "invoice";
+    id: string;
+  }>;
+  state: "standing" | "answered" | "retired";
   sentAt: string;
   answeredAt: string | null;
   retiredAt: string | null;
@@ -30,22 +33,25 @@ const retireMutate = jest.fn();
 let sendPending = false;
 let retirePending = false;
 
-jest.mock('@/hooks/use-feature-flag', () => ({
+jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: () => mockFlag,
 }));
 
-jest.mock('@patina/supabase', () => ({
+jest.mock("@patina/supabase", () => ({
   useProjectNotes: () => ({ data: mockNotes }),
   useSendProjectNote: () => ({ mutate: sendMutate, isPending: sendPending }),
-  useRetireProjectNote: () => ({ mutate: retireMutate, isPending: retirePending }),
+  useRetireProjectNote: () => ({
+    mutate: retireMutate,
+    isPending: retirePending,
+  }),
 }));
 
 const baseProps = {
-  projectId: 'project-1',
-  clientFirstName: 'Elena',
-  openProposals: [{ id: 'prop-1', title: 'authorization No. 7' }],
-  openTradeScopes: [{ id: 'ts-1', title: 'paintwork scope' }],
-  openInvoices: [{ id: 'inv-1', title: 'invoice No. 12' }],
+  projectId: "project-1",
+  clientFirstName: "Elena",
+  openProposals: [{ id: "prop-1", title: "authorization No. 7" }],
+  openTradeScopes: [{ id: "ts-1", title: "paintwork scope" }],
+  openInvoices: [{ id: "inv-1", title: "invoice No. 12" }],
 };
 
 beforeEach(() => {
@@ -57,40 +63,42 @@ beforeEach(() => {
   retirePending = false;
 });
 
-describe('ClientNoteComposer — flag gate', () => {
-  it('renders nothing while the flag is loading', () => {
+describe("ClientNoteComposer — flag gate", () => {
+  it("renders nothing while the flag is loading", () => {
     mockFlag = { value: false, isLoading: true };
     const { container } = render(<ClientNoteComposer {...baseProps} />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders nothing when the flag resolves false', () => {
+  it("renders nothing when the flag resolves false", () => {
     mockFlag = { value: false, isLoading: false };
     const { container } = render(<ClientNoteComposer {...baseProps} />);
     expect(container).toBeEmptyDOMElement();
   });
 });
 
-describe('ClientNoteComposer — no standing note', () => {
+describe("ClientNoteComposer — no standing note", () => {
   it('shows the collapsed "Write to your client" action', () => {
     render(<ClientNoteComposer {...baseProps} />);
     expect(
-      screen.getByRole('button', { name: 'Write to your client' }),
+      screen.getByRole("button", { name: "Write to your client" }),
     ).toBeInTheDocument();
   });
 
-  it('opening pre-ticks proposals + trade scopes and leaves invoices unticked', () => {
+  it("opening pre-ticks proposals + trade scopes and leaves invoices unticked", () => {
     render(<ClientNoteComposer {...baseProps} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Write to your client' }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Write to your client" }),
+    );
 
-    const proposalBox = screen.getByRole('checkbox', {
-      name: 'Send it with authorization No. 7',
+    const proposalBox = screen.getByRole("checkbox", {
+      name: "Send it with authorization No. 7",
     });
-    const tradeScopeBox = screen.getByRole('checkbox', {
-      name: 'Send it with the paintwork scope',
+    const tradeScopeBox = screen.getByRole("checkbox", {
+      name: "Send it with the paintwork scope",
     });
-    const invoiceBox = screen.getByRole('checkbox', {
-      name: 'Send it with invoice No. 12',
+    const invoiceBox = screen.getByRole("checkbox", {
+      name: "Send it with invoice No. 12",
     });
 
     expect(proposalBox).toBeChecked();
@@ -98,26 +106,28 @@ describe('ClientNoteComposer — no standing note', () => {
     expect(invoiceBox).not.toBeChecked();
   });
 
-  it('Send calls the mutation with the body and serialized enclosures, and dispatches DOCUMENT_WRITE_EVENT', () => {
+  it("Send calls the mutation with the body and serialized enclosures, and dispatches DOCUMENT_WRITE_EVENT", () => {
     const onWrite = jest.fn();
     window.addEventListener(DOCUMENT_WRITE_EVENT, onWrite);
 
     render(<ClientNoteComposer {...baseProps} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Write to your client' }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Write to your client" }),
+    );
 
     fireEvent.change(screen.getByPlaceholderText(/Three last pieces/), {
-      target: { value: 'Sign these three and I will order Friday.' },
+      target: { value: "Sign these three and I will order Friday." },
     });
     // Leave the invoice unticked (default) and send.
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(sendMutate).toHaveBeenCalledWith(
       {
-        projectId: 'project-1',
-        body: 'Sign these three and I will order Friday.',
+        projectId: "project-1",
+        body: "Sign these three and I will order Friday.",
         enclosures: expect.arrayContaining([
-          { kind: 'proposal', id: 'prop-1' },
-          { kind: 'trade_scope', id: 'ts-1' },
+          { kind: "proposal", id: "prop-1" },
+          { kind: "trade_scope", id: "ts-1" },
         ]),
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
@@ -137,39 +147,45 @@ describe('ClientNoteComposer — no standing note', () => {
     window.removeEventListener(DOCUMENT_WRITE_EVENT, onWrite);
   });
 
-  it('disables Send while the body is blank', () => {
+  it("disables Send while the body is blank", () => {
     render(<ClientNoteComposer {...baseProps} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Write to your client' }));
-    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Write to your client" }),
+    );
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });
 
-  it('disables Send when the body exceeds 2000 characters', () => {
+  it("disables Send when the body exceeds 2000 characters", () => {
     render(<ClientNoteComposer {...baseProps} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Write to your client' }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Write to your client" }),
+    );
     fireEvent.change(screen.getByPlaceholderText(/Three last pieces/), {
-      target: { value: 'x'.repeat(2001) },
+      target: { value: "x".repeat(2001) },
     });
-    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });
 
   it('falls back to "A line to your client" when clientFirstName is absent', () => {
     render(<ClientNoteComposer {...baseProps} clientFirstName={null} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Write to your client' }));
-    expect(screen.getByText('A line to your client')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Write to your client" }),
+    );
+    expect(screen.getByText("A line to your client")).toBeInTheDocument();
   });
 });
 
-describe('ClientNoteComposer — standing note', () => {
+describe("ClientNoteComposer — standing note", () => {
   beforeEach(() => {
     mockNotes = [
       {
-        id: 'note-1',
-        projectId: 'project-1',
-        authorId: 'author-1',
-        body: 'Three last pieces are ready for your signature.',
-        enclosures: [{ kind: 'proposal', id: 'prop-1' }],
-        state: 'standing',
-        sentAt: '2026-09-04T12:00:00.000Z',
+        id: "note-1",
+        projectId: "project-1",
+        authorId: "author-1",
+        body: "Three last pieces are ready for your signature.",
+        enclosures: [{ kind: "proposal", id: "prop-1" }],
+        state: "standing",
+        sentAt: "2026-09-04T12:00:00.000Z",
         answeredAt: null,
         retiredAt: null,
       },
@@ -179,24 +195,24 @@ describe('ClientNoteComposer — standing note', () => {
   it('renders the note body, the receipt line, and "Take it down"', () => {
     render(<ClientNoteComposer {...baseProps} />);
     expect(
-      screen.getByText('Three last pieces are ready for your signature.'),
+      screen.getByText("Three last pieces are ready for your signature."),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Sent 4 September. It stands on her page until she answers.',
+        "Sent 4 September. It stands on her page until she answers.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Take it down' }),
+      screen.getByRole("button", { name: "Take it down" }),
     ).toBeInTheDocument();
   });
 
-  it('retire calls the retire mutation with the note id and project id', () => {
+  it("retire calls the retire mutation with the note id and project id", () => {
     render(<ClientNoteComposer {...baseProps} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Take it down' }));
+    fireEvent.click(screen.getByRole("button", { name: "Take it down" }));
 
     expect(retireMutate).toHaveBeenCalledWith(
-      { noteId: 'note-1', projectId: 'project-1' },
+      { noteId: "note-1", projectId: "project-1" },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });

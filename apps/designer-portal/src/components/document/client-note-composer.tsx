@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * "Write to your client" (spec §6, Lane 6) — a project document's one
@@ -12,20 +12,17 @@
  * return so hook order never depends on the flag's resolved value.
  */
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   useProjectNotes,
   useSendProjectNote,
   useRetireProjectNote,
   type ProjectNote,
   type ProjectNoteEnclosure,
-} from '@patina/supabase';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import {
-  DocumentAction,
-  DocumentActionRow,
-} from './document-action';
-import { DOCUMENT_WRITE_EVENT } from './margin-rail';
+} from "@patina/supabase";
+import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { DocumentAction, DocumentActionRow } from "./document-action";
+import { DOCUMENT_WRITE_EVENT } from "./margin-rail";
 
 const MAX_BODY_LENGTH = 2000;
 
@@ -33,9 +30,9 @@ const MAX_BODY_LENGTH = 2000;
  *  `en-GB` for the day-before-month order; the words themselves stay
  *  English regardless of locale. */
 function dayMonth(iso: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'long',
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
   }).format(new Date(iso));
 }
 
@@ -65,7 +62,7 @@ function defaultTickedKeys(
 
 function ticketsToEnclosures(ticked: Set<string>): ProjectNoteEnclosure[] {
   return Array.from(ticked).map((key) => {
-    const [kind, id] = key.split(':') as [ProjectNoteEnclosure['kind'], string];
+    const [kind, id] = key.split(":") as [ProjectNoteEnclosure["kind"], string];
     return { kind, id };
   });
 }
@@ -77,13 +74,13 @@ export function ClientNoteComposer({
   openTradeScopes,
   openInvoices,
 }: ClientNoteComposerProps) {
-  const flag = useFeatureFlag('threshold');
+  const flag = useFeatureFlag("threshold");
   const { data: notes } = useProjectNotes(projectId);
   const sendNote = useSendProjectNote();
   const retireNote = useRetireProjectNote();
 
   const [composing, setComposing] = useState(false);
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState("");
   const [ticked, setTicked] = useState<Set<string>>(() =>
     defaultTickedKeys(openProposals, openTradeScopes),
   );
@@ -92,18 +89,18 @@ export function ClientNoteComposer({
   if (flag.isLoading || !flag.value) return null;
 
   const standingNote: ProjectNote | undefined = (notes ?? []).find(
-    (n) => n.state === 'standing',
+    (n) => n.state === "standing",
   );
 
   const openComposer = () => {
     setTicked(defaultTickedKeys(openProposals, openTradeScopes));
-    setBody('');
+    setBody("");
     setComposing(true);
   };
 
   const closeComposer = () => {
     setComposing(false);
-    setBody('');
+    setBody("");
     setTicked(defaultTickedKeys(openProposals, openTradeScopes));
   };
 
@@ -202,7 +199,7 @@ export function ClientNoteComposer({
 
   const label = clientFirstName
     ? `A line to ${clientFirstName}`
-    : 'A line to your client';
+    : "A line to your client";
   const disabled =
     !body.trim() || body.length > MAX_BODY_LENGTH || sendNote.isPending;
 
