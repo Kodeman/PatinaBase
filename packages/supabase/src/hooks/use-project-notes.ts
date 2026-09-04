@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { createBrowserClient } from "../client";
-import type { Database, Json } from "../database.types";
+import { useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { createBrowserClient } from '../client';
+import type { Database } from '../database.types';
 
 const getSupabase = () => createBrowserClient();
 
-type ProjectNoteRow = Database["public"]["Tables"]["project_notes"]["Row"];
+type ProjectNoteRow = Database['public']['Tables']['project_notes']['Row'];
 
-export interface ProjectNoteEnclosure {
-  kind: "proposal" | "trade_scope" | "invoice";
+export type ProjectNoteEnclosure = {
+  kind: 'proposal' | 'trade_scope' | 'invoice';
   id: string;
-}
+};
 
 export interface ProjectNote {
   id: string;
@@ -21,7 +21,7 @@ export interface ProjectNote {
   authorId: string;
   body: string;
   enclosures: ProjectNoteEnclosure[];
-  state: "standing" | "answered" | "retired";
+  state: 'standing' | 'answered' | 'retired';
   sentAt: string;
   answeredAt: string | null;
   retiredAt: string | null;
@@ -34,7 +34,7 @@ function toProjectNote(row: ProjectNoteRow): ProjectNote {
     authorId: row.author_id,
     body: row.body,
     enclosures: (row.enclosures ?? []) as unknown as ProjectNoteEnclosure[],
-    state: row.state as ProjectNote["state"],
+    state: row.state as ProjectNote['state'],
     sentAt: row.sent_at,
     answeredAt: row.answered_at,
     retiredAt: row.retired_at,
@@ -42,24 +42,36 @@ function toProjectNote(row: ProjectNoteRow): ProjectNote {
 }
 
 export const projectNotesKeys = {
-  all: ["project-notes"] as const,
-  list: (projectId: string) => ["project-notes", projectId] as const,
+  all: ['project-notes'] as const,
+  list: (projectId: string) => ['project-notes', projectId] as const,
 };
+
+// Realtime is the primary freshness path (project_notes is on the
+// supabase_realtime publication and useProjectNotesRealtime invalidates on
+// every change), but the client portal sets refetchOnWindowFocus: false
+// globally (providers.tsx) and a dropped socket or misbehaving publication
+// should still self-heal — spec §10 risk 8's "refetch-on-focus fallback".
+// Idiom + comment shape from use-project-approvals.ts:126-134.
+const projectNotesForegroundRefresh = {
+  refetchOnWindowFocus: true,
+  refetchOnReconnect: true,
+} as const;
 
 export function useProjectNotes(projectId: string | undefined) {
   return useQuery({
-    queryKey: projectNotesKeys.list(projectId ?? ""),
+    queryKey: projectNotesKeys.list(projectId ?? ''),
     queryFn: async (): Promise<ProjectNote[]> => {
       const supabase = getSupabase();
       const { data, error } = await supabase
-        .from("project_notes")
-        .select("*")
-        .eq("project_id", projectId as string)
-        .order("sent_at", { ascending: false });
+        .from('project_notes')
+        .select('*')
+        .eq('project_id', projectId as string)
+        .order('sent_at', { ascending: false });
       if (error) throw error;
       return ((data ?? []) as ProjectNoteRow[]).map(toProjectNote);
     },
     enabled: !!projectId,
+    ...projectNotesForegroundRefresh,
   });
 }
 
@@ -81,14 +93,14 @@ export function useSendProjectNote() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      if (!user) throw new Error('Not authenticated');
       const { data, error } = await supabase
-        .from("project_notes")
+        .from('project_notes')
         .insert({
           project_id: projectId,
           author_id: user.id,
           body,
-          enclosures: (enclosures ?? []) as unknown as Json,
+          enclosures: enclosures ?? [],
         })
         .select()
         .single();
@@ -116,9 +128,9 @@ export function useRetireProjectNote() {
     }: RetireProjectNoteInput): Promise<ProjectNote> => {
       const supabase = getSupabase();
       const { data, error } = await supabase
-        .from("project_notes")
-        .update({ state: "retired", retired_at: new Date().toISOString() })
-        .eq("id", noteId)
+        .from('project_notes')
+        .update({ state: 'retired', retired_at: new Date().toISOString() })
+        .eq('id', noteId)
         .select()
         .single();
       if (error) throw error;
@@ -144,18 +156,18 @@ export function useProjectNotesRealtime(projectId: string | undefined) {
     const channel: RealtimeChannel = supabase
       .channel(`project-notes:${projectId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "public",
-          table: "project_notes",
+          event: '*',
+          schema: 'public',
+          table: 'project_notes',
           filter: `project_id=eq.${projectId}`,
         },
         () => {
           queryClient.invalidateQueries({
             queryKey: projectNotesKeys.list(projectId),
           });
-        },
+        }
       )
       .subscribe();
     return () => {
