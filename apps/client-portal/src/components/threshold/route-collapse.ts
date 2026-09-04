@@ -1,12 +1,15 @@
 /**
  * The Threshold folds the eight old top-level destinations (the seven
- * `nav-config.ts` routes plus the `/messages` corner link) into anchors on
- * the one project page. `ROUTE_COLLAPSE` names the anchor each old route
- * lands on; `collapsedHref` turns an exact match into the in-page href.
+ * `nav-config.ts` routes plus the `/messages` corner link) plus `/projects`
+ * — where sign-in lands every client (`CLIENT_AUTH_DESTINATION`) — into
+ * anchors on the one project page. `ROUTE_COLLAPSE` names the anchor each
+ * old route lands on; `collapsedHref` turns an exact match into the in-page
+ * href.
  *
  * Matching is exact-match only (a trailing slash is stripped first) — a
  * nested route under one of these prefixes (`/proposals/abc/sign`,
- * `/decisions/req-1`) keeps its own page and is never collapsed.
+ * `/decisions/req-1`, and crucially the collapse destination
+ * `/projects/<id>` itself) keeps its own page and is never collapsed.
  */
 
 /**
@@ -32,6 +35,7 @@ export const ROUTE_COLLAPSE: Record<string, ThresholdAnchor> = {
   '/documents': 'mat-papers',
   '/orders': 'road',
   '/messages': 'note',
+  '/projects': 'doorstep',
 };
 
 export function collapsedHref(pathname: string, projectId: string): string | null {
