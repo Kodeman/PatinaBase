@@ -15,6 +15,15 @@ jest.mock('@/hooks/use-commercial-client', () => ({
   invalidateSignedCommercialDocument: jest.fn().mockResolvedValue(undefined),
 }));
 
+// L3 gave the leaf its other four answers; they carry their own hooks and
+// their own suites (door-acts.test.tsx, door-gate.test.tsx). This file is
+// about the note pinned to the leaf, so the acts stand in as a stub — the
+// same boundary door-gate.test.tsx draws.
+jest.mock('../door-acts', () => ({
+  __esModule: true,
+  DoorActs: () => null,
+}));
+
 jest.mock('@/lib/analytics/events', () => ({
   __esModule: true,
   proposalClientEvents: { signed: jest.fn() },
