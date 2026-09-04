@@ -10697,3 +10697,19 @@ its 48px crop folded and its full plate unfolded, and neither replaces the other
 *Entries add: R134 · last id = R134*
 
 Note (2026-09-03): the E4 and E9 drip gates reuse first_capture and payment_received respectively, accepted by Kody as the nearest available activation events; revisit if 00291 gains a library/aesthete event.
+
+### R135 · The client page is The Document's homeowner face; the 5 Aug route promise retired — 2026-09-04
+
+**Ruled by Kody, 2026-09-04.** The client portal's authenticated surface is not a fourth surface alongside The Document, the iOS app, and the marketplace — it is **The Document's homeowner face**, the place where the studio's own client signs, pays, and reads the record Nora keeps for her. Where a designer opens the record from the desk, a homeowner opens the same record from the door. `docs/design/the-client-page/README.md` names this directly: "The page is not a fourth ranked surface. It is the homeowner-facing face of The Document (S1)." This ruling makes that framing doctrine, not proposal language.
+
+This **AMENDS the Single Pane ruling of 5 August 2026** (`docs/design/the-single-pane/README.md`), which shipped Path B · The Making behind a flag on the express promise that "every existing route keeps working." That clause is retired. Every old address a homeowner or an email, SMS, cron job, the iOS app, or the extension might still hold — `/today`, `/decisions`, `/decisions/[id]`, `/reviews`, `/proposals`, `/proposals/[id]`, `/invoices`, `/invoices/[id]`, `/budget`, `/documents`, `/orders`, `/messages`, `/inbox`, `/scans`, `/account`, `/preferences`, `/settings/*`, `/projects` — now **redirects to an anchor on the one page** rather than rendering as a route of its own. The route tree those addresses named is gone; what a person finds at the far end of an old link is the Threshold, opened to the right door.
+
+Three further rulings, all consequences of the same interview:
+
+- **The header is removed for every client**, solo or multi-project. No wordmark, no project switcher, no nav bar, no *More ▾*, no right-side utilities. The fourteen-control, seven-destination header the diagnosis in `docs/design/the-client-page/README.md` counted is deleted outright, not hidden behind a flag.
+- **Multi-project switching lives in the mat.** A client with more than one house does not choose it from a header dropdown; she finds "Your other houses" where she finds everything else that is hers to keep — in the mat, at the foot of her own doorstep, alongside her details and the way out.
+- **No feature flag.** Path B · The Threshold ships to every client on the platform with no `threshold`/`single-pane` gate and no override. This is possible because the fact that made 5 August cautious — a live client base to protect mid-migration — is not the fact on the ground today: **zero clients are live on the platform.** There is nothing to stage a rollout against, so there is nothing gained by staging one.
+
+Consequence for the workstream: the retirement plan (`docs/superpowers/plans/2026-09-04-client-portal-retirement.md`) and the completion plan that preceded it (`docs/superpowers/plans/2026-09-04-client-page-completion.md`) carry this ruling out in code — old route trees, the header components, both flags, and every hook and component the inventory marks dead at cutover are deleted, not archived behind a switch.
+
+*Entries add: R135 · last id = R135*
