@@ -52,9 +52,11 @@ import { GroundFloor } from './ground-floor';
 import { HouseLedger } from './house-ledger';
 import { Letterbox } from './letterbox';
 import { Mat, type MatPaper, type MatPerson } from './mat';
+import { PapersSheet } from './papers-sheet';
 import { PlanKey } from './plan-key';
 import { Previously } from './previously';
 import { RoomBand } from './room-band';
+import { RoomCapture } from './room-capture';
 import { SinceYesterday } from './since-yesterday';
 import { StoryPole } from './story-pole';
 import { TheNote, type NoteEnclosure } from './the-note';
@@ -259,6 +261,7 @@ export function Threshold({
   const previousMark = usePreviousReadingMark(projectId);
 
   const [sinceActive, setSinceActive] = useState(false);
+  const [papersOpen, setPapersOpen] = useState(false);
 
   const today = useMemo(
     () => (hydrated ? new Date() : undefined),
@@ -601,7 +604,13 @@ export function Threshold({
   ];
 
   const mat = (
-    <Mat people={people} papers={papers} accountHref="/account" onSignOut={() => void signOut()} />
+    <Mat
+      people={people}
+      papers={papers}
+      accountHref="/account"
+      onSignOut={() => void signOut()}
+      onOpenPapers={() => setPapersOpen(true)}
+    />
   );
 
   const ledger = <HouseLedger ledger={model.ledger} />;
@@ -739,6 +748,7 @@ export function Threshold({
               {band.marks.map((mark) =>
                 mark.kind === 'door' ? renderDoor(mark) : renderWall(mark),
               )}
+              <RoomCapture projectId={projectId} roomName={band.name} />
             </RoomBand>
           ))}
 
@@ -757,6 +767,11 @@ export function Threshold({
       <SinceYesterday active={sinceActive} changed={model.changed}>
         {body}
       </SinceYesterday>
+      <PapersSheet
+        projectId={projectId}
+        open={papersOpen}
+        onDismiss={() => setPapersOpen(false)}
+      />
     </div>
   );
 }

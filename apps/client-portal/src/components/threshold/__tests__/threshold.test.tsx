@@ -29,6 +29,16 @@ jest.mock('next/link', () => ({
   },
 }));
 
+// The capture reads room_scans and the sharing table of its own accord; this
+// suite is about the wiring, so the band's plate is a marker here and is
+// tested in `room-capture.test.tsx`.
+jest.mock('../room-capture', () => ({
+  __esModule: true,
+  RoomCapture: ({ roomName }: { roomName: string }) => (
+    <div data-testid="room-capture-stub">{roomName}</div>
+  ),
+}));
+
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
   useProjectInvoices: jest.fn(),
@@ -659,6 +669,18 @@ describe('Threshold — the acts the house owes', () => {
     expect(papers).toHaveTextContent('The drawing set');
     expect(papers).toHaveTextContent('Furnishings authorization No. 7');
     expect(papers).toHaveTextContent('Invoice No. 4');
+  });
+
+  it('offers the papers in full from the mat, and stands a capture in every room', () => {
+    renderThreshold();
+
+    expect(
+      screen.getByRole('button', { name: /the papers, in full/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    const captures = screen.getAllByTestId('room-capture-stub');
+    expect(captures).toHaveLength(screen.getAllByTestId('room-band-lintel').length);
   });
 
   it('resolves an invoice enclosure on the note from the invoice cache', () => {

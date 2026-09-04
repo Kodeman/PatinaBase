@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import { ScoredAction } from '@/components/making/scored-action';
+import { PAPERS_TAB_LABEL } from '@/lib/threshold/papers';
 
 /* ── The mat ────────────────────────────────────────────────────────────────
    What you find by the door on the way out: who is working on the house and
@@ -38,6 +39,8 @@ export interface MatProps {
   papers: MatPaper[];
   accountHref: '/account';
   onSignOut: () => void;
+  /** Lays the papers sheet over the page — every paper, not only the named few. */
+  onOpenPapers?: () => void;
 }
 
 const LINE_CLASS =
@@ -63,7 +66,7 @@ function Paper({ paper }: { paper: MatPaper }) {
   return <span className={LINE_CLASS}>{paper.label}</span>;
 }
 
-export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
+export function Mat({ people, papers, accountHref, onSignOut, onOpenPapers }: MatProps) {
   return (
     <section
       id="mat"
@@ -99,6 +102,17 @@ export function Mat({ people, papers, accountHref, onSignOut }: MatProps) {
           {papers.map((paper, index) => (
             <Paper key={`${paper.label}-${index}`} paper={paper} />
           ))}
+          {onOpenPapers && (
+            <ScoredAction
+              actionKey="mat_papers"
+              regionKey="mat"
+              surfaceKey="the_threshold"
+              variant="tertiary"
+              onClick={onOpenPapers}
+            >
+              {PAPERS_TAB_LABEL}
+            </ScoredAction>
+          )}
         </div>
 
         {/* No column head here: "Your details" is the act itself, and a heading
