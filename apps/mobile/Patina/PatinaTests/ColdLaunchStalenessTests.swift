@@ -109,6 +109,57 @@ struct ColdLaunchStalenessTests {
         #expect(hub.stalenessLine == nil)
     }
 
+    /// …and a floor that draws NOTHING is the same case, not the case above.
+    ///
+    /// A floor is written for an account with nothing in it too — five zeros —
+    /// so `floorStoredAt != nil` alone put "Last updated 2 minutes ago." over
+    /// an empty Studio that printed no line at all before `W1-B-16`. The
+    /// staleness line dates what the screen is showing.
+    @Test("an empty floor does not date an empty Studio")
+    func anEmptyFloorDatesNothing() {
+        let writer = BadgeCountService.makeForTests(defaults: makeSuite())
+        writer.apply(
+            decisions: [], summaries: [], proposals: [], invoices: [],
+            projects: [], roster: []
+        )
+        writer.persistCountsForTesting()
+        #expect(writer.floorStoredAt != nil, "a floor was still written")
+        #expect(writer.drawsAnyCount == false, "an all-zero floor draws nothing")
+
+        let hub = StudioHubViewModel()
+        hub.restoredFloorAt = {
+            writer.drawsAnyCount ? writer.floorStoredAt : nil
+        }
+        hub.apply(totalFailure())
+        #expect(hub.stalenessLine == nil,
+                "an empty Studio dated itself after a failure")
+    }
+
+    /// The floor W1-B-16 was filed about — one that has something on it — is
+    /// the one that carries the line.
+    @Test("a floor with a count on it is the one that can be stale")
+    func aFloorWithCountsDrawsSomething() throws {
+        let writer = BadgeCountService.makeForTests(defaults: makeSuite())
+        writer.apply(
+            decisions: nil, summaries: nil, proposals: nil, invoices: nil,
+            projects: [try project()], roster: nil
+        )
+        writer.persistCountsForTesting()
+        #expect(writer.drawsAnyCount)
+        #expect(writer.floorStoredAt != nil)
+    }
+
+    private func project() throws -> RemoteProject {
+        let row: [String: Any] = [
+            "id": "c0000000-0000-0000-0000-000000000001",
+            "name": "Hartwell Residence"
+        ]
+        return try JSONDecoder().decode(
+            RemoteProject.self,
+            from: try JSONSerialization.data(withJSONObject: row)
+        )
+    }
+
     /// The in-process success still wins: a warm hub names when IT last
     /// answered, not when the floor was written.
     @Test("the warm shape still names its own last success")
@@ -146,7 +197,9 @@ struct ColdLaunchStalenessTests {
             in: try SourcePin.read("Patina/Features/Profile/ViewModels/StudioHubViewModel.swift")
         )
         #expect(hub.contains("lastSuccessAt ?? restoredFloorAt()"))
-        #expect(hub.contains("BadgeCountService.shared.floorStoredAt"),
+        #expect(hub.contains("BadgeCountService.shared"),
                 "the hub's seam no longer reads the real floor in production")
+        #expect(hub.contains("badges.drawsAnyCount ? badges.floorStoredAt : nil"),
+                "the production seam dates a floor that draws nothing")
     }
 }

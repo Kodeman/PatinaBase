@@ -87,10 +87,19 @@ final class StudioHubViewModel {
         !held.isEmpty || restoredFloorAt() != nil
     }
 
-    /// When the persisted count floor was last true, read through a seam so a
-    /// test can drive the cold shape without a network or a shared singleton.
+    /// When the persisted count floor the screen is DRAWING was last true,
+    /// read through a seam so a test can drive the cold shape without a
+    /// network or a shared singleton.
+    ///
+    /// `drawsAnyCount` is the second half: a floor is written for an account
+    /// with nothing in it too, and dating an empty Studio — "Last updated 2
+    /// minutes ago." over a screen with nothing on it — is a staleness claim
+    /// about nothing, where before `W1-B-16` there was no line at all.
     @ObservationIgnored
-    var restoredFloorAt: () -> Date? = { BadgeCountService.shared.floorStoredAt }
+    var restoredFloorAt: () -> Date? = {
+        let badges = BadgeCountService.shared
+        return badges.drawsAnyCount ? badges.floorStoredAt : nil
+    }
 
     private static let stalenessFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()

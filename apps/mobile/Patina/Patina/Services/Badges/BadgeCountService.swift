@@ -217,6 +217,19 @@ final class BadgeCountService {
     /// fetch answered.
     private(set) var floorStoredAt: Date?
 
+    /// Whether the counts this service is holding draw anything at all.
+    ///
+    /// `floorStoredAt` says a floor was WRITTEN, and one is written for an
+    /// account with nothing in it too — five zeros and four empty arrays. The
+    /// Studio's staleness line dates what the screen is SHOWING, so a floor
+    /// that draws nothing must not date an empty Studio: before `W1-B-16` that
+    /// shape printed no line, and it should not have gained one.
+    var drawsAnyCount: Bool {
+        pendingDecisionCount > 0 || unreadMessageCount > 0
+            || proposalsAwaitingSignatureCount > 0 || payableInvoiceCount > 0
+            || projectCount > 0
+    }
+
     private static let persistedCountsKey = "patina.badge_counts.last_successful.v1"
 
     private let defaults: UserDefaults
