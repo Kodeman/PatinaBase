@@ -12847,3 +12847,15 @@ DO $g$ BEGIN
   GRANT UPDATE (opened_at, clicked_at, status) ON public.notification_log TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00564_client_signoff_approval.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.approve_client_signoff(uuid, text, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00564_client_signoff_approval.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.approve_client_signoff(uuid, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
